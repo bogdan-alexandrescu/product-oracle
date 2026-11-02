@@ -33,6 +33,13 @@ import { expect, test, type BrowserContext, type Locator, type Page } from "./te
  * "add a task 'Write the FAQ' to Setup for teams for Theo Brandt" gives a card on that
  * item for Theo Brandt; fails_when = the line splits at the name's own " for " (no card,
  * or "Which item?"); no_claim = other phrases.
+ *
+ * Card fixes-on-working-state (the "simple-chat" scenario's Weekly plan review): protects =
+ * an open card's fix buttons are checked again on the meeting's working state, so once a
+ * fix applied in the meeting mends a broken link, an earlier card on that item shows no
+ * fix buttons, even after the page is opened again; fails_when = the earlier card still
+ * offers the fixes it had when it was made; no_claim = the fixes' dates (api
+ * tests/test_walkc_meeting.py reads the meeting's working state).
  */
 
 async function flags(context: BrowserContext, value: string) {
@@ -146,6 +153,32 @@ for (const phone of [false, true]) {
       await theo.reload();
       const again = theo.getByTestId("meeting-chat").getByTestId("chat-card").filter({ hasText: "Rename Setup checklist to “First-run checklist”" });
       await expect(again.getByTestId("chat-card-outcome")).toContainText("Proposed to Avery Stone by you");
+    });
+
+    test(`a fix applied in the meeting clears an earlier card's fixes (${where})`, async ({ page, context }) => {
+      await context.addInitScript((key) => localStorage.setItem(key, "simple-chat"), MOCK_SCENARIO_KEY);
+      const owner = await attend(page, ADMIN.email, true);
+      const chat = owner.getByTestId("meeting-chat");
+      const say = async (text: string) => {
+        await chat.getByLabel("Message Oracle").fill(text);
+        await tap(chat.getByRole("button", { name: "Send" }));
+      };
+      const card = (name: string) => owner.getByTestId("meeting-chat").getByTestId("chat-card").filter({ hasText: name });
+      await say("move Alert rules engine to next quarter");
+      await tap(card("Move Alert rules engine to Jan 1").getByRole("button", { name: "Apply", exact: true }));
+      await expect(card("Move Alert rules engine to Jan 1").getByTestId("chat-card-outcome")).toContainText("Applied by you");
+      // A card's fixes name the item as the card would leave it.
+      const fix = /^Start (Weekly|Alert) digest after Alert rules engine ends$/;
+      await say("rename Weekly alert digest to Weekly digest");
+      const earlier = card("Rename Weekly alert digest to “Weekly digest”");
+      await expect(earlier.getByTestId("chat-card-fix").filter({ hasText: fix })).toHaveCount(1);
+      await say("rename Weekly alert digest to Alert digest");
+      const later = card("Rename Weekly alert digest to “Alert digest”");
+      await tap(later.getByTestId("chat-card-fix").filter({ hasText: fix }));
+      await expect(later.getByTestId("chat-card-outcome")).toContainText("Applied by you");
+      await owner.reload();
+      await expect(earlier.getByRole("button", { name: "Apply", exact: true })).toBeVisible();
+      await expect(earlier.getByTestId("chat-card-fix")).toHaveCount(0);
     });
   });
 }
