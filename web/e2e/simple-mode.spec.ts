@@ -44,6 +44,15 @@ async function expectDetailed(page: Page, path: string) {
   await expect(detailedRail(page)).toBeVisible();
 }
 
+/** The person's saved mode, as the landing reads it. */
+function savedMode(page: Page) {
+  return page.evaluate(async () => {
+    const mock = (globalThis as { __poMockFetch?: (r: Request) => Promise<Response> }).__poMockFetch!;
+    const res = await mock(new Request(new URL("/v1/me/preferences", location.origin)));
+    return ((await res.json()) as { experience?: string | null }).experience ?? null;
+  });
+}
+
 async function switchTo(page: Page, mode: "Simple" | "Detailed") {
   await modeSwitch(page).getByRole("radio", { name: mode }).click();
 }
@@ -232,6 +241,9 @@ test("a /simple link opens in Simple for an owner whose saved mode is Detailed",
   await expectSimple(page, "/simple");
   await switchTo(page, "Detailed");
   await expectDetailed(page, "/home");
+  // The switch opens Detailed at once and saves the choice meanwhile; the mock runs in the page,
+  // so leaving before its save lands would drop it. Wait for the saved Detailed.
+  await expect.poll(() => savedMode(page)).toBe("detailed");
 
   await page.goto("/simple/one-pagers");
   await expectSimple(page, "/simple/one-pagers");
