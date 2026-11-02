@@ -8,6 +8,7 @@ import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRo
 import { Walk } from "@/app/simple/_home/walk";
 import { SimpleWelcome } from "@/app/simple/_home/welcome";
 import { Icon } from "@/components/ds/Icon";
+import { Dialog } from "@/components/ds/Dialog";
 import { setToastPlace, toast } from "@/components/ds/Toast";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { usePhone } from "@/components/simple/FlowViews";
@@ -115,6 +116,9 @@ const STATUS_TONE: Record<GoalTile["status"], string> = {
  * decider apply with Undo, others propose, viewers read). Roles only through can() and the
  * rows' own can_* fields.
  */
+/** An item's dates in a change's before or after. */
+type Dates = { start_date?: string | null; end_date?: string | null };
+
 export default function SimpleHome() {
   const { me, can, capsReady } = useMe();
   const zone = useCompanyZone();
@@ -196,6 +200,8 @@ export default function SimpleHome() {
   // S7: Oracle's suggested features under each goal of the band (an accept reloads Home).
   const suggestions = useGoalSuggestions(reloadAll);
   const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
+  // A proposal that moves dates: its Accept first lists what moves (old and new dates).
+  const [confirming, setConfirming] = useState<Change | null>(null);
   const proposes = can("create_simple_change");
   const decidesAll = can("accept_simple_change");
   const reads = !proposes;
@@ -284,11 +290,6 @@ export default function SimpleHome() {
   ).filter(([id]) => (id === "broken-links" ? (roadmap.data?.items.length ?? 1) > 0 : id === "decisions" ? !decisionsEmpty : !proposalsEmpty));
   // The goal band's weights as their share of the score ("50% of the score").
   const weightSum = (tiles ?? []).reduce((n, g) => n + (g.weight != null && g.weight > 0 ? g.weight : 0), 0);
-  /** A goal's features on the roadmap (filtered to it), or Priorities when none is planned yet. */
-  const goalHref = (id: string) => {
-    const key = roadmap.data?.items.find((i) => i.goal?.id === id)?.goal?.key;
-    return key ? `/simple/roadmap?goal=${encodeURIComponent(key)}` : "/simple/priorities";
-  };
   const share = (w: number | null) => (w != null && w > 0 && weightSum > 0 ? Math.round((w / weightSum) * 100) : null);
   // The broken-links list's heading names the roadmaps they are on.
   const brokenRoadmaps = [...new Set(broken.map((b) => b.item.roadmap.title))];
@@ -315,6 +316,21 @@ export default function SimpleHome() {
     mine.find((c) => c.op === "shift_dependents" && c.target.item_id !== b.item.id && (b.flag.moves ?? []).includes(String(c.target.item_id)) && b.flag.fixes.includes("shift_dependents"));
   const brokenDeciders = [...new Set(broken.filter((b) => !b.item.can_decide).flatMap((b) => (b.item.deciders.length ? b.item.deciders : ["the decider"])))];
 
+  /** What a keyed change moves, item by item: its dates before and after. */
+  const moves = (c: Change) =>
+    Object.entries(c.after as Record<string, unknown>)
+      .filter(([, v]) => !!v && typeof v === "object" && "start_date" in (v as object))
+      .map(([id, v]) => {
+        const a = v as Dates;
+        const b = ((c.before as Record<string, unknown>)[id] ?? {}) as Dates;
+        const span = (x: Dates) => (!x.start_date && !x.end_date ? "not dated yet" : `${x.start_date ? calendarDay(x.start_date) : "undated"} – ${x.end_date ? calendarDay(x.end_date) : "undated"}`);
+        return { id, title: itemTitle(id), before: span(b), after: span(a) };
+      });
+  const accepted = (c: Change) => {
+    const m = moves(c);
+    return m.length ? `Accepted: ${m.map((x) => `${x.title} now ${x.after}`).join("; ")}` : "Accepted";
+  };
+  const accept = (c: Change) => void act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/accept", { params: { path: { change_id: c.id } } })), accepted(c));
   const proposalRow = (c: Change) => (
     <HomeRow
       key={c.id}
@@ -331,7 +347,7 @@ export default function SimpleHome() {
             <button
               type="button"
               className="simple-button simple-button-primary"
-              onClick={() => void act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/accept", { params: { path: { change_id: c.id } } })), "Accepted")}
+              onClick={() => (moves(c).length > 0 ? setConfirming(c) : accept(c))}
             >
               Accept
             </button>
@@ -445,6 +461,40 @@ export default function SimpleHome() {
   return (
     <SimplePage title="Home">
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
+      {confirming && (
+        <Dialog
+          title={`Accept: ${OP_WORDS[confirming.op] ?? confirming.op}`}
+          testId="accept-moves"
+          onClose={() => setConfirming(null)}
+          actions={
+            <button
+              type="button"
+              className="simple-button simple-button-primary"
+              onClick={() => {
+                const c = confirming;
+                setConfirming(null);
+                accept(c);
+              }}
+            >
+              {`Accept and move ${moves(confirming).length} ${moves(confirming).length === 1 ? "item" : "items"}`}
+            </button>
+          }
+        >
+          <p className="simple-small">
+            {confirming.by_name} proposed this{confirming.reason ? `: “${confirming.reason}”` : "."} These dates change:
+          </p>
+          <ul className="simple-small mt-1 flex flex-col gap-1" data-testid="accept-moves-list">
+            {moves(confirming).map((m) => (
+              <li key={m.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="font-medium text-text">{m.title}</span>
+                <del className="rounded bg-crit-bg px-1.5 text-crit">{m.before}</del>
+                <span aria-hidden>→</span>
+                <ins className="rounded bg-pass-bg px-1.5 text-pass no-underline">{m.after}</ins>
+              </li>
+            ))}
+          </ul>
+        </Dialog>
+      )}
       <header data-testid="home-greeting" className="-mt-4 flex flex-col gap-1">
         <p className="simple-small tnum">{formatInZone(now.toISOString(), zone, { weekday: "long", month: "long", day: "numeric" })}</p>
         <p className="simple-lead max-[600px]:min-h-[2lh]">
@@ -504,9 +554,9 @@ export default function SimpleHome() {
                         )}
                       </div>
                     )}
-                    {/* qa-simple-home-26: the goal opens its features on the roadmap; its code (qa-simple-home-13) only in the tooltip. */}
+                    {/* A goal card opens Priorities filtered to that goal; its code (qa-simple-home-13) only in the tooltip. */}
                     <Link
-                      href={goalHref(g.id)}
+                      href={`/simple/priorities?goal=${encodeURIComponent(g.name)}`}
                       data-testid="home-goal-link"
                       title={g.code ? `${g.code} · ${g.name}` : g.name}
                       className="font-semibold text-text hover:underline"

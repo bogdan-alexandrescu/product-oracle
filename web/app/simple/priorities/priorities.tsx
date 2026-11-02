@@ -335,6 +335,8 @@ function landsUnder(rows: Row[], row: Row, position: number): string {
 
 function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out; phone: boolean; compare: boolean; mayChange: boolean; changed: Changed; moved: Moved | null }) {
   const [side, setSide] = useState<"yours" | "oracle">("yours");
+  // A goal's list (from a Home goal card) leaves out the features not ranked yet.
+  const goalOn = !!useSearchParams().get("goal");
   const [move, setMove] = useState<{ row: Row; position: number } | null>(null);
   // qa-simple-plan-5: closing the move dialog (Escape, Cancel, Move) puts focus back on the row's handle.
   const backToHandle = (featureId: string) =>
@@ -370,7 +372,7 @@ function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out
       ) : (
         list
       )}
-      {data.drafts.length > 0 && <Drafts drafts={data.drafts} proposals={data.proposals} mayChange={mayChange} changed={changed} />}
+      {data.drafts.length > 0 && !goalOn && <Drafts drafts={data.drafts} proposals={data.proposals} mayChange={mayChange} changed={changed} />}
       {move && (
         <MoveDialog
           move={move}
@@ -392,10 +394,12 @@ function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out
 }
 
 function YourList({ data, half = false, mayChange, onMove, changed, moved }: { data: Out; half?: boolean; mayChange: boolean; onMove: (row: Row, position: number) => void; changed: Changed; moved: Moved | null }) {
-  const rows = byLine(data);
+  // A Home goal card opens the list for its goal (?goal=<its name>).
+  const goal = useSearchParams().get("goal");
+  const rows = byLine(data).filter((r) => !goal || goalOfRow(data)(r) === goal);
+  const setParams = useSetParams();
   const refs = useRef<(HTMLLIElement | null)[]>([]);
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
-  const maxValue = Math.max(1, ...rows.map((r) => r.goal_value ?? 0));
   // qa-simple-plan-34: a look-alike's link (?show=<its item or feature>) marks its row and brings it into view.
   const show = useSearchParams().get("show");
   const shown = (r: Row) => !!show && (r.feature_id === show || r.item_id === show);
@@ -460,13 +464,29 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
   }
   return (
     <>
-    <LineCaption data={data} />
+    {goal && (
+      <p className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-accent-ink" data-testid="prio-goal-filter">
+        <span>
+          Showing <b>{goal}</b> only: {rows.length ? `${rows.length} of ${data.rows.length} features` : "nothing for this goal is planned yet"}
+        </span>
+        <button type="button" className="font-semibold underline" onClick={() => setParams({ goal: null })}>
+          Show all
+        </button>
+      </p>
+    )}
+    {/* Split at a dated line, the two parts' headings say what the caption said; a goal's caption counts only its features. */}
+    {goal ? rows.length > 0 && !apart && <LineCaption data={{ ...data, rows }} /> : !apart && <LineCaption data={data} />}
     <p className="mb-2 text-[length:var(--simple-small)] text-text2" data-testid="prio-score-help">
       {SCORE_WORDS}
     </p>
     <ol aria-label="Ranked list" className="flex flex-col gap-[var(--simple-gap)]">
       {rows.flatMap((r, i) => {
-        const divider = i === split ? [<LineDivider key="the-line" data={data} />] : [];
+        // Split at a dated line: "Makes ..." over the first part, "Misses ..." over the rest, each in rank order.
+        const divider = apart
+          ? [...(i === 0 ? [<PartHead key="makes" data={data} makes n={split} />] : []), ...(i === split ? [<PartHead key="misses" data={data} makes={false} n={rows.length - split} />] : [])]
+          : i === split
+            ? [<LineDivider key="the-line" data={data} />]
+            : [];
         // Any of the feature's items (a proposal on its later item shows here too).
         const proposals = data.proposals.filter((p) => p.feature_id === r.feature_id && (p.op === "override_priority" || p.op === "estimate_feature"));
         const target = drag && drag.to === i && drag.from !== i;
@@ -522,7 +542,6 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
               <span data-testid="prio-details" className={`${half ? "basis-full sm:pl-12" : "ml-auto"} flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--simple-small)] text-text2`}>
                 {/* The chips stay together, wrapping as one group. */}
                 <span className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
-                  {!r.above_line && <MissesTag data={data} row={r} />}
                   {goalOf(r) ? (
                     <span data-testid="prio-goal">{goalOf(r)}</span>
                   ) : (
@@ -532,29 +551,8 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
                   )}
                 </span>
                 {r.milestone && <span className="whitespace-nowrap">Milestone {r.milestone}</span>}
-                {/* qa-simple-plan-3: the confidence the score is worked out with, beside the numbers. */}
-                {r.effort != null && (
-                  <span data-testid="prio-confidence" className="whitespace-nowrap tabular-nums" title={SCORE_WORDS}>
-                    confidence {fmt(r.confidence, 2)}
-                  </span>
-                )}
-                {/* The numbers say what they are and wrap as one group. */}
-                <span data-testid="prio-numbers" className="flex items-center gap-1 whitespace-nowrap tabular-nums">
-                  <span aria-hidden className="h-2 w-16 flex-none overflow-hidden rounded-full border border-line bg-surface2">
-                    <span className="block h-full rounded-full bg-accent" style={{ width: `${((r.goal_value ?? 0) / maxValue) * 100}%` }} />
-                  </span>
-                  {r.effort == null ? (
-                    // qa-simple-plan-8: PM-owned work has no engineer-weeks, so no score.
-                    <span data-testid="prio-pm-owned">{`value ${fmt(r.goal_value)} · PM-owned, no engineer-weeks · no score`}</span>
-                  ) : (
-                    <>
-                      {`value ${fmt(r.goal_value)} · ${fmt(r.effort)} wk · score `}
-                      <span className="font-semibold text-text" data-testid="prio-score" title={SCORE_WORDS}>
-                        {fmt(r.score, 2)}
-                      </span>
-                    </>
-                  )}
-                </span>
+                {/* qa-simple-plan-3: value · confidence · weeks · score, in the order of the score's formula; no bar. */}
+                <Numbers r={r} />
               </span>
             </div>
             {/* qa4-simple-plan-25: Oracle's rank and the move sit in a slot of their own under the row, so the row keeps its layout. */}
@@ -1705,6 +1703,52 @@ function MissesTag({ data, row, compact = false }: { data: Out; row?: Row; compa
   return (
     <span data-testid="prio-misses" className="flex-none whitespace-nowrap rounded-full border border-line-strong bg-surface px-2 text-[length:var(--simple-small)] text-text2">
       Misses {lineLabel(data)}
+    </span>
+  );
+}
+/** A part's heading over the ranked list split at a dated line: "Makes Customer conference · Nov 14, 2026 · 1 feature, in rank order". */
+function PartHead({ data, makes, n }: { data: Out; makes: boolean; n: number }) {
+  return (
+    <li data-testid="prio-part-head" aria-label={`${makes ? "Makes" : "Misses"} ${lineLabel(data)}`} className={`flex flex-wrap items-baseline gap-x-2 pt-2 ${makes ? "" : "mt-2 border-t-2 border-accent-ink pt-3"}`}>
+      <span className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">
+        {makes ? "Makes" : "Misses"} {lineLabel(data)}
+      </span>
+      <span className="text-[length:var(--simple-small)] text-text2" data-testid="prio-part-count">
+        {n} {n === 1 ? "feature" : "features"}, in rank order
+      </span>
+    </li>
+  );
+}
+
+/** A row's numbers, each keeping its "·" with it so a wrapped line never starts or ends with a stray dot. */
+function Numbers({ r }: { r: Row }) {
+  const parts = [
+    <span key="value">value {fmt(r.goal_value)}</span>,
+    ...(r.effort == null
+      ? // qa-simple-plan-8: PM-owned work has no engineer-weeks, so no score.
+        [<span key="pm" data-testid="prio-pm-owned">PM-owned, no engineer-weeks, no score</span>]
+      : [
+          <span key="confidence" data-testid="prio-confidence" title={SCORE_WORDS}>confidence {fmt(r.confidence, 2)}</span>,
+          <span key="weeks">{fmt(r.effort)} wk</span>,
+          <span key="score">
+            score{" "}
+            <span className="font-semibold text-text" data-testid="prio-score" title={SCORE_WORDS}>
+              {fmt(r.score, 2)}
+            </span>
+          </span>,
+        ]),
+  ];
+  return (
+    // A "·" that would start a line sits in the clipped margin.
+    <span data-testid="prio-numbers" className="block overflow-hidden tabular-nums">
+      <span className="-ml-[14px] flex flex-wrap items-center gap-y-1">
+        {parts.map((p) => (
+          <span key={p.key} className="relative flex items-center whitespace-nowrap pl-[14px]">
+            <span aria-hidden className="absolute left-[4px]">·</span>
+            {p}
+          </span>
+        ))}
+      </span>
     </span>
   );
 }

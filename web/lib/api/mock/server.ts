@@ -162,6 +162,7 @@ import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { itemSubjectName, knowManyPlans, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type SimpleDb } from "./simple-roadmap";
+import { shownDates, storedDates } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -1067,6 +1068,16 @@ function seedSimpleHomeScenario(): Db {
   seedSimpleProposal(db.simple_roadmap, who, "edit_title", "alert-export", { title: "Alert history export" }, { title: "Alert history as CSV" }, "2026-10-26T15:00:00Z", "Says what people get");
   seedSimpleProposal(db.simple_roadmap, who, "change_horizon", "setup-ideas", { horizon: "next" }, { horizon: "now" }, "2026-10-26T16:30:00Z");
   seedSimpleProposal(db.simple_roadmap, who, "add_item_task", "alert-digest", {}, { title: "Digest email for team leads" }, "2026-10-26T17:00:00Z", "A new step in the digest flow");
+  // A "Move the dependents" proposal (keyed by item id, as the engine keys it): Home's Accept lists what it moves.
+  // Mobile alert push keeps the dates its bar shows, stored, so the proposal's before is what the engine reads.
+  const sr = db.simple_roadmap!;
+  const day = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+  const rulesEnd = storedDates(sr, "alert-rules").end ?? "2026-11-10";
+  const digest = storedDates(sr, "alert-digest");
+  const mobile = shownDates(sr, "alert-mobile");
+  sr.own["alert-mobile"] = { start: mobile.start, end: mobile.end, source: "typed" };
+  const len = digest.start && digest.end ? Math.round((Date.parse(digest.end) - Date.parse(digest.start)) / 86_400_000) : 40;
+  seedSimpleProposal(sr, who, "shift_dependents", "alert-digest", { [sr.ids["alert-digest"]]: { start_date: digest.start, end_date: digest.end }, [sr.ids["alert-mobile"]]: { start_date: mobile.start, end_date: mobile.end } }, { [sr.ids["alert-digest"]]: { start_date: day(rulesEnd, 1), end_date: day(rulesEnd, 1 + len) }, [sr.ids["alert-mobile"]]: { start_date: day(rulesEnd, 1), end_date: day(rulesEnd, 51) } }, "2026-10-27T09:30:00Z", "Both start before Alert rules engine ends");
   return db;
 }
 
