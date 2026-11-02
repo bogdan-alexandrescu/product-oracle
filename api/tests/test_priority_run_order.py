@@ -136,13 +136,13 @@ async def seed_baseline(tenant_id) -> None:
         await s.commit()
 
 
-async def at_priority(client, owner, runtime, text=ORDER, **knobs) -> dict:  # noqa: F811
-    """A baseline_to_prd run past its approved feature set, its priority segment ended
-    with ``text`` as priority.yaml."""
+async def at_priority(client, owner, runtime, text=ORDER, features=CLEAN, **knobs) -> dict:  # noqa: F811
+    """A baseline_to_prd run past its approved feature set (``features``), its priority
+    segment ended with ``text`` as priority.yaml."""
     tenant_id, auth = owner
     await seed_baseline(tenant_id)
     runtime.script["feature_set"] = [
-        Outcome(artifacts={"feature_set.yaml": CLEAN, "design.md": "# Design\n"})
+        Outcome(artifacts={"feature_set.yaml": features, "design.md": "# Design\n"})
     ]
     runtime.script["priority"] = [Outcome(artifacts={"priority.yaml": text})]
     run = await started(client, auth, document=DOC, **knobs)
@@ -751,6 +751,37 @@ async def test_a_new_feature_is_scored_and_ranked_with_the_rest(client, owner, r
     assert rows["bulk-edit"]["title"] == "Bulk edit"
     ranked = {r["key"]: r for r in resp.json()["snapshot"]["ranking"]}
     assert ranked["bulk-edit"]["new"] is True and ranked["bulk-edit"]["score"] == 1.8
+
+
+# The run's feature set says bulk-edit, new in this PRD, depends on address-lookup.
+NEW_DEPENDS = CLEAN.replace(
+    "    title: Bulk edit\n    goals: []\n",
+    "    title: Bulk edit\n    goals: []\n    depends_on: [address-lookup]\n",
+)
+
+
+async def test_a_new_feature_keeps_what_it_depends_on(client, owner, runtime):  # noqa: F811
+    """build-runplan review: the order's Depends on column of a new feature reads what the
+    run's feature set says it depends on, and the features that wait on it."""
+    tenant_id, _ = owner
+    assert NEW_DEPENDS != CLEAN
+    run = await at_priority(client, owner, runtime, ORDER_NEW, features=NEW_DEPENDS)
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert run_order.blocking_of(snap.check_result) == 0, snap.check_result
+    new = {r["key"]: r for r in snap.ranking}["bulk-edit"]
+    assert new["depends_on"] == ["address-lookup"] and new["dependents"] == []
+
+
+async def test_a_new_feature_ranked_above_what_it_depends_on_is_blocking(client, owner, runtime):  # noqa: F811
+    tenant_id, _ = owner
+    above = ORDER_NEW.replace("rank: 1\n", "rank: X\n").replace("rank: 2\n", "rank: 1\n")
+    above = above.replace("rank: X\n", "rank: 2\n")
+    run = await at_priority(client, owner, runtime, above, features=NEW_DEPENDS)
+    (snap,) = await snapshots(tenant_id, run["id"])
+    codes = [(p["code"], p["feature"]) for p in snap.check_result["problems"] if p["blocking"]]
+    assert codes == [("before_prerequisite", "bulk-edit")]
+    new = {r["key"]: r for r in snap.ranking}["bulk-edit"]
+    assert new["depends_on"] == ["address-lookup"]
 
 
 async def test_approving_the_order_adds_its_new_features_as_proposed(client, owner, runtime):  # noqa: F811
