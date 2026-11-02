@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
+import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { Button, LinkButton } from "@/components/ds";
 import { clock, FlowPanel, meetingMoment } from "@/components/simple/FlowVisual";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
@@ -771,9 +772,11 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeet
   const published = v.published_at ? dmy(v.published_at.slice(0, 10)) : null;
   // qa-simple-prd-p3-16: "Approved" only where the One-pagers list says so too (one summary for both).
   // build-rundecide RD2 b: approving the PRD after its run's review makes the latest version the approved one.
-  const approved =
-    (!!published && (!summary || !!summary.approved_version || summary.status === "approved")) ||
-    (!!summary?.approved_version && summary.approved_version === summary.latest_version && summary.status === "approved");
+  // build-rundecide RD2 b: while a run's review waits on the latest version the PRD reads In review;
+  // once its second step approves the PRD it reads Approved.
+  const [run, setRun] = useState<"waiting" | "done" | null>(null);
+  const latestApproved = summary?.latest_version != null && summary.approved_version === summary.latest_version && summary.status === "approved";
+  const approved = run === "done" || (run !== "waiting" && ((!!published && (!summary || !!summary.approved_version || summary.status === "approved")) || latestApproved));
   // qa-simple-prd-47: separators at the meta line's own 4.5:1 colour.
   const sep = phone ? null : <span aria-hidden className="text-text2">·</span>;
   return (
@@ -803,7 +806,8 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeet
         {/* qa-simple-prd-9: the same state the One-pagers list names. */}
         {approved && draft && <span data-testid="one-pager-draft-chip" className="text-[14px] font-semibold text-text">draft in progress</span>}
         {/* qa-simple-prd-p3-16: never approved, it shows the status the list shows ("In review", "Draft"). */}
-        {!approved && summary && <span data-testid="one-pager-status"><PrdStatus d={summary} /></span>}
+        {!approved && run === "waiting" && <span data-testid="one-pager-status"><DocStatusChip status="in_review" dot /></span>}
+        {!approved && run !== "waiting" && summary && <span data-testid="one-pager-status"><PrdStatus d={summary} /></span>}
         <span>{phone && plan ? `v${v.version}` : `Version ${v.version}`}{published ? ` · ${published}` : ""}</span>
         {sep}
         {v.owner ? <span>Owner <b className="font-[650] text-text">{v.owner.name}</b></span> : <span>No owner yet</span>}
@@ -826,7 +830,7 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeet
       </div>
       {phone && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       {!inMeeting && !presenting && summary?.latest_version != null && (
-        <RunReviewStep doc={v.document.slug} title={v.document.title} n={summary.latest_version} approved={approved} onApproved={() => onRunApproved?.()} />
+        <RunReviewStep doc={v.document.slug} title={v.document.title} n={summary.latest_version} approved={latestApproved} onState={setRun} onApproved={() => onRunApproved?.()} />
       )}
     </div>
   );

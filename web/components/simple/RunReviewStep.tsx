@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Icon } from "@/components/ds/Icon";
 import { api, ApiError, unwrap } from "@/lib/api/client";
@@ -27,7 +27,7 @@ const BOX = "rounded-[14px] border border-line bg-surface p-4 shadow-sm";
  * status by the title then reads Approved. To change the PRD first, Start review stays above.
  * Shown to whoever decides the review, then to whoever may approve the PRD; hidden otherwise.
  */
-export function RunReviewStep({ doc, title, n, approved, onApproved }: { doc: string; title: string; n: number; approved: boolean; onApproved: () => void }) {
+export function RunReviewStep({ doc, title, n, approved, onState, onApproved }: { doc: string; title: string; n: number; approved: boolean; onState?: (s: "waiting" | "done" | null) => void; onApproved: () => void }) {
   const { can, me } = useMe();
   const zone = useCompanyZone();
   const q = useQuery(
@@ -50,6 +50,9 @@ export function RunReviewStep({ doc, title, n, approved, onApproved }: { doc: st
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  // The PRD's status by the title follows the run: In review while its review or the PRD's approval waits.
+  const state = done ? "done" : r && !approved && (r.status === "pending" || r.status === "approved") ? "waiting" : null;
+  useEffect(() => onState?.(state), [state, onState]);
   if (!r) return null;
   const name = runName(title);
   const you = me?.name?.trim() || me?.email || "you";
@@ -120,8 +123,11 @@ export function RunReviewStep({ doc, title, n, approved, onApproved }: { doc: st
     return (
       <section className={BOX} aria-label="The run's PRD review" data-testid="run-review-step">
         <p className="simple-meta inline-flex flex-wrap items-center gap-1.5" data-testid="run-review-approved">
-          <Icon name="check" size={16} stroke={1.7} /> {["Run review approved", by && `by ${by}`].filter(Boolean).join(" ")}
-          {mine?.decided_at ? ` · ${dayWords(mine.decided_at, zone)}` : ""}
+          <Icon name="check" size={16} stroke={1.7} />
+          <span>
+            {["Run review approved", by && `by ${by}`].filter(Boolean).join(" ")}
+            {mine?.decided_at ? ` · ${dayWords(mine.decided_at, zone)}` : ""}
+          </span>
         </p>
         <h2 className="simple-h2 mt-2">Next stop: approve the PRD</h2>
         <p className="simple-small">Approving makes version {n} the PRD everyone builds from. To change it first, use Start review above.</p>
