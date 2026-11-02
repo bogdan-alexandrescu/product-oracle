@@ -1109,8 +1109,8 @@ const NOT_ITEMS = new Set(["title", "roadmap", "summary", "goals", "problems", "
 /**
  * The dates a roadmap version's text writes, each checked against its PRD's schedule
  * bases now (oracle.roadmap.doc_dates, simplified: ISO dates in headings and bodies; a
- * basis with an item key counts in that item's own section and in the roadmap's own
- * sections). One mark per date and section, worst status; Sources and data points and
+ * basis with an item key counts in that item's own section and, when the item is one of
+ * this roadmap's, in the roadmap's own sections). One mark per date and section, worst status; Sources and data points and
  * Changes since last version (and their sub-sections), and an "As of" date, are not read.
  */
 export function dateMarks(
@@ -1119,6 +1119,8 @@ export function dateMarks(
   sections: { section_key: string; level: number; heading: string; body_md: string }[],
 ): Schemas["DateMarkOut"][] {
   const out = new Map<string, Schemas["DateMarkOut"]>();
+  // walkb-roadmap review: this roadmap's own items; only their bases back a date outside every item.
+  const own = new Set(sections.map((s) => ITEM_ANCHOR.exec(s.section_key)?.[1] ?? s.section_key).filter((k) => !NOT_ITEMS.has(k)));
   let sourcesLevel: number | null = null;
   for (const s of sections) {
     if (s.section_key === "sources" || s.section_key === "changes") {
@@ -1137,7 +1139,7 @@ export function dateMarks(
       for (const m of text.matchAll(ISO_DATE)) {
         const day = m[0];
         if (AS_OF.test(text.slice(Math.max(0, m.index - 12), m.index))) continue;
-        const covers = (b: Basis) => b.prd_document_id === prdId && b.supports_date === day && (!b.item_key || b.item_key === owner || NOT_ITEMS.has(s.section_key));
+        const covers = (b: Basis) => b.prd_document_id === prdId && b.supports_date === day && (!b.item_key || b.item_key === owner || (NOT_ITEMS.has(s.section_key) && own.has(b.item_key)));
         const verified = db.bases.filter((b) => b.status === "verified" && covers(b));
         const withdrawn = db.bases.filter((b) => b.status === "withdrawn" && covers(b));
         const status = verified.length ? "verified" : withdrawn.length ? "withdrawn" : "unverified";
