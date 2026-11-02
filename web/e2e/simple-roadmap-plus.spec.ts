@@ -273,7 +273,8 @@ for (const [where, use] of [
         const kd = (await select.locator("option", { hasText: "Customer conference" }).getAttribute("value"))!;
         await select.selectOption(kd);
         await expect(page).toHaveURL(new RegExp(`line=${encodeURIComponent(kd).replace(/%3A/i, "(:|%3A)")}`));
-        await expect(page.getByTestId("line-caption").first()).toContainText("miss Customer conference · Nov 14, 2026");
+        // build-plan QP1: a line the plan's dates regroup the list at heads its two parts in place of the caption.
+        await expect(page.getByTestId("line-caption").or(page.getByTestId("prio-part-head").filter({ hasText: /^Misses / })).first()).toContainText(/[Mm]iss(es)? Customer conference · Nov 14, 2026/);
         const rows = page.locator('[data-testid="prio-row"]');
         await expect(rows.first()).toBeVisible();
         for (const r of await rows.all()) {
@@ -291,7 +292,8 @@ for (const [where, use] of [
         // qa-simple-plan-1: a typed date applies with Apply (or Enter), never while typing.
         await page.getByRole("button", { name: "Apply" }).click();
         await expect(page).toHaveURL(/line=date(:|%3A)2026-12-31/);
-        await expect(page.getByTestId("line-caption").first()).toContainText("miss Dec 31, 2026");
+        // build-plan QP1: a line the plan's dates regroup the list at heads its two parts in place of the caption.
+        await expect(page.getByTestId("line-caption").or(page.getByTestId("prio-part-head").filter({ hasText: /^Misses / })).first()).toContainText(/[Mm]iss(es)? Dec 31, 2026/);
         await page.getByRole("tab", { name: "Value / effort" }).click();
         const points = page.getByTestId("vxe-point");
         await expect(points.first()).toBeVisible();

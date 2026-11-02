@@ -142,7 +142,7 @@ for (const v of SIZES) {
     });
 
     test(`QP4: Accept on a move confirms its dates first; a goal card opens Priorities for that goal (${v.name})`, async ({ page }) => {
-      await setUp(page, { scenario: "simple-home", phone: v.phone });
+      await setUp(page, { scenario: "simple-home-move", phone: v.phone });
       await page.goto("/simple");
       await expect(page.getByTestId("home-greeting")).toBeVisible();
       const row = page.getByTestId("home-proposal").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "Both start before Alert rules engine ends" });

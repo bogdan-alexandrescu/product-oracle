@@ -50,9 +50,23 @@ async function checkLine(page: Page, scope: Locator, rows: Locator, titleOf: (ro
     expect(r.misses, r.title).toBe(!r.above);
     // QA pass 3 (qa-simple-plan-27): a feature tagged with the milestone it misses says so.
     const own = `Misses its own milestone, ${label}`;
-    if (r.above) expect(r.tag, r.title).toBe(null);
-    else expect([compact ? "Misses" : `Misses ${label}`, own], r.title).toContain(r.tag);
+    // build-plan QP1: the ranked list's rows carry no Misses pill; its parts or caption say what misses.
+    if (r.above || !compact) expect(r.tag, r.title).toBe(null);
+    else expect(["Misses", own], r.title).toContain(r.tag);
     if (compact) expect([r.above ? null : `Misses ${label}`, own], r.title).toContain(r.tagTitle);
+  }
+  const heads = scope.getByTestId("prio-part-head");
+  if (!compact && (await heads.count()) > 0) {
+    // Split at a line the plan's dates regroup the list at: "Makes <line>" over what makes it, "Misses <line>" over the rest, each counted.
+    await expect(heads).toHaveCount(2);
+    await expect(heads.nth(0)).toHaveAccessibleName(`Makes ${label}`);
+    await expect(heads.nth(1)).toHaveAccessibleName(`Misses ${label}`);
+    const n = (k: number) => `${k} ${k === 1 ? "feature" : "features"}, in rank order`;
+    await expect(scope.getByTestId("prio-part-count").nth(0)).toHaveText(n(m.length - missing.length));
+    await expect(scope.getByTestId("prio-part-count").nth(1)).toHaveText(n(missing.length));
+    await expect(scope.getByTestId("line-caption")).toHaveCount(0);
+    await expect(scope.getByTestId("line-divider")).toHaveCount(0);
+    return m.findIndex((r) => !r.above) >= 0 && m.slice(m.findIndex((r) => !r.above)).some((r) => r.above);
   }
   const caption = scope.getByTestId("line-caption");
   await expect(caption).toContainText(`${missing.length} of ${m.length} miss ${label}`);
@@ -103,13 +117,13 @@ for (const [where, size] of [
             await select.selectOption(value);
             // The caption reads the line plainly: "this quarter", a key date's or milestone's name, a day without "By".
             const label = value === "now" ? "this quarter" : text.replace(/^(Key date|Milestone): /, "").replace(/^By /, "");
-            await expect(page.getByTestId("line-caption")).toContainText(` miss ${label}`);
+            await expect(page.getByTestId("line-caption").or(page.getByTestId("prio-part-head").filter({ hasText: /^Misses / }))).toContainText(new RegExp(`[Mm]iss(es)? ${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
             sawInterleaved = (await checkLine(page, list, rows, title, label)) || sawInterleaved;
           }
           await select.selectOption("pick");
           await page.getByLabel("The line's date").fill("2026-12-31");
           await page.getByRole("button", { name: "Apply" }).click();
-          await expect(page.getByTestId("line-caption")).toContainText(" miss Dec 31, 2026");
+          await expect(page.getByTestId("line-caption").or(page.getByTestId("prio-part-head").filter({ hasText: /^Misses / }))).toContainText(/[Mm]iss(es)? Dec 31, 2026/);
           sawInterleaved = (await checkLine(page, list, rows, title, "Dec 31, 2026")) || sawInterleaved;
           // QA pass 3 (qa-simple-plan-2): every line splits the list, makers first; no row that makes it sits under one that misses it.
           expect(sawInterleaved).toBe(false);

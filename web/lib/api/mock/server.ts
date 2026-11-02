@@ -551,6 +551,7 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * approver owning the alerts track) deciding Grow retention's suggestions (suggest review);
  * "simple-home-deciders" as "simple-deciders" plus a commenter's proposal waiting on the
  * pricing roadmap's decider (#723 S1 Home review).
+ * "simple-home-move" as "simple-home" plus a "Move the dependents" proposal Home's Accept confirms.
  * "simple-500" as the default company with 500 invented items on Simple's roadmap (S4, dod-perf:
  * 12 more roadmaps each from its own PRD, 8 goals, 6 tracks, dated and undated, with dependencies).
  * "simple-chat" as "simple-home" plus S9's invented meeting, Weekly plan review (the owner
@@ -1068,7 +1069,20 @@ function seedSimpleHomeScenario(): Db {
   seedSimpleProposal(db.simple_roadmap, who, "edit_title", "alert-export", { title: "Alert history export" }, { title: "Alert history as CSV" }, "2026-10-26T15:00:00Z", "Says what people get");
   seedSimpleProposal(db.simple_roadmap, who, "change_horizon", "setup-ideas", { horizon: "next" }, { horizon: "now" }, "2026-10-26T16:30:00Z");
   seedSimpleProposal(db.simple_roadmap, who, "add_item_task", "alert-digest", {}, { title: "Digest email for team leads" }, "2026-10-26T17:00:00Z", "A new step in the digest flow");
-  // A "Move the dependents" proposal (keyed by item id, as the engine keys it): Home's Accept lists what it moves.
+  return db;
+}
+
+/**
+ * "simple-home-move": "simple-home" plus a commenter's "Move the dependents" proposal on Weekly
+ * alert digest (keyed by item id, as the engine keys it), so Home's Accept lists what it moves
+ * with old and new dates (build-plan, Home's "Confirm, filtered list"). Invented data.
+ */
+function seedSimpleHomeMoveScenario(): Db {
+  const db = seedSimpleHomeScenario();
+  const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
+  const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
+  const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+  const who = { id: commenter.id, name: commenter.name ?? commenter.email, owners, roles };
   // Mobile alert push keeps the dates its bar shows, stored, so the proposal's before is what the engine reads.
   const sr = db.simple_roadmap!;
   const day = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
@@ -2888,6 +2902,8 @@ function load(): Db {
                 ? seedSimpleDecidersScenario
               : scenario === "simple-home"
                 ? seedSimpleHomeScenario
+              : scenario === "simple-home-move"
+                ? seedSimpleHomeMoveScenario
               : scenario === "simple-home-deciders"
                 ? seedSimpleHomeDecidersScenario
               : scenario === "simple-suggest-deciders"
