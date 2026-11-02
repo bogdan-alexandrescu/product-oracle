@@ -1379,7 +1379,13 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
         if i.status != "cut"
     ]
     plan = plan_strip.strip(plan_items(slice_.items), slice_.today)
-    span = milestone_span(plan_items(slice_.items))
+    # A dated plan's span is the one its timeline draws (its milestones, or the dates the
+    # lead accepted); else the items' dated milestones.
+    view = (await plan_model.views(db, {document.id})).get(document.id)
+    if view is not None and view.dated and view.span:
+        span: tuple[date, date] | None = (view.span.start, view.span.end)
+    else:
+        span = milestone_span(plan_items(slice_.items))
     timeline = OnePagerBlock(
         key=TIMELINE.key, title=TIMELINE.title, rules=TIMELINE.rules, kind="timeline", lines=[]
     )
