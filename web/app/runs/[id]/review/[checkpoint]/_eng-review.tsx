@@ -248,7 +248,7 @@ export function EngReview({
                       </span>
                     </span>
                     <span className="mt-1 flex flex-wrap items-center gap-1.5">
-                      <span data-testid="brief-verdict">
+                      <span className="flex" data-testid="brief-verdict">
                         {v ? (
                           <Chip kind={VERDICT_KIND[v.verdict]} wrap>
                             {VERDICT_WORDS[v.verdict]}
