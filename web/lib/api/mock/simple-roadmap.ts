@@ -73,6 +73,8 @@ interface SeedItem {
   /** meet-chat-right-prd: on its PRD's draft roadmap (a run's items-only roadmap, the PRD not
    * approved yet), not on the roadmap: only a review meeting's chat on that PRD reads it. */
   draft_roadmap?: boolean;
+  /** build-runplan RP2: the PRD it belongs to when not its roadmap's own (./meeting-draft.ts). */
+  prd_doc?: { id: string; slug: string; title: string };
 }
 
 interface SimpleDb {
@@ -740,7 +742,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       id: db.ids[s.key], key: s.key, title: s.title, outcome: s.outcome ?? null, horizon: s.horizon,
       code: prdCode(s.section),
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
-      prd: { id: stableUuid(`simple-prd/${s.roadmap}`), slug: rm.prd.toLowerCase().replace(/ /g, "-"), title: rm.prd },
+      prd: s.prd_doc ?? { id: stableUuid(`simple-prd/${s.roadmap}`), slug: rm.prd.toLowerCase().replace(/ /g, "-"), title: rm.prd },
       goal: s.goal ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, title: GOALS[s.goal] ?? PLAN_GOALS[s.goal], metric: METRICS[s.goal] ?? null } : null,
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,

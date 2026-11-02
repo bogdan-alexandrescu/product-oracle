@@ -160,6 +160,7 @@ import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, 
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
+import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { itemSubjectName, knowManyPlans, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
@@ -1544,6 +1545,19 @@ function seedPriorityOrder(): Db {
 }
 
 /**
+ * build-runplan RP2 "meeting-draft-dates" scenario: the Simple home's data, the Saved carts PRD a
+ * draft whose run dated six items on its draft roadmap (./meeting-draft.ts).
+ */
+function seedMeetingDraftDatesScenario(): Db {
+  const db = seedSimpleHomeScenario();
+  // The fixtures' Saved carts PRD, named as the review shows it.
+  const doc = db.documents.find((d) => d.slug === SAVED_CARTS.slug)!;
+  doc.title = SAVED_CARTS.title;
+  if (db.simple_roadmap) seedMeetingDraftDates(db.simple_roadmap, doc.id);
+  return db;
+}
+
+/**
  * D12 "next-draft" scenario: the fleet PRD on draft 2 with two accepted section-text
  * changes (F-33, F-34), a whole-draft remark staged for the agents and one nobody staged
  * yet. "next-draft-costly": the same, with the agents' run estimated over the owner-approval
@@ -2859,6 +2873,8 @@ function load(): Db {
             ? seedRunReviewDecider
           : scenario === "priority-order"
             ? seedPriorityOrder
+          : scenario === "meeting-draft-dates"
+            ? seedMeetingDraftDatesScenario
           : scenario === "next-draft" || scenario === "next-draft-costly"
             ? () => seedNextDraft(scenario === "next-draft-costly")
           : scenario === "before-drafting"

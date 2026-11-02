@@ -49,6 +49,7 @@ import { companyDateInWords } from "./connections";
 import { stableUuid } from "./ids";
 import { nextOccurrence, type RitualsDb } from "./rituals";
 import { publishOnePager, type OnePagerDb } from "./simple-one-pager";
+import { draftAct, draftRoadmapOut } from "./meeting-draft";
 import { roadmapOut, type SimpleDb } from "./simple-roadmap";
 import type { ChatMeetings, MeetingAgenda, MeetingNote } from "./simple-chat";
 
@@ -511,6 +512,8 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
     not_approved: [],
     notes: m.notes ?? [],
     agenda: m.agenda_state ?? { next: null, skipped: [] },
+    // build-runplan RP2: the run's draft roadmap of the PRD (meeting_draft.draft_out).
+    draft_roadmap: draftRoadmapOut(ctx.roadmap, p.ids),
   };
 }
 
@@ -1064,6 +1067,18 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     const note: MeetingNote = { id: `comment-${crypto.randomUUID()}`, kind: "comment", text, by_name: nameOf(ctx, ctx.me.id), at: iso(mockNowMs()), card_id: null };
     (m.notes ??= []).push(note);
     return json(201, one(ctx, db, m));
+  }
+  // build-runplan RP2 (meeting_draft): Change dates, Leave out and Approve these N dates on the run's draft.
+  if (p[4] === "draft-items" && method === "POST") {
+    if (m.status !== "live") return json(409, { detail: "The meeting has ended" });
+    if (!mayChange(m, ctx.me.id)) return json(403, { detail: "You cannot change things in this meeting" });
+    const b = (await body(req)) as { start?: string; end?: string };
+    const act = p[5] === "approve" ? ({ kind: "approve" } as const) : p[6] === "dates" ? ({ kind: "dates", id: p[5]!, start: b.start ?? "", end: b.end ?? "" } as const) : p[6] === "leave-out" ? ({ kind: "leave", id: p[5]! } as const) : null;
+    if (!act) return null;
+    const r = draftAct(ctx.roadmap, prd.ids, act);
+    if ("status" in r) return json(r.status, { detail: r.detail });
+    if (act.kind === "approve") record(db, ctx, m, `${prd.title} dates approved: ${r.n} item${r.n === 1 ? "" : "s"} on the roadmap`, [], []);
+    return ok();
   }
   if (p[4] === "approve" && method === "POST") {
     if (m.status !== "live") return json(409, { detail: "This meeting has ended" });
