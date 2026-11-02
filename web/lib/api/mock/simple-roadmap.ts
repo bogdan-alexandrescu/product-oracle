@@ -1000,12 +1000,16 @@ function keyDatesOut(db: SimpleDb, full: SimpleDb, shown: string[], me: { id: st
   const keyDates = slugs
     .flatMap((slug) => {
       const pub = draftOf(slug)?.published.key_dates ?? null;
-      const own = (db.key_dates?.[slug] ?? []).map((k) => {
+      const fromPrds = prdKeyDates(db, slug, ref(slug));
+      // ah-prd-milestones-once review (key_dates.published_copies): a copy of a PRD's milestone the
+      // roadmap published before they were read-only from the PRD (its name, "From <PRD>") is skipped.
+      const copies = new Set(fromPrds.map((k) => `${k.id}/${k.name.replace(/^\S+ · /, "")}/From ${k.prd!.title}`));
+      const own = (db.key_dates?.[slug] ?? []).filter((k) => !copies.has(`${k.id}/${k.name}/${k.note}`)).map((k) => {
         const was = pub?.find((x) => x.id === k.id);
         const inDraft = pub !== null && (!was || JSON.stringify(was) !== JSON.stringify(k));
         return { id: k.id, roadmap: ref(slug), name: k.name, date: k.date, note: k.note, in_draft: inDraft, prd: null };
       });
-      return [...own, ...prdKeyDates(db, slug, ref(slug))];
+      return [...own, ...fromPrds];
     })
     .sort((a, b) => (a.date === b.date ? a.name.localeCompare(b.name) : a.date < b.date ? -1 : 1));
   const may = me.role !== "viewer";
@@ -1159,12 +1163,12 @@ export interface PrdApproval {
     end: string | null;
     source: "engineering" | "accepted";
   }[];
-  milestones: { code: string; name: string; date: string }[];
 }
 
 /**
- * approved-prd-roadmap: approving a PRD version puts its dated items and its milestones (as key
- * dates) in its roadmap's working draft, marked as from the PRD (oracle.simple.prd_roadmap.on_prd_approved).
+ * approved-prd-roadmap: approving a PRD version puts its dated items in its roadmap's working
+ * draft, marked as from the PRD (oracle.simple.prd_roadmap.on_prd_approved); no key dates, its
+ * milestones are read-only from the PRD (ah-prd-milestones-once).
  * Approving again takes the PRD's earlier additions out first; an item already published only
  * adds what changed; nothing while the roadmap's draft is in review.
  */
@@ -1284,37 +1288,27 @@ export function approvedPrdToDraft(
     });
     keys.push(key);
   }
-  const kdIds: string[] = [];
-  for (const m of a.milestones) {
-    const value = {
-      id: stableUuid(`simple-prd-key-date/${rm}/${a.prd.slug}/${m.code}`),
-      name: m.name,
-      date: m.date,
-      note: `From ${a.prd.title}`,
-    };
-    const pub = d.published.key_dates?.find((k) => k.id === value.id);
-    if (pub && JSON.stringify(pub) === JSON.stringify(value)) continue;
-    kds.push(value);
-    kdIds.push(value.id);
-  }
+  // ah-prd-milestones-once (the owner's pick: 'Read-only from the PRD'): no key dates; its
+  // milestones show read-only from the PRD (prdKeyDates), once each. An earlier copy leaves.
   (db.key_dates ??= {})[rm] = kds;
-  if (keys.length || kdIds.length)
+  if (keys.length)
     prds[a.prd.slug] = {
       prd: a.prd,
       version: a.version,
       keys,
-      key_dates: kdIds,
+      key_dates: [],
     };
 }
 
-/** approved-prd-roadmap: how many items and key dates each approved PRD put in the draft. */
+/** approved-prd-roadmap: how many items each approved PRD put in the draft; key_dates is always 0
+ * (ah-prd-milestones-once: its milestones are read-only from the PRD), as the API's sources_out. */
 export function draftPrds(d: MockDraft): Schemas["SimpleDraftPrd"][] {
   return Object.values(d.prds ?? {})
     .map((x) => ({
       prd: x.prd,
       version: x.version,
       items: x.keys.length,
-      key_dates: x.key_dates.length,
+      key_dates: 0,
     }))
     .sort((a, b) => a.prd.title.localeCompare(b.prd.title));
 }

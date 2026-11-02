@@ -109,10 +109,28 @@ async def published(
     return out
 
 
+def copied(overlay: dict[str, Any] | None) -> set[str]:
+    """ah-prd-milestones-once: the key dates an approved PRD copied into a draft made before
+    its milestones were read-only from the PRD (oracle.simple.prd_roadmap, ``from_prds``),
+    still as it wrote them. They are skipped when read and when published, so each milestone
+    shows once, from the PRD; one the owner changed since is theirs and stays."""
+    ov = overlay or {}
+    kds = ov.get(KEY) or {}
+    return {
+        str(k)
+        for src in (ov.get("from_prds") or {}).values()
+        for k in src.get(KEY) or []
+        if k in kds and kds[k] is not None and kds[k] == (src.get("wrote") or {}).get(k)
+    }
+
+
 def patched(pub: dict[str, dict[str, Any]], overlay: dict[str, Any] | None) -> dict[str, Any]:
     """The key dates as a draft's overlay has them (id -> value)."""
     out = dict(pub)
+    skip = copied(overlay)
     for k, v in ((overlay or {}).get(KEY) or {}).items():
+        if k in skip:
+            continue
         if v is None:
             out.pop(k, None)
         else:
@@ -227,7 +245,9 @@ async def roadmap_key_dates(
         d = open_.get(doc_id)
         sees = d is not None and drafts.sees(principal, d, w)
         values = patched(pub[doc_id], d.overlay if sees else None)
-        changed = set(((d.overlay or {}).get(KEY) or {}) if sees and d else {})
+        changed = set(((d.overlay or {}).get(KEY) or {}) if sees and d else {}) - copied(
+            d.overlay if sees and d else None
+        )
         ref = SimpleDocRef(id=doc.id, slug=doc.slug, title=doc.title)
         for k, v in _sorted(values):
             out.append(
@@ -300,8 +320,30 @@ async def read_key_dates(
     prds = key_date_prds(principal, docs, entries)
     if views is None:
         views = await plans.views(db, {p.id for of in prds.values() for p in of})
+    old = published_copies(docs, prds, views)
+    own = [k for k in own if (k.id, k.name, k.note) not in old]
     out = sorted(own + prd_key_dates(docs, prds, views), key=lambda k: (k.date, k.name))
     return out, roadmaps
+
+
+def published_copies(
+    docs: dict[uuid.UUID, Document],
+    prds: dict[uuid.UUID, list[Document]],
+    views: dict[uuid.UUID, Any],
+) -> set[tuple[uuid.UUID, str, str]]:
+    """ah-prd-milestones-once review: the (id, name, note) an approved PRD's milestone was
+    copied with as a key date before its milestones were read-only from the PRD (id
+    ``uuid5(roadmap, "<prd>:<code>")``, its name, "From <PRD>"), for each milestone
+    :func:`prd_key_dates` shows. A roadmap that published such a copy skips it when read, so
+    the milestone shows once, from the PRD, whatever day the copy holds (the PRD may have
+    moved it since); one the owner renamed or re-noted since is theirs and stays."""
+    return {
+        (uuid.uuid5(doc_id, f"{prd.id}:{m.code}"), m.name, f"From {prd.title}")
+        for doc_id in docs
+        for prd in prds.get(doc_id, [])
+        for m in getattr(views.get(prd.id), "milestones", None) or []
+        if m.end_date is not None
+    }
 
 
 def key_date_prds(
@@ -374,7 +416,10 @@ async def _apply(
 
 async def publish(db: AsyncSession, d: SimpleDraft) -> None:
     """The approved draft's key dates become the roadmap's published ones."""
+    skip = copied(d.overlay)
     for kd_id, v in ((d.overlay or {}).get(KEY) or {}).items():
+        if kd_id in skip:
+            continue
         row = await db.get(RoadmapKeyDate, uuid.UUID(kd_id))
         if v is None:
             if row is not None:
