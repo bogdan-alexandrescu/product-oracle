@@ -15,8 +15,8 @@ import { login } from "./helpers";
  *   it; the picked verdict fills in at once; Save verdict turns the row and the tally; the
  *   arrows step through; fails_when=the old table and side panel, or a verdict that does not
  *   record; no_claim=other review pages (they keep their table).
- * - "hard case" (EC1 b): protects=15 features at 1512 wide: the list scrolls on its own and ends
- *   above the bar at rest and once the page scrolls, the last feature's verdict click records; fails_when=the list runs under the
+ * - "hard case" (EC1 b): protects=15 features at 1512 wide: the list scrolls on its own and runs
+ *   down to the bar's top edge (as in the picked frame), never under it, at rest and once the page scrolls, the last feature's verdict click records; fails_when=the list runs under the
  *   bar or the click misses.
  * - "short window" (walk-eng-check item 2): protects=at 1512x600 and 1366x540 the verdict
  *   buttons sit in the first screen above the bar and a click records; fails_when=a verdict
@@ -100,9 +100,12 @@ test("hard case: 15 features at 1512 wide, the list scrolls on its own above the
   await page.setViewportSize({ width: 1512, height: 945 });
   await openCheck(page, "eng-check-shop-15", 15);
   expect(await list(page).evaluate((el) => el.scrollHeight > el.clientHeight + 1), "the list scrolls on its own").toBe(true);
-  // At rest, before the page scrolls, the list already ends above the bar: no row sits under it.
+  // At rest, before the page scrolls, the list runs down to the bar's top edge, as in the picked
+  // frame, and no row sits under it.
   const rest = await box(list(page));
-  expect(rest.y + rest.height, "the list ends above the bar at rest").toBeLessThanOrEqual((await box(bar(page))).y + 1);
+  const restBar = await box(bar(page));
+  expect(rest.y + rest.height, "the list ends at the bar's top edge at rest").toBeGreaterThanOrEqual(restBar.y - 1);
+  expect(rest.y + rest.height, "the list never runs under the bar at rest").toBeLessThanOrEqual(restBar.y + 1);
   await row(page, "f.invoice-pdf").getByRole("button").click();
   await expect(pane(page).getByTestId("brief-position")).toContainText("Feature 15 of 15");
   await verdicts(page).getByRole("button", { name: "Feasible", exact: true }).click();
@@ -110,10 +113,15 @@ test("hard case: 15 features at 1512 wide, the list scrolls on its own above the
   await expect(bar(page).getByTestId("eng-tally")).toContainText("1 of 15 decided");
   await page.mouse.move(700, 400);
   await page.mouse.wheel(0, 600);
-  await page.waitForTimeout(300);
-  const l = await box(list(page));
-  const b = await box(bar(page));
-  expect(l.y + l.height, "the list ends above the bar").toBeLessThanOrEqual(b.y + 1);
+  // Wait on the scrolled state, not on a timing: the page has scrolled and the list's end has
+  // settled at the bar's top edge, never under it.
+  await expect.poll(async () => page.evaluate(() => scrollY)).toBeGreaterThan(0);
+  const gap = async () => {
+    const l = await box(list(page));
+    return Math.round(l.y + l.height - (await box(bar(page))).y);
+  };
+  await expect.poll(gap, { message: "the list ends at the bar's top edge once scrolled, never under it" }).toBeGreaterThanOrEqual(-1);
+  expect(Math.abs(await gap()), "the list ends at the bar's top edge once scrolled, never under it").toBeLessThanOrEqual(1);
   await expect(row(page, "f.invoice-pdf")).toBeInViewport();
 });
 

@@ -157,13 +157,28 @@ test("sources › Google Docs: editing adds to the list from the picker; removin
   await expect(row).toContainText("2 items");
 });
 
+/**
+ * Searches Sources as a person would. The search box is drawn once before the page has its
+ * account and again after (a new box): words typed into the first one are lost, Search stays
+ * off and the click waited out the test. Wait on that state instead: the words are in the box
+ * the page reads and Search takes them, typing again if the box was swapped.
+ */
+async function searchFor(page: Page, words: string) {
+  const box = page.getByLabel("Search", { exact: true });
+  const go = page.getByRole("button", { name: "Search" });
+  await expect(async () => {
+    if ((await box.inputValue()) !== words) await box.fill(words);
+    await expect(go).toBeEnabled({ timeout: 1_000 });
+  }).toPass();
+  await go.click();
+}
+
 test("sources › Google Docs: removing a folder and saving hides its docs at once, without a sync", async ({ page }) => {
   await fakeGoogle(page, PICKED);
   await login(page);
   // A doc from the "Product specs" folder is in search.
   await page.goto("/sources");
-  await page.getByLabel("Search", { exact: true }).fill("guests");
-  await page.getByRole("button", { name: "Search" }).click();
+  await searchFor(page, "guests");
   await expect(page.getByTestId("search-hit")).toHaveCount(1);
   await expect(page.getByTestId("search-hit")).toContainText("Checkout spec");
 
@@ -183,8 +198,7 @@ test("sources › Google Docs: removing a folder and saving hides its docs at on
 
   // Gone from search too, with no sync run.
   await page.goto("/sources");
-  await page.getByLabel("Search", { exact: true }).fill("guests");
-  await page.getByRole("button", { name: "Search" }).click();
+  await searchFor(page, "guests");
   await expect(page.getByText("Nothing in your sources matches “guests”.")).toBeVisible();
   await expect(page.getByTestId("search-hit")).toHaveCount(0);
 });

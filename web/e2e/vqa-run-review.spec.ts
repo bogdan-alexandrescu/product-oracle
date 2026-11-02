@@ -13,8 +13,11 @@ import { login } from "./helpers";
  *   the list as in the picked frame; fails_when=the verdict cell adds a line taller than its
  *   words and every undecided row grows.
  * - "list ends at the bar": protects=on a desktop the list runs down to the decision bar's top
- *   edge, as in the picked frame, and never under it;
- *   fails_when=a gap above the bar cuts the last row short.
+ *   edge, as in the picked frame, and never under it (within 1px, as build-engcheck's hard case), at
+ *   rest, scrolled and at the page's very end, at 1440x900,
+ *   1512x945 and 1920x1080 (whether its rows fill the room or not);
+ *   fails_when=a gap above the bar cuts the last row short, or the list stops short of the bar
+ *   when its rows are shorter than the window, or the page's end gap pushes it up off the bar.
  * - "answered in its card" (EC2 b): protects=an answered question keeps its card, the same
  *   border and padding as an open one, with the tick, the question, the answer, who gave it
  *   and Change inside, and no answer box, desktop and phone; fails_when=the answered question
@@ -49,8 +52,11 @@ for (const [device, viewport] of [
   });
 }
 
-test("desktop: the list runs down to the bar as in the frame, never under it", async ({ page }) => {
-  await page.setViewportSize(DESKTOP);
+// The list's height must not hang on the window or on how tall its rows come out (fonts): at
+// 1512x945 and 1920x1080 nine rows are shorter than the room, and the list still ends at the bar.
+for (const viewport of [DESKTOP, { width: 1512, height: 945 }, { width: 1920, height: 1080 }]) {
+test(`desktop ${viewport.width}x${viewport.height}: the list runs down to the bar as in the frame, never under it`, async ({ page }) => {
+  await page.setViewportSize(viewport);
   await openCheck(page);
   const list = (await page.getByRole("region", { name: "Features" }).boundingBox())!;
   const bar = (await page.getByTestId("decision-bar").boundingBox())!;
@@ -62,8 +68,21 @@ test("desktop: the list runs down to the bar as in the frame, never under it", a
   await expect.poll(async () => page.evaluate(() => scrollY)).toBeGreaterThan(0);
   const l2 = (await page.getByRole("region", { name: "Features" }).boundingBox())!;
   const b2 = (await page.getByTestId("decision-bar").boundingBox())!;
-  expect(l2.y + l2.height).toBeLessThanOrEqual(b2.y + 1);
+  // The same promise as build-engcheck's hard case: once scrolled the list ends at the bar's top
+  // edge within 1px, never above it and never under it.
+  expect(l2.y + l2.height, "the list still ends at the bar's top edge").toBeGreaterThanOrEqual(b2.y - 1);
+  expect(l2.y + l2.height, "the list never runs under the bar once scrolled").toBeLessThanOrEqual(b2.y + 1);
+  // And at the page's very end, where the page's own gap once pushed the list 16px above the bar.
+  await page.mouse.wheel(0, 5000);
+  await expect.poll(async () => page.evaluate(() => Math.ceil(scrollY + innerHeight) >= document.documentElement.scrollHeight)).toBe(true);
+  const gap = async () => {
+    const l3 = (await page.getByRole("region", { name: "Features" }).boundingBox())!;
+    return Math.round(l3.y + l3.height - (await page.getByTestId("decision-bar").boundingBox())!.y);
+  };
+  await expect.poll(gap, { message: "the list ends at the bar's top edge at the page's very end" }).toBeGreaterThanOrEqual(-1);
+  expect(Math.abs(await gap()), "the list ends at the bar's top edge at the page's very end, never under it").toBeLessThanOrEqual(1);
 });
+}
 
 for (const [device, viewport] of [
   ["desktop", DESKTOP],

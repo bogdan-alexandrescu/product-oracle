@@ -75,7 +75,11 @@ export function EngReview({
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   // The decision bar's height and where the list's top sits: the sticky list runs down to the
   // bar's top edge (as in the picked frame) at rest and once scrolled, and scrolls on its own,
-  // so no row is ever under the bar (a click there would land on the bar).
+  // so no row is ever under the bar (a click there would land on the bar). Its height is set, not
+  // only capped: a list whose rows are shorter than the room (nine rows in a tall window) still
+  // ends at the bar. A late layout above it (fonts, a note that appears) moves it: re-placed then.
+  // On a desktop the page's 16px gap above the bar sits under the reading pane, not under the
+  // grid, so at the page's very end the sticky list is not pushed up off the bar.
   const barRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLElement>(null);
   const [barH, setBarH] = useState(72);
@@ -83,9 +87,13 @@ export function EngReview({
   useEffect(() => {
     const el = barRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setBarH(el.offsetHeight));
-    ro.observe(el);
     const place = () => setListTop(Math.max(16, Math.round(listRef.current?.getBoundingClientRect().top ?? 16)));
+    const ro = new ResizeObserver(() => {
+      setBarH(el.offsetHeight);
+      place();
+    });
+    ro.observe(el);
+    ro.observe(document.body);
     place();
     window.addEventListener("scroll", place, { passive: true });
     window.addEventListener("resize", place);
@@ -219,7 +227,7 @@ export function EngReview({
           ref={listRef}
           aria-label="Features"
           data-testid="brief-list"
-          className={`sticky top-4 max-h-[calc(100dvh_-_var(--bar-h,72px)_-_var(--list-top,16px))] min-w-0 overflow-y-auto overscroll-contain rounded-panel border border-line bg-surface max-[900px]:static max-[900px]:max-h-none ${
+          className={`sticky top-4 h-[calc(100dvh_-_var(--bar-h,72px)_-_var(--list-top,16px))] min-w-0 overflow-y-auto overscroll-contain rounded-panel border border-line bg-surface max-[900px]:static max-[900px]:h-auto ${
             reading ? "max-[900px]:hidden" : ""
           }`}
         >
@@ -296,7 +304,7 @@ export function EngReview({
       <div
         ref={barRef}
         data-testid="decision-bar"
-        className="sticky bottom-0 z-30 -mx-6 mt-4 border-t border-line bg-surface px-6 py-3 shadow-tip max-[600px]:bottom-[68px] max-[600px]:-mx-2.5 max-[600px]:px-3"
+        className="sticky bottom-0 z-30 -mx-6 mt-4 min-[901px]:mt-0 border-t border-line bg-surface px-6 py-3 shadow-tip max-[600px]:bottom-[68px] max-[600px]:-mx-2.5 max-[600px]:px-3"
       >
         {error && <ErrorNote>{error}</ErrorNote>}
         {sending && decides && (
@@ -460,7 +468,7 @@ function BriefPane({
 
   return (
     <article
-      className={`min-w-0 rounded-panel border border-line bg-surface ${reading ? "" : "max-[900px]:hidden"}`}
+      className={`min-w-0 rounded-panel border border-line bg-surface min-[901px]:mb-4 ${reading ? "" : "max-[900px]:hidden"}`}
       data-testid="brief-inspector"
       aria-label={`Brief: ${f.title}`}
     >
