@@ -65,11 +65,11 @@ for (const phone of [false, true]) {
       const url = page.url();
       if (phone) await expect(page.getByTestId("meeting-people-toggle")).toContainText("1 of 3 here");
       await openPeople(page, phone);
-      await expect(chip(page, "Avery Stone")).toHaveAttribute("data-present", "true");
+      await expect(chip(page, "Avery Stone")).toHaveAttribute("data-joined", "true");
       await expect(chip(page, "Avery Stone").getByTestId("attendee-invited")).toHaveCount(0);
       for (const name of ["Theo Brandt", "Priya Raman"]) {
         await expect(chip(page, name).getByTestId("attendee-invited")).toHaveText(/invited, not joined yet/);
-        await expect(chip(page, name)).toHaveAttribute("data-present", "false");
+        await expect(chip(page, name)).toHaveAttribute("data-joined", "false");
       }
 
       await switchTo(page, "commenter@example.com");
@@ -80,7 +80,7 @@ for (const phone of [false, true]) {
       await tap(page.getByRole("button", { name: "Join", exact: true }));
       await expect(page.getByRole("button", { name: "Join", exact: true })).toHaveCount(0);
       await openPeople(page, phone);
-      await expect(chip(page, "Theo Brandt")).toHaveAttribute("data-present", "true");
+      await expect(chip(page, "Theo Brandt")).toHaveAttribute("data-joined", "true");
       await expect(chip(page, "Theo Brandt").getByTestId("attendee-invited")).toHaveCount(0);
       await expect(chip(page, "Priya Raman").getByTestId("attendee-invited")).toBeVisible();
       if (phone) await expect(page.getByTestId("meeting-people-toggle")).toContainText("2 of 3 here");

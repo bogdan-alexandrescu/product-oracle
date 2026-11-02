@@ -308,7 +308,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
             // walkc-meeting r2 (5a): one invited who has not pressed Join reads "not joined yet", never here.
             const here = a.present && a.joined;
             return (
-            <li key={a.id} data-present={here ? "true" : "false"} className={`flex items-center rounded-full border border-line px-3 py-0.5 max-[600px]:min-h-11 ${here ? "" : "text-text2"}`}>
+            <li key={a.id} data-present={a.present ? "true" : "false"} data-joined={a.joined ? "true" : "false"} className={`flex items-center rounded-full border border-line px-3 py-0.5 max-[600px]:min-h-11 ${here ? "" : "text-text2"}`}>
               <span>
                 <span aria-hidden className={`mr-1 inline-block h-2.5 w-2.5 rounded-full ${here ? "bg-accent" : "bg-text-faint"}`} />
                 {a.name}
