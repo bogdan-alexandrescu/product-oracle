@@ -185,10 +185,14 @@ async def test_reapproval_replaces_the_prds_items_rather_than_adding_them_again(
     assert sorted(i["key"] for i in out["items"]) == ["offline-sync", "route-search"]
     assert items["offline-sync"]["end"]["date"] == "2026-12-22"
     assert items["route-search"]["end"]["date"] == "2027-01-08"
-    assert sorted((k["name"], k["date"]) for k in out["key_dates"]) == [
+    # The roadmap's own key dates; the PRD's milestones (roadmap-keydates) come beside them.
+    own = [k for k in out["key_dates"] if k["prd"] is None]
+    assert sorted((k["name"], k["date"]) for k in own) == [
         ("Launch", "2027-02-05"),
         ("Private beta", "2026-12-04"),
     ]
+    milestones = {(k["name"], k["date"]) for k in out["key_dates"] if k["prd"] is not None}
+    assert ("M2 · Launch", "2027-02-05") in milestones
     drafts = (await client.get(DRAFTS, headers=ctx.as_("owner"))).json()
     [d] = [d for d in drafts if d["document"]["id"] == str(ids["roadmap"])]
     [src] = d["from_prds"]
@@ -209,7 +213,7 @@ async def test_reapproval_replaces_the_prds_items_rather_than_adding_them_again(
     await approve(client, ctx, 2)
     again = await read(client, ctx)
     assert sorted(i["key"] for i in again["items"]) == ["offline-sync", "route-search"]
-    assert len(again["key_dates"]) == 2
+    assert len([k for k in again["key_dates"] if k["prd"] is None]) == 2
 
 
 CHANGES = "/v1/simple/changes"
