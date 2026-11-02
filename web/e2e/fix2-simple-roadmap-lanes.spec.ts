@@ -115,8 +115,8 @@ test.describe("phone", () => {
   /** Finding 6: a lane's name carries a title (its full name) for a hover/long-press, even once drawn at phone width. */
   test("B3: a lane's name has its own title for the full text", async ({ page }) => {
     await openLanes(page, "light");
-    const fa = phoneLane(page, "Faster activation");
+    const fa = phoneLane(page, "Activation");
     // The lane's own title (its runs carry their own, naming their items).
-    await expect(fa.locator(":scope > title")).toHaveText("Faster activation");
+    await expect(fa.locator(":scope > title")).toHaveText("Activation");
   });
 });

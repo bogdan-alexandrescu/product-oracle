@@ -101,6 +101,7 @@ test.describe("phone", () => {
   test("qa-plan-54: an open lane's rows write days as 'Nov 2 – Nov 13'", async ({ page }) => {
     await lanes(page);
     const lane = page.getByTestId("phone-lane").filter({ has: page.locator('[data-testid="phone-lane-name"]', { hasText: /^Reliability$/ }) });
+    await lane.click();
     await expect(lane).toHaveAttribute("data-open", "true");
     const list = page.getByTestId("lane-list");
     await expect(list.getByTestId("lane-row").first()).toContainText("Nov 2 – Nov 13");

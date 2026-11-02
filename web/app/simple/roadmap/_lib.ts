@@ -428,10 +428,19 @@ export function milestonePrd(data: Roadmap, m: Milestone): { slug: string; title
   return prd ? { slug: prd.slug, title: prd.title } : null;
 }
 
+/** The goal a planned item's PRD gives it: the one most of its slices name (the first on a tie); null: none. */
+function planGoal(item: Item | undefined): string | null {
+  const n = new Map<string, number>();
+  for (const x of item?.slices ?? []) if (x.goal) n.set(x.goal, (n.get(x.goal) ?? 0) + 1);
+  let best: string | null = null;
+  for (const [goal, k] of n) if (best === null || k > n.get(best)!) best = goal;
+  return best;
+}
+
 /**
- * The rows' lanes. Goal: the API's goal groups, an item with no goal of its own going under the
- * goal its plan slices move most (the API's lane of that goal when there is one; one lane per
- * goal, "No goal" last); Milestone: an item under its PRD's milestone of its first slice, in code
+ * The rows' lanes. Goal: the API's goal groups, a planned item going under the goal its PRD's
+ * plan slices move most, not another goal its feature supports (the API's lane of that goal
+ * when there is one; one lane per goal, "No goal" last); Milestone: an item under its PRD's milestone of its first slice, in code
  * order, titled with the PRD when the plan's items come from more than one; an item with no
  * slice under the track milestone it leads to (fix4 qa-simple-roadmap-11: the milestone naming
  * it, else its own milestone's, else the first of its track's it ends on or before), by date
@@ -450,7 +459,9 @@ export function lanes(data: Roadmap, by: Lane): Roadmap {
   if (by === "goal") {
     for (const g of data.groups)
       for (const id of g.item_ids) {
-        const goal = g.key === "none" ? byId.get(id)?.slices.find((x) => x.goal)?.goal : null;
+        // walkb-roadmap review 5c: a planned item sits under its PRD's goal (the one its slices
+        // name most), never under another goal its feature also supports.
+        const goal = planGoal(byId.get(id));
         const named = goal ? data.groups.find((x) => x.key !== "none" && x.title === goal) : undefined;
         if (named) put(named.key, named.title, id);
         else if (goal) put(`plan-goal:${goal}`, goal, id);

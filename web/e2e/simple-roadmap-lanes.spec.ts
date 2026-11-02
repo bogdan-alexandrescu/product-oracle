@@ -55,7 +55,7 @@ for (const scheme of ["light", "dark"] as const) {
      * count, then PM-owned ("3 items · no engineering"); each piece a pill coloured by its
      * milestone (F-05a in M1 and F-05b in M2 differ), a feature's slices on one row joined by a
      * dotted line; pieces that overlap stack (Setup checklist and Sample data import take two
-     * rows of Faster activation), pieces one after the other share a row (Setup failure alerts
+     * rows of Activation, the PRD's goal for both), pieces one after the other share a row (Setup failure alerts
      * and Setup error report); the month row, the week row with the Today pill, each milestone's
      * end a flag "M1 ends Nov 27" with a dashed line, the year-end break hatched, the legend in
      * the card (M1, M2, M3, No engineering work, Today, Holidays, One bar per part of a feature) and the Group by's
@@ -65,7 +65,7 @@ for (const scheme of ["light", "dark"] as const) {
     test(`B2: goal lanes with stacked pieces (desktop, ${scheme})`, async ({ page }) => {
       await open(page, scheme);
       const titles = await page.getByTestId("chart-group").locator("b").allInnerTexts();
-      expect(titles).toEqual(["Faster activation", "Reliability", "Revenue", "Growth", "Activation", "PM-owned"]);
+      expect(titles).toEqual(["Activation", "Reliability", "Revenue", "Growth", "PM-owned"]);
       await expect(lane(page, "Reliability").getByTestId("lane-count")).toHaveText("5 items");
       await expect(lane(page, "PM-owned").getByTestId("lane-count")).toHaveText("3 items · no engineering");
       // PM-owned work (F-04, F-10, F-18) sits in its own lane, grey and dashed.
@@ -167,8 +167,8 @@ for (const scheme of ["light", "dark"] as const) {
 
     /**
      * Card lanes-b3-phone: protects = B3: one thin lane per goal with its name and count, each
-     * lane's work as one bar per run of a milestone (Faster activation's two M1 pieces are one
-     * bar, 2 Nov - 27 Nov), the lane with the most work open below ("open below", its pieces
+     * lane's work as one bar per run of a milestone (Activation's two M1 pieces are one
+     * bar, 2 Nov - 27 Nov), the lane with the most work (the first of a tie) open below ("open below", its pieces
      * listed with code, name, milestone dot and dates, "5 items, up to 1 at once"); tapping
      * another lane opens it, tapping a listed piece opens the item's card as a sheet; the page
      * never scrolls sideways; fails_when = a lane, a run, the list or the card is missing or
@@ -177,18 +177,19 @@ for (const scheme of ["light", "dark"] as const) {
     test(`B3: thin lanes, the open one listed below (phone, ${scheme})`, async ({ page }) => {
       await open(page, scheme);
       await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-view", "lanes-phone");
-      await expect(page.getByTestId("phone-lane")).toHaveCount(6);
-      const fa = phoneLane(page, "Faster activation");
-      await expect(fa.getByTestId("lane-count")).toHaveText("2 items");
-      await expect(fa.getByTestId("lane-run")).toHaveCount(1);
-      await expect(fa.getByTestId("lane-run")).toHaveAttribute("data-start", "2026-11-02");
-      await expect(fa.getByTestId("lane-run")).toHaveAttribute("data-end", "2026-11-27");
+      await expect(page.getByTestId("phone-lane")).toHaveCount(5);
+      const fa = phoneLane(page, "Activation");
+      await expect(fa.getByTestId("lane-count")).toHaveText("5 items");
+      await expect(fa.getByTestId("lane-run").first()).toHaveAttribute("data-start", "2026-11-02");
+      await expect(fa.getByTestId("lane-run").first()).toHaveAttribute("data-end", "2026-11-27");
       await expect(phoneLane(page, "Growth").getByTestId("lane-run")).toHaveCount(3);
       // The milestones' ends (flags "M1", "M2", "M3" and their lines), Today and the holidays, as B3 draws them.
       await expect(page.getByTestId("milestone-end")).toHaveCount(3);
       await expect(page.getByTestId("milestone-end").first().getByTestId("milestone-end-label")).toHaveText("M1");
       await expect(page.getByTestId("today-pill")).toHaveText("Today");
       await expect(page.getByTestId("no-work")).toHaveAttribute("data-start", "2026-12-28");
+      await expect(fa).toHaveAttribute("data-open", "true");
+      await phoneLane(page, "Reliability").click();
       await expect(phoneLane(page, "Reliability")).toHaveAttribute("data-open", "true");
       await expect(phoneLane(page, "Reliability").getByTestId("lane-open-chip")).toHaveText("Listed below");
       const list = page.getByTestId("lane-list");
