@@ -634,6 +634,14 @@ class SimpleDraftChange(BaseModel):
     titles: list[str] = []
 
 
+class SimpleSubmitIn(BaseModel):
+    """Send for approval's optional body (build-review): people the sender adds as
+    reviewers. The draft waits on them too, after the document's required reviewers; each
+    must be an active member who may approve (commenter and up)."""
+
+    reviewer_ids: list[uuid.UUID] = []
+
+
 class SimpleDraftOut(BaseModel):
     """A working draft of one roadmap (S3b): its changes until submitted, then the version
     in review and who it waits on."""
@@ -1170,6 +1178,20 @@ class SimplePlanStrip(BaseModel):
     past_edge: int = 0
 
 
+class OnePagerInReview(BaseModel):
+    """One change in review a reader may not see in full (build-review): a line change in
+    the PRD's draft or someone's proposal, in the same words its margin note would use."""
+
+    line_id: str
+    kind: Literal["change", "proposal"]
+    before: str
+    after: str
+    by_name: str
+    # A change: whom its submitted draft waits on (none while the draft is working); a
+    # proposal: whom it is routed to.
+    waiting_on: list[SimplePersonRef]
+
+
 class OnePagerOut(BaseModel):
     document: SimpleDocRef
     version: int
@@ -1195,6 +1217,9 @@ class OnePagerOut(BaseModel):
     draft: OnePagerDraft | None
     # Drafts and proposals the reader may not see (the count only).
     changes_in_review: int
+    # The same changes, one per line change or proposal (build-review); empty for people
+    # who see the draft itself.
+    in_review: list[OnePagerInReview] = []
     # Owners and the decider change lines directly (Undo); approvers and commenters
     # propose; viewers read.
     can_edit: bool
