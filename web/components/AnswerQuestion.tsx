@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Button, InfoTip } from "@/components/ds";
 import { PersonPicker, peopleByIds, type Person } from "@/components/PersonPicker";
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
-import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
+import { ApiError, SOMETHING_WENT_WRONG, api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage } from "@/lib/use-query";
 
 export type InboxQuestion = Schemas["InboxQuestion"];
@@ -88,7 +88,14 @@ export function AnswerQuestion({
       );
       onSettled(kind, settledLabel(kind, delegate));
     } catch (e) {
-      setError(e instanceof ApiError && e.status === 403 ? await askedOfMessage(q.question.id) : errorMessage(e));
+      setError(
+        e instanceof ApiError && e.status === 403
+          ? await askedOfMessage(q.question.id)
+          : // brief-answers: a send cut off on the way says why; the text stays in the form.
+            kind === "answer" && (!(e instanceof ApiError) || (e.status >= 500 && e.message === SOMETHING_WENT_WRONG))
+            ? "Your answer did not reach Oracle in time. Your text is still here: send it again."
+            : errorMessage(e),
+      );
     } finally {
       setBusy(null);
     }

@@ -5759,6 +5759,13 @@ async function route(db: Db, req: Request): Promise<Response> {
         question: (id) => v2db.questions.find((x) => x.id === id) ?? null,
         nextQuestion,
         recordAnswer,
+        saved: (id) => {
+          const question = v2db.questions.find((x) => x.id === id);
+          if (!question || question.status !== "answered") return null;
+          const answer = v2db.answers.filter((a) => a.question_id === id).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+          if (!answer || answer.kind !== "answer" || answer.answered_by !== me.id) return null;
+          return { answer, question, gap: v2db.gaps.find((g) => g.id === question.gap_id) ?? null };
+        },
       },
       req,
       p,
@@ -5807,6 +5814,14 @@ async function route(db: Db, req: Request): Promise<Response> {
       if (!run || run.status !== "draft") return null;
       const patch = new Request(new URL(`/v1/runs/${id}`, req.url), { method: "PATCH", body: JSON.stringify(body) });
       return routeRuns({ ...runsContext(db), db: db.runs! }, patch, ["v1", "runs", id]).then((r) => r ?? notFound("Route"));
+    };
+    const runStatus = (id: string) => db.runs?.runs.find((r) => r.id === id)?.status ?? null;
+    const startRun = async (id: string) => {
+      for (const step of ["estimate", "start"]) {
+        const call = new Request(new URL(`/v1/runs/${id}/${step}`, req.url), { method: "POST" });
+        const resp = await routeRuns({ ...runsContext(db), db: db.runs! }, call, ["v1", "runs", id, step]);
+        if (!resp?.ok) return;
+      }
     };
     const confirmedGoals = () => new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.title]));
     const goalKeys = () => new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.key]));
@@ -5874,7 +5889,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     };
     const intake = await routeIntake(
       v2db,
-      { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, goalKeys, lockedSections, requests, questionsLevel: () => levelFor((db.autonomy ??= emptyAutonomy()), "questions"), learned: () => nudges(db.quality?.learnings, "question_category"), raiseFeedback, withdrawFeedback },
+      { userId: me.id, role: me.role, createRun, updateRun, runStatus, startRun, people: db.members, subjects, confirmedGoals, goalKeys, lockedSections, requests, questionsLevel: () => levelFor((db.autonomy ??= emptyAutonomy()), "questions"), learned: () => nudges(db.quality?.learnings, "question_category"), raiseFeedback, withdrawFeedback },
       req,
       p,
       q,

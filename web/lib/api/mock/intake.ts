@@ -80,6 +80,9 @@ export interface IntakeContext {
   createRun: (body: Schemas["RunCreate"]) => Promise<Response>;
   /** C4: changes the intake's draft run, not started yet (PATCH /v1/runs/{id}); null when it is no longer a draft. */
   updateRun?: (id: string, body: Schemas["RunPatch"]) => Promise<Response | null>;
+  /** brief-answers: a run's status, and Estimate then Start on it (an accepted research run). */
+  runStatus?: (id: string) => string | null;
+  startRun?: (id: string) => Promise<void>;
   /** The company's members (C2); without them nobody can be asked a teammate's question. */
   people?: MockPerson[];
   subjects?: SubjectLookup;
@@ -882,9 +885,20 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     if (proposal.status !== "proposed") return fail(409, `This proposal is already ${proposal.status}`);
     if (p[3] === "accept") {
       if (proposal.kind === "research_run") {
-        const resp = await ctx.createRun({ flow: "baseline_to_prd", document: "research", knobs: { depth: "quick", roles: {}, checkpoints: {} } });
-        if (!resp.ok) return resp;
-        proposal.result = { run_id: ((await resp.json()) as { id: string }).id };
+        // brief-answers (as answers.research_run): the intake's one unstarted research run takes
+        // the gaps, else one is made; then it is estimated and started (a draft only when it cannot).
+        const reuse = (db.intake_proposals ?? [])
+          .filter((x) => x.intake_id === proposal.intake_id && x.kind === "research_run" && x.status === "accepted")
+          .map((x) => x.result?.run_id)
+          .find((id): id is string => typeof id === "string" && ctx.runStatus?.(id) === "draft");
+        let runId = reuse ?? null;
+        if (!runId) {
+          const resp = await ctx.createRun({ flow: "baseline_to_prd", document: "research", knobs: { depth: "quick", roles: {}, checkpoints: {} } });
+          if (!resp.ok) return resp;
+          runId = ((await resp.json()) as { id: string }).id;
+        }
+        proposal.result = { run_id: runId };
+        await ctx.startRun?.(runId);
       } else {
         const section = typeof proposal.detail.section_key === "string" ? proposal.detail.section_key : null;
         const document = proposal.detail.document_id ?? proposal.detail.document;
