@@ -89,6 +89,7 @@ export const ORIGIN_LABEL: Record<Exclude<DecisionSummary["origin"], "manual">, 
   request_decline: "Recorded when a request was declined",
   pricing: "Recorded from a pricing memo",
   meeting: "Recorded in a review meeting",
+  prd: "A question on a PRD",
 };
 
 export const VERDICT_LABEL: Record<Schemas["DecisionReviewOut"]["verdict"], string> = {
