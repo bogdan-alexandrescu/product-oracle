@@ -214,8 +214,15 @@ const NOW_LINE: Line = { key: "now", kind: "now", label: "This quarter (Now)", d
 
 const lineDay = (d: string): string => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
-/** priorities._same_name: a line's name as compared ("M1 · Prove it" is "M1 Prove it"). */
-const sameName = (name: string): string => name.replace(/·/g, " ").split(/\s+/).filter(Boolean).join(" ").toLowerCase();
+/**
+ * priorities._same_as: what makes a milestone the same as another on its day, by the roadmap
+ * chart's rule (roadmap/_lib.ts drawnKeyDates): its code ("M1"), or its name without the code
+ * ("prove it", in lower case).
+ */
+const sameAs = (name: string, day: string): string[] => {
+  const words = name.replace(/^[A-Z][A-Z0-9]*-?[0-9]+[a-z]?\s*[·:.\-–—]?\s*/, "").trim().toLowerCase();
+  return [`${name.split(/[\s·]/)[0]}|${day}`, ...(words ? [`~${words}|${day}`] : [])].sort();
+};
 
 /**
  * priorities.lines: Now, each key date and each dated milestone the reader sees. The key dates
@@ -227,13 +234,14 @@ const sameName = (name: string): string => name.replace(/·/g, " ").split(/\s+/)
 function linesOf(read: Schemas["SimpleRoadmapOut"]): { lines: Line[]; same: Map<string, Line> } {
   const tracks = new Set(read.items.map((i) => i.track?.id).filter(Boolean));
   const keyDates = (read.key_dates ?? []).map((k): Line => ({ key: `key_date:${k.id}`, kind: "key_date", label: `${k.name} · ${lineDay(k.date)}`, date: k.date, prd: k.prd ?? null }));
-  const fromPrd = new Map((read.key_dates ?? []).flatMap((k, i) => (k.prd ? [[`${sameName(k.name)}|${k.date}`, keyDates[i]] as const] : [])));
+  const fromPrd = new Map<string, Line>();
+  (read.key_dates ?? []).forEach((k, i) => k.prd && sameAs(k.name, k.date).forEach((x) => fromPrd.has(x) || fromPrd.set(x, keyDates[i])));
   const same = new Map<string, Line>();
   const milestones: Line[] = [];
   for (const m of read.milestones) {
     if (!m.date || !tracks.has(m.track_id) || m.status === "dropped") continue;
     const key = `milestone:${m.id}`;
-    const kd = fromPrd.get(`${sameName(m.name)}|${m.date}`);
+    const kd = sameAs(m.name, m.date).map((x) => fromPrd.get(x)).find(Boolean);
     if (kd) same.set(key, kd);
     else milestones.push({ key, kind: "milestone", label: `${m.name} · ${lineDay(m.date)}`, date: m.date });
   }
