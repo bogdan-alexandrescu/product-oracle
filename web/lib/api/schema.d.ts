@@ -20404,7 +20404,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline" | "pricing" | "meeting";
+            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline" | "pricing" | "meeting" | "prd";
             /**
              * Reversibility
              * @enum {string}
@@ -20699,7 +20699,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline" | "pricing" | "meeting";
+            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline" | "pricing" | "meeting" | "prd";
             /**
              * Reversibility
              * @enum {string}
@@ -40460,6 +40460,8 @@ export interface components {
              * @default false
              */
             can_start: boolean;
+            /** Reviews In Trash */
+            reviews_in_trash?: "roadmap" | null;
         };
         /** SimpleVisualCommentIn */
         SimpleVisualCommentIn: {
@@ -56602,7 +56604,7 @@ export interface operations {
                 approver?: string | null;
                 /** @description true: only those whose review has come; false: none of them */
                 due?: boolean | null;
-                /** @description one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, comma-separated */
+                /** @description one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, prd, comma-separated */
                 origin?: string | null;
                 /** @description the chosen option's key */
                 chosen?: string | null;
