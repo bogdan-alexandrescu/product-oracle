@@ -193,6 +193,9 @@ class FakeSwarmCloud:
         self.held: dict[str, str] = {}
         # Files an agent step writes instead of the default content: step_id -> files.
         self.step_files: dict[str, dict[str, str]] = {}
+        # Files every agent step leaves, and raw reads SwarmCloud refuses by file name.
+        self.extra_files: dict[str, str] = {}
+        self.raw_refusals: dict[str, int] = {}
         # #2498: a step that would start after the MCP credential expired parks
         # CREDENTIAL_MISSING instead of failing ("blocked_by": in task.blocked_by,
         # "waiting": in task.waiting.detail; None: it fails, as before #2498).
@@ -309,6 +312,9 @@ class FakeSwarmCloud:
                     return httpx.Response(self.form_status, text="<html>upstream error</html>")
                 if name not in step.files:
                     return _err(404, "not_found", "no such artifact")
+                if name in self.raw_refusals:
+                    status = self.raw_refusals[name]
+                    return _err(status, "invalid_name", "artifact name not allowed")
                 return httpx.Response(200, text=step.files[name])
             rows = [{"name": n, "role": None} for n in step.files]
             rows.append({"name": "agent.log", "role": "agent_stdout"})
@@ -773,6 +779,7 @@ class FakeSwarmCloud:
         elif m3 := _NOTES.search(prompt):
             names = [m3[1]]
         s.files = {n: _default_content(n, segment, attempt, document_of(prompt)) for n in names}
+        s.files.update(self.extra_files)
         s.files.update(self.step_files.get(s.step_id, {}))
         s.cost = AGENT_COST
         s.state = "SUCCEEDED"
