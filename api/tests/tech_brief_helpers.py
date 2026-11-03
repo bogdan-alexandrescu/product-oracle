@@ -135,7 +135,7 @@ class BriefsRuntime(FakeRuntime):
     the run's document): F4's Engineering check checks the briefs against the run's
     approved scope."""
 
-    async def artifacts(self, workflow_id: str, steps=None) -> dict[str, str]:
+    async def artifacts(self, workflow_id: str, steps=None, *, skipped=None) -> dict[str, str]:
         files = await super().artifacts(workflow_id, steps)
         record = self._record(workflow_id)
         if record.segment != "feature_set" or record.outcome.artifacts is not None:
