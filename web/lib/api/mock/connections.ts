@@ -15,6 +15,7 @@ import { FIREFLIES_CONNECTION_ID } from "./fireflies";
 import { MOCK_LOGIN } from "./fixtures";
 import { newCompany } from "./ids";
 import { MOCK_NOTION_CONNECTION_ID, notionPages } from "./notion";
+import { forgetMockConnection, relinkMockSources } from "./sources";
 
 type ConnectionRow = Schemas["ConnectionOut"];
 
@@ -290,6 +291,12 @@ export function mockConnectionEndpoint(id: string): string | null {
   return row ? (row.endpoint_url ?? FIREFLIES_DEFAULT_ENDPOINT) : null;
 }
 
+/** The person's connections (the Sources page offers them to a source; ./sources.ts). */
+export function mockConnectionRows(email?: string): ConnectionRow[] {
+  const db = load();
+  return db.connections.filter((c) => yours(db, c, email));
+}
+
 /** #710: the active Fireflies connections, read live (./live.ts); the mock's store is everyone's. */
 export function liveConnections(): ConnectionRow[] {
   return load().connections.filter((c) => c.provider === "fireflies" && c.status === "active");
@@ -417,6 +424,8 @@ function upsert(
     expires_at: auth_mode === "oauth" ? new Date(Date.now() + 3600_000).toISOString() : null,
     updated_at: now(),
   });
+  // As the API's save: the sources a Disconnect of this very account left without a connection.
+  relinkMockSources(row, email);
   return row;
 }
 
@@ -588,6 +597,8 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string, email
     if (!p[3] && m === "DELETE") {
       db.connections = db.connections.filter((c) => c.id !== row.id);
       if (db.owners) delete db.owners[row.id];
+      // The sources it synced keep the account they lost (as the API's forget_connection).
+      forgetMockConnection(row, email);
       return json(204, undefined);
     }
     if (p[3] === "reconnect" && m === "POST") {

@@ -513,7 +513,11 @@ class FakeRuntime:
         return self._cost(record)
 
     async def artifacts(
-        self, workflow_id: str, steps: tuple[str, ...] | None = None
+        self,
+        workflow_id: str,
+        steps: tuple[str, ...] | None = None,
+        *,
+        skipped: dict[str, str] | None = None,
     ) -> dict[str, str]:
         record = self._record(workflow_id)
         if record.outcome.artifacts is not None:
@@ -521,6 +525,12 @@ class FakeRuntime:
         outputs = tuple(record.spec.outputs) if record.spec is not None else ()
         prompt = record.spec.steps[-1].prompt if record.spec and record.spec.steps else ""
         return _default_files(record.segment, record.attempt, outputs, prompt)
+
+    async def read_artifacts(
+        self, workflow_id: str, steps: tuple[str, ...] | None = None
+    ) -> tuple[dict[str, str], dict[str, str]]:
+        """:meth:`artifacts` with the files it left out: none, the fake refuses none."""
+        return await self.artifacts(workflow_id, steps), {}
 
     async def cancel(self, workflow_id: str) -> None:
         self._record(workflow_id).cancelled = True

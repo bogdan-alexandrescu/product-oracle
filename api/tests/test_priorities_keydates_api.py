@@ -11,8 +11,22 @@ Test cards (protects / fails_when / no_claim):
   the roadmap read lists; picking one draws the line on its day; a newly approved version
   that moves M2 moves its line; fails_when=the PRD's milestones are missing from the lines,
   carry no PRD, or keep an old day; no_claim=the web (priorities-keydates.spec.ts).
+- test_plan_milestone_on_a_prd_key_date_is_listed_once: protects=prio-line-once (the owner,
+  Nov 3: "show it once"): a plan milestone with the same name and day as a PRD's key date is
+  left out of the lines (the key date "From the PRD" stays), while one with the same name on
+  another day, or another name on the same day, stays; a saved pick of the left-out
+  milestone draws the same line, as the key date; fails_when=both are listed, the wrong one
+  is dropped, a near one is dropped, or the saved pick falls back to Now; no_claim=the web
+  (prio-line-once.spec.ts).
+- test_plan_milestone_matches_a_prd_key_date_as_the_roadmap_does: protects=prio-line-once
+  review: a plan milestone is the PRD's key date on the same day by the roadmap chart's rule
+  (roadmap/_lib.ts drawnKeyDates): its code alone ("M3") or its name without the code ("Prove
+  it"), compared in lower case as the chart does (no casefold: "Große" is not "GROSSE");
+  fails_when=the Line picker lists a milestone twice that the roadmap draws once, or once that
+  it draws twice; no_claim=the web (prio-line-once.spec.ts).
 """
 
+import uuid
 from datetime import date
 
 import pytest
@@ -20,6 +34,7 @@ from sqlalchemy import select
 
 from oracle import company_time
 from oracle.docs.models import Document
+from oracle.roadmap.models import TrackMilestone
 from oracle.simple.models import RoadmapKeyDate
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
@@ -77,3 +92,88 @@ async def test_prd_milestones_are_key_date_lines(client):
     body = (await client.get(URL, headers=ctx.as_("owner"))).json()
     assert ("M2 · Scale volume · Dec 18, 2026", "2026-12-18", "guided-setup") in key_dates(body)
     assert not any(d == "2026-12-25" for _, d, _ in key_dates(body))
+
+
+async def test_plan_milestone_on_a_prd_key_date_is_listed_once(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx, items=("f-01", "f-03"))
+    async with tenant_session(ctx.tenant_id) as s:
+        made = [
+            TrackMilestone(
+                track_id=ids["track"],
+                name=name,
+                target_date=day,
+                horizon="now",
+                status="planned",
+                basis_ids=[uuid.uuid4()],
+                item_keys=["f-01"],
+            )
+            for name, day in (
+                ("M1 · Prove it", date(2026, 11, 27)),  # the PRD's M1, on its day
+                ("M2 · Scale volume", date(2026, 12, 26)),  # the PRD's M2, a day later
+                ("Beta", date(2026, 11, 27)),  # another name on M1's day
+            )
+        ]
+        s.add_all(made)
+        await s.commit()
+        dup, late, beta = (f"milestone:{m.id}" for m in made)
+    body = (await client.get(URL, headers=ctx.as_("viewer"))).json()
+    shown = [(ln["kind"], ln["label"]) for ln in body["lines"]]
+    assert shown == [
+        ("now", "This quarter (Now)"),
+        ("key_date", "M1 · Prove it · Nov 27, 2026"),
+        ("milestone", "Beta · Nov 27, 2026"),
+        ("key_date", "M2 · Scale volume · Dec 25, 2026"),
+        ("milestone", "M2 · Scale volume · Dec 26, 2026"),
+        ("key_date", "M3 · Open to all · Feb 12, 2027"),
+    ], f"the PRD's M1 is not listed once: {shown}"
+    keys = {ln["key"] for ln in body["lines"]}
+    assert dup not in keys and {late, beta} <= keys
+    m1 = next(ln for ln in body["lines"] if ln["label"].startswith("M1"))
+    assert m1["prd"]["slug"] == "guided-setup"
+    # A saved pick of the milestone left out draws the same line, as the PRD's key date.
+    picked = (await client.get(URL, params={"line": dup}, headers=ctx.as_("viewer"))).json()
+    assert picked["line"] == m1
+
+
+async def test_plan_milestone_matches_a_prd_key_date_as_the_roadmap_does(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx, FIXTURE.replace("Open to all", "Große Öffnung"), items=("f-01", "f-03"))
+    async with tenant_session(ctx.tenant_id) as s:
+        made = [
+            TrackMilestone(
+                track_id=ids["track"],
+                name=name,
+                target_date=day,
+                horizon="now",
+                status="planned",
+                basis_ids=[uuid.uuid4()],
+                item_keys=["f-01"],
+            )
+            for name, day in (
+                ("Prove it", date(2026, 11, 27)),  # M1's name without its code, on its day
+                ("M2", date(2026, 12, 25)),  # M2's code alone, on its day
+                ("M9 · GROSSE ÖFFNUNG", date(2027, 2, 12)),  # casefold's M3, not lower's
+            )
+        ]
+        s.add_all(made)
+        await s.commit()
+        prove, m2, big = (f"milestone:{m.id}" for m in made)
+    body = (await client.get(URL, headers=ctx.as_("viewer"))).json()
+    shown = [(ln["kind"], ln["label"]) for ln in body["lines"]]
+    assert shown == [
+        ("now", "This quarter (Now)"),
+        ("key_date", "M1 · Prove it · Nov 27, 2026"),
+        ("key_date", "M2 · Scale volume · Dec 25, 2026"),
+        ("key_date", "M3 · Große Öffnung · Feb 12, 2027"),
+        ("milestone", "M9 · GROSSE ÖFFNUNG · Feb 12, 2027"),
+    ], f"the lines do not count a milestone as the roadmap does: {shown}"
+    keys = {ln["key"] for ln in body["lines"]}
+    assert prove not in keys and m2 not in keys and big in keys
+    # A saved pick of a milestone left out draws its key date's line.
+    for key, label in (
+        (prove, "M1 · Prove it · Nov 27, 2026"),
+        (m2, "M2 · Scale volume · Dec 25, 2026"),
+    ):
+        picked = (await client.get(URL, params={"line": key}, headers=ctx.as_("viewer"))).json()
+        assert picked["line"]["label"] == label and picked["line"]["kind"] == "key_date"

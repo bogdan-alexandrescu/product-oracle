@@ -18,7 +18,9 @@ default; ``?line=`` draws it at a day instead: ``key_date:<id>`` (a roadmap's ke
 ``milestone:<id>`` (a dated track milestone) or ``date:<YYYY-MM-DD>``; then a row is above
 the line when its item is planned to finish by that day (its stored or estimated end). An
 unknown line reads as Now. ``lines`` offers Now, every key date and every dated milestone
-the reader sees; the web keeps a person's pick in their preferences (``priorities_line``).
+the reader sees, except a milestone with a PRD key date's name on its day, listed once as
+that key date (prio-line-once; its key still draws that line); the web keeps a person's pick
+in their preferences (``priorities_line``).
 
 Changes go through the change engine (``/v1/simple/changes``): ``override_priority`` (with
 each row's ``before_override``), ``estimate_feature`` and ``confirm_item``. It writes
@@ -457,8 +459,23 @@ def _day(d: date) -> str:
 NOW_LINE = SimpleLine(key="now", kind="now", label="This quarter (Now)")
 
 
-async def lines(db: AsyncSession, principal: Any, read_: service.Read) -> list[SimpleLine]:
-    """The lines offered: Now, each key date and each dated milestone the reader sees."""
+# A milestone's code before its words: "M1 · ", "F-26: ", "M2b " (roadmap/_lib.ts drawnKeyDates).
+_CODE = re.compile(r"^[A-Z][A-Z0-9]*-?[0-9]+[a-z]?\s*[·:.\-–—]?\s*")
+
+
+def _same_as(name: str, day: date) -> set[tuple[str, date]]:
+    """What makes a milestone the same as another on its day (prio-line-once), by the roadmap
+    chart's rule (roadmap/_lib.ts drawnKeyDates): its code ("M1"), or its name without the
+    code ("prove it", in lower case as the chart's toLowerCase)."""
+    words = _CODE.sub("", name, count=1).strip().lower()
+    return {(re.split(r"[\s·]", name)[0], day)} | ({("~" + words, day)} if words else set())
+
+
+async def lines(
+    db: AsyncSession, principal: Any, read_: service.Read
+) -> tuple[list[SimpleLine], dict[str, SimpleLine]]:
+    """The lines offered: Now, each key date and each dated milestone the reader sees; and the
+    line each milestone left out is drawn at (prio-line-once, below), by its key."""
     docs = {e.roadmap.id: e.roadmap for e in read_.entries}
     # priorities-keydates: the roadmap's key dates as Simple › Roadmap reads them, its PRDs'
     # milestones with them.
@@ -475,26 +492,39 @@ async def lines(db: AsyncSession, principal: Any, read_: service.Read) -> list[S
         )
         for k in kds
     ]
-    out += [
-        SimpleLine(
-            key=f"milestone:{m.id}",
-            kind="milestone",
-            label=f"{m.name} · {_day(m.target_date)}",
-            date=m.target_date,
-        )  # fmt: skip
-        for m in read_.milestones
-        if m.target_date is not None and m.track_id in tracks and m.status != "dropped"
-    ]
+    # prio-line-once (the owner, Nov 3: "show it once"): a plan milestone the same as a PRD key
+    # date on its day (_same_as: its code, or its name without the code) is that milestone,
+    # listed once, "From the PRD"; a saved pick of it draws the key date's line.
+    from_prd: dict[tuple[str, date], SimpleLine] = {}
+    for k, ln in zip(kds, out[1:], strict=True):
+        for same_as in _same_as(k.name, k.date) if k.prd else ():
+            from_prd.setdefault(same_as, ln)
+    same: dict[str, SimpleLine] = {}
+    for m in read_.milestones:
+        if m.target_date is None or m.track_id not in tracks or m.status == "dropped":
+            continue
+        key = f"milestone:{m.id}"
+        kd = next(
+            (from_prd[x] for x in sorted(_same_as(m.name, m.target_date)) if x in from_prd), None
+        )
+        if kd is not None:
+            same[key] = kd
+            continue
+        out.append(SimpleLine(key=key, kind="milestone", label=f"{m.name} · {_day(m.target_date)}",
+                              date=m.target_date))  # fmt: skip
     # Key dates and milestones in date order, one list (Now first).
-    return [out[0], *sorted(out[1:], key=lambda x: x.date or date.max)]
+    return [out[0], *sorted(out[1:], key=lambda x: x.date or date.max)], same
 
 
 # A picked day earlier than this is a half-typed one (year 1, 20, 202), never a line.
 FIRST_LINE_YEAR = 2000
 
 
-def pick_line(key: str | None, offered: list[SimpleLine]) -> SimpleLine:
-    """The line ``key`` names among those offered, or a picked day; else Now."""
+def pick_line(
+    key: str | None, offered: list[SimpleLine], same: dict[str, SimpleLine] | None = None
+) -> SimpleLine:
+    """The line ``key`` names among those offered (or, for a milestone left out as a PRD's key
+    date, that key date's: ``same``), or a picked day; else Now."""
     if key and key.startswith("date:"):
         try:
             day = date.fromisoformat(key[5:])
@@ -504,6 +534,8 @@ def pick_line(key: str | None, offered: list[SimpleLine]) -> SimpleLine:
             return NOW_LINE
         return SimpleLine(key=f"date:{day.isoformat()}", kind="date", label=f"By {_day(day)}",
                           date=day)  # fmt: skip
+    if key and same and key in same:
+        return same[key]
     return next((x for x in offered if x.key == key), NOW_LINE)
 
 
@@ -521,8 +553,8 @@ async def build(
     ranking = await priorities.compute(db, METHOD, principal, overrides=True)
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     items = _items(read_)
-    offered = await lines(db, principal, read_)
-    line = pick_line(line_key, offered)
+    offered, same = await lines(db, principal, read_)
+    line = pick_line(line_key, offered, same)
     active = {str(o.id): o for o in await priorities.active_overrides(db)}
     by_feature = {str(o.feature_id): o for o in active.values()}
     names = await changes._names(db, {o.created_by for o in active.values()})

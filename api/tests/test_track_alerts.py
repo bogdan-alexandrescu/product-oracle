@@ -740,3 +740,116 @@ def test_the_audience():
     for kind, sees in (("date_slip", True), ("overdue", True), ("blocked", False)):
         assert alerts.in_audience(_principal("commenter", lead), owned, kind,
                                   frozenset({lead})) is sees  # fmt: skip
+
+
+# --- a roadmap moved to Trash --------------------------------------------------------------
+
+
+async def _trashed_behind_its_back(tenant_id, *slugs: str) -> None:
+    """The PRD and its roadmap in Trash with the track's alerts left open: the data a
+    delete made before deletes closed them."""
+    async with tenant_session(tenant_id) as s:
+        await s.execute(
+            update(Document)
+            .where(Document.slug.in_(slugs))
+            .values(deleted_at=datetime.now(UTC))
+            .execution_options(synchronize_session=False)
+        )
+        await s.commit()
+
+
+async def test_an_alert_of_a_trashed_track_never_fails_the_inbox_or_home(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    """protects=inbox-trashed-track (1); fails_when=one open alert whose track is in Trash
+    makes GET /v1/inbox (and with it Home's Decisions waiting for you and Since your last
+    visit) a 500, or the Inbox or the alerts list still shows it; no_claim=closing it."""
+    tenant_id, auth = owner
+    track, slip = await slipped(client, auth, runtime)
+    await _trashed_behind_its_back(tenant_id, PRD, ROADMAP)
+    async with tenant_session(tenant_id) as s:
+        state = await s.scalar(
+            select(TrackAlert.state).where(TrackAlert.id == uuid.UUID(slip["id"]))
+        )
+    assert state == "open"
+
+    inbox = await client.get("/v1/inbox", headers=auth)
+    assert inbox.status_code == 200, inbox.text
+    assert inbox.json()["tracks"] == []
+    assert await alerts_of(client, auth, "all") == []
+    # Home's sections behind the Inbox: its decisions, what changed, what waits on me.
+    for path in ("/v1/simple/decisions/waiting", "/v1/simple/changes", "/v1/inbox/questions"):
+        resp = await client.get(path, headers=auth)
+        assert resp.status_code == 200, (path, resp.text)
+    # Keeping it is not found, not a 500.
+    keep = await client.post(f"/v1/track-alerts/{slip['id']}/keep", headers=auth)
+    assert keep.status_code in (403, 404), keep.text
+
+
+async def test_trashing_a_roadmap_closes_its_alerts_and_restoring_reopens_them(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    """protects=inbox-trashed-track (2); fails_when=a roadmap moved to Trash leaves its
+    track's open alerts open, a restore leaves them closed, or a restore reopens one that
+    was kept or closed before the delete; no_claim=the web rows."""
+    tenant_id, auth = owner
+    track, slip = await slipped(client, auth, runtime)
+    await importing(
+        client, auth,
+        {"external_ref": "ENG-777", "title": "Refactor cart", "state": "todo",
+         "track_id": track["id"]},
+    )  # fmt: skip
+    (other,) = [a for a in await alerts_of(client, auth) if a["kind"] == "unplanned"]
+    kept = await client.post(f"/v1/track-alerts/{other['id']}/keep", headers=auth)
+    assert kept.status_code == 200, kept.text
+
+    async def states() -> dict[str, str]:
+        async with tenant_session(tenant_id) as s:
+            rows = await s.scalars(
+                select(TrackAlert).where(TrackAlert.track_id == uuid.UUID(track["id"]))
+            )
+            return {str(a.id): a.state for a in rows}
+
+    resp = await client.request("DELETE", f"/v1/documents/{ROADMAP}", headers=auth)
+    assert resp.status_code == 200, resp.text
+    entry = resp.json()
+    after = await states()
+    assert after[slip["id"]] == "resolved" and after[other["id"]] == "kept"
+    inbox = await client.get("/v1/inbox", headers=auth)
+    assert inbox.status_code == 200, inbox.text
+    assert slip["id"] not in {a["id"] for t in inbox.json()["tracks"] for a in t["alerts"]}
+
+    back = await client.post(f"/v1/trash/{entry['id']}/restore", headers=auth)
+    assert back.status_code == 200, back.text
+    after = await states()
+    assert after[slip["id"]] == "open" and after[other["id"]] == "kept"
+    (row,) = (await client.get("/v1/inbox", headers=auth)).json()["tracks"]
+    assert slip["id"] in {a["id"] for a in row["alerts"]}
+
+
+async def test_trashing_a_prd_closes_its_tracks_alerts_and_restoring_reopens_them(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    """protects=inbox-trashed-track (2); fails_when=the track's PRD (and its roadmap with
+    it) goes to Trash with the track's alerts open, or comes back with them closed;
+    no_claim=the monitor's later passes."""
+    tenant_id, auth = owner
+    track, slip = await slipped(client, auth, runtime)
+    resp = await client.request("DELETE", f"/v1/documents/{PRD}", headers=auth)
+    assert resp.status_code == 200, resp.text
+    async with tenant_session(tenant_id) as s:
+        a = await s.get(TrackAlert, uuid.UUID(slip["id"]))
+        assert a is not None and a.state == "resolved"
+    inbox = await client.get("/v1/inbox", headers=auth)
+    assert inbox.status_code == 200 and inbox.json()["tracks"] == []
+
+    back = await client.post(f"/v1/documents/{PRD}/restore", headers=auth)
+    assert back.status_code == 200, back.text
+    (open_,) = [a for a in await alerts_of(client, auth) if a["kind"] == "date_slip"]
+    assert open_["id"] == slip["id"] and open_["state"] == "open"

@@ -643,6 +643,12 @@ function OverrunHeld({ run, mayResume }: { run: RunOut; mayResume: boolean }) {
  */
 function tickResult(out: Schemas["TickOut"], run: RunOut, mine: boolean): string {
   const at = formatTime(new Date().toISOString());
+  // artifact-skip-refused: a file this run's step needs that SwarmCloud refused is said in
+  // words ("run <id>: SwarmCloud refused to send ..."), not only counted. Other errors carry codes.
+  const prefix = `run ${run.id}: SwarmCloud refused to send `;
+  const own = out.errors.filter((e) => e.startsWith(prefix)).map((e) => `${e.slice(`run ${run.id}: `.length)}.`);
+  const said = own.length ? ` ${own.join(" ")}` : "";
+  const others = out.errors.length - own.length;
   // This run is not at work (it waits on a person, or between segments): say so, whatever other runs the check read.
   if (run.status !== "running" || (out.runs_checked === 0 && out.errors.length === 0)) {
     const why =
@@ -656,13 +662,13 @@ function tickResult(out: Schemas["TickOut"], run: RunOut, mine: boolean): string
             ? "the run is paused over its budget"
             : "the run is between segments";
     // fix-work review: the check's own trouble stays in view, whatever this run is waiting on.
-    const failed = out.errors.length ? ` ${plural(out.errors.length, "run")} could not be checked at ${at}.` : "";
-    return `No agents are working right now; ${why}.${failed}`;
+    const failed = others ? ` ${plural(others, "run")} could not be checked at ${at}.` : "";
+    return `No agents are working right now; ${why}.${failed}${said}`;
   }
   const parts = [out.segments_finished ? `${plural(out.segments_finished, "segment")} finished` : "no segment finished yet"];
   if (out.runs_paused) parts.push(`${plural(out.runs_paused, "run")} paused over budget`);
-  if (out.errors.length) parts.push(`${plural(out.errors.length, "run")} could not be checked`);
-  return `Checked ${plural(out.runs_checked, "active run")} at ${at}: ${parts.join(", ")}.`;
+  if (others) parts.push(`${plural(others, "run")} could not be checked`);
+  return `Checked ${plural(out.runs_checked, "active run")} at ${at}: ${parts.join(", ")}.${said}`;
 }
 
 /**

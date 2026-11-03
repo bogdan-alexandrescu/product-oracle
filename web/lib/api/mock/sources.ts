@@ -5,7 +5,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import type { CitedItem } from "./baseline";
-import { FIREFLIES_DEFAULT_ENDPOINT, mockConnectionEndpoint } from "./connections";
+import { FIREFLIES_DEFAULT_ENDPOINT, mockConnectionEndpoint, mockConnectionRows, reconnectReason } from "./connections";
 import { FIREFLIES_CONNECTION_ID } from "./fireflies";
 import { mockUuid, PRODUCT_CHAT_ID, seeded, seededItemId } from "./ids";
 import { MOCK_NOTION_CONNECTION_ID } from "./notion";
@@ -21,6 +21,11 @@ interface SourcesDb {
   snapshots: Schemas["SnapshotOut"][];
   /** Other members' sources and items, by email: only the owners' Company coverage counts them. */
   team?: Record<string, { sources: Source[]; items: Item[] }>;
+  /** Source id -> the connection a Disconnect took from it (sources.lost_provider and
+   * lost_account_id) and whose it was: that person connecting that account again links it. */
+  lost?: Record<string, { provider: string; account_id: string; email?: string }>;
+  /** Connections a Disconnect deleted: no longer offered to a source. */
+  removed?: string[];
 }
 
 type Role = Schemas["Me"]["role"];
@@ -390,6 +395,67 @@ function load(scenario: string | null = localStorage.getItem("po-mock-scenario")
   return seeded("sources", seed);
 }
 
+function store(db: SourcesDb) {
+  localStorage.setItem(SOURCES_STORAGE_KEY, JSON.stringify(db));
+}
+
+/** As the API's forget_connection: a Disconnect leaves the sources it synced with no
+ * connection, each keeping the provider and account it lost. */
+export function forgetMockConnection(conn: { id: string; provider: string; account_id: string }, email?: string) {
+  const db = load();
+  db.removed = [...new Set([...(db.removed ?? []), conn.id])];
+  for (const s of db.sources) {
+    if (s.connection_id !== conn.id) continue;
+    s.connection_id = null;
+    s.reconnect_reason = null;
+    db.lost = { ...db.lost, [s.id]: { provider: conn.provider, account_id: conn.account_id, email } };
+  }
+  store(db);
+}
+
+// As the API's: the sync errors of a source whose connection is gone, the only ones a relink clears.
+const NO_CONNECTION = "This source has no connection: pick one of your connections";
+const CONNECTION_REMOVED = "The connection was removed: pick another one";
+
+/** As the API's relink_sources: the same person connected the same account again, so the
+ * sources that lost it are linked to the new connection. Never another account's. */
+export function relinkMockSources(conn: { id: string; provider: string; account_id: string }, email?: string) {
+  const db = load();
+  db.removed = (db.removed ?? []).filter((id) => id !== conn.id);
+  for (const s of db.sources) {
+    const lost = db.lost?.[s.id];
+    if (s.connection_id || !lost || PROVIDER[s.kind] !== conn.provider) continue;
+    if (lost.provider !== conn.provider || lost.account_id !== conn.account_id) continue;
+    if (lost.email !== undefined && email !== undefined && lost.email !== email) continue;
+    s.connection_id = conn.id;
+    delete db.lost![s.id];
+    s.config_version += 1;
+    if (s.status === "error" && (s.last_error === NO_CONNECTION || s.last_error === CONNECTION_REMOVED)) {
+      s.status = "active";
+      s.last_error = null;
+    }
+  }
+  store(db);
+}
+
+/** The person's connections of `provider` a source can use (/v1/sources/kinds): the
+ * Sources page's own, less those a Disconnect deleted, and those made on Settings › Connections. */
+function choicesFor(db: SourcesDb, provider: string, email?: string): Schemas["ConnectionChoice"][] {
+  const removed = new Set(db.removed ?? []);
+  const fixed = (CONNECTIONS[provider] ?? []).filter((c) => !removed.has(c.id));
+  const live = mockConnectionRows(email)
+    // The seeded Notion account is on both lists, under two ids: offered once.
+    .filter((r) => r.provider === provider && !fixed.some((c) => c.id === r.id || c.account_label === r.account_label))
+    .map((r) => ({
+      id: r.id,
+      account_label: r.account_label,
+      status: r.status,
+      reconnect_reason: reconnectReason(r.provider, r.scopes),
+      endpoint_url: provider === "fireflies" ? mockConnectionEndpoint(r.id) : null,
+    }));
+  return [...fixed.map(withEndpoint), ...live];
+}
+
 /** A source's kind and repositories (the code map mock, ./engineering.ts); null when there is none. */
 export function sourceRepos(id: string): { kind: Source["kind"]; repos: string[] } | null {
   const s = load().sources.find((x) => x.id === id);
@@ -560,7 +626,7 @@ function badConfig(kind: Source["kind"], config: Record<string, unknown>): strin
 export async function routeSources(req: Request, p: string[], q: URLSearchParams, ctx: SourcesContext): Promise<Response> {
   const db = load(ctx.scenario);
   const res = await route(db, req, p, q, ctx);
-  localStorage.setItem(SOURCES_STORAGE_KEY, JSON.stringify(db));
+  store(db);
   return res;
 }
 
@@ -634,7 +700,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
         kind,
         provider: PROVIDER[kind],
         connector_available: AVAILABLE[kind],
-        connections: PROVIDER[kind] ? (CONNECTIONS[PROVIDER[kind]!] ?? []).map(withEndpoint) : [],
+        connections: PROVIDER[kind] ? choicesFor(db, PROVIDER[kind]!, ctx.me.email) : [],
       })),
     );
   }
@@ -666,6 +732,29 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       }
       const invalid = patch.config ? badConfig(s.kind, patch.config) : null;
       if (invalid) return json(422, { detail: invalid });
+      // As the API's _check_connection: one of the person's active connections of the kind's provider.
+      const relinked = "connection_id" in patch && patch.connection_id !== s.connection_id;
+      if (relinked) {
+        const provider = PROVIDER[s.kind];
+        const id = patch.connection_id ?? null;
+        if (!provider) return json(422, { detail: "Uploads take no connection" });
+        if (!id) return json(422, { detail: `A ${s.kind} source needs one of your ${provider} connections` });
+        const choice = choicesFor(db, provider, ctx.me.email).find((c) => c.id === id);
+        if (!choice) {
+          const other = Object.values(PROVIDER).find((p) => p && p !== provider && choicesFor(db, p, ctx.me.email).some((c) => c.id === id));
+          if (other) return json(422, { detail: `A ${s.kind} source needs a ${provider} connection, not a ${other} one` });
+          return json(404, { detail: "Connection not found" });
+        }
+        if (choice.status !== "active") return json(422, { detail: `The connection is ${choice.status}: reconnect it first` });
+        s.connection_id = id;
+        if (db.lost) delete db.lost[s.id];
+        if (s.kind === "google_docs") s.reconnect_reason = choice.reconnect_reason ?? null;
+        else s.unavailable_items = [];
+        if (s.status === "error" || s.status === "needs_attention") {
+          s.status = "active";
+          s.last_error = null;
+        }
+      }
       const renamed = patch.name != null && patch.name.trim() !== s.name;
       const config = patch.config ? normalizeLabels(s.kind, patch.config) : null;
       const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -673,7 +762,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       // New names alone: stored, nothing else changes (no sweep; the "not read" list stays).
       const relabelled = config != null && !reconfigured && !same(config, s.config);
       // Only a save that changes something bumps the version (as the API does).
-      if (renamed || reconfigured || relabelled) s.config_version += 1;
+      if (renamed || reconfigured || relabelled || relinked) s.config_version += 1;
       if (patch.name) s.name = patch.name;
       if (config && relabelled) s.config = config;
       if (config && reconfigured) {
@@ -713,6 +802,11 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       s.status = "needs_attention";
       s.last_error = `${broken[0].toUpperCase()}${broken.slice(1)}: edit this source to sync it again`;
       return json(200, { source_id: s.id, outcome: "needs_attention", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: s.last_error, source: counted(db, s) });
+    }
+    // As the API's credential_for: a source a Disconnect left without a connection.
+    if (PROVIDER[s.kind] && !s.connection_id) {
+      s.status = "error";
+      s.last_error = NO_CONNECTION;
     }
     if (s.status === "error") {
       return json(200, { source_id: s.id, outcome: "error", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: s.last_error, source: counted(db, s) });

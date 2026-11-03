@@ -157,6 +157,10 @@ async def save(
         conn.endpoint_url = endpoint_url
     conn.updated_at = _now()
     await session.flush()
+    # The sources a Disconnect of this very account left without a connection.
+    from oracle.sources.service import relink_sources
+
+    await relink_sources(session, conn)
     return conn
 
 

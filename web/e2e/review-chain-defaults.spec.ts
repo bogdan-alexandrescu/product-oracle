@@ -14,9 +14,12 @@ const DOC = "/documents/checkout-redesign/v/1";
 
 test("outline rail: a lapsed approval shows Lapsed, never a check, as the section view does", async ({ page }) => {
   await login(page);
-  // goal-trace's approval on v1 lapses (its approver was removed).
-  await page.evaluate((key) => {
-    const db = JSON.parse(localStorage.getItem(key)!);
+  // goal-trace's approval on v1 lapses (its approver was removed). Edited as the document page
+  // loads, before its first call: edited on Home, a Home call still landing could save over it.
+  await page.addInitScript((key) => {
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    const db = JSON.parse(raw);
     const version = db.versions.find((v: { slug?: string; number: number; document_id: string }) => v.number === 1 && db.documents.find((d: { id: string; slug: string }) => d.id === v.document_id)?.slug === "checkout-redesign");
     const review = db.reviews.find((r: { version_id: string; section_key: string }) => r.version_id === version.id && r.section_key === "goal-trace");
     review.lapsed_at = "2026-10-19T09:00:00Z";

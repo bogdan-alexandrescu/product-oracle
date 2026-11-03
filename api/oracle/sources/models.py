@@ -65,6 +65,11 @@ class Source(TenantScoped, Base):
     connection_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("connections.id", ondelete="SET NULL"), index=True
     )
+    # The provider and account of the connection a Disconnect deleted (connection_id set
+    # null; service.forget_connection): the same owner connecting that account again
+    # links the source by itself (service.relink_sources). Cleared once it is linked.
+    lost_provider: Mapped[str | None] = mapped_column(Text)
+    lost_account_id: Mapped[str | None] = mapped_column(Text)
     kind: Mapped[str] = mapped_column(Text, nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     # The owner's allowlist: repos, channel ids, root pages. Never secrets.

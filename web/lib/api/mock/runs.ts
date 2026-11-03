@@ -1533,6 +1533,8 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
 
 /** Tests: a count of runs every check reports it could not read. */
 export const MOCK_TICK_ERRORS_KEY = "po-mock-tick-errors";
+/** Tests (artifact-skip-refused): a file name SwarmCloud refuses to send (422) from every running step. */
+export const MOCK_TICK_REFUSED_KEY = "po-mock-tick-refused";
 
 function tick(ctx: RunsContext): Schemas["TickOut"] {
   const out = {
@@ -1573,6 +1575,21 @@ function tick(ctx: RunsContext): Schemas["TickOut"] {
       r.waiting_for = null;
       if (waiting) submit(ctx, r, waiting);
       refresh(r);
+      continue;
+    }
+    // As the API: a refused file the step's import needs holds the step; the check says so and
+    // the run carries one note per file.
+    const refused = typeof localStorage === "undefined" ? null : localStorage.getItem(MOCK_TICK_REFUSED_KEY);
+    const step = r.segments.find((x) => x.status === "running");
+    if (refused && step) {
+      const why = "422 validation_error: artifact name not allowed";
+      out.errors.push(
+        `run ${r.id}: SwarmCloud refused to send ${refused} (${why}), which the ${step.title} step needs to import its results`,
+      );
+      const note =
+        `SwarmCloud refused to send ${refused} (${why}), the file this step's results are imported from, so they ` +
+        "were not imported. Oracle asks again each minute; if SwarmCloud keeps refusing it, cancel the run and start it again.";
+      if (!r.notes.includes(note)) r.notes.push(note);
       continue;
     }
     const done = finishRunning(ctx, r);

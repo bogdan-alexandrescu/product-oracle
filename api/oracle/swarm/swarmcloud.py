@@ -1170,8 +1170,17 @@ class SwarmCloudRuntime:
         )
 
     async def artifacts(
-        self, workflow_id: str, steps: tuple[str, ...] | None = None
+        self,
+        workflow_id: str,
+        steps: tuple[str, ...] | None = None,
+        *,
+        skipped: dict[str, str] | None = None,
     ) -> dict[str, str]:
+        """A listed file SwarmCloud refuses to serve for good (a refusal that is not
+        retryable: a 4xx such as 422, or a 404 its envelope calls gone) is left out and
+        the rest read on; ``skipped``, when given, gets its name and SwarmCloud's refusal
+        ("422 validation_error: ..."). A refusal that may pass (a 5xx, 429, a lost
+        answer, a bare 404) raises, so the whole read is tried again."""
         payload = await self._read(workflow_id)
         rows = (payload.get("workflow") or {}).get("steps") or []
         if steps is not None:
@@ -1203,16 +1212,38 @@ class SwarmCloudRuntime:
                     if read >= MAX_ARTIFACT_FILES:
                         return files
                     read += 1
-                    content = await self._read_limited(
-                        client, f"{path}/raw", {"name": name}, MAX_ARTIFACT_BYTES
-                    )
+                    try:
+                        content = await self._read_limited(
+                            client, f"{path}/raw", {"name": name}, MAX_ARTIFACT_BYTES
+                        )
+                    except RuntimeUnavailable as exc:
+                        if exc.retryable:
+                            raise
+                        log.warning("SwarmCloud refused artifact %s of %s: %s", name, task_id, exc)
+                        if skipped is not None:
+                            skipped[name.rsplit("/", 1)[-1]] = _refused_why(exc)
+                        continue
                     if content is not None:
                         files[name.rsplit("/", 1)[-1]] = content.decode("utf-8", "replace")
         return files
 
+    async def read_artifacts(
+        self, workflow_id: str, steps: tuple[str, ...] | None = None
+    ) -> tuple[dict[str, str], dict[str, str]]:
+        """:meth:`artifacts` with the files it left out: ``(files, skipped)``."""
+        skipped: dict[str, str] = {}
+        files = await self.artifacts(workflow_id, steps, skipped=skipped)
+        return files, skipped
+
     async def cancel(self, workflow_id: str) -> None:
         async with self._client() as client:
             await self._call(client, "POST", f"/v1/workflows/{workflow_id}/cancel")
+
+
+def _refused_why(exc: RuntimeUnavailable) -> str:
+    """SwarmCloud's refusal without the call it refused: "422 validation_error: ..."."""
+    text = str(exc)
+    return text.split(": HTTP ", 1)[1] if ": HTTP " in text else (str(exc.status) or text)
 
 
 def _refusal(resp: httpx.Response, method: str, path: str) -> RuntimeUnavailable:
@@ -1513,8 +1544,17 @@ class UnconfiguredSwarmCloud:
         raise self._refuse()
 
     async def artifacts(
-        self, workflow_id: str, steps: tuple[str, ...] | None = None
+        self,
+        workflow_id: str,
+        steps: tuple[str, ...] | None = None,
+        *,
+        skipped: dict[str, str] | None = None,
     ) -> dict[str, str]:
+        raise self._refuse()
+
+    async def read_artifacts(
+        self, workflow_id: str, steps: tuple[str, ...] | None = None
+    ) -> tuple[dict[str, str], dict[str, str]]:
         raise self._refuse()
 
     async def cancel(self, workflow_id: str) -> None:

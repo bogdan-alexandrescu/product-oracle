@@ -1527,7 +1527,7 @@ function lineWords(data: Out): string {
   return !l || l.kind === "now" ? "not this quarter" : `not planned to finish by ${l.label.replace(/^By /, "")}`;
 }
 
-/** Roadmap-plus: the "Line" picker: This quarter (Now) · each key date (a PRD's milestones "From the PRD: <name> · <day>") · each dated milestone · Pick a date. */
+/** Roadmap-plus: the "Line" picker: This quarter (Now) · each key date (a PRD's milestones "From the PRD: <name> · <day>") · each dated milestone (one the PRD already lists on its day shows once, from the PRD: prio-line-once) · Pick a date. */
 function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void }) {
   const current = data.line ?? { key: "now", kind: "now" as const, label: "This quarter (Now)", date: null };
   // Picking a date, the date field takes the select's place (one control); a picked day is the select's own option.
