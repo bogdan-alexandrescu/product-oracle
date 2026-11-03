@@ -31,6 +31,19 @@ async function showPickers(page: Page) {
   if ((await toggle.isVisible()) && (await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
 }
 
+/** The signed-in person's saved Simple roadmap filters, as the mock holds them. */
+const savedFilters = (page: Page) =>
+  page.evaluate(() => {
+    const db = JSON.parse(localStorage.getItem("po-mock-db-v2") ?? "{}") as { preferences?: Record<string, { simple_filters?: unknown }> };
+    return Object.values(db.preferences ?? {})[0]?.simple_filters ?? null;
+  });
+
+/** Closes a phone's Filters, as a person does before tapping below them. */
+async function hidePickers(page: Page) {
+  const toggle = page.getByTestId("filters-toggle");
+  if ((await toggle.isVisible()) && (await toggle.getAttribute("aria-expanded")) === "true") await toggle.click();
+}
+
 for (const [where, use] of [
   ["desktop", {}],
   ["phone", PHONE],
@@ -40,10 +53,6 @@ for (const [where, use] of [
 
     test("saved filters that are no longer on the roadmap are dropped and saved back", async ({ page }) => {
       await page.addInitScript(([key, scenario]) => localStorage.setItem(key, scenario), [MOCK_SCENARIO_KEY, STALE_SIMPLE_FILTERS_SCENARIO] as const);
-      const saves: unknown[] = [];
-      page.on("request", (r) => {
-        if (r.method() === "PATCH" && new URL(r.url()).pathname === "/v1/me/preferences") saves.push(r.postDataJSON());
-      });
       await login(page);
       await openBoard(page);
       await expect(boardCard(page, "alert-rules")).toHaveCount(1);
@@ -54,14 +63,14 @@ for (const [where, use] of [
         await expect(filter(page, name)).toHaveValue("");
         await expect(filter(page, name).locator("option:checked")).toHaveText("All");
       }
-      // Saved back once, quietly: no toast.
-      await expect.poll(() => saves).toEqual([{ simple_filters: { prd: "", goal: "", track: "" } }]);
+      // Saved back, quietly: no toast. (The mock keeps its data in the page's storage.)
+      await expect.poll(() => savedFilters(page)).toEqual({ prd: "", goal: "", track: "" });
       await expect(page.getByRole("status").filter({ hasText: "filters" })).toHaveCount(0);
       // Coming back, the items are still there and nothing more is saved.
       await openBoard(page);
       await expect(boardCard(page, "alert-rules")).toHaveCount(1);
       await expect(page.getByText("Nothing matches these filters")).toHaveCount(0);
-      expect(saves).toHaveLength(1);
+      expect(await savedFilters(page)).toEqual({ prd: "", goal: "", track: "" });
     });
 
     test("a link to a PRD no longer on the roadmap says so, with Clear", async ({ page }) => {
@@ -74,6 +83,7 @@ for (const [where, use] of [
       await expect(page.getByText("Nothing matches these filters")).toHaveCount(0);
       await showPickers(page);
       await expect(filter(page, "PRD").locator("option:checked")).toHaveText("Not on this roadmap");
+      await hidePickers(page);
       await note.getByRole("button", { name: "Clear" }).click();
       await expect(note).toHaveCount(0);
       await page.getByTestId("format-board").click();
