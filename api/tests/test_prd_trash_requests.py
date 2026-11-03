@@ -46,9 +46,7 @@ async def _trash(client, ctx: Ctx, slug: str) -> dict:
     return resp.json()
 
 
-async def test_trashing_a_prd_releases_its_requests_and_restore_relinks_the_free_ones(
-    client, ctx
-):
+async def test_trashing_a_prd_releases_its_requests_and_restore_relinks_the_free_ones(client, ctx):
     """protects=New PRD (4) (moving a PRD to Trash releases its request links; restoring
     re-links each request still free); fails_when=a request keeps the trashed PRD, a new
     brief is refused it, restore leaves a free request unlinked, or restore takes back a

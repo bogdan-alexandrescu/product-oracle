@@ -81,8 +81,9 @@ async def test_brief_goals_answer_gap(client):
     assert intake["goal_ids"] == [g["id"] for g in goals]
     assert intake["out_of_scope"] == ["Address book sharing between accounts"]
     assert intake["template"] == "one-pager" and intake["theme"] == "one-page-brief"
+    # New PRD (2): one reader sent alone is stored as a one-item list.
     assert intake["prd_answers"] == {"decision": "commit_build", "size": "new_feature",
-                                     "readers": "product_eng", "model_driven": False}  # fmt: skip
+                                     "readers": ["product_eng"], "model_driven": False}  # fmt: skip
     assert intake["run_ids"] == []
 
     gaps = gaps_by_category(out)

@@ -38925,6 +38925,57 @@
         "x-min-role": "approver"
       }
     },
+    "/v1/requests/release-from-trash": {
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Release Requests From Trash",
+        "description": "Release it (New PRD 4): each of these requests still linked to a PRD in Trash loses\nthat link and its brief, so a new brief may take it. A live PRD's link stays.",
+        "operationId": "release_requests_from_trash",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseFromTrashIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseFromTrashOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "commenter"
+      }
+    },
     "/v1/requests/{request_id}": {
       "get": {
         "tags": [
@@ -95709,13 +95760,17 @@
           "readers": {
             "anyOf": [
               {
-                "type": "string",
-                "enum": [
-                  "founder",
-                  "product_eng",
-                  "leadership",
-                  "engineers_or_agents"
-                ]
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "founder",
+                    "product_eng",
+                    "leadership",
+                    "engineers_or_agents"
+                  ]
+                },
+                "type": "array",
+                "maxItems": 4
               },
               {
                 "type": "null"
@@ -101129,6 +101184,44 @@
           "credential"
         ],
         "title": "RegisterIn"
+      },
+      "ReleaseFromTrashIn": {
+        "properties": {
+          "request_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Request Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_ids"
+        ],
+        "title": "ReleaseFromTrashIn",
+        "description": "Release it (New PRD 4): the requests a new brief would take."
+      },
+      "ReleaseFromTrashOut": {
+        "properties": {
+          "released": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Released"
+          }
+        },
+        "type": "object",
+        "required": [
+          "released"
+        ],
+        "title": "ReleaseFromTrashOut",
+        "description": "The requests whose link to a PRD in Trash was cleared."
       },
       "RemovedOut": {
         "properties": {

@@ -11204,6 +11204,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/requests/release-from-trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Release Requests From Trash
+         * @description Release it (New PRD 4): each of these requests still linked to a PRD in Trash loses
+         *     that link and its brief, so a new brief may take it. A live PRD's link stays.
+         */
+        post: operations["release_requests_from_trash"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/requests/{request_id}": {
         parameters: {
             query?: never;
@@ -31311,7 +31332,7 @@ export interface components {
             /** Size */
             size?: ("small_change" | "new_feature" | "new_product") | null;
             /** Readers */
-            readers?: ("founder" | "product_eng" | "leadership" | "engineers_or_agents") | null;
+            readers?: ("founder" | "product_eng" | "leadership" | "engineers_or_agents")[] | null;
             /** Model Driven */
             model_driven?: boolean | null;
         };
@@ -33260,6 +33281,22 @@ export interface components {
             label: string;
             /** Credential */
             credential: string;
+        };
+        /**
+         * ReleaseFromTrashIn
+         * @description Release it (New PRD 4): the requests a new brief would take.
+         */
+        ReleaseFromTrashIn: {
+            /** Request Ids */
+            request_ids: string[];
+        };
+        /**
+         * ReleaseFromTrashOut
+         * @description The requests whose link to a PRD in Trash was cleared.
+         */
+        ReleaseFromTrashOut: {
+            /** Released */
+            released: string[];
         };
         /** RemovedOut */
         RemovedOut: {
@@ -67723,6 +67760,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TriageStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    release_requests_from_trash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseFromTrashIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseFromTrashOut"];
                 };
             };
             /** @description Validation Error */
