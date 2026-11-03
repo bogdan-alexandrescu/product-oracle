@@ -84,6 +84,10 @@
               "caption": "Esc in the panel hides it too, and that is kept; focus goes back to the selected row."
             },
             {
+              "file": "frames/pc1-b-open-1512.html",
+              "caption": "Hard case, 1512 px (the owner's window) with details shown: the panel takes 380 px, a long goal wraps onto four lines and three dependencies onto six."
+            },
+            {
               "file": "frames/pc1-b-closed-1280.html",
               "caption": "Hard case, 1280 px with details hidden: Confidence and Depends on are back, beside wider goal names."
             },
