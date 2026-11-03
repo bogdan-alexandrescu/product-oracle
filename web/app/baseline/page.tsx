@@ -26,7 +26,7 @@ import { fillNotice } from "./_components/goal-fields";
 import type { Stepper } from "./_components/GoalInterview";
 import { GraphTab } from "./_components/GraphTab";
 import { ItemsTab } from "./_components/ItemsTab";
-import { fieldName, noChange, ProposalsTab, type FromFilter } from "./_components/ProposalsTab";
+import { cardsOf, fieldName, noChange, ProposalsTab, type FromFilter } from "./_components/ProposalsTab";
 import { Tabs, type TabItem } from "./_components/Tabs";
 
 type Tab = "from-run" | "graph" | "items" | "flagged" | "conflicts" | "proposals" | "blockers";
@@ -374,12 +374,19 @@ export default function BaselinePage() {
   const decide = (proposal: ProposalOut, accept: boolean, skip: string[] = []) =>
     act(async () => {
       const params = { params: { path: { proposal_id: proposal.id } } };
-      if (accept) await unwrap(api.POST("/v1/baseline/proposals/{proposal_id}/accept", { ...params, body: { skip_fields: skip } }));
-      else await unwrap(api.POST("/v1/baseline/proposals/{proposal_id}/reject", params));
-      if (accept && skip.length > 0)
-        return `Proposal accepted without ${skip.map((k) => fieldName(k)).join(", ")}: the rest is applied and the item is locked against Oracle's changes until a person unlocks it.`;
-      if (accept) return "Proposal accepted: the change is applied and the item is locked against Oracle's changes until a person unlocks it.";
-      return noChange(proposal) ? "Proposal dismissed: it changed nothing." : "Proposal rejected.";
+      if (!accept) {
+        // A card that shows the same change proposed again rejects them all.
+        for (const id of [proposal.id, ...(proposal.also_proposed ?? []).map((a) => a.id)])
+          await unwrap(api.POST("/v1/baseline/proposals/{proposal_id}/reject", { params: { path: { proposal_id: id } } }));
+        return noChange(proposal) ? "Proposal dismissed: it changed nothing." : "Proposal rejected.";
+      }
+      const out = await unwrap(api.POST("/v1/baseline/proposals/{proposal_id}/accept", { ...params, body: { skip_fields: skip } }));
+      if (out.outcome === "already_done") return "This link already exists: the proposal is closed as already done.";
+      const closed = out.closed_as_done?.length ?? 0;
+      const also = closed === 0 ? "" : closed === 1 ? " 1 other proposal was already done and is closed." : ` ${closed} other proposals were already done and are closed.`;
+      if (skip.length > 0)
+        return `Proposal accepted without ${skip.map((k) => fieldName(k)).join(", ")}: the rest is applied and the item is locked against Oracle's changes until a person unlocks it.${also}`;
+      return `Proposal accepted: the change is applied and the item is locked against Oracle's changes until a person unlocks it.${also}`;
     });
 
   const openConflicts = conflicts.data?.filter((c) => c.status === "open").length;
@@ -390,7 +397,7 @@ export default function BaselinePage() {
     { id: "items", label: "Items" },
     { id: "flagged", label: "Flagged", count: trace.data?.summary.flagged, kind: "crit" },
     { id: "conflicts", label: "Conflicts", count: openConflicts, kind: "warn" },
-    { id: "proposals", label: "Proposals", count: proposals.data?.length, kind: "acc" },
+    { id: "proposals", label: "Proposals", count: proposals.data && cardsOf(proposals.data).length, kind: "acc" },
     { id: "blockers", label: "Blockers", count: blockers.data?.length, kind: "warn" },
   ];
   const openEntity = openId ? graph.data?.entities.find((e) => e.id === openId) : undefined;

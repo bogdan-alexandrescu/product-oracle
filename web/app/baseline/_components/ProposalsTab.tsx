@@ -110,7 +110,7 @@ export function ProposalsTab({
         </Panel>
       )}
       <ProposalList
-        proposals={proposals}
+        proposals={cardsOf(proposals)}
         runs={runs}
         from={from}
         onFrom={onFrom}
@@ -272,6 +272,86 @@ function OverlapWarning({
   );
 }
 
+/** The proposals that get their own card: one the API marked as another open one's
+ * duplicate (the same change, proposed again by the run) shows on that one's card. */
+export const cardsOf = (proposals: ProposalOut[]) =>
+  proposals.filter((p) => !p.duplicate_of || !proposals.some((o) => o.id === p.duplicate_of));
+
+type Also = Schemas["ProposalAlso"];
+
+/** "Writer", "Writer and Critic", "Writer, Critic and Analyst". */
+const names = (items: string[]) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`);
+
+/** A choice's values in words: "Planned", or "milestone M2, effort L" when it sets more. */
+function choiceWords(fields: Record<string, unknown> | undefined, type?: string): string {
+  const flat = flatFields(fields).filter(([k]) => !HIDDEN_FIELDS.has(k));
+  return flat.length === 1 ? valueWords(flat[0][0], flat[0][1]) : flat.map(([k, v]) => `${fieldName(k, type)} ${valueWords(k, v)}`).join(", ");
+}
+
+/** The card of a change proposed more than once: who else proposed it, and when they
+ * disagree, one choice ("Planned or Proposed") whose every option accepts its proposal. */
+function AlsoProposed({
+  p,
+  type,
+  canWrite,
+  busy,
+  onDecide,
+}: {
+  p: ProposalOut;
+  type?: string;
+  canWrite: boolean;
+  busy: boolean;
+  onDecide: (proposal: ProposalOut, accept: boolean) => void;
+}) {
+  const also = p.also_proposed ?? [];
+  const agree = also.filter((a) => a.same);
+  const differ = also.filter((a) => !a.same);
+  const options: { id: string; label: string; by: string }[] = [];
+  if (differ.length > 0) {
+    options.push({ id: p.id, label: choiceWords((p.payload as Payload).fields, type), by: "" });
+    for (const a of differ) {
+      const label = choiceWords(a.fields as Record<string, unknown>, type);
+      const same = options.find((o) => o.label === label);
+      if (same) same.by = same.by ? `${same.by}, ${a.by}` : a.by;
+      else options.push({ id: a.id, label, by: a.by });
+    }
+  }
+  return (
+    <>
+      {agree.length > 0 && (
+        <p data-testid="also-proposed" className="text-[13px] text-text2">
+          Also proposed by {names(agree.map((a: Also) => a.by))}
+        </p>
+      )}
+      {options.length > 1 && (
+        <div role="group" aria-label="Pick one" data-testid="proposal-choice" className="mt-1 flex flex-col gap-2 rounded-button border border-line bg-surface2 p-3 text-sm">
+          <p className="font-semibold">{options.map((o) => o.label).join(" or ")}</p>
+          <p className="text-text2">
+            {options
+              .filter((o) => o.by)
+              .map((o) => `${o.by} suggests ${o.label}`)
+              .join(" · ")}
+          </p>
+          {canWrite && (
+            <div className="flex flex-wrap gap-2">
+              {options.map((o) => (
+                <Button
+                  key={o.id}
+                  disabled={busy}
+                  title={ACCEPT_LOCKS}
+                  onClick={() => onDecide(o.id === p.id ? p : { ...p, id: o.id, also_proposed: [] }, true)}
+                >
+                  {o.label}
+                </Button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
 /** A proposal whose every field already has its proposed value: the API's sentence says so. */
 export const noChange = (p: ProposalOut) => p.summary.startsWith("No change to ");
 
@@ -336,6 +416,8 @@ function ProposalList({
   const zone = useCompanyZone();
   const byRun = from !== "" && from !== "none";
   const run = byRun ? runs.find((r) => r.id === from) : undefined;
+  // One line for every open proposal that would undo what was just accepted.
+  const undoing = proposals.filter((p) => (p.overlaps ?? []).some((o) => o.by === "proposal")).map((p) => p.id);
   return (
     <Panel title="Proposals" count={proposals.length} tools={<FromSelect runs={runs} from={from} onFrom={onFrom} />}>
       {byRun && (
@@ -355,6 +437,14 @@ function ProposalList({
         <p className="px-4 py-8 text-center text-text2">{byRun ? "No open proposals from this run." : "No open proposals."}</p>
       ) : (
         <>
+          {undoing.length > 0 && (
+            <p data-testid="undo-line" className="border-b border-line px-4 py-2 text-sm">
+              {undoing.length === 1 ? "1 proposal would undo what you just accepted" : `${undoing.length} proposals would undo what you just accepted`} ·{" "}
+              <button type="button" onClick={() => showSiblings(undoing)} className="font-semibold text-accent-ink hover:underline">
+                Show
+              </button>
+            </p>
+          )}
           {canWrite && (
             <p data-testid="proposals-accept-help" className="border-b border-line px-4 py-2 text-sm text-text2">
               {ACCEPT_LOCKS}
@@ -368,6 +458,7 @@ function ProposalList({
               const overlaps = p.overlaps ?? [];
               const warn = canWrite && warning === p.id && overlaps.length > 0;
               const siblings = p.entity_id ? proposals.filter((o) => o.id !== p.id && o.entity_id === p.entity_id).map((o) => o.id) : [];
+              const choice = (p.also_proposed ?? []).some((a) => !a.same);
               const lit = highlighted.includes(p.id);
               return (
                 <li
@@ -389,6 +480,7 @@ function ProposalList({
                     <Sentence p={p} graph={graph} onOpen={onOpen} />
                     {overlaps.length > 0 && <OverlapChip overlaps={overlaps} />}
                     <Source p={p} meId={meId} />
+                    {(p.also_proposed ?? []).length > 0 && <AlsoProposed p={p} type={type} canWrite={canWrite} busy={busy} onDecide={onDecide} />}
                     {siblings.length > 0 && (
                       <button
                         type="button"
@@ -435,13 +527,15 @@ function ProposalList({
                         </Button>
                       ) : (
                         <>
-                          <Button
-                            disabled={busy}
-                            title={ACCEPT_LOCKS}
-                            onClick={() => (overlaps.length > 0 ? setWarning(p.id) : onDecide(p, true))}
-                          >
-                            Accept
-                          </Button>
+                          {!choice && (
+                            <Button
+                              disabled={busy}
+                              title={ACCEPT_LOCKS}
+                              onClick={() => (overlaps.length > 0 ? setWarning(p.id) : onDecide(p, true))}
+                            >
+                              Accept
+                            </Button>
+                          )}
                           <Button disabled={busy} onClick={() => onDecide(p, false)}>
                             Reject
                           </Button>
