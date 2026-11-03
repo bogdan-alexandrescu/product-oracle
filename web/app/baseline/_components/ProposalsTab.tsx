@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useId, useRef, useState, type ReactNode } from "react";
 
-import { Button, Chip, CodeText, Panel } from "@/components/ds";
+import { Button, Chip, CodeText, Panel, withCodes } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import type { GraphOut, ProposalOut, Schemas } from "@/lib/api/client";
+import { nameCodes } from "@/lib/code-index";
+import { useCompanyCodes } from "@/lib/codes";
 import { useCompanyZone, zoneDay } from "@/lib/dates";
 import { formatDateTime } from "@/lib/format";
 
@@ -329,6 +331,10 @@ function ProposalList({
   // The cards a "N other open proposals on this entry" link last pointed to (#268).
   const [highlighted, setHighlighted] = useState<string[]>([]);
   const cards = useRef(new Map<string, HTMLLIElement>());
+  // A reason never shows a code without its name (codes-and-chips): a known code gets its
+  // name, a source's own number says which run's sources it is from.
+  const codes = useCompanyCodes();
+  const reasonOf = (p: ProposalOut, reason: string) => nameCodes(reason, codes, p.run ? `the sources of ${p.run.flow_title}` : "its source");
   const showSiblings = (ids: string[]) => {
     setHighlighted(ids);
     cards.current.get(ids[0])?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -399,8 +405,8 @@ function ProposalList({
                       </button>
                     )}
                     {payload.reason && (
-                      <p className="truncate text-sm text-text2" title={payload.reason}>
-                        <CodeText text={payload.reason} />
+                      <p className="truncate text-sm text-text2" title={reasonOf(p, payload.reason)}>
+                        {withCodes(reasonOf(p, payload.reason), codes)}
                       </p>
                     )}
                     <details className="text-sm">

@@ -228,3 +228,59 @@ export function splitCodes(text: string, index: CodeIndex): CodePiece[] {
   if (at < text.length) out.push(text.slice(at));
   return out;
 }
+
+/** A code a source document numbers its own lines with (`FR-06`, `REQ-12`), or an entity's (`G-B`, `F-08`). */
+const SOURCE_CODE = /^(?:[A-Z]{1,5}-[A-Z]?\d+[a-z]?|G-[A-Z][A-Z0-9]*)$/;
+/** Standards and versions that only look like codes: `UTF-8`, `ISO-8601`, `SHA-256`. */
+const NOT_A_CODE = /^(?:UTF|ISO|IEC|SHA|MD|AES|RSA|RFC|TLS|SSL|HTTP|IPV|WCAG|PCI|SOC|COVID|CVE|IEEE|ECMA|ES|H|MP|USB|WPA)-/;
+/** Codes written together, `FR-08/FR-09`, `F-1, F-2 and F-3`: one group, named after its last code. */
+const GROUP = new RegExp(String.raw`(?<![\w./:#@=&?-])(?:${CODE})(?:(?:\s?[/,&]\s?|\s(?:and|or)\s)(?:${CODE}))*(?![\w-]|\.\w)`, "g");
+const ONE = new RegExp(`${CODE}`, "g");
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** True when `name` stands right after the code (`F-08 Name`, `F-08: Name`) or right before it (`Name (F-08)`). */
+function namedBeside(name: string, before: string, after: string): boolean {
+  const n = escape(name.trim());
+  return new RegExp(`^\\s*(?:[:·–—-]\\s*|\\(\\s*)?${n}`, "i").test(after) || new RegExp(`${n}\\s*[(:·–—-]?\\s*$`, "i").test(before);
+}
+
+/**
+ * Agent-written text (a proposal's reason) with no code left without its name
+ * (codes-and-chips): a known goal or feature code written bare gets its name beside it
+ * (`G-B goal body` → `G-B Growth goal body`); a code nothing names, a source document's
+ * own requirement number (`FR-06`, `FR-08/FR-09`), is followed by where it comes from
+ * (`FR-06 (from <source>)`). A code already named, a URL, and words that only look like
+ * codes (`Q4`, `UTF-8`) stay as written; run twice, it changes nothing more.
+ */
+export function nameCodes(text: string, index: CodeIndex, source: string): string {
+  if (!text) return text;
+  const urls = [...text.matchAll(URL_RE)].map((m) => [m.index!, m.index! + m[0].length]);
+  const from = ` (from ${source})`;
+  let out = "";
+  let at = 0;
+  for (const m of text.matchAll(GROUP)) {
+    const start = m.index!;
+    const end = start + m[0].length;
+    if (urls.some(([a, b]) => start < b && end > a)) continue;
+    const after = text.slice(end);
+    let group = "";
+    let last = 0;
+    let unknown = false;
+    for (const c of m[0].matchAll(ONE)) {
+      const cs = c.index!;
+      const ce = cs + c[0].length;
+      group += m[0].slice(last, ce);
+      last = ce;
+      const entry = lookupCode(c[0], index);
+      if (entry) {
+        const rest = m[0].slice(ce) + after;
+        if (!namedBeside(entry.name, text.slice(0, start + cs), rest)) group += ` ${entry.name}`;
+      } else if (SOURCE_CODE.test(c[0]) && !NOT_A_CODE.test(c[0])) unknown = true;
+    }
+    group += m[0].slice(last);
+    if (unknown && !after.startsWith(" (from ")) group += from;
+    out += text.slice(at, start) + group;
+    at = end;
+  }
+  return out + text.slice(at);
+}

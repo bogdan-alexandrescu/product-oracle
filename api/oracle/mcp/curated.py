@@ -20,6 +20,7 @@ from oracle import confidence
 from oracle.docs.schemas import CITATION_CONTRACT_MARK, with_citation_contract
 from oracle.mcp.auth import McpCaller
 from oracle.mcp.tools import Operation, ToolError, call_operation, to_result
+from oracle.runs.flows import PROPOSAL_REASON_CODES
 from oracle.tenancy import tenant_session
 from oracle.tenant_settings import TenantSetting
 
@@ -494,7 +495,10 @@ CURATED: tuple[Curated, ...] = (
             "unlocks it. The run is recorded for you: "
             "leave run_id out. Cite evidence for the change, "
             "and say when that evidence is low confidence. The response's `summary` is how "
-            "people will read your proposal; check it says what you meant. " + CONFIDENCE_GUIDANCE
+            "people will read your proposal; check it says what you meant. "
+            + CONFIDENCE_GUIDANCE
+            + " "
+            + PROPOSAL_REASON_CODES
         ),
         needs={
             "op": _by(
