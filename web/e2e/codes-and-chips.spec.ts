@@ -17,22 +17,31 @@ async function openBaseline(page: Page) {
   await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
 }
 
-test("Add item: a goal with no code reads once, with no code chip", async ({ page }) => {
-  await openBaseline(page);
-  await page.getByRole("button", { name: "Add item" }).click();
-  const form = page.getByRole("dialog", { name: "Add an item" });
-  await form.getByLabel("Kind").selectOption("feature");
-  const served = form.getByRole("group", { name: "Goals it serves" });
-  await expect(served.getByLabel("Raise activation")).toBeVisible();
-  // The name once: the row's label, never a code chip holding it too.
-  await expect(served.getByText("Raise activation", { exact: true })).toHaveCount(1);
-  await expect(served.getByText("Grow paid conversion", { exact: true })).toHaveCount(1);
-  await expect(served.locator(".font-mono")).toHaveCount(0);
-});
+for (const [size, viewport] of [
+  ["desktop", { width: 1366, height: 820 }],
+  ["phone", { width: 390, height: 844 }],
+] as const) {
+  test.describe(size, () => {
+    test.use({ viewport });
 
-test("Proposals: a source's own requirement number reads with where it comes from", async ({ page }) => {
-  await openBaseline(page);
-  await page.getByRole("tab", { name: /Proposals/ }).click();
-  const darkMode = page.getByTestId("proposal").filter({ hasText: "Dark mode" });
-  await expect(darkMode).toContainText("Mentioned as next up in the planning call, under FR-06 (from the sources of Baseline to PRD).");
-});
+    test(`${size}: Add item: a goal with no code reads once, with no code chip`, async ({ page }) => {
+      await openBaseline(page);
+      await page.getByRole("button", { name: "Add item" }).click();
+      const form = page.getByRole("dialog", { name: "Add an item" });
+      await form.getByLabel("Kind").selectOption("feature");
+      const served = form.getByRole("group", { name: "Goals it serves" });
+      await expect(served.getByLabel("Raise activation")).toBeVisible();
+      // The name once: the row's label, never a code chip holding it too.
+      await expect(served.getByText("Raise activation", { exact: true })).toHaveCount(1);
+      await expect(served.getByText("Grow paid conversion", { exact: true })).toHaveCount(1);
+      await expect(served.locator(".font-mono")).toHaveCount(0);
+    });
+
+    test(`${size}: Proposals: a source's own requirement number reads with where it comes from`, async ({ page }) => {
+      await openBaseline(page);
+      await page.getByRole("tab", { name: /Proposals/ }).click();
+      const darkMode = page.getByTestId("proposal").filter({ hasText: "Dark mode" });
+      await expect(darkMode).toContainText("Mentioned as next up in the planning call, under FR-06 (from the sources of Baseline to PRD).");
+    });
+  });
+}
