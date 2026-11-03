@@ -415,6 +415,13 @@ async def lookups(db: AsyncSession, alerts: list[TrackAlert]) -> Lookups:
                    await visibility.hidden_for_reader(db), level)  # fmt: skip
 
 
+def shown(alerts: list[TrackAlert], lk: Lookups) -> list[TrackAlert]:
+    """The alerts whose track was loaded: a track whose PRD is in Trash is left out of
+    every read (oracle.trash.filter) while its alert rows stay, so one such alert never
+    fails a whole list (inbox-trashed-track)."""
+    return [a for a in alerts if a.track_id in lk.tracks]
+
+
 def out(
     a: TrackAlert, principal: "Principal", lk: Lookups, inbox_state: str | None = None
 ) -> TrackAlertOut:
@@ -454,12 +461,16 @@ async def list_alerts(
         query = query.where(TrackAlert.track_id == track_id)
     rows = list(await db.scalars(query))
     lk = await lookups(db, rows)
-    return [out(a, principal, lk) for a in rows]
+    return [out(a, principal, lk) for a in shown(rows, lk)]
 
 
 async def get_alert(db: AsyncSession, alert_id: uuid.UUID) -> TrackAlert:
     a = await db.scalar(select(TrackAlert).where(TrackAlert.id == alert_id).with_for_update())
-    if a is None:
+    # An alert of a track in Trash is not found, as its track is not.
+    if (
+        a is None
+        or await db.scalar(select(ProductTrack).where(ProductTrack.id == a.track_id)) is None
+    ):
         raise NotFound("Track alert not found")
     return a
 
@@ -637,6 +648,49 @@ async def accept_date(
     return Accepted(a, basis, withdrawn, moved, stale)
 
 
+# --- Trash (inbox-trashed-track) ----------------------------------------------------------
+
+
+async def close_for_trash(
+    db: AsyncSession, document_ids: set[uuid.UUID], at: datetime
+) -> list[str]:
+    """Resolve the open alerts of the tracks whose PRD or roadmap goes to Trash now (call
+    it before the documents are marked deleted). Returns their ids: the Trash entry keeps
+    them so a restore reopens the same ones (:func:`reopen_after_trash`)."""
+    if not document_ids:
+        return []
+    track_ids = select(ProductTrack.id).where(
+        ProductTrack.prd_document_id.in_(document_ids)
+        | ProductTrack.roadmap_document_id.in_(document_ids)
+    )
+    rows = list(
+        await db.scalars(
+            select(TrackAlert)
+            .where(TrackAlert.track_id.in_(track_ids), TrackAlert.state == "open")
+            .order_by(TrackAlert.id)
+            .with_for_update()
+        )
+    )
+    for a in rows:
+        a.state, a.resolved_at = "resolved", at
+    await db.flush()
+    return [str(a.id) for a in rows]
+
+
+async def reopen_after_trash(db: AsyncSession, alert_ids: list[str]) -> None:
+    """Reopen the alerts a delete closed, those still resolved (the monitor may have
+    opened a newer one meanwhile)."""
+    if not alert_ids:
+        return
+    for a in await db.scalars(
+        select(TrackAlert)
+        .where(TrackAlert.id.in_([uuid.UUID(i) for i in alert_ids]), TrackAlert.state == "resolved")
+        .with_for_update()
+    ):
+        a.state, a.resolved_at = "open", None
+    await db.flush()
+
+
 # --- Inbox (F2 §4) -----------------------------------------------------------------------
 
 
@@ -662,7 +716,11 @@ async def inbox_rows(
     if not rows:
         return []
     lk = await lookups(db, rows)
-    mine = [a for a in rows if in_audience(principal, lk.tracks[a.track_id], a.kind, lk.leads)]
+    mine = [
+        a
+        for a in shown(rows, lk)
+        if in_audience(principal, lk.tracks[a.track_id], a.kind, lk.leads)
+    ]
     groups: dict[uuid.UUID, list[TrackAlert]] = {}
     for a in mine:
         groups.setdefault(a.track_id, []).append(a)

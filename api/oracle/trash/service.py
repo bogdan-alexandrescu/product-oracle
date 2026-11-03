@@ -278,12 +278,22 @@ async def delete_root(
     at = now()
     rows = resolved.rows()
     sources = await _built_from(db, {d.id for d in resolved.documents})
+    # inbox-trashed-track: the open alerts of a track whose PRD or roadmap goes close now
+    # (before the documents leave every read), and a restore reopens them.
+    from oracle.roadmap import alerts
+
+    closed = await alerts.close_for_trash(db, {d.id for d in resolved.documents}, at)
     entry = TrashEntry(
         id=uuid.uuid4(),
         root_type=root_type,
         root_id=root.id,
         # What it was built from outside this delete: Restore says if that is gone.
-        root={**describe(root), "built_from": [describe(d) for d in sources]},
+        root={
+            **describe(root),
+            "built_from": [describe(d) for d in sources],
+            # Track alerts it closed: a restore reopens them.
+            "closed_alerts": closed,
+        },
         items=[describe(r) for r in rows if r is not root],
         deleted_by=principal.id,
         deleted_by_name=await _actor_name(db, principal),
@@ -402,6 +412,9 @@ async def restore_entry(
             .values(deleted_at=None, deleted_by=None, deleted_reason=None, trash_entry_id=None)
             .execution_options(synchronize_session=False)
         )
+    from oracle.roadmap import alerts
+
+    await alerts.reopen_after_trash(db, entry.root.get("closed_alerts") or [])
     not_restored = await _not_restored(db, entry)
     await audit.record(
         db,
