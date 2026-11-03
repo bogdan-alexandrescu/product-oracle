@@ -11,6 +11,7 @@ import { startInterview, startInterviews, vagueGoals } from "@/lib/api/goal-inte
 import { GOALS_OBSERVE, useGoalsLevel } from "@/lib/goals-autonomy";
 import { api, unwrap, type ConflictOut, type EntityOut, type ProposalOut } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
+import { CsPage, useCs } from "@/components/mock/CurrentState"; // MOCK-HOOK
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { AddItemSheet, type AddKind } from "./_components/AddItem";
@@ -126,6 +127,7 @@ function InterviewFromUrl({ onGoal, onVague }: { onGoal: (id: string) => void; o
 
 export default function BaselinePage() {
   const { me, can, capsReady, capsError } = useMe();
+  const cs = useCs(); // MOCK-HOOK
   // #370: approvers change the baseline, commenters propose; a viewer only reads it.
   const canWrite = can("confirm_entity");
   const canComment = can("create_proposal");
@@ -459,6 +461,7 @@ export default function BaselinePage() {
       </Page>
     );
 
+  if (cs) return <CsPage cs={cs} />; // MOCK-HOOK
   return (
     <Page>
       <Suspense fallback={null}>

@@ -12,6 +12,7 @@ import { usePanelOpen } from "@/components/hop/open-state";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
+import { CsPrioBar, CsRowMark, csPriorityRows, useCs } from "@/components/mock/CurrentState"; // MOCK-HOOK
 import { useSetParams } from "@/lib/use-set-params";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -136,7 +137,8 @@ export function Priorities() {
     setParams({ line: key === "now" ? null : key });
     void api.PATCH("/v1/me/preferences", { body: { priorities_line: key } });
   };
-  const data = q.data;
+  const cs = useCs(); // MOCK-HOOK
+  const data = q.data && cs?.cs2 ? { ...q.data, rows: csPriorityRows(q.data.rows, cs) } : q.data; // MOCK-HOOK
   // Roles through can() and the rows' own fields: the API says who applies and who proposes.
   const mayChange = capsReady && can("create_simple_change") && !!data?.can_change;
   // S7: Oracle's suggested features under each goal bucket (an accept adds a draft here).
@@ -268,6 +270,7 @@ export function Priorities() {
           )}
         </p>
       )}
+      {data && !blank && tab === "ranked" && <CsPrioBar cs={cs} />} {/* MOCK-HOOK */}
       {data && !blank && tab === "ranked" && (
         <Ranked data={data} phone={phone} compare={compare} mayChange={mayChange} changed={changed} moved={moved} />
       )}
@@ -545,6 +548,7 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
                 data-testid="prio-line-mark"
               />
               <CodeChip r={r} />
+              <CsRowMark title={r.title} /> {/* MOCK-HOOK */}
               <span className="min-w-[12rem] flex-1 font-medium" data-testid="prio-title">{r.title}</span>
               {/* walkb-priorities: no ml-auto, so details that wrap under the title start at the left on every row. */}
               <span data-testid="prio-details" className={`${half ? "basis-full sm:pl-12" : ""} flex min-w-0 max-w-full flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--simple-small)] text-text2`}>
