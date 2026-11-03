@@ -1527,7 +1527,7 @@ function lineWords(data: Out): string {
   return !l || l.kind === "now" ? "not this quarter" : `not planned to finish by ${l.label.replace(/^By /, "")}`;
 }
 
-/** Roadmap-plus: the "Line" picker: This quarter (Now) · each key date (a PRD's milestones "From the PRD: <name> · <day>") · each dated milestone · Pick a date. */
+/** Roadmap-plus: the "Line" picker: This quarter (Now) · each key date (a PRD's milestones "From the PRD: <name> · <day>") · each dated milestone (one the PRD already lists on its day shows once, from the PRD: prio-line-once) · Pick a date. */
 function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void }) {
   const current = data.line ?? { key: "now", kind: "now" as const, label: "This quarter (Now)", date: null };
   // Picking a date, the date field takes the select's place (one control); a picked day is the select's own option.
@@ -1697,8 +1697,10 @@ function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }
 
 /** A row's own mark when it misses the line; compact (Value/effort's side list, B): a small "Misses" chip, the line in its title. */
 function MissesTag({ data, row, compact = false }: { data: Out; row?: Row; compact?: boolean }) {
-  // qa-simple-plan-27: a feature tagged with the very milestone the line is drawn at misses its own milestone.
-  const own = !!row?.milestone && data.line?.kind === "milestone" && data.line.label.split(" · ")[0] === row.milestone;
+  // qa-simple-plan-27: a feature tagged with the very milestone the line is drawn at misses its own milestone
+  // (prio-line-once: a PRD's milestone is listed once, as its key date "From the PRD").
+  const atMilestone = data.line?.kind === "milestone" || (data.line?.kind === "key_date" && !!data.line.prd);
+  const own = !!row?.milestone && atMilestone && data.line!.label.split(" · ")[0] === row.milestone;
   if (own && !compact)
     return (
       <span data-testid="prio-misses" data-own="true" className="min-w-0 max-w-full rounded-full bg-crit-bg px-2 text-[length:var(--simple-small)] font-medium text-crit">

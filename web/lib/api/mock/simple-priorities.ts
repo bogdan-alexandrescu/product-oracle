@@ -214,31 +214,41 @@ const NOW_LINE: Line = { key: "now", kind: "now", label: "This quarter (Now)", d
 
 const lineDay = (d: string): string => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
+/** priorities._same_name: a line's name as compared ("M1 · Prove it" is "M1 Prove it"). */
+const sameName = (name: string): string => name.replace(/·/g, " ").split(/\s+/).filter(Boolean).join(" ").toLowerCase();
+
 /**
  * priorities.lines: Now, each key date and each dated milestone the reader sees. The key dates
  * are the roadmap read's own (roadmapOut's keyDatesOut, as key_dates.read_key_dates serves
- * both pages): a PRD's milestones among them, each naming its PRD.
+ * both pages): a PRD's milestones among them, each naming its PRD. prio-line-once: a milestone
+ * with a PRD key date's name on its day is left out (listed once, "From the PRD"); `same` is
+ * the key date's line by the left-out milestone's key, so a saved pick of it draws that line.
  */
-function linesOf(read: Schemas["SimpleRoadmapOut"]): Line[] {
+function linesOf(read: Schemas["SimpleRoadmapOut"]): { lines: Line[]; same: Map<string, Line> } {
   const tracks = new Set(read.items.map((i) => i.track?.id).filter(Boolean));
+  const keyDates = (read.key_dates ?? []).map((k): Line => ({ key: `key_date:${k.id}`, kind: "key_date", label: `${k.name} · ${lineDay(k.date)}`, date: k.date, prd: k.prd ?? null }));
+  const fromPrd = new Map((read.key_dates ?? []).flatMap((k, i) => (k.prd ? [[`${sameName(k.name)}|${k.date}`, keyDates[i]] as const] : [])));
+  const same = new Map<string, Line>();
+  const milestones: Line[] = [];
+  for (const m of read.milestones) {
+    if (!m.date || !tracks.has(m.track_id) || m.status === "dropped") continue;
+    const key = `milestone:${m.id}`;
+    const kd = fromPrd.get(`${sameName(m.name)}|${m.date}`);
+    if (kd) same.set(key, kd);
+    else milestones.push({ key, kind: "milestone", label: `${m.name} · ${lineDay(m.date)}`, date: m.date });
+  }
   // Key dates and milestones in date order, one list (Now first).
-  return [
-    NOW_LINE,
-    ...[
-      ...(read.key_dates ?? []).map((k): Line => ({ key: `key_date:${k.id}`, kind: "key_date", label: `${k.name} · ${lineDay(k.date)}`, date: k.date, prd: k.prd ?? null })),
-      ...read.milestones.filter((m) => m.date && tracks.has(m.track_id) && m.status !== "dropped").map((m): Line => ({ key: `milestone:${m.id}`, kind: "milestone", label: `${m.name} · ${lineDay(m.date!)}`, date: m.date! })),
-    ].sort((a, b) => (a.date! < b.date! ? -1 : a.date! > b.date! ? 1 : 0)),
-  ];
+  return { lines: [NOW_LINE, ...[...keyDates, ...milestones].sort((a, b) => (a.date! < b.date! ? -1 : a.date! > b.date! ? 1 : 0))], same };
 }
 
-/** priorities.pick_line: the line named among those offered, or a picked day; else Now. */
-function pickLine(key: string | null, offered: Line[]): Line {
+/** priorities.pick_line: the line named among those offered (or a left-out milestone's key date: `same`), or a picked day; else Now. */
+function pickLine(key: string | null, offered: Line[], same?: Map<string, Line>): Line {
   if (key?.startsWith("date:")) {
     const day = key.slice(5);
     // A day before 2000 is a half-typed one (year 1), never a line (priorities.FIRST_LINE_YEAR).
     return /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(Date.parse(day)) && Number(day.slice(0, 4)) >= 2000 ? { key, kind: "date", label: `By ${lineDay(day)}`, date: day } : NOW_LINE;
   }
-  return offered.find((x) => x.key === key) ?? NOW_LINE;
+  return (key ? same?.get(key) : undefined) ?? offered.find((x) => x.key === key) ?? NOW_LINE;
 }
 
 export function prioritiesOut(
@@ -250,8 +260,8 @@ export function prioritiesOut(
 ): Schemas["SimplePrioritiesOut"] {
   const today = companyToday();
   const read = roadmapOut(db, ctx.role, new URLSearchParams(), { id: ctx.id, role: ctx.role })!;
-  const lines = linesOf(read);
-  const line = pickLine(lineKey, lines);
+  const { lines, same } = linesOf(read);
+  const line = pickLine(lineKey, lines, same);
   const readItems = new Map(read.items.map((i) => [i.id, i]));
   // A cut draft reads as "draft" on the roadmap: the seed says it is cut (as the API's cut set).
   // S7: a draft merged into another is closed too.
