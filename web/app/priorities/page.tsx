@@ -997,7 +997,8 @@ function Priorities() {
   const phone = usePhone();
   const pc = usePanelClose("priorities"); // MOCK-HOOK
   // PC1: with the panel closed the Goal and Depends on columns take the room it gave back. // MOCK-HOOK
-  const wideCols = !!pc.v && !pc.open; // MOCK-HOOK
+  // d's rail gives back only 324 px, so its columns keep their widths (at 1280 px wider ones squeeze Feature). // MOCK-HOOK
+  const wideCols = !!pc.v && !pc.open && pc.v !== "d"; // MOCK-HOOK
   const depsWidth = wideCols ? DEPS_WIDE : DEPS_WIDTH; // MOCK-HOOK
   const depsRoom = depsWidth - CELL_PAD; // MOCK-HOOK
   const [sheet, setSheet] = useState(false);
