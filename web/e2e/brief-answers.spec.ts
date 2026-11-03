@@ -77,7 +77,7 @@ test("lost reply: the send says why and keeps the text; sending again saves it o
   await expect(first.getByTestId("answer")).toContainText(LONG.slice(0, 80));
   await expect(first.getByLabel("Your answer")).toHaveCount(0);
   // Saved once: the text is not there twice over.
-  expect((await first.getByTestId("answer").innerText()).split(LONG.slice(0, 60)).length - 1).toBe(1);
+  expect((await first.getByTestId("answer").innerText()).split(LONG).length - 1).toBe(1);
 });
 
 test("follow-up counts: an answer Oracle follows up on counts at once; the reply adds to it", async ({ page }) => {
@@ -107,9 +107,13 @@ test("research: Research this waits for approval with a link; Accept starts the 
   await expect(research).toContainText("Research proposed: waits for approval");
   await expect(first).not.toContainText("Being researched");
 
-  await research.getByRole("link", { name: "See the proposal" }).click();
+  const link = research.getByRole("link", { name: "See the proposal" });
+  const target = (await link.getAttribute("href")) ?? "";
+  expect(target).toMatch(/^#proposal-/);
+  await link.click();
   await expect(page.getByRole("tab", { name: /^Proposals/ })).toHaveAttribute("aria-selected", "true");
-  const card = page.getByTestId("proposal").filter({ hasText: "Research:" }).filter({ has: page.getByRole("button", { name: "Accept" }) }).first();
+  const card = page.locator(target);
+  await expect(card).toContainText("Research:");
   await expect(card).toBeInViewport();
   await card.getByRole("button", { name: "Accept" }).click();
   await expect(card.getByTestId("proposal-status")).toHaveText("Accepted");

@@ -44,7 +44,8 @@ test("Oracle follows up: a short answer gets one follow-up; Skip records it; off
   await expect(follow).toHaveCount(1);
   await expect(follow).toContainText(MOCK_TEAM_FOLLOW_UP);
   await expect(first.getByRole("button", { name: "Reply", exact: true })).toBeVisible();
-  await expect(first.getByTestId("answer")).toHaveCount(0);
+  // brief-answers: the answer is recorded with the follow-up (it closes its question and counts).
+  await expect(first.getByTestId("answer")).toContainText("Checkout time.");
 
   // Skip, record my answer records what was written; the follow-up stays in the thread.
   await first.getByRole("button", { name: "Skip, record my answer" }).click();
