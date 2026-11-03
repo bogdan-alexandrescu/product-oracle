@@ -6922,9 +6922,10 @@ def _note_refused(
             _note_art(art, note)
     if not held:
         return None
+    # Read on the run page as it is (after "run <id>: "): words only.
     return (
-        f"run {run.id}: {_flow(run).segment(segment.name).title}: SwarmCloud refused to send "
-        f"{', '.join(held)}, which its import needs"
+        f"run {run.id}: SwarmCloud refused to send {', '.join(held)}, which the "
+        f"{_flow(run).segment(segment.name).title} step needs to import its results"
     )
 
 

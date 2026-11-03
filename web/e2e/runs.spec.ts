@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { MOCK_TICK_ERRORS_KEY } from "../lib/api/mock/runs";
+import { MOCK_TICK_ERRORS_KEY, MOCK_TICK_REFUSED_KEY } from "../lib/api/mock/runs";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
@@ -596,4 +596,29 @@ test("fix-work review: a check that could not read some runs says so on a run th
   // Why no agent works on this run, and the runs the check could not read.
   await expect(result).toContainText("No agents are working right now; the run is waiting for your review.");
   await expect(result).toContainText(/2 runs could not be checked at .+\.$/);
+});
+
+test("artifact-skip-refused: a file SwarmCloud refuses that the step needs is said in words, not only counted", async ({ page }) => {
+  await openRuns(page);
+  await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
+  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  // The baseline step runs again.
+  const cp = page.getByTestId("checkpoint-baseline_confirm");
+  await cp.getByLabel("Note for the agents").fill("Add a target for G2");
+  await cp.getByRole("button", { name: "Request changes" }).click();
+  await expect(status(page)).toHaveText("Running");
+  // SwarmCloud lists the step's baseline.yaml but will not send it.
+  await page.evaluate(([key]) => localStorage.setItem(key, "baseline.yaml"), [MOCK_TICK_REFUSED_KEY] as const);
+  await page.getByRole("button", { name: "Refresh progress" }).click();
+  const result = page.getByTestId("tick-result");
+  await expect(result).toContainText(
+    "SwarmCloud refused to send baseline.yaml (422 validation_error: artifact name not allowed), which the Baseline proposal step needs to import its results.",
+  );
+  await expect(result).not.toContainText("could not be checked");
+  await expect(status(page)).toHaveText("Running");
+  // One note on the run names the file and SwarmCloud's refusal, however often it is checked.
+  await page.getByRole("button", { name: "Refresh progress" }).click();
+  const notes = page.getByTestId("run-notes").locator("li").filter({ hasText: "baseline.yaml" });
+  await expect(notes).toHaveCount(1);
+  await expect(notes).toContainText("SwarmCloud refused to send baseline.yaml (422 validation_error: artifact name not allowed)");
 });
