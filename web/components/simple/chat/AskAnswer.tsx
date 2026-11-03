@@ -4,17 +4,25 @@ import Link from "next/link";
 import { createContext, Fragment, useContext, type ReactNode } from "react";
 
 import { Icon } from "@/components/ds";
-import { formatInZone } from "@/lib/dates";
+import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { isSafeHref, parseBlocks, type Block, type Inline } from "@/lib/markdown";
+import { noRawTokens } from "@/lib/raw-tokens";
 
 /**
  * Oracle's answer in Simple's Ask panel, as the owner's pick C draws it (ask-panel fidelity,
  * 2026-10-28): its title, its lines, short labelled lists ("DONE WHEN", "TARGETS"…) and,
  * under them, where it comes from as links ("From the PRD · Roadmap", "Open M2 on the
  * roadmap"). The answer's text is the small markdown Oracle writes (lib/markdown); its
- * `[c:n]` markers are a small raised number against the word before them, a link to the source
- * it cites (none when it has none to open): the cited sources are the links under it.
+ * `[c:n]` markers are a small raised number just after the word before them, a link to the source
+ * it cites (none when it has none to open): the cited sources are the links under it. A live
+ * read's `[l:n]` (General chat, meeting notes) is a raised number after the context's ones,
+ * named for the read; any other token is never shown (chat-citations: noRawTokens).
  */
+
+/** An answer's words with each live read's `[l:n]` as a footnote, and no raw token left. */
+function footnoted(text: string): string {
+  return noRawTokens(text.replace(/\[l:(\d{1,4})\]/g, "[c:l.$1]"));
+}
 
 /** "7:42 PM": a line's time in the company's time zone, with no zone after it. */
 export function chatTime(iso: string, zone: string): string {
@@ -32,7 +40,7 @@ export function Who({ name, at, zone, mine }: { name: string; at: string; zone: 
 }
 
 /** A citation as an answer carries it (oracle.discussions.context: n, kind, title, url). */
-export type AnswerCite = { n?: number; kind?: string; title?: string; url?: string | null; label?: string };
+export type AnswerCite = { n?: number; kind?: string; title?: string; url?: string | null; label?: string; ref?: string; source?: string; read_at?: string };
 
 /** A marker still being written at the end of a streaming answer ("[", "[c", "[c:1"). */
 const PARTIAL = /\[([cl](:\d{0,4})?)?$/;
@@ -55,13 +63,11 @@ function inline(nodes: Inline[]): ReactNode {
     switch (n.t) {
       case "text": {
         // qa-simple-home-17: no space left between a word and its marker ("only [c:1]." reads "only¹.").
-        const v = nodes[i + 1]?.t === "cite" ? n.v.replace(/\s+$/, "") : n.v;
+        const v = noRawTokens(nodes[i + 1]?.t === "cite" ? n.v.replace(/\s+$/, "") : n.v);
         return <Fragment key={i}>{v}</Fragment>;
       }
-      case "cite": {
-        const num = /\d+/.exec(n.key)?.[0];
-        return num ? <Cite key={i} num={num} /> : null;
-      }
+      case "cite":
+        return <Cite key={i} id={n.key} />;
       case "code":
         return <code key={i}>{n.v}</code>;
       case "strong":
@@ -89,17 +95,40 @@ function inline(nodes: Inline[]): ReactNode {
 /** The answer's citations, for its markers. */
 const Cites = createContext<AnswerCite[]>([]);
 
+/** chat-citations: a footnote's own raised number, set off from the word and the number before it. */
+const SUP = "ml-[3px] text-[11px] leading-none font-semibold";
+
 /**
  * qa4-simple-home-3: a marker is a link to its own source, named for a screen reader ("Source 1:
- * Open Goal on the roadmap"); a marker with no source to open shows no number at all.
+ * Open Goal on the roadmap"); a marker with no source to open shows no number at all. A live
+ * read (`l.n`) is numbered after the context's citations and named for the read; it has no
+ * page in Oracle to open.
  */
-function Cite({ num }: { num: string }) {
+function Cite({ id }: { id: string }) {
   const cites = useContext(Cites);
-  const c = cites.find((x) => String(x.n) === num);
+  const zone = useCompanyZone();
+  const read = /^l\.(\d{1,4})$/.exec(id)?.[1];
+  if (read) {
+    const c = cites.find((x) => x.kind === "live" && x.ref === `l:${read}`);
+    if (!c) return null;
+    const after = Math.max(0, ...cites.map((x) => (x.kind !== "live" && typeof x.n === "number" ? x.n : 0)));
+    const num = after + Number(read);
+    const words = [c.source || "Meeting notes", c.read_at && `read ${chatTime(c.read_at, zone)}`].filter(Boolean).join(" · ");
+    return (
+      <sup className={SUP}>
+        <span data-testid="answer-cite" data-n={num} aria-label={`Source ${num}: ${words}`} title={words} className="text-accent-ink">
+          {num}
+        </span>
+      </sup>
+    );
+  }
+  if (!/^\d{1,4}$/.test(id)) return null;
+  const num = id;
+  const c = cites.find((x) => x.kind !== "live" && String(x.n) === num);
   const s = c ? source(c) : null;
   if (!s?.url) return null;
   return (
-    <sup className="ml-px text-[11px] leading-none font-semibold">
+    <sup className={SUP}>
       <Link href={s.url} data-testid="answer-cite" data-n={num} aria-label={`Source ${num}: ${s.words}`} title={s.words} className="text-accent-ink hover:underline">
         {num}
       </Link>
@@ -109,7 +138,7 @@ function Cite({ num }: { num: string }) {
 
 /** The answer's text as the pick draws it: title, lines, labels over short lists. */
 export function AnswerText({ text, live = false, cites = [] }: { text: string; live?: boolean; cites?: AnswerCite[] }) {
-  const blocks = parseBlocks(live ? text.replace(PARTIAL, "") : text);
+  const blocks = parseBlocks(footnoted(live ? text.replace(PARTIAL, "") : text));
   const title = titleOf(blocks[0]);
   const rest = title ? blocks.slice(1) : blocks;
   const out: ReactNode[] = [];
