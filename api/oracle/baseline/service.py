@@ -23,7 +23,6 @@ from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from difflib import SequenceMatcher
 from typing import Any, Literal
 
 from sqlalchemy import and_, func, or_, select
@@ -458,9 +457,10 @@ def _title_words(title: Any) -> str:
 
 
 def near_titles(a: Any, b: Any) -> bool:
-    """Near-identical titles: "Saved carts" and "Add saved cart"."""
-    x, y = _title_words(a), _title_words(b)
-    return bool(x) and (x == y or SequenceMatcher(None, x, y).ratio() >= 0.9)
+    """Near-identical titles: "Saved carts" and "Add saved cart", "Saved addresses" and
+    "Saved address" (one is the other with up to two letters more)."""
+    x, y = sorted((_title_words(a), _title_words(b)), key=len)
+    return bool(x) and (x == y or (len(x) >= 5 and y.startswith(x) and len(y) - len(x) <= 2))
 
 
 def same_change(a: dict[str, Any], b: dict[str, Any]) -> bool:
@@ -554,12 +554,13 @@ async def close_siblings(db: AsyncSession, accepted: Proposal, principal: Princi
     from oracle.baseline.describe import summaries
 
     root = accepted.payload.get("duplicate_of") or str(accepted.id)
-    near = [
-        Proposal.payload["duplicate_of"].astext == root,
-        Proposal.id == uuid.UUID(root),
-        and_(Proposal.entity_id.is_(None), Proposal.edge_id.is_(None),
-             Proposal.payload["op"].astext == "create"),
-    ]  # fmt: skip
+    near = [Proposal.payload["duplicate_of"].astext == root, Proposal.id == uuid.UUID(root)]
+    if accepted.payload.get("op") == "create":
+        near.append(and_(
+            Proposal.entity_id.is_(None), Proposal.edge_id.is_(None),
+            Proposal.payload["op"].astext == "create",
+            Proposal.payload["kind"].astext == accepted.payload.get("kind"),
+        ))  # fmt: skip
     if accepted.entity_id:
         near.append(Proposal.entity_id == accepted.entity_id)
     if accepted.edge_id:

@@ -1023,8 +1023,11 @@ const titleWords = (t: unknown) =>
     .replace(/s\b/g, "")
     .replace(/[^a-z0-9]+/g, "");
 
-/** As service.near_titles, without the 0.9 similarity step: the same words once normalised. */
-const nearTitles = (a: unknown, b: unknown) => titleWords(a) !== "" && titleWords(a) === titleWords(b);
+/** As service.near_titles: the same words once normalised, or one with up to two letters more. */
+function nearTitles(a: unknown, b: unknown): boolean {
+  const [x, y] = [titleWords(a), titleWords(b)].sort((m, n) => m.length - n.length);
+  return x !== "" && (x === y || (x.length >= 5 && y.startsWith(x) && y.length - x.length <= 2));
+}
 
 /** As service.same_change: the same fields, the same link, or a new item of the same type and key or title. */
 export function sameChange(a: Pay, b: Pay): boolean {
@@ -1084,7 +1087,10 @@ function closeSiblings(s: BaselineState, accepted: ProposalRow, userId: string):
     if (p.id === accepted.id || p.status !== "open") continue;
     const other = p.payload as Pay;
     const grouped = (other.duplicate_of ?? p.id) === root;
-    const near = grouped || (accepted.entity_id && p.entity_id === accepted.entity_id) || (!p.entity_id && !p.edge_id && other.op === "create");
+    const near =
+      grouped ||
+      (accepted.entity_id && p.entity_id === accepted.entity_id) ||
+      (pay.op === "create" && !p.entity_id && !p.edge_id && other.op === "create" && other.kind === pay.kind);
     if (!near) continue;
     let outcome: "already_done" | "not_chosen" | null = null;
     if (grouped && !agrees(pay, other)) outcome = "not_chosen";

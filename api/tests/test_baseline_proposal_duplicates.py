@@ -114,7 +114,10 @@ async def test_new_items_with_near_identical_titles_are_marked(client, ctx):
     first = await _propose(client, ctx, add("saved-carts", "Saved carts"), run, "writer")
     second = await _propose(client, ctx, add("save-cart", "Add saved cart"), run, "critic")
     other = await _propose(client, ctx, add("gift-cards", "Gift cards"), run, "critic")
+    addresses = await _propose(client, ctx, add("addresses", "Saved addresses"), run, "writer")
+    address = await _propose(client, ctx, add("address", "Saved address"), run, "critic")
     listed = await _open(client, ctx)
+    assert listed[address["id"]]["duplicate_of"] == addresses["id"]
     assert listed[second["id"]]["duplicate_of"] == first["id"]
     assert listed[other["id"]]["duplicate_of"] is None
     assert [a["id"] for a in listed[first["id"]]["also_proposed"]] == [second["id"]]
