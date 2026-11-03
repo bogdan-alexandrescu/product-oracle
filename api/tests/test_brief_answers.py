@@ -5,13 +5,16 @@ Each test's card is one line: protects / fails_when / no_claim. Synthetic placeh
 only.
 """
 
+import re
 import uuid
+from pathlib import Path
 
 import pytest
 from sqlalchemy import select
 
 from oracle.baseline.models import Proposal
 from oracle.intake import answers as intake_answers
+from oracle.interviews import turns as interview_turns
 from oracle.llm import gateway
 from oracle.runs import service as runs_service
 from oracle.runs.models import Run
@@ -109,6 +112,23 @@ async def test_resending_an_answer_already_saved_says_saved(client, ctx, fake):
     assert again["recorded"]["answer"]["body"] == LONG
     assert again["recorded"]["question"]["status"] == "answered"
     assert len(await answers_of(ctx, q["id"])) == 1
+
+
+# What recording an answer may take after the model's reply (its proposals, the change
+# event, the audit rows), with room to spare.
+RECORDING_SECONDS = 60
+
+
+def test_the_web_proxy_waits_longer_than_a_turn_takes():
+    """protects=the web's /v1 proxy (next.config.ts proxyTimeout) waits past a turn's
+    model deadline plus recording the answer, so a long answer's first Send answer
+    comes back; fails_when=proxyTimeout is missing (Next's 30 s default) or under that;
+    no_claim=the network between the browser and the web."""
+    config = (Path(__file__).parents[2] / "web" / "next.config.ts").read_text(encoding="utf-8")
+    found = re.search(r"proxyTimeout:\s*([\d_]+)", config)
+    assert found, "next.config.ts sets no proxyTimeout: Next's 30-second default applies"
+    waits = int(found.group(1).replace("_", "")) / 1000
+    assert waits > interview_turns.DEADLINE_SECONDS + RECORDING_SECONDS
 
 
 # (3) An answer closes its question and counts.
