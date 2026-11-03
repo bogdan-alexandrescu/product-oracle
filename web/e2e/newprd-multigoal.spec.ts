@@ -104,6 +104,35 @@ for (const scheme of ["light", "dark"] as const) {
         await expect(picked).toContainText(A);
         await expect(picked).toContainText(B);
       });
+
+      test("a PRD started but not drafted opens its draft sheet with both goals ticked", async ({ page }) => {
+        await login(page);
+        await page.goto("/simple/one-pagers");
+        await simple(page).getByTestId("simple-one-pagers").getByRole("button", { name: "New PRD" }).click();
+        const s = sheet(page);
+        await s.getByLabel("Name").fill(NAME);
+        await s.getByLabel("The problem").fill(PROBLEM);
+        const group = s.getByRole("group", { name: "The goals it helps" });
+        await group.getByRole("button", { name: A }).click();
+        await group.getByRole("button", { name: B }).click();
+        await s.getByRole("button", { name: "Next" }).click();
+        await expect(s.getByTestId("np-question")).toBeVisible();
+        // Left before drafting: the row waits, naming both goals.
+        await s.getByRole("button", { name: "Close" }).click();
+        await expect(s).toBeHidden();
+        const row = simple(page).getByTestId("one-pager-started");
+        await expect(row).toContainText("Not drafted yet");
+        await expect(row.getByTestId("one-pager-started-goals")).toHaveText(`For ${A} and ${B}`);
+
+        // Opened again from Detailed, its draft sheet has both goals ticked, and only those.
+        await row.getByRole("link", { name: NAME }).click();
+        await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
+        await page.getByRole("button", { name: "Draft with Oracle" }).click();
+        const goals = page.getByRole("group", { name: /Goals this PRD serves/ });
+        await expect(goals.getByRole("checkbox", { name: new RegExp(A) })).toBeChecked();
+        await expect(goals.getByRole("checkbox", { name: new RegExp(B) })).toBeChecked();
+        await expect(goals.getByRole("checkbox", { checked: true })).toHaveCount(2);
+      });
     });
   }
 }
