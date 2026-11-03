@@ -78,7 +78,8 @@ async def test_a_run_whose_check_broke_is_named_without_the_error_s_class(
     [unchecked] = out["unchecked"]
     assert unchecked["run_id"] == run["id"]
     assert "Error" not in unchecked["reason"], unchecked["reason"]
-    assert unchecked["reason"] == "something went wrong while reading it; the next check tries again"
+    said = "something went wrong while reading it; the next check tries again"
+    assert unchecked["reason"] == said
 
 
 async def test_a_run_whose_pass_ran_with_an_import_error_is_checked_not_unchecked(

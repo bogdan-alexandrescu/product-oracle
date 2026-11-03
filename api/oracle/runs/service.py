@@ -120,7 +120,6 @@ import contextvars
 import copy
 import hashlib
 import logging
-import re
 import time
 import uuid
 import weakref
@@ -8032,27 +8031,29 @@ async def _stamp_checked(db: AsyncSession, run_id: uuid.UUID, since: datetime) -
     await db.commit()
 
 
-_RUN_ERROR = re.compile(r"^run ([0-9a-fA-F-]{36}): (.+)$", re.S)
+def _unchecked_reason(exc: BaseException | str) -> str:
+    """run-progress: why a tick could not check a run, in a few plain words: never the
+    runtime's path, a workflow id, an HTTP code or an error's class name."""
+    again = "; the next check tries again"
+    if exc == "dates_pending":
+        return "its roadmap's dates are still being worked out" + again
+    if isinstance(exc, safe_yaml.ParseBusy):
+        return "Oracle was busy reading other files" + again
+    if isinstance(exc, RuntimeUnavailable):
+        if exc.gone or exc.status == 404:
+            return "SwarmCloud could not find its workflow" + again
+        if exc.status is not None and exc.status >= 500:
+            return "SwarmCloud had a problem on its side" + again
+        if exc.status is not None:
+            return "SwarmCloud refused Oracle's request" + again
+        return "SwarmCloud did not answer in time" + again
+    return "something went wrong while reading it" + again
 
 
-def _unchecked_reason(text: str) -> str:
-    """run-progress: why a tick could not check a run, in words, from its error."""
-    if text == "dates_pending":
-        return "its roadmap's dates are still being worked out; the next check tries again"
-    if text.startswith("parse_busy"):
-        return "Oracle was busy reading other files; the next check tries again"
-    if re.fullmatch(r"[A-Z][A-Za-z]*(Error|Exception)?", text):
-        return f"something went wrong while reading it ({text}); the next check tries again"
-    return text.rstrip(".")
-
-
-async def _unchecked(db: AsyncSession, errors: list[str]) -> list[TickUnchecked]:
-    """run-progress: each run named in the tick's errors, once, with its first reason."""
-    why: dict[uuid.UUID, str] = {}
-    for e in errors:
-        # A file SwarmCloud refused to send: the run was checked; the run page says it.
-        if (m := _RUN_ERROR.match(e)) is not None and "refused to send" not in m.group(2):
-            why.setdefault(uuid.UUID(m.group(1)), _unchecked_reason(m.group(2)))
+async def _unchecked(db: AsyncSession, why: dict[uuid.UUID, str]) -> list[TickUnchecked]:
+    """run-progress: each run whose pass broke off before it was read, with why. A run
+    whose pass ran is checked, whatever it reported (an import that failed, a file
+    SwarmCloud refused to send, a decision not posted yet): its error says so."""
     if not why:
         return []
     runs = list(await db.scalars(select(Run).where(Run.id.in_(why))))
@@ -8080,6 +8081,8 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
     of runtime calls per run, and never with a run's row lock held across one."""
     stats = _TickStats()
     errors: list[str] = []
+    # run-progress: the runs whose pass broke off before they were read, and why.
+    unread: dict[uuid.UUID, str] = {}
     # E1: queued derivations of PRD drafts start first, so this pass submits them.
     from oracle.roadmap import draft_items
 
@@ -8111,6 +8114,7 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
         deadline = loop.time() + TICK_RUN_SECONDS
         stats.pass_id = uuid.uuid4().hex
         began = _now()
+        read = False
         try:
             # Its parses count against the run (oracle.safe_yaml.MAX_PER_OWNER).
             with safe_yaml.parse_owner(str(run_id)):
@@ -8142,6 +8146,7 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
                     if owed is None:
                         continue
                     stats.checked += 1  # counted once: by its pass when that ran
+                read = True
                 await _stamp_checked(db, run_id, began)
                 if (refused := await refresh_key(db, run_id, deadline=deadline)) is not None:
                     errors.append(refused)
@@ -8153,21 +8158,29 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
             # run's row lock and transaction end here, not after the wait.
             await db.rollback()
             errors.append(f"run {run_id}: {exc.code}")
+            if not read:
+                unread.setdefault(run_id, _unchecked_reason(exc))
         except RuntimeUnavailable as exc:
             await db.rollback()
             errors.append(f"run {run_id}: {exc}")
+            if not read:
+                unread.setdefault(run_id, _unchecked_reason(exc))
         except Exception as exc:  # one broken run must not stop the others
             if _dates_pending(exc):
                 # The run stays as it was and the next tick tries again: never a failed
                 # run. Its row lock and transaction end here.
                 await db.rollback()
                 errors.append(f"run {run_id}: dates_pending")
+                if not read:
+                    unread.setdefault(run_id, _unchecked_reason("dates_pending"))
                 continue
             log.exception("tick failed for run %s", run_id)
             await db.rollback()
             errors.append(f"run {run_id}: {type(exc).__name__}")
+            if not read:
+                unread.setdefault(run_id, _unchecked_reason(exc))
     errors += stats.errors
-    unchecked = await _unchecked(db, errors)
+    unchecked = await _unchecked(db, unread)
     return TickOut(
         runs_checked=stats.checked,
         segments_finished=stats.finished,
