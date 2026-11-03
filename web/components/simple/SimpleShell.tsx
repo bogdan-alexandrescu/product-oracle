@@ -29,7 +29,7 @@ export const SIMPLE_DESTINATIONS: Dest[] = [
   { label: "Home", href: SIMPLE_HOME, icon: "home", testId: "simple-nav-home" },
   { label: "One-pagers", href: "/simple/one-pagers", icon: "doc", testId: "simple-nav-one-pagers" },
   { label: "Roadmap", href: "/simple/roadmap", icon: "roadmap", testId: "simple-nav-roadmap" },
-  { label: "Goal map", href: "/simple/goals", icon: "flag", testId: "simple-nav-goals" }, // MOCK-HOOK
+  { label: "Goal map", href: "/simple/goals", icon: "target", testId: "simple-nav-goals" }, // MOCK-HOOK
   { label: "Priorities", href: "/simple/priorities", icon: "priorities", testId: "simple-nav-priorities" },
   { label: "Meetings", href: "/simple/meetings", icon: "clock", testId: "simple-nav-meetings" },
   { label: "Decisions", href: "/simple/decisions", icon: "flag", testId: "simple-nav-decisions" },

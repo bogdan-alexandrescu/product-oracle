@@ -78,20 +78,20 @@ function Proof({ m, compact }: { m: GmMilestone; compact?: boolean }) {
   const ok = (v: number | null) => v !== null && (m.measure.startsWith("days") ? v === 0 : v >= m.threshold);
   return (
     <span className="flex min-w-0 max-w-full flex-col gap-1">
-      <span className="flex w-full gap-1" aria-label="Last 7 days">
+      <span className={`flex w-full gap-1 ${compact ? "" : "flex-wrap"}`} aria-label="Last 7 days">
         {m.days.map((v, i) => (
           <span
             key={i}
             title={`${DAYS[i]}: ${v === null ? "not measured" : num(v, m.unit)}`}
-            className={`grid ${compact ? "h-5" : "h-6"} ${compact ? "min-w-0 flex-1 text-[10px]" : "min-w-9 px-1 text-[13px] max-[600px]:min-w-0 max-[600px]:flex-1"} place-items-center rounded-md font-semibold ${
-              v === null ? "bg-surface2 text-text-faint" : ok(v) ? "bg-pass-bg text-pass" : "bg-surface2 text-text2"
+            className={`grid h-6 ${compact ? "min-w-0 flex-1 text-[12px]" : "min-w-9 px-1 text-[14px]"} place-items-center rounded-md font-semibold ${
+              v === null ? "bg-surface2 text-text-faint" : ok(v) ? "bg-pass-bg text-pass" : "border border-line-strong bg-surface text-text"
             }`}
           >
             {v === null ? "·" : compact && m.unit === "$" ? `${Math.round(v / 1000)}k` : num(v, m.unit)}
           </span>
         ))}
       </span>
-      <span className="simple-small text-[13px]! leading-5">
+      <span className="simple-small text-[14px]! leading-5">
         {m.status === "met"
           ? `Held 7 days in a row on a live rep · confirmed by ${m.confirmed}, Nov 2`
           : m.status === "not_measured"
@@ -117,24 +117,52 @@ function Guardrail({ map }: { map: GoalMap }) {
 }
 
 /** Feature line: expected lift and, once released, what it measured. */
-function FeatureCard({ f, area, tight }: { f: GmFeature; area?: string; tight?: boolean }) {
+function FeatureCard({ f, area, tight, also, fresh, serves = "Also serves" }: { f: GmFeature; area?: string; tight?: boolean; also?: string[]; fresh?: string; serves?: string }) {
   return (
-    <div data-testid="gm-feature" className={`flex flex-col gap-1 rounded-xl border border-line bg-surface ${tight ? "px-2.5 py-1.5" : "px-3 py-2"} ${f.lift === "not_helping" ? "border-crit/50" : ""}`}>
-      <span className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
-        <span className={`font-semibold ${tight ? "text-[15px] leading-5" : ""}`}>{f.name}</span>
+    <div data-testid="gm-feature" data-fresh={fresh ? "1" : undefined} className={`flex flex-col gap-1 rounded-xl border border-line bg-surface ${tight ? "px-2.5 py-1.5" : "px-3 py-2"} ${f.lift === "not_helping" ? "border-crit/50" : ""} ${fresh ? "border-accent! ring-2 ring-accent/40" : ""}`}>
+      <span className={`font-semibold ${tight ? "text-[16px] leading-6" : ""}`}>{f.name}</span>
+      <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <LiftPill l={f.lift} />
+        <span className="simple-small text-[14px]! leading-5">
+          {area ? `${area} · ` : ""}Expects {lower(f.expected)} ({f.confidence.toLowerCase()} confidence)
+          {f.measured ? ` · measured ${f.measured}` : f.released ? " · out, no reading yet" : " · not out yet"}
+        </span>
       </span>
-      <span className="simple-small text-[13px]! leading-5">
-        {area ? `${area} · ` : ""}Expects {lower(f.expected)} ({f.confidence.toLowerCase()} confidence)
-        {f.measured ? ` · measured ${f.measured}` : f.released ? "" : " · not released yet"}
-      </span>
+      {!!also?.length && (
+        <span className="text-[14px] leading-5 text-text2">
+          {serves} {also.map((n, i) => (
+            <span key={n}>
+              {i ? " and " : ""}
+              <b className={n === fresh ? "rounded bg-accent-soft px-1 text-accent-ink" : "font-semibold"}>{n}</b>
+              {n === fresh ? <span className="font-semibold text-accent-ink"> (new)</span> : null}
+            </span>
+          ))}
+        </span>
+      )}
     </div>
   );
 }
 
+/** A feature already drawn under another milestone: a small pointer, not a second card. */
+function AlsoHere({ f, under }: { f: GmFeature; under: string }) {
+  return (
+    <span data-testid="gm-feature-also" className="rounded-xl border border-dashed border-line-strong px-2.5 py-1 text-[14px] leading-5 text-text2">
+      <b className="text-text">{f.name}</b> also serves this; its card is under {under}
+    </span>
+  );
+}
+
+/** For each feature, the milestone whose place draws its card: the first it serves in the order shown. */
+function homes(order: string[], features: GmFeature[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const f of features) out[f.id] = [...f.milestones].sort((a, b) => order.indexOf(a) - order.indexOf(b))[0];
+  return out;
+}
+const msName = (map: GoalMap, id: string) => map.milestones.find((m) => m.id === id)?.name ?? "";
+
 /** After an edit, brings what changed into view (MOCK-HOOK: the frames record the scroll). */
 function reveal(sel: string, block: ScrollLogicalPosition = "center") {
-  setTimeout(() => document.querySelector(sel)?.scrollIntoView({ block, inline: "center" }), 50);
+  setTimeout(() => document.querySelector(sel)?.scrollIntoView({ block, inline: "nearest" }), 50);
 }
 
 const lower = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
@@ -197,8 +225,9 @@ function AreaPicks({ areas, picked, toggle }: { areas: GmArea[]; picked: string[
   return (
     <span className="flex flex-wrap gap-2">
       {areas.map((a, i) => (
-        <label key={a.id} className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1 text-[15px] ${picked.includes(a.id) ? "border-accent bg-accent-soft font-semibold text-accent-ink" : "border-line"}`}>
+        <label key={a.id} className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-[15px] ${picked.includes(a.id) ? "border-accent bg-accent font-semibold text-on-accent" : "border-line-strong"}`}>
           <input type="checkbox" className="sr-only" checked={picked.includes(a.id)} onChange={() => toggle(a.id)} />
+          {picked.includes(a.id) && <Icon name="check" size={16} />}
           {i + 1}. {a.name}
         </label>
       ))}
@@ -224,7 +253,7 @@ function emptyDraft(map: GoalMap, mid: boolean, edit: Edit): Draft {
   if (!mid) return d;
   if (edit === "propose") return { ...d, name: "40 sign-ups per rep", goal: "signups", threshold: "40", areas: ["scale", "onboard"], after: "m1" };
   if (edit === "goal") return { ...d, target: "12" };
-  if (edit === "attach") return { ...d, search: "team", feature: "f11", milestone: "m2" };
+  if (edit === "attach") return { ...d, search: "trial", feature: "f6", milestone: "m6" };
   if (edit === "prd") return { ...d, milestone: "m4", areas: ["conv", "safety"] };
   if (edit === "area") return { ...d, areaName: "Rep hiring" };
   return d;
@@ -246,6 +275,7 @@ export function GoalMapPage() {
   const [pick, setPick] = useState<string | null>(seedPick);
   const [started, setStarted] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  const [linked, setLinked] = useState<{ feature: string; milestone: string } | null>(null);
   const [seeded, setSeeded] = useState(false);
 
   useEffect(() => {
@@ -306,7 +336,14 @@ export function GoalMapPage() {
         g.id === goalId ? { ...g, target: Number(draft.target), history: [{ date: "Nov 3, 2026", text: `Target ${num(g.target, g.unit)} → ${num(Number(draft.target), g.unit)}`, by: "Dana Whitlock" }, ...g.history] } : g,
       );
       setMap({ ...map, goals });
-      setFlash(`Goal changed. Its history keeps the old target.`);
+      const g = map.goals.find((x) => x.id === goalId)!;
+      const rev = map.goals.find((x) => x.id === "revenue")!;
+      const t = Number(draft.target);
+      setFlash(
+        goalId === "conversions" && rev.target && t
+          ? `Goal saved; its history keeps ${num(g.target, g.unit)}. Revenue still aims at ${num(rev.target, "$")} a day: ${map.reps} reps × ${t} × $${Math.round(rev.target / (map.reps * t))} a conversion.`
+          : `Goal saved; its history keeps the old target.`,
+      );
       reveal(`[data-goal="${goalId}"]`, "start");
     }
     if (edit === "attach") {
@@ -314,7 +351,9 @@ export function GoalMapPage() {
       setMap({ ...map, features });
       const f = map.features.find((x) => x.id === draft.feature);
       const m = map.milestones.find((x) => x.id === draft.milestone);
-      setFlash(`${f?.name} now serves ${m?.name}.`);
+      setLinked({ feature: draft.feature, milestone: draft.milestone });
+      setFlash(`Attached: ${f?.name} now also serves ${m?.name}.`);
+      reveal("[data-fresh]");
     }
     if (edit === "prd") {
       const m = map.milestones.find((x) => x.id === draft.milestone);
@@ -328,7 +367,7 @@ export function GoalMapPage() {
     close();
   };
 
-  const ctx: Ctx = { map, open, moveArea, pick, setPick, started };
+  const ctx: Ctx = { map, open, moveArea, pick, setPick, started, linked };
   const wide = variant !== "b";
 
   return (
@@ -348,7 +387,7 @@ export function GoalMapPage() {
         </div>
       </header>
       {flash && (
-        <p role="status" data-testid="gm-flash" className="rounded-2xl bg-accent-soft px-4 py-2.5 font-semibold text-accent-ink">
+        <p role="status" data-testid="gm-flash" className="fixed bottom-6 left-1/2 z-30 w-max max-w-[min(720px,calc(100vw-32px))] -translate-x-1/2 rounded-2xl border border-accent bg-accent-soft px-4 py-2.5 font-semibold text-accent-ink shadow-lg max-[600px]:bottom-24">
           {flash}
         </p>
       )}
@@ -380,6 +419,7 @@ interface Ctx {
   pick: string | null;
   setPick: (id: string | null) => void;
   started: string | null;
+  linked: { feature: string; milestone: string } | null;
 }
 
 function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: GoalMap; edit: Edit; draft: Draft; setDraft: (d: Draft) => void; goal: GmGoal; onClose: () => void; onSave: () => void }) {
@@ -428,10 +468,10 @@ function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: Go
   if (edit === "goal")
     return (
       <Drawer title={`Edit goal: ${goal.name}`} onClose={onClose} testId="gm-editor">
-        <p className="simple-small">Now {num(goal.current, goal.unit)} a day. {goal.math}.</p>
+        <p className="simple-small">Now {num(goal.current, goal.unit)} a day, target {num(goal.target, goal.unit)}. {goal.math}.</p>
         <label className={label}>
-          Target (at least, every day)
-          <input className={field} value={draft.target} placeholder={num(goal.target, goal.unit)} onChange={(e) => set({ target: e.target.value })} />
+          New target (at least, every day)
+          <input className={field} value={draft.target} placeholder="Type a number" onChange={(e) => set({ target: e.target.value })} />
         </label>
         {draft.target && (
           <p className="rounded-xl bg-warn-bg px-3 py-2 text-[15px] text-warn">
@@ -595,7 +635,7 @@ function AreaOrder({ map, open, moveArea }: Ctx) {
 function sortMs(map: GoalMap): GmMilestone[] {
   const d = depth(map.milestones);
   const order = ["Oct", "Nov", "Dec", "Jan", "Feb"];
-  return [...map.milestones].sort((a, b) => d[a.id] - d[b.id] || order.indexOf(a.month) - order.indexOf(b.month) || a.goal.localeCompare(b.goal));
+  return [...map.milestones].sort((a, b) => d[a.id] - d[b.id] || order.indexOf(a.month) - order.indexOf(b.month) || a.goal.localeCompare(b.goal) || a.threshold - b.threshold);
 }
 
 function afterWords(m: GmMilestone, map: GoalMap): string {
@@ -605,76 +645,108 @@ function afterWords(m: GmMilestone, map: GoalMap): string {
 
 /* ---------- A · Ladder × lanes ---------- */
 
+/** MOCK-HOOK: `&at=<milestone>` scrolls the grid sideways to that gate and the page down to the gates (the hard case's second frame). */
+function useAt(at: string | null) {
+  useEffect(() => {
+    if (!at) return;
+    const t = setTimeout(() => {
+      const box = document.querySelector<HTMLElement>('[data-testid="gm-ladder-scroll"]');
+      const gate = document.querySelector<HTMLElement>(`[data-gate="${at}"]`);
+      if (box && gate) box.scrollLeft = gate.offsetLeft - 200;
+      const sec = document.querySelector('[data-testid="gm-ladder"]');
+      if (sec) window.scrollTo(0, sec.getBoundingClientRect().top + window.scrollY - 16);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [at]);
+}
+
 function Ladder(ctx: Ctx) {
   const { map, open, moveArea } = ctx;
   const ms = sortMs(map);
   const d = depth(map.milestones);
+  const home = homes(ms.map((m) => m.id), map.features);
+  const at = useSearchParams().get("at"); // MOCK-HOOK
+  useAt(at);
   return (
     <>
       <Goals {...ctx} />
       <Guardrail map={map} />
-      <section className="simple-card gap-0! p-0! max-[600px]:hidden" data-testid="gm-ladder" aria-label="Milestones by area">
-        <div className="flex items-center justify-between gap-3 px-5 py-3">
-          <h2 className="simple-h2">Milestones by area</h2>
-          <span className="simple-small">Left to right in steps: a milestone needs the ones it comes after.</span>
-        </div>
-        <div className="overflow-x-auto border-t border-line">
-          <div className="grid" style={{ gridTemplateColumns: `200px repeat(${ms.length}, minmax(232px, 1fr))` }}>
-            <div className="sticky left-0 z-10 border-b border-r border-line bg-surface px-3 py-2">
-              <Btn small testId="gm-add-area" onClick={() => open("area")}>
-                <Icon name="plus" size={16} /> Add an area
-              </Btn>
-            </div>
-            {ms.map((m) => (
-              <div key={m.id} data-testid="gm-gate" data-gate={m.id} className={`flex flex-col gap-1.5 border-b border-r border-line px-3 py-2.5 ${m.proposed ? "border-dashed bg-accent-soft" : m.status === "missed" ? "bg-crit-bg" : ""}`}>
-                <span className="flex items-center justify-between gap-2">
-                  <span className="text-[13px] font-semibold uppercase tracking-wide text-text2">
-                    Step {d[m.id] + 1} · {m.month}
-                  </span>
-                  {m.proposed ? <Pill cls="bg-surface text-accent-ink border border-accent">Proposed</Pill> : <StatusPill s={m.status} />}
-                </span>
-                <span className="font-semibold leading-6">{m.name}</span>
-                <span className="text-[15px] leading-5 text-text2">
-                  {num(m.current, m.unit)} of {num(m.threshold, m.unit)} · {afterWords(m, map)}
-                </span>
-                <Proof m={m} compact />
-              </div>
-            ))}
-            {map.areas.map((a, ai) => (
-              <LadderRow key={a.id} a={a} ai={ai} n={map.areas.length} ms={ms} map={map} open={open} moveArea={moveArea} />
-            ))}
+      <div className="max-[600px]:hidden!">
+        <section className="simple-card gap-0! p-0!" data-testid="gm-ladder" aria-label="Milestones by area">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+            <h2 className="simple-h2">Milestones by area</h2>
+            <span className="simple-small">Left to right in steps: a milestone needs the ones it comes after.</span>
+            {ms.length > 3 && <span className="simple-small font-semibold">3 of {ms.length} steps shown at a time · scroll sideways for the rest →</span>}
           </div>
-        </div>
-      </section>
-      <LadderPhone {...ctx} ms={ms} />
+          <div className="relative border-t border-line">
+            <div data-testid="gm-ladder-scroll" className="snap-x snap-mandatory overflow-x-auto scroll-pl-[200px] [container-type:inline-size]">
+              <div className="grid w-max min-w-full" style={{ gridTemplateColumns: `200px repeat(${ms.length}, max(248px, calc((100cqw - 200px) / 3)))` }}>
+                <div className="sticky left-0 z-10 border-b border-r border-line bg-surface px-3 py-2">
+                  <Btn small testId="gm-add-area" onClick={() => open("area")}>
+                    <Icon name="plus" size={16} /> Add an area
+                  </Btn>
+                </div>
+                {ms.map((m) => (
+                  <div
+                    key={m.id}
+                    data-testid="gm-gate"
+                    data-gate={m.id}
+                    className={`flex snap-start flex-col gap-1.5 border-b border-r border-line px-3 py-2.5 ${m.proposed ? "border-2 border-dashed border-accent! bg-accent-soft" : m.status === "missed" ? "bg-crit-bg" : ""}`}
+                  >
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="text-[14px] font-semibold uppercase tracking-wide text-text2">
+                        Step {d[m.id] + 1} · due {m.month}
+                      </span>
+                      {m.proposed ? <Pill cls="bg-surface text-accent-ink border border-accent">Proposed</Pill> : <StatusPill s={m.status} />}
+                    </span>
+                    <span className="text-[17px] font-semibold leading-6">{m.name}</span>
+                    <span className="text-[16px] leading-6 text-text2">
+                      {num(m.current, m.unit)} of {num(m.threshold, m.unit)} · {afterWords(m, map)}
+                    </span>
+                    <Proof m={m} compact />
+                  </div>
+                ))}
+                {map.areas.map((a, ai) => (
+                  <LadderRow key={a.id} a={a} ai={ai} n={map.areas.length} ms={ms} map={map} open={open} moveArea={moveArea} home={home} proposed={ms.find((m) => m.proposed)?.id} />
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+      <LadderPhone {...ctx} ms={ms} home={home} />
     </>
   );
 }
 
-function LadderRow({ a, ai, n, ms, map, open, moveArea }: { a: GmArea; ai: number; n: number; ms: GmMilestone[]; map: GoalMap; open: Ctx["open"]; moveArea: Ctx["moveArea"] }) {
+function LadderRow({ a, ai, n, ms, map, open, moveArea, home, proposed }: { a: GmArea; ai: number; n: number; ms: GmMilestone[]; map: GoalMap; open: Ctx["open"]; moveArea: Ctx["moveArea"]; home: Record<string, string>; proposed?: string }) {
   return (
     <>
       <div className="sticky left-0 z-10 flex flex-col gap-1 border-b border-r border-line bg-surface px-3 py-2.5" data-testid="gm-lane">
         <span className="font-semibold leading-6">
           {ai + 1}. {a.name}
         </span>
-        <span className="simple-small text-[13px]! leading-5">Pulls: {a.lever.toLowerCase()}</span>
+        <span className="simple-small text-[14px]! leading-5">Pulls: {a.lever.toLowerCase()}</span>
         <span className="flex gap-1">
-          <button type="button" disabled={ai === 0} aria-label={`Move ${a.name} up`} onClick={() => moveArea(a.id, -1)} className="rounded-md border border-line px-1.5 text-[13px] disabled:opacity-40">↑</button>
-          <button type="button" disabled={ai === n - 1} aria-label={`Move ${a.name} down`} onClick={() => moveArea(a.id, 1)} className="rounded-md border border-line px-1.5 text-[13px] disabled:opacity-40">↓</button>
+          <button type="button" disabled={ai === 0} aria-label={`Move ${a.name} up`} onClick={() => moveArea(a.id, -1)} className="rounded-md border border-line px-1.5 text-[14px] disabled:opacity-40">↑</button>
+          <button type="button" disabled={ai === n - 1} aria-label={`Move ${a.name} down`} onClick={() => moveArea(a.id, 1)} className="rounded-md border border-line px-1.5 text-[14px] disabled:opacity-40">↓</button>
         </span>
       </div>
       {ms.map((m) => {
         const fs = map.features.filter((f) => f.area === a.id && f.milestones.includes(m.id));
         const serves = m.areas.includes(a.id);
         return (
-          <div key={m.id} className={`flex flex-col gap-1.5 border-b border-r border-line p-2 ${serves ? "bg-surface2/60" : ""}`}>
-            {fs.map((f) => (
-              <FeatureCard key={f.id} f={f} tight />
-            ))}
-            {serves && !fs.length && <span className="simple-small text-[13px]! leading-5 px-1">No feature yet</span>}
+          <div key={m.id} className={`flex flex-col gap-1.5 border-b border-r border-line p-2 ${serves ? "bg-surface2/60" : ""} ${m.id === proposed ? "border-x-2 border-dashed border-x-accent" : ""}`}>
+            {fs.map((f) =>
+              home[f.id] === m.id ? (
+                <FeatureCard key={f.id} f={f} tight also={f.milestones.filter((x) => x !== m.id).map((x) => msName(map, x))} />
+              ) : (
+                <AlsoHere key={f.id} f={f} under={msName(map, home[f.id])} />
+              ),
+            )}
+            {serves && !fs.length && <span className="simple-small text-[14px]! leading-5 px-1">No feature yet</span>}
             {serves && (
-              <button type="button" onClick={() => open("attach")} className="self-start rounded-full px-1.5 text-[13px] font-semibold text-accent-ink hover:underline">
+              <button type="button" onClick={() => open("attach")} className="self-start rounded-full px-1.5 text-[14px] font-semibold text-accent-ink hover:underline">
                 + Attach a feature
               </button>
             )}
@@ -685,9 +757,9 @@ function LadderRow({ a, ai, n, ms, map, open, moveArea }: { a: GmArea; ai: numbe
   );
 }
 
-function LadderPhone({ map, ms }: Ctx & { ms: GmMilestone[] }) {
+function LadderPhone({ map, ms, home }: Ctx & { ms: GmMilestone[]; home: Record<string, string> }) {
   return (
-    <section className="hidden flex-col gap-3 max-[600px]:flex" data-testid="gm-ladder-phone">
+    <section className="hidden flex-col gap-3 pb-24 max-[600px]:flex" data-testid="gm-ladder-phone">
       <h2 className="simple-h2">Milestones, in steps</h2>
       {ms.map((m) => (
         <div key={m.id} className="simple-card gap-2!">
@@ -706,9 +778,13 @@ function LadderPhone({ map, ms }: Ctx & { ms: GmMilestone[] }) {
                 <span className="text-[14px] font-semibold text-text2">{map.areas.indexOf(a) + 1}. {a.name}</span>
                 {map.features
                   .filter((f) => f.area === a.id && f.milestones.includes(m.id))
-                  .map((f) => (
-                    <FeatureCard key={f.id} f={f} tight />
-                  ))}
+                  .map((f) =>
+                    home[f.id] === m.id ? (
+                      <FeatureCard key={f.id} f={f} tight also={f.milestones.filter((x) => x !== m.id).map((x) => msName(map, x))} />
+                    ) : (
+                      <AlsoHere key={f.id} f={f} under={msName(map, home[f.id])} />
+                    ),
+                  )}
               </div>
             ))}
         </div>
@@ -722,6 +798,8 @@ function LadderPhone({ map, ms }: Ctx & { ms: GmMilestone[] }) {
 function GoalTree(ctx: Ctx) {
   const { map, open } = ctx;
   const ms = sortMs(map);
+  const order = map.goals.flatMap((g) => ms.filter((m) => m.goal === g.id).map((m) => m.id));
+  const home = homes(order, map.features);
   return (
     <>
       <Guardrail map={map} />
@@ -753,7 +831,7 @@ function GoalTree(ctx: Ctx) {
                       <span className="font-semibold">{m.name}</span>
                       <StatusPill s={m.status} />
                       <span className="text-text2">
-                        {num(m.current, m.unit)} of {num(m.threshold, m.unit)} · {m.month}
+                        {num(m.current, m.unit)} of {num(m.threshold, m.unit)} · due in {m.month}
                       </span>
                       <span className="simple-small ml-auto">{afterWords(m, map)}</span>
                     </span>
@@ -770,8 +848,12 @@ function GoalTree(ctx: Ctx) {
                         .filter((f) => f.milestones.includes(m.id))
                         .sort((a, b) => map.areas.findIndex((x) => x.id === a.area) - map.areas.findIndex((x) => x.id === b.area))
                         .map((f) => (
-                          <li key={f.id}>
-                            <FeatureCard f={f} tight area={map.areas.find((a) => a.id === f.area)?.name} />
+                          <li key={f.id} className="flex flex-col">
+                            {home[f.id] === m.id ? (
+                              <FeatureCard f={f} tight area={map.areas.find((a) => a.id === f.area)?.name} also={f.milestones.filter((x) => x !== m.id).map((x) => msName(map, x))} />
+                            ) : (
+                              <AlsoHere f={f} under={msName(map, home[f.id])} />
+                            )}
                           </li>
                         ))}
                       <li>
@@ -793,7 +875,7 @@ function GoalTree(ctx: Ctx) {
 function Lever({ title, now, target, status, testId, children, goal, onEdit }: { title: string; now: string; target: string; status: GmStatus; testId?: string; children?: ReactNode; goal?: boolean; onEdit?: () => void }) {
   return (
     <div data-testid={testId} className={`simple-card min-w-0 flex-1 gap-2! p-4! ${goal ? "border-accent!" : ""}`}>
-      <span className="flex items-start justify-between gap-2">
+      <span className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
         <span className="font-semibold leading-6">{title}</span>
         <StatusPill s={status} />
       </span>
@@ -811,9 +893,9 @@ function Lever({ title, now, target, status, testId, children, goal, onEdit }: {
   );
 }
 
-const Op = ({ c }: { c: string }) => <span className="self-center px-1 text-[26px] font-bold text-text-faint max-[600px]:self-start">{c}</span>;
+const Op = ({ c, className = "" }: { c: string; className?: string }) => <span className={`self-center px-1 text-[26px] font-bold text-text-faint ${className}`}>{c}</span>;
 
-function LeverBody({ map, lever, open }: { map: GoalMap; lever: string; open: Ctx["open"] }) {
+function LeverBody({ map, lever, open, linked }: { map: GoalMap; lever: string; open: Ctx["open"]; linked: Ctx["linked"] }) {
   const fs = map.features.filter((f) => f.lever === lever);
   const areas = map.areas.filter((a) => fs.some((f) => f.area === a.id));
   const msIds = [...new Set(fs.flatMap((f) => f.milestones))];
@@ -827,19 +909,31 @@ function LeverBody({ map, lever, open }: { map: GoalMap; lever: string; open: Ct
         ))}
       </span>
       {!fs.length && <span className="simple-small">No milestone or feature pulls it yet.</span>}
-      {!!ms.length && <span className="text-[14px] font-semibold text-text2">Milestones on this lever</span>}
-      <ol className="flex flex-col gap-1">
-        {ms.map((m) => (
-          <li key={m.id} className="flex flex-wrap items-center justify-between gap-x-2 text-[15px] leading-6">
-            <span>{m.name}</span>
-            <StatusPill s={m.status} />
-          </li>
-        ))}
+      {!!ms.length && <span className="text-[14px] font-semibold text-text2">Milestones it moves</span>}
+      <ol className="flex flex-col gap-2">
+        {ms.map((m) => {
+          const n = fs.filter((f) => f.milestones.includes(m.id)).length;
+          const isNew = linked?.milestone === m.id && fs.some((f) => f.id === linked.feature);
+          return (
+            <li key={m.id} className={`flex flex-col gap-1.5 rounded-xl border px-2.5 py-2 ${isNew ? "border-accent bg-accent-soft/50" : "border-line"}`}>
+              <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[16px] font-semibold leading-6">
+                <span>{m.name}</span>
+                <StatusPill s={m.status} />
+              </span>
+              <span className="simple-small text-[14px]! leading-5">
+                {num(m.current, m.unit)} of {num(m.threshold, m.unit)} · due in {m.month} · {n} {n === 1 ? "feature" : "features"} here
+                {isNew ? <b className="text-accent-ink"> (1 new)</b> : null}
+              </span>
+              <Proof m={m} />
+            </li>
+          );
+        })}
       </ol>
       {!!fs.length && <span className="text-[14px] font-semibold text-text2">Features pulling it</span>}
-      {shown.map((f) => (
-        <FeatureCard key={f.id} f={f} tight />
-      ))}
+      {shown.map((f) => {
+        const names = f.milestones.map((x) => msName(map, x));
+        return <FeatureCard key={f.id} f={f} tight serves="Serves" also={names} fresh={linked?.feature === f.id ? msName(map, linked.milestone) : undefined} />;
+      })}
       {fs.length > shown.length && <span className="simple-small">and {fs.length - shown.length} more</span>}
       <button type="button" onClick={() => open("attach")} className="self-start text-[14px] font-semibold text-accent-ink hover:underline">+ Attach a feature</button>
     </>
@@ -847,10 +941,11 @@ function LeverBody({ map, lever, open }: { map: GoalMap; lever: string; open: Ct
 }
 
 function DriverTree(ctx: Ctx) {
-  const { map, open } = ctx;
+  const { map, open, linked } = ctx;
   const [s, c, r] = map.goals;
   const rate = s.current && c.current ? Math.round((c.current / s.current) * 100) : null;
   const value = r.current && c.current ? Math.round(r.current / (c.current * map.reps)) : null;
+  const box = "flex max-[600px]:w-full";
   return (
     <>
       <AreaOrder {...ctx} />
@@ -862,40 +957,40 @@ function DriverTree(ctx: Ctx) {
             </Lever>
           </div>
         </div>
-        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-x-1 gap-y-3 max-[600px]:flex max-[600px]:flex-col">
-          <div className="row-span-2 flex">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-x-1 gap-y-3 max-[600px]:flex max-[600px]:flex-col max-[600px]:items-stretch">
+          <div className={`row-span-2 ${box} max-[600px]:order-1`}>
             <Lever title="Reps live" now={`${map.reps}`} target="reps" status="on_track">
-              <LeverBody map={map} lever="Number of reps" open={open} />
+              <LeverBody map={map} lever="Number of reps" open={open} linked={linked} />
             </Lever>
           </div>
-          <Op c="×" />
-          <div className="col-span-3 flex">
+          <Op c="×" className="max-[600px]:order-2" />
+          <div className={`col-span-3 ${box} max-[600px]:order-3`}>
             <Lever goal title="Paid conversions per rep (goal)" now={num(c.current, "")} target={`of ${c.target} a day`} status={c.status} onEdit={() => open("goal", c.id)}>
               <span className="simple-small text-[14px]! leading-5">= sign-ups per rep × conversion rate. Needs 40–65 sign-ups at 15–25%.</span>
             </Lever>
           </div>
-          <Op c="×" />
-          <div className="row-span-2 flex">
+          <Op c="×" className="max-[600px]:order-8" />
+          <div className={`row-span-2 ${box} max-[600px]:order-9`}>
             <Lever title="Value of a conversion" now={value === null ? "—" : `$${value}`} target="each" status={value === null ? "not_measured" : "on_track"}>
-              <LeverBody map={map} lever="Value per conversion" open={open} />
+              <LeverBody map={map} lever="Value per conversion" open={open} linked={linked} />
             </Lever>
           </div>
           <span className="max-[600px]:hidden" />
-          <div className="col-start-3 flex">
+          <div className={`col-start-3 ${box} max-[600px]:order-4 max-[600px]:border-l-4 max-[600px]:border-line max-[600px]:pl-3`}>
             <Lever goal title="Sign-ups per rep (goal)" now={num(s.current, "")} target={`of ${s.target} a day`} status={s.status} onEdit={() => open("goal", s.id)}>
-              <LeverBody map={map} lever="Sign-ups per rep" open={open} />
+              <LeverBody map={map} lever="Sign-ups per rep" open={open} linked={linked} />
             </Lever>
           </div>
-          <Op c="×" />
-          <div className="flex">
+          <Op c="×" className="max-[600px]:order-5 max-[600px]:ml-4" />
+          <div className={`${box} max-[600px]:order-6 max-[600px]:border-l-4 max-[600px]:border-line max-[600px]:pl-3`}>
             <Lever title="Conversion rate" now={rate === null ? "—" : `${rate}%`} target="needs 15–25%" status="on_track">
-              <LeverBody map={map} lever="Conversion rate" open={open} />
+              <LeverBody map={map} lever="Conversion rate" open={open} linked={linked} />
             </Lever>
           </div>
         </div>
-        <div className="simple-card gap-2! border-pass/50!">
+        <div className="simple-card gap-2! border-pass/50! max-[600px]:mb-24">
           <Guardrail map={map} />
-          <LeverBody map={map} lever="Guardrail" open={open} />
+          <LeverBody map={map} lever="Guardrail" open={open} linked={linked} />
         </div>
       </section>
     </>
@@ -912,14 +1007,22 @@ function Scoreboard(ctx: Ctx) {
     return ai - bi;
   });
   const chosen = map.milestones.find((m) => m.id === pick);
+  useEffect(() => {
+    // On a narrow screen the drill-in is a sheet: the page behind it stays still.
+    if (!chosen || window.innerWidth > 900) return;
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.documentElement.style.overflow = "";
+    };
+  }, [chosen]);
   return (
     <>
       <div className="grid grid-cols-4 gap-3 max-[900px]:grid-cols-2 max-[600px]:grid-cols-1" data-testid="gm-tiles">
         {map.goals.map((g) => (
           <div key={g.id} className="simple-card gap-1! p-4!" data-testid="gm-goal">
-            <span className="flex items-start justify-between gap-2">
+            <span className="flex items-start justify-between gap-4">
               <span className="font-semibold leading-6">{g.name}</span>
-              <button type="button" onClick={() => open("goal", g.id)} className="text-[14px] font-semibold text-accent-ink hover:underline">Edit</button>
+              <button type="button" onClick={() => open("goal", g.id)} className="shrink-0 rounded-full border border-line px-2.5 py-0.5 text-[14px] font-semibold text-accent-ink hover:bg-surface2">Edit</button>
             </span>
             <span className="simple-number">{num(g.current, g.unit)}</span>
             <span className="flex items-center justify-between gap-2 text-text2">
@@ -956,7 +1059,10 @@ function Scoreboard(ctx: Ctx) {
               >
                 <span className="flex min-w-0 flex-col">
                   <span className="font-semibold leading-6">{m.name}</span>
-                  <span className="simple-small truncate text-[13px]! leading-5">{m.areas.map((x) => map.areas.find((a) => a.id === x)?.name).join(" · ")}</span>
+                  <span className="simple-small text-[14px]! leading-5">{m.areas.map((x) => map.areas.find((a) => a.id === x)?.name).join(" · ")}</span>
+                  <span className="hidden text-[15px] leading-6 max-[600px]:block">
+                    {num(m.current, m.unit)} of {num(m.threshold, m.unit)} · {fs.length} {fs.length === 1 ? "feature" : "features"}, <span className="text-pass">{help} helping</span>
+                  </span>
                 </span>
                 <span className="max-[600px]:hidden">
                   {num(m.current, m.unit)} / {num(m.threshold, m.unit)}
@@ -972,8 +1078,9 @@ function Scoreboard(ctx: Ctx) {
             );
           })}
         </section>
+        {chosen && <div aria-hidden onClick={() => setPick(null)} className="fixed inset-0 z-20 hidden bg-black/40 max-[900px]:block" />}
         {chosen && (
-          <aside className="simple-card sticky top-4 w-[400px] shrink-0 gap-3! max-[900px]:fixed max-[900px]:inset-x-0 max-[900px]:bottom-0 max-[900px]:top-auto max-[900px]:z-30 max-[900px]:max-h-[70vh] max-[900px]:w-full max-[900px]:overflow-y-auto" data-testid="gm-drill" aria-label={chosen.name}>
+          <aside className="simple-card sticky top-4 w-[400px] shrink-0 gap-3! max-[900px]:fixed max-[900px]:inset-x-0 max-[900px]:bottom-0 max-[900px]:top-auto max-[900px]:z-30 max-[900px]:max-h-[75vh] max-[900px]:w-full max-[900px]:overflow-y-auto max-[900px]:rounded-b-none max-[900px]:pb-24" data-testid="gm-drill" aria-label={chosen.name}>
             <span className="flex items-start justify-between gap-2">
               <h2 className="simple-h2">{chosen.name}</h2>
               <button type="button" aria-label="Close" onClick={() => setPick(null)} className="rounded-full p-1 hover:bg-surface2">
@@ -982,7 +1089,7 @@ function Scoreboard(ctx: Ctx) {
             </span>
             <span className="flex items-center gap-2">
               <StatusPill s={chosen.status} />
-              <span className="text-text2">{num(chosen.current, chosen.unit)} of {num(chosen.threshold, chosen.unit)} · {chosen.month}</span>
+              <span className="text-text2">{num(chosen.current, chosen.unit)} of {num(chosen.threshold, chosen.unit)} · due in {chosen.month}</span>
             </span>
             <span className="simple-small">{afterWords(chosen, map)}. Met when held 7 days in a row on a live rep, guardrail held.</span>
             <Proof m={chosen} />

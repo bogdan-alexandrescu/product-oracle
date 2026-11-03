@@ -21,6 +21,7 @@ function frames(): Frame[] {
       { name: `gm1-${x}-mid`, q: `?gm1=${x}${ex}&open=${e}&phase=mid`, w: 1440, h: 900 },
       { name: `gm1-${x}-result`, q: `?gm1=${x}${ex}&open=${e}&phase=mid`, act: "save", w: 1440, h: 900 },
       { name: `gm1-${x}-hard`, q: hard, w: 1440, h: 900 },
+      ...(x === "a" ? [{ name: `gm1-a-hard-scrolled`, q: `${hard}&at=m10`, w: 1440, h: 900 }] : []),
       { name: `gm1-${x}-hard-1512`, q: hard, w: 1512, h: 945 },
       { name: `gm1-${x}-phone-390`, q: `?gm1=${x}${ex}`, w: 390, h: 844 },
     );
@@ -113,7 +114,12 @@ test("capture the goal map frames", async ({ browser, baseURL }) => {
       css = css.split(raw).join(`../assets/${fn}`);
     }
     fs.writeFileSync(`${OUT}/frames/${f.name}.html`, r.html.replace("__CSS__", css.replace(/<\/style/g, "<\\/style")));
+    // The first screen as the frame's PNG, the whole page beside it (so a long hard case is all there), and the first screen in dark.
     await page.screenshot({ path: `${OUT}/frames/${f.name}.png` });
+    if (r.height > f.h + 40) await page.screenshot({ path: `${OUT}/frames/${f.name}-full.png`, fullPage: true });
+    await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: `${OUT}/frames/${f.name}-dark.png` });
     meta[f.name] = { height: r.height, width: r.width, q: f.q, act: f.act ?? null };
     console.log(f.name, r.height, r.width);
     await ctx.close();
