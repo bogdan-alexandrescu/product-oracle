@@ -204,7 +204,7 @@ const CELL_PAD = 16;
 const DEPS_WIDTH = 104;
 const DEPS_ROOM = DEPS_WIDTH - CELL_PAD;
 const DEPS_WIDE = 232; // MOCK-HOOK
-const GOAL_WIDE = 232; // MOCK-HOOK
+const GOAL_WIDE = 260; // MOCK-HOOK
 
 function goalWidth(features: RankedFeature[], max = GOAL_MAX /* MOCK-HOOK */): number {
   let need = 0;
@@ -215,6 +215,8 @@ function goalWidth(features: RankedFeature[], max = GOAL_MAX /* MOCK-HOOK */): n
       const beside = CELL_PAD + codeTagRoom(n.code) + longest;
       // A name that cannot sit beside its code even at GOAL_MAX goes under it.
       need = Math.max(need, beside <= max ? beside : CELL_PAD + longest); // MOCK-HOOK
+      // PC1, panel closed: room for the whole name beside its code, up to the wider max. // MOCK-HOOK
+      if (max > GOAL_MAX) need = Math.max(need, Math.min(max, CELL_PAD + codeTagRoom(n.code) + (textWidth(n.name, 500, 15) ?? 0))); // MOCK-HOOK
     }
   return Math.min(max, Math.max(GOAL_MIN, Math.ceil(need) + 1)); // MOCK-HOOK
 }
