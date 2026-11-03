@@ -21,6 +21,8 @@ Test cards (protects / fails_when / no_claim):
 - test_strategy_stack_follows_the_rule: protects=Strategy's stack lists a choice's goals and
   the unaligned goals in the one order with positions; fails_when=they come by key;
   no_claim=drift findings.
+- test_simple_goal_suggestions_follow_the_rule: protects=Simple Roadmap's goal cards come in
+  the one order; fails_when=they come by key; no_claim=the suggestions.
 - test_position_must_be_a_whole_number: protects=a goal's Edit saves a position of 1 or
   more and refuses 0 or a word with a field problem; a tie on position goes to the older
   goal; fails_when=a bad position is stored; no_claim=the web form.
@@ -134,3 +136,15 @@ async def test_position_must_be_a_whole_number(client):
         assert (await s.get(Entity, ids["charlie"])).attrs["position"] == 1
     r = await client.get("/v1/baseline/entities", params={"type": "goal"}, headers=owner)
     assert [g["key"] for g in r.json()] == ["bravo", "charlie", "delta", "alpha", "echo"]
+
+
+async def test_simple_goal_suggestions_follow_the_rule(client):
+    """protects=Simple Roadmap's goal cards (GET /v1/simple/goal-suggestions) list goals in
+    the one order with positions; fails_when=they come by key; no_claim=the suggestions."""
+    ctx = await make_ctx()
+    await seed_goals(ctx)
+    r = await client.get("/v1/simple/goal-suggestions", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    goals = [g["goal"] for g in r.json()["goals"]]
+    assert [g["key"] for g in goals] == ORDER
+    assert [g["position"] for g in goals] == [1, 2, 3, None, None]
