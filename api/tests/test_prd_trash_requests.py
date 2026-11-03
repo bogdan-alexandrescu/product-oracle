@@ -78,9 +78,9 @@ async def test_trashing_a_prd_releases_its_requests_and_restore_relinks_the_free
 
 async def test_a_request_still_on_a_trashed_prd_names_it_and_release_frees_it(client, ctx):
     """protects=New PRD (4) (the 409 names the PRD, says it is in Trash, and Release it
-    frees the request); fails_when=the message says "another PRD", leaves out Trash, or
-    the request stays refused after Release it; no_claim=requests on a live PRD (their
-    409 is test_requests_brief)."""
+    frees the request); fails_when=the message says "another PRD", leaves out Trash, the
+    409 has no linked_in_trash code, or the request stays refused after Release it;
+    no_claim=requests on a live PRD (their 409 is test_requests_brief)."""
     from tests.v2_helpers import seed_v2
 
     seeded = await seed_v2(ctx.tenant_id)
@@ -96,9 +96,12 @@ async def test_a_request_still_on_a_trashed_prd_names_it_and_release_frees_it(cl
     body = {"title": "Brief B", "brief": BRIEF, "ai_extraction": False, "request_ids": [r["id"]]}
     resp = await client.post("/v1/intakes", json=body, headers=ctx.as_("commenter"))
     assert resp.status_code == 409, resp.text
+    # Review minor: the refusal carries a code, so the app's Release it does not read words.
     detail = resp.json()["detail"]
-    assert "Checkout redesign PRD" in detail and "in Trash" in detail, detail
-    assert "another PRD" not in detail
+    assert detail["code"] == "linked_in_trash", detail
+    message = detail["message"]
+    assert "Checkout redesign PRD" in message and "in Trash" in message, message
+    assert "another PRD" not in message
 
     resp = await client.post(
         "/v1/requests/release-from-trash",

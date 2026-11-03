@@ -26,6 +26,12 @@ import { login } from "./helpers";
  * - "Release it" (4): protects=a request still linked to a PRD in Trash is refused in words
  *   that name the PRD and say it is in Trash, and Release it frees it and goes on;
  *   fails_when=the message says "another PRD" or Release it is missing; no_claim=live PRDs.
+ * - "Release it follows the code" (4, review minor): protects=Release it shows for the Trash
+ *   refusal's code, not for its words, so a live PRD whose title holds "which is in Trash"
+ *   gets no Release it; fails_when=the button reads the message; no_claim=the 409's code
+ *   itself (pytest test_prd_trash_requests).
+ * Item (1), several goals under 'The goals it helps' on Simple Home, was already on main
+ * (newprd-multigoal.spec.ts): this lane adds nothing for it.
  */
 
 const DESKTOP = { width: 1440, height: 900 };
@@ -65,6 +71,15 @@ async function linkFirstPrd(page: Page, title: string): Promise<string> {
   await inspector(page).getByRole("button", { name: "Save links" }).click();
   await expect(inspector(page).getByRole("link", { name: prd })).toBeVisible();
   return prd;
+}
+
+/** Links the request to the PRD of this title. */
+async function linkPrd(page: Page, title: string, prd: string) {
+  await openRequests(page);
+  await pickRequest(page, title);
+  await inspector(page).getByLabel("Linked PRD").selectOption({ label: prd });
+  await inspector(page).getByRole("button", { name: "Save links" }).click();
+  await expect(inspector(page).getByRole("link", { name: prd })).toBeVisible();
 }
 
 async function trashPrd(page: Page, prd: string) {
@@ -207,6 +222,25 @@ for (const [label, size] of [
       await openRequests(page);
       await pickRequest(page, "Weekly summary email");
       await expect(inspector(page).getByRole("link", { name: "Weekly order summary" })).toBeVisible();
+    });
+
+    test("Release it follows the code: a live PRD whose title says 'which is in Trash' offers no Release it", async ({ page }) => {
+      await login(page);
+      const prd = "Shelf the box which is in Trash";
+      await openNewPrd(page);
+      await page.getByRole("textbox", { name: "Title" }).fill(prd);
+      await page.getByRole("button", { name: "Start from an empty skeleton instead" }).click();
+      await expect(page).toHaveURL(/\/documents\/[a-z0-9-]+$/);
+      await linkPrd(page, "Weekly summary email", prd);
+
+      await openNewPrd(page);
+      await page.getByRole("textbox", { name: "Title" }).fill("Weekly order summary");
+      await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
+      await behind(page).getByRole("checkbox", { name: "Weekly summary email" }).check();
+      await page.getByRole("button", { name: "Continue" }).first().click();
+      const alert = page.getByRole("alert").filter({ hasText: "already linked" });
+      await expect(alert).toContainText(`"Weekly summary email" is already linked to the PRD "${prd}"`);
+      await expect(alert.getByRole("button", { name: "Release it" })).toHaveCount(0);
     });
   });
 }
