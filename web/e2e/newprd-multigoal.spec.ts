@@ -98,7 +98,9 @@ for (const scheme of ["light", "dark"] as const) {
         // Detailed shows the same two goals as picked.
         await row.getByRole("link", { name: NAME }).click();
         await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
-        const picked = page.getByTestId("intake-goals-picked");
+        // On a phone the brief's side panel opens from Show details.
+        if (label === "phone") await page.getByRole("button", { name: "Show details" }).click();
+        const picked = page.getByTestId("intake-inspector").filter({ visible: true }).getByTestId("intake-goals-picked");
         await expect(picked).toContainText(A);
         await expect(picked).toContainText(B);
       });
