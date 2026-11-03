@@ -8,12 +8,15 @@ transcript. A turn (:func:`take_turn`) is one answer to one of the intake's ques
    ``interview_turn`` call, 25-second deadline, oracle.interviews.turns). The answer is
    committed before the call, which holds no row lock and no connection; one turn per
    interview runs at a time (a second is 429).
-2. When the answer does not meet it and Oracle has not followed up on this question yet,
-   Oracle posts one follow-up and waits for the reply (or "Skip, record my answer").
-3. Otherwise, or after the reply, the answer is recorded through the answer path
-   (oracle.intake.answers: kind ``answer``, the member's messages joined with a blank
-   line, "your decision"). A call that fails or runs out of time records the answer as
-   written, with the note :data:`COULD_NOT`.
+2. The answer is recorded through the answer path (oracle.intake.answers: kind
+   ``answer``, "your decision"), so it closes its question and counts (brief-answers).
+   When it does not meet the stop condition and Oracle has not followed up on this
+   question yet, Oracle also posts one follow-up; the reply (or "Skip, record my
+   answer") adds to the same answer: the member's messages joined with a blank line.
+   A call that fails or runs out of time records the answer as written, with the note
+   :data:`COULD_NOT`.
+3. A send whose reply was lost on the way back (its text kept, or its answer saved) and
+   sent again saves the text once (brief-answers).
 
 A round is the member's messages on a question since Oracle last recorded an answer to
 it (Oracle's ``closing`` message on that question).
@@ -35,7 +38,7 @@ from oracle.interviews.models import Interview, InterviewMessage
 from oracle.interviews.schemas import ANSWER_MAX
 from oracle.interviews.service import InterviewError
 from oracle.tenancy import tenant_session
-from oracle.v2.models import KnowledgeGap, StakeholderQuestion
+from oracle.v2.models import KnowledgeGap, StakeholderAnswer, StakeholderQuestion
 
 PROMPT = "interview_team_turn"
 RECORDED = "Answer recorded."
@@ -167,7 +170,9 @@ async def _checked(
             answers.check_visible(principal, intake, gap)
         except service.IntakeError:
             raise InterviewError(404, "Question not found") from None
-    if question.status not in answers.ANSWERABLE:
+    # An answered question still takes the reply to Oracle's follow-up, or the same answer
+    # sent again (:func:`_turn` decides).
+    if question.status not in answers.ANSWERABLE and question.status != "answered":
         raise InterviewError(409, "This question is answered; it is not asked again")
     if question.asked_to is not None and question.asked_to != principal.id:
         raise InterviewError(403, "This question was asked of someone else")
@@ -207,6 +212,38 @@ async def take_turn(
         await turns.release_turn(tenant_id, interview_id, at)
 
 
+async def _saved(
+    db: AsyncSession, principal: Principal, question: StakeholderQuestion
+) -> StakeholderAnswer | None:
+    """The member's answer standing on an answered question, if it is theirs."""
+    if question.status != "answered":
+        return None
+    last = await db.scalar(
+        select(StakeholderAnswer)
+        .where(StakeholderAnswer.question_id == question.id)
+        .order_by(StakeholderAnswer.created_at.desc(), StakeholderAnswer.id.desc())
+        .limit(1)
+    )
+    if last is None or last.kind != "answer" or last.answered_by != principal.id:
+        return None
+    return last
+
+
+def _as_result(
+    saved: StakeholderAnswer, question: StakeholderQuestion, gap: KnowledgeGap | None
+) -> dict[str, Any]:
+    """An answer already standing, as :func:`answers.answer` reports one."""
+    return {
+        "answer": saved,
+        "question": question,
+        "gap": gap,
+        "proposals": [],
+        "baseline_proposal_ids": [],
+        "change_event_id": None,
+        "next_actions": [],
+    }
+
+
 async def _turn(
     db: AsyncSession,
     principal: Principal,
@@ -220,10 +257,22 @@ async def _turn(
     text = (body or "").strip()
     earlier = await _round(db, row, question_id)
     said = [m.body for m in earlier if m.role == "interviewee" and m.kind == "answer"]
+    followed_up = any(m.kind == "follow_up" for m in earlier)
+    saved = await _saved(db, principal, question)
+    if question.status == "answered" and (saved is None or not followed_up):
+        if saved is not None and text and saved.body == text:
+            # brief-answers: the first send was saved but its reply never came back; the
+            # same answer sent again reads as saved, once.
+            return [], _as_result(saved, question, gap)
+        raise InterviewError(409, "This question is answered; it is not asked again")
     if not text and not (skip_follow_up and said):
         raise InterviewError(422, "An answer needs a body")
     added: list[InterviewMessage] = []
-    if text:
+    if text and said and said[-1] == text and not followed_up:
+        # brief-answers: a send that broke after its text was kept is sent again; the
+        # text is kept once.
+        pass
+    elif text:
         said.append(text)
         added.append(_message(row, question_id, "interviewee", "answer", text))
     elif skip_follow_up:
@@ -232,70 +281,85 @@ async def _turn(
     if len(joined) > ANSWER_MAX:
         raise InterviewError(422, f"An answer is at most {ANSWER_MAX} characters")
 
-    followed_up = any(m.kind == "follow_up" for m in earlier)
-    closing = RECORDED
+    closing: str | None = RECORDED
     call: dict[str, Any] = {}
     db.add_all(added)
     await db.flush()
-    if not followed_up and not skip_follow_up:
-        payload = {
-            "question": question.prompt,
-            "gap": (
-                {"statement": gap.statement, "stop_condition": gap.stop_condition}
-                if gap is not None
-                else None
-            ),
-            "conversation": [{"role": "interviewee", "body": s} for s in said],
-            "may_follow_up": True,
-        }
-        # The answer is saved; the session's connection goes back to the pool and the
-        # call runs on a session of its own.
-        await db.commit()
-        async with tenant_session(row.tenant_id) as own:
-            reply, spent = await turns.customer_turn(own, payload, prompt=PROMPT)
-        row, question, gap = await _checked(db, principal, row.id, question_id)
-        if reply is not None and reply.follow_up:
-            note = _message(
-                row,
-                question_id,
-                "oracle",
-                "follow_up",
-                reply.follow_up,
-                model=reply.model,
-                usage=reply.usage,
-                cost_usd=reply.cost_usd,
-            )
-            db.add(note)
-            await db.flush()
-            added.append(note)
-            await audit.record(
-                db,
-                principal,
-                "interview.follow_up",
-                "interview",
-                row.id,
-                {"question": str(question_id)},
-            )
-            return added, None
-        if reply is None:
-            closing = COULD_NOT
-            used = spent
-        else:
-            used = reply
-        if used is not None:
-            call = {"model": used.model, "usage": used.usage, "cost_usd": used.cost_usd}
-
-    try:
-        result = await answers.answer(
+    if followed_up and saved is not None:
+        # The reply to Oracle's follow-up adds to the answer recorded with it.
+        saved.body = joined
+        await audit.record(
             db,
             principal,
-            question,
-            AnswerIn(kind="answer", body=joined, knowledge_state="user_decision"),
+            "intake.answer_amended",
+            "stakeholder_answer",
+            saved.id,
+            {"question": str(question_id)},
         )
-    except service.IntakeError as e:
-        raise InterviewError(e.status, str(e)) from e
-    note = _message(row, question_id, "oracle", "closing", closing, **call)
-    db.add(note)
-    await db.flush()
-    added.append(note)
+        result = _as_result(saved, question, gap)
+    else:
+        if not followed_up and not skip_follow_up:
+            payload = {
+                "question": question.prompt,
+                "gap": (
+                    {"statement": gap.statement, "stop_condition": gap.stop_condition}
+                    if gap is not None
+                    else None
+                ),
+                "conversation": [{"role": "interviewee", "body": s} for s in said],
+                "may_follow_up": True,
+            }
+            # The answer is saved; the session's connection goes back to the pool and the
+            # call runs on a session of its own.
+            await db.commit()
+            async with tenant_session(row.tenant_id) as own:
+                reply, spent = await turns.customer_turn(own, payload, prompt=PROMPT)
+            row, question, gap = await _checked(db, principal, row.id, question_id)
+            if question.status == "answered":
+                raise InterviewError(409, "This question is answered; it is not asked again")
+            if reply is not None and reply.follow_up:
+                note = _message(
+                    row,
+                    question_id,
+                    "oracle",
+                    "follow_up",
+                    reply.follow_up,
+                    model=reply.model,
+                    usage=reply.usage,
+                    cost_usd=reply.cost_usd,
+                )
+                db.add(note)
+                await db.flush()
+                added.append(note)
+                await audit.record(
+                    db,
+                    principal,
+                    "interview.follow_up",
+                    "interview",
+                    row.id,
+                    {"question": str(question_id)},
+                )
+                # brief-answers: the answer closes its question now; the round stays
+                # open for the reply.
+                closing = None
+            elif reply is None:
+                closing = COULD_NOT
+                if spent is not None:
+                    call = {"model": spent.model, "usage": spent.usage, "cost_usd": spent.cost_usd}
+            else:
+                call = {"model": reply.model, "usage": reply.usage, "cost_usd": reply.cost_usd}
+        try:
+            result = await answers.answer(
+                db,
+                principal,
+                question,
+                AnswerIn(kind="answer", body=joined, knowledge_state="user_decision"),
+            )
+        except service.IntakeError as e:
+            raise InterviewError(e.status, str(e)) from e
+    if closing is not None:
+        note = _message(row, question_id, "oracle", "closing", closing, **call)
+        db.add(note)
+        await db.flush()
+        added.append(note)
     return added, result

@@ -683,7 +683,7 @@ async def propose_research(
             "question": _prompt(intake, gap, question),
             "why": "Agents look into the pinned sources, seeing each of the author's "
             "findings only as it is shared, and propose what they find; an "
-            "approver estimates and starts the run, and its results arrive as proposals.",
+            "approver's Accept starts the run, and its results arrive as proposals.",
         },
         created_by=principal.id,
     )
@@ -832,10 +832,7 @@ async def accept(
         )
     if proposal.kind == "research_run":
         gap_ids = [uuid.UUID(g) for g in proposal.detail.get("gap_ids") or []]
-        run_id = await create_run(
-            db, principal, intake, IntakeRunIn(), gap_ids=gap_ids,
-            depth=proposal.detail.get("depth"),
-        )  # fmt: skip
+        run_id = await research_run(db, principal, intake, gap_ids, proposal.detail.get("depth"))
         proposal.result = {"run_id": str(run_id)}
     else:
         proposal.result = {"feedback_item_id": str(await _open_feedback(db, intake, proposal))}
@@ -848,6 +845,60 @@ async def accept(
         {"kind": proposal.kind, **proposal.result},
     )  # fmt: skip
     return proposal
+
+
+async def research_run(
+    db: AsyncSession,
+    principal: Principal,
+    intake: ProductIntake,
+    gap_ids: list[uuid.UUID],
+    depth: str | None,
+) -> uuid.UUID:
+    """brief-answers: accepted research runs. The intake's one unstarted research run of
+    the flow takes the gaps (a PRD never keeps a second draft of it), else a run is
+    made. :func:`start_research` then estimates and starts it under the usual cost gates
+    (over the threshold it waits for an owner's approval)."""
+    from oracle.runs.models import Run
+
+    drafts = (
+        await db.scalars(
+            select(Run)
+            .where(
+                Run.knobs["intake_id"].astext == str(intake.id),
+                Run.flow == "baseline_to_prd",
+                Run.status == "draft",
+            )
+            .order_by(Run.created_at, Run.id)
+        )
+    ).all()
+    draft = next((r for r in drafts if (r.knobs or {}).get("intake_gap_ids")), None)
+    if draft is not None:
+        known = list(draft.knobs.get("intake_gap_ids") or [])
+        merged = [*known, *[str(g) for g in gap_ids if str(g) not in known]]
+        draft.knobs = {**draft.knobs, "intake_gap_ids": merged}
+        draft.estimate_usd = None  # its gaps changed: estimated again below
+        await db.flush()
+        run_id = draft.id
+    else:
+        run_id = await create_run(
+            db, principal, intake, IntakeRunIn(), gap_ids=gap_ids, depth=depth
+        )
+    return run_id
+
+
+async def start_research(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> None:
+    """Estimate and start an accepted research run, after the accept is committed (an
+    estimate commits); a run that cannot start stays a draft, and nothing else changes."""
+    from oracle.runs import service as runs_service
+
+    try:
+        await runs_service.estimate(db, principal, run_id)
+        await runs_service.start(db, principal, run_id)
+        await db.commit()
+    except runs_service.RunError:
+        await db.rollback()
+        return
+    await runs_service.submit_queued(db, run_id)
 
 
 async def _open_feedback(

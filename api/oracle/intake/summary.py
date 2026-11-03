@@ -440,7 +440,9 @@ def gate(view: "View") -> GateView:
             if g.category in cats.HARD_BLOCKER_CATEGORIES
         ]
     return GateView(
-        open_critical=len(unresolved),
+        # brief-answers: an answered critical question waiting for its review is answered,
+        # not open; the gate still waits for the review (B4).
+        open_critical=sum(g.status != engine.PENDING for g in unresolved),
         blocking_gap_ids=blocking,
         gate="blocked" if blocking else "clear",
         private_blocking_gap_ids=private,
