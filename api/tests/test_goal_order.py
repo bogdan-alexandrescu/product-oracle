@@ -29,10 +29,12 @@ Test cards (protects / fails_when / no_claim):
 """
 
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 
 from oracle import company_time
+from oracle.baseline.goal_order import sort_goals
 from oracle.baseline.models import Entity
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
@@ -148,3 +150,29 @@ async def test_simple_goal_suggestions_follow_the_rule(client):
     goals = [g["goal"] for g in r.json()["goals"]]
     assert [g["key"] for g in goals] == ORDER
     assert [g["position"] for g in goals] == [1, 2, 3, None, None]
+
+
+async def test_baseline_trace_follows_the_rule(client):
+    """protects=Detailed > Baseline > Flagged's Goal coverage (GET /v1/baseline/trace) lists
+    goals in the one order, each with its position; fails_when=they come by key or
+    position is missing; no_claim=the features' own order."""
+    ctx = await make_ctx()
+    await seed_goals(ctx)
+    r = await client.get("/v1/baseline/trace", headers=ctx.as_("viewer"))
+    assert r.status_code == 200, r.text
+    goals = r.json()["goals"]
+    assert [g["key"] for g in goals] == ORDER
+    assert [g["position"] for g in goals] == [1, 2, 3, None, None]
+
+
+def test_a_full_tie_goes_by_title_then_id():
+    """protects=goals tied on position and creation order by title (case-folded, then as
+    written), then by id, as the web's byGoalOrder does; fails_when=a full tie keeps the
+    order the goals came in; no_claim=the web."""
+    made = datetime(2026, 9, 1, tzinfo=UTC)
+
+    def goal(gid: str, title: str) -> SimpleNamespace:
+        return SimpleNamespace(id=gid, title=title, attrs={"position": 1}, created_at=made)
+
+    goals = [goal("a", "same"), goal("c", "Same"), goal("b", "Same"), goal("d", "Other")]
+    assert [g.id for g in sort_goals(goals)] == ["d", "b", "c", "a"]
