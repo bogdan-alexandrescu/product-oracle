@@ -41,6 +41,8 @@ async function snap(page: Page, w: number, h: number) {
         if (o.selected) o.setAttribute("selected", "");
         else o.removeAttribute("selected");
       }
+    for (const el of Array.from(document.querySelectorAll("*"))) if (el.scrollLeft || el.scrollTop) el.setAttribute("data-mk-scroll", `${el.scrollLeft},${el.scrollTop}`);
+    if (scrollY) document.documentElement.setAttribute("data-mk-win", String(scrollY));
     let css = "";
     for (const sh of Array.from(document.styleSheets)) {
       try {
@@ -63,7 +65,9 @@ async function snap(page: Page, w: number, h: number) {
     head.append(st);
     const sc = document.createElement("script");
     sc.textContent =
-      "(function(){var t=new URLSearchParams(location.search).get('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);})();";
+      "(function(){var t=new URLSearchParams(location.search).get('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);" +
+      "addEventListener('load',function(){document.querySelectorAll('[data-mk-scroll]').forEach(function(e){var p=e.getAttribute('data-mk-scroll').split(',');e.scrollLeft=+p[0];e.scrollTop=+p[1];});" +
+      "var y=document.documentElement.getAttribute('data-mk-win');if(y)scrollTo(0,+y);});})();";
     head.append(sc);
     return { html: "<!doctype html>\n" + doc.outerHTML, css, height: document.documentElement.scrollHeight, width: document.documentElement.scrollWidth };
   }, [w, h] as const);
@@ -89,8 +93,10 @@ test("capture the goal map frames", async ({ browser, baseURL }) => {
     await page.waitForTimeout(900);
     if (f.act === "save") {
       await page.getByTestId("gm-save").click();
-      await page.waitForTimeout(600);
+      await page.waitForTimeout(900);
     }
+    if (process.env.GM_DEBUG)
+      console.log(await page.evaluate(() => Array.from(document.querySelectorAll("body *")).filter((e) => e.getBoundingClientRect().right > 391).slice(-6).map((e) => `${e.tagName}.${(e.getAttribute("class") ?? "").slice(0, 80)} ${Math.round(e.getBoundingClientRect().right)} ${(e.textContent ?? "").slice(0, 40)}`).join("\n")));
     const r = await snap(page, f.w, f.h);
     let css = r.css;
     const urls = [...css.matchAll(/url\(([^)]+\.(?:woff2?|ttf|otf)[^)]*)\)/g)].map((m) => m[1]);

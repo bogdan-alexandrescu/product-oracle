@@ -38,7 +38,7 @@ function num(v: number | null, unit: string): string {
 
 function Pill({ cls, children, testId }: { cls: string; children: ReactNode; testId?: string }) {
   return (
-    <span data-testid={testId} className={`inline-block shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[14px] font-semibold ${cls}`}>
+    <span data-testid={testId} className={`inline-block shrink-0 whitespace-nowrap rounded-full [word-spacing:0.12em] px-2.5 py-0.5 text-[14px] font-semibold ${cls}`}>
       {children}
     </span>
   );
@@ -46,14 +46,15 @@ function Pill({ cls, children, testId }: { cls: string; children: ReactNode; tes
 const StatusPill = ({ s }: { s: GmStatus }) => <Pill cls={STATUS[s].cls}>{STATUS[s].label}</Pill>;
 const LiftPill = ({ l }: { l: GmLift }) => <Pill cls={LIFT[l].cls}>{LIFT[l].label}</Pill>;
 
-function Btn({ children, onClick, primary, testId, small }: { children: ReactNode; onClick?: () => void; primary?: boolean; testId?: string; small?: boolean }) {
+function Btn({ children, onClick, primary, testId, small, disabled }: { children: ReactNode; onClick?: () => void; primary?: boolean; testId?: string; small?: boolean; disabled?: boolean }) {
   return (
     <button
       type="button"
       data-testid={testId}
+      disabled={disabled}
       onClick={onClick}
       className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border font-semibold ${small ? "px-2.5 py-0.5 text-[14px]" : "px-4 py-1.5 text-[15px]"} ${
-        primary ? "border-accent bg-accent text-on-accent" : "border-line bg-surface text-text hover:bg-surface2"
+        primary ? "border-accent bg-accent text-on-accent disabled:opacity-40" : "border-line bg-surface text-text hover:bg-surface2"
       }`}
     >
       {children}
@@ -76,13 +77,13 @@ function Bar({ current, target, status }: { current: number | null; target: numb
 function Proof({ m, compact }: { m: GmMilestone; compact?: boolean }) {
   const ok = (v: number | null) => v !== null && (m.measure.startsWith("days") ? v === 0 : v >= m.threshold);
   return (
-    <span className="flex flex-col gap-1">
-      <span className="flex gap-1" aria-label="Last 7 days">
+    <span className="flex min-w-0 max-w-full flex-col gap-1">
+      <span className="flex w-full gap-1" aria-label="Last 7 days">
         {m.days.map((v, i) => (
           <span
             key={i}
             title={`${DAYS[i]}: ${v === null ? "not measured" : num(v, m.unit)}`}
-            className={`grid ${compact ? "h-5" : "h-6"} ${compact ? "min-w-7 px-0.5 text-[11px]" : "min-w-9 px-1 text-[13px]"} place-items-center rounded-md font-semibold ${
+            className={`grid ${compact ? "h-5" : "h-6"} ${compact ? "min-w-0 flex-1 text-[10px]" : "min-w-9 px-1 text-[13px] max-[600px]:min-w-0 max-[600px]:flex-1"} place-items-center rounded-md font-semibold ${
               v === null ? "bg-surface2 text-text-faint" : ok(v) ? "bg-pass-bg text-pass" : "bg-surface2 text-text2"
             }`}
           >
@@ -119,16 +120,30 @@ function Guardrail({ map }: { map: GoalMap }) {
 function FeatureCard({ f, area, tight }: { f: GmFeature; area?: string; tight?: boolean }) {
   return (
     <div data-testid="gm-feature" className={`flex flex-col gap-1 rounded-xl border border-line bg-surface ${tight ? "px-2.5 py-1.5" : "px-3 py-2"} ${f.lift === "not_helping" ? "border-crit/50" : ""}`}>
-      <span className="flex items-start justify-between gap-2">
+      <span className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
         <span className={`font-semibold ${tight ? "text-[15px] leading-5" : ""}`}>{f.name}</span>
         <LiftPill l={f.lift} />
       </span>
       <span className="simple-small text-[13px]! leading-5">
-        {area ? `${area} · ` : ""}Expects {f.expected} ({f.confidence.toLowerCase()} confidence)
+        {area ? `${area} · ` : ""}Expects {lower(f.expected)} ({f.confidence.toLowerCase()} confidence)
         {f.measured ? ` · measured ${f.measured}` : f.released ? "" : " · not released yet"}
       </span>
     </div>
   );
+}
+
+/** After an edit, brings what changed into view (MOCK-HOOK: the frames record the scroll). */
+function reveal(sel: string) {
+  setTimeout(() => document.querySelector(sel)?.scrollIntoView({ block: "center", inline: "center" }), 50);
+}
+
+const lower = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
+
+function goalWarning(map: GoalMap, goal: GmGoal, target: string): string {
+  const ms = map.milestones.filter((m) => m.goal === goal.id).sort((a, b) => b.threshold - a.threshold);
+  const top = ms[0];
+  const words = `${num(goal.target, goal.unit)} → ${num(Number(target), goal.unit)}: its ${ms.length} milestones keep their own thresholds.`;
+  return top && top.threshold < Number(target) ? `${words} The highest, “${top.name}”, would now stop short of the goal.` : words;
 }
 
 function depth(ms: GmMilestone[]): Record<string, number> {
@@ -284,6 +299,7 @@ export function GoalMapPage() {
       };
       setMap({ ...map, milestones: [...map.milestones, m] });
       setFlash(`Proposed: ${m.name}. Sent to Dana Whitlock to approve.`);
+      reveal('[data-gate="new"]');
     }
     if (edit === "goal") {
       const goals = map.goals.map((g) =>
@@ -291,6 +307,7 @@ export function GoalMapPage() {
       );
       setMap({ ...map, goals });
       setFlash(`Goal changed. Its history keeps the old target.`);
+      reveal(`[data-goal="${goalId}"]`);
     }
     if (edit === "attach") {
       const features = map.features.map((f) => (f.id === draft.feature && !f.milestones.includes(draft.milestone) ? { ...f, milestones: [...f.milestones, draft.milestone] } : f));
@@ -404,7 +421,7 @@ function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: Go
         </label>
         <div className="flex justify-end gap-2">
           <Btn onClick={onClose}>Cancel</Btn>
-          <Btn primary testId="gm-save" onClick={onSave}>Propose</Btn>
+          <Btn primary testId="gm-save" disabled={!draft.name || !draft.threshold} onClick={onSave}>Propose</Btn>
         </div>
       </Drawer>
     );
@@ -418,7 +435,7 @@ function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: Go
         </label>
         {draft.target && (
           <p className="rounded-xl bg-warn-bg px-3 py-2 text-[15px] text-warn">
-            {goal.target} → {draft.target}: 2 milestones toward this goal keep their own thresholds; “10 paid conversions per rep” would sit below the new target.
+            {goalWarning(map, goal, draft.target)}
           </p>
         )}
         <div className="flex flex-col gap-1">
@@ -434,7 +451,7 @@ function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: Go
         </div>
         <div className="flex justify-end gap-2">
           <Btn onClick={onClose}>Cancel</Btn>
-          <Btn primary testId="gm-save" onClick={onSave}>Save goal</Btn>
+          <Btn primary testId="gm-save" disabled={!draft.target} onClick={onSave}>Save goal</Btn>
         </div>
       </Drawer>
     );
@@ -461,7 +478,7 @@ function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: Go
               <button type="button" onClick={() => set({ feature: f.id })} className={`w-full rounded-xl border px-3 py-2 text-left ${draft.feature === f.id ? "border-accent bg-accent-soft" : "border-line"}`}>
                 <span className="font-semibold">{f.name}</span>
                 <span className="simple-small block text-[14px]! leading-5">
-                  {map.areas.find((a) => a.id === f.area)?.name} · expects {f.expected} on {f.lever.toLowerCase()}
+                  {map.areas.find((a) => a.id === f.area)?.name} · expects {lower(f.expected)}{f.lever === "Guardrail" ? "" : ` on ${f.lever.toLowerCase()}`}
                 </span>
               </button>
             </li>
@@ -469,7 +486,7 @@ function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: Go
         </ul>
         <div className="flex justify-end gap-2">
           <Btn onClick={onClose}>Cancel</Btn>
-          <Btn primary testId="gm-save" onClick={onSave}>Attach</Btn>
+          <Btn primary testId="gm-save" disabled={!draft.feature || !draft.milestone} onClick={onSave}>Attach</Btn>
         </div>
       </Drawer>
     );
@@ -498,7 +515,7 @@ function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: Go
         )}
         <div className="flex justify-end gap-2">
           <Btn onClick={onClose}>Cancel</Btn>
-          <Btn primary testId="gm-save" onClick={onSave}>Start the PRD</Btn>
+          <Btn primary testId="gm-save" disabled={!draft.milestone || !draft.areas.length} onClick={onSave}>Start the PRD</Btn>
         </div>
       </Drawer>
     );
@@ -511,7 +528,7 @@ function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: Go
       <p className="simple-small">It goes last; move it up or down after. Every view keeps your order.</p>
       <div className="flex justify-end gap-2">
         <Btn onClick={onClose}>Cancel</Btn>
-        <Btn primary testId="gm-save" onClick={onSave}>Add area</Btn>
+        <Btn primary testId="gm-save" disabled={!draft.areaName} onClick={onSave}>Add area</Btn>
       </div>
     </Drawer>
   );
@@ -599,7 +616,7 @@ function Ladder(ctx: Ctx) {
       <section className="simple-card gap-0! p-0! max-[600px]:hidden" data-testid="gm-ladder" aria-label="Milestones by area">
         <div className="flex items-center justify-between gap-3 px-5 py-3">
           <h2 className="simple-h2">Milestones by area</h2>
-          <span className="simple-small">Left to right: each milestone builds on the ones before it.</span>
+          <span className="simple-small">Left to right in steps: a milestone needs the ones it comes after.</span>
         </div>
         <div className="overflow-x-auto border-t border-line">
           <div className="grid" style={{ gridTemplateColumns: `200px repeat(${ms.length}, minmax(232px, 1fr))` }}>
@@ -609,7 +626,7 @@ function Ladder(ctx: Ctx) {
               </Btn>
             </div>
             {ms.map((m) => (
-              <div key={m.id} data-testid="gm-gate" className={`flex flex-col gap-1.5 border-b border-r border-line px-3 py-2.5 ${m.proposed ? "border-dashed bg-accent-soft" : m.status === "missed" ? "bg-crit-bg" : ""}`}>
+              <div key={m.id} data-testid="gm-gate" data-gate={m.id} className={`flex flex-col gap-1.5 border-b border-r border-line px-3 py-2.5 ${m.proposed ? "border-dashed bg-accent-soft" : m.status === "missed" ? "bg-crit-bg" : ""}`}>
                 <span className="flex items-center justify-between gap-2">
                   <span className="text-[13px] font-semibold uppercase tracking-wide text-text2">
                     Step {d[m.id] + 1} · {m.month}
@@ -711,7 +728,7 @@ function GoalTree(ctx: Ctx) {
       <AreaOrder {...ctx} />
       <section className="flex flex-col gap-4" data-testid="gm-tree">
         {map.goals.map((g, gi) => (
-          <div key={g.id} className="simple-card gap-3!" data-testid="gm-goal">
+          <div key={g.id} className="simple-card gap-3!" data-testid="gm-goal" data-goal={g.id}>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
               <span className="text-[13px] font-semibold uppercase tracking-wide text-text2">Goal {gi + 1}</span>
               <h2 className="simple-h2">{g.name} ≥ {num(g.target, g.unit)}</h2>
@@ -806,7 +823,7 @@ function LeverBody({ map, lever, open }: { map: GoalMap; lever: string; open: Ct
     <>
       <span className="flex flex-wrap gap-1.5">
         {areas.map((a) => (
-          <Pill key={a.id} cls="bg-surface2 text-text2 whitespace-normal!">{map.areas.indexOf(a) + 1}. {a.name}</Pill>
+          <Pill key={a.id} cls="bg-surface2 text-text2 whitespace-normal! max-w-full">{map.areas.indexOf(a) + 1}. {a.name}</Pill>
         ))}
       </span>
       {!fs.length && <span className="simple-small">No milestone or feature pulls it yet.</span>}
@@ -845,7 +862,7 @@ function DriverTree(ctx: Ctx) {
             </Lever>
           </div>
         </div>
-        <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] items-start gap-x-1 gap-y-3 max-[600px]:flex max-[600px]:flex-col">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-x-1 gap-y-3 max-[600px]:flex max-[600px]:flex-col">
           <div className="row-span-2 flex">
             <Lever title="Reps live" now={`${map.reps}`} target="reps" status="on_track">
               <LeverBody map={map} lever="Number of reps" open={open} />
@@ -938,7 +955,7 @@ function Scoreboard(ctx: Ctx) {
                 className={`grid w-full grid-cols-[minmax(0,2.2fr)_1fr_1fr_1.2fr] items-center gap-3 border-b border-line px-4 py-2.5 text-left hover:bg-surface2 max-[600px]:grid-cols-[1fr_auto] ${pick === m.id ? "bg-accent-soft" : ""}`}
               >
                 <span className="flex min-w-0 flex-col">
-                  <span className="truncate font-semibold">{m.name}</span>
+                  <span className="font-semibold leading-6">{m.name}</span>
                   <span className="simple-small truncate text-[13px]! leading-5">{m.areas.map((x) => map.areas.find((a) => a.id === x)?.name).join(" · ")}</span>
                 </span>
                 <span className="max-[600px]:hidden">
