@@ -287,16 +287,9 @@ async def _turn(
     await db.flush()
     if followed_up and saved is not None:
         # The reply to Oracle's follow-up adds to the answer recorded with it.
-        saved.body = joined
-        await audit.record(
-            db,
-            principal,
-            "intake.answer_amended",
-            "stakeholder_answer",
-            saved.id,
-            {"question": str(question_id)},
-        )
-        result = _as_result(saved, question, gap)
+        # brief-answers review: through the answer path, so its proposals quote the
+        # reply too and a critical gap waits for review again (B4).
+        result = await answers.amend(db, principal, question, saved, joined)
     else:
         if not followed_up and not skip_follow_up:
             payload = {

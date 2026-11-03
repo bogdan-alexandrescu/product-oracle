@@ -361,6 +361,103 @@ async def answer(
     }
 
 
+async def amend(
+    db: AsyncSession,
+    principal: Principal,
+    question: StakeholderQuestion,
+    row: StakeholderAnswer,
+    body: str,
+) -> dict[str, Any]:
+    """brief-answers review: the reply to Oracle's follow-up adds to the answer recorded
+    with it. The proposals made of the answer quote the whole of it (an open one is
+    rewritten; a decided PRD patch gets a new one), a critical gap's answer changed
+    below the owner role waits for review again (B4), and the change is recorded."""
+    intake = await get_intake(db, question.intake_id) if question.intake_id else None
+    gap = await db.get(KnowledgeGap, question.gap_id) if question.gap_id else None
+    row.body = body
+    importance = importance_of(intake, gap) if gap is not None else None
+    if (
+        gap is not None
+        and importance == "critical"
+        and gap.status in ("answered", "validated")
+        and not has_role(principal.role, "owner")
+    ):
+        gap.status = engine.PENDING
+    await db.flush()
+    proposals: list[IntakeProposal] = []
+    baseline_ids: list[uuid.UUID] = []
+    mode = proposal_mode(intake, gap) if gap is not None and intake is not None else None
+    if gap is not None and intake is not None and mode is not None:
+        existing = await _proposal_of(db, intake, gap, row)
+        if existing is not None and existing.status == "open":
+            locked = await baseline_service.lock_proposal(db, existing.id)
+            if locked is not None and locked.status == "open":
+                fields, reason = _baseline_fields(intake, gap, question, row, mode)
+                locked.payload = {**locked.payload, "fields": fields, "reason": reason}
+                baseline_ids.append(locked.id)
+        elif existing is None:
+            made = await _propose_baseline(db, principal, intake, gap, question, row, mode)
+            if made is not None:
+                baseline_ids.append(made)
+        if mode == "full":
+            patches = (
+                await db.scalars(
+                    select(IntakeProposal).where(
+                        IntakeProposal.answer_id == row.id, IntakeProposal.kind == "prd_patch"
+                    )
+                )
+            ).all()
+            open_ones = [p for p in patches if p.status == "proposed"]
+            for patch in open_ones:
+                patch.detail = {**patch.detail, "text": f"{_prompt(intake, gap, question)} {body}"}
+                proposals.append(patch)
+            if not open_ones and not any(p.status == "dismissed" for p in patches):
+                made_patch = await _propose_patch(db, principal, intake, gap, question, row)
+                if made_patch is not None:
+                    proposals.append(made_patch)
+    event = None
+    if gap is not None:
+        event = await changes.record_change(
+            db,
+            "decision",
+            cause="intake_answer:amended",
+            actor=principal,
+            subject_id=gap.id,
+            subject_ref=f"intake:{gap.intake_id}#gap:{gap.id}",
+            document_id=gap.document_id,
+            data={
+                "intake_id": str(gap.intake_id) if gap.intake_id else None,
+                "gap_id": str(gap.id),
+                "question_id": str(question.id),
+                "category": gap.category,
+                "answer_kind": row.kind,
+                "gap_status": gap.status,
+                "impact": list(gap.impact),
+                "related_modules": list(gap.related_modules),
+                "signals": (intake.analysis or {}).get("signals", {}) if intake else {},
+            },
+        )
+    await audit.record(
+        db, principal, "intake.answer_amended", "stakeholder_answer", row.id,
+        {"question": str(question.id), "gap_id": str(gap.id) if gap else None},
+    )  # fmt: skip
+    if intake is not None:
+        await engine.sync_questions(db, intake)
+        engine.refresh_status(
+            intake, await engine.intake_gaps(db, intake.id), ("awaiting_answers", "ready")
+        )
+    await db.flush()
+    return {
+        "answer": row,
+        "question": question,
+        "gap": gap,
+        "proposals": proposals,
+        "baseline_proposal_ids": baseline_ids,
+        "change_event_id": event.id if event else None,
+        "next_actions": next_actions(gap, importance) if gap is not None else [],
+    }
+
+
 def proposal_mode(intake: ProductIntake, gap: KnowledgeGap) -> str | None:
     """What an answer to the gap may propose to the baseline (S6, owner 2026-10-19):
     nothing while it is private; at counts (others see it by id and category only) the
@@ -886,18 +983,40 @@ async def research_run(
     return run_id
 
 
-async def start_research(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> None:
+async def start_research(
+    db: AsyncSession, principal: Principal, proposal_id: uuid.UUID, run_id: uuid.UUID
+) -> None:
     """Estimate and start an accepted research run, after the accept is committed (an
-    estimate commits); a run that cannot start stays a draft, and nothing else changes."""
+    estimate commits). A run that cannot start stays a draft, and the proposal keeps
+    why (``result.start_error``, brief-answers review), shown on the brief and its
+    question."""
     from oracle.runs import service as runs_service
 
     try:
         await runs_service.estimate(db, principal, run_id)
         await runs_service.start(db, principal, run_id)
         await db.commit()
-    except runs_service.RunError:
+    except runs_service.RunError as e:
         await db.rollback()
+        proposal = await db.get(IntakeProposal, proposal_id)
+        if proposal is not None:
+            proposal.result = {**(proposal.result or {}), "start_error": str(e)}
+            await db.commit()
         return
+    # A draft reused after an earlier refusal started now: no proposal of it says it
+    # could not.
+    refused = (
+        await db.scalars(
+            select(IntakeProposal).where(
+                IntakeProposal.result["run_id"].astext == str(run_id),
+                IntakeProposal.result.has_key("start_error"),
+            )
+        )
+    ).all()
+    for done in refused:
+        done.result = {k: v for k, v in done.result.items() if k != "start_error"}
+    if refused:
+        await db.commit()
     await runs_service.submit_queued(db, run_id)
 
 

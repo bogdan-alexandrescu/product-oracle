@@ -491,7 +491,7 @@ async def accept_intake_proposal(
     await db.refresh(proposal)
     run_id = (proposal.result or {}).get("run_id")
     if proposal.kind == "research_run" and run_id:
-        await answers.start_research(db, principal, uuid.UUID(run_id))
+        await answers.start_research(db, principal, proposal.id, uuid.UUID(run_id))
         await db.refresh(proposal)
     return IntakeProposalOut.model_validate(proposal)
 
