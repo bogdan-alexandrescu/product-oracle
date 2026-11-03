@@ -1543,7 +1543,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
 /** Runs a check counts as at work: an ended run it could not read is still named. */
 const TICK_ACTIVE = new Set<string>(["running", "awaiting_checkpoint", "awaiting_approval", "paused_overrun"]);
 
-/** Tests: a count of runs every check reports it could not read. */
+/** Tests: a count of runs every check reports it could not read, or "running": every running run. */
 export const MOCK_TICK_ERRORS_KEY = "po-mock-tick-errors";
 /** Tests (artifact-skip-refused): a file name SwarmCloud refuses to send (422) from every running step. */
 export const MOCK_TICK_REFUSED_KEY = "po-mock-tick-refused";
@@ -1576,11 +1576,23 @@ function tick(ctx: RunsContext): Schemas["TickOut"] {
     delivered.add(r.id);
     out.runs_checked += 1;
   }
+  // Tests: runs the check could not read (the API lists each with its error, and rolls back their pass).
+  const failing = typeof localStorage === "undefined" ? null : localStorage.getItem(MOCK_TICK_ERRORS_KEY);
+  // As the API: ended runs Oracle still watches (a cancel winding down), named with why.
+  // "running": every running run, the one a test started included.
+  const unread = !failing
+    ? []
+    : failing === "running"
+      ? ctx.db.runs.filter((r) => r.status === "running" && r.flow !== DRAFT_ITEMS_FLOW)
+      : [...ctx.db.runs.filter((r) => !TICK_ACTIVE.has(r.status)), ...ctx.db.runs.filter((r) => TICK_ACTIVE.has(r.status))].slice(0, Number(failing));
+  const unreadIds = new Set(unread.map((r) => r.id));
   for (const r of ctx.db.runs) {
     if (r.status !== "running" || delivered.has(r.id)) continue;
     // E1: a draft's items run is finished by the draft roadmap's own tick (./draft-roadmap.ts).
     if (r.flow === DRAFT_ITEMS_FLOW) continue;
     out.runs_checked += 1;
+    // A run that could not be checked is named, not counted as active.
+    if (unreadIds.has(r.id)) continue;
     out.active_runs += 1;
     if ((ctx.slowAgents || ctx.quietAgents) && agentsWorking(ctx, r)) continue;
     if (r.waiting_for) {
@@ -1614,17 +1626,12 @@ function tick(ctx: RunsContext): Schemas["TickOut"] {
     else out.runs_advanced += 1;
     startedInCheck(ctx, r);
   }
-  // Tests: runs the check could not read (the API lists each with its error).
-  const failing = typeof localStorage === "undefined" ? null : localStorage.getItem(MOCK_TICK_ERRORS_KEY);
-  if (failing) {
-    // As the API: ended runs Oracle still watches (a cancel winding down), named with why.
-    const watched = [...ctx.db.runs.filter((r) => !TICK_ACTIVE.has(r.status)), ...ctx.db.runs.filter((r) => TICK_ACTIVE.has(r.status))];
-    for (const r of watched.slice(0, Number(failing))) {
-      const reason = "SwarmCloud did not answer (HTTP 503 unavailable)";
-      out.errors.push(`run ${r.id}: ${reason}`);
-      out.unchecked.push({ run_id: r.id, title: [r.document_title, r.flow_title].filter(Boolean).join(" · "), reason });
-      out.runs_checked += 1;
-    }
+  for (const r of unread) {
+    // As the API: SwarmCloud's 503, in words (the error keeps what SwarmCloud said).
+    out.errors.push(`run ${r.id}: SwarmCloud refused GET /v1/workflows/${r.id}: HTTP 503 unavailable`);
+    const reason = "SwarmCloud had a problem on its side; the next check tries again";
+    out.unchecked.push({ run_id: r.id, title: [r.document_title, r.flow_title].filter(Boolean).join(" · "), reason });
+    if (r.status !== "running" || r.flow === DRAFT_ITEMS_FLOW) out.runs_checked += 1;
   }
   return out;
 }

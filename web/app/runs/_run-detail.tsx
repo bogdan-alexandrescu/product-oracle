@@ -524,17 +524,18 @@ export function RunDetail({ id }: { id: string }) {
         {run.status === "paused_overrun" && <OverrunHeld run={run} mayResume={can("resume_run")} />}
         {checked && (
           <Notice testId="tick-result">
-            {checked.text}
-            {/* run-progress: each run the check could not read, named with why, and a link to it. */}
-            {checked.unchecked.map((u) => (
+            {!checked.lead && checked.text}
+            {/* run-progress: each run the check could not read, named with why, and a link to it; this run first. */}
+            {checked.unchecked.map((u, i) => (
               <span key={u.run_id} data-testid="tick-unchecked">
-                {" "}
+                {checked.lead && i === 0 ? null : " "}
                 <Link href={`/runs/${u.run_id}`} className="underline">
                   {u.run_id === run.id ? "This run" : u.title}
                 </Link>{" "}
                 could not be checked: {u.reason}.
               </span>
             ))}
+            {checked.lead && checked.text}
           </Notice>
         )}
         <Panel
@@ -650,7 +651,8 @@ function OverrunHeld({ run, mayResume }: { run: RunOut; mayResume: boolean }) {
   );
 }
 
-type TickResult = { text: string; unchecked: Schemas["TickUnchecked"][] };
+/** ``lead``: this run could not be checked, so the result leads with it (``unchecked`` first, then ``text``). */
+type TickResult = { text: string; unchecked: Schemas["TickUnchecked"][]; lead?: boolean };
 
 /**
  * #258: what "Refresh progress" checked: "Checked 1 active run at 9:24 AM: 1 segment finished."
@@ -684,6 +686,12 @@ function tickResult(out: Schemas["TickOut"], run: RunOut, mine: boolean): TickRe
   }
   const parts = [out.segments_finished ? `${plural(out.segments_finished, "segment")} finished` : "no segment finished yet"];
   if (out.runs_paused) parts.push(`${plural(out.runs_paused, "run")} paused over budget`);
+  // run-progress review: this run could not be checked: said first, then what else the check read.
+  if (unchecked.some((u) => u.run_id === run.id)) {
+    const first = [...unchecked.filter((u) => u.run_id === run.id), ...unchecked.filter((u) => u.run_id !== run.id)];
+    const others = out.active_runs ? ` ${plural(out.active_runs, "other active run")} at ${at}: ${parts.join(", ")}` : ` at ${at}`;
+    return { text: ` Checked${others}.${said}`, unchecked: first, lead: true };
+  }
   return { text: `Checked ${plural(out.active_runs, "active run")} at ${at}: ${parts.join(", ")}.${said}`, unchecked };
 }
 
@@ -912,10 +920,10 @@ function duration(ms: number): string {
  * run-progress: an agent's latest sign of work: its heartbeat, SwarmCloud's last event on its
  * task, or the proposals the run wrote ("12 proposals written, last 30s ago").
  */
-function lastWork(a: Schemas["SegmentAgent"], proposals: number, since: (at: string) => string): string {
+function lastWork(a: Schemas["SegmentAgent"], since: (at: string) => string): string {
   const at = a.last_work_at ?? a.heartbeat_at;
   if (!at) return "no sign of work yet";
-  if (a.last_work === "proposals") return `${plural(proposals, "proposal")} written, last ${since(at)} ago`;
+  if (a.last_work === "proposals") return `last proposal ${since(at)} ago`;
   if (a.last_work === "event") return `last activity ${since(at)} ago`;
   return `last heartbeat ${since(at)} ago`;
 }
@@ -935,6 +943,12 @@ function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
       <p className="tnum">
         {/* run-progress: "$0.00" only once SwarmCloud reports a cost; until then, say so. */}
         <span data-testid="segment-cost">{s.cost_reported ? `${usd(s.cost_usd)} spent so far` : "Cost not reported yet"}</span> ·{" "}
+        {/* run-progress review: the run's proposals are counted once for the step, not on each agent. */}
+        {s.checked_at && s.proposals_written > 0 && (
+          <>
+            <span data-testid="segment-proposals">{plural(s.proposals_written, "proposal")} written</span> ·{" "}
+          </>
+        )}
         {s.checked_at ? `checked ${since(s.checked_at)} ago` : "Not checked yet: the agents' progress shows after the next check"}
       </p>
       {s.checked_at &&
@@ -947,7 +961,7 @@ function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
                 </span>{" "}
                 · {a.state.charAt(0).toUpperCase() + a.state.slice(1)} ·{" "}
                 <span data-testid="agent-elapsed">{a.started_at ? `${since(a.started_at)} elapsed` : "start not read"}</span> ·{" "}
-                <span data-testid="agent-heartbeat">{lastWork(a, s.proposals_written, since)}</span>
+                <span data-testid="agent-heartbeat">{lastWork(a, since)}</span>
                 {!!a.cost_usd && <> · {usd(a.cost_usd)}</>}
               </li>
             ))}
