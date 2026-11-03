@@ -52,7 +52,7 @@ async function watchHeader(page: Page) {
   });
 }
 
-test("Home says nothing about what waits until it knows, and New PRD never moves", async ({ page }) => {
+async function honestHeader(page: Page) {
   await signIn(page);
   // The waiting decisions answer late, after every other read.
   await page.evaluate(
@@ -78,6 +78,20 @@ test("Home says nothing about what waits until it knows, and New PRD never moves
   // A click aimed at New PRD lands on New PRD.
   await simple(page).getByTestId("np-new-prd").click();
   await expect(page.getByRole("dialog")).toBeVisible();
+}
+
+test("Home says nothing about what waits until it knows, and New PRD never moves", async ({ page }) => {
+  await honestHeader(page);
+});
+
+test.describe("on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+  test("Home says nothing about what waits until it knows, and New PRD never moves", async ({ page }) => {
+    await honestHeader(page);
+  });
+  test("with every roadmap and PRD in Trash, Home's sections load and the roadmap review says so", async ({ page }) => {
+    await everythingInTrash(page);
+  });
 });
 
 /**
@@ -120,21 +134,26 @@ async function trashEvery(page: Page, rows: Locator): Promise<number> {
 async function onlyTheRoadmapRefresh(page: Page) {
   await page.goto("/company/rituals");
   const on = page
-    .getByTestId("rituals-table")
-    .getByRole("row")
+    .getByTestId("ritual-row")
     .filter({ has: page.getByTestId("ritual-state").filter({ hasText: /^On$/ }) })
     .filter({ hasNotText: "Monthly roadmap refresh" });
   await expect(on.first()).toBeVisible();
   for (let n = 0; n < 15 && (await on.count()) > 0; n++) {
     const before = await on.count();
-    await on.first().getByRole("gridcell").first().click();
-    await page.getByRole("button", { name: "Pause", exact: true }).click();
+    // The row's corner, clear of its links (a phone opens the ritual in a sheet).
+    await on.first().click({ position: { x: 4, y: 4 } });
+    await page.getByRole("button", { name: "Pause", exact: true }).filter({ visible: true }).click();
     await expect(on).toHaveCount(before - 1);
+    if (await page.getByTestId("ritual-sheet").isVisible()) await page.keyboard.press("Escape");
   }
   await expect(on).toHaveCount(0);
 }
 
 test("with every roadmap and PRD in Trash, Home's sections load and the roadmap review says so", async ({ page }) => {
+  await everythingInTrash(page);
+});
+
+async function everythingInTrash(page: Page) {
   await signIn(page);
   await onlyTheRoadmapRefresh(page);
   await page.goto("/plan/documents");
@@ -157,5 +176,6 @@ test("with every roadmap and PRD in Trash, Home's sections load and the roadmap 
   await expect(line).toHaveText("Reviews a roadmap in Trash · Ritual settings");
   await line.getByRole("link", { name: "Ritual settings" }).click();
   await expect(page).toHaveURL(/\/company\/rituals\?ritual=/);
-  await expect(page.getByTestId("rituals-table").getByRole("row", { selected: true })).toContainText("Monthly roadmap refresh");
-});
+  // The ritual's settings open (beside the table, or in a sheet on a phone).
+  await expect(page.getByRole("heading", { name: "Monthly roadmap refresh" }).filter({ visible: true })).toBeVisible();
+}
