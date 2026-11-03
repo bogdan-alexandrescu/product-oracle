@@ -440,7 +440,8 @@ function choicesFor(db: SourcesDb, provider: string, email?: string): Schemas["C
   const removed = new Set(db.removed ?? []);
   const fixed = (CONNECTIONS[provider] ?? []).filter((c) => !removed.has(c.id));
   const live = mockConnectionRows(email)
-    .filter((r) => r.provider === provider && !fixed.some((c) => c.id === r.id))
+    // The seeded Notion account is on both lists, under two ids: offered once.
+    .filter((r) => r.provider === provider && !fixed.some((c) => c.id === r.id || c.account_label === r.account_label))
     .map((r) => ({
       id: r.id,
       account_label: r.account_label,

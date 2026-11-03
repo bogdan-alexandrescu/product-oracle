@@ -183,7 +183,7 @@ test("notion picker: loads icons only over https from Notion's hosts, without a 
   await expect.poll(() => fetched).toEqual(["https://www.notion.so/icons/chart-line_gray.svg"]);
 });
 
-test("notion picker: a source whose Notion connection is gone asks to reconnect, with nothing to edit", async ({
+test("notion picker: a source whose Notion connection is gone offers the person's Notion connection, with nothing to edit", async ({
   page,
 }) => {
   const { form, picker } = await openPicker(page);
@@ -200,12 +200,15 @@ test("notion picker: a source whose Notion connection is gone asks to reconnect,
   }, SOURCES_STORAGE_KEY);
   await page.reload();
   const row = page.getByRole("listitem", { name: "Handbook" });
+  // source-relink: the card and Edit pages say the same, and offer the person's Notion connection.
+  const words = "This source has no connection. Pick one of your Notion connections to sync it again.";
+  await expect(row.getByTestId("source-no-connection")).toContainText(words);
   await row.getByRole("button", { name: "More actions for Handbook" }).click();
   await row.getByRole("menuitem", { name: "Edit pages" }).click();
-  const reconnect = row.getByTestId("notion-reconnect");
-  await expect(reconnect).toContainText("Reconnect Notion to change pages.");
-  await expect(reconnect).toContainText("It keeps its 1 picked page; changing them needs a Notion connection.");
-  await expect(reconnect.getByRole("link", { name: "Go to Connections" })).toHaveAttribute("href", "/settings/connections");
+  const reconnect = row.getByTestId("source-no-connection");
+  await expect(reconnect).toHaveCount(1);
+  await expect(reconnect).toContainText(words);
+  await expect(reconnect.getByRole("button", { name: "Use Example Notion" })).toBeVisible();
   await expect(row.locator("textarea, input")).toHaveCount(0);
   await expect(row.getByRole("button", { name: "Save pages" })).toHaveCount(0);
   expect(await smallestText(reconnect)).toBeGreaterThanOrEqual(13);
