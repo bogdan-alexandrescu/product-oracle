@@ -100,7 +100,7 @@ async def test_a_file_refused_for_now_is_still_read_again(status):
 
 def _swarm(refused: str, status: int) -> FakeSwarmCloud:
     swarm = FakeSwarmCloud(mcp=True, await_input=True, service_answer=True)
-    swarm.extra_files = {"_export.yaml": "rows: []\n"}
+    swarm.extra_files = {"_export.yaml": "rows: []\n", "baseline.yaml": "version: 1\n"}
     swarm.raw_refusals = {refused: status}
     set_runtime(swarm.runtime())
     return swarm

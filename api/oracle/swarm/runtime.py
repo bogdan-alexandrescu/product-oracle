@@ -329,10 +329,23 @@ class AgentRuntime(Protocol):
     async def cost(self, workflow_id: str) -> Decimal: ...
 
     async def artifacts(
-        self, workflow_id: str, steps: tuple[str, ...] | None = None
+        self,
+        workflow_id: str,
+        steps: tuple[str, ...] | None = None,
+        *,
+        skipped: dict[str, str] | None = None,
     ) -> dict[str, str]:
         """Text artifacts by file name: of the whole workflow once it has ended, or of
-        the named steps (read by their task ids) while it waits."""
+        the named steps (read by their task ids) while it waits. A file the runtime
+        refuses for good is left out and, when ``skipped`` is given, named there with
+        the runtime's refusal; a refusal that may pass raises :class:`RuntimeUnavailable`."""
+        ...
+
+    async def read_artifacts(
+        self, workflow_id: str, steps: tuple[str, ...] | None = None
+    ) -> tuple[dict[str, str], dict[str, str]]:
+        """:meth:`artifacts` with the files it left out, by name with the runtime's
+        refusal: ``(files, skipped)``."""
         ...
 
     async def cancel(self, workflow_id: str) -> None: ...

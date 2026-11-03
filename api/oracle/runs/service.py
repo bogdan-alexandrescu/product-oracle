@@ -4320,6 +4320,7 @@ _OUTSIDE = frozenset(
         "status",
         "cost",
         "artifacts",
+        "read_artifacts",
         "cancel",
         "features",
         "ensure_mcp_server",
@@ -5993,8 +5994,9 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
     await db.commit()  # nothing held across the runtime calls
     status = await _within(runtime.status(workflow_id), deadline)
     files: dict[str, str] = {}
+    skipped: dict[str, str] = {}
     if status.terminal and status.state == "succeeded":
-        files = await _within(runtime.artifacts(workflow_id), deadline)
+        files, skipped = await _within(runtime.read_artifacts(workflow_id), deadline)
 
     run, segments = await _locked(db, run_id)
     running = next((s for s in segments if s.id == segment_id), None)
@@ -6041,6 +6043,15 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
         run, running, workflow_id, _current_attempt(art, running).get("submitted_at"), status
     )
     art = _art(running)
+
+    if status.terminal and status.state == "succeeded" and skipped:
+        held = _note_refused(run, running, art, skipped, await _import_names(db, run, running))
+        if held is not None:
+            # A file its import needs was refused: not taken, read again next tick.
+            stats.errors.append(held)
+            _set_art(running, art)
+            await db.commit()
+            return
 
     if status.terminal:
         stats.finished += 1
@@ -6860,17 +6871,84 @@ async def _read_found(
     return _found_apply(run, segments, segment, e, out, cancelling)
 
 
-async def _harvest(run: Run, segment: RunSegment, workflow_id: str, steps: tuple[str, ...]) -> None:
+async def _import_names(db: AsyncSession, run: Run, segment: RunSegment) -> set[str]:
+    """The files :func:`_advance` imports or checks from ``segment``: without one, its
+    import fails or reads as empty."""
+    sdef = _flow(run).segment(segment.name)
+    names = {
+        name
+        for name in (
+            ITEMS_FILE,
+            feature_set.FILE,
+            run_order.FILE,
+            flows.LAUNCH_FILE,
+            flows.TRIAGE_FILE,
+            flows.BRIEFS_FILE,
+        )
+        if name in sdef.outputs
+    }
+    if sdef.imports_baseline:
+        names.add("baseline.yaml")
+    if sdef.checkpoint == eng_dates.KIND:
+        names.add(eng_dates.FILE)
+    if sdef.imports_draft:
+        names.add(flows.draft_file(await _target_kind(db, run)))
+    return names
+
+
+def _note_refused(
+    run: Run, segment: RunSegment, art: dict[str, Any], skipped: dict[str, str], needed: set[str]
+) -> str | None:
+    """Notes each file SwarmCloud refused to serve, once per file. Returns what to say
+    when one of them is a file the segment's import needs: its results are not taken."""
+    refused = art.setdefault("refused_files", {})
+    held: list[str] = []
+    for name, why in sorted(skipped.items()):
+        why = _shown(why) or "no reason given"
+        if name in needed:
+            held.append(f"{name} ({why})")
+            note = (
+                f"SwarmCloud refused to send {name} ({why}), the file this step's results "
+                "are imported from, so they were not imported. Oracle asks again each "
+                "minute; if SwarmCloud keeps refusing it, cancel the run and start it again."
+            )
+        else:
+            note = (
+                f"SwarmCloud refused to send {name} ({why}), so this step's results were "
+                "imported without it."
+            )
+        if refused.get(name) != why:
+            refused[name] = why
+            _note_art(art, note)
+    if not held:
+        return None
+    return (
+        f"run {run.id}: {_flow(run).segment(segment.name).title}: SwarmCloud refused to send "
+        f"{', '.join(held)}, which its import needs"
+    )
+
+
+async def _harvest(
+    db: AsyncSession, run: Run, segment: RunSegment, workflow_id: str, steps: tuple[str, ...]
+) -> str | None:
     """A segment's files from the steps that wrote them (read by task id), in step order:
-    a later step's file of the same name wins."""
-    files = await _rt().artifacts(workflow_id, steps)
+    a later step's file of the same name wins. A file SwarmCloud refuses to serve for good
+    is noted and left out; when the import needs it, nothing is taken and the reason is
+    returned (the segment keeps running and is read again)."""
+    files, skipped = await _rt().read_artifacts(workflow_id, steps)
     art = _art(segment)
+    if skipped:
+        held = _note_refused(run, segment, art, skipped, await _import_names(db, run, segment))
+        if held is not None:
+            _set_art(segment, art)
+            return held
     art["files"] = {**art["files"], **files}
     if art["attempts"]:
         _current_attempt(art, segment)["state"] = "succeeded"
     _set_art(segment, art)
     segment.status = "succeeded"
     segment.finished_at = _now()
+    return None
 
 
 # A step state that is neither a failure nor an expiry.
@@ -6945,7 +7023,9 @@ async def _tick_workflow(
             closed = status.terminal and ended is not None and ended.state not in _OPEN_OR_DONE
             if parked is None and not answered and not closed:
                 break
-            await _harvest(run, current, wf["id"], producers)
+            if (held := await _harvest(db, run, current, wf["id"], producers)) is not None:
+                stats.errors.append(held)
+                break
             wait: dict[str, Any] = {
                 "workflow_id": wf["id"],
                 "step_id": review,
@@ -6975,7 +7055,9 @@ async def _tick_workflow(
                 stats.advanced += 1
             break
         # Checkpoint off, or the last round's revision is done: the files are final.
-        await _harvest(run, current, wf["id"], producers)
+        if (held := await _harvest(db, run, current, wf["id"], producers)) is not None:
+            stats.errors.append(held)
+            break
         stats.finished += 1
         if entry.get("checkpoint"):
             # Its checkpoint waits in the Inbox only: the workflow has nothing left.
@@ -7285,9 +7367,10 @@ async def _pause_workflow(
         round_ = int(entry.get("round") or 1)
         producers = tuple(entry["work"]) if round_ == 1 else (entry["revises"][round_ - 2],)
         done = status.step(producers[-1])
+        held = None
         if done is not None and done.state == "SUCCEEDED":
-            await _harvest(run, current, wf["id"], producers)
-        else:
+            held = await _harvest(db, run, current, wf["id"], producers)
+        if done is None or done.state != "SUCCEEDED" or held is not None:
             art = _art(current)
             if art["attempts"]:
                 _current_attempt(art, current)["state"] = "cancelled"
