@@ -81,11 +81,11 @@
       },
       {
        "file": "frames/ms1-b-open.html",
-       "caption": "Two items ticked (their rows shaded); a bar at the foot offers “Make a milestone after these”."
+       "caption": "Two items ticked (their bars outlined); a bar at the foot offers “Make a milestone after these”."
       },
       {
        "file": "frames/ms1-b-mid.html",
-       "caption": "The card opens with the two items already in it and the day after the later one; the owner names it."
+       "caption": "The card opens with the two picked items already in it; the owner names it and sets the day."
       },
       {
        "file": "frames/ms1-b-done-gantt.html",
@@ -289,7 +289,7 @@
      "frames": [
       {
        "file": "frames/ms3-a-rest.html",
-       "caption": "A roadmap built from the PRD Usage alerts: its four milestones drawn hollow with dashed lines, each marked “PRD”."
+       "caption": "A roadmap built from the PRD Usage alerts: its four milestones drawn hollow with dashed lines, each label starting “PRD”."
       },
       {
        "file": "frames/ms3-a-open.html",

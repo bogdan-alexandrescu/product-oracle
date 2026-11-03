@@ -148,7 +148,7 @@ export function MsLayer(props: MsLayerProps) {
       const cy = r.y + r.h / 2;
       const late = r.end > m.date;
       if (style === "a") {
-        if (!late && ex < mx) out.push(<div key={`g-${m.id}-${k}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: ex + 2, top: cy, width: mx - ex - 2, borderTop: `1.5px dotted ${msEdge(m.code)}` }} />);
+        if (!late && ex < mx) out.push(<div key={`g-${m.id}-${k}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: ex + 2, top: cy - 1, width: mx - ex - 2, borderTop: `2px dotted ${msEdge(m.code)}` }} />);
         out.push(<i key={`gd-${m.id}-${k}`} aria-hidden className="pointer-events-none absolute z-[13] h-2 w-2 rounded-full" style={{ left: (late ? mx : ex) - 4, top: cy - 4, background: late ? "var(--crit)" : msEdge(m.code) }} />);
       }
       if (late && style !== "c")
@@ -166,13 +166,13 @@ export function MsLayer(props: MsLayerProps) {
     const lane = laneOf(m.goal);
     const proposed = ms.ms3 === "a" && ["mid", "done"].includes(p) && m.id === "p2";
     const at = proposed ? X("2027-01-05") : mx;
-    out.push(<Diamond key={`p-${m.id}`} x={mx} y={axisY} code={m.code} hollow title={`${m.code} ${m.name} (from the PRD ${m.prd})`} lock={ms.ms3 === "b"} testid="ms-prd-diamond" />);
+    out.push(<Diamond key={`p-${m.id}`} x={mx} y={axisY} code={m.code} hollow={ms.ms3 !== "c"} title={`${m.code} ${m.name} (from the PRD ${m.prd})`} lock={ms.ms3 === "b"} testid="ms-prd-diamond" />);
     if (lane)
-      out.push(<div key={`pv-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: `1.5px dashed ${msEdge(m.code)}`, opacity: proposed ? 0.4 : 1 }} />);
+      out.push(<div key={`pv-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: `1.5px ${ms.ms3 === "c" ? "solid" : "dashed"} ${msEdge(m.code)}`, opacity: proposed ? 0.4 : 1 }} />);
     if (lane)
       out.push(
-        <Chip key={`pc-${m.id}`} className="border bg-surface" style={{ left: mx + 6, top: lane.y0 + 6, maxWidth: (() => { const nx = prd.map((o) => X(o.date)).filter((v) => v > mx).sort((a, b) => a - b)[0]; return nx != null ? Math.max(28, nx - mx - 12) : 420; })(), color: msInk(m.code), borderColor: msEdge(m.code), opacity: proposed ? 0.5 : 1 }}>
-          {m.code} {phone ? "" : m.name} <span className="font-normal text-text2">{ms.ms3 === "c" ? "· copied from PRD" : "· PRD"}</span>
+        <Chip key={`pc-${m.id}`} className="border" style={{ background: ms.ms3 === "c" ? msFill(m.code) : "var(--surface)", left: mx + 6, top: lane.y0 + 6, maxWidth: (() => { const nx = prd.map((o) => X(o.date)).filter((v) => v > mx).sort((a, b) => a - b)[0]; return nx != null ? Math.max(28, nx - mx - 12) : 420; })(), color: msInk(m.code), borderColor: msEdge(m.code), opacity: proposed ? 0.5 : 1 }}>
+          <span className="font-normal text-text2">{ms.ms3 === "c" ? "Copied · " : "PRD · "}</span>{m.code} {phone ? "" : m.name}
         </Chip>,
       );
     if (proposed && lane) {
@@ -232,7 +232,8 @@ export function MsLayer(props: MsLayerProps) {
   if (ms.decision === "ms1" && ms.ms1 === "b" && ["open", "mid"].includes(p)) {
     for (const k of MS_NEW.gates) {
       const r = rowOf(k);
-      if (r) out.push(<div key={`pick-${k}`} aria-hidden className="pointer-events-none absolute z-[11]" style={{ left: 0, top: r.y, width: props.width, height: r.h, background: "var(--accent-soft)", opacity: 0.55 }} />);
+      if (r && p === "open") out.push(<div key={`pick-${k}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: X(r.start) - 3, top: r.y + 3, width: Math.max(30, X(r.end) - X(r.start) + 6), height: r.h - 6, outline: "2px solid var(--accent)", borderRadius: 8 }} />);
+      if (r && p === "open") out.push(<span key={`tick-${k}`} aria-hidden className="absolute z-[13] flex h-4 w-4 items-center justify-center rounded bg-accent text-[11px] font-bold text-on-accent" style={{ left: Math.max(4, X(r.start) - 22), top: r.y + r.h / 2 - 8 }}>✓</span>);
     }
   }
   if (ms.decision === "ms1" && ms.ms1 === "c" && p === "open") {
@@ -252,9 +253,12 @@ export function MsLayer(props: MsLayerProps) {
   }
   if (ms.decision === "ms1" && ms.ms1 === "d" && !phone)
     out.push(
-      <span key="palette" data-testid="ms-palette" className="absolute z-[15] flex cursor-grab items-center gap-1.5 rounded-full border border-line-strong bg-surface px-2.5 text-xs leading-6 font-semibold" style={{ left: view === "timeline" ? 12 : 8, top: view === "timeline" ? 10 : axisY - 12, opacity: p === "open" ? 0.45 : 1 }}>
-        <i aria-hidden className="inline-block h-2.5 w-2.5 rotate-45 bg-accent-ink" /> Drag a milestone onto a date
-      </span>,
+      // Pinned to the chart's top-left corner as it scrolls sideways.
+      <div key="palette" className="sticky top-0 left-0 z-[30] h-0 w-0">
+        <span data-testid="ms-palette" className="absolute flex cursor-grab items-center gap-1.5 rounded-full border border-line-strong bg-surface px-2.5 text-xs leading-6 font-semibold whitespace-nowrap" style={{ left: view === "timeline" ? 12 : 8, top: view === "timeline" ? 10 : axisY - 12, opacity: p === "open" ? 0.45 : 1 }}>
+          <i aria-hidden className="inline-block h-2.5 w-2.5 rotate-45 bg-accent-ink" /> Drag a milestone onto a date
+        </span>
+      </div>,
     );
   // MS2: moving one on the axis.
   if (ms.decision === "ms2" && p === "move") {
@@ -269,7 +273,7 @@ export function MsLayer(props: MsLayerProps) {
   // The add card (MS1 mid and second, MS2 every open state).
   const cardAt = (d: string) => ({ left: Math.max(8, Math.min(X(d) + 14, props.width - 380)), top: axisY + 18 });
   if (ms.decision === "ms1" && p === "mid") out.push(<AddCard key="card" ms={ms} m={MS_NEW} at={cardAt(MS_NEW.date)} phone={phone} gantt={view === "gantt"} />);
-  if (ms.decision === "ms1" && p === "second") out.push(<AddCard key="card" ms={ms} m={MS_SECOND} at={{ left: Math.max(8, X(MS_SECOND.date) - 374), top: axisY + 18 }} phone={phone} gantt={view === "gantt"} second />);
+  if (ms.decision === "ms1" && ms.ms1 !== "c" && p === "second") out.push(<AddCard key="card" ms={ms} m={MS_SECOND} at={{ left: Math.max(8, X(MS_SECOND.date) - 374), top: axisY + 18 }} phone={phone} gantt={view === "gantt"} second />);
   if (ms.decision === "ms2" && ["open", "mid"].includes(p)) out.push(<AddCard key="card" ms={ms} m={MS_NEW} at={cardAt(MS_NEW.date)} phone={phone} gantt={view === "gantt"} edit={p === "open"} />);
   if (ms.decision === "ms3" && p === "open") out.push(<PrdCard key="card" ms={ms} at={cardAt("2026-12-15")} phone={phone} gantt={view === "gantt"} />);
 
