@@ -15,6 +15,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { MkMark } from "@/components/simple/MkGoalOrder"; // MOCK-HOOK
 import { addMonths } from "@/lib/dates";
 
 import { FixButtons, type Act } from "./_card";
@@ -714,6 +715,7 @@ function DayChart(props: TimelineProps) {
                   className="pointer-events-none relative z-[11] flex h-8 items-end border-b border-line bg-surface2/70"
                 >
                   <div className="sticky left-0 px-3 pb-1 text-sm font-semibold whitespace-nowrap">
+                    {r.key !== "none" && r.key !== "below" && <MkMark index={rows.filter((x) => x.kind === "lane" && x.key !== "none" && x.key !== "below").indexOf(r)} />} {/* MOCK-HOOK */}
                     {r.title}{" "}
                     <span className="font-normal text-text2">
                       · {r.count} {r.count === 1 ? "item" : "items"}

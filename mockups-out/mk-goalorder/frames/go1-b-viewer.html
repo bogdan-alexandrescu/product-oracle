@@ -2426,13 +2426,14 @@ pre .date-mark, code .date-mark { font-family: var(--font-sans,inherit); }
 .mk-go-num { background: var(--surface2); min-width: 20px; height: 20px; color: var(--text2); vertical-align: 1px; border-radius: 999px; justify-content: center; align-items: center; margin-right: 6px; padding: 0px 5px; font-size: 12px; font-weight: 700; line-height: 1; display: inline-flex; }
 .simple-goal > .mk-go-num { align-self: flex-start; }
 .mk-go-main { background: var(--accent-soft); color: var(--accent-ink); vertical-align: 1px; border-radius: 999px; align-self: flex-start; margin-right: 6px; padding: 1px 8px; font-size: 12px; font-weight: 700; display: inline-block; }
-.simple-goal.mk-go-first { box-shadow: var(--simple-card-shadow), inset 0 3px 0 var(--accent); }
+.mk-go-first { position: relative; }
+.mk-go-first::before { content: ""; background: var(--accent); border-radius: 0px 0px 3px 3px; height: 3px; position: absolute; top: 0px; left: 16px; right: 16px; }
 .mk-go-editbar { background: var(--accent-soft); border-radius: 12px; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; padding: 8px 12px; display: flex; }
 .simple-goal.mk-go-edit { outline: 1px dashed var(--line-strong); cursor: grab; min-height: 120px; }
-.simple-goal.mk-go-lifted { outline: 2px solid var(--accent); cursor: grabbing; transform: translateY(-6px) rotate(-1.2deg); box-shadow: rgba(0, 0, 0, 0.22) 0px 14px 30px; }
+.simple-goal.mk-go-lifted { z-index: 5; outline: 2px solid var(--accent); cursor: grabbing; position: relative; transform: translate(10px, -14px) rotate(-2.5deg); box-shadow: rgba(0, 0, 0, 0.32) 0px 22px 44px; }
 .mk-go-grip { color: var(--text-faint); cursor: grab; border-radius: 6px; padding: 2px 4px; font-size: 16px; line-height: 1; }
 button.mk-go-grip:hover, .mk-go-grip.mk-go-held { background: var(--accent-soft); color: var(--accent-ink); }
-.mk-go-arrow { border: 1px solid var(--line-strong); background: var(--surface); min-width: 34px; height: 30px; color: var(--text); border-radius: 8px; font-weight: 700; }
+.mk-go-arrow { border: 1px solid var(--line-strong); background: var(--surface); min-width: 44px; height: 44px; color: var(--text); border-radius: 8px; font-weight: 700; }
 .mk-go-arrow:disabled { opacity: 0.35; }
 .mk-go-list { flex-direction: column; gap: 6px; display: flex; }
 .mk-go-list li { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; align-items: center; gap: 8px; padding: 8px 10px; display: flex; }
@@ -2441,8 +2442,9 @@ button.mk-go-grip:hover, .mk-go-grip.mk-go-held { background: var(--accent-soft)
 .mk-go-pop button { text-align: left; border-radius: 6px; padding: 6px 8px; font-size: 14px; }
 .mk-go-pop button:hover { background: var(--surface2); }
 .mk-go-pop button:disabled { opacity: 0.4; }
-tr[data-mk="drag"] { background: var(--surface); outline: 2px solid var(--accent); z-index: 5; position: relative; transform: translate(8px, -86px); box-shadow: rgba(0, 0, 0, 0.22) 0px 10px 26px; }
-tr[data-mk="drop"] { box-shadow: inset 0 3px 0 var(--accent); }
+tr[data-mk="drag"] > td { opacity: 0.35; }
+tr[data-mk="drop"] > td { box-shadow: inset 0 3px 0 var(--accent); }
+.mk-go-ghost { z-index: 20; border: 2px solid var(--accent); background: var(--surface); width: 420px; color: var(--text); white-space: nowrap; pointer-events: none; border-radius: 10px; align-items: center; gap: 6px; padding: 8px 12px; font-weight: 600; display: flex; position: absolute; top: -22px; left: 6px; transform: rotate(-1.5deg); box-shadow: rgba(0, 0, 0, 0.3) 0px 16px 34px; }
 .mk-go-place { flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; display: flex; }
 @property --tw-translate-x { syntax: "*"; inherits: false; initial-value: 0; }
 @property --tw-translate-y { syntax: "*"; inherits: false; initial-value: 0; }

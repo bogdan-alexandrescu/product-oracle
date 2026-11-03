@@ -6,7 +6,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button, Dialog, toast } from "@/components/ds";
-import { mk, mkMove, mkOrder, mkSetOrder } from "@/lib/mk-goalorder";
+import { mk, mkGoals, mkMove, mkOrder, mkSetOrder } from "@/lib/mk-goalorder";
 
 /** Re-renders when the order changes (any page, any control). */
 export function useMkTick(): number {
@@ -25,9 +25,20 @@ export function mkSave(next: string[], moved?: string): void {
   mkSetOrder(next);
   const at = moved ? next.indexOf(moved) + 1 : 0;
   toast({
-    message: moved ? `${moved} is now goal ${at} of ${next.length}. Every page shows the new order.` : "Goal order saved. Every page shows the new order.",
+    message: moved ? `${moved} is now goal ${at} of ${next.length} confirmed goals. Every page shows the new order.` : "Goal order saved. Every page shows the new order.",
     action: { label: "Undo", onClick: () => mkSetOrder(before) },
   });
+}
+
+/** The hard case's archived goal: said once, so the owner sees it is left out on purpose. */
+export function MkArchivedNote(): ReactNode {
+  const n = mkGoals().filter((g) => g.archived).length;
+  if (!n) return null;
+  return (
+    <span className="simple-small block" data-testid="mk-archived-note">
+      {n === 1 ? "1 archived goal is" : `${n} archived goals are`} not in the order.
+    </span>
+  );
 }
 
 // ---------------------------------------------------------------- GO2: the marks
@@ -84,7 +95,10 @@ export function MkHomeEdit({ rows, onDone }: { rows: Tile[]; onDone: () => void 
   return (
     <div data-testid="mk-home-edit">
       <div className="mk-go-editbar">
-        <span className="simple-small">Drag a goal, or use its arrows. The order shows on every page once saved.</span>
+        <span>
+          <span className="simple-small">Drag a goal, or use its arrows. The order shows on every page once saved.</span>
+          <MkArchivedNote />
+        </span>
         <span className="flex gap-2">
           <Button variant="ghost" onClick={onDone}>
             Cancel
@@ -177,6 +191,9 @@ export function MkOrderDialog({ onClose }: { onClose: () => void }): ReactNode {
           </li>
         ))}
       </ol>
+      <div className="mt-3">
+        <MkArchivedNote />
+      </div>
     </Dialog>
   );
 }
@@ -208,6 +225,7 @@ export function MkHandle({ title, top }: { title: string; top: boolean }): React
         ⠿
       </button>
       <span className="mk-go-num tnum">{i + 1}</span>
+      {mk("phase") === "mid" && i === 0 && <MkGhost title={order[2]} />}
       {held && (
         <span className="mk-go-pop" role="menu" style={at ? { position: "fixed", left: at.x, top: at.y } : undefined}>
           <span className="text-xs text-text2">Drag the row, or</span>
@@ -220,6 +238,37 @@ export function MkHandle({ title, top }: { title: string; top: boolean }): React
           <button type="button" role="menuitem" disabled={i === 0} onClick={() => go(-i)}>
             Make it goal 1
           </button>
+          <MkArchivedNote />
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** GO1 a mid-drag: the carried row, lifted over the row it will land above (fixed, so the table does not clip it). */
+function MkGhost({ title }: { title: string }): ReactNode {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [at, setAt] = useState<{ left: number; top: number; width: number } | null>(null);
+  useLayoutEffect(() => {
+    const place = () => {
+      const r = ref.current?.closest("tr")?.getBoundingClientRect();
+      if (r) setAt({ left: r.left + 28, top: r.top - 26, width: Math.min(560, r.width * 0.5) });
+    };
+    place();
+    addEventListener("scroll", place, true);
+    addEventListener("resize", place);
+    return () => {
+      removeEventListener("scroll", place, true);
+      removeEventListener("resize", place);
+    };
+  }, []);
+  return (
+    <span ref={ref} aria-hidden>
+      {at && (
+        <span className="mk-go-ghost" data-testid="mk-ghost" style={{ position: "fixed", ...at }}>
+          <span className="mk-go-grip">⠿</span>
+          <span className="mk-go-num tnum">3</span>
+          {title}
         </span>
       )}
     </span>
@@ -239,6 +288,7 @@ export function MkPlace({ title, canOrder }: { title: string; canOrder: boolean 
       <span>
         Goal <b className="tnum">{i + 1}</b> of {order.length}
         {i === 0 && <span className="text-text2">, shown first</span>}
+        <MkArchivedNote />
       </span>
       {canOrder && (
         <span className="flex gap-2">

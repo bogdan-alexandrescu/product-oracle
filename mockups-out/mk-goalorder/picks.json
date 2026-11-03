@@ -30,11 +30,11 @@
             },
             {
               "file": "frames/go1-a-mid.html",
-              "caption": "Mid-drag: the row is lifted; a blue line above Faster activation shows where it lands."
+              "caption": "Mid-drag: Grow paid conversion is lifted over the table, its old row faded; a blue line above Faster activation shows where it lands."
             },
             {
               "file": "frames/go1-a-saved.html",
-              "caption": "Dropped at the top: the table re-sorts and a toast says it is goal 1 of 5, with Undo."
+              "caption": "Dropped at the top: the table re-sorts and a toast says it is goal 1 of 5 confirmed goals, with Undo (Cut early churn is only proposed, so it is not in the order)."
             },
             {
               "file": "frames/go1-a-result.html",
@@ -42,11 +42,15 @@
             },
             {
               "file": "frames/go1-a-hard-1512.html",
-              "caption": "Eight goals, one archived (not listed) and one long title, at 1512: the handle on goal 8 opened."
+              "caption": "Eight goals and one long title, at 1512: the handle on goal 8 opened; its menu says 1 archived goal is not in the order."
             },
             {
               "file": "frames/go1-a-phone-390.html",
               "caption": "Phone 390: the handle and number sit beside each goal's stacked block."
+            },
+            {
+              "file": "frames/go1-a-viewer.html",
+              "caption": "A viewer: the same Goals table with no handles and no numbers."
             },
             {
               "file": "frames/go1-a-dark.html",
@@ -73,7 +77,7 @@
             },
             {
               "file": "frames/go1-b-mid.html",
-              "caption": "Mid-drag: Grow paid conversion is lifted and moving to place 2."
+              "caption": "Mid-drag: Grow paid conversion is lifted (tilted, with a shadow) and moving to place 2."
             },
             {
               "file": "frames/go1-b-saved.html",
@@ -85,11 +89,11 @@
             },
             {
               "file": "frames/go1-b-viewer.html",
-              "caption": "A viewer sees the same order and no Change order button."
+              "caption": "A viewer, before any change: the goal row as it is, with no Change order button."
             },
             {
               "file": "frames/go1-b-hard-1512.html",
-              "caption": "Eight goals at 1512 while ordering: the row wraps to two lines; the long title wraps in its card."
+              "caption": "Eight goals at 1512 while ordering: the row wraps to two lines, the long title wraps in its card, and a line says 1 archived goal is not in the order."
             },
             {
               "file": "frames/go1-b-phone-390.html",
@@ -131,11 +135,15 @@
             },
             {
               "file": "frames/go1-c-hard-1512.html",
-              "caption": "Eight goals at 1512: every goal is one line; the long title wraps to two."
+              "caption": "Eight goals at 1512: every goal is one line, the long title wraps to two, and a line under the list says 1 archived goal is not in the order."
             },
             {
               "file": "frames/go1-c-phone-390.html",
-              "caption": "Phone 390: the list fills the screen; arrows are large enough to tap."
+              "caption": "Phone 390: the list fills the screen; each arrow is a full finger-size button."
+            },
+            {
+              "file": "frames/go1-c-viewer.html",
+              "caption": "A viewer: Simple Home with the goal row and no Change order button."
             },
             {
               "file": "frames/go1-c-dark.html",
@@ -173,11 +181,15 @@
             },
             {
               "file": "frames/go1-d-hard-1512.html",
-              "caption": "The cost at 1512: Faster page loads is goal 8 of 8, seven presses from the front."
+              "caption": "The cost at 1512: Faster page loads is goal 8 of 8, seven presses from the front; 1 archived goal is not in the order. (The Feature × goal table above is cramped with the panel open: a fault in the built table, not in this proposal.)"
             },
             {
               "file": "frames/go1-d-phone-390.html",
               "caption": "Phone 390: the panel fills the screen; Order sits below the goal's figures."
+            },
+            {
+              "file": "frames/go1-d-viewer.html",
+              "caption": "A viewer opens the same goal: Order says Goal 3 of 5, with no Move buttons."
             },
             {
               "file": "frames/go1-d-dark.html",
@@ -197,7 +209,7 @@
           "letter": "a",
           "name": "A number on each goal",
           "recommended": true,
-          "what": "A small grey number before every goal's name, 1 to n, wherever goals are listed: Home's cards, the Roadmap's goal cards and goal lanes, Baseline's table. Nothing else changes.",
+          "what": "A small grey number before every goal's name, 1 to n, wherever goals are listed: Home's cards, the Roadmap's goal cards and the timeline's goal headers, Baseline's table. Nothing else changes.",
           "why": "A number says 'this is a set order' without words, matches what the owner sees while ordering, and lets people say 'goal 2' in a meeting. It stays readable with eight goals and on a phone.",
           "plus": "Tiny, the same on every page and in exports.",
           "cost": "One more mark on every card; people may read it as a rank of worth rather than the owner's chosen order.",
@@ -208,7 +220,7 @@
             },
             {
               "file": "frames/go2-a-roadmap.html",
-              "caption": "Roadmap: the goal cards and the goal lanes carry the same numbers."
+              "caption": "Roadmap: the goal cards and the timeline's goal headers carry the same numbers."
             },
             {
               "file": "frames/go2-a-hard-1512.html",
@@ -238,7 +250,7 @@
             },
             {
               "file": "frames/go2-b-roadmap.html",
-              "caption": "Roadmap: Main goal on the first goal card and the first lane."
+              "caption": "Roadmap: Main goal and a thin accent line on the first goal card, and Main goal on the timeline's first goal header."
             },
             {
               "file": "frames/go2-b-hard-1512.html",

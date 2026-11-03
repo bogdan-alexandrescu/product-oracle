@@ -917,10 +917,7 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
               style={{ height: geo[n].height }}
               className="flex min-w-0 flex-col justify-center border-t border-[var(--simple-rule)] pr-2.5 pl-4"
             >
-              <b className={`text-[15px] leading-5 font-bold ${l.kind === "below" ? "text-text2" : ""}`}>
-                {lane === "goal" && l.kind === "group" && l.key !== "none" && <MkMark index={n} />} {/* MOCK-HOOK */}
-                {l.title}
-              </b>
+              <b className={`text-[15px] leading-5 font-bold ${l.kind === "below" ? "text-text2" : ""}`}>{lane === "goal" && l.kind === "group" && l.key !== "none" && <MkMark index={n} />}{l.title}</b> {/* MOCK-HOOK: MkMark */}
               <small className="text-[12.5px] leading-4 text-text-faint" data-testid="lane-count">
                 {l.count} {l.count === 1 ? "item" : "items"}
                 {l.kind === "pm" ? " · no engineering" : ""}

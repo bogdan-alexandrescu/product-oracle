@@ -33,13 +33,6 @@ async function start(page: Page, cfg: Cfg, w: keyof typeof SIZE = 1440) {
   await page.waitForURL(/\/home|\/simple/);
 }
 
-async function setTheme(page: Page, theme: "light" | "dark") {
-  await page.evaluate((t) => {
-    localStorage.setItem("oracle-theme", t);
-    document.documentElement.dataset.theme = t;
-  }, theme);
-}
-
 async function open(page: Page, url: string, ready: string) {
   await page.goto(url);
   await page.locator(ready).first().waitFor({ state: "visible", timeout: 20_000 });
@@ -169,12 +162,15 @@ test("go1-a", async ({ page }) => {
   await page.getByRole("button", { name: "Move Faster page loads" }).evaluate((e) => e.scrollIntoView({ block: "center" }));
   await page.getByRole("button", { name: "Move Faster page loads" }).click();
   await snap(page, "go1-a-hard-1512");
-  await page.setViewportSize(SIZE[390]);
+  await start(page, { go1: "a", goals: "9" }, 390); // MOCK-HOOK: a fresh mock each time, so no state leaks between frames
   await open(page, `${base}&goals=9`, "[data-testid=mk-handle]");
   await goalsTable(page);
   await snap(page, "go1-a-phone-390");
-  await page.setViewportSize(SIZE[1440]);
-  await setTheme(page, "dark");
+  await start(page, { go1: "a", role: "viewer" });
+  await open(page, base, "[data-testid^=goal-g]");
+  await goalsTable(page);
+  await snap(page, "go1-a-viewer");
+  await start(page, { go1: "a", theme: "dark" });
   await open(page, base, "[data-testid=mk-handle]");
   await goalsTable(page);
   await page.getByRole("button", { name: "Move Grow paid conversion" }).click();
@@ -205,12 +201,11 @@ test("go1-b", async ({ page }) => {
   await start(page, { go1: "b", goals: "9" }, 1512);
   await open(page, "/simple?go1=b&goals=9&open=1", "[data-testid=mk-edit-goal]");
   await snap(page, "go1-b-hard-1512");
-  await page.setViewportSize(SIZE[390]);
+  await start(page, { go1: "b" }, 390);
   await open(page, "/simple?go1=b&open=1", "[data-testid=mk-edit-goal]");
   await page.getByTestId("mk-home-edit").scrollIntoViewIfNeeded();
   await snap(page, "go1-b-phone-390");
-  await page.setViewportSize(SIZE[1440]);
-  await setTheme(page, "dark");
+  await start(page, { go1: "b", theme: "dark" });
   await open(page, "/simple?go1=b&open=1&phase=mid", "[data-testid=mk-edit-goal]");
   await snap(page, "go1-b-dark");
 });
@@ -236,11 +231,13 @@ test("go1-c", async ({ page }) => {
   await start(page, { go1: "c", goals: "9" }, 1512);
   await open(page, "/simple?go1=c&goals=9&open=1", "[data-testid=mk-order-dialog]");
   await snap(page, "go1-c-hard-1512");
-  await page.setViewportSize(SIZE[390]);
+  await start(page, { go1: "c" }, 390);
   await open(page, "/simple?go1=c&open=1&phase=mid", "[data-testid=mk-order-dialog]");
   await snap(page, "go1-c-phone-390");
-  await page.setViewportSize(SIZE[1440]);
-  await setTheme(page, "dark");
+  await start(page, { go1: "c", role: "viewer" });
+  await open(page, "/simple?go1=c", "[data-testid=home-goal]");
+  await snap(page, "go1-c-viewer");
+  await start(page, { go1: "c", theme: "dark" });
   await open(page, "/simple?go1=c&open=1&phase=mid", "[data-testid=mk-order-dialog]");
   await snap(page, "go1-c-dark");
 });
@@ -252,6 +249,8 @@ test("go1-d", async ({ page }) => {
   const openGoal = async (title: string) => {
     await page.locator("[data-testid^=goal-g]", { hasText: title }).first().click();
     await page.getByTestId("mk-place").waitFor();
+    // MOCK-HOOK: no sideways scroll left in the tables behind the panel (it hid the sticky Feature column).
+    await page.evaluate(() => document.querySelectorAll("*").forEach((e) => e.scrollLeft > 0 && (e.scrollLeft = 0)));
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.getByTestId("mk-place").scrollIntoViewIfNeeded();
   };
@@ -271,14 +270,19 @@ test("go1-d", async ({ page }) => {
   await start(page, { go1: "d", goals: "9" }, 1512);
   await open(page, `${base}&goals=9`, "[data-testid^=goal-g]");
   await openGoal("Faster page loads");
+  await goalsTable(page); // MOCK-HOOK: the goal list behind the panel (the Feature × goal table breaks at this width with the panel open)
+  await page.evaluate(() => window.scrollBy(0, -34)); // MOCK-HOOK: keep the panel's Order label in view
   await snap(page, "go1-d-hard-1512");
-  await page.setViewportSize(SIZE[390]);
+  await start(page, { go1: "d" }, 390);
   await open(page, base, "[data-testid^=goal-g]");
   await openGoal("Grow paid conversion");
   await page.getByTestId("mk-place").scrollIntoViewIfNeeded();
   await snap(page, "go1-d-phone-390");
-  await page.setViewportSize(SIZE[1440]);
-  await setTheme(page, "dark");
+  await start(page, { go1: "d", role: "viewer" });
+  await open(page, base, "[data-testid^=goal-g]");
+  await openGoal("Grow paid conversion");
+  await snap(page, "go1-d-viewer");
+  await start(page, { go1: "d", theme: "dark" });
   await open(page, base, "[data-testid^=goal-g]");
   await openGoal("Grow paid conversion");
   await snap(page, "go1-d-dark");
@@ -297,12 +301,11 @@ for (const v of ["a", "b", "c", "d"]) {
     await open(page, `/simple?${q}&goals=9`, "[data-testid=home-goal]");
     await page.locator("[data-testid=home-goals]").scrollIntoViewIfNeeded();
     await snap(page, `go2-${v}-hard-1512`);
-    await page.setViewportSize(SIZE[390]);
+    await start(page, { go2: v }, 390);
     await open(page, `/simple?${q}`, "[data-testid=home-goal]");
     await page.locator("[data-testid=home-goals]").scrollIntoViewIfNeeded();
     await snap(page, `go2-${v}-phone-390`);
-    await page.setViewportSize(SIZE[1440]);
-    await setTheme(page, "dark");
+    await start(page, { go2: v, theme: "dark" });
     await open(page, `/simple/roadmap?${q}`, "[data-testid=simple-chart]");
     await snap(page, `go2-${v}-dark`);
   });

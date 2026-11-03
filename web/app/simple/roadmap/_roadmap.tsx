@@ -1,7 +1,7 @@
 "use client";
 
 import { MkMark, MkOrderLine } from "@/components/simple/MkGoalOrder"; // MOCK-HOOK
-import { mkOn, mkRank } from "@/lib/mk-goalorder"; // MOCK-HOOK
+import { mk, mkOn, mkRank } from "@/lib/mk-goalorder"; // MOCK-HOOK
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -249,7 +249,7 @@ function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadm
     <ul className="grid grid-cols-2 gap-2 min-[900px]:grid-cols-4" data-testid="goal-counters">
       {/* qa4-simple-roadmap-10: a card for every goal with a lane (the grid wraps past four). */}
       {cards.map(([id, g], mkI) => ( /* MOCK-HOOK: mkI */
-        <li key={id} data-testid="goal-counter" className="rounded-xl border border-line bg-surface px-3 py-2">
+        <li key={id} data-testid="goal-counter" className={`rounded-xl border border-line bg-surface px-3 py-2 ${mk("go2") === "b" && mkI === 0 ? "mk-go-first" : ""}`} /* MOCK-HOOK */>
           <p className="truncate text-[15px] font-semibold" title={g.title}>
             <MkMark index={mkI} /> {/* MOCK-HOOK */}
             {g.title}
