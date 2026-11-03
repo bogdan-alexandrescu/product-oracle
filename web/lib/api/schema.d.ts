@@ -31860,6 +31860,25 @@ export interface components {
             skip_fields: string[];
         };
         /**
+         * ProposalAlso
+         * @description Another of the run's open proposals of the same change, shown on this one's card.
+         */
+        ProposalAlso: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** By */
+            by: string;
+            /** Fields */
+            fields: {
+                [key: string]: unknown;
+            };
+            /** Same */
+            same: boolean;
+        };
+        /**
          * ProposalCreate
          * @description Suggest a change for an approver to accept: commenters and agents use this.
          */
@@ -31889,6 +31908,8 @@ export interface components {
             run_id?: string | null;
             /** Reason */
             reason?: string | null;
+            /** Role */
+            role?: string | null;
         };
         /** ProposalDecision */
         ProposalDecision: {
@@ -31937,6 +31958,20 @@ export interface components {
              * @default []
              */
             overlaps: components["schemas"]["ProposalOverlap"][];
+            /** Duplicate Of */
+            duplicate_of?: string | null;
+            /**
+             * Also Proposed
+             * @default []
+             */
+            also_proposed: components["schemas"]["ProposalAlso"][];
+            /** Outcome */
+            outcome?: ("already_done" | "not_chosen") | null;
+            /**
+             * Closed As Done
+             * @default []
+             */
+            closed_as_done: string[];
         };
         /**
          * ProposalOverlap

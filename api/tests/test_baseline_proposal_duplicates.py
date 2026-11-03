@@ -69,10 +69,9 @@ async def test_the_same_change_twice_in_a_run_is_marked(client, ctx):
     fails_when: it is not marked, or the first does not list the second's role."""
     run = await _run(ctx)
     feat = await _feature(client, ctx)
-    first = await _propose(client, ctx, _update(feat, {"attrs": {"milestone": "M2"}}, "Ships in M2."),
-                           run, "writer")  # fmt: skip
-    second = await _propose(client, ctx, _update(feat, {"attrs": {"milestone": "M2"}}, "M2 slice."),
-                            run, "critic")  # fmt: skip
+    m2 = {"attrs": {"milestone": "M2"}}
+    first = await _propose(client, ctx, _update(feat, m2, "Ships in M2."), run, "writer")
+    second = await _propose(client, ctx, _update(feat, m2, "M2 slice."), run, "critic")
     listed = await _open(client, ctx)
     assert listed[second["id"]]["duplicate_of"] == first["id"]
     assert listed[first["id"]]["duplicate_of"] is None

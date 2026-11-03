@@ -315,6 +315,9 @@ class ProposalCreate(BaseModel):
     fields: dict[str, Any] = {}
     run_id: uuid.UUID | None = None
     reason: str | None = None
+    # The run's role that proposes it ("writer", "critic"): a duplicate reads "Also
+    # proposed by Critic".
+    role: str | None = Field(default=None, max_length=60)
 
 
 class ProposalRun(BaseModel):
@@ -352,6 +355,17 @@ class ProposalOverlap(BaseModel):
     by: Literal["proposal", "edit"]
 
 
+class ProposalAlso(BaseModel):
+    """Another of the run's open proposals of the same change, shown on this one's card."""
+
+    id: uuid.UUID
+    # Its role ("Critic"), else who made it.
+    by: str
+    # Its fields; ``same`` is false when it sets them to other values (a choice).
+    fields: dict[str, Any]
+    same: bool
+
+
 class ProposalOut(ORM):
     id: uuid.UUID
     entity_id: uuid.UUID | None = None
@@ -372,6 +386,16 @@ class ProposalOut(ORM):
     # An open update's fields whose value changed since it was written; accepting it
     # would undo that change.
     overlaps: list[ProposalOverlap] = []
+    # The open proposal of the same run whose card shows this one (same change, proposed
+    # again); null when it has its own card.
+    duplicate_of: uuid.UUID | None = None
+    # The open proposals shown on this card: "Also proposed by Critic", or a choice.
+    also_proposed: list[ProposalAlso] = []
+    # How it closed when no one decided it: "already_done" (an accept made it a no-op,
+    # or the link it adds exists), "not_chosen" (another choice of it was accepted).
+    outcome: Literal["already_done", "not_chosen"] | None = None
+    # On an accept: the other open proposals it closed as already done.
+    closed_as_done: list[uuid.UUID] = []
 
 
 class ProposalDecision(BaseModel):
