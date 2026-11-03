@@ -1,5 +1,7 @@
 "use client";
 
+import { MkMark, MkOrderLine } from "@/components/simple/MkGoalOrder"; // MOCK-HOOK
+import { mkOn, mkRank } from "@/lib/mk-goalorder"; // MOCK-HOOK
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -228,6 +230,7 @@ function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadm
     return n < 0 ? Number.MAX_SAFE_INTEGER : n;
   };
   const cards = [...goals.entries()].filter(([id, g]) => picked(id, g.title)).sort(([a, x], [b, y]) => rank(a, x.title) - rank(b, y.title) || x.title.localeCompare(y.title));
+  if (mkOn()) cards.sort(([, x], [, y]) => mkRank(x.title) - mkRank(y.title)); // MOCK-HOOK: the owner's order
   const filteredOut = only && !cards.length && !empty.length;
   if (!cards.length && !empty.length && !filteredOut) return null;
   const open = (id: string, title: string) => {
@@ -241,11 +244,14 @@ function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadm
     ) : null;
   };
   return (
+    <>
+    <MkOrderLine /> {/* MOCK-HOOK */}
     <ul className="grid grid-cols-2 gap-2 min-[900px]:grid-cols-4" data-testid="goal-counters">
       {/* qa4-simple-roadmap-10: a card for every goal with a lane (the grid wraps past four). */}
-      {cards.map(([id, g]) => (
+      {cards.map(([id, g], mkI) => ( /* MOCK-HOOK: mkI */
         <li key={id} data-testid="goal-counter" className="rounded-xl border border-line bg-surface px-3 py-2">
           <p className="truncate text-[15px] font-semibold" title={g.title}>
+            <MkMark index={mkI} /> {/* MOCK-HOOK */}
             {g.title}
           </p>
           {/* fix4 qa-simple-roadmap-49: the metric wraps to a second line, its full words on hover past that. */}
@@ -282,6 +288,7 @@ function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadm
         </li>
       )}
     </ul>
+    </> /* MOCK-HOOK */
   );
 }
 

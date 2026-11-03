@@ -3,7 +3,7 @@
 // (GO1 a Baseline handles, b Home row, c order dialog, d a goal's own Move left / Move right)
 // and the marks that say the order is deliberate (GO2 a numbers, b main goal, c one line, d nothing).
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button, Dialog, toast } from "@/components/ds";
 import { mk, mkMove, mkOrder, mkSetOrder } from "@/lib/mk-goalorder";
@@ -190,16 +190,26 @@ export function MkHandle({ title, top }: { title: string; top: boolean }): React
   const i = order.indexOf(title);
   const picked = mk("open") === "1" && i === 2;
   const [held, setHeld] = useState(picked);
+  const ref = useRef<HTMLButtonElement>(null);
+  const [at, setAt] = useState<{ x: number; y: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!held || !ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    setAt({ x: r.left, y: r.bottom + 4 });
+  }, [held]);
   if (!top || i < 0) return null;
-  const go = (d: number) => mkSave(mkMove(order, title, i + d), title);
+  const go = (d: number) => {
+    setHeld(false);
+    mkSave(mkMove(order, title, i + d), title);
+  };
   return (
     <span className="relative flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-      <button type="button" className={`mk-go-grip ${held ? "mk-go-held" : ""}`} aria-label={`Move ${title}`} onClick={() => setHeld(!held)} data-testid="mk-handle">
+      <button ref={ref} type="button" className={`mk-go-grip ${held ? "mk-go-held" : ""}`} aria-label={`Move ${title}`} onClick={() => setHeld(!held)} data-testid="mk-handle">
         ⠿
       </button>
       <span className="mk-go-num tnum">{i + 1}</span>
       {held && (
-        <span className="mk-go-pop" role="menu">
+        <span className="mk-go-pop" role="menu" style={at ? { position: "fixed", left: at.x, top: at.y } : undefined}>
           <span className="text-xs text-text2">Drag the row, or</span>
           <button type="button" role="menuitem" disabled={i === 0} onClick={() => go(-1)}>
             Move up
@@ -207,7 +217,7 @@ export function MkHandle({ title, top }: { title: string; top: boolean }): React
           <button type="button" role="menuitem" disabled={i === order.length - 1} onClick={() => go(1)}>
             Move down
           </button>
-          <button type="button" role="menuitem" disabled={i === 0} onClick={() => mkSave(mkMove(order, title, 0), title)}>
+          <button type="button" role="menuitem" disabled={i === 0} onClick={() => go(-i)}>
             Make it goal 1
           </button>
         </span>

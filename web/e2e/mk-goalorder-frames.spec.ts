@@ -150,8 +150,8 @@ test("go1-a", async ({ page }) => {
   await open(page, `/simple?go1=a`, "[data-testid=home-goal]");
   await snap(page, "go1-a-cost");
   await open(page, base, "[data-testid=mk-handle]");
-  await page.getByRole("button", { name: "Move Grow paid conversion" }).click();
   await goalsTable(page);
+  await page.getByRole("button", { name: "Move Grow paid conversion" }).click();
   await snap(page, "go1-a-open");
   await open(page, `${base}&phase=mid`, "[data-testid=mk-handle]");
   await goalsTable(page);
@@ -166,8 +166,8 @@ test("go1-a", async ({ page }) => {
   await resetOrder(page);
   await start(page, { go1: "a", goals: "9" }, 1512);
   await open(page, `${base}&goals=9`, "[data-testid=mk-handle]");
-  await page.getByRole("button", { name: "Move Faster page loads" }).click();
   await goalsTable(page);
+  await page.getByRole("button", { name: "Move Faster page loads" }).click();
   await snap(page, "go1-a-hard-1512");
   await page.setViewportSize(SIZE[390]);
   await open(page, `${base}&goals=9`, "[data-testid=mk-handle]");
@@ -175,8 +175,9 @@ test("go1-a", async ({ page }) => {
   await snap(page, "go1-a-phone-390");
   await page.setViewportSize(SIZE[1440]);
   await setTheme(page, "dark");
-  await open(page, `${base}&open=1`, "[data-testid=mk-handle]");
+  await open(page, base, "[data-testid=mk-handle]");
   await goalsTable(page);
+  await page.getByRole("button", { name: "Move Grow paid conversion" }).click();
   await snap(page, "go1-a-dark");
 });
 
@@ -251,6 +252,8 @@ test("go1-d", async ({ page }) => {
   const openGoal = async (title: string) => {
     await page.locator("[data-testid^=goal-g]", { hasText: title }).first().click();
     await page.getByTestId("mk-place").waitFor();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.getByTestId("mk-place").scrollIntoViewIfNeeded();
   };
   await open(page, base, "[data-testid^=goal-g]");
   await goalsTable(page);
