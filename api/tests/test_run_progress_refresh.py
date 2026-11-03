@@ -7,10 +7,12 @@ import uuid
 import pytest
 
 from oracle.baseline.models import Proposal
+from oracle.runs import service
 from oracle.tenancy import tenant_session
 from tests.fixtures import seed_auth
 from tests.test_adapter_v2 import on, use
 from tests.test_adapter_v2 import settings as _v2_settings
+from tests.test_adapter_v2_round9 import _interrupted
 from tests.test_runs import get, started, tick
 
 settings = _v2_settings
@@ -52,6 +54,44 @@ async def test_a_run_that_could_not_be_checked_is_named_with_why_and_not_counted
     assert unchecked["title"] == (f"{doc} · " if doc else "") + broken["flow_title"]
     assert unchecked["reason"] and broken["id"] not in unchecked["reason"]
     assert all(u["run_id"] != ok["id"] for u in out["unchecked"])
+    # In words: no API path, workflow id or HTTP code, and no stray space at its end.
+    reason = unchecked["reason"]
+    assert all(raw not in reason for raw in ("/v1/", "wf_", "HTTP", "404")), reason
+    assert reason == reason.strip()
+    assert reason == "SwarmCloud could not find its workflow; the next check tries again"
+
+
+async def test_a_run_whose_check_broke_is_named_without_the_error_s_class(
+    client, owner, monkeypatch
+):
+    _, auth = owner
+    swarm = on()
+    use(swarm)
+    swarm.steps_per_poll = 0
+    run = await started(client, auth)
+
+    async def broken(*_a, **_k):
+        raise TimeoutError()
+
+    monkeypatch.setattr(service, "_tick_run", broken)
+    out = await _tick(client, auth)
+    [unchecked] = out["unchecked"]
+    assert unchecked["run_id"] == run["id"]
+    assert "Error" not in unchecked["reason"], unchecked["reason"]
+    assert unchecked["reason"] == "something went wrong while reading it; the next check tries again"
+
+
+async def test_a_run_whose_pass_ran_with_an_import_error_is_checked_not_unchecked(
+    client, owner, monkeypatch
+):
+    """Importing a step's output failed, but the run's pass ran (its workflow was read):
+    the error is reported, the run is not named as one that could not be checked."""
+    _, auth = owner
+    swarm = on()
+    run, _ = await _interrupted(client, auth, monkeypatch, swarm)
+    out = await _tick(client, auth)
+    assert any("importing" in e for e in out["errors"]), out["errors"]
+    assert all(u["run_id"] != run["id"] for u in out["unchecked"]), out["unchecked"]
 
 
 async def test_an_ended_run_still_watched_is_not_counted_as_active(client, owner):
@@ -83,6 +123,29 @@ async def test_every_tick_moves_a_running_run_s_checked_time(client, owner):
     await tick(client, auth)
     second = _running(await get(client, auth, run["id"]))["checked_at"]
     assert first is not None and second > first
+
+
+async def test_a_pass_that_records_no_agents_still_moves_the_checked_time(
+    client, owner, monkeypatch
+):
+    """A running run whose pass reads it but records no agents (they stay as last
+    read): its checked time still moves on Refresh progress."""
+    _, auth = owner
+    swarm = on()
+    use(swarm)
+    swarm.steps_per_poll = 0
+    run = await started(client, auth)
+    first = swarm.workflows["wf_1"].steps[0]
+    swarm.forged[first.step_id] = {"state": "RUNNING", "started_at": STARTED}
+    await tick(client, auth)
+    before = _running(await get(client, auth, run["id"]))
+    assert before["checked_at"] is not None and len(before["agents"]) == 1
+
+    monkeypatch.setattr(service, "_record_running", lambda *_a, **_k: None)
+    await tick(client, auth)
+    after = _running(await get(client, auth, run["id"]))
+    assert after["checked_at"] > before["checked_at"]
+    assert [a["role"] for a in after["agents"]] == [a["role"] for a in before["agents"]]
 
 
 async def test_the_runtime_s_last_event_is_the_agent_s_last_work(client, owner):
