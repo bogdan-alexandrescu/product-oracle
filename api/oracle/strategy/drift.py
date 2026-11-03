@@ -32,6 +32,7 @@ from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import changes, company_time
+from oracle.baseline.goal_order import goal_position, sort_goals
 from oracle.baseline.models import Edge, Entity, EntityRevision, Evidence
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.roadmap.models import ProductTrack, RoadmapItem
@@ -536,7 +537,8 @@ async def _section_text(db: AsyncSession, version_id: uuid.UUID, key: str) -> st
 
 
 def _node(e: Entity) -> StackNode:
-    return StackNode(id=e.id, key=e.key, title=e.title)
+    position = goal_position(e.attrs) if e.type == "goal" else None
+    return StackNode(id=e.id, key=e.key, title=e.title, position=position)
 
 
 async def _vision(db: AsyncSession, a: Approved) -> StackVision:
@@ -611,7 +613,7 @@ async def stack(db: AsyncSession) -> StrategyStackOut:
                     StackGoal(
                         **_node(x).model_dump(), items=sum(x.id in g.item_goals(i) for i in g.items)
                     )
-                    for x in sorted(goals, key=lambda e: e.key)
+                    for x in sort_goals(goals)
                 ],
                 features=[_node(x) for x in sorted(features, key=lambda e: e.key)],
                 items=items,
@@ -628,11 +630,7 @@ async def stack(db: AsyncSession) -> StrategyStackOut:
             choices=choices,
         ),
         unaligned=Unaligned(
-            goals=[
-                _node(x)
-                for x in sorted(g.goals.values(), key=lambda e: e.key)
-                if x.id not in aligned
-            ],
+            goals=[_node(x) for x in sort_goals(g.goals.values()) if x.id not in aligned],
             items=[
                 UnalignedItem(roadmap_item_id=i.id, title=i.title, draft=False)
                 for i in g.items

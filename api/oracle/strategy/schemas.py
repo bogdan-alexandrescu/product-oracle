@@ -84,6 +84,8 @@ class StackNode(BaseModel):
     id: uuid.UUID
     key: str
     title: str
+    # goal-order: the goal's place (its attrs.position, 1 = first); none when unset.
+    position: int | None = None
 
 
 class StackGoal(StackNode):

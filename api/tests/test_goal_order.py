@@ -22,8 +22,8 @@ Test cards (protects / fails_when / no_claim):
   the unaligned goals in the one order with positions; fails_when=they come by key;
   no_claim=drift findings.
 - test_position_must_be_a_whole_number: protects=a goal's Edit saves a position of 1 or
-  more and refuses 0 or a word with a field problem; a tie on position goes to the older goal; fails_when=a bad position is stored;
-  no_claim=the web form.
+  more and refuses 0 or a word with a field problem; a tie on position goes to the older
+  goal; fails_when=a bad position is stored; no_claim=the web form.
 """
 
 from datetime import UTC, datetime, timedelta

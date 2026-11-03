@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, changes
 from oracle.auth.deps import Principal
 from oracle.baseline import goals, scoring
+from oracle.baseline.goal_order import goal_sort_key
 from oracle.baseline.models import (
     EDGE_TYPES,
     ENTITY_TYPES,
@@ -1295,7 +1296,9 @@ async def list_entities(
         stmt = stmt.where(Entity.type == type_)
     if status:
         stmt = stmt.where(Entity.status == status)
-    return list((await db.scalars(stmt)).all())
+    rows = list((await db.scalars(stmt)).all())
+    # goal-order: goals in the one goal order, other types by key.
+    return sorted(rows, key=lambda e: (e.type, goal_sort_key(e) if e.type == "goal" else ()))
 
 
 async def list_edges(

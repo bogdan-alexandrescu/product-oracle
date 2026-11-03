@@ -22459,6 +22459,8 @@ export interface components {
             /** Parent Id */
             parent_id?: string | null;
             progress?: components["schemas"]["GoalProgress"] | null;
+            /** Position */
+            position?: number | null;
             /**
              * Evidence
              * @default []
@@ -22541,6 +22543,8 @@ export interface components {
             /** Parent Id */
             parent_id?: string | null;
             progress?: components["schemas"]["GoalProgress"] | null;
+            /** Position */
+            position?: number | null;
         };
         /** EntityPatch */
         EntityPatch: {
@@ -24275,6 +24279,8 @@ export interface components {
             goal: string;
             /** Title */
             title: string;
+            /** Position */
+            position?: number | null;
             /** Weight */
             weight: number;
             /** Weight Assumed */
@@ -38559,6 +38565,8 @@ export interface components {
              * @default false
              */
             no_goal: boolean;
+            /** Position */
+            position?: number | null;
         };
         /** SimpleGoalRef */
         SimpleGoalRef: {
@@ -38573,6 +38581,8 @@ export interface components {
             title: string;
             /** Metric */
             metric?: string | null;
+            /** Position */
+            position?: number | null;
         };
         /** SimpleGoalSuggestion */
         SimpleGoalSuggestion: {
@@ -39636,6 +39646,8 @@ export interface components {
             key: string;
             /** Title */
             title: string;
+            /** Position */
+            position?: number | null;
         };
         /** SimplePriorityMerge */
         SimplePriorityMerge: {
@@ -41316,6 +41328,8 @@ export interface components {
             key: string;
             /** Title */
             title: string;
+            /** Position */
+            position?: number | null;
             /**
              * Items
              * @default 0
@@ -41333,6 +41347,8 @@ export interface components {
             key: string;
             /** Title */
             title: string;
+            /** Position */
+            position?: number | null;
         };
         /** StackStrategy */
         StackStrategy: {
@@ -43190,6 +43206,8 @@ export interface components {
             locked: boolean;
             /** Confidence */
             confidence?: number | null;
+            /** Position */
+            position?: number | null;
         };
         /** TraceEvidenceRef */
         TraceEvidenceRef: {
@@ -45296,6 +45314,11 @@ export interface components {
              * @default null
              */
             weight: number | null;
+            /**
+             * Position
+             * @default null
+             */
+            position: number | null;
         };
         /** WebhookActor */
         WebhookActor: {

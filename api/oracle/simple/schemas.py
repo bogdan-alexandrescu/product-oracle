@@ -74,6 +74,8 @@ class SimpleGoalRef(BaseModel):
     title: str
     # S4: the goal's metric (its ``attrs.metric``), the goal counters' line.
     metric: str | None = None
+    # goal-order: the goal's place (its attrs.position, 1 = first); none when unset.
+    position: int | None = None
 
 
 class SimpleTrackRef(BaseModel):
@@ -778,6 +780,8 @@ class SimpleQuarter(BaseModel):
 class SimplePriorityGoal(BaseModel):
     key: str
     title: str
+    # goal-order: the goal's place (its attrs.position, 1 = first); none when unset.
+    position: int | None = None
 
 
 class SimplePriorityAfter(BaseModel):
@@ -1007,6 +1011,8 @@ class SimpleGoalBucket(BaseModel):
     share: float
     codes: list[str]
     no_goal: bool = False
+    # goal-order: the goal's place (its attrs.position, 1 = first); none when unset.
+    position: int | None = None
 
 
 class SimpleLine(BaseModel):

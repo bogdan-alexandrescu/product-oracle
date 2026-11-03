@@ -59,6 +59,9 @@ class GoalLink:
     # #345: a subgoal's parent goal, credited through it (its weight is the parent's share).
     parent_key: str | None = None
     parent_title: str | None = None
+    # goal-order: the goal's position and its place in the one goal order.
+    position: int | None = None
+    order: tuple = ()
 
 
 @dataclass
@@ -225,9 +228,11 @@ def goal_value(f: FeatureInput) -> tuple[float, list[dict[str, Any]]]:
         term = weight * contribution
         total += term
         via = {"parent": g.parent_key, "parent_title": g.parent_title} if g.parent_key else {}
+        at = {"position": g.position} if g.position is not None else {}
         terms.append(
             {
                 **via,
+                **at,
                 "goal": g.goal_key,
                 "title": g.goal_title,
                 "weight": weight,

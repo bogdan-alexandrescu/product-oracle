@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth.deps import Principal
 from oracle.baseline import trace as baseline_trace
+from oracle.baseline.goal_order import sort_goals
 from oracle.baseline.models import Entity, Evidence
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.priorities import service as priorities
@@ -330,7 +331,7 @@ async def version_trace(
                 section_hash=s.content_hash,
                 links=views.get(s.section_key, []),
                 entities=entities,
-                goals=[entity_ref(x) for x in sorted(goals.values(), key=lambda x: x.key)],
+                goals=[entity_ref(x) for x in sort_goals(goals.values())],
                 downstream=_for_section(downstream, s.section_key),
             )
         )

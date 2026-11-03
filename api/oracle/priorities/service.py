@@ -20,6 +20,7 @@ from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.baseline import evidence as baseline_evidence
 from oracle.baseline import scoring as baseline_scoring
+from oracle.baseline.goal_order import goal_position, goal_sort_key
 from oracle.baseline.models import Edge, Entity, Evidence
 from oracle.models import AuditEvent
 from oracle.priorities import pushback, reason_check
@@ -235,6 +236,8 @@ async def load_features(
                     goal_id=str(goal.id),
                     parent_key=parent.key if parent else None,
                     parent_title=parent.title if parent else None,
+                    position=goal_position(goal.attrs),
+                    order=goal_sort_key(goal),
                 )
             )
         elif edge.type == "depends_on" and edge.src_id in inputs and edge.dst_id in inputs:
@@ -277,7 +280,7 @@ async def load_features(
             )
         )
     for f in inputs.values():
-        f.goals.sort(key=lambda g: g.goal_key)
+        f.goals.sort(key=lambda g: (g.order, g.goal_key))
         f.depends_on.sort()
     await _track_record(db, list(inputs.values()))
     return sorted(inputs.values(), key=lambda f: f.key)

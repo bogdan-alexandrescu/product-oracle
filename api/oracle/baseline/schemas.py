@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from oracle.baseline.goal_order import goal_position
 from oracle.baseline.goals import GoalCheck, goal_check
 
 EntityType = Literal[
@@ -117,11 +118,15 @@ class EntityOut(ORM):
     # #345: the goal this one is a subgoal of, and a goal's progress with its roll-up.
     parent_id: uuid.UUID | None = None
     progress: GoalProgress | None = None
+    # goal-order: a goal's place on every page (its attrs.position, 1 = first); null otherwise.
+    position: int | None = None
 
     @model_validator(mode="after")
     def _check_goal(self) -> "EntityOut":
         if self.type == "goal" and self.goal_check is None:
             self.goal_check = GoalCheck(**goal_check(self.attrs, status=self.status))
+        if self.type == "goal":
+            self.position = goal_position(self.attrs)
         return self
 
 
