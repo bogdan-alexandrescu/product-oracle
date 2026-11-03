@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from "./test";
 
 import { BEFORE_DRAFTING } from "../lib/api/mock/intake";
+import { MOCK_RUN_START_REFUSED_KEY } from "../lib/api/mock/server";
 import { MOCK_TEAM_FOLLOW_UP } from "../lib/api/mock/interviews";
 import { login } from "./helpers";
 
@@ -21,6 +22,9 @@ import { login } from "./helpers";
  * - "research": protects=Research this says "Research proposed: waits for approval" with a link
  *   to the proposal; Accept starts the research and the question links its run, which runs;
  *   fails_when=the question says "Being researched" while nothing runs, or the run is a draft.
+ * - "research refused": protects=when Accept cannot start the research, the proposal and the
+ *   question say it did not start and why; fails_when=they say "Being researched" or only
+ *   "Open the run" to a draft nobody can start; no_claim=the run page's own controls.
  */
 
 const thread = (page: Page) => page.getByTestId("intake-thread");
@@ -42,10 +46,10 @@ async function openBrief(page: Page) {
   await expect(mine(page)).toHaveCount(2);
 }
 
+// The panel shows on this desktop-sized page; its Answered count is always checked.
 async function answeredCount(page: Page): Promise<number> {
-  const panel = page.getByTestId("intake-inspector");
-  if (await panel.isVisible()) return Number((await panel.getByTestId("stat-answered").innerText()).replace(/\D/g, ""));
-  return -1;
+  await expect(answered(page)).toBeVisible();
+  return Number((await answered(page).innerText()).replace(/\D/g, ""));
 }
 
 test("long answer: one Send answer saves it and the panel counts it", async ({ page }) => {
@@ -58,7 +62,7 @@ test("long answer: one Send answer saves it and the panel counts it", async ({ p
   await expect(first.getByTestId("answer")).toContainText(LONG.slice(0, 80));
   await expect(first.getByTestId("follow-up")).toHaveCount(0);
   await expect(page.getByText("Something went wrong")).toHaveCount(0);
-  if (before >= 0) await expect(answered(page)).toContainText(String(before + 1));
+  await expect(answered(page)).toContainText(String(before + 1));
 });
 
 test("lost reply: the send says why and keeps the text; sending again saves it once", async ({ page }) => {
@@ -89,13 +93,13 @@ test("follow-up counts: an answer Oracle follows up on counts at once; the reply
   await first.getByRole("button", { name: "Send answer" }).click();
   await expect(first.getByTestId("follow-up")).toContainText(MOCK_TEAM_FOLLOW_UP);
   await expect(first.getByTestId("answer")).toContainText("Checkout time.");
-  if (before >= 0) await expect(answered(page)).toContainText(String(before + 1));
+  await expect(answered(page)).toContainText(String(before + 1));
 
   await first.getByLabel("Your reply").fill("Checkout time for returning buyers, confirmed by the support lead.");
   await first.getByRole("button", { name: "Reply", exact: true }).click();
   await expect(first.getByTestId("answer")).toHaveCount(1);
   await expect(first.getByTestId("answer")).toContainText("returning buyers");
-  if (before >= 0) await expect(answered(page)).toContainText(String(before + 1));
+  await expect(answered(page)).toContainText(String(before + 1));
 });
 
 test("research: Research this waits for approval with a link; Accept starts the research", async ({ page }) => {
@@ -125,4 +129,27 @@ test("research: Research this waits for approval with a link; Accept starts the 
   await expect(page).toHaveURL(/\/runs\//);
   await expect(page.getByTestId("run-progress").first()).toBeVisible();
   await expect(page.getByTestId("run-progress").first()).not.toHaveText("Not started");
+});
+
+test("research refused: an Accept that cannot start the research says why", async ({ page }) => {
+  const why = "No Claude account can take the run: add one in Settings";
+  await page.addInitScript(([key, words]) => localStorage.setItem(key, words), [MOCK_RUN_START_REFUSED_KEY, why] as const);
+  await openBrief(page);
+  const first = mine(page).nth(0);
+  await first.getByRole("button", { name: "Answer", exact: true }).click();
+  await first.getByRole("button", { name: "Research this" }).click();
+  const research = first.getByTestId("question-research");
+  await research.getByRole("link", { name: "See the proposal" }).click();
+  const card = page.locator(`[id^="proposal-"]`).filter({ hasText: "Research:" }).first();
+  await card.getByRole("button", { name: "Accept" }).click();
+  await expect(card.getByTestId("proposal-status")).toHaveText("Accepted");
+  await expect(card).toContainText(`Research did not start: ${why}`);
+  await expect(card.getByRole("link", { name: "Open the run" })).toHaveCount(0);
+
+  await page.getByRole("tab", { name: /^Questions/ }).click();
+  const after = mine(page).nth(0).getByTestId("question-research");
+  await expect(after).toContainText("Research did not start");
+  await expect(after).toContainText(why);
+  await expect(after).not.toContainText("Being researched");
+  await expect(after.getByRole("link", { name: "Open the run" })).toHaveCount(0);
 });
