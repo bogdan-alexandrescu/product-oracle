@@ -10,21 +10,26 @@ import uuid
 import pytest
 from sqlalchemy import select
 
+from oracle.baseline.models import Proposal
 from oracle.intake import answers as intake_answers
 from oracle.llm import gateway
 from oracle.runs import service as runs_service
 from oracle.runs.models import Run
 from oracle.swarm import FakeRuntime, set_runtime
 from oracle.tenancy import tenant_session
+from oracle.v2.models import ChangeEvent
 from tests.claude_account_helpers import add_account, window
 from tests.intake_helpers import (
     answer,
+    ask_of,
     batch,
     company,
+    create_intake,
     intake_with_source,
     question_for,
     summary,
 )
+from tests.test_intake import _document
 from tests.test_interviews_team import (
     answers_of,
     follow_up,
@@ -210,12 +215,6 @@ async def test_the_reply_to_a_follow_up_reaches_the_answers_proposals(client, ct
     """protects=the reply to Oracle's follow-up reaches the PRD patch and the baseline
     proposal made of the answer, and the change is recorded; fails_when=they keep the
     thin first answer; no_claim=what the model judges thin."""
-    from tests.test_intake import _document
-
-    from oracle.baseline.models import Proposal
-    from oracle.v2.models import ChangeEvent
-    from tests.intake_helpers import ask_of, create_intake
-
     doc = await _document(client, ctx)
     out = await create_intake(client, ctx, who="approver", document=doc)
     intake_id = out["intake"]["id"]
