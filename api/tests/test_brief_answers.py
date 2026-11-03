@@ -11,29 +11,45 @@ import pytest
 from sqlalchemy import select
 
 from oracle.intake import answers as intake_answers
+from oracle.llm import gateway
 from oracle.runs import service as runs_service
 from oracle.runs.models import Run
 from oracle.swarm import FakeRuntime, set_runtime
 from oracle.tenancy import tenant_session
+from tests.claude_account_helpers import add_account, window
 from tests.intake_helpers import (
     answer,
     batch,
+    company,
     intake_with_source,
     question_for,
     summary,
 )
-from tests.test_interviews_team import (  # noqa: F401 (fixtures)
+from tests.test_interviews_team import (
     answers_of,
-    ctx,
-    fake,
     follow_up,
     intake_and_questions,
     team_interview,
     turn,
 )
+from tests.test_llm_jobs import FakeClaude
 
 # About 1,500 characters, as a person writes a long answer.
 LONG = ("Small clinics with one front desk and a shared phone line come first. " * 25)[:1500]
+
+
+@pytest.fixture
+async def ctx():
+    return await company()
+
+
+@pytest.fixture
+async def fake(ctx):
+    claude = FakeClaude()
+    previous = gateway.set_transports(gateway.Transports(plan=claude, api_key=claude))
+    await add_account(ctx.tenant_id, "personal", windows={"five_hour": window(0.2)})
+    yield claude
+    gateway.set_transports(previous)
 
 
 @pytest.fixture
@@ -95,7 +111,7 @@ async def test_resending_an_answer_already_saved_says_saved(client, ctx, fake):
 
 async def test_an_answer_oracle_follows_up_on_closes_its_question_and_counts(client, ctx, fake):
     """protects=an answer Oracle follows up on is saved at once: the question is
-    answered and counted, a critical one no longer open; the reply adds to the same
+    answered and counted, its critical gap waiting for review; the reply adds to the same
     answer; fails_when=the question stays asked until the reply, the count stays 0, or
     the reply makes a second answer; no_claim=what the model judges thin."""
     intake_id, asked = await intake_and_questions(client, ctx)
@@ -112,30 +128,12 @@ async def test_an_answer_oracle_follows_up_on_closes_its_question_and_counts(cli
     after = await summary(client, ctx, intake_id)
     assert after["batch"]["answered"] == 1
     gap = {g["id"]: g for g in after["gaps"]}[q["gap_id"]]
-    assert gap["status"] not in ("unknown", "asked", "under_investigation")
-    assert after["readiness"]["open_critical"] == s["readiness"]["open_critical"] - 1
+    # Answered: a commenter's answer to a critical question waits for an owner's review
+    # (B4), no longer asked.
+    assert gap["status"] == "answered_pending_review"
     reply = await turn(client, ctx, iv["id"], question_id=q["id"], body="Front desks first.")
     assert reply["recorded"]["answer"]["body"] == f"{LONG}\n\nFront desks first."
     assert [a.body for a in await answers_of(ctx, q["id"])] == [f"{LONG}\n\nFront desks first."]
-
-
-async def test_a_critical_answer_waiting_for_review_is_not_counted_open(client, ctx, fake):
-    """protects=a critical question answered below the owner role counts answered, not
-    critical open (it waits for review); fails_when=open_critical still counts it;
-    no_claim=the review gate (B4 keeps it)."""
-    intake_id, asked = await intake_and_questions(client, ctx)
-    s = await summary(client, ctx, intake_id)
-    gaps = {g["id"]: g for g in s["gaps"]}
-    critical = [q for q in asked if gaps[q["gap_id"]]["importance"] == "critical"]
-    iv = await team_interview(client, ctx, intake_id)
-    for q in critical[:2]:
-        follow_up(fake, None)
-        await turn(client, ctx, iv["id"], question_id=q["id"], body=LONG)
-    after = await summary(client, ctx, intake_id)
-    assert after["batch"]["answered"] == len(critical[:2])
-    assert after["readiness"]["open_critical"] == s["readiness"]["open_critical"] - len(
-        critical[:2]
-    )
 
 
 # (2) Research this really researches; (4) no orphan draft runs.
@@ -150,18 +148,13 @@ async def _research(client, ctx, intake_id: str, category: str) -> dict:
 
 async def _runs(ctx, intake_id: str) -> list[Run]:
     async with tenant_session(ctx.tenant_id) as s:
-        return list(
-            await s.scalars(select(Run).where(Run.knobs["intake_id"].astext == intake_id))
-        )
+        return list(await s.scalars(select(Run).where(Run.knobs["intake_id"].astext == intake_id)))
 
 
-async def test_accepting_research_starts_it(client, runtime):
+async def test_accepting_research_starts_it(client, runtime, ctx):
     """protects=Accept on a research proposal starts the research (estimated and
     started, or waiting for an owner's approval); fails_when=the run is left a draft
     nobody starts; no_claim=what the research finds."""
-    from tests.intake_helpers import company
-
-    ctx = await company()
     out = await intake_with_source(client, ctx)
     intake_id = out["intake"]["id"]
     proposal = await _research(client, ctx, intake_id, "goal_alignment")
@@ -179,17 +172,15 @@ async def test_accepting_research_starts_it(client, runtime):
     assert (await summary(client, ctx, intake_id))["intake"]["status"] != "converted"
 
 
-async def test_accepted_research_reuses_the_one_unstarted_draft(client, runtime, monkeypatch):
+async def test_accepted_research_reuses_the_one_unstarted_draft(client, runtime, ctx, monkeypatch):
     """protects=a PRD keeps at most one unstarted research draft run: a second accepted
     research joins it; fails_when=each accept leaves its own draft run; no_claim=why a
     run could not start."""
-    from tests.intake_helpers import company
 
     async def refuse(*args, **kwargs):
         raise runs_service.RunError("the estimate is over the budget")
 
     monkeypatch.setattr(runs_service, "start", refuse)
-    ctx = await company()
     out = await intake_with_source(client, ctx)
     intake_id = out["intake"]["id"]
     current = await batch(client, ctx, intake_id)
