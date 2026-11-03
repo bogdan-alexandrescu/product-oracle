@@ -39,6 +39,8 @@ import {
 } from "@/lib/simple-home";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, waitingChanged } from "@/lib/waiting";
+import { MkHomeBar, MkHomeEdit, MkMark, MkOrderLine, useMkTick } from "@/components/simple/MkGoalOrder"; // MOCK-HOOK
+import { mk } from "@/lib/mk-goalorder"; // MOCK-HOOK
 
 type Change = Schemas["SimpleChangeOut"];
 type Decision = Schemas["DecisionOut"];
@@ -264,7 +266,10 @@ export default function SimpleHome() {
     return ids;
   }, [toDecide, broken]);
   const proposedGoals = (goals.data ?? []).filter((g) => g.type === "goal" && g.status === "proposed").length;
-  const tiles = useMemo(() => (goals.data ? goalTiles(goals.data, roadmap.data, waitingItems) : undefined), [goals.data, roadmap.data, waitingItems]);
+  const mkTick = useMkTick(); // MOCK-HOOK
+  const [mkEdit, setMkEdit] = useState(() => mk("go1") === "b" && mk("open") === "1"); // MOCK-HOOK
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- MOCK-HOOK: mkTick re-sorts after a reorder
+  const tiles = useMemo(() => (goals.data ? goalTiles(goals.data, roadmap.data, waitingItems) : undefined), [goals.data, roadmap.data, waitingItems, mkTick]); // MOCK-HOOK
   // A new company (no goals yet) leads with its setup; an established company's Simple Home keeps
   // its picked design (Detailed Home keeps the checklist behind its Set up chip).
   const setupFirst = !!setup && tiles !== undefined && tiles.length === 0;
@@ -597,16 +602,18 @@ export default function SimpleHome() {
       {setupFirst && setup && (can("put_setting") || !setupQ.data?.welcome) && <SetupCard setup={setup} owner={can("put_setting")} onHide={() => void hideSetup()} />}
 
       <section aria-label="Goals" data-testid="home-goals">
+        <MkOrderLine /> {/* MOCK-HOOK */}
+        <MkHomeBar canOrder={can("confirm_entity")} editing={mkEdit} onEdit={setMkEdit} /> {/* MOCK-HOOK */}
         <Block q={{ ...goals, data: tiles }} testId="home-goals" skeleton={<GoalBandSkeleton />}>
           {(rows) =>
-            rows.length === 0 ? (
+            mkEdit && rows.length > 0 ? <MkHomeEdit rows={rows} onDone={() => setMkEdit(false)} /> /* MOCK-HOOK */ : rows.length === 0 ? (
               <p className="simple-small" data-testid="home-goals-empty">
                 No confirmed company goals yet.
               </p>
             ) : (
               <ul className="simple-goal-band">
-                {rows.map((g) => (
-                  <li key={g.id} data-testid="home-goal" className="simple-goal">
+                {rows.map((g, mkI) => ( /* MOCK-HOOK: mkI */
+                  <li key={g.id} data-testid="home-goal" className={`simple-goal ${mk("go2") === "b" && mkI === 0 ? "mk-go-first" : ""}`} /* MOCK-HOOK */>
                     {/* With Ask open the cards narrow: the guardrail tag and the share each keep one line, the share moving under. */}
                     {(g.guardrail || share(g.weight) != null) && (
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -625,6 +632,7 @@ export default function SimpleHome() {
                       title={g.code ? `${g.code} · ${g.name}` : g.name}
                       className="font-semibold text-text hover:underline"
                     >
+                      <MkMark index={mkI} /> {/* MOCK-HOOK */}
                       {g.name}
                     </Link>
                     {g.path && (

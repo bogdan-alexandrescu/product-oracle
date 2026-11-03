@@ -27,6 +27,8 @@ import {
 import { GoalFields, goalDraft, goalPatch, gapLabel, Measurements, missingTip, problemsOf, type GoalDraft, type GoalProblem, type PlanningHorizons } from "./goal-fields";
 import { LIMIT_LABEL, PromoteForm, suggestedBlocker } from "./PromoteBlocker";
 import { SubgoalActions } from "./subgoal-actions";
+import { MkPlace } from "@/components/simple/MkGoalOrder"; // MOCK-HOOK
+import { mk } from "@/lib/mk-goalorder"; // MOCK-HOOK
 import {
   ConfidenceRing,
   contributionOf,
@@ -423,6 +425,11 @@ export function EntityDrawer({
         )}
         {d && (
           <>
+            {mk("go1") === "d" && d.type === "goal" && d.status === "confirmed" && !d.parent_id && ( /* MOCK-HOOK: GO1 d */
+              <InspectorSection label="Order"> {/* MOCK-HOOK */}
+                <MkPlace title={d.title} canOrder={canWrite} /> {/* MOCK-HOOK */}
+              </InspectorSection> /* MOCK-HOOK */
+            )}
             {d.locked && (
               <InspectorSection
                 label="Lock"

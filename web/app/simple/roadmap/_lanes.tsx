@@ -1,5 +1,7 @@
 "use client";
 
+import { MkMark, MkOrderLine } from "@/components/simple/MkGoalOrder"; // MOCK-HOOK
+import { mk } from "@/lib/mk-goalorder"; // MOCK-HOOK
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 
 import { calendarDay } from "@/lib/dates";
@@ -381,6 +383,8 @@ export interface LanesProps {
 const goalLane = (key: string) => key !== "none" && !key.startsWith("plan-goal:");
 
 export function Lanes(props: LanesProps) {
+  // MOCK-HOOK: GO2 c's one line over the goal lanes.
+  if (props.lane === "goal" && mk("go2") === "c") return <><MkOrderLine />{props.compact ? <PhoneLanes {...props} /> : <DesktopLanes {...props} />}</>; // MOCK-HOOK
   return props.compact ? <PhoneLanes {...props} /> : <DesktopLanes {...props} />;
 }
 
@@ -913,7 +917,10 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
               style={{ height: geo[n].height }}
               className="flex min-w-0 flex-col justify-center border-t border-[var(--simple-rule)] pr-2.5 pl-4"
             >
-              <b className={`text-[15px] leading-5 font-bold ${l.kind === "below" ? "text-text2" : ""}`}>{l.title}</b>
+              <b className={`text-[15px] leading-5 font-bold ${l.kind === "below" ? "text-text2" : ""}`}>
+                {lane === "goal" && l.kind === "group" && l.key !== "none" && <MkMark index={n} />} {/* MOCK-HOOK */}
+                {l.title}
+              </b>
               <small className="text-[12.5px] leading-4 text-text-faint" data-testid="lane-count">
                 {l.count} {l.count === 1 ? "item" : "items"}
                 {l.kind === "pm" ? " · no engineering" : ""}
@@ -1558,7 +1565,9 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
                   <rect x={0} y={midY - 9} width={words + 4} height={18} rx={4} fill="var(--simple-paper)" />
                   <text y={midY} dominantBaseline="central" fill="var(--text)">
                     <tspan fontSize={14} fontWeight={700} data-testid="phone-lane-name">
+                      {mk("go2") === "a" && l.kind === "group" ? `${lanes.indexOf(l) + 1}  ` : "" /* MOCK-HOOK */}
                       {l.title}
+                      {mk("go2") === "b" && l.kind === "group" && lanes.indexOf(l) === 0 ? " · Main goal" : "" /* MOCK-HOOK */}
                     </tspan>
                     <tspan dx={4} fontSize={12.5} fill="var(--text-faint)" data-testid="lane-count">
                       {count}

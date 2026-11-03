@@ -1,5 +1,6 @@
 import { byTitle } from "@/app/baseline/_components/order";
 import { named, type Names } from "@/lib/codes";
+import { mkOn, mkRank } from "@/lib/mk-goalorder"; // MOCK-HOOK
 
 /** The fields the goal tree reads (an EntityOut is one). */
 type GoalLike = {
@@ -65,7 +66,7 @@ export function goalTree<T extends GoalLike>(entities: T[], numbered: GoalLike[]
   const out: GoalNode<T>[] = [];
   live
     .filter((g) => !isSub(g))
-    .sort(heaviest)
+    .sort(mkOn() ? (a, b) => mkRank(a.title) - mkRank(b.title) : heaviest) // MOCK-HOOK
     .forEach((g, i) => {
       const subs = live.filter((s) => isSub(s) && s.parent_id === g.id).sort(heaviest);
       const own = named(g.title, g.key);

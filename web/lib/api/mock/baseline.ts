@@ -11,6 +11,7 @@ import { DEPOSITS_IDS } from "./blockers";
 import { describe, proposer } from "./describe";
 import { goalCheck, readText, refusedProblems, todayIso, unitOk, type GoalProblem } from "./goals";
 import { MOCK_SCENARIO_KEY, PRODUCT_CHAT_ID, seededItemId } from "./ids";
+import { mkGoals, mkOn } from "@/lib/mk-goalorder"; // MOCK-HOOK
 import { routeEvidenceLinks } from "./public-links";
 
 type Role = Schemas["Me"]["role"];
@@ -267,7 +268,7 @@ export function seedBaseline(uuid: () => string): BaselineState {
   // typed and owned (by the approver, see attributeGoalOwner), paid conversion typed without
   // an owner, early churn still on text, so it is Not measurable and offers Fill from text.
   const longWords = typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === LONG_WORDS_SCENARIO;
-  const activation = entity("goal", "g.activation", longWords ? "G-A Internationalization" : "Raise activation", {
+  const activation = entity("goal", "g.activation", longWords ? "G-A Internationalization" : mkOn() ? "Faster activation" : "Raise activation" /* MOCK-HOOK */, {
     body: "More new accounts reach their first successful order in the first week.",
     attrs: {
       weight: 0.5, metric: "Accounts that finish setup within 7 days", unit: "%", comparison: "at_least", target: 45, start: 31,
@@ -291,6 +292,10 @@ export function seedBaseline(uuid: () => string): BaselineState {
     status: "proposed",
     confidence: 0.45,
   });
+  // MOCK-HOOK: mk-goalorder's other invented goals (one archived in the hard case).
+  if (mkOn()) // MOCK-HOOK
+    for (const g of mkGoals().filter((x) => x.key !== "faster-activation" && x.key !== "paid-conversion")) // MOCK-HOOK
+      entity("goal", `g.${g.key}`, g.title, { attrs: { weight: 0.1, metric: "Weekly count", target_text: "up 10%" }, status: g.archived ? "rejected" : "confirmed", confidence: 0.6 }); // MOCK-HOOK
   // Activation's value on the first of each month, as people recorded it.
   [31, 33, 32, 35, 34, 36, 38].forEach((value, i) => {
     const measured_on = `2026-${String(4 + i).padStart(2, "0")}-01`;

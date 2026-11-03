@@ -24,6 +24,8 @@ import {
 } from "./common";
 import { figure, fillable, gapLabel, horizonLabel, missingTip, OwnerName, targetText, typedTarget, useOwners } from "./goal-fields";
 import { byTitle } from "./order";
+import { MkHandle } from "@/components/simple/MkGoalOrder"; // MOCK-HOOK
+import { mk, mkOrder } from "@/lib/mk-goalorder"; // MOCK-HOOK
 
 type Props = {
   graph: GraphOut;
@@ -478,6 +480,10 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       cell: (g) => <ConfidenceRing value={g.confidence} evidence={g.evidence_count} low={low} size={32} />,
     },
   ];
+  // MOCK-HOOK: GO1 a, a handle and the goal's place before each top-level goal, for those who may order.
+  if (mk("go1") === "a" && canWrite) // MOCK-HOOK
+    goalCols.unshift({ key: "mk-order", header: <span className="sr-only">Order</span>, width: "64px", phone: "action", cell: (g) => <MkHandle title={g.title} top={!tree.get(g.id)?.parentId} /> }); // MOCK-HOOK
+  const mkMid = mk("go1") === "a" && mk("phase") === "mid" ? mkOrder() : null; // MOCK-HOOK
   // A commenter's Make measurable has a phone row of its own too; on a wide screen it stays
   // under the goal's name, so their column there is a sliver.
   if (canWrite || onMakeMeasurable) {
@@ -644,7 +650,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
           rowKey={(g) => g.id}
           selected={selectedId}
           onSelect={(id) => onOpen(id)}
-          rowProps={(g) => ({ "data-testid": `goal-${g.key}` })}
+          rowProps={(g) => ({ "data-testid": `goal-${g.key}`, "data-mk": mkMid ? (g.title === mkMid[2] ? "drag" : g.title === mkMid[0] ? "drop" : undefined) : undefined })} // MOCK-HOOK
           // qa-plan-37: Add subgoal opens right under the goal it is for, not above the table.
           detail={(g) =>
             adding?.id === g.id && onAddSubgoal ? (

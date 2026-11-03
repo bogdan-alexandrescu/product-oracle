@@ -16,6 +16,7 @@ import { newCompany, seeded, stableUuid } from "./ids";
 import { betSubject, flowFor, type VisualsDb } from "./simple-visuals";
 import type { OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
+import { mkGoals, mkOn, mkRank } from "@/lib/mk-goalorder"; // MOCK-HOOK
 
 type Item = Schemas["SimpleRoadmapItem"];
 type Suggestion = Schemas["DateSuggestionOut"];
@@ -214,6 +215,8 @@ export function knowTalkGoals(db: { items: { key: string }[]; plan?: unknown }):
   }
 }
 const GOALS_KNOWN: Record<string, boolean> = {};
+// MOCK-HOOK: mk-goalorder's invented goals name themselves on every load (the seed is kept, this map is not).
+if (mkOn()) for (const g of mkGoals().filter((x) => !x.archived)) GOALS[g.key] = g.title; // MOCK-HOOK
 
 /** The PRD's own code of a section an item came from ("f-06" -> "F-06"); null when the key is no code (service.py). */
 export function prdCode(section: string | null | undefined): string | null {
@@ -353,13 +356,27 @@ export function seedSimpleDeciders(people: { decider: string; approver: string; 
   return db;
 }
 
+// MOCK-HOOK: mk-goalorder's invented work for the goals the default seed has no items for.
+const MK_ITEMS: SeedItem[] = [ // MOCK-HOOK
+  { key: "mk-trial-nudge", title: "Trial end reminders", horizon: "now", roadmap: "pricing-roadmap", goal: "paid-conversion", confidence: "high", start: 5, end: 40, source: "typed", status: "in_progress" }, // MOCK-HOOK
+  { key: "mk-plan-compare", title: "Plan compare page", horizon: "next", roadmap: "pricing-roadmap", goal: "paid-conversion", confidence: "medium", start: 45, end: 85, source: "typed" }, // MOCK-HOOK
+  { key: "mk-mute-rules", title: "Smart mute rules", horizon: "now", roadmap: "alerts-roadmap", goal: "quiet-alerts", track: "alerts", confidence: "medium", start: 15, end: 55, source: "typed", status: "in_progress" }, // MOCK-HOOK
+  { key: "mk-help-search", title: "Help center search", horizon: "now", roadmap: "onboarding-roadmap", goal: "support-load", confidence: "high", start: 0, end: 35, source: "typed", status: "in_progress" }, // MOCK-HOOK
+  { key: "mk-first-report", title: "First report wizard", horizon: "next", roadmap: "onboarding-roadmap", goal: "guided-week", confidence: "low", start: 40, end: 80, source: "typed" }, // MOCK-HOOK
+  { key: "mk-team-plans", title: "Team plan bundles", horizon: "next", roadmap: "pricing-roadmap", goal: "mid-size", confidence: "medium", start: 50, end: 90, source: "typed" }, // MOCK-HOOK
+  { key: "mk-fast-load", title: "Lighter dashboard load", horizon: "now", roadmap: "alerts-roadmap", goal: "page-speed", confidence: "high", start: 10, end: 30, source: "engineering", status: "in_progress" }, // MOCK-HOOK
+]; // MOCK-HOOK
+
 export function seedSimpleRoadmap(): SimpleDb {
   // A new company: no items yet, so no plan, broken links, priorities or key dates (Detailed says no goals).
   // Nor Oracle's goal suggestions (no goal is confirmed yet: none are made on its own).
   if (newCompany()) return { items: [], ids: {}, own: {}, suggestions: [], decisions: {}, key_dates: {}, goal_suggestions: [], goal_jobs: {}, auto_done: Object.keys(GOALS) };
+  // MOCK-HOOK: mk-goalorder: every invented goal names itself and has work on the roadmap.
+  const mkSeed: SeedItem[] = mkOn() ? MK_ITEMS.filter((i) => mkGoals().some((g) => g.key === i.goal && !g.archived)) : []; // MOCK-HOOK
+  if (mkOn()) for (const g of mkGoals().filter((x) => !x.archived)) GOALS[g.key] = g.title; // MOCK-HOOK
   return seeded("simple-roadmap", () => ({
-    items: SEED.map((s) => ({ ...s })),
-    ids: Object.fromEntries(SEED.map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])),
+    items: [...SEED, ...mkSeed].map((s) => ({ ...s })), // MOCK-HOOK
+    ids: Object.fromEntries([...SEED, ...mkSeed].map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])), // MOCK-HOOK
     own: {},
     suggestions: [],
     decisions: { "alert-digest": [{ number: 7, title: "Send the digest weekly or daily?" }] },
@@ -955,7 +972,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   return {
     today, group,
     windows: { now: { start: w.now[0], end: w.now[1] }, next: { start: w.next[0], end: w.next[1] }, later: { start: w.later[0], end: w.later[1] } },
-    groups: [...groups.entries()].sort((a, b) => (a[1].sort < b[1].sort ? -1 : 1)).map(([key, g]) => ({ key, title: g.title, item_ids: g.item_ids })),
+    groups: [...groups.entries()].sort((a, b) => (mkOn() && group === "goal" && a[0] !== "none" && b[0] !== "none" ? mkRank(a[1].title) - mkRank(b[1].title) : a[1].sort < b[1].sort ? -1 : 1)).map(([key, g]) => ({ key, title: g.title, item_ids: g.item_ids })), // MOCK-HOOK
     items: shown,
     milestones: [
       // The digest's Beta (a new company has no digest, so no Beta).

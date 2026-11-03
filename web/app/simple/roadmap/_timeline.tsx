@@ -1,5 +1,6 @@
 "use client";
 
+import { MkMark } from "@/components/simple/MkGoalOrder"; // MOCK-HOOK
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 import { APPLIED_EVENT, lastPreview, PREVIEW_EVENT, type AppliedDetail, type ChatPreview, type PreviewDetail } from "@/lib/api/simple-chat";
@@ -686,6 +687,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                 <>
                   <span className={`flex min-w-0 items-baseline ${wrapRows ? "flex-wrap gap-x-2" : "gap-2"}`}>
                     <span className={`${wrapRows ? "min-w-0 break-words" : "truncate"} font-semibold ${compact ? "text-sm leading-[16px]" : "text-[15px] leading-tight"}`} title={r.title}>
+                      {lane === "goal" && !r.below && goalLane(r.key) && <MkMark index={l.rows.filter((x) => x.kind === "group" && !x.below && goalLane(x.key)).indexOf(r)} />} {/* MOCK-HOOK */}
                       {r.title}
                     </span>
                     {r.count != null && !r.below && (
