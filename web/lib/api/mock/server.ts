@@ -3,6 +3,7 @@
  * into openapi-fetch as its `fetch`, so pages call the typed client exactly as they
  * will against the real API. State lives in localStorage, so it survives reloads.
  */
+import { goalMapOut } from "./goal-map"; // MOCK-HOOK
 import type { Schemas } from "@/lib/api/client";
 import { addMonths, todayIn } from "@/lib/dates";
 import { sectionDiff } from "@/lib/diff";
@@ -6184,6 +6185,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (input?.kind === "pricing") return startPricing(db, me, input);
   }
   if (p[1] === "priorities" && p[2] === "calibration" && p.length === 3 && m === "GET") return json(200, trackRecord(db));
+  if (p[1] === "simple" && p[2] === "goal-map" && m === "GET") return json(200, goalMapOut(url.searchParams)); // MOCK-HOOK
   const handled = await laneF(db, req, p, m, me.role, localStorage.getItem(MOCK_SCENARIO_KEY), { id: me.id, name: memberName(me) });
   // E1: a draft started from the template's empty skeleton has nothing to derive yet.
   if (handled?.status === 201 && p[1] === "drafts" && p.length === 2 && m === "POST") {
