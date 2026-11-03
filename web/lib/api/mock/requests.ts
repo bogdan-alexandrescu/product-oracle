@@ -1120,7 +1120,7 @@ export function behindBriefRefusal(
   db: RequestsDb,
   ids: string[],
   titles: { intake: (id: string) => string | null; document: (id: string) => string | null; trashed?: (id: string) => string | null },
-): { status: number; detail: string } | null {
+): { status: number; detail: string | { code: string; message: string } } | null {
   const rows = ids.map((id) => db.requests.find((r) => r.id === id));
   if (!rows.every((r) => r?.state === "qualified")) return { status: 422, detail: "Only qualified requests can be behind a PRD" };
   for (const r of rows as Row[]) {
@@ -1128,7 +1128,8 @@ export function behindBriefRefusal(
     if (r.document_id) {
       const live = titles.document(r.document_id);
       const gone = live == null ? titles.trashed?.(r.document_id) : null;
-      if (gone != null) return { status: 409, detail: `"${r.title}" is still linked to the PRD "${gone}", which is in Trash. Release it to link it here.` };
+      // The code is what the app's Release it reads (service.LINKED_IN_TRASH).
+      if (gone != null) return { status: 409, detail: { code: "linked_in_trash", message: `"${r.title}" is still linked to the PRD "${gone}", which is in Trash. Release it to link it here.` } };
       return { status: 409, detail: `"${r.title}" is already linked to the PRD "${live ?? "another PRD"}"` };
     }
   }

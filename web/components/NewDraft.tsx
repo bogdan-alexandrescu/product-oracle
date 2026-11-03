@@ -24,7 +24,7 @@ import {
 import { RequestsBehind } from "@/components/RequestsBehind";
 import { ThemeThumbnail } from "@/components/ThemePreview";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
 import { namedText } from "@/lib/codes";
 import { unwrapProblems, ProblemsError } from "@/lib/api/problems";
 import { assess, goalViews } from "@/app/home/_goals";
@@ -1169,6 +1169,8 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
   const [requests, setRequests] = useState<string[]>(requestIds);
   const [busy, setBusy] = useState<"continue" | "skeleton" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // New PRD (4): the 409's code, not its words, offers Release it.
+  const [inTrash, setInTrash] = useState(false);
   // QA docs-9: Continue is always there to press; pressing it early says what is missing.
   const [checked, setChecked] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -1246,6 +1248,7 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
       router.push(`/intakes/${out.intake.id}`);
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : errorMessage(err));
+      setInTrash(err instanceof ApiError && err.code === "linked_in_trash");
       setBusy(null);
     }
   }
@@ -1256,6 +1259,7 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
     try {
       await unwrap(api.POST("/v1/requests/release-from-trash", { body: { request_ids: requests } }));
       setError(null);
+      setInTrash(false);
       (document.getElementById(formId) as HTMLFormElement | null)?.requestSubmit();
     } catch (err) {
       setError(errorMessage(err));
@@ -1265,6 +1269,7 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
   }
 
   async function skeleton() {
+    setInTrash(false);
     if (!templateKey || !title.trim()) {
       setError("Give the PRD a title first.");
       return;
@@ -1341,7 +1346,7 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
             <ErrorNote>
               {error}
               {/* New PRD (4): a request still linked to a PRD in Trash is released here, then Continue goes again. */}
-              {error.includes("which is in Trash") && (
+              {inTrash && (
                 <>
                   {" "}
                   <Button variant="ghost" onClick={() => void release()} disabled={releasing}>

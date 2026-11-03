@@ -72,9 +72,15 @@ OWNER_NAMES_REQUESTER = "Only an owner files a request in someone else's name"
 
 
 class RequestError(Exception):
-    def __init__(self, status: int, message: str) -> None:
+    def __init__(self, status: int, message: str, code: str | None = None) -> None:
         super().__init__(message)
         self.status = status
+        # A refusal the app acts on (LINKED_IN_TRASH) carries a code, so it never reads words.
+        self.code = code
+
+
+# New PRD (4): a request still linked to a PRD in Trash; the app offers Release it.
+LINKED_IN_TRASH = "linked_in_trash"
 
 
 def _not_found(what: str = "Request") -> RequestError:
@@ -85,8 +91,8 @@ def _invalid(message: str) -> RequestError:
     return RequestError(422, message)
 
 
-def _conflict(message: str) -> RequestError:
-    return RequestError(409, message)
+def _conflict(message: str, code: str | None = None) -> RequestError:
+    return RequestError(409, message, code)
 
 
 def _forbidden(message: str) -> RequestError:
@@ -1488,7 +1494,8 @@ async def _not_taken(db: AsyncSession, rows: list[ProductRequest]) -> None:
                 if gone is not None:
                     raise _conflict(
                         f'"{row.title}" is still linked to the PRD "{gone.title}", which is '
-                        "in Trash. Release it to link it here."
+                        "in Trash. Release it to link it here.",
+                        LINKED_IN_TRASH,
                     )
             raise _conflict(
                 f'"{row.title}" is already linked to the PRD "{title or "another PRD"}"'

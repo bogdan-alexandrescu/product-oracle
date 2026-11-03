@@ -65,7 +65,8 @@ Approver = Annotated[Principal, Depends(require_role_now("approver"))]
 
 
 def _http(exc: service.RequestError | triage.TriageError) -> HTTPException:
-    return HTTPException(exc.status, str(exc))
+    code = getattr(exc, "code", None)
+    return HTTPException(exc.status, {"code": code, "message": str(exc)} if code else str(exc))
 
 
 @router.get("/requests", response_model=RequestList)
