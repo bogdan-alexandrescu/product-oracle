@@ -224,19 +224,24 @@ for (const [label, size] of [
       await expect(inspector(page).getByRole("link", { name: "Weekly order summary" })).toBeVisible();
     });
 
-    test("Release it follows the code: a live PRD whose title says 'which is in Trash' offers no Release it", async ({ page }) => {
+    test("Release it follows the code: a live PRD whose title says 'which is in Trash' offers no Release it", async ({ page, context }) => {
       await login(page);
       const prd = "Shelf the box which is in Trash";
       await openNewPrd(page);
       await page.getByRole("textbox", { name: "Title" }).fill(prd);
+      await page.getByTestId("template-option-prd-rfc").click();
       await page.getByRole("button", { name: "Start from an empty skeleton instead" }).click();
-      await expect(page).toHaveURL(/\/documents\/[a-z0-9-]+$/);
-      await linkPrd(page, "Weekly summary email", prd);
+      await expect(page).toHaveURL(/\/documents\/shelf-the-box-which-is-in-trash$/);
 
       await openNewPrd(page);
       await page.getByRole("textbox", { name: "Title" }).fill("Weekly order summary");
       await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
       await behind(page).getByRole("checkbox", { name: "Weekly summary email" }).check();
+      // Meanwhile, in a second tab, the request is linked to that live PRD.
+      const other = await context.newPage();
+      await linkPrd(other, "Weekly summary email", prd);
+      await other.close();
+
       await page.getByRole("button", { name: "Continue" }).first().click();
       const alert = page.getByRole("alert").filter({ hasText: "already linked" });
       await expect(alert).toContainText(`"Weekly summary email" is already linked to the PRD "${prd}"`);
