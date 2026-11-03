@@ -49,6 +49,9 @@ KIND_PROVIDER: dict[str, str | None] = {
 assert set(KIND_PROVIDER) == set(SOURCE_KINDS)
 
 CONNECTOR_UNAVAILABLE = "connector not available yet"
+# The sync errors of a source whose connection is gone: a relink clears these, no other.
+NO_CONNECTION = "This source has no connection: pick one of your connections"
+CONNECTION_REMOVED = "The connection was removed: pick another one"
 
 
 class NotFoundError(Exception):
@@ -178,7 +181,7 @@ async def credential_for(
         return None, None
     connection_id = connection_id or source.connection_id
     if connection_id is None:
-        raise InvalidError("This source has no connection: pick one of your connections")
+        raise InvalidError(NO_CONNECTION)
     try:
         credential = await connections.get_credential(db, connection_id, source.owner_user_id)
     except connections.ConnectionUnavailable as e:
@@ -882,8 +885,8 @@ async def relink_sources(db: AsyncSession, conn: Connection) -> list[Source]:
         source.connection_id = conn.id
         source.lost_provider = source.lost_account_id = None
         # Same account: the cursor's position still holds. The sync's "no connection"
-        # error no longer does; the next sync checks the provider again.
-        if source.status == "error":
+        # error no longer does; any other error stands until the next sync.
+        if source.status == "error" and source.last_error in (NO_CONNECTION, CONNECTION_REMOVED):
             source.status = "active"
             source.last_error = None
         source.config_version = Source.config_version + 1

@@ -413,6 +413,10 @@ export function forgetMockConnection(conn: { id: string; provider: string; accou
   store(db);
 }
 
+// As the API's: the sync errors of a source whose connection is gone, the only ones a relink clears.
+const NO_CONNECTION = "This source has no connection: pick one of your connections";
+const CONNECTION_REMOVED = "The connection was removed: pick another one";
+
 /** As the API's relink_sources: the same person connected the same account again, so the
  * sources that lost it are linked to the new connection. Never another account's. */
 export function relinkMockSources(conn: { id: string; provider: string; account_id: string }, email?: string) {
@@ -426,7 +430,7 @@ export function relinkMockSources(conn: { id: string; provider: string; account_
     s.connection_id = conn.id;
     delete db.lost![s.id];
     s.config_version += 1;
-    if (s.status === "error") {
+    if (s.status === "error" && (s.last_error === NO_CONNECTION || s.last_error === CONNECTION_REMOVED)) {
       s.status = "active";
       s.last_error = null;
     }
@@ -802,7 +806,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     // As the API's credential_for: a source a Disconnect left without a connection.
     if (PROVIDER[s.kind] && !s.connection_id) {
       s.status = "error";
-      s.last_error = "This source has no connection: pick one of your connections";
+      s.last_error = NO_CONNECTION;
     }
     if (s.status === "error") {
       return json(200, { source_id: s.id, outcome: "error", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: s.last_error, source: counted(db, s) });
