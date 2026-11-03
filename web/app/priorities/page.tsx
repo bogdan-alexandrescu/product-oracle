@@ -39,6 +39,7 @@ import { displayName } from "@/lib/names";
 import { useScreenSubject } from "@/lib/screen-subject";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { fitWords, textWidth, useFontsReady, useWidth, wordsOf } from "@/lib/words";
+import { usePanelClose } from "@/components/ds/panel-close"; // MOCK-HOOK
 
 import {
   ChangesPanel,
@@ -202,8 +203,10 @@ const CELL_PAD = 16;
 /** The Depends on column, and the room its 13 px text has. */
 const DEPS_WIDTH = 104;
 const DEPS_ROOM = DEPS_WIDTH - CELL_PAD;
+const DEPS_WIDE = 232; // MOCK-HOOK
+const GOAL_WIDE = 232; // MOCK-HOOK
 
-function goalWidth(features: RankedFeature[]): number {
+function goalWidth(features: RankedFeature[], max = GOAL_MAX /* MOCK-HOOK */): number {
   let need = 0;
   for (const f of features)
     for (const g of f.explanation.goals) {
@@ -211,9 +214,9 @@ function goalWidth(features: RankedFeature[]): number {
       const longest = Math.max(0, ...wordsOf(n.name).map((w) => textWidth(w, 500, 15) ?? 0));
       const beside = CELL_PAD + codeTagRoom(n.code) + longest;
       // A name that cannot sit beside its code even at GOAL_MAX goes under it.
-      need = Math.max(need, beside <= GOAL_MAX ? beside : CELL_PAD + longest);
+      need = Math.max(need, beside <= max ? beside : CELL_PAD + longest); // MOCK-HOOK
     }
-  return Math.min(GOAL_MAX, Math.max(GOAL_MIN, Math.ceil(need) + 1));
+  return Math.min(max, Math.max(GOAL_MIN, Math.ceil(need) + 1)); // MOCK-HOOK
 }
 
 /** A feature key as its name only (beside other names, the code adds nothing). */
@@ -990,6 +993,11 @@ function Priorities() {
   const withChanges = order === "changes";
   // qa-plan-14: on a phone the selected feature opens in a bottom sheet, as on Impact.
   const phone = usePhone();
+  const pc = usePanelClose("priorities"); // MOCK-HOOK
+  // PC1: with the panel closed the Goal and Depends on columns take the room it gave back. // MOCK-HOOK
+  const wideCols = !!pc.v && !pc.open; // MOCK-HOOK
+  const depsWidth = wideCols ? DEPS_WIDE : DEPS_WIDTH; // MOCK-HOOK
+  const depsRoom = depsWidth - CELL_PAD; // MOCK-HOOK
   const [sheet, setSheet] = useState(false);
   const pick = (key: string) => {
     setSelected(key);
@@ -1073,7 +1081,7 @@ function Priorities() {
 
   const fonts = useFontsReady();
   // Measured in the fonts the page has, and again in its own once they load (priorities-words).
-  const goalCol = useMemo(() => (fonts ? goalWidth(rows ?? []) : GOAL_MIN), [fonts, rows]);
+  const goalCol = useMemo(() => (fonts ? goalWidth(rows ?? [], wideCols ? GOAL_WIDE : GOAL_MAX) : GOAL_MIN), [fonts, rows, wideCols]); // MOCK-HOOK
   // The Feature column takes the room left, so its text's room is read from its header; a
   // phone's card is a whole line wide (its header is for screen readers only).
   const [featureHead, featureHeadWidth] = useWidth();
@@ -1244,7 +1252,7 @@ function Priorities() {
     {
       key: "deps",
       header: "Depends on",
-      width: `${DEPS_WIDTH}px`,
+      width: `${depsWidth}px`, // MOCK-HOOK
       hideOnPhone: true,
       // qa4-plan-1: with the Oracle # column it gives way under 1000 px (the inspector shows
       // it), so the Feature column keeps room for whole words.
@@ -1264,10 +1272,10 @@ function Priorities() {
           <span data-testid="row-deps" className="block text-[13px] leading-[18px] text-text2" title={[text, note].filter(Boolean).join(". ") || undefined}>
             {/* Between words; a word wider than the column hyphenated, never cut bare
                 ("instrumentatio / n", priorities-words). */}
-            {(fonts ? fitWords(text, DEPS_ROOM, 400, 13) : text) || "—"}
+            {(fonts ? fitWords(text, depsRoom /* MOCK-HOOK */, 400, 13) : text) || "—"}
             {note && (
               <span data-testid="row-deps-outside" className="block text-[12px] leading-4 text-warn">
-                {fonts ? fitWords(note, DEPS_ROOM, 400, 12) : note}
+                {fonts ? fitWords(note, depsRoom /* MOCK-HOOK */, 400, 12) : note}
               </span>
             )}
           </span>
@@ -1433,7 +1441,7 @@ function Priorities() {
         )}
         {cmp && <NewFeaturesNote c={cmp} />}
 
-        <Split inspector={!phone && inspector}>
+        <Split inspector={!phone && inspector} panel={pc /* MOCK-HOOK */}>
           <Panel>
             <div className="flex min-h-14 flex-wrap items-center gap-2.5 border-b border-line px-4 py-2.5 max-[600px]:px-3">
               {/* On a phone the method switch and the formula's (i) share one line that never
@@ -1470,6 +1478,11 @@ function Priorities() {
                 />
               </div>
               <span className="flex-1 max-[600px]:hidden min-[601px]:order-2" />
+              {pc.v === "b" && ( // MOCK-HOOK
+                <Button className="min-[601px]:order-4 max-[600px]:hidden" icon={pc.open ? "chevron-right" : "chevron-left"} aria-pressed={!pc.open} aria-controls={inspectorId} data-testid="details-switch" onClick={() => (pc.open ? pc.hide() : pc.setOpen(true))}>
+                  {pc.open ? "Hide details" : "Show details"}
+                </Button>
+              )}
             </div>
             {r && r.cycles.length > 0 && (
               <div
@@ -1496,7 +1509,7 @@ function Priorities() {
               columns={columns}
               rows={rows}
               rowKey={(f) => f.key}
-              selected={current?.key ?? null}
+              selected={pc.v === "c" && !pc.open && !selected ? null : (current?.key ?? null) /* MOCK-HOOK */}
               onSelect={(k) => pick(k)}
               loading={snapshotId ? cq.loading && !cmp : q.loading}
               empty="No features ranked"

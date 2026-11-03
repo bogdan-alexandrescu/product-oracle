@@ -177,6 +177,28 @@ const FEATURES: FeatureSeed[] = [
   },
 ];
 
+// MOCK-HOOK: PC1 mock-ups (mk-panelclose), po-mock-scenario=pc1-long: more features, long goal
+// names and many dependencies, so the Goal and Depends on columns overflow beside the panel. Invented. // MOCK-HOOK
+export const PC1_SCENARIO = "pc1-long"; // MOCK-HOOK
+const PG1 = "Cut the time from sign-up to the first shared project in half"; // MOCK-HOOK
+const PG2 = "Keep monthly churn of team plans under two percent"; // MOCK-HOOK
+const PG3 = "Make checkout accessible for screen reader users"; // MOCK-HOOK
+const pc1 = (key: string, title: string, goals: GoalLink[], depends_on: string[], effort: number, confidence: number): FeatureSeed => ({ // MOCK-HOOK
+  key, title, status: "proposed", goals, depends_on, evidence: [], // MOCK-HOOK
+  attrs: { effort, reach: 1200, impact: 2, confidence, business_value: 5, time_criticality: 3, risk_reduction: 2, job_size: effort, moscow: "should" }, // MOCK-HOOK
+}); // MOCK-HOOK
+const PC1_FEATURES: FeatureSeed[] = [ // MOCK-HOOK
+  pc1("F-9", "Guided first project with sample tasks", [{ goal: "g.pc1-first-project", title: PG1, weight: 3, contribution: 3 }, { goal: "g.activation", title: G1, weight: 3, contribution: 2 }], ["F-1", "F-3", "F-5", "F-10", "F-11", "F-12"], 2, 0.8), // MOCK-HOOK
+  pc1("F-10", "Invite teammates from the project page", [{ goal: "g.pc1-first-project", title: PG1, weight: 3, contribution: 2 }], ["F-3"], 1, 0.7), // MOCK-HOOK
+  pc1("F-11", "Team plan renewal reminders", [{ goal: "g.pc1-churn", title: PG2, weight: 2, contribution: 3 }, { goal: "g.paid-conversion", title: G2, weight: 2, contribution: 1 }], ["F-4", "F-7", "F-8"], 2, 0.6), // MOCK-HOOK
+  pc1("F-12", "Keyboard and screen reader support at checkout", [{ goal: "g.pc1-accessible", title: PG3, weight: 2, contribution: 3 }, { goal: "g.activation", title: G1, weight: 3, contribution: 1 }], ["F-1", "F-2", "F-5"], 3, 0.7), // MOCK-HOOK
+  pc1("F-13", "Usage report for workspace owners", [{ goal: "g.pc1-churn", title: PG2, weight: 2, contribution: 2 }], ["F-4", "F-7", "F-8", "F-11"], 2, 0.5), // MOCK-HOOK
+  pc1("F-14", "Project templates for agencies", [{ goal: "g.pc1-first-project", title: PG1, weight: 3, contribution: 1 }, { goal: "g.pc1-churn", title: PG2, weight: 2, contribution: 1 }], ["F-3", "F-9", "F-10"], 3, 0.6), // MOCK-HOOK
+]; // MOCK-HOOK
+export function pc1Features(scenario: string | null | undefined) { // MOCK-HOOK
+  if (scenario === PC1_SCENARIO && !FEATURES.some((f) => f.key === "F-9")) FEATURES.push(...PC1_FEATURES); // MOCK-HOOK
+} // MOCK-HOOK
+
 const round = (n: number) => Math.round(n * 1000) / 1000;
 const num = (v: unknown): number | null => {
   if (typeof v === "number") return v;
@@ -2024,6 +2046,7 @@ export async function laneF(
   const q = new URL(req.url).searchParams;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
 
+  pc1Features(scenario); // MOCK-HOOK
   if (area === "priorities") {
     if (p.length === 2 && m === "GET") {
       const method = q.get("method") ?? "goal_weighted";
