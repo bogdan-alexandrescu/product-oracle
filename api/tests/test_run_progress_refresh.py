@@ -48,7 +48,8 @@ async def test_a_run_that_could_not_be_checked_is_named_with_why_and_not_counted
     assert out["active_runs"] == 1
     [unchecked] = out["unchecked"]
     assert unchecked["run_id"] == broken["id"]
-    assert unchecked["title"] == broken["flow_title"]
+    doc = broken["document_title"]
+    assert unchecked["title"] == (f"{doc} · " if doc else "") + broken["flow_title"]
     assert unchecked["reason"] and broken["id"] not in unchecked["reason"]
     assert all(u["run_id"] != ok["id"] for u in out["unchecked"])
 

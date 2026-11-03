@@ -8055,7 +8055,10 @@ async def _unchecked(db: AsyncSession, errors: list[str]) -> list[TickUnchecked]
             why.setdefault(uuid.UUID(m.group(1)), _unchecked_reason(m.group(2)))
     if not why:
         return []
-    titles = {r.id: _flow(r).title for r in await db.scalars(select(Run).where(Run.id.in_(why)))}
+    runs = list(await db.scalars(select(Run).where(Run.id.in_(why))))
+    refs = await _refs(db, runs)
+    # As the run's page heads it: "Team onboarding · Baseline to PRD".
+    titles = {r.id: " · ".join(t for t in (refs.title(r), _flow(r).title) if t) for r in runs}
     await db.rollback()
     return [
         TickUnchecked(run_id=rid, title=titles.get(rid, "A run"), reason=w)
