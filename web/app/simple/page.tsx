@@ -568,7 +568,8 @@ export default function SimpleHome() {
         </p>
         {/* NP1: New PRD beside the walk, opening the guided sheet. home-honest-loading: while the
             role or what waits is unknown, each button's place is kept (invisible), so New PRD
-            never moves under the pointer as the walk arrives. */}
+            never moves under the pointer as the walk arrives. New PRD itself shows once Home knows
+            whether the walk does: with nothing to walk it is first painted where it stays. */}
         {!walking && (!capsReady || !reads || canStartPrd) && (
           <div className="flex flex-wrap gap-2">
             {!capsReady || (!reads && !counted) ? (
@@ -583,10 +584,10 @@ export default function SimpleHome() {
                 </button>
               )
             )}
-            {canStartPrd ? (
+            {canStartPrd && (reads || counted) ? (
               <NewPrdButton onOpen={() => setNewPrd(true)} />
             ) : (
-              !capsReady && (
+              (!capsReady || canStartPrd) && (
                 <span aria-hidden data-testid="home-new-prd-slot" className="simple-button invisible">
                   <Icon name="plus" size={18} /> New PRD
                 </span>
