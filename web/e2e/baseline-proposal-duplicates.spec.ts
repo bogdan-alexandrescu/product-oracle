@@ -44,14 +44,15 @@ for (const [where, size] of [["desktop", null], ["phone", PHONE]] as const) {
 
     /**
      * protects: a feature added twice under near-identical titles is one card naming the other
-     * role; accepting it closes the other as already done.
-     * fails_when: "Add saved address" has its own card, the role is not named, or it is left open.
+     * role and its title; accepting it closes the other as already done.
+     * fails_when: "Add saved address" has its own card, the role or its title is not named, or
+     * it is left open.
      */
     test("a feature proposed twice is one card, also proposed by the critic", async ({ page }) => {
       await openProposals(page);
       const added = card(page, "Asked for in the planning call.");
       await expect(added).toHaveCount(1);
-      await expect(added.getByTestId("also-proposed")).toHaveText("Also proposed by Critic");
+      await expect(added.getByTestId("also-proposed")).toHaveText("Also proposed by Critic as “Add saved address”");
       await added.getByRole("button", { name: "Accept", exact: true }).click();
       await expect(page.getByRole("status")).toContainText("1 other proposal was already done and is closed.");
       await expect(card(page, "Asked for in the planning call.")).toHaveCount(0);
@@ -92,6 +93,34 @@ for (const [where, size] of [["desktop", null], ["phone", PHONE]] as const) {
       await expect(page.getByTestId("undo-line")).toContainText("1 proposal would undo what you just accepted");
       await page.getByTestId("undo-line").getByRole("button", { name: "Show" }).click();
       await expect(card(page, "Stretch target.")).toHaveAttribute("data-highlighted", "true");
+    });
+
+    /**
+     * protects: a feature and its next version ("Search" and "Search v2") are two cards, and
+     * accepting the first leaves the second to decide.
+     * fails_when: "Search v2" shows as also proposed on the Search card, or the accept closes it.
+     */
+    test("a feature and its next version are two cards", async ({ page }) => {
+      await openProposals(page);
+      const search = card(page, "A search box.");
+      await expect(card(page, "A second search with filters.")).toHaveCount(1);
+      await expect(search.getByTestId("also-proposed")).toHaveCount(0);
+      await search.getByRole("button", { name: "Accept", exact: true }).click();
+      await expect(page.getByRole("status")).toContainText("Proposal accepted");
+      await expect(page.getByRole("status")).not.toContainText("already done");
+      await expect(card(page, "A search box.")).toHaveCount(0);
+      await expect(card(page, "A second search with filters.")).toHaveCount(1);
+    });
+
+    /**
+     * protects: the line about undoing what you just accepted is only for an accept made just
+     * now; a proposal that would undo one from days ago keeps its own chip only.
+     * fails_when: the line shows on opening the page for an accept made days ago.
+     */
+    test("an accept from days ago is not 'just accepted'", async ({ page }) => {
+      await openProposals(page);
+      await expect(card(page, "Invites in M1.").getByTestId("overlap-chip")).toBeVisible();
+      await expect(page.getByTestId("undo-line")).toHaveCount(0);
     });
   });
 }

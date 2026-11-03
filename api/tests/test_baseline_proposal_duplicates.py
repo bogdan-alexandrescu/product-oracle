@@ -192,3 +192,75 @@ async def test_a_link_accept_closes_the_same_link_proposed_again(client, ctx):
     assert resp.status_code == 200, resp.text
     assert resp.json()["closed_as_done"] == [second["id"]]
     assert uuid.UUID(second["id"]) and await _open(client, ctx) == {}
+
+
+async def test_a_title_with_a_version_or_an_extra_word_is_its_own_feature(client, ctx):
+    """protects: "Search v2" or "Sharing UI" is a feature of its own, not a near-identical
+    title of "Search" or "Sharing"; accepting one leaves the other open.
+    fails_when: the second is marked a duplicate, or the accept closes it as already done."""
+    run = await _run(ctx)
+
+    def add(key: str, title: str) -> dict:
+        return {"op": "create", "kind": "entity",
+                "fields": {"type": "feature", "key": key, "title": title}}  # fmt: skip
+
+    search = await _propose(client, ctx, add("search", "Search"), run, "writer")
+    search_v2 = await _propose(client, ctx, add("search-v2", "Search v2"), run, "critic")
+    sharing = await _propose(client, ctx, add("sharing", "Sharing"), run, "writer")
+    sharing_ui = await _propose(client, ctx, add("sharing-ui", "Sharing UI"), run, "critic")
+    reports = await _propose(client, ctx, add("reports", "Reports"), run, "writer")
+    reports_v2 = await _propose(client, ctx, add("reports-v2", "Reports v2"), run, "critic")
+    listed = await _open(client, ctx)
+    for p in (search_v2, sharing_ui, reports_v2):
+        assert listed[p["id"]]["duplicate_of"] is None
+    for p in (search, sharing, reports):
+        assert listed[p["id"]]["also_proposed"] == []
+
+    resp = await _accept(client, ctx, search)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["closed_as_done"] == []
+    assert search_v2["id"] in await _open(client, ctx)
+
+
+async def test_duplicates_stay_one_card_when_their_first_closes_alone(client, ctx):
+    """protects: when the proposal a group's card showed is rejected on its own, the
+    others of the group stay one card, on the oldest of them.
+    fails_when: each remaining duplicate gets a card of its own."""
+    run = await _run(ctx)
+    feat = await _feature(client, ctx)
+    m2 = {"attrs": {"milestone": "M2"}}
+    first = await _propose(client, ctx, _update(feat, m2, "Ships in M2."), run, "writer")
+    second = await _propose(client, ctx, _update(feat, m2, "M2 slice."), run, "critic")
+    third = await _propose(client, ctx, _update(feat, m2, "M2 it is."), run, "scope_reviewer")
+    resp = await client.post(f"{B}/proposals/{first['id']}/reject", json={},
+                             headers=ctx.as_("approver"))  # fmt: skip
+    assert resp.status_code == 200, resp.text
+    listed = await _open(client, ctx)
+    assert listed[second["id"]]["duplicate_of"] is None
+    assert [a["id"] for a in listed[second["id"]]["also_proposed"]] == [third["id"]]
+    assert listed[third["id"]]["duplicate_of"] == second["id"]
+    assert listed[third["id"]]["also_proposed"] == []
+
+
+async def test_a_create_accept_checks_only_new_items_of_its_type(client, ctx, monkeypatch):
+    """protects: accepting a new feature checks only the open proposals that add a feature,
+    not every open proposal adding any item in the workspace, one query each.
+    fails_when: a proposal adding a goal is checked too."""
+    from oracle.baseline import service
+
+    checked: list[str] = []
+    no_op = service._no_op
+
+    async def counting(db, p):
+        checked.append(str(p.id))
+        return await no_op(db, p)
+
+    monkeypatch.setattr(service, "_no_op", counting)
+    feature = await _propose(client, ctx, {"op": "create", "kind": "entity",
+                             "fields": {"type": "feature", "key": "search", "title": "Search"}})  # fmt: skip
+    goal = await _propose(client, ctx, {"op": "create", "kind": "entity",
+                          "fields": {"type": "goal", "key": "g.reach", "title": "Reach"}})  # fmt: skip
+    resp = await _accept(client, ctx, feature)
+    assert resp.status_code == 200, resp.text
+    assert goal["id"] not in checked
+    assert goal["id"] in await _open(client, ctx)

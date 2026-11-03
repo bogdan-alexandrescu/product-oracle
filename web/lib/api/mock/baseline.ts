@@ -1632,6 +1632,19 @@ export function addDuplicateProposals(s: BaselineState, uuid: () => string) {
   push(goal, update({ attrs: { target: 50 } }, "Half of new accounts set up in a week."), "2026-10-16T08:46:00Z", false);
   push(goal, update({ title: goal.title }, "Keep the name."), "2026-10-16T08:47:00Z", false);
   push(goal, update({ attrs: { target: 55 } }, "Stretch target."), "2026-10-16T08:48:00Z", false);
+  push(null, { ...feature("f.search", "Search", "writer"), reason: "A search box." }, "2026-10-16T08:49:00Z");
+  push(null, { ...feature("f.search-v2", "Search v2", "critic"), reason: "A second search with filters." }, "2026-10-16T08:50:00Z");
+  // Team invites' milestone, set by a proposal accepted days ago, that an older one would undo.
+  const invites = by("f.team-invites");
+  const was = invites.attrs?.milestone ?? null;
+  invites.attrs = { ...invites.attrs, milestone: "M3" };
+  push(invites, update({ attrs: { milestone: "M1" } }, "Invites in M1."), "2026-10-16T08:51:00Z", false);
+  s.proposals.push({
+    id: uuid(), entity_id: invites.id, edge_id: null,
+    payload: { op: "update", kind: "entity", fields: { attrs: { milestone: "M3" } }, reason: "Invites move to M3.", origin: "user" },
+    run_id: null, actor: null, status: "accepted", decided_by: null, decided_at: "2026-10-18T09:00:00Z", created_at: "2026-10-17T09:00:00Z",
+  });
+  (s.fieldChanges ??= []).push({ entity_id: invites.id, field: "attrs.milestone", before: was, after: "M3", at: "2026-10-18T09:00:00Z" });
 }
 
 /**
