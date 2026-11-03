@@ -332,9 +332,9 @@ function ProposalList({
   const [highlighted, setHighlighted] = useState<string[]>([]);
   const cards = useRef(new Map<string, HTMLLIElement>());
   // A reason never shows a code without its name (codes-and-chips): a known code gets its
-  // name, a source's own number says which run's sources it is from.
+  // name, a source's own number the title of the document it comes from, when one is known.
   const codes = useCompanyCodes();
-  const reasonOf = (p: ProposalOut, reason: string) => nameCodes(reason, codes, p.run ? `the sources of ${p.run.flow_title}` : "its source");
+  const reasonOf = (p: ProposalOut, reason: string) => nameCodes(reason, codes, p.run?.source_title);
   const showSiblings = (ids: string[]) => {
     setHighlighted(ids);
     cards.current.get(ids[0])?.scrollIntoView({ block: "center", behavior: "smooth" });

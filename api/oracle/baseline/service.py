@@ -556,16 +556,35 @@ async def list_proposals(
 async def proposal_runs(
     db: AsyncSession, run_ids: Iterable[uuid.UUID | None]
 ) -> dict[uuid.UUID, ProposalRun]:
-    """{run id: ProposalRun} for the runs that made these proposals, in one query."""
+    """{run id: ProposalRun} for the runs that made these proposals, with their sources."""
+    from oracle.docs.models import Document
+    from oracle.docs.service import version_sources
     from oracle.runs.flows import FLOWS
     from oracle.runs.models import Run
 
     ids = {i for i in run_ids if i is not None}
     if not ids:
         return {}
-    rows = await db.execute(
-        select(Run.id, Run.flow, Run.status, Run.created_at).where(Run.id.in_(ids))
-    )
+    runs = (await db.scalars(select(Run).where(Run.id.in_(ids)))).all()
+
+    def source_id(run: Run) -> uuid.UUID | None:
+        raw = (run.knobs or {}).get("source_version_id")
+        return uuid.UUID(raw) if raw else None
+
+    sources = await version_sources(db, [source_id(r) for r in runs])
+    doc_ids = {r.document_id for r in runs if r.document_id is not None}
+    titles: dict[uuid.UUID, str] = {}
+    if doc_ids:
+        rows = await db.execute(select(Document.id, Document.title).where(Document.id.in_(doc_ids)))
+        titles = {doc_id: title for doc_id, title in rows.all()}
+
+    def source_title(run: Run) -> str | None:
+        sid = source_id(run)
+        found = sources.get(sid) if sid is not None else None
+        if found is not None:
+            return found.title
+        return titles.get(run.document_id) if run.document_id is not None else None
+
     return {
         r.id: ProposalRun(
             id=r.id,
@@ -573,8 +592,9 @@ async def proposal_runs(
             flow_title=FLOWS[r.flow].title if r.flow in FLOWS else r.flow,
             status=r.status,
             created_at=r.created_at,
+            source_title=source_title(r),
         )
-        for r in rows
+        for r in runs
     }
 
 

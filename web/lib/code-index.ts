@@ -229,10 +229,13 @@ export function splitCodes(text: string, index: CodeIndex): CodePiece[] {
   return out;
 }
 
-/** A code a source document numbers its own lines with (`FR-06`, `REQ-12`), or an entity's (`G-B`, `F-08`). */
-const SOURCE_CODE = /^(?:[A-Z]{1,5}-[A-Z]?\d+[a-z]?|G-[A-Z][A-Z0-9]*)$/;
-/** Standards and versions that only look like codes: `UTF-8`, `ISO-8601`, `SHA-256`. */
-const NOT_A_CODE = /^(?:UTF|ISO|IEC|SHA|MD|AES|RSA|RFC|TLS|SSL|HTTP|IPV|WCAG|PCI|SOC|COVID|CVE|IEEE|ECMA|ES|H|MP|USB|WPA)-/;
+/**
+ * A requirement number a source document numbers its own lines with (`FR-06`, `REQ-12`,
+ * `NFR-3`): only these prefixes, so a look-alike (`GPT-4`, `PR-12`, `A-1 visa`, `UTF-8`) is
+ * never taken for one, and a goal or feature code (`G-B`, `F-08`) never is either, even while
+ * the company's codes load or when its goal was rejected.
+ */
+const SOURCE_CODE = /^(?:FR|NFR|REQ|RQ|BR|UR|SR|SYS|US|UC|AC|TR|DR|IR|QR|CR)-\d+[a-z]?$/;
 /** Codes written together, `FR-08/FR-09`, `F-1, F-2 and F-3`: one group, named after its last code. */
 const GROUP = new RegExp(String.raw`(?<![\w./:#@=&?-])(?:${CODE})(?:(?:\s?[/,&]\s?|\s(?:and|or)\s)(?:${CODE}))*(?![\w-]|\.\w)`, "g");
 const ONE = new RegExp(`${CODE}`, "g");
@@ -248,11 +251,12 @@ function namedBeside(name: string, before: string, after: string): boolean {
  * Agent-written text (a proposal's reason) with no code left without its name
  * (codes-and-chips): a known goal or feature code written bare gets its name beside it
  * (`G-B goal body` → `G-B Growth goal body`); a code nothing names, a source document's
- * own requirement number (`FR-06`, `FR-08/FR-09`), is followed by where it comes from
- * (`FR-06 (from <source>)`). A code already named, a URL, and words that only look like
- * codes (`Q4`, `UTF-8`) stay as written; run twice, it changes nothing more.
+ * own requirement number (`FR-06`, `FR-08/FR-09`), is followed by the title of the document
+ * it comes from (`FR-06 (from <source>)`), or left as written when no source is known. A
+ * code already named, a URL, and words that only look like codes (`Q4`, `UTF-8`) stay as
+ * written; run twice, it changes nothing more.
  */
-export function nameCodes(text: string, index: CodeIndex, source: string): string {
+export function nameCodes(text: string, index: CodeIndex, source: string | null | undefined): string {
   if (!text) return text;
   const urls = [...text.matchAll(URL_RE)].map((m) => [m.index!, m.index! + m[0].length]);
   const from = ` (from ${source})`;
@@ -275,7 +279,7 @@ export function nameCodes(text: string, index: CodeIndex, source: string): strin
       if (entry) {
         const rest = m[0].slice(ce) + after;
         if (!namedBeside(entry.name, text.slice(0, start + cs), rest)) group += ` ${entry.name}`;
-      } else if (SOURCE_CODE.test(c[0]) && !NOT_A_CODE.test(c[0])) unknown = true;
+      } else if (source && SOURCE_CODE.test(c[0])) unknown = true;
     }
     group += m[0].slice(last);
     if (unknown && !after.startsWith(" (from ")) group += from;

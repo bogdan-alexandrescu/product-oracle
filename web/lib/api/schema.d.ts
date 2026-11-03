@@ -32002,6 +32002,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Source Title */
+            source_title?: string | null;
         };
         /**
          * ProposedAssessment
