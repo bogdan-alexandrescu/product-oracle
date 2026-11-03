@@ -120,3 +120,16 @@ test("capture the goal map frames", async ({ browser, baseURL }) => {
   }
   fs.writeFileSync(metaFile, JSON.stringify(meta, null, 1));
 });
+
+test("static frames render on their own", async ({ browser }) => {
+  test.skip(!process.env.GM_CHECK);
+  for (const name of (process.env.GM_CHECK ?? "").split(",")) {
+    const [w, h] = name.includes("phone") ? [390, 844] : name.includes("1512") ? [1512, 945] : [1440, 900];
+    const ctx = await browser.newContext({ viewport: { width: w, height: h } });
+    const page = await ctx.newPage();
+    await page.goto(`file://${OUT}/frames/${name}.html?theme=dark`);
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `${process.env.TMPDIR}/check-${name}.png` });
+    await ctx.close();
+  }
+});

@@ -7,7 +7,7 @@
  * Edits are kept in the page's own state (the mock has no write route for them).
  */
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { Icon } from "@/components/ds/Icon";
 import { mockFetch } from "@/lib/api/mock/server";
@@ -133,8 +133,8 @@ function FeatureCard({ f, area, tight }: { f: GmFeature; area?: string; tight?: 
 }
 
 /** After an edit, brings what changed into view (MOCK-HOOK: the frames record the scroll). */
-function reveal(sel: string) {
-  setTimeout(() => document.querySelector(sel)?.scrollIntoView({ block: "center", inline: "center" }), 50);
+function reveal(sel: string, block: ScrollLogicalPosition = "center") {
+  setTimeout(() => document.querySelector(sel)?.scrollIntoView({ block, inline: "center" }), 50);
 }
 
 const lower = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
@@ -307,7 +307,7 @@ export function GoalMapPage() {
       );
       setMap({ ...map, goals });
       setFlash(`Goal changed. Its history keeps the old target.`);
-      reveal(`[data-goal="${goalId}"]`);
+      reveal(`[data-goal="${goalId}"]`, "start");
     }
     if (edit === "attach") {
       const features = map.features.map((f) => (f.id === draft.feature && !f.milestones.includes(draft.milestone) ? { ...f, milestones: [...f.milestones, draft.milestone] } : f));
@@ -634,7 +634,7 @@ function Ladder(ctx: Ctx) {
                   {m.proposed ? <Pill cls="bg-surface text-accent-ink border border-accent">Proposed</Pill> : <StatusPill s={m.status} />}
                 </span>
                 <span className="font-semibold leading-6">{m.name}</span>
-                <span className="text-[15px] text-text2">
+                <span className="text-[15px] leading-5 text-text2">
                   {num(m.current, m.unit)} of {num(m.threshold, m.unit)} · {afterWords(m, map)}
                 </span>
                 <Proof m={m} compact />

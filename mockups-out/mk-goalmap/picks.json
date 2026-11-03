@@ -1,0 +1,167 @@
+{
+  "title": "The goal map: company goals, areas of focus, milestones and features in one view",
+  "subtitle": "Mock-ups for Simple. Invented data: three goals, four areas (five in the hard case), milestones with 7 days of proof, features with expected and measured lift.",
+  "decisions": [
+    {
+      "code": "GM1",
+      "name": "How Simple shows the goal map",
+      "question": "How should Simple show and edit company goals, areas of focus, milestones and the features serving them?",
+      "common": "A new Simple page, Goal map, in the rail after Roadmap, in Simple's design (light rail, cards, 18 px body). Every proposal shows the goals with today's reading against the target and their status; the guardrail (customer complaints = 0) that every milestone must hold; each milestone's reading, threshold, status (met, on track, at risk, missed, not measured yet) and its 7 days of proof with who confirmed; each feature's expected lift and confidence and, once out, its measured lift (helping, not helping, not measured yet). Every proposal lets the owner add an area, reorder areas (the order holds in every view), edit a goal (its history kept), propose a milestone, attach a feature to a milestone and start a New PRD from a picked milestone and areas, from the same forms.",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "Ladder by area lanes",
+          "recommended": true,
+          "what": "The three goals sit on top as cards joined by arrows (sign-ups → paid conversions → revenue), each with today's reading against its target, a bar, its status and the math it builds on. Under them a green guardrail strip (customer complaints = 0) that every milestone must hold. Then one grid: the areas are rows in the owner's order (move up or down, add an area), the milestones are columns in steps from left to right, each gate with its reading against its threshold, its status and the last 7 days as proof with who confirmed it. Each feature is a card in the cell of its area under the milestone it serves, with its expected lift and, once out, what it measured (helping, not helping, not measured yet). Propose a milestone and New PRD sit at the top; Edit sits on each goal; Attach a feature sits in each cell a milestone touches.",
+          "why": "It is the only proposal where the owner's whole model is drawn at once, in their own shape: what builds on what reads left to right, the area order is the row order every view keeps, a milestone that cuts across areas spans their rows, and a feature that does not help is a red card in the exact place it was meant to help. Every edit happens where the thing sits.",
+          "plus": "What builds on what, the area order and which features help read in one look; proof sits on each gate; a proposed milestone appears in place, dashed, until approved.",
+          "cost": "Wide: at 1440 only 4 of 7 gates fit and the grid scrolls sideways (12 gates in the hard case show 4–5 at a time); the hard case page is about 4 screens tall; on a phone the grid becomes a list of milestones with their areas, so the lanes are lost there.",
+          "frames": [
+            {
+              "file": "frames/gm1-a-rest.html",
+              "caption": "Simple › Goal map. At rest: the three goals with readings against targets, the guardrail strip, and milestones by area, steps left to right with 7-day proof on each gate."
+            },
+            {
+              "file": "frames/gm1-a-open.html",
+              "caption": "The owner clicks Propose a milestone: the form asks for a name, the goal it moves, the threshold, the areas it pulls and what it comes after."
+            },
+            {
+              "file": "frames/gm1-a-mid.html",
+              "caption": "Filled in: 40 sign-ups per rep, at least 40, areas Scale per rep and Onboarding & revenue, after 25 sign-ups per rep."
+            },
+            {
+              "file": "frames/gm1-a-result.html",
+              "caption": "Result after Propose: the map scrolls to a dashed gate, 40 sign-ups per rep, marked Proposed at step 2, with today's 7 days already read and room to attach features."
+            },
+            {
+              "file": "frames/gm1-a-hard.html",
+              "caption": "Hard case at 1440: 5 areas, 12 milestones, 40 features, revenue not measured yet and 8 paid conversions per rep missed (red gate). Only 4 gates fit; the rest scroll sideways."
+            },
+            {
+              "file": "frames/gm1-a-hard-1512.html",
+              "caption": "The same hard case at 1512, the owner's window: one more gate fits, still a sideways scroll."
+            },
+            {
+              "file": "frames/gm1-a-phone-390.html",
+              "caption": "Phone 390: goals stack with arrows turned down, then the milestones one by one with their areas and features; the lanes are gone."
+            }
+          ]
+        },
+        {
+          "letter": "B",
+          "name": "Goal tree",
+          "recommended": false,
+          "what": "One card per goal, in the order they build on each other, with its reading against the target, its status and Edit. Inside each goal its milestones in steps, each with its reading, status, 7 days of proof, the areas it pulls (as numbered chips in the owner's order) and what it comes after; inside each milestone the features serving it with expected and measured lift and Attach a feature. The guardrail strip and an ordered bar of areas (move left or right, add an area) sit on top.",
+          "plus": "Reads like a document, top to bottom, with no sideways scroll; works the same on a phone; the goal's own history shows right under it after an edit.",
+          "cost": "Areas are only chips, not a structure: you cannot see an area's whole load at a glance. The hard case runs to almost 7 screens, and a milestone that needs one under another goal only says so in words.",
+          "frames": [
+            {
+              "file": "frames/gm1-b-rest.html",
+              "caption": "Simple › Goal map. At rest: guardrail, areas in order, then goal 1 with its milestones and their features, indented."
+            },
+            {
+              "file": "frames/gm1-b-open.html",
+              "caption": "The owner clicks Edit on Paid conversions per rep per day: target field and the goal's history (set at 10 on Oct 2)."
+            },
+            {
+              "file": "frames/gm1-b-mid.html",
+              "caption": "Typing 12: a note says its 3 milestones keep their thresholds and the highest, 10 paid conversions per rep, would now stop short of the goal."
+            },
+            {
+              "file": "frames/gm1-b-result.html",
+              "caption": "Result after Save goal: the goal reads ≥ 12, Now 5.6 of 12, and its line says Last change: Target 10 → 12, Nov 3."
+            },
+            {
+              "file": "frames/gm1-b-hard.html",
+              "caption": "Hard case at 1440: 5 areas, 12 milestones, 40 features; the page runs to about 7 screens."
+            },
+            {
+              "file": "frames/gm1-b-hard-1512.html",
+              "caption": "The same hard case at 1512: the same long page, a little less wrapping."
+            },
+            {
+              "file": "frames/gm1-b-phone-390.html",
+              "caption": "Phone 390: the same tree, stacked; proof squares stretch to the width."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "Driver tree",
+          "recommended": false,
+          "what": "The goals' math drawn as boxes: Revenue per day on top, equal to Reps live × Paid conversions per rep × Value of a conversion; under paid conversions, Sign-ups per rep × Conversion rate. Each goal box has its reading, target, status and Edit; each lever box lists the areas pulling it, the milestones on that lever with their status, and the features pulling it with expected and measured lift. The guardrail box sits under the tree with the features that keep it. The areas order bar sits on top.",
+          "plus": "Shows why each goal moves: which lever is short (conversion rate 18% against 15–25%, value $200) and what pulls it; a new lever is easy to see when empty.",
+          "cost": "Milestones are grouped by lever, not in order, so what builds on what in time is lost; a milestone on two levers shows twice; only 6 features show per box (and N more); the tree changes shape if the math changes.",
+          "frames": [
+            {
+              "file": "frames/gm1-c-rest.html",
+              "caption": "Simple › Goal map. At rest: revenue = reps × paid conversions per rep × value; paid conversions = sign-ups per rep × conversion rate; each box with its milestones and features."
+            },
+            {
+              "file": "frames/gm1-c-open.html",
+              "caption": "The owner clicks + Attach a feature: pick a milestone and search the features."
+            },
+            {
+              "file": "frames/gm1-c-mid.html",
+              "caption": "Mid-way: milestone 50 sign-ups per rep, search “team”, Team invite at sign-up picked."
+            },
+            {
+              "file": "frames/gm1-c-result.html",
+              "caption": "Result after Attach: a line says Team invite at sign-up now serves 50 sign-ups per rep, and the milestone shows under the value lever too."
+            },
+            {
+              "file": "frames/gm1-c-hard.html",
+              "caption": "Hard case at 1440: 12 reps live, revenue and value not measured yet, More reps area pulling the reps box."
+            },
+            {
+              "file": "frames/gm1-c-hard-1512.html",
+              "caption": "The same hard case at 1512: boxes a little wider, same shape."
+            },
+            {
+              "file": "frames/gm1-c-phone-390.html",
+              "caption": "Phone 390: the boxes stack top to bottom, the × signs between them."
+            }
+          ]
+        },
+        {
+          "letter": "D",
+          "name": "Scoreboard with drill-in",
+          "recommended": false,
+          "what": "Big tiles for the three goals and the guardrail, the areas order bar, then one table of milestones sorted by area order: reading against threshold, status, and how many features serve it (helping, not helping). Clicking a row opens a side panel with the milestone's proof (7 days and who confirmed), what it comes after, its features with expected and measured lift, Attach a feature and New PRD from this milestone.",
+          "plus": "Shortest page by far (1.6 screens in the hard case); the numbers are big and quick to scan; good for a daily check.",
+          "cost": "What builds on what is only words inside the panel; areas are a line of text under each row; one milestone's proof at a time.",
+          "frames": [
+            {
+              "file": "frames/gm1-d-rest.html",
+              "caption": "Simple › Goal map. At rest: goal tiles and the guardrail tile, areas in order, and the milestones table."
+            },
+            {
+              "file": "frames/gm1-d-open.html",
+              "caption": "The owner opened 6 paid conversions per rep and clicked New PRD from this milestone: the milestone is picked, areas still to choose."
+            },
+            {
+              "file": "frames/gm1-d-mid.html",
+              "caption": "Mid-way: Customer safety and Conversions picked; a note says the PRD starts with the measure, threshold, guardrail and the 4 features serving it."
+            },
+            {
+              "file": "frames/gm1-d-result.html",
+              "caption": "Result after Start the PRD: a card says New PRD started for 6 paid conversions per rep, with Open the draft."
+            },
+            {
+              "file": "frames/gm1-d-hard.html",
+              "caption": "Hard case at 1440: 12 milestones in one table; the missed 8 paid conversions per rep is open with its 7 days and Due Oct 31."
+            },
+            {
+              "file": "frames/gm1-d-hard-1512.html",
+              "caption": "The same hard case at 1512: the table and the panel side by side."
+            },
+            {
+              "file": "frames/gm1-d-phone-390.html",
+              "caption": "Phone 390: the milestone panel slides up over the list with its proof and features."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,42 +1,42 @@
 {
  "gm1-a-rest": {
-  "height": 2058,
+  "height": 2034,
   "width": 1425,
   "q": "?gm1=a",
   "act": null
  },
  "gm1-a-open": {
-  "height": 2058,
+  "height": 2034,
   "width": 1425,
   "q": "?gm1=a&open=propose",
   "act": null
  },
  "gm1-a-mid": {
-  "height": 2058,
+  "height": 2034,
   "width": 1425,
   "q": "?gm1=a&open=propose&phase=mid",
   "act": null
  },
  "gm1-a-result": {
-  "height": 2142,
+  "height": 2118,
   "width": 1425,
   "q": "?gm1=a&open=propose&phase=mid",
   "act": "save"
  },
  "gm1-a-hard": {
-  "height": 3463,
+  "height": 3439,
   "width": 1425,
   "q": "?gm1=a&data=hard",
   "act": null
  },
  "gm1-a-hard-1512": {
-  "height": 3463,
+  "height": 3439,
   "width": 1497,
   "q": "?gm1=a&data=hard",
   "act": null
  },
  "gm1-a-phone-390": {
-  "height": 6186,
+  "height": 6162,
   "width": 390,
   "q": "?gm1=a",
   "act": null
