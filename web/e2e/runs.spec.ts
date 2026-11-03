@@ -597,7 +597,7 @@ test("fix-work review: a check that could not read some runs says so on a run th
   await expect(result).toContainText("No agents are working right now; the run is waiting for your review.");
   // run-progress: each named, with why.
   await expect(result.getByTestId("tick-unchecked")).toHaveCount(2);
-  await expect(result.getByTestId("tick-unchecked").first()).toContainText(/could not be checked: SwarmCloud did not answer/);
+  await expect(result.getByTestId("tick-unchecked").first()).toContainText(/could not be checked: SwarmCloud had a problem on its side; the next check tries again\.$/);
 });
 
 /** artifact-skip-refused: the baseline step runs again and SwarmCloud will not send its baseline.yaml. */

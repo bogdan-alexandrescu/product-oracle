@@ -1548,7 +1548,7 @@ export const MOCK_TICK_ERRORS_KEY = "po-mock-tick-errors";
 /** Tests (artifact-skip-refused): a file name SwarmCloud refuses to send (422) from every running step. */
 export const MOCK_TICK_REFUSED_KEY = "po-mock-tick-refused";
 
-function tick(ctx: RunsContext): Schemas["TickOut"] {
+function tick(ctx: RunsContext, ticker = false): Schemas["TickOut"] {
   const out = {
     runs_checked: 0,
     segments_finished: 0,
@@ -1577,7 +1577,8 @@ function tick(ctx: RunsContext): Schemas["TickOut"] {
     out.runs_checked += 1;
   }
   // Tests: runs the check could not read (the API lists each with its error, and rolls back their pass).
-  const failing = typeof localStorage === "undefined" ? null : localStorage.getItem(MOCK_TICK_ERRORS_KEY);
+  // Only the ticker's own check (POST /v1/internal/tick), never the ticks that seed the mock's runs.
+  const failing = !ticker || typeof localStorage === "undefined" ? null : localStorage.getItem(MOCK_TICK_ERRORS_KEY);
   // As the API: ended runs Oracle still watches (a cancel winding down), named with why.
   // "running": every running run, the one a test started included.
   const unread = !failing
@@ -1902,7 +1903,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
 
   if (p[1] === "flows" && m === "GET") return json(200, flowCatalog());
   if (p[1] === "inbox" && m === "GET") return json(200, inbox(ctx));
-  if (p[1] === "internal" && p[2] === "tick" && m === "POST") return json(200, tick(ctx));
+  if (p[1] === "internal" && p[2] === "tick" && m === "POST") return json(200, tick(ctx, true));
   // C6: the document's approved PRD scope, by id or slug (a new PRD's run names it by slug).
   if (p[1] === "documents" && p.length === 4 && p[3] === "scope" && m === "GET") {
     const doc = ctx.documents.find((d) => d.id === p[2] || d.slug === p[2]);
