@@ -1588,7 +1588,8 @@ function tick(ctx: RunsContext): Schemas["TickOut"] {
       );
       const note =
         `SwarmCloud refused to send ${refused} (${why}), the file this step's results are imported from, so they ` +
-        "were not imported. Oracle asks again each minute; if SwarmCloud keeps refusing it, cancel the run and start it again.";
+        "were not imported. Oracle asks again each minute; if SwarmCloud keeps refusing it, ask whoever runs SwarmCloud why " +
+        "it refuses this file: it goes by the file's name, so running the step again will not help.";
       if (!r.notes.includes(note)) r.notes.push(note);
       continue;
     }
