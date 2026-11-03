@@ -192,3 +192,30 @@ async def test_picking_a_connection_of_another_provider_is_refused(client, tenan
     assert resp.status_code == 422
     assert "github connection, not a slack one" in resp.json()["detail"]
     assert (await _get(client, alice, src["id"]))["connection_id"] is None
+
+
+async def test_relinking_clears_only_the_no_connection_error(client, tenant_id, alice, fake):
+    conn = await _connect(client, alice, TOKEN)
+    src = await _source(client, alice, conn["id"])
+    await _disconnect(client, alice, conn["id"])
+    resp = await client.post(f"/v1/sources/{src['id']}/sync", headers=alice.headers)
+    assert "no connection" in resp.json()["error"]
+
+    await _connect(client, alice, TOKEN)
+    got = await _get(client, alice, src["id"])
+    assert (got["status"], got["last_error"]) == ("active", None)
+
+
+async def test_relinking_keeps_another_sync_error(client, tenant_id, alice, fake):
+    conn = await _connect(client, alice, TOKEN)
+    src = await _source(client, alice, conn["id"])
+    await _disconnect(client, alice, conn["id"])
+    async with tenant_session(tenant_id) as s:
+        row = await s.get(Source, src["id"])
+        row.status, row.last_error = "error", "Repo example/shop was not found"
+        await s.commit()
+
+    await _connect(client, alice, TOKEN)
+    got = await _get(client, alice, src["id"])
+    assert got["connection_id"] is not None
+    assert (got["status"], got["last_error"]) == ("error", "Repo example/shop was not found")
