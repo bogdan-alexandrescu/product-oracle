@@ -106,6 +106,7 @@ from oracle.simple.schemas import (
     SimpleStartPrd,
     SimpleUpcomingMeeting,
 )
+from oracle.trash import service as trash_service
 
 log = logging.getLogger(__name__)
 
@@ -1339,6 +1340,10 @@ async def _sees_change(db: AsyncSession, principal: Any, c: SimpleChange) -> boo
     return c.by == me or has_role(principal.role, "owner") or me in (c.routed_to or [])
 
 
+# The document kind a ritual kind reviews (oracle.rituals.kinds).
+REVIEWS: dict[str, Literal["roadmap"]] = {"roadmap_refresh": "roadmap"}
+
+
 async def _upcoming(
     db: AsyncSession, names: dict, principal: Any, only: uuid.UUID | None = None
 ) -> list[SimpleUpcomingMeeting]:
@@ -1418,6 +1423,10 @@ async def _upcoming(
     missing = {i for ids in held.values() for i in ids} - set(names)
     if missing:
         names.update(await _names(db, missing))
+    # A ritual whose documents are all in Trash reviews nothing live (Home says so).
+    trashed: dict[str, bool] = {}
+    for kind in {REVIEWS[r.kind] for _, r in rows if r.kind in REVIEWS}:
+        trashed[kind] = await trash_service.only_in_trash(db, kind)
     out = []
     for o, r in rows:
         due = o.due_at if o is not None else r.next_due_at
@@ -1435,6 +1444,7 @@ async def _upcoming(
             meeting_id=started.get(o.id) if o is not None else None,
             pre_read_ready=o is not None and o.status == "ready",
             can_start=may_start_ritual(principal, r),
+            reviews_in_trash=REVIEWS[r.kind] if trashed.get(REVIEWS.get(r.kind, "")) else None,
         ))  # fmt: skip
     return out
 

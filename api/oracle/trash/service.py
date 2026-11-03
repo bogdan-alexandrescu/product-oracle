@@ -500,3 +500,23 @@ async def list_entries(db: AsyncSession) -> list[TrashEntry]:
     entries = list(await db.scalars(stmt))
     hidden = await _hidden_runs(db, entries)
     return [e for e in entries if e.root_id not in hidden]
+
+
+async def highest_decision_number(db: AsyncSession) -> int | None:
+    """The highest decision number, a trashed PRD's open questions' too (the filter hides
+    them; a new decision's number must still be new)."""
+    from sqlalchemy import func
+
+    from oracle.decisions.models import Decision
+
+    return await db.scalar(select(func.max(Decision.number)).execution_options(**ALL))
+
+
+async def only_in_trash(db: AsyncSession, kind: str) -> bool:
+    """Every document of this kind is in Trash (and there is at least one): a review of
+    them reviews what is in Trash (Home's "Next review meeting")."""
+    kinds = await db.scalars(
+        select(Document.deleted_at).where(Document.kind == kind).execution_options(**ALL)
+    )
+    at = list(kinds)
+    return bool(at) and all(d is not None for d in at)
