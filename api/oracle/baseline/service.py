@@ -450,17 +450,21 @@ async def propose(
 _TITLE_LEAD = re.compile(r"^(add|new|a|an|the)\s+")
 
 
-def _title_words(title: Any) -> str:
-    """A new item's title for comparing: no case, no leading "Add", no plural, no spaces."""
+def _title_words(title: Any) -> list[str]:
+    """A new item's title as words for comparing: no case, no leading "Add", no plural."""
     words = _TITLE_LEAD.sub("", str(title or "").strip().lower())
-    return re.sub(r"[^a-z0-9]+", "", re.sub(r"s\b", "", words))
+    return re.findall(r"[a-z0-9]+", re.sub(r"s\b", "", words))
 
 
 def near_titles(a: Any, b: Any) -> bool:
     """Near-identical titles: "Saved carts" and "Add saved cart", "Saved addresses" and
-    "Saved address" (one is the other with up to two letters more)."""
-    x, y = sorted((_title_words(a), _title_words(b)), key=len)
-    return bool(x) and (x == y or (len(x) >= 5 and y.startswith(x) and len(y) - len(x) <= 2))
+    "Saved address" (the same words, the last with up to two letters more). A word or a
+    number more is another item: "Search" and "Search v2", "Sharing" and "Sharing UI"."""
+    x, y = sorted((_title_words(a), _title_words(b)), key=lambda w: len("".join(w)))
+    if not x or len(x) != len(y) or x[:-1] != y[:-1] or not y[-1].startswith(x[-1]):
+        return False
+    more = y[-1][len(x[-1]) :]
+    return not more or (len("".join(x)) >= 5 and len(more) <= 2 and more.isalpha())
 
 
 def same_change(a: dict[str, Any], b: dict[str, Any]) -> bool:
@@ -503,25 +507,33 @@ async def duplicates(
     dup_of: dict[uuid.UUID, uuid.UUID | None] = {p.id: None for p in proposals}
     also: dict[uuid.UUID, list[Proposal]] = {p.id: [] for p in proposals}
     open_ = [p for p in proposals if p.status == "open"]
-    roots = {_uuid_or_none(p.payload.get("duplicate_of")) for p in open_} - {None}
-    if roots:
-        live = set(
-            (await db.scalars(select(Proposal.id).where(
-                Proposal.id.in_(roots), Proposal.status == "open"
-            ))).all()
-        )  # fmt: skip
-        for p in open_:
-            root = _uuid_or_none(p.payload.get("duplicate_of"))
-            dup_of[p.id] = root if root in live else None
-    ids = [str(p.id) for p in open_]
-    if ids:
-        rows = await db.scalars(
-            select(Proposal)
-            .where(Proposal.status == "open", Proposal.payload["duplicate_of"].astext.in_(ids))
-            .order_by(Proposal.created_at)
-        )
-        for d in rows.all():
-            also[uuid.UUID(d.payload["duplicate_of"])].append(d)
+    roots = {str(r) for p in open_ if (r := _uuid_or_none(p.payload.get("duplicate_of")))}
+    keys = roots | {str(p.id) for p in open_}
+    if not keys:
+        return dup_of, also
+    rows = await db.scalars(
+        select(Proposal)
+        .where(Proposal.status == "open", Proposal.payload["duplicate_of"].astext.in_(keys))
+        .order_by(Proposal.created_at)
+    )
+    groups: dict[str, list[Proposal]] = {}
+    for d in rows.all():
+        groups.setdefault(d.payload["duplicate_of"], []).append(d)
+    live = set(
+        (await db.scalars(select(Proposal.id).where(
+            Proposal.id.in_([uuid.UUID(r) for r in groups]), Proposal.status == "open"
+        ))).all()
+    )  # fmt: skip
+    for root, group in groups.items():
+        # A group whose first proposal closed alone stays one card, on its oldest.
+        lead = uuid.UUID(root) if uuid.UUID(root) in live else group[0].id
+        for d in group:
+            if d.id == lead:
+                continue
+            if lead in also:
+                also[lead].append(d)
+            if d.id in dup_of:
+                dup_of[d.id] = lead
     return dup_of, also
 
 
@@ -556,10 +568,18 @@ async def close_siblings(db: AsyncSession, accepted: Proposal, principal: Princi
     root = accepted.payload.get("duplicate_of") or str(accepted.id)
     near = [Proposal.payload["duplicate_of"].astext == root, Proposal.id == uuid.UUID(root)]
     if accepted.payload.get("op") == "create":
+        # Only a new item of its type (a link between the same two items) can be made a no-op.
+        made, fields = accepted.payload.get("fields") or {}, Proposal.payload["fields"]
+        same_item = (
+            [fields[k].astext == str(made.get(k)) for k in ("src_id", "dst_id", "type")]
+            if accepted.payload.get("kind") == "edge"
+            else [fields["type"].astext == str(made.get("type"))]
+        )
         near.append(and_(
             Proposal.entity_id.is_(None), Proposal.edge_id.is_(None),
             Proposal.payload["op"].astext == "create",
             Proposal.payload["kind"].astext == accepted.payload.get("kind"),
+            *same_item,
         ))  # fmt: skip
     if accepted.entity_id:
         near.append(Proposal.entity_id == accepted.entity_id)

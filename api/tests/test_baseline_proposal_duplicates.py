@@ -256,10 +256,13 @@ async def test_a_create_accept_checks_only_new_items_of_its_type(client, ctx, mo
         return await no_op(db, p)
 
     monkeypatch.setattr(service, "_no_op", counting)
-    feature = await _propose(client, ctx, {"op": "create", "kind": "entity",
-                             "fields": {"type": "feature", "key": "search", "title": "Search"}})  # fmt: skip
-    goal = await _propose(client, ctx, {"op": "create", "kind": "entity",
-                          "fields": {"type": "goal", "key": "g.reach", "title": "Reach"}})  # fmt: skip
+
+    def add(type_: str, key: str, title: str) -> dict:
+        return {"op": "create", "kind": "entity",
+                "fields": {"type": type_, "key": key, "title": title}}  # fmt: skip
+
+    feature = await _propose(client, ctx, add("feature", "search", "Search"))
+    goal = await _propose(client, ctx, add("goal", "g.reach", "Reach"))
     resp = await _accept(client, ctx, feature)
     assert resp.status_code == 200, resp.text
     assert goal["id"] not in checked

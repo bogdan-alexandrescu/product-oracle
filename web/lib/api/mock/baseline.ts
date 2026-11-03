@@ -1014,19 +1014,23 @@ function overlapsOf(s: BaselineState, p: ProposalRow): Schemas["ProposalOverlap"
 /** `fields` without the skipped keys. */
 type Pay = { op?: string; kind?: string; fields?: Changes & { src_id?: string; dst_id?: string; type?: string; key?: string }; role?: string; duplicate_of?: string };
 
-/** As service._title_words: no case, no leading "Add", no plural, no spaces. */
+/** As service._title_words: the title's words, no case, no leading "Add", no plural. */
 const titleWords = (t: unknown) =>
   String(t ?? "")
     .trim()
     .toLowerCase()
     .replace(/^(add|new|a|an|the)\s+/, "")
     .replace(/s\b/g, "")
-    .replace(/[^a-z0-9]+/g, "");
+    .match(/[a-z0-9]+/g) ?? [];
 
-/** As service.near_titles: the same words once normalised, or one with up to two letters more. */
-function nearTitles(a: unknown, b: unknown): boolean {
-  const [x, y] = [titleWords(a), titleWords(b)].sort((m, n) => m.length - n.length);
-  return x !== "" && (x === y || (x.length >= 5 && y.startsWith(x) && y.length - x.length <= 2));
+/** As service.near_titles: the same words, the last with up to two letters more; never a word or number more. */
+export function nearTitles(a: unknown, b: unknown): boolean {
+  const [x, y] = [titleWords(a), titleWords(b)].sort((m, n) => m.join("").length - n.join("").length);
+  if (x.length === 0 || x.length !== y.length || x.slice(0, -1).join(" ") !== y.slice(0, -1).join(" ")) return false;
+  const [xl, yl] = [x[x.length - 1], y[y.length - 1]];
+  if (!yl.startsWith(xl)) return false;
+  const more = yl.slice(xl.length);
+  return more === "" || (x.join("").length >= 5 && more.length <= 2 && /^[a-z]+$/.test(more));
 }
 
 /** As service.same_change: the same fields, the same link, or a new item of the same type and key or title. */
@@ -1078,6 +1082,10 @@ function noOp(s: BaselineState, p: ProposalRow): boolean {
   return s.entities.some((e) => e.type === f.type && e.key === f.key);
 }
 
+/** As service.close_siblings' query: a new item of the same type, or a link between the same two items. */
+const sameItem = (a: Pay, b: Pay) =>
+  (a.kind === "edge" ? (["src_id", "dst_id", "type"] as const) : (["type"] as const)).every((k) => a.fields?.[k] === b.fields?.[k]);
+
 /** As service.close_siblings: after an accept, no-ops close as already done, a disagreeing duplicate as not chosen. */
 function closeSiblings(s: BaselineState, accepted: ProposalRow, userId: string): string[] {
   const pay = accepted.payload as Pay;
@@ -1090,7 +1098,7 @@ function closeSiblings(s: BaselineState, accepted: ProposalRow, userId: string):
     const near =
       grouped ||
       (accepted.entity_id && p.entity_id === accepted.entity_id) ||
-      (pay.op === "create" && !p.entity_id && !p.edge_id && other.op === "create" && other.kind === pay.kind);
+      (pay.op === "create" && !p.entity_id && !p.edge_id && other.op === "create" && other.kind === pay.kind && sameItem(pay, other));
     if (!near) continue;
     let outcome: "already_done" | "not_chosen" | null = null;
     if (grouped && !agrees(pay, other)) outcome = "not_chosen";
@@ -1201,10 +1209,14 @@ export async function routeBaseline(
   /** As service.duplicates: the open proposal whose card shows this one, and those its card shows. */
   const duplicatesOf = (p: ProposalRow): Pick<Schemas["ProposalOut"], "duplicate_of" | "also_proposed"> => {
     if (p.status !== "open") return { duplicate_of: null, also_proposed: [] };
+    // The card a group shows on: its first, or its oldest open one when the first closed alone.
+    const group = (root: string) => s.proposals.filter((d) => d.status === "open" && (d.payload as Pay).duplicate_of === root);
+    const lead = (root: string) => (s.proposals.some((r) => r.id === root && r.status === "open") ? root : group(root)[0]?.id);
     const root = (p.payload as Pay).duplicate_of;
-    const also = s.proposals.filter((d) => d.status === "open" && (d.payload as Pay).duplicate_of === p.id);
+    const mine = root && lead(root) === p.id ? group(root) : group(p.id);
+    const also = mine.filter((d) => d.id !== p.id);
     return {
-      duplicate_of: root && s.proposals.some((r) => r.id === root && r.status === "open") ? root : null,
+      duplicate_of: root && lead(root) !== p.id ? lead(root) : null,
       also_proposed: also.map((d) => {
         const role = (d.payload as Pay).role;
         const run = d.run_id ? (caller.runOf?.(d.run_id) ?? null) : null;

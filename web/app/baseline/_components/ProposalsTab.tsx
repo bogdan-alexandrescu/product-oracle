@@ -204,6 +204,9 @@ function opLine(payload: Payload, type: string | undefined, fields: number): str
 
 type Overlap = Schemas["ProposalOverlap"];
 
+/** Within the last hour: what "just accepted" means. */
+const justNow = (iso: string) => Date.now() - new Date(iso).getTime() < 60 * 60_000;
+
 /** "less than a minute ago", "12 min ago", "3 h ago", "2 days ago". */
 function ago(iso: string): string {
   const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
@@ -306,6 +309,12 @@ function AlsoProposed({
   const also = p.also_proposed ?? [];
   const agree = also.filter((a) => a.same);
   const differ = also.filter((a) => !a.same);
+  // A new item proposed again under another title names that title.
+  const mine = (p.payload as Payload).fields?.title;
+  const titled = (a: Also) => {
+    const title = (a.fields as Record<string, unknown>).title;
+    return typeof title === "string" && title !== mine ? title : null;
+  };
   const options: { id: string; label: string; by: string }[] = [];
   if (differ.length > 0) {
     options.push({ id: p.id, label: choiceWords((p.payload as Payload).fields, type), by: "" });
@@ -320,7 +329,7 @@ function AlsoProposed({
     <>
       {agree.length > 0 && (
         <p data-testid="also-proposed" className="text-[13px] text-text2">
-          Also proposed by {names(agree.map((a: Also) => a.by))}
+          Also proposed by {names(agree.map((a: Also) => (titled(a) ? `${a.by} as “${titled(a)}”` : a.by)))}
         </p>
       )}
       {options.length > 1 && (
@@ -416,8 +425,9 @@ function ProposalList({
   const zone = useCompanyZone();
   const byRun = from !== "" && from !== "none";
   const run = byRun ? runs.find((r) => r.id === from) : undefined;
-  // One line for every open proposal that would undo what was just accepted.
-  const undoing = proposals.filter((p) => (p.overlaps ?? []).some((o) => o.by === "proposal")).map((p) => p.id);
+  // One line for every open proposal that would undo what was just accepted (in the last
+  // hour); one that would undo an older accept keeps its own chip only.
+  const undoing = proposals.filter((p) => (p.overlaps ?? []).some((o) => o.by === "proposal" && justNow(o.changed_at))).map((p) => p.id);
   return (
     <Panel title="Proposals" count={proposals.length} tools={<FromSelect runs={runs} from={from} onFrom={onFrom} />}>
       {byRun && (
