@@ -529,10 +529,8 @@ class FakeRuntime:
     async def read_artifacts(
         self, workflow_id: str, steps: tuple[str, ...] | None = None
     ) -> tuple[dict[str, str], dict[str, str]]:
-        """:meth:`artifacts` with the files it left out: ``(files, skipped)``."""
-        skipped: dict[str, str] = {}
-        files = await self.artifacts(workflow_id, steps, skipped=skipped)
-        return files, skipped
+        """:meth:`artifacts` with the files it left out: none, the fake refuses none."""
+        return await self.artifacts(workflow_id, steps), {}
 
     async def cancel(self, workflow_id: str) -> None:
         self._record(workflow_id).cancelled = True
