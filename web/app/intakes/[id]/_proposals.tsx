@@ -49,6 +49,8 @@ function ProposalDiff({ p }: { p: Proposal }) {
 function Outcome({ p }: { p: Proposal }) {
   if (p.status === "accepted") {
     const run = text(p.result.run_id);
+    const refused = text(p.result.start_error);
+    if (run && refused) return <p className="text-sm break-words text-warn">Research did not start: {refused}</p>;
     if (run)
       return (
         <Link href={`/runs/${run}`} className="text-sm font-semibold text-accent-ink underline">

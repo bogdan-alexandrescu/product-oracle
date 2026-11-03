@@ -36,6 +36,15 @@ function researchFor(s: Summary, questionId: string, gapId: string | null | unde
  */
 function Research({ proposal, onOpen }: { proposal: Proposal | undefined; onOpen?: (proposalId: string) => void }) {
   const run = proposal?.status === "accepted" && typeof proposal.result?.run_id === "string" ? proposal.result.run_id : null;
+  const refused = run && typeof proposal?.result?.start_error === "string" ? proposal.result.start_error : null;
+  // brief-answers review: a research run Accept could not start says why, not "Being researched".
+  if (refused)
+    return (
+      <span data-testid="question-research" className="inline-flex flex-wrap items-center gap-1.5">
+        <Chip kind="warn">Research did not start</Chip>
+        <span className="break-words text-text2">{refused}</span>
+      </span>
+    );
   if (run)
     return (
       <span data-testid="question-research" className="inline-flex items-center gap-1.5">

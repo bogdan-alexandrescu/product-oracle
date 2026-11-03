@@ -82,7 +82,8 @@ export interface IntakeContext {
   updateRun?: (id: string, body: Schemas["RunPatch"]) => Promise<Response | null>;
   /** brief-answers: a run's status, and Estimate then Start on it (an accepted research run). */
   runStatus?: (id: string) => string | null;
-  startRun?: (id: string) => Promise<void>;
+  /** The refusal's words when the run cannot start, else null. */
+  startRun?: (id: string) => Promise<string | null>;
   /** The company's members (C2); without them nobody can be asked a teammate's question. */
   people?: MockPerson[];
   subjects?: SubjectLookup;
@@ -898,7 +899,13 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
           runId = ((await resp.json()) as { id: string }).id;
         }
         proposal.result = { run_id: runId };
-        await ctx.startRun?.(runId);
+        const refused = (await ctx.startRun?.(runId)) ?? null;
+        if (refused) proposal.result = { run_id: runId, start_error: refused };
+        else
+          for (const x of db.intake_proposals ?? []) {
+            // A reused draft started now: no proposal of it says it could not.
+            if (x.result?.run_id === runId && "start_error" in x.result) x.result = { run_id: runId };
+          }
       } else {
         const section = typeof proposal.detail.section_key === "string" ? proposal.detail.section_key : null;
         const document = proposal.detail.document_id ?? proposal.detail.document;
