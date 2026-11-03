@@ -492,9 +492,9 @@ async def lines(
         )
         for k in kds
     ]
-    # prio-line-once (the owner, Nov 3: "show it once"): a plan milestone with a PRD key date's
-    # name on its day is that milestone, listed once, "From the PRD"; a saved pick of it draws
-    # the key date's line.
+    # prio-line-once (the owner, Nov 3: "show it once"): a plan milestone the same as a PRD key
+    # date on its day (_same_as: its code, or its name without the code) is that milestone,
+    # listed once, "From the PRD"; a saved pick of it draws the key date's line.
     from_prd: dict[tuple[str, date], SimpleLine] = {}
     for k, ln in zip(kds, out[1:], strict=True):
         for same_as in _same_as(k.name, k.date) if k.prd else ():
