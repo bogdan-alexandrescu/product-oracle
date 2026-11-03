@@ -11,20 +11,22 @@ import { expect, test, type Page } from "./test";
  * it · Nov 27, 2026" (never also "Milestone: …"); picking it draws the line on its day, and the
  * box reads it in full on a 390 px phone. A saved pick of the plan's milestone (the URL here)
  * draws the same line and shows as the "From the PRD" option. Desktop and phone, light and dark.
- * Invented data.
+ * prio-line-once review: on "roadmap-keydates-uncoded" the onboarding track's milestone "Prove it"
+ * (M1's name without its code, on its day), which Simple › Roadmap draws once, is listed once
+ * too, as the PRD's M1. Invented data.
  */
 
 const M1 = "M1 · Prove it · Nov 27, 2026";
 // The plan's own milestone M1 (the mock's id for it): a pick saved before it was left out.
 const PLAN_M1 = `milestone:${stableUuid("simple-plan-milestone/M1")}`;
 
-async function setUp(page: Page, scheme: "light" | "dark"): Promise<void> {
+async function setUp(page: Page, scheme: "light" | "dark", scenario = "roadmap-keydates"): Promise<void> {
   await page.context().addInitScript(
     ([key, value, themeKey, theme]) => {
       localStorage.setItem(key, value);
       localStorage.setItem(themeKey, theme);
     },
-    [MOCK_SCENARIO_KEY, "roadmap-keydates", THEME_KEY, scheme] as const,
+    [MOCK_SCENARIO_KEY, scenario, THEME_KEY, scheme] as const,
   );
   await page.emulateMedia({ colorScheme: scheme });
   await login(page);
@@ -62,6 +64,15 @@ for (const [name, viewport] of [["desktop", { width: 1440, height: 900 }], ["pho
         await expect(heads.nth(0)).toHaveAttribute("aria-label", `Makes ${M1}`);
         await expect(heads.nth(1)).toHaveAttribute("aria-label", `Misses ${M1}`);
         await expectShownInFull(page, `From the PRD: ${M1}`);
+      });
+
+      test("a milestone named without its code on M1's day is listed once, as the PRD's M1", async ({ page }) => {
+        await setUp(page, scheme, "roadmap-keydates-uncoded");
+        await open(page);
+        const options = page.getByTestId("line-picker").getByLabel("Line", { exact: true }).locator("option");
+        await expect(options.filter({ hasText: `From the PRD: ${M1}` })).toHaveCount(1);
+        const texts = await options.allTextContents();
+        expect(texts.filter((t) => t.includes("Prove it")), texts.join("\n")).toEqual([`From the PRD: ${M1}`]);
       });
 
       test("a saved pick of the plan's M1 draws the same line, shown as From the PRD", async ({ page }) => {
