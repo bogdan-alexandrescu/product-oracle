@@ -573,6 +573,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * PRD and not approved yet (walkb-roadmap review 5a).
  */
 export { MOCK_SCENARIO_KEY };
+/** roadmap-stale-filters: the person's saved Simple roadmap filters name a PRD and a goal that are no longer on it. */
+export const STALE_SIMPLE_FILTERS_SCENARIO = "stale-simple-filters";
 /**
  * #723: Simple mode is on in the mock (the API's ORACLE_SIMPLE_MODE); tests set this
  * localStorage key to "off" to see the app without it (no switch, everyone in Detailed).
@@ -5297,6 +5299,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "me" && p[2] === "preferences") {
     db.preferences ??= {};
     const mine = (db.preferences[me.email] ??= { document_view: "brief", setup_hidden: false, welcome_dismissed: false, slack_pings: { ...SLACK_PINGS } });
+    // roadmap-stale-filters: PRD and Goal picks saved before that PRD and goal left the roadmap.
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === STALE_SIMPLE_FILTERS_SCENARIO && mine.simple_filters === undefined) mine.simple_filters = { prd: "retired-example-prd", goal: "retired-example-goal", track: "" };
     mine.slack_pings = { ...SLACK_PINGS, ...mine.slack_pings }; // saved before Slack pings
     if (m === "PATCH") {
       const patch = await body<Schemas["PreferencesUpdate"]>();
