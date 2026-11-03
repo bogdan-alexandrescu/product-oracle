@@ -1,7 +1,8 @@
 """Goals keep one order on every page (goal-order).
 
 A goal's place is its ``attrs.position`` (1 = first, leftmost). Goals with a position come
-first, by position; goals without one follow; ties go to the older goal, then by title.
+first, by position; goals without one follow; ties go to the older goal, then by title
+(case-folded, then as written), then by id.
 Every API read that lists, groups or picks goals sorts them with :func:`goal_sort_key`;
 the web's twin is ``web/lib/goal-order.ts``. Archived goals keep their place among
 archived ones: the rule never looks at status.
@@ -36,13 +37,15 @@ def position_ok(value: Any) -> bool:
 
 
 def goal_sort_key(goal: GoalLike) -> tuple:
-    """The one goal order: position, then no position, then creation time, then title."""
+    """The one goal order: position, then no position, then creation time, then title,
+    then id."""
     position = goal_position(goal.attrs)
     made = goal.created_at or FAR
     if made.tzinfo is None:
         made = made.replace(tzinfo=UTC)
     title = goal.title or ""
-    return (position is None, position or 0, made, title.casefold(), title)
+    return (position is None, position or 0, made, title.casefold(), title,
+            str(getattr(goal, "id", "") or ""))  # fmt: skip
 
 
 def sort_goals[G: GoalLike](goals: Iterable[G]) -> list[G]:

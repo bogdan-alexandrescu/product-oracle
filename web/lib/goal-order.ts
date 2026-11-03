@@ -1,7 +1,8 @@
 /**
  * Goals keep one order on every page (goal-order), the API's twin rule
  * (api/oracle/baseline/goal_order.py): a goal's position (its attrs.position, 1 = first)
- * first; goals without one after those with one; then the older goal; then by title.
+ * first; goals without one after those with one; then the older goal; then by title
+ * (case-folded, then as written); then by id.
  * Every list, group or picker of goals sorts with byGoalOrder. Archived goals keep their
  * place among archived ones: the rule never looks at status.
  */
@@ -32,7 +33,12 @@ export function byGoalOrder(a: OrderedGoal, b: OrderedGoal): number {
   }
   const made = (a.created_at ?? "￿").localeCompare(b.created_at ?? "￿");
   if (made) return made;
-  return a.title.localeCompare(b.title, undefined, { sensitivity: "base" }) || (a.id ?? "").localeCompare(b.id ?? "");
+  return byCode(a.title.toLowerCase(), b.title.toLowerCase()) || byCode(a.title, b.title) || byCode(a.id ?? "", b.id ?? "");
+}
+
+/** Plain code-point order, as Python compares strings (the API's tie-breaks). */
+function byCode(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /** `goals` in the one goal order (a new array). */

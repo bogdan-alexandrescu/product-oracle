@@ -43291,6 +43291,8 @@ export interface components {
              * @enum {string}
              */
             status: "proposed" | "confirmed" | "rejected";
+            /** Position */
+            position?: number | null;
             /** Weight */
             weight?: number | null;
             /** Confidence */

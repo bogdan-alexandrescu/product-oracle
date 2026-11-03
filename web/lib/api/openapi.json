@@ -128752,6 +128752,17 @@
             ],
             "title": "Status"
           },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
           "weight": {
             "anyOf": [
               {

@@ -484,6 +484,8 @@ class TraceGoal(BaseModel):
     key: str
     title: str
     status: NodeStatus
+    # goal-order: its place on every page (attrs.position, 1 = first); null otherwise.
+    position: int | None = None
     weight: float | None = None
     confidence: float | None = None
     features: list[TraceGoalFeature]

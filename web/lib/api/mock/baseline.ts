@@ -579,7 +579,7 @@ export function traceReport(s: BaselineState, low = LOW_CONFIDENCE): Schemas["Tr
     .filter((e) => (e.type === "feature" || e.type === "goal") && e.status !== "rejected")
     .sort((a, b) => a.key.localeCompare(b.key));
   const features = live.filter((e) => e.type === "feature");
-  const goals = live.filter((e) => e.type === "goal");
+  const goals = sortGoals(live.filter((e) => e.type === "goal"));
   const byId = new Map(live.map((e) => [e.id, e]));
   const featureIds = new Set(features.map((f) => f.id));
 
@@ -627,6 +627,7 @@ export function traceReport(s: BaselineState, low = LOW_CONFIDENCE): Schemas["Tr
       key: g.key,
       title: g.title,
       status: g.status,
+      position: goalPosition({ attrs: g.attrs }),
       weight: num(g.attrs?.weight),
       confidence: num(g.confidence),
       features: fs,
