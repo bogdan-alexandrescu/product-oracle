@@ -17,10 +17,26 @@
           "plus": "Asked where the late date shows; the roadmap stays in view while you pick; works the same on a phone as a bottom sheet.",
           "cost": "Only someone who opens Roadmap finds it; a late date is not pushed to you.",
           "frames": [
-            { "file": "fd1-a-rest.html", "caption": "At rest: the goal is 6 weeks late (Mar 12 against Jan 29), and \"Bring this date in\" sits beside the late date." },
-            { "file": "fd1-a-open.html", "caption": "Tapped: Oracle's answer opens in a side panel over the same roadmap." },
-            { "file": "fd1-a-hard-1512.html", "caption": "Hard case at 1512: the target is Jan 8, 9 weeks away; the same button shows." },
-            { "file": "fd1-a-phone.html", "caption": "Phone 390: the goal card and its button lead the page; the milestones stack under it." }
+            {
+              "file": "fd1-a-rest.html",
+              "caption": "At rest: the goal is 6 weeks late (Mar 12 against Jan 29), and \"Bring this date in\" sits beside the late date."
+            },
+            {
+              "file": "fd1-a-open.html",
+              "caption": "Tapped: Oracle's answer opens in a side panel over the same roadmap."
+            },
+            {
+              "file": "fd1-a-hard-1512.html",
+              "caption": "Hard case at 1512: the target is Jan 8, 9 weeks away; the same button shows."
+            },
+            {
+              "file": "fd1-a-phone.html",
+              "caption": "Phone 390: the goal card and its button lead the page; the milestones stack under it."
+            },
+            {
+              "file": "fd1-a-dark.html",
+              "caption": "Dark: the roadmap at rest with its button."
+            }
           ]
         },
         {
@@ -31,10 +47,26 @@
           "plus": "You hear about a late date without looking for it; one tap from the first page you open.",
           "cost": "Adds a card to Home each time a date slips; the roadmap is not in view while you pick, so moving items is harder to picture.",
           "frames": [
-            { "file": "fd1-b-rest.html", "caption": "At rest: Home's card says M2 lands Mar 12, 6 weeks after Jan 29, and Oracle found 7 changes." },
-            { "file": "fd1-b-open.html", "caption": "\"See what to cut\" pressed: the answer opens over Home." },
-            { "file": "fd1-b-hard-1512.html", "caption": "Hard case at 1512: the card says no changes reach Jan 8." },
-            { "file": "fd1-b-phone.html", "caption": "Phone 390: the card sits under the greeting." }
+            {
+              "file": "fd1-b-rest.html",
+              "caption": "At rest: Home's card says M2 lands Mar 12, 6 weeks after Jan 29, and Oracle found 7 changes."
+            },
+            {
+              "file": "fd1-b-open.html",
+              "caption": "\"See what to cut\" pressed: the answer opens over Home."
+            },
+            {
+              "file": "fd1-b-hard-1512.html",
+              "caption": "Hard case at 1512: the card says no changes reach Jan 8."
+            },
+            {
+              "file": "fd1-b-phone.html",
+              "caption": "Phone 390: the card sits under the greeting."
+            },
+            {
+              "file": "fd1-b-dark.html",
+              "caption": "Dark: the Home card at rest."
+            }
           ]
         },
         {
@@ -45,10 +77,30 @@
           "plus": "Works from any page and for any goal or milestone you name; a follow-up question can narrow it (\"without touching the chart\").",
           "cost": "You have to know to ask; each question runs Oracle (a few cents and some seconds) before you see anything.",
           "frames": [
-            { "file": "fd1-c-rest.html", "caption": "At rest: the question asked, and Oracle's short answer: five changes bring M2 from Mar 12 to Jan 25." },
-            { "file": "fd1-c-open.html", "caption": "\"Pick the changes\" pressed: the pick list opens." },
-            { "file": "fd1-c-hard-1512.html", "caption": "Hard case at 1512: Oracle says the earliest is Jan 16, and names the two items it will not cut." },
-            { "file": "fd1-c-phone.html", "caption": "Phone 390: the same answer, full width." }
+            {
+              "file": "fd1-c-rest.html",
+              "caption": "At rest: the question asked, and Oracle's short answer: five changes bring M2 from Mar 12 to Jan 25."
+            },
+            {
+              "file": "fd1-c-open.html",
+              "caption": "\"Pick the changes\" pressed: the pick list opens."
+            },
+            {
+              "file": "fd1-c-after.html",
+              "caption": "After approving: Oracle says what changed in the same chat, and that Home, Roadmap and Priorities show the new dates."
+            },
+            {
+              "file": "fd1-c-hard-1512.html",
+              "caption": "Hard case at 1512: Oracle says the earliest is Jan 16, and names the two items it will not cut."
+            },
+            {
+              "file": "fd1-c-phone.html",
+              "caption": "Phone 390: the same answer, full width."
+            },
+            {
+              "file": "fd1-c-dark.html",
+              "caption": "Dark: the question and answer."
+            }
           ]
         }
       ]
@@ -68,12 +120,30 @@
           "plus": "Fine control: any mix of changes; the cost of each is read before it is ticked; the date updates at once.",
           "cost": "A long list (8 changes here) asks for scrolling; the owner weighs each change rather than taking a ready set.",
           "frames": [
-            { "file": "fd2-a-open.html", "caption": "Open: Oracle's pick is ticked (5 changes) and the meter shows Jan 25, reaching Jan 29 with 4 days to spare." },
-            { "file": "fd2-a-mid.html", "caption": "Mid-pick: three changes ticked; the meter shows Feb 12, 14 days after Jan 29." },
-            { "file": "fd2-a-picked.html", "caption": "Two more ticked (the reply time chart off the gate, tone presets to the next PRD): the meter turns green at Jan 25." },
-            { "file": "fd2-a-hard-1512.html", "caption": "Hard case at 1512: every change ticked still lands Jan 16, 8 days after Jan 8; the send check is locked and Oracle says it will not offer it." },
-            { "file": "fd2-a-phone.html", "caption": "Phone 390: the meter sticks at the top of the sheet while the list scrolls." },
-            { "file": "fd2-a-dark.html", "caption": "Dark: the mid-pick state." }
+            {
+              "file": "fd2-a-open.html",
+              "caption": "Open: Oracle's pick is ticked (5 changes) and the meter shows Jan 25, reaching Jan 29 with 4 days to spare."
+            },
+            {
+              "file": "fd2-a-mid.html",
+              "caption": "Mid-pick: three changes ticked; the meter shows Feb 12, 14 days after Jan 29."
+            },
+            {
+              "file": "fd2-a-picked.html",
+              "caption": "Two more ticked (the reply time chart off the gate, tone presets to the next PRD): the meter turns green at Jan 25."
+            },
+            {
+              "file": "fd2-a-hard-1512.html",
+              "caption": "Hard case at 1512: every change ticked still lands Jan 16, 8 days after Jan 8; the send check is locked and Oracle says it will not offer it."
+            },
+            {
+              "file": "fd2-a-phone.html",
+              "caption": "Phone 390: the meter sticks at the top of the sheet while the list scrolls."
+            },
+            {
+              "file": "fd2-a-dark.html",
+              "caption": "Dark: the mid-pick state."
+            }
           ]
         },
         {
@@ -84,12 +154,30 @@
           "plus": "One decision instead of eight; easy to compare the three on a phone.",
           "cost": "You take a whole set or change it a step later; a package can hide one change you would not make.",
           "frames": [
-            { "file": "fd2-b-open.html", "caption": "Open: \"Fits the date\" is Oracle's pick: Jan 25, 14 person-weeks off." },
-            { "file": "fd2-b-mid.html", "caption": "Mid-pick: Light trim chosen; it keeps every feature but lands Feb 25, 27 days late." },
-            { "file": "fd2-b-picked.html", "caption": "\"Fits the date\" picked again: its five changes list under it." },
-            { "file": "fd2-b-hard-1512.html", "caption": "Hard case at 1512: even Deep cut lands Jan 16, 8 days after Jan 8." },
-            { "file": "fd2-b-phone.html", "caption": "Phone 390: the three packages stack in the sheet." },
-            { "file": "fd2-b-dark.html", "caption": "Dark: the open state." }
+            {
+              "file": "fd2-b-open.html",
+              "caption": "Open: \"Fits the date\" is Oracle's pick: Jan 25, 14 person-weeks off."
+            },
+            {
+              "file": "fd2-b-mid.html",
+              "caption": "Mid-pick: Light trim chosen; it keeps every feature but lands Feb 25, 27 days late."
+            },
+            {
+              "file": "fd2-b-picked.html",
+              "caption": "\"Fits the date\" picked again: its five changes list under it."
+            },
+            {
+              "file": "fd2-b-hard-1512.html",
+              "caption": "Hard case at 1512: even Deep cut lands Jan 16, 8 days after Jan 8."
+            },
+            {
+              "file": "fd2-b-phone.html",
+              "caption": "Phone 390: the three packages stack in the sheet."
+            },
+            {
+              "file": "fd2-b-dark.html",
+              "caption": "Dark: the open state."
+            }
           ]
         },
         {
@@ -100,11 +188,26 @@
           "plus": "Shows when things land, not just how many days are saved; good for someone who thinks in calendars.",
           "cost": "Needs a wide panel (1040 px) and dragging; on a phone the bars are tiny and dragging is fiddly. The cost of each change is not in view while dragging.",
           "frames": [
-            { "file": "fd2-c-open.html", "caption": "Open: Oracle's pick already dragged: two bars past the line, one sliced; M2 now Jan 25." },
-            { "file": "fd2-c-mid.html", "caption": "Mid-drag: the reply time chart being dragged off M2's gate; M2 now Feb 12." },
-            { "file": "fd2-c-hard-1512.html", "caption": "Hard case at 1512: every movable bar moved; M2 still lands Jan 16, after the Jan 8 line." },
-            { "file": "fd2-c-phone.html", "caption": "Phone 390: the timeline scrolls sideways inside the sheet." },
-            { "file": "fd2-c-dark.html", "caption": "Dark: the mid-drag state." }
+            {
+              "file": "fd2-c-open.html",
+              "caption": "Open: Oracle's pick already dragged: two bars past the line, one sliced; M2 now Jan 25."
+            },
+            {
+              "file": "fd2-c-mid.html",
+              "caption": "Mid-drag: the reply time chart being dragged off M2's gate; M2 now Feb 12."
+            },
+            {
+              "file": "fd2-c-hard-1512.html",
+              "caption": "Hard case at 1512: every movable bar moved; M2 still lands Jan 16, after the Jan 8 line."
+            },
+            {
+              "file": "fd2-c-phone.html",
+              "caption": "Phone 390: the timeline scrolls sideways inside the sheet."
+            },
+            {
+              "file": "fd2-c-dark.html",
+              "caption": "Dark: the mid-drag state."
+            }
           ]
         }
       ]
@@ -124,12 +227,34 @@
           "plus": "Nothing changes until you have read the list of moved dates; one approve for both documents.",
           "cost": "One more step and a 40-second wait before the roadmap shows the new dates.",
           "frames": [
-            { "file": "fd3-a-open.html", "caption": "The pick made: the button says what follows, Oracle drafts the next versions for you to check, about 40 seconds." },
-            { "file": "fd3-a-result.html", "caption": "Result: PRD changes and the date list (M2 Mar 12 to Jan 25, M3 Apr 2 to Apr 9), with the run's time and cost." },
-            { "file": "fd3-a-adjusted.html", "caption": "Approved: the roadmap shows the new dates, old ones struck through; the goal is on plan for Jan 25." },
-            { "file": "fd3-a-hard-1512.html", "caption": "Hard case at 1512: the panel offers to keep the cuts and move the target to Jan 16 before drafting." },
-            { "file": "fd3-a-phone.html", "caption": "Phone 390: the check list in the sheet, Approve both at its foot." },
-            { "file": "fd3-a-dark.html", "caption": "Dark: the adjusted roadmap." }
+            {
+              "file": "fd3-a-open.html",
+              "caption": "The pick made: the button says what follows, Oracle drafts the next versions for you to check, about 40 seconds."
+            },
+            {
+              "file": "fd3-a-result.html",
+              "caption": "Result: PRD changes and the date list (M2 Mar 12 to Jan 25, M3 Apr 2 to Apr 9), with the run's time and cost."
+            },
+            {
+              "file": "fd3-a-adjusted.html",
+              "caption": "Approved: the roadmap shows the new dates, old ones struck through; the goal is on plan for Jan 25."
+            },
+            {
+              "file": "fd3-a-home.html",
+              "caption": "Home after approving: the late-date card turns into \"on its date\" with what moved."
+            },
+            {
+              "file": "fd3-a-hard-1512.html",
+              "caption": "Hard case at 1512: the panel offers to keep the cuts and move the target to Jan 16 before drafting."
+            },
+            {
+              "file": "fd3-a-phone.html",
+              "caption": "Phone 390: the check list in the sheet, Approve both at its foot."
+            },
+            {
+              "file": "fd3-a-dark.html",
+              "caption": "Dark: the adjusted roadmap."
+            }
           ]
         },
         {
@@ -140,11 +265,34 @@
           "plus": "Fastest: the new dates show the moment you pick; undo is one tap.",
           "cost": "No list of moved dates before the change; a date in another milestone (M3 moving a week) is easy to miss until it is published.",
           "frames": [
-            { "file": "fd3-b-open.html", "caption": "The pick made: the button applies the changes straight to the drafts." },
-            { "file": "fd3-b-result.html", "caption": "Result: the roadmap draft already shows the new dates, with Publish both and Undo all 5." },
-            { "file": "fd3-b-adjusted.html", "caption": "Published: the new dates are live." },
-            { "file": "fd3-b-hard-1512.html", "caption": "Hard case at 1512: every change applies, and the panel says Jan 8 is still out of reach." },
-            { "file": "fd3-b-phone.html", "caption": "Phone 390: the applied draft with its Publish and Undo buttons." }
+            {
+              "file": "fd3-b-open.html",
+              "caption": "The pick made: the button applies the changes straight to the drafts."
+            },
+            {
+              "file": "fd3-b-result.html",
+              "caption": "Result: the roadmap draft already shows the new dates, with Publish both and Undo all 5."
+            },
+            {
+              "file": "fd3-b-adjusted.html",
+              "caption": "Published: the new dates are live."
+            },
+            {
+              "file": "fd3-b-home.html",
+              "caption": "Home after publishing: the same card, saying you published."
+            },
+            {
+              "file": "fd3-b-hard-1512.html",
+              "caption": "Hard case at 1512: every change applies, and the panel says Jan 8 is still out of reach."
+            },
+            {
+              "file": "fd3-b-phone.html",
+              "caption": "Phone 390: the applied draft with its Publish and Undo buttons."
+            },
+            {
+              "file": "fd3-b-dark.html",
+              "caption": "Dark: the applied draft with Undo."
+            }
           ]
         },
         {
@@ -155,11 +303,34 @@
           "plus": "The person who knows the sizes confirms the slices before dates are promised.",
           "cost": "Waits on another person, most often up to a day; the owner cannot bring the date in alone.",
           "frames": [
-            { "file": "fd3-c-open.html", "caption": "The pick made: the button sends the changes for a size check." },
-            { "file": "fd3-c-result.html", "caption": "Result: waiting on Tomas Brook since Oct 22, 3:12 PM, with the drafted changes and dates listed." },
-            { "file": "fd3-c-adjusted.html", "caption": "Approved the next morning: the roadmap shows the new dates." },
-            { "file": "fd3-c-hard-1512.html", "caption": "Hard case at 1512: the same no-reach note before anything is sent." },
-            { "file": "fd3-c-phone.html", "caption": "Phone 390: the waiting state in the sheet." }
+            {
+              "file": "fd3-c-open.html",
+              "caption": "The pick made: the button sends the changes for a size check."
+            },
+            {
+              "file": "fd3-c-result.html",
+              "caption": "Result: waiting on Tomas Brook since Oct 22, 3:12 PM, with the drafted changes and dates listed."
+            },
+            {
+              "file": "fd3-c-adjusted.html",
+              "caption": "Approved the next morning: the roadmap shows the new dates."
+            },
+            {
+              "file": "fd3-c-home.html",
+              "caption": "Home after the lead approves: the card names Tomas Brook and when."
+            },
+            {
+              "file": "fd3-c-hard-1512.html",
+              "caption": "Hard case at 1512: the same no-reach note before anything is sent."
+            },
+            {
+              "file": "fd3-c-phone.html",
+              "caption": "Phone 390: the waiting state in the sheet."
+            },
+            {
+              "file": "fd3-c-dark.html",
+              "caption": "Dark: waiting on the size check."
+            }
           ]
         }
       ]

@@ -848,8 +848,37 @@ export function FitRoadmap() {
   );
 }
 
+const APPROVED = {
+  // MOCK-HOOK: who made the new versions live, per FD3 proposal.
+  a: "You approved PRD version 4 and roadmap version 7 on Oct 22, 3:14 PM.",
+  b: "You published PRD version 4 and roadmap version 7 on Oct 22, 3:20 PM.",
+  c: "Tomas Brook checked the sizes and approved on Oct 23, 10:20 AM.",
+};
+
 /** FD1 b: a prompt on Simple Home when a target date is not reachable. */
 export function FitHomeCard() {
+  const f = useFit();
+  if (f.phase === "adjusted")
+    return (
+      <section className="simple-card" data-testid="fit-home" aria-label="A date brought in">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="simple-h2">{FIT_GOAL.milestone} is on its date</h2>
+          <span className="simple-status simple-status-ok">On target</span>
+        </div>
+        <p>
+          It now lands <span className="font-semibold">Jan 25</span> (was <del>Mar 12</del>), 4 days before Jan 29. {APPROVED[f.fd3]}
+        </p>
+        <ul className="simple-small flex flex-col gap-1">
+          <li>Reply to similar threads at once and the reply time chart now land with M3 Team inbox, Apr 9 (was Apr 2).</li>
+          <li>Tone presets left this PRD; Priorities lists it under the next one.</li>
+          <li>The goal starts at 34 of 40 replied threads at launch and reaches 40 with M3.</li>
+        </ul>
+      </section>
+    );
+  return <FitHomePrompt />;
+}
+
+function FitHomePrompt() {
   const f = useFit();
   const [open, setOpen] = useState(
     f.phase === "open" || f.phase === "mid" || f.phase === "hard",
@@ -944,6 +973,13 @@ export function FitAsk() {
           </button>
         </div>,
       )}
+      {f.phase === "adjusted" &&
+        bubble(
+          `Oracle · ${{ a: "Oct 22, 3:15 PM", b: "Oct 22, 3:21 PM", c: "Oct 23, 10:21 AM" }[f.fd3]}`,
+          <p>
+            Done. {APPROVED[f.fd3]} M2 Agent reply flow now lands Jan 25 (was Mar 12); M3 Team inbox moves to Apr 9. Home, Roadmap and Priorities show the new dates.
+          </p>,
+        )}
       <div className="flex items-center gap-2 rounded-xl border border-line px-3 py-2 text-text2">
         <Icon name="ask" size={18} /> Ask a follow-up
       </div>
