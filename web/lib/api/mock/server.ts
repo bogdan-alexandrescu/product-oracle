@@ -105,6 +105,9 @@ import { digestBlocks, emptyMarket, routeMarket, seedMarket, type MarketDb } fro
 import {
   addInterviewRequest,
   behindBriefRefusal,
+  relinkDocuments,
+  releaseDocuments,
+  type ReleasedRequest,
   linkIntakeDocument,
   putBehindBrief,
   releaseBrief,
@@ -4922,6 +4925,15 @@ function ensureDecisions(db: Db, ctx: DecisionsContext): DecisionsDb {
   return db.decisions;
 }
 
+/** New PRD (4): the title of a document in Trash; null when it is not there. */
+function trashedTitle(db: Db, id: string): string | null {
+  for (const e of db.trash?.entries ?? []) {
+    const d = (e.documents as { id: string; title: string }[]).find((x) => x.id === id);
+    if (d) return d.title;
+  }
+  return null;
+}
+
 function requestsContext(db: Db, userId: string, role: Role): RequestsContext {
   const me = db.members.find((x) => x.id === userId);
   const decisionsCtx = me ? decisionsContext(db, me) : null;
@@ -4933,6 +4945,7 @@ function requestsContext(db: Db, userId: string, role: Role): RequestsContext {
     decisions: decisionsCtx ? requestDecisions(decisionsCtx, () => ensureDecisions(db, decisionsCtx)) : undefined,
     zone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
     intakeTitle: (id) => ensureV2(db).intakes.find((i) => i.id === id)?.title ?? null,
+    trashedTitle: (id) => trashedTitle(db, id),
     suggestionsShown: () => ["recommend", "act"].includes(levelFor((db.autonomy ??= emptyAutonomy()), "requests")),
     goals: () => db.baseline.entities.filter((e) => e.type === "goal"),
     features: () => db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected"),
@@ -5271,6 +5284,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       specRequests: () => (db.specs ??= specsSeed(db)).specs.map((s) => ({ source_document_id: s.request.source_document_id, document_slug: s.document_slug })),
       me,
       deciderOf: (id) => db.review_v2?.policies.find((x) => x.document_id === id)?.decider_id ?? null,
+      // New PRD (4): a PRD moved to Trash releases its requests; Restore links back the free ones.
+      onTrash: (ids) => releaseDocuments(ensureRequests(db), ids),
+      onRestore: (released) => relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
       uuid,
       now,
     },
@@ -5825,6 +5841,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         behindBriefRefusal(ensureRequests(db), ids, {
           intake: (id) => ensureV2(db).intakes.find((i) => i.id === id)?.title ?? null,
           document: (id) => db.documents.find((d) => d.id === id)?.title ?? null,
+          trashed: (id) => trashedTitle(db, id),
         }),
       link: (intakeId: string, ids: string[]) => putBehindBrief(ensureRequests(db), intakeId, ids),
       release: (intakeId: string) => releaseBrief(ensureRequests(db), intakeId),

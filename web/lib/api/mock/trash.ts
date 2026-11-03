@@ -39,6 +39,8 @@ export interface TrashEntryRow {
   versions: unknown[];
   runs: RunOut[];
   intakes: Intake[];
+  /** What the delete released (New PRD 4: the requests linked to its PRDs), for Restore. */
+  released?: unknown;
 }
 
 export interface TrashDb {
@@ -58,6 +60,10 @@ export interface TrashContext<D extends TrashDocument, V extends TrashVersion> {
   me: { id: string; email: string; role: Role };
   /** The document's designated decider (its review policy), who regenerates it whatever their role. */
   deciderOf?: (documentId: string) => string | null;
+  /** New PRD (4): moving these documents to Trash releases what links to them; the result is kept for Restore. */
+  onTrash?: (documentIds: string[]) => unknown;
+  /** Restore: link back what onTrash released (after the rows are back). */
+  onRestore?: (released: unknown) => void;
   uuid: () => string;
   now: () => string;
 }
@@ -264,6 +270,7 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
     versions: take(ctx.versions, (v) => !ids.has(v.document_id)),
     runs: take(ctx.runs(), (r) => !runIds.has(r.id)),
     intakes: take(ctx.intakes(), (i) => !intakeIds.has(i.id)),
+    released: ctx.onTrash?.([...ids]),
   };
   ctx.db.entries.push(entry);
   return json(200, entryOut(entry, now));
@@ -279,5 +286,6 @@ function restore<D extends TrashDocument, V extends TrashVersion>(ctx: TrashCont
   ctx.runs().push(...entry.runs);
   ctx.intakes().push(...entry.intakes);
   ctx.db.entries = ctx.db.entries.filter((e) => e !== entry);
+  if (entry.released !== undefined) ctx.onRestore?.(entry.released);
   return entryOut(entry, now);
 }

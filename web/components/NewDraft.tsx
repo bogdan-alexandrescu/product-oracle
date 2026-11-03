@@ -159,6 +159,90 @@ function Question<V extends string | boolean>({
   );
 }
 
+/** A question that takes several answers (New PRD 2: who reads and approves it); "Not sure" clears them. */
+function MultiQuestion({
+  name,
+  question,
+  options,
+  value,
+  onChange,
+}: {
+  name: string;
+  question: string;
+  options: readonly Option<string>[];
+  value: readonly string[] | null | undefined;
+  onChange: (v: string[] | null) => void;
+}) {
+  const picked = value ?? [];
+  const chip = (on: boolean, none: boolean) =>
+    `inline-flex h-8 cursor-pointer items-center gap-1 rounded-lg border px-3 text-sm font-medium has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent ${
+      on && none
+        ? "border-accent-mid bg-accent-soft text-accent-ink"
+        : on
+          ? "border-accent bg-accent text-on-accent"
+          : none
+            ? "border-line bg-surface text-text2 hover:bg-surface2"
+            : "border-line-strong bg-surface text-text hover:bg-surface2"
+    }`;
+  return (
+    <fieldset className="min-w-0">
+      <legend className="mb-2 text-[15px] font-semibold text-text">{question}</legend>
+      <p className="-mt-1 mb-2 text-sm text-text2">Pick all that apply.</p>
+      <div className="flex flex-wrap gap-1.5">
+        <label className={chip(picked.length === 0, true)}>
+          <input type="checkbox" name={name} className="sr-only" checked={picked.length === 0} onChange={() => onChange(null)} />
+          Not sure
+        </label>
+        {options.map((o) => {
+          const on = picked.includes(o.value);
+          return (
+            <label key={o.value} className={chip(on, false)}>
+              <input
+                type="checkbox"
+                name={name}
+                className="sr-only"
+                checked={on}
+                onChange={() => {
+                  // Kept in the questions' order, whatever order they were ticked in.
+                  const next = options.map((x) => x.value).filter((v) => (v === o.value ? !on : picked.includes(v)));
+                  onChange(next.length ? next : null);
+                }}
+              />
+              {on && <Icon name="check" size={16} />}
+              {o.label}
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
+/** The four PRD questions; who reads and approves it takes several answers. */
+function PrdQuestions({ name, prd, onAnswer }: { name: string; prd: PrdAnswers; onAnswer: <K extends keyof PrdAnswers>(k: K, v: PrdAnswers[K]) => void }) {
+  return PRD_QUESTIONS.map((q) =>
+    q.field === "readers" ? (
+      <MultiQuestion
+        key={q.field}
+        name={`${name}${q.field}`}
+        question={q.question}
+        options={q.options}
+        value={prd.readers}
+        onChange={(v) => onAnswer("readers", v as PrdAnswers["readers"])}
+      />
+    ) : (
+      <Question
+        key={q.field}
+        name={`${name}${q.field}`}
+        question={q.question}
+        options={q.options as readonly Option<string | boolean>[]}
+        value={prd[q.field]}
+        onChange={(v) => onAnswer(q.field, v as never)}
+      />
+    ),
+  );
+}
+
 function NumberQuestion({
   label,
   hint,
@@ -433,6 +517,17 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
   const dark = useDarkPage();
   // qa-docs-39: one theme to offer is no choice; it is named, not drawn as a lone radio.
   const onlyTheme = themes.data?.length === 1 ? themes.data[0] : null;
+  // New PRD (3): a template the person picked never changes on its own; one Oracle chose
+  // may follow the answers, and the change is said in one line.
+  const picked = templateSource === "user" || templateSource === "company";
+  const nameOf = (k: string | null) => templates.find((t) => t.key === k)?.name ?? null;
+  const [shown, setShown] = useState<{ key: string | null; switched: string | null }>({ key: templateKey, switched: null });
+  if (shown.key !== templateKey) setShown({ key: templateKey, switched: !picked && shown.key && templateKey ? templateKey : null });
+  const switchedName = !picked && shown.switched === templateKey ? nameOf(shown.switched) : null;
+  const pick = (key: string) => {
+    setTemplatePick({ key, source: "user" });
+    if (themePick?.source !== "user") setThemePick(null);
+  };
   return (
     <>
       <section aria-labelledby={`${id}-template`}>
@@ -443,18 +538,29 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
           {templateSource === "last" && <Chip kind="acc">Your last choice</Chip>}
           {templateSource === "company" && <Chip kind="acc">Company default</Chip>}
           {rec && templateKey !== rec.template.key && (
-            <Button
-              variant="ghost"
-              className="ml-auto"
-              onClick={() => {
-                setTemplatePick({ key: rec.template.key, source: "user" });
-                setThemePick(null);
-              }}
-            >
-              Use recommended
-            </Button>
+            <span data-testid="template-recommended-now" className="ml-auto inline-flex flex-wrap items-center gap-1.5 text-sm text-text2">
+              <span>
+                Recommended now: <span className="font-semibold text-text">{rec.template.name}</span>
+              </span>
+              <span aria-hidden="true">·</span>
+              <Button
+                variant="ghost"
+                aria-label={`Use ${rec.template.name}`}
+                onClick={() => {
+                  setTemplatePick({ key: rec.template.key, source: "user" });
+                  setThemePick(null);
+                }}
+              >
+                Use it
+              </Button>
+            </span>
           )}
         </div>
+        {switchedName && (
+          <p data-testid="template-switched" role="status" className="-mt-1 mb-2.5 text-sm text-text2">
+            Switched to {switchedName} to match your answers.
+          </p>
+        )}
         <div role="radiogroup" aria-labelledby={`${id}-template`} className="grid gap-2 sm:grid-cols-2">
           {templates.map((t) => {
             const checked = t.key === templateKey;
@@ -472,10 +578,9 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
                   name={`${id}-template`}
                   className="mt-1 size-4 flex-none accent-[var(--accent)]"
                   checked={checked}
-                  onChange={() => {
-                    setTemplatePick({ key: t.key, source: "user" });
-                    if (themePick?.source !== "user") setThemePick(null);
-                  }}
+                  onChange={() => pick(t.key)}
+                  // Clicking the template already shown picks it too (no change event fires).
+                  onClick={() => pick(t.key)}
                 />
                 <span className="min-w-0 flex-1">
                   <span className="flex min-w-0 items-center gap-2">
@@ -884,17 +989,7 @@ export function NewDraft({ kind }: { kind: Kind }) {
                 About this {label}
               </h2>
               <div className="flex flex-col gap-4">
-                {kind === "prd" &&
-                  PRD_QUESTIONS.map((q) => (
-                    <Question
-                      key={q.field}
-                      name={q.field}
-                      question={q.question}
-                      options={q.options as readonly Option<string | boolean>[]}
-                      value={prd[q.field]}
-                      onChange={(v) => setAnswer(q.field, v as never)}
-                    />
-                  ))}
+                {kind === "prd" && <PrdQuestions name="" prd={prd} onAnswer={setAnswer} />}
                 {kind === "roadmap" && (
                   <>
                     {ROADMAP_QUESTIONS.map((q) => (
@@ -1155,6 +1250,20 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
     }
   }
 
+  const [releasing, setReleasing] = useState(false);
+  async function release() {
+    setReleasing(true);
+    try {
+      await unwrap(api.POST("/v1/requests/release-from-trash", { body: { request_ids: requests } }));
+      setError(null);
+      (document.getElementById(formId) as HTMLFormElement | null)?.requestSubmit();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setReleasing(false);
+    }
+  }
+
   async function skeleton() {
     if (!templateKey || !title.trim()) {
       setError("Give the PRD a title first.");
@@ -1228,7 +1337,20 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
             </p>
           )}
           <Split inspector={inspector}>
-          {error && <ErrorNote>{error}</ErrorNote>}
+          {error && (
+            <ErrorNote>
+              {error}
+              {/* New PRD (4): a request still linked to a PRD in Trash is released here, then Continue goes again. */}
+              {error.includes("which is in Trash") && (
+                <>
+                  {" "}
+                  <Button variant="ghost" onClick={() => void release()} disabled={releasing}>
+                    {releasing ? "Releasing…" : "Release it"}
+                  </Button>
+                </>
+              )}
+            </ErrorNote>
+          )}
           {checked && !ready && (
             <ErrorNote>
               <span data-testid="new-prd-missing">
@@ -1319,16 +1441,7 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
                 About this PRD
               </h2>
               <div className="flex flex-col gap-4">
-                {PRD_QUESTIONS.map((q) => (
-                  <Question
-                    key={q.field}
-                    name={`${id}-${q.field}`}
-                    question={q.question}
-                    options={q.options as readonly Option<string | boolean>[]}
-                    value={prd[q.field]}
-                    onChange={(v) => setAnswer(q.field, v as never)}
-                  />
-                ))}
+                <PrdQuestions name={`${id}-`} prd={prd} onAnswer={setAnswer} />
               </div>
             </section>
           </Panel>
