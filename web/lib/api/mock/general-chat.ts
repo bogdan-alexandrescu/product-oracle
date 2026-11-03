@@ -14,7 +14,12 @@ type Reply = { pieces: string[]; citations: Record<string, unknown>[] };
 
 export function generalReply(baseline: BaselineState, path: string, question: string, now: string): Reply | null {
   if (path !== "/" || !GENERAL_FOCUS.test(question)) return null;
-  const goals = baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").slice(0, 3);
+  // The goals features serve first, as a person asking for focus areas wants them.
+  const served = (id: string) => baseline.edges.some((x) => x.type === "supports" && x.dst_id === id && x.status !== "rejected");
+  const goals = baseline.entities
+    .filter((e) => e.type === "goal" && e.status === "confirmed")
+    .sort((a, b) => Number(served(b.id)) - Number(served(a.id)))
+    .slice(0, 3);
   if (!goals.length) return null;
   const citations: Record<string, unknown>[] = [];
   const cite = (kind: string, title: string, id: string) => {
@@ -31,6 +36,13 @@ export function generalReply(baseline: BaselineState, path: string, question: st
     const named = features.map((f) => `${f.title} (${f.status}) ${cite("entity", `Feature: ${f.title}`, f.id)}`);
     return `- **${g.title}** ${goalCite.get(g.id)}: ${named.length ? named.join(", ") : "no features yet"}`;
   });
+  // As the API's context says of them: "serves no goal yet".
+  const ids = new Set(goals.map((g) => g.id));
+  const loose = baseline.entities
+    .filter((e) => e.type === "feature" && e.status !== "rejected")
+    .filter((f) => !baseline.edges.some((x) => x.type === "supports" && x.src_id === f.id && ids.has(x.dst_id) && x.status !== "rejected"))
+    .slice(0, 3);
+  if (loose.length) lines.push(`- **Not tied to a goal yet**: ${loose.map((f) => `${f.title} (${f.status}) ${cite("entity", `Feature: ${f.title}`, f.id)}`).join(", ")}`);
   const first = goals[0];
   citations.push({ kind: "live", ref: "l:1", source: "Meeting notes", call: "search", read_at: now, item_id: null });
   return {

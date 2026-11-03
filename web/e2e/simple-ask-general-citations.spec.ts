@@ -61,7 +61,8 @@ for (const phone of [false, true]) {
       await expect(reply).toHaveAttribute("data-status", "complete");
       await expect(reply.getByTestId("answer-title")).toHaveText("Focus areas");
       const body = reply.getByTestId("chat-message-body");
-      await expect(body).toContainText("The last planning call named the same three.");
+      await expect(body).toContainText("The last planning call named the same three");
+      await expect(body).toContainText("(confirmed)");
       for (const raw of ["[l:", "[c:", "[s:", "c4]"]) await expect(body).not.toContainText(raw);
 
       // Context citations are raised links to the baseline; the read is a raised number after them.
