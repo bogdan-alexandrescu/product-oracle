@@ -9,9 +9,11 @@ import { login } from "./helpers";
 // reported yet", not "$0.00". "Refresh progress" counts only the runs at work and names each
 // run it could not check, with why and a link to it.
 
-async function startRoadmap(page: import("@playwright/test").Page) {
+async function startRoadmap(page: import("@playwright/test").Page, phone = false) {
   await login(page);
-  await page.getByRole("navigation", { name: "Oracle" }).getByRole("link", { name: "Plan", exact: true }).click();
+  // A phone keeps the side nav folded away: Plan by its address.
+  if (phone) await page.goto("/plan");
+  else await page.getByRole("navigation", { name: "Oracle" }).getByRole("link", { name: "Plan", exact: true }).click();
   await page.getByTestId("plan-tabs").filter({ visible: true }).getByRole("link", { name: "Roadmap documents" }).click();
   await page.getByTestId("approved-prd").filter({ hasText: "Usage alerts PRD" }).getByRole("button", { name: "Build roadmap" }).click();
   const dialog = page.getByRole("dialog", { name: "Build roadmap" });
@@ -20,9 +22,9 @@ async function startRoadmap(page: import("@playwright/test").Page) {
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
 }
 
-test("a step that wrote proposals shows that work, and an unreported cost says so", async ({ page }) => {
+async function quietAgents(page: import("@playwright/test").Page, phone = false) {
   await page.addInitScript((key) => localStorage.setItem(key, "quiet-agents"), MOCK_SCENARIO_KEY);
-  await startRoadmap(page);
+  await startRoadmap(page, phone);
   const items = page.getByTestId("segment-roadmap_items");
   const progress = items.getByTestId("segment-progress");
   await expect(progress.getByTestId("segment-cost")).toHaveText("Cost not reported yet");
@@ -38,11 +40,11 @@ test("a step that wrote proposals shows that work, and an unreported cost says s
   await expect(progress.getByTestId("segment-cost")).toHaveText("Cost not reported yet");
   await expect(progress).not.toContainText("$0.00");
   await expect(progress).toContainText(/· checked \d+[smh] ago/);
-});
+}
 
-test("a check that could not read a run names it, says why and links to it", async ({ page }) => {
+async function uncheckedRun(page: import("@playwright/test").Page, phone = false) {
   await page.addInitScript(([key]) => localStorage.setItem(key, "1"), [MOCK_TICK_ERRORS_KEY] as const);
-  await startRoadmap(page);
+  await startRoadmap(page, phone);
   const here = page.url();
   await page.getByRole("button", { name: "Refresh progress" }).click();
   const result = page.getByTestId("tick-result");
@@ -59,4 +61,24 @@ test("a check that could not read a run names it, says why and links to it", asy
   await expect(page).not.toHaveURL(here);
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText(name.split(" · ").pop() ?? name);
+}
+
+test("a step that wrote proposals shows that work, and an unreported cost says so", async ({ page }) => {
+  await quietAgents(page);
+});
+
+test("a check that could not read a run names it, says why and links to it", async ({ page }) => {
+  await uncheckedRun(page);
+});
+
+test.describe("phone", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("on a phone, the proposals written and the unreported cost show", async ({ page }) => {
+    await quietAgents(page, true);
+  });
+
+  test("on a phone, the run a check could not read is named with a link", async ({ page }) => {
+    await uncheckedRun(page, true);
+  });
 });
