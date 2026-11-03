@@ -55,6 +55,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.baseline.goal_order import goal_position, sort_goals
 from oracle.baseline.models import Edge, Entity, Evidence
 from oracle.docs.models import Document, DocumentVersion
 from oracle.jobs.models import LlmJob
@@ -874,7 +875,7 @@ def _live_goals(read_: service.Read) -> set[uuid.UUID]:
 
 
 async def _goals(db: AsyncSession) -> list[Entity]:
-    return list(
+    return sort_goals(
         await db.scalars(
             select(Entity)
             .where(Entity.type == "goal", Entity.status == "confirmed")
@@ -923,7 +924,7 @@ async def suggest(db: AsyncSession, principal: Any, goal_id: uuid.UUID) -> Simpl
 
 
 def _brief(g: Entity) -> SimpleGoalBrief:
-    return SimpleGoalBrief(id=str(g.id), key=g.key, title=g.title)
+    return SimpleGoalBrief(id=str(g.id), key=g.key, title=g.title, position=goal_position(g.attrs))
 
 
 async def listing(

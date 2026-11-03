@@ -38547,6 +38547,8 @@ export interface components {
             key: string;
             /** Title */
             title: string;
+            /** Position */
+            position?: number | null;
         };
         /** SimpleGoalBucket */
         SimpleGoalBucket: {

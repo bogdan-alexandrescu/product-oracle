@@ -115909,6 +115909,17 @@
           "title": {
             "type": "string",
             "title": "Title"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
           }
         },
         "type": "object",
