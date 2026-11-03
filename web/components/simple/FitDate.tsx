@@ -326,7 +326,7 @@ function Packages({
                 checked={on}
                 onChange={() => setPkg(p.id)}
               />
-              <span className="flex-1 font-semibold">{p.name}</span>
+              <span className="flex-1 font-semibold">{hard && p.id === "fit" ? "Middle cut" : p.name}</span>
               <span
                 className={`tnum text-lg font-semibold ${over <= 0 ? "text-pass" : "text-warn"}`}
               >
@@ -339,7 +339,7 @@ function Packages({
                 : `${over} days after ${target}.`}{" "}
               {s.pw} person-weeks off.{" "}
               {p.id === "fit" && !hard ? "Oracle's pick. " : ""}
-              {p.gives}
+              {hard && p.id === "fit" ? "The goal starts at 34 of 40." : p.gives}
             </span>
             {on && (
               <ul className="flex flex-col gap-1 border-t border-line pt-2">
@@ -398,7 +398,7 @@ function DragTimeline({
       </p>
       <div className="relative overflow-x-auto rounded-xl border border-line">
         <div className="relative min-w-[720px] py-2">
-          <div className="relative mt-7 ml-[220px] h-6 text-[12px] text-text2">
+          <div className="relative mt-12 ml-[220px] h-6 text-[12px] text-text2">
             {ticks.map((t) => (
               <span
                 key={t}
@@ -414,7 +414,7 @@ function DragTimeline({
               className="absolute top-0 bottom-0 border-l-2 border-dashed border-accent"
               style={{ left: `${x(target)}%` }}
             >
-              <span className="absolute top-0 right-1 rounded bg-accent px-1.5 text-[12px] font-semibold whitespace-nowrap text-on-accent">
+              <span className="absolute top-0 right-1 z-10 rounded bg-accent px-1.5 text-[12px] font-semibold whitespace-nowrap text-on-accent">
                 Target {target}
               </span>
             </div>
@@ -422,7 +422,7 @@ function DragTimeline({
               className="absolute top-0 bottom-0 border-l-2 border-warn"
               style={{ left: `${x(newEnd)}%` }}
             >
-              <span className="absolute top-0 left-1 rounded bg-warn-bg px-1.5 text-[12px] font-semibold whitespace-nowrap text-warn">
+              <span className="absolute top-6 left-1 rounded bg-warn-bg px-1.5 text-[12px] font-semibold whitespace-nowrap text-warn">
                 M2 now {newEnd}
               </span>
             </div>

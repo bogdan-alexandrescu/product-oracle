@@ -146,7 +146,7 @@ export const FIT_RECS: FitRec[] = [
     lever: "move",
     title: "Move after the date",
     item: "Reply to similar threads at once",
-    effect: "Moves to M3 Team inbox, Apr 9",
+    effect: "Moves to M3 Team inbox: lands Mar 19, M3 on Apr 9",
     pwSaved: 5,
     days: 16,
     moves: [
@@ -308,7 +308,7 @@ export const FIT_DIFF = {
       item: "Thread summary card (4 to 2 person-weeks)",
     },
     { change: "Moved to the next PRD", item: "Tone presets" },
-    { change: "Goal at launch", item: "34 of 40 replied threads; 40 after M3" },
+    { change: "34 of 40 replied threads at launch; 40 after M3", item: "The goal" },
   ],
   dates: [
     {

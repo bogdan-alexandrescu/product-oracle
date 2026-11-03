@@ -1,0 +1,168 @@
+{
+  "title": "Bring a goal date in: ask Oracle what to cut or shrink",
+  "subtitle": "Oracle answers with changes you pick from; then the PRD and its roadmap get new drafts with the dates worked out again, all in Simple. Invented example: Larkspur Help Desk's goal \"40 replied threads per agent per day\", milestone M2 Agent reply flow, target Jan 29, on today's plan Mar 12 (4 engineers at 70% focus).",
+  "decisions": [
+    {
+      "code": "FD1",
+      "name": "Where you ask",
+      "question": "Where in Simple does the owner ask Oracle to bring a date in?",
+      "common": "Every place opens the same Oracle answer in Simple, never Detailed. The answer names the goal, the target, today's date on the plan and the team it counts on. When no set of changes reaches the target (the hard case: target Jan 8), the place still opens and says so plainly.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "On the roadmap date",
+          "recommended": true,
+          "what": "Simple Roadmap shows the goal with its target and its date on today's plan. When the plan misses the target, a \"Bring this date in\" button sits beside the late date. One tap opens Oracle's answer in a side panel over the roadmap, so the milestones you are changing stay in view.",
+          "why": "The question comes up where the date is read, and the panel keeps the roadmap behind it, so you see the items you are about to move. It needs no new page and no new card on Home.",
+          "plus": "Asked where the late date shows; the roadmap stays in view while you pick; works the same on a phone as a bottom sheet.",
+          "cost": "Only someone who opens Roadmap finds it; a late date is not pushed to you.",
+          "frames": [
+            { "file": "fd1-a-rest.html", "caption": "At rest: the goal is 6 weeks late (Mar 12 against Jan 29), and \"Bring this date in\" sits beside the late date." },
+            { "file": "fd1-a-open.html", "caption": "Tapped: Oracle's answer opens in a side panel over the same roadmap." },
+            { "file": "fd1-a-hard-1512.html", "caption": "Hard case at 1512: the target is Jan 8, 9 weeks away; the same button shows." },
+            { "file": "fd1-a-phone.html", "caption": "Phone 390: the goal card and its button lead the page; the milestones stack under it." }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "A prompt on Home",
+          "recommended": false,
+          "what": "When a goal's date on the plan passes its target, Simple Home shows a card saying so, with how late it is and how many changes Oracle found. \"See what to cut\" opens the answer over Home; \"Keep the date as it is\" puts the card away.",
+          "plus": "You hear about a late date without looking for it; one tap from the first page you open.",
+          "cost": "Adds a card to Home each time a date slips; the roadmap is not in view while you pick, so moving items is harder to picture.",
+          "frames": [
+            { "file": "fd1-b-rest.html", "caption": "At rest: Home's card says M2 lands Mar 12, 6 weeks after Jan 29, and Oracle found 7 changes." },
+            { "file": "fd1-b-open.html", "caption": "\"See what to cut\" pressed: the answer opens over Home." },
+            { "file": "fd1-b-hard-1512.html", "caption": "Hard case at 1512: the card says no changes reach Jan 8." },
+            { "file": "fd1-b-phone.html", "caption": "Phone 390: the card sits under the greeting." }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Ask Oracle question",
+          "recommended": false,
+          "what": "You type the question in Ask Oracle (\"What can we cut or shrink to bring M2 in to Jan 29?\"). Oracle answers in a few lines with the biggest changes and the new date, and a \"Pick the changes\" button turns the answer into the same pick list.",
+          "plus": "Works from any page and for any goal or milestone you name; a follow-up question can narrow it (\"without touching the chart\").",
+          "cost": "You have to know to ask; each question runs Oracle (a few cents and some seconds) before you see anything.",
+          "frames": [
+            { "file": "fd1-c-rest.html", "caption": "At rest: the question asked, and Oracle's short answer: five changes bring M2 from Mar 12 to Jan 25." },
+            { "file": "fd1-c-open.html", "caption": "\"Pick the changes\" pressed: the pick list opens." },
+            { "file": "fd1-c-hard-1512.html", "caption": "Hard case at 1512: Oracle says the earliest is Jan 16, and names the two items it will not cut." },
+            { "file": "fd1-c-phone.html", "caption": "Phone 390: the same answer, full width." }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "FD2",
+      "name": "How Oracle shows its picks",
+      "question": "How does Oracle show its changes for you to pick from?",
+      "common": "Each change is one lever on one item: move it after the date or to the next PRD, ship only the slice the milestone needs, take it off the milestone's gate, split it, overlap a wait, or raise focus time. Each shows days saved, person-weeks saved, which dates move, and what it costs (goal at risk, off the gate, a risk). A locked box lists what Oracle will not cut and why: the send check (guardrail: no draft goes out without an agent reading it) and hiding card numbers (safety). The must-include item is shown but cannot be picked.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Ranked list, live date",
+          "recommended": true,
+          "what": "One list, ranked by days saved for the least harm, with a tick box per change. A meter on top shows the new date as you tick: amber while it misses the target, green with the days to spare once it reaches it. Oracle ticks its own pick to start; you untick or add.",
+          "why": "Every change and its cost is in one place, and the meter answers \"is that enough?\" at each tick. It fits a side panel and a phone without a new kind of control.",
+          "plus": "Fine control: any mix of changes; the cost of each is read before it is ticked; the date updates at once.",
+          "cost": "A long list (8 changes here) asks for scrolling; the owner weighs each change rather than taking a ready set.",
+          "frames": [
+            { "file": "fd2-a-open.html", "caption": "Open: Oracle's pick is ticked (5 changes) and the meter shows Jan 25, reaching Jan 29 with 4 days to spare." },
+            { "file": "fd2-a-mid.html", "caption": "Mid-pick: three changes ticked; the meter shows Feb 12, 14 days after Jan 29." },
+            { "file": "fd2-a-picked.html", "caption": "Two more ticked (the reply time chart off the gate, tone presets to the next PRD): the meter turns green at Jan 25." },
+            { "file": "fd2-a-hard-1512.html", "caption": "Hard case at 1512: every change ticked still lands Jan 16, 8 days after Jan 8; the send check is locked and Oracle says it will not offer it." },
+            { "file": "fd2-a-phone.html", "caption": "Phone 390: the meter sticks at the top of the sheet while the list scrolls." },
+            { "file": "fd2-a-dark.html", "caption": "Dark: the mid-pick state." }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Three packages",
+          "recommended": false,
+          "what": "Oracle groups the changes into three ready sets from least to most cut: Light trim, Fits the date, Deep cut. Each shows its date, person-weeks off and what it gives up; the picked one opens to list its changes.",
+          "plus": "One decision instead of eight; easy to compare the three on a phone.",
+          "cost": "You take a whole set or change it a step later; a package can hide one change you would not make.",
+          "frames": [
+            { "file": "fd2-b-open.html", "caption": "Open: \"Fits the date\" is Oracle's pick: Jan 25, 14 person-weeks off." },
+            { "file": "fd2-b-mid.html", "caption": "Mid-pick: Light trim chosen; it keeps every feature but lands Feb 25, 27 days late." },
+            { "file": "fd2-b-picked.html", "caption": "\"Fits the date\" picked again: its five changes list under it." },
+            { "file": "fd2-b-hard-1512.html", "caption": "Hard case at 1512: even Deep cut lands Jan 16, 8 days after Jan 8." },
+            { "file": "fd2-b-phone.html", "caption": "Phone 390: the three packages stack in the sheet." },
+            { "file": "fd2-b-dark.html", "caption": "Dark: the open state." }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Drag past the line",
+          "recommended": false,
+          "what": "A wide panel shows the milestone's items as bars on a timeline with a dashed target line. You drag a bar past the line to move it after the date, or drag its end in to ship a slice; the line for the milestone's new date moves as you drop. Locked bars do not move.",
+          "plus": "Shows when things land, not just how many days are saved; good for someone who thinks in calendars.",
+          "cost": "Needs a wide panel (1040 px) and dragging; on a phone the bars are tiny and dragging is fiddly. The cost of each change is not in view while dragging.",
+          "frames": [
+            { "file": "fd2-c-open.html", "caption": "Open: Oracle's pick already dragged: two bars past the line, one sliced; M2 now Jan 25." },
+            { "file": "fd2-c-mid.html", "caption": "Mid-drag: the reply time chart being dragged off M2's gate; M2 now Feb 12." },
+            { "file": "fd2-c-hard-1512.html", "caption": "Hard case at 1512: every movable bar moved; M2 still lands Jan 16, after the Jan 8 line." },
+            { "file": "fd2-c-phone.html", "caption": "Phone 390: the timeline scrolls sideways inside the sheet." },
+            { "file": "fd2-c-dark.html", "caption": "Dark: the mid-drag state." }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "FD3",
+      "name": "What happens after the pick",
+      "question": "What happens once you have picked the changes?",
+      "common": "Oracle writes the picked changes into a new draft of the PRD (version 3 to 4) and of its roadmap (version 6 to 7) and works the dates out again from sizes, team, focus, order and waits; you never edit either by hand. The locked items stay as they are. Once the new versions are live, Home, Roadmap and Priorities show the new dates.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Draft, check, approve",
+          "recommended": true,
+          "what": "\"Draft 5 changes\" runs Oracle (about 40 seconds, about $0.20 of Claude time). It shows what changes in the PRD and every date that moves, old struck through, new beside it. \"Approve both\" makes both versions live at once; \"Back to the picks\" changes the pick.",
+          "why": "You see every date that moves before anything changes, in one step, and you are the one who approves; the cost and time are said up front.",
+          "plus": "Nothing changes until you have read the list of moved dates; one approve for both documents.",
+          "cost": "One more step and a 40-second wait before the roadmap shows the new dates.",
+          "frames": [
+            { "file": "fd3-a-open.html", "caption": "The pick made: the button says what follows, Oracle drafts the next versions for you to check, about 40 seconds." },
+            { "file": "fd3-a-result.html", "caption": "Result: PRD changes and the date list (M2 Mar 12 to Jan 25, M3 Apr 2 to Apr 9), with the run's time and cost." },
+            { "file": "fd3-a-adjusted.html", "caption": "Approved: the roadmap shows the new dates, old ones struck through; the goal is on plan for Jan 25." },
+            { "file": "fd3-a-hard-1512.html", "caption": "Hard case at 1512: the panel offers to keep the cuts and move the target to Jan 16 before drafting." },
+            { "file": "fd3-a-phone.html", "caption": "Phone 390: the check list in the sheet, Approve both at its foot." },
+            { "file": "fd3-a-dark.html", "caption": "Dark: the adjusted roadmap." }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Apply to drafts, undo",
+          "recommended": false,
+          "what": "\"Apply 5 changes to the drafts\" writes them into the PRD and roadmap drafts at once. The roadmap shows the new dates as a draft with \"Publish both\" and \"Undo all 5\"; undo works for 7 days.",
+          "plus": "Fastest: the new dates show the moment you pick; undo is one tap.",
+          "cost": "No list of moved dates before the change; a date in another milestone (M3 moving a week) is easy to miss until it is published.",
+          "frames": [
+            { "file": "fd3-b-open.html", "caption": "The pick made: the button applies the changes straight to the drafts." },
+            { "file": "fd3-b-result.html", "caption": "Result: the roadmap draft already shows the new dates, with Publish both and Undo all 5." },
+            { "file": "fd3-b-adjusted.html", "caption": "Published: the new dates are live." },
+            { "file": "fd3-b-hard-1512.html", "caption": "Hard case at 1512: every change applies, and the panel says Jan 8 is still out of reach." },
+            { "file": "fd3-b-phone.html", "caption": "Phone 390: the applied draft with its Publish and Undo buttons." }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Engineering lead checks",
+          "recommended": false,
+          "what": "Oracle drafts both versions, then sends them to the engineering lead (here Tomas Brook) as a Simple review step to check the new sizes (a slice of 4 person-weeks down to 2 is an estimate). The dates change once the lead approves; you hear on Home.",
+          "plus": "The person who knows the sizes confirms the slices before dates are promised.",
+          "cost": "Waits on another person, most often up to a day; the owner cannot bring the date in alone.",
+          "frames": [
+            { "file": "fd3-c-open.html", "caption": "The pick made: the button sends the changes for a size check." },
+            { "file": "fd3-c-result.html", "caption": "Result: waiting on Tomas Brook since Oct 22, 3:12 PM, with the drafted changes and dates listed." },
+            { "file": "fd3-c-adjusted.html", "caption": "Approved the next morning: the roadmap shows the new dates." },
+            { "file": "fd3-c-hard-1512.html", "caption": "Hard case at 1512: the same no-reach note before anything is sent." },
+            { "file": "fd3-c-phone.html", "caption": "Phone 390: the waiting state in the sheet." }
+          ]
+        }
+      ]
+    }
+  ]
+}
