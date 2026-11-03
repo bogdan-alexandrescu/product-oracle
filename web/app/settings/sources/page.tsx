@@ -872,7 +872,8 @@ function SourceRow({
               <span className="min-w-0 flex-1 basis-60 break-words" data-testid="last-error">
                 {source.last_error}
               </span>
-              {connectionRejected(source, connection) && (
+              {/* With no connection left, the block above says what to do instead. */}
+              {connectionRejected(source, connection) && !unlinked && (
                 <LinkButton href="/settings/connections" icon="link" data-testid="source-reconnect" aria-label={`Reconnect ${source.name}`}>
                   Reconnect
                 </LinkButton>

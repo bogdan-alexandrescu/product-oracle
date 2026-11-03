@@ -102,6 +102,8 @@ for (const [size, viewport] of [
         block.getByRole("link", { name: "Settings › Connections" }),
       ).toHaveAttribute("href", "/settings/connections");
       await expect(block.getByRole("button", { name: /^Use / })).toHaveCount(0);
+  // Its old error stays, but no Reconnect beside it: the block says what to do.
+  await expect(row.getByTestId("source-reconnect")).toHaveCount(0);
       await capture(page, row, "source-relink-none", size);
       await block.getByRole("link", { name: "Settings › Connections" }).click();
       await expect(page).toHaveURL(/\/settings\/connections$/);
