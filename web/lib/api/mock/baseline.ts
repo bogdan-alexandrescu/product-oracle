@@ -6,6 +6,7 @@
  * confirmed goal or rest on weak evidence.
  */
 import type { Schemas } from "@/lib/api/client";
+import { goalPosition, sortGoals } from "@/lib/goal-order";
 
 import { DEPOSITS_IDS } from "./blockers";
 import { describe, proposer } from "./describe";
@@ -1067,6 +1068,8 @@ export async function routeBaseline(
       goal_check: e.type === "goal" ? goalCheck(e.attrs, e.status, isMember) : null,
       parent_id: e.parent_id ?? null,
       progress: e.type === "goal" ? progressOf(s, e) : null,
+      // goal-order: a goal's place on every page (its attrs.position, 1 = first).
+      position: e.type === "goal" ? goalPosition({ attrs: e.attrs }) : null,
     }) as Schemas["EntityOut"];
   /** 422 with every problem, as the API refuses a person's bad goal fields. */
   const refuse = (errors: GoalProblem[]) => json(422, { detail: `goal fields rejected: ${errors.length} problem(s)`, errors });
@@ -1131,10 +1134,9 @@ export async function routeBaseline(
     if (head === "entities" && !id && m === "GET") {
       const type = q.get("type");
       const status = q.get("status");
-      return json(
-        200,
-        s.entities.filter((e) => shown(e) && (!type || e.type === type) && (!status || e.status === status)).map(entityOut),
-      );
+      const rows = s.entities.filter((e) => shown(e) && (!type || e.type === type) && (!status || e.status === status));
+      // goal-order: goals in the one goal order, as the API lists them.
+      return json(200, (type === "goal" ? sortGoals(rows) : rows).map(entityOut));
     }
 
     if (head === "entities" && !id && m === "POST") {

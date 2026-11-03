@@ -1,4 +1,4 @@
-import { byTitle } from "@/app/baseline/_components/order";
+import { byGoalOrder } from "@/lib/goal-order";
 import { named, type Names } from "@/lib/codes";
 
 /** The fields the goal tree reads (an EntityOut is one). */
@@ -11,6 +11,7 @@ type GoalLike = {
   parent_id?: string | null;
   created_at?: string;
   attrs?: Record<string, unknown>;
+  position?: number | null;
 };
 
 export type GoalNode<T extends GoalLike> = {
@@ -33,16 +34,13 @@ export type GoalNode<T extends GoalLike> = {
   children: number;
 };
 
-const heaviest = (a: GoalLike, b: GoalLike) =>
-  Number(b.attrs?.weight ?? 0) - Number(a.attrs?.weight ?? 0) || byTitle(a, b);
-
 const oldest = (a: GoalLike, b: GoalLike) =>
   (a.created_at ?? "").localeCompare(b.created_at ?? "") || a.id.localeCompare(b.id);
 
 /**
  * A subgoal's number under its parent: the order the parent's subgoals were created in,
  * archived ones keeping theirs, so G-B.1 names the same subgoal whatever the weights are
- * and whichever siblings come or go (a code quoted in a PRD stays true).
+ * and whichever positions are set and whichever siblings come or go (a code quoted in a PRD stays true).
  */
 function subgoalNumbers(goals: GoalLike[]): Map<string, number> {
   const byParent = new Map<string, GoalLike[]>();
@@ -51,7 +49,7 @@ function subgoalNumbers(goals: GoalLike[]): Map<string, number> {
 }
 
 /**
- * Live goals as a tree, heaviest first at each level: each goal is followed by its
+ * Live goals as a tree, in the one goal order at each level (lib/goal-order.ts): each goal is followed by its
  * subgoals (#345). Goals are tagged G1, G2…; a subgoal takes its parent's tag and its
  * place: G1.1, G1.2. Its code is its parent's code and its number (G-B.1), none when the
  * parent has none. A subgoal whose parent is archived or gone stands as a goal. Archived
@@ -65,9 +63,9 @@ export function goalTree<T extends GoalLike>(entities: T[], numbered: GoalLike[]
   const out: GoalNode<T>[] = [];
   live
     .filter((g) => !isSub(g))
-    .sort(heaviest)
+    .sort(byGoalOrder)
     .forEach((g, i) => {
-      const subs = live.filter((s) => isSub(s) && s.parent_id === g.id).sort(heaviest);
+      const subs = live.filter((s) => isSub(s) && s.parent_id === g.id).sort(byGoalOrder);
       const own = named(g.title, g.key);
       out.push({
         goal: g,

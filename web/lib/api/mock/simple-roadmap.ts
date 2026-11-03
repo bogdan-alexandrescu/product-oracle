@@ -9,6 +9,7 @@
  * horizons are the defaults (short 1 quarter, medium 2, long 12-24 months).
  */
 import type { Schemas } from "@/lib/api/client";
+import { goalPosition, sortGoals, type OrderedGoal } from "@/lib/goal-order";
 import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
@@ -214,6 +215,26 @@ export function knowTalkGoals(db: { items: { key: string }[]; plan?: unknown }):
   }
 }
 const GOALS_KNOWN: Record<string, boolean> = {};
+
+/**
+ * goal-order: the company's goals (the baseline's), so Simple's goal refs, groups, buckets and
+ * goal cards follow the one goal order (lib/goal-order.ts). server.ts names them before every
+ * Simple route; a goal the baseline does not hold comes after those it does, by key.
+ */
+let companyGoals: (OrderedGoal & { key: string })[] = [];
+export function knowCompanyGoals(goals: (OrderedGoal & { key: string })[]): void {
+  companyGoals = sortGoals(goals);
+}
+/** A goal's place in the one goal order (by key). */
+export function goalRank(key: string): number {
+  const n = companyGoals.findIndex((g) => g.key === key);
+  return n < 0 ? Number.MAX_SAFE_INTEGER : n;
+}
+/** A goal's position (by key), null when unset or unknown. */
+export function goalPositionOf(key: string): number | null {
+  const g = companyGoals.find((x) => x.key === key);
+  return g ? goalPosition(g) : null;
+}
 
 /** The PRD's own code of a section an item came from ("f-06" -> "F-06"); null when the key is no code (service.py). */
 export function prdCode(section: string | null | undefined): string | null {
@@ -881,7 +902,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       code: prdCode(s.section),
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
       prd: ownPrd(s),
-      goal: s.goal ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, title: GOALS[s.goal] ?? PLAN_GOALS[s.goal], metric: METRICS[s.goal] ?? null } : null,
+      goal: s.goal ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, title: GOALS[s.goal] ?? PLAN_GOALS[s.goal], metric: METRICS[s.goal] ?? null, position: goalPositionOf(s.goal) } : null,
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,
       status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),
@@ -948,7 +969,9 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     const ref = group === "goal" ? i.goal : group === "track" ? i.track : i.prd;
     const none = { goal: "No goal", track: "No track", prd: "No PRD" }[group];
     const key = ref?.id ?? "none";
-    const g = groups.get(key) ?? { title: ref?.title ?? none, sort: ref ? `0${"key" in ref ? ref.key : ref.title}` : "1", item_ids: [] };
+    // goal-order: goal groups in the one goal order (then by key); No goal last.
+    const sort = !ref ? "1" : "key" in ref ? `0${String(goalRank(String(ref.key))).padStart(16, "0")}${ref.key}` : `0${ref.title}`;
+    const g = groups.get(key) ?? { title: ref?.title ?? none, sort, item_ids: [] };
     g.item_ids.push(i.id);
     groups.set(key, g);
   }

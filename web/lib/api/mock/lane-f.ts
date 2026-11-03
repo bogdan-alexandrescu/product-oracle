@@ -5,6 +5,7 @@
  * UI to be exercised; the API stays the reference.
  */
 import type { Schemas } from "@/lib/api/client";
+import { goalPosition, sortGoals } from "@/lib/goal-order";
 import { plainText } from "@/lib/markdown";
 import { LONG_WORDS_SCENARIO } from "./baseline";
 import { presenterNotes, resolveBrief } from "./brief";
@@ -1991,8 +1992,16 @@ const KEY_RE = /^[a-z0-9][a-z0-9-]{1,62}$/;
 
 /** Each goal term titled as the baseline titles the goal now, as the API reads it. */
 function goalTitles(db: Db, r: Schemas["PriorityRanking"], scenario?: string | null): Schemas["PriorityRanking"] {
-  const titles = new Map((db.baseline.entities).filter((e) => e.type === "goal").map((e) => [e.key, e.title]));
-  for (const f of r.features) for (const g of f.explanation.goals) g.title = titles.get(g.goal) ?? g.title;
+  const goals = db.baseline.entities.filter((e) => e.type === "goal");
+  const titles = new Map(goals.map((e) => [e.key, e.title]));
+  // goal-order: each feature's goals carry their position and come in the one goal order.
+  const rank = new Map(sortGoals(goals).map((e, i) => [e.key, i]));
+  const at = new Map(goals.map((e) => [e.key, goalPosition({ attrs: e.attrs })]));
+  const place = (key: string) => rank.get(key) ?? Number.MAX_SAFE_INTEGER;
+  for (const f of r.features) {
+    for (const g of f.explanation.goals) Object.assign(g, { title: titles.get(g.goal) ?? g.title, position: at.get(g.goal) ?? null });
+    f.explanation.goals.sort((a, b) => place(a.goal) - place(b.goal) || a.goal.localeCompare(b.goal));
+  }
   if (scenario === LONG_WORDS_SCENARIO) for (const f of r.features) f.title = LONG_WORDS[f.key] ?? f.title;
   return r;
 }

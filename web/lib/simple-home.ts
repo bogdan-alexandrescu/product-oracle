@@ -79,7 +79,7 @@ export function itemAtRisk(item: Item, today: string): string | null {
   return null;
 }
 
-/** The goal band: one tile per confirmed top-level goal, heaviest first, then by key. */
+/** The goal band: one tile per confirmed top-level goal, in the one goal order (lib/goal-order.ts). */
 export function goalTiles(goals: Entity[], roadmap: Roadmap | undefined, waiting: Set<string>): GoalTile[] {
   const today = roadmap?.today ?? "";
   const confirmed = goals.filter((g) => g.type === "goal" && g.status === "confirmed");

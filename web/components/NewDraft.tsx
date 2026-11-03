@@ -26,6 +26,7 @@ import { ThemeThumbnail } from "@/components/ThemePreview";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { namedText } from "@/lib/codes";
+import { sortGoals } from "@/lib/goal-order";
 import { unwrapProblems, ProblemsError } from "@/lib/api/problems";
 import { assess, goalViews } from "@/app/home/_goals";
 import { useMe } from "@/lib/me";
@@ -962,8 +963,9 @@ const PROBLEM_MAX = 4000;
 
 /** The company's confirmed goals, as the goal pickers read them. */
 export function useConfirmedGoals() {
-  return useQuery("door-goals", () =>
-    unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal", status: "confirmed" } } })),
+  // goal-order: the chips in the one goal order, whatever order the list comes in.
+  return useQuery("door-goals", async () =>
+    sortGoals(await unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal", status: "confirmed" } } }))),
   );
 }
 

@@ -298,6 +298,8 @@ export type GoalDraft = {
   due: string;
   owner: string | null;
   weight: string;
+  /** goal-order: the goal's place on every page, 1 = first. */
+  position: string;
 };
 
 const str = (v: unknown) => (v == null ? "" : String(v));
@@ -316,6 +318,7 @@ export function goalDraft(attrs: Attrs): GoalDraft {
     due: str(attrs.due),
     owner: typeof attrs.owner === "string" ? attrs.owner : null,
     weight: str(attrs.weight),
+    position: str(attrs.position),
   };
 }
 
@@ -333,6 +336,7 @@ export function goalPatch(draft: GoalDraft, attrs: Attrs): Attrs {
     due: text(draft.due),
     owner: draft.owner,
     weight: num(draft.weight),
+    position: num(draft.position),
   };
   const out: Attrs = {};
   for (const [k, v] of Object.entries(next)) if (JSON.stringify(v ?? null) !== JSON.stringify(attrs[k] ?? null)) out[k] = v;
@@ -450,6 +454,22 @@ export function GoalFields({
           onChange={(e) => set({ weight: e.target.value })}
         />
         <FieldError field="weight" problems={problems} />
+      </label>
+      <label className={LABEL}>
+        <span>
+          Position <span className="font-normal">(1 = first)</span>
+        </span>
+        <input
+          className={INPUT}
+          type="number"
+          min={1}
+          step={1}
+          inputMode="numeric"
+          value={draft.position}
+          placeholder="After the goals with a position"
+          onChange={(e) => set({ position: e.target.value })}
+        />
+        <FieldError field="position" problems={problems} />
       </label>
       {problems
         .filter((p) => p.where === "attrs.current" || p.where === "attrs.current_as_of")
