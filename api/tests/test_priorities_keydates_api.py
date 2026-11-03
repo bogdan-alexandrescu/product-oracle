@@ -93,9 +93,15 @@ async def test_plan_milestone_on_a_prd_key_date_is_listed_once(client):
     ids = await seed(ctx, items=("f-01", "f-03"))
     async with tenant_session(ctx.tenant_id) as s:
         made = [
-            TrackMilestone(track_id=ids["track"], name=name, target_date=day, horizon="now",
-                           status="planned", basis_ids=[uuid.uuid4()],
-                           item_keys=["f-01"])  # fmt: skip
+            TrackMilestone(
+                track_id=ids["track"],
+                name=name,
+                target_date=day,
+                horizon="now",
+                status="planned",
+                basis_ids=[uuid.uuid4()],
+                item_keys=["f-01"],
+            )
             for name, day in (
                 ("M1 · Prove it", date(2026, 11, 27)),  # the PRD's M1, on its day
                 ("M2 · Scale volume", date(2026, 12, 26)),  # the PRD's M2, a day later
