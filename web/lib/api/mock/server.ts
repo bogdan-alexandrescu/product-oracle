@@ -4925,6 +4925,9 @@ function ensureDecisions(db: Db, ctx: DecisionsContext): DecisionsDb {
   return db.decisions;
 }
 
+/** New PRD (4): Trash keeps a PRD's request links, as a PRD trashed before the release did. */
+export const TRASH_KEPT_LINKS_SCENARIO = "trash-kept-links";
+
 /** New PRD (4): the title of a document in Trash; null when it is not there. */
 function trashedTitle(db: Db, id: string): string | null {
   for (const e of db.trash?.entries ?? []) {
@@ -5285,7 +5288,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       me,
       deciderOf: (id) => db.review_v2?.policies.find((x) => x.document_id === id)?.decider_id ?? null,
       // New PRD (4): a PRD moved to Trash releases its requests; Restore links back the free ones.
-      onTrash: (ids) => releaseDocuments(ensureRequests(db), ids),
+      // TRASH_KEPT_LINKS_SCENARIO: a PRD trashed before this release kept its request links.
+      onTrash: (ids) => (localStorage.getItem(MOCK_SCENARIO_KEY) === TRASH_KEPT_LINKS_SCENARIO ? undefined : releaseDocuments(ensureRequests(db), ids)),
       onRestore: (released) => relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
       uuid,
       now,
