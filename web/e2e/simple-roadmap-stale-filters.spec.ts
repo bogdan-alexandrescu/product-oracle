@@ -91,6 +91,62 @@ for (const [where, use] of [
       await expect(boardCard(page, "alert-rules")).toHaveCount(1);
       await showPickers(page);
       await expect(filter(page, "PRD").locator("option:checked")).toHaveText("All");
+      // roadmap-stale-filters review: Clear takes the PRD out of the address too, so coming
+      // back to the page (a reload) does not bring the note back.
+      await expect(page).not.toHaveURL(/[?&]prd=/);
+      await page.reload();
+      await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+      await expect(page.getByText("Alert rules engine").filter({ visible: true }).first()).toBeVisible();
+      await expect(page.getByTestId("filters-gone")).toHaveCount(0);
+      await expect(page.getByText("Nothing matches these filters")).toHaveCount(0);
+    });
+
+    test("a link to a goal no longer on the roadmap says so, with Clear", async ({ page }) => {
+      await login(page);
+      await page.goto(`${ROADMAP}?goal=retired-example-goal`);
+      await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+      const note = page.getByTestId("filters-gone");
+      await expect(note).toContainText("That goal is no longer on this roadmap");
+      await expect(page.getByText("Nothing matches these filters")).toHaveCount(0);
+      await note.getByRole("button", { name: "Clear" }).click();
+      await expect(note).toHaveCount(0);
+      await expect(page).not.toHaveURL(/[?&]goal=/);
+      await page.getByTestId("format-board").click();
+      await expect(boardCard(page, "alert-rules")).toHaveCount(1);
+    });
+
+    test("a link to a PRD and a goal no longer on the roadmap names both", async ({ page }) => {
+      await login(page);
+      await page.goto(`${ROADMAP}?prd=retired-example-prd&goal=retired-example-goal`);
+      await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+      const note = page.getByTestId("filters-gone");
+      await expect(note).toContainText("That PRD and goal are no longer on this roadmap");
+      await note.getByRole("button", { name: "Clear" }).click();
+      await expect(note).toHaveCount(0);
+      await page.getByTestId("format-board").click();
+      await expect(boardCard(page, "alert-rules")).toHaveCount(1);
+      await expect(page).not.toHaveURL(/[?&](prd|goal)=/);
+      await page.reload();
+      await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+      await expect(page.getByText("Alert rules engine").filter({ visible: true }).first()).toBeVisible();
+      await expect(page.getByTestId("filters-gone")).toHaveCount(0);
+    });
+
+    test("a saved goal that leaves nothing next to a linked PRD is dropped and saved back", async ({ page }) => {
+      // The roadmap is first read with the link's PRD, so the saved goal is checked only once
+      // it leaves nothing (the same path as a pick that goes stale while the page is open).
+      await page.addInitScript(([key, scenario]) => localStorage.setItem(key, scenario), [MOCK_SCENARIO_KEY, STALE_SIMPLE_FILTERS_SCENARIO] as const);
+      await login(page);
+      await page.goto(`${ROADMAP}?prd=usage-alerts`);
+      await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+      await page.getByTestId("format-board").click();
+      await expect(boardCard(page, "alert-rules")).toHaveCount(1);
+      await expect(page.getByTestId("filters-gone")).toHaveCount(0);
+      await expect(page.getByText("Nothing matches these filters")).toHaveCount(0);
+      await showPickers(page);
+      await expect(filter(page, "Goal").locator("option:checked")).toHaveText("All");
+      await expect(filter(page, "PRD")).toHaveValue("usage-alerts");
+      await expect.poll(async () => ((await savedFilters(page)) as { goal?: string } | null)?.goal).toBe("");
     });
   });
 }
