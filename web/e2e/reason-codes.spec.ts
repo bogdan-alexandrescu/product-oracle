@@ -44,7 +44,31 @@ test("a code nothing names is shown with the source's title", () => {
 });
 
 test("words that only look like codes stay as written", () => {
-  for (const text of ["Ships in Q4 with UTF-8 names.", "See https://example.com/FR-06 for more.", "Follows ISO-8601 dates.", "Text with no codes."]) {
+  for (const text of [
+    "Ships in Q4 with UTF-8 names.",
+    "See https://example.com/FR-06 for more.",
+    "Follows ISO-8601 dates.",
+    "Text with no codes.",
+    // Look-alikes no deny-list named: only a requirement number's own prefix is from a source.
+    "Tried GPT-4 on the draft.",
+    "Merged in PR-12 last week.",
+    "Needs an A-1 visa.",
+  ]) {
     expect(name(text)).toBe(text);
   }
+});
+
+test("a goal or feature code the index does not hold is never from a source", () => {
+  // While the company's codes load, or a rejected or archived goal's code.
+  for (const index of [new Map(), buildCodeIndex([], [])] as CodeIndex[]) {
+    expect(nameCodes("Updates the G-B goal body.", index, SOURCE)).toBe("Updates the G-B goal body.");
+    expect(nameCodes("F-08 ships first.", index, SOURCE)).toBe("F-08 ships first.");
+    expect(nameCodes("Covers FR-06.", index, SOURCE)).toBe(`Covers FR-06 (from ${SOURCE}).`);
+  }
+  expect(name("Retires G-Z, an archived goal.")).toBe("Retires G-Z, an archived goal.");
+});
+
+test("with no known source, a source's number reads as written", () => {
+  expect(nameCodes("Covers FR-06.", index, null)).toBe("Covers FR-06.");
+  expect(nameCodes("F-08 and FR-06 agree.", index, null)).toBe("F-08 Example feature and FR-06 agree.");
 });

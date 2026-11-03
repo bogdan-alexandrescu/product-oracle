@@ -6,7 +6,7 @@ import { login } from "./helpers";
  * codes-and-chips: a goal whose title carries no code reads once, with no code chip; a
  * proposal's reason never shows a code without its name.
  * protects = the goal's name is not drawn twice, once in a mono code chip; a source's own
- * requirement number reads with where it comes from;
+ * requirement number reads with the title of the document it comes from;
  * fails_when = the chip falls back to the title, or the reason shows "FR-06" bare;
  * no_claim = how a goal with a code is drawn (baseline-goals.spec.ts, named-codes.spec.ts).
  */
@@ -41,7 +41,10 @@ for (const [size, viewport] of [
       await openBaseline(page);
       await page.getByRole("tab", { name: /Proposals/ }).click();
       const darkMode = page.getByTestId("proposal").filter({ hasText: "Dark mode" });
-      await expect(darkMode).toContainText("Mentioned as next up in the planning call, under FR-06 (from the sources of Baseline to PRD).");
+      await expect(darkMode).toContainText("Mentioned as next up in the planning call, under FR-06 (from Saved carts).");
+      // Never the run's flow name, nor "its source" naming nothing.
+      await expect(darkMode).not.toContainText("the sources of");
+      await expect(darkMode).not.toContainText("its source");
     });
   });
 }
