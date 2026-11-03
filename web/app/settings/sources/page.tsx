@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type ComponentType, type FormEvent, type ReactNode, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 
@@ -329,8 +330,6 @@ function AllowlistEditor({
     if (fresh) onReload(fresh);
   }
 
-  if (notion && !source.connection_id) return <ReconnectNotion picked={notionRoots(source.config).length} />;
-
   return (
     <form onSubmit={save} className="mt-2.5 flex flex-col gap-2.5 rounded-button border border-line bg-surface2 p-3">
       {Picker && <Picker connectionId={source.connection_id} config={picked} onChange={setPicked} />}
@@ -394,7 +393,7 @@ function FirefliesEditor({
       {source.connection_id ? (
         <FirefliesPicker connectionId={source.connection_id} value={value} onChange={setValue} titleRule={initial.titleRule} />
       ) : (
-        <Warn>This source has no connection: reconnect Fireflies first.</Warn>
+        <Warn>This source has no connection. Pick one of your Fireflies connections to sync it again.</Warn>
       )}
       {error && <SaveError error={error} stale={stale} busy={busy} onReload={reload} />}
       <div className="flex items-center gap-2.5">
@@ -467,35 +466,91 @@ function DriveFilesEditor({
   );
 }
 
-/** A Notion source whose connection is gone: its pages can only be picked through a connection. */
-function ReconnectNotion({ picked }: { picked: number }) {
+const PROVIDER_NAME: Record<string, string> = {
+  github: "GitHub",
+  slack: "Slack",
+  notion: "Notion",
+  fireflies: "Fireflies",
+  google: "Google",
+};
+
+/** A source whose connection was deleted (Disconnect): the person's connections of its
+ * provider, each one click to link it again; with none, where to make one. The card and its
+ * editor (Edit meetings, Edit pages…) show this same block. */
+function NoConnection({
+  source,
+  option,
+  onLinked,
+}: {
+  source: Source;
+  option: KindOption | undefined;
+  onLinked: (s: Source, label: string) => void;
+}) {
+  const { act, error, busy } = useAction();
+  const provider = PROVIDER_NAME[option?.provider ?? ""] ?? KIND_LABEL[source.kind];
+  const usable = (option?.connections ?? []).filter((c) => c.status === "active");
+  const name = (c: Choice) => c.account_label ?? `your ${provider} connection`;
+
+  async function use(c: Choice) {
+    const saved = await act(() =>
+      unwrap(
+        api.PATCH("/v1/sources/{source_id}", {
+          params: { path: { source_id: source.id } },
+          body: { connection_id: c.id, base_version: source.config_version },
+        }),
+      ),
+    );
+    if (saved) onLinked(saved, name(c));
+  }
+
   return (
     <div
-      className="mt-2.5 flex flex-col gap-2.5 rounded-button border border-line bg-surface2 p-3"
-      data-testid="notion-reconnect"
+      className="mt-2 flex flex-col gap-2 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn"
+      data-testid="source-no-connection"
+      role="group"
+      aria-label={`Connection of ${source.name}`}
     >
-      <Warn>Reconnect Notion to change pages.</Warn>
-      <p className="text-sm text-text2">
-        This source&rsquo;s Notion connection was removed. It keeps its {picked} picked{" "}
-        {picked === 1 ? "page" : "pages"}; changing them needs a Notion connection.
+      <p className="flex min-w-0 items-start gap-2 font-medium">
+        <Icon name="alert" size={16} className="mt-0.5 flex-none" />
+        {usable.length > 0 ? (
+          <span className="min-w-0 break-words">
+            This source has no connection. Pick one of your {provider} connections to sync it again.
+          </span>
+        ) : (
+          <span className="min-w-0 break-words">
+            This source has no connection. Connect {provider} in{" "}
+            <Link href="/settings/connections" className="underline underline-offset-2">
+              Settings › Connections
+            </Link>
+            , then pick it here.
+          </span>
+        )}
       </p>
-      <div>
-        <LinkButton href="/settings/connections" icon="link">
-          Go to Connections
-        </LinkButton>
-      </div>
+      {usable.length > 0 && (
+        <span className="flex flex-wrap items-center gap-1.5">
+          {usable.map((c) => (
+            <Button key={c.id} variant="solid" disabled={busy} onClick={() => void use(c)}>
+              Use {name(c)}
+            </Button>
+          ))}
+        </span>
+      )}
+      {error && <Notice tone="error">{error}</Notice>}
     </div>
   );
 }
 
 function SourceRow({
   source,
+  option,
   connection,
   onChange,
   onDelete,
   targeted = false,
 }: {
   source: Source;
+  /** What the source's kind can use: its provider and the person's connections of it. */
+  option?: KindOption;
   connection?: Choice;
   onChange: (s: Source) => void;
   onDelete: () => void;
@@ -523,6 +578,13 @@ function SourceRow({
     UNKNOWN.folder,
   );
   const unavailable = source.unavailable_items ?? [];
+  // A Disconnect deleted its connection: it says so, and offers the person's others.
+  const unlinked = source.kind !== "upload" && !source.connection_id;
+  const linked = (s: Source, label: string) => {
+    onChange(s);
+    setEditing(false);
+    setNotice({ tone: "pass", text: `Linked to ${label}. Sync now to read it again.` });
+  };
 
   async function syncNow() {
     setNotice(null);
@@ -736,6 +798,7 @@ function SourceRow({
           </span>
         )}
       </div>
+      {unlinked && !editing && <NoConnection source={source} option={option} onLinked={linked} />}
       {source.kind === "github" && <CodeMaps source={source} />}
       {source.reconnect_reason && <ReconnectToChoose className="mt-2" />}
       {drive && <DriveNotes notes={unavailable} picked={picked} sourceName={source.name} />}
@@ -820,7 +883,9 @@ function SourceRow({
           {error && <Notice tone="error">{error}</Notice>}
         </div>
       )}
-      {editing && drive && (
+      {/* Its editor (Edit meetings, Edit pages…) says the same, with the same choice. */}
+      {editing && unlinked && <NoConnection source={source} option={option} onLinked={linked} />}
+      {editing && drive && !unlinked && (
         <DriveFilesEditor
           key={source.config_version}
           source={source}
@@ -833,7 +898,7 @@ function SourceRow({
           }}
         />
       )}
-      {editing && fireflies && (
+      {editing && fireflies && !unlinked && (
         <FirefliesEditor
           key={source.config_version}
           source={source}
@@ -845,7 +910,7 @@ function SourceRow({
           }}
         />
       )}
-      {editing && allowlist && !drive && (
+      {editing && allowlist && !drive && !unlinked && (
         <AllowlistEditor
           key={source.config_version}
           source={source}
@@ -1189,6 +1254,7 @@ export default function SourceSettingsPage() {
                 <SourceRow
                   key={s.id}
                   source={s}
+                  option={kinds.data?.find((k) => k.kind === s.kind)}
                   connection={kinds.data?.flatMap((k) => k.connections).find((c) => c.id === s.connection_id)}
                   onChange={replace}
                   targeted={s.id === target}
