@@ -198,7 +198,7 @@ const PC1_FEATURES: FeatureSeed[] = [ // MOCK-HOOK
 export function pc1Features(scenario: string | null | undefined) { // MOCK-HOOK
   if (scenario === PC1_SCENARIO && !FEATURES.some((f) => f.key === "F-9")) FEATURES.push(...PC1_FEATURES); // MOCK-HOOK
 } // MOCK-HOOK
-
+// MOCK-HOOK
 const round = (n: number) => Math.round(n * 1000) / 1000;
 const num = (v: unknown): number | null => {
   if (typeof v === "number") return v;

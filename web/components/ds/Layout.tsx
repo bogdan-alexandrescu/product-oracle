@@ -143,9 +143,9 @@ export function Split({
     : `grid-cols-[minmax(0,1fr)_380px] max-[1100px]:grid-cols-1 ${wide ? "max-[1320px]:grid-cols-1" : ""}`;
   const sticky = byRoom ? "xl:@min-[920px]:sticky xl:@min-[920px]:top-4" : wide ? "min-[1321px]:sticky min-[1321px]:top-4" : "xl:sticky xl:top-4";
   return ( // MOCK-HOOK
-    <ClosableSplit inspector={inspector} cols={cols} sticky={sticky} byRoom={byRoom} panel={panel}>
-      {children}
-    </ClosableSplit>
+    <ClosableSplit inspector={inspector} cols={cols} sticky={sticky} byRoom={byRoom} panel={panel}>{/* MOCK-HOOK */}
+      {children}{/* MOCK-HOOK */}
+    </ClosableSplit> // MOCK-HOOK
   ); // MOCK-HOOK
 }
 

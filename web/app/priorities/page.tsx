@@ -202,7 +202,8 @@ const GOAL_MAX = 144;
 const CELL_PAD = 16;
 /** The Depends on column, and the room its 13 px text has. */
 const DEPS_WIDTH = 104;
-const DEPS_ROOM = DEPS_WIDTH - CELL_PAD;
+const DEPS_ROOM = DEPS_WIDTH - CELL_PAD; // MOCK-HOOK: unused while PC1 is mocked (depsRoom)
+void DEPS_ROOM; // MOCK-HOOK
 const DEPS_WIDE = 232; // MOCK-HOOK
 const GOAL_WIDE = 260; // MOCK-HOOK
 
@@ -1482,10 +1483,10 @@ function Priorities() {
               </div>
               <span className="flex-1 max-[600px]:hidden min-[601px]:order-2" />
               {pc.v === "b" && ( // MOCK-HOOK
-                <Button className="min-[601px]:order-4 max-[600px]:hidden" icon={pc.open ? "chevron-right" : "chevron-left"} aria-pressed={!pc.open} aria-controls={inspectorId} data-testid="details-switch" onClick={() => (pc.open ? pc.hide() : pc.setOpen(true))}>
-                  {pc.open ? "Hide details" : "Show details"}
-                </Button>
-              )}
+                <Button className="min-[601px]:order-4 max-[600px]:hidden" icon={pc.open ? "chevron-right" : "chevron-left"} aria-pressed={!pc.open} aria-controls={inspectorId} data-testid="details-switch" onClick={() => (pc.open ? pc.hide() : pc.setOpen(true))}>{/* MOCK-HOOK */}
+                  {pc.open ? "Hide details" : "Show details"}{/* MOCK-HOOK */}
+                </Button> // MOCK-HOOK
+              )}{/* MOCK-HOOK */}
             </div>
             {r && r.cycles.length > 0 && (
               <div
