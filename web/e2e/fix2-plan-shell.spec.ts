@@ -146,7 +146,7 @@ test.describe("desktop", () => {
     test(`qa-plan-14: Cut early churn shows its target and says No current value yet (${role})`, async ({ page }) => {
       if (role === "viewer") await page.addInitScript(([key, r]) => localStorage.setItem(key, r), [MOCK_ROLE_KEY, role] as const);
       await openPlan(page);
-      const churn = page.getByTestId("plan-goals").getByTestId("home-goal-G3");
+      const churn = page.getByTestId("plan-goals").getByTestId("home-goal-G1");
       await expect(churn).toContainText("Cut early churn");
       await expect(churn.getByTestId("goal-figure")).toContainText("8%");
       await expect(churn.getByTestId("goal-to-go")).toHaveText("No current value yet");

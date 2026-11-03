@@ -41,7 +41,7 @@ test("qa-plan-4: Plan's goal cards and the Baseline's Goals table show the same 
   await page.getByTestId("nav-plan").filter({ visible: true }).first().click();
   await expect(page).toHaveURL(/\/plan/);
   const plan = page.getByTestId("plan-goals");
-  const g1 = plan.getByTestId("home-goal-G1");
+  const g1 = plan.getByTestId("home-goal-G3");
   const g2 = plan.getByTestId("home-goal-G2");
   await expect(g1).toContainText("Raise activation");
   // No evidence yet on either goal: no score on Plan either.
@@ -111,12 +111,12 @@ test("qa-plan-36: Make measurable names one list of missing fields everywhere", 
 test("qa-plan-37: Add subgoal opens under its goal's row", async ({ page }) => {
   await openBaseline(page);
   const table = goalsTable(page);
-  const activation = table.getByTestId("goal-g.activation");
-  await activation.getByRole("button", { name: "Add subgoal" }).click();
+  const churn = table.getByTestId("goal-g.early-churn");
+  await churn.getByRole("button", { name: "Add subgoal" }).click();
   const form = page.getByRole("form", { name: "Add subgoal" });
   await expect(form).toBeVisible();
   await expect(form.getByLabel("Subgoal title")).toBeFocused();
-  const [row, f, next] = await Promise.all([activation, form, table.getByTestId("goal-g.paid-conversion")].map(box));
+  const [row, f, next] = await Promise.all([churn, form, table.getByTestId("goal-g.paid-conversion")].map(box));
   expect(f.y).toBeGreaterThanOrEqual(row.y + row.height - 1);
   expect(f.y + f.height).toBeLessThanOrEqual(next.y + 1);
   await form.getByRole("button", { name: "Cancel" }).click();
