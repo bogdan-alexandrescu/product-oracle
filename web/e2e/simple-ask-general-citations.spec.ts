@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "./test";
 
-import { noRawTokens } from "../lib/raw-tokens";
+import { answerWords, noRawTokens } from "../lib/raw-tokens";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN } from "./helpers";
 
@@ -38,6 +38,17 @@ test("the sanitizer takes out every raw token and keeps the footnotes", () => {
   expect(noRawTokens("Still unknown [c:c4] here")).toBe("Still unknown here");
   expect(noRawTokens("Three areas [s:12], two goals")).toBe("Three areas, two goals");
   expect(noRawTokens("Kept [c:3] and [c:l.1]; a [link](/simple) too")).toBe("Kept [c:3] and [c:l.1]; a [link](/simple) too");
+});
+
+test("code keeps its words as written; a token still being written never shows", () => {
+  // chat-citations review: only the answer's words lose their raw tokens, not code in it.
+  expect(answerWords("Search for `[s:1]` in the notes [s:2].")).toBe("Search for `[s:1]` in the notes.");
+  expect(answerWords("Run:\n```\nfind [id:42]\n```\nDone [l:1].")).toBe("Run:\n```\nfind [id:42]\n```\nDone [c:l.1].");
+  // While the answer streams, a half-written token of any kind is held back until it is whole.
+  expect(answerWords("Three areas [s:1", true)).toBe("Three areas ");
+  expect(answerWords("Read so far [c:l.", true)).toBe("Read so far ");
+  expect(answerWords("Read so far [l:", true)).toBe("Read so far ");
+  expect(answerWords("Three areas [s:1", false)).toBe("Three areas [s:1");
 });
 
 for (const phone of [false, true]) {
