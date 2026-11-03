@@ -135,12 +135,15 @@ function ms(
   areas: string[],
   depends: string[],
   month: string,
-  unit = "",
+  unit = GOALS.find((g) => g.id === goal)!.unit,
 ): GmMilestone {
+  const wiggle = [0.04, 0.01, 0.05, 0.02, 0.06, 0.03, 0.05];
   const days =
     current === null
       ? [null, null, null, null, null, null, null]
-      : Array.from({ length: 7 }, (_, i) => Math.round((current - (6 - i) * (status === "missed" ? -0.4 : 0.6)) * 10) / 10);
+      : status === "met"
+        ? wiggle.map((w, i) => Math.round(Math.max(threshold, current * (0.94 + w + i * 0.005)) * 10) / 10)
+        : Array.from({ length: 7 }, (_, i) => Math.round(current * (1 - (6 - i) * 0.02 + wiggle[i] / 4) * 10) / 10);
   return {
     id,
     name,

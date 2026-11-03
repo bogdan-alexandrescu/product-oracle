@@ -5172,6 +5172,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   const url = new URL(req.url);
   const p = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
   const q = url.searchParams;
+  if (p[1] === "simple" && p[2] === "goal-map") return json(200, goalMapOut(q)); // MOCK-HOOK
   const m = req.method;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
 
@@ -6185,7 +6186,6 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (input?.kind === "pricing") return startPricing(db, me, input);
   }
   if (p[1] === "priorities" && p[2] === "calibration" && p.length === 3 && m === "GET") return json(200, trackRecord(db));
-  if (p[1] === "simple" && p[2] === "goal-map" && m === "GET") return json(200, goalMapOut(url.searchParams)); // MOCK-HOOK
   const handled = await laneF(db, req, p, m, me.role, localStorage.getItem(MOCK_SCENARIO_KEY), { id: me.id, name: memberName(me) });
   // E1: a draft started from the template's empty skeleton has nothing to derive yet.
   if (handled?.status === 201 && p[1] === "drafts" && p.length === 2 && m === "POST") {

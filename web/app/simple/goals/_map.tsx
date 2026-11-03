@@ -38,7 +38,7 @@ function num(v: number | null, unit: string): string {
 
 function Pill({ cls, children, testId }: { cls: string; children: ReactNode; testId?: string }) {
   return (
-    <span data-testid={testId} className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-[14px] font-semibold ${cls}`}>
+    <span data-testid={testId} className={`inline-block shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[14px] font-semibold ${cls}`}>
       {children}
     </span>
   );
@@ -82,15 +82,15 @@ function Proof({ m, compact }: { m: GmMilestone; compact?: boolean }) {
           <span
             key={i}
             title={`${DAYS[i]}: ${v === null ? "not measured" : num(v, m.unit)}`}
-            className={`grid h-6 ${compact ? "w-6 text-[11px]" : "min-w-9 px-1 text-[13px]"} place-items-center rounded-md font-semibold ${
+            className={`grid ${compact ? "h-5" : "h-6"} ${compact ? "min-w-7 px-0.5 text-[11px]" : "min-w-9 px-1 text-[13px]"} place-items-center rounded-md font-semibold ${
               v === null ? "bg-surface2 text-text-faint" : ok(v) ? "bg-pass-bg text-pass" : "bg-surface2 text-text2"
             }`}
           >
-            {compact ? "" : num(v, m.unit)}
+            {v === null ? "·" : compact && m.unit === "$" ? `${Math.round(v / 1000)}k` : num(v, m.unit)}
           </span>
         ))}
       </span>
-      <span className="simple-small text-[13px]!">
+      <span className="simple-small text-[13px]! leading-5">
         {m.status === "met"
           ? `Held 7 days in a row on a live rep · confirmed by ${m.confirmed}, Nov 2`
           : m.status === "not_measured"
@@ -209,7 +209,7 @@ function emptyDraft(map: GoalMap, mid: boolean, edit: Edit): Draft {
   if (!mid) return d;
   if (edit === "propose") return { ...d, name: "40 sign-ups per rep", goal: "signups", threshold: "40", areas: ["scale", "onboard"], after: "m1" };
   if (edit === "goal") return { ...d, target: "12" };
-  if (edit === "attach") return { ...d, search: "referral", feature: "f7", milestone: "m4" };
+  if (edit === "attach") return { ...d, search: "team", feature: "f11", milestone: "m2" };
   if (edit === "prd") return { ...d, milestone: "m4", areas: ["conv", "safety"] };
   if (edit === "area") return { ...d, areaName: "Rep hiring" };
   return d;
@@ -238,9 +238,9 @@ export function GoalMapPage() {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- MOCK-HOOK: the URL seeds the open edit once
       setSeeded(true);
       setEdit(seedOpen);
-      setDraft(emptyDraft(map, mid, seedOpen));
+      setDraft({ ...emptyDraft(map, mid, seedOpen), ...(!mid && seedPick ? { milestone: seedPick } : {}) });
     }
-  }, [map, seedOpen, mid, seeded]);
+  }, [map, seedOpen, mid, seeded, seedPick]);
 
   if (!map) return <div className="simple-page" role="status">Loading the goal map…</div>;
 
@@ -312,14 +312,14 @@ export function GoalMapPage() {
   };
 
   const ctx: Ctx = { map, open, moveArea, pick, setPick, started };
-  const wide = variant === "a" || variant === "c";
+  const wide = variant !== "b";
 
   return (
     <div className="simple-page" data-testid="gm-page" style={wide ? { maxWidth: "none" } : undefined}>
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h1 className="simple-h1 max-[600px]:sr-only">Goal map</h1>
-          <p className="simple-small">Company goals, areas of focus, milestones and the features serving them. Updated daily · Nov 3.</p>
+          <p className="simple-small">Goals, areas, milestones and features. Updated daily · Nov 3.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Btn testId="gm-propose" onClick={() => open("propose")}>
@@ -460,7 +460,7 @@ function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: Go
             <li key={f.id}>
               <button type="button" onClick={() => set({ feature: f.id })} className={`w-full rounded-xl border px-3 py-2 text-left ${draft.feature === f.id ? "border-accent bg-accent-soft" : "border-line"}`}>
                 <span className="font-semibold">{f.name}</span>
-                <span className="simple-small block text-[14px]!">
+                <span className="simple-small block text-[14px]! leading-5">
                   {map.areas.find((a) => a.id === f.area)?.name} · expects {f.expected} on {f.lever.toLowerCase()}
                 </span>
               </button>
@@ -521,23 +521,22 @@ function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: Go
 
 function GoalCard({ g, onEdit, goals }: { g: GmGoal; onEdit: () => void; goals: GmGoal[] }) {
   return (
-    <div data-testid="gm-goal" className="simple-card flex-1 gap-2! p-4!">
+    <div data-testid="gm-goal" className="simple-card flex-1 gap-1.5! px-4! py-3!">
       <span className="flex items-start justify-between gap-2">
         <span className="font-semibold leading-6">{g.name}</span>
         <StatusPill s={g.status} />
       </span>
       <span className="flex items-baseline gap-2">
-        <span className="simple-number">{num(g.current, g.unit)}</span>
+        <span className="simple-number text-[26px]! leading-8!">{num(g.current, g.unit)}</span>
         <span className="text-text2">of {num(g.target, g.unit)} a day</span>
+        <span className="ml-auto">
+          <Btn small testId={`gm-edit-goal-${g.id}`} onClick={onEdit}>Edit</Btn>
+        </span>
       </span>
       <Bar current={g.current} target={g.target} status={g.status} />
-      <span className="simple-small text-[14px]!">
+      <span className="simple-small text-[14px]! leading-5">
         {g.builds_on.length ? `Builds on ${goals.find((x) => x.id === g.builds_on[0])?.name.toLowerCase()}: ` : ""}
         {g.math}
-      </span>
-      <span className="flex items-center justify-between gap-2">
-        <span className="simple-small text-[13px]!">Last change {g.history[0].date.replace(", 2026", "")}</span>
-        <Btn small testId={`gm-edit-goal-${g.id}`} onClick={onEdit}>Edit</Btn>
       </span>
     </div>
   );
@@ -547,10 +546,10 @@ function Goals({ map, open, arrows = true }: Ctx & { arrows?: boolean }) {
   return (
     <div className="flex items-stretch gap-2 max-[600px]:flex-col">
       {map.goals.map((g, i) => (
-        <div key={g.id} className="flex flex-1 items-center gap-2 max-[600px]:flex-col">
+        <div key={g.id} className="flex flex-1 items-stretch gap-2 max-[600px]:flex-col">
           <GoalCard g={g} goals={map.goals} onEdit={() => open("goal", g.id)} />
           {arrows && i < map.goals.length - 1 && (
-            <span className="text-[24px] font-bold text-text-faint max-[600px]:rotate-90" aria-label="builds on">→</span>
+            <span className="self-center text-[24px] font-bold text-text-faint max-[600px]:rotate-90" aria-label="builds on">→</span>
           )}
         </div>
       ))}
@@ -603,7 +602,7 @@ function Ladder(ctx: Ctx) {
           <span className="simple-small">Left to right: each milestone builds on the ones before it.</span>
         </div>
         <div className="overflow-x-auto border-t border-line">
-          <div className="grid" style={{ gridTemplateColumns: `200px repeat(${ms.length}, minmax(210px, 1fr))` }}>
+          <div className="grid" style={{ gridTemplateColumns: `200px repeat(${ms.length}, minmax(232px, 1fr))` }}>
             <div className="sticky left-0 z-10 border-b border-r border-line bg-surface px-3 py-2">
               <Btn small testId="gm-add-area" onClick={() => open("area")}>
                 <Icon name="plus" size={16} /> Add an area
@@ -642,7 +641,7 @@ function LadderRow({ a, ai, n, ms, map, open, moveArea }: { a: GmArea; ai: numbe
         <span className="font-semibold leading-6">
           {ai + 1}. {a.name}
         </span>
-        <span className="simple-small text-[13px]!">Pulls: {a.lever.toLowerCase()}</span>
+        <span className="simple-small text-[13px]! leading-5">Pulls: {a.lever.toLowerCase()}</span>
         <span className="flex gap-1">
           <button type="button" disabled={ai === 0} aria-label={`Move ${a.name} up`} onClick={() => moveArea(a.id, -1)} className="rounded-md border border-line px-1.5 text-[13px] disabled:opacity-40">↑</button>
           <button type="button" disabled={ai === n - 1} aria-label={`Move ${a.name} down`} onClick={() => moveArea(a.id, 1)} className="rounded-md border border-line px-1.5 text-[13px] disabled:opacity-40">↓</button>
@@ -656,7 +655,7 @@ function LadderRow({ a, ai, n, ms, map, open, moveArea }: { a: GmArea; ai: numbe
             {fs.map((f) => (
               <FeatureCard key={f.id} f={f} tight />
             ))}
-            {serves && !fs.length && <span className="simple-small text-[13px]! px-1">No feature yet</span>}
+            {serves && !fs.length && <span className="simple-small text-[13px]! leading-5 px-1">No feature yet</span>}
             {serves && (
               <button type="button" onClick={() => open("attach")} className="self-start rounded-full px-1.5 text-[13px] font-semibold text-accent-ink hover:underline">
                 + Attach a feature
@@ -807,19 +806,20 @@ function LeverBody({ map, lever, open }: { map: GoalMap; lever: string; open: Ct
     <>
       <span className="flex flex-wrap gap-1.5">
         {areas.map((a) => (
-          <Pill key={a.id} cls="bg-surface2 text-text2">{map.areas.indexOf(a) + 1}. {a.name}</Pill>
+          <Pill key={a.id} cls="bg-surface2 text-text2 whitespace-normal!">{map.areas.indexOf(a) + 1}. {a.name}</Pill>
         ))}
       </span>
-      <span className="text-[14px] font-semibold text-text2">Milestones on this lever</span>
+      {!fs.length && <span className="simple-small">No milestone or feature pulls it yet.</span>}
+      {!!ms.length && <span className="text-[14px] font-semibold text-text2">Milestones on this lever</span>}
       <ol className="flex flex-col gap-1">
         {ms.map((m) => (
-          <li key={m.id} className="flex items-center justify-between gap-2 text-[15px]">
+          <li key={m.id} className="flex flex-wrap items-center justify-between gap-x-2 text-[15px] leading-6">
             <span>{m.name}</span>
             <StatusPill s={m.status} />
           </li>
         ))}
       </ol>
-      <span className="text-[14px] font-semibold text-text2">Features pulling it</span>
+      {!!fs.length && <span className="text-[14px] font-semibold text-text2">Features pulling it</span>}
       {shown.map((f) => (
         <FeatureCard key={f.id} f={f} tight />
       ))}
@@ -841,33 +841,40 @@ function DriverTree(ctx: Ctx) {
         <div className="flex justify-center">
           <div className="w-[min(520px,100%)]">
             <Lever goal title={`Revenue per day (goal)`} now={num(r.current, "$")} target={`of ${num(r.target, "$")}`} status={r.status} onEdit={() => open("goal", r.id)}>
-              <span className="simple-small text-[14px]!">= reps × paid conversions per rep × value of a conversion</span>
+              <span className="simple-small text-[14px]! leading-5">= reps × paid conversions per rep × value of a conversion</span>
             </Lever>
           </div>
         </div>
-        <div className="flex items-start gap-2 max-[600px]:flex-col">
-          <Lever title="Reps live" now={`${map.reps}`} target="reps" status="on_track">
-            <LeverBody map={map} lever="Number of reps" open={open} />
-          </Lever>
-          <Op c="×" />
-          <div className="flex min-w-0 flex-[2] flex-col gap-2">
-            <Lever goal title="Paid conversions per rep (goal)" now={num(c.current, "")} target={`of ${c.target} a day`} status={c.status} onEdit={() => open("goal", c.id)}>
-              <span className="simple-small text-[14px]!">= sign-ups per rep × conversion rate</span>
+        <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] items-start gap-x-1 gap-y-3 max-[600px]:flex max-[600px]:flex-col">
+          <div className="row-span-2 flex">
+            <Lever title="Reps live" now={`${map.reps}`} target="reps" status="on_track">
+              <LeverBody map={map} lever="Number of reps" open={open} />
             </Lever>
-            <div className="flex items-start gap-2 max-[600px]:flex-col">
-              <Lever goal title="Sign-ups per rep (goal)" now={num(s.current, "")} target={`of ${s.target} a day`} status={s.status} onEdit={() => open("goal", s.id)}>
-                <LeverBody map={map} lever="Sign-ups per rep" open={open} />
-              </Lever>
-              <Op c="×" />
-              <Lever title="Conversion rate" now={rate === null ? "—" : `${rate}%`} target="needs 15–25%" status="on_track">
-                <LeverBody map={map} lever="Conversion rate" open={open} />
-              </Lever>
-            </div>
           </div>
           <Op c="×" />
-          <Lever title="Value of a conversion" now={value === null ? "—" : `$${value}`} target="each" status={value === null ? "not_measured" : "on_track"}>
-            <LeverBody map={map} lever="Value per conversion" open={open} />
-          </Lever>
+          <div className="col-span-3 flex">
+            <Lever goal title="Paid conversions per rep (goal)" now={num(c.current, "")} target={`of ${c.target} a day`} status={c.status} onEdit={() => open("goal", c.id)}>
+              <span className="simple-small text-[14px]! leading-5">= sign-ups per rep × conversion rate. Needs 40–65 sign-ups at 15–25%.</span>
+            </Lever>
+          </div>
+          <Op c="×" />
+          <div className="row-span-2 flex">
+            <Lever title="Value of a conversion" now={value === null ? "—" : `$${value}`} target="each" status={value === null ? "not_measured" : "on_track"}>
+              <LeverBody map={map} lever="Value per conversion" open={open} />
+            </Lever>
+          </div>
+          <span className="max-[600px]:hidden" />
+          <div className="col-start-3 flex">
+            <Lever goal title="Sign-ups per rep (goal)" now={num(s.current, "")} target={`of ${s.target} a day`} status={s.status} onEdit={() => open("goal", s.id)}>
+              <LeverBody map={map} lever="Sign-ups per rep" open={open} />
+            </Lever>
+          </div>
+          <Op c="×" />
+          <div className="flex">
+            <Lever title="Conversion rate" now={rate === null ? "—" : `${rate}%`} target="needs 15–25%" status="on_track">
+              <LeverBody map={map} lever="Conversion rate" open={open} />
+            </Lever>
+          </div>
         </div>
         <div className="simple-card gap-2! border-pass/50!">
           <Guardrail map={map} />
@@ -932,7 +939,7 @@ function Scoreboard(ctx: Ctx) {
               >
                 <span className="flex min-w-0 flex-col">
                   <span className="truncate font-semibold">{m.name}</span>
-                  <span className="simple-small truncate text-[13px]!">{m.areas.map((x) => map.areas.find((a) => a.id === x)?.name).join(" · ")}</span>
+                  <span className="simple-small truncate text-[13px]! leading-5">{m.areas.map((x) => map.areas.find((a) => a.id === x)?.name).join(" · ")}</span>
                 </span>
                 <span className="max-[600px]:hidden">
                   {num(m.current, m.unit)} / {num(m.threshold, m.unit)}
@@ -942,7 +949,7 @@ function Scoreboard(ctx: Ctx) {
                 </span>
                 <span className="text-[15px] max-[600px]:hidden">
                   {fs.length} · <span className="text-pass">{help} helping</span>
-                  {no ? <span className="text-crit"> · {no} not</span> : null}
+                  {no ? <span className="text-crit"> · {no} not helping</span> : null}
                 </span>
               </button>
             );
