@@ -18,6 +18,15 @@ import { NewPrdButton, NewPrdSheet, StartedCard, useCanStartPrd, useStartedPrds 
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { QuestionRow, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
 import { SimplePage } from "@/components/simple/SimplePage";
+import { FitAsk, FitHomeCard, useFit } from "@/components/simple/FitDate"; // MOCK-HOOK
+import { Suspense } from "react"; // MOCK-HOOK
+
+// MOCK-HOOK: mk-fitdate FD1 b (a prompt on Home) and c (an Ask Oracle question).
+function FitHome() { // MOCK-HOOK
+  const f = useFit(); // MOCK-HOOK
+  if (!f.on || f.fd1 === "a") return null; // MOCK-HOOK
+  return f.fd1 === "b" ? <FitHomeCard /> : <FitAsk />; // MOCK-HOOK
+} // MOCK-HOOK
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay, formatInZone, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
@@ -578,6 +587,9 @@ export default function SimpleHome() {
           </div>
         )}
       </header>
+      <Suspense> {/* MOCK-HOOK */}
+        <FitHome /> {/* MOCK-HOOK */}
+      </Suspense> {/* MOCK-HOOK */}
 
       {walking && (
         <Walk
