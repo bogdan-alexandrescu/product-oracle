@@ -459,9 +459,16 @@ def _day(d: date) -> str:
 NOW_LINE = SimpleLine(key="now", kind="now", label="This quarter (Now)")
 
 
-def _same_name(name: str) -> str:
-    """A line's name as compared (prio-line-once): "M1 · Prove it" is "M1 Prove it"."""
-    return " ".join(name.replace("·", " ").split()).casefold()
+# A milestone's code before its words: "M1 · ", "F-26: ", "M2b " (roadmap/_lib.ts drawnKeyDates).
+_CODE = re.compile(r"^[A-Z][A-Z0-9]*-?[0-9]+[a-z]?\s*[·:.\-–—]?\s*")
+
+
+def _same_as(name: str, day: date) -> set[tuple[str, date]]:
+    """What makes a milestone the same as another on its day (prio-line-once), by the roadmap
+    chart's rule (roadmap/_lib.ts drawnKeyDates): its code ("M1"), or its name without the
+    code ("prove it", in lower case as the chart's toLowerCase)."""
+    words = _CODE.sub("", name, count=1).strip().lower()
+    return {(re.split(r"[\s·]", name)[0], day)} | ({("~" + words, day)} if words else set())
 
 
 async def lines(
@@ -488,15 +495,18 @@ async def lines(
     # prio-line-once (the owner, Nov 3: "show it once"): a plan milestone with a PRD key date's
     # name on its day is that milestone, listed once, "From the PRD"; a saved pick of it draws
     # the key date's line.
-    from_prd = {
-        (_same_name(k.name), k.date): ln for k, ln in zip(kds, out[1:], strict=True) if k.prd
-    }
+    from_prd: dict[tuple[str, date], SimpleLine] = {}
+    for k, ln in zip(kds, out[1:], strict=True):
+        for same_as in _same_as(k.name, k.date) if k.prd else ():
+            from_prd.setdefault(same_as, ln)
     same: dict[str, SimpleLine] = {}
     for m in read_.milestones:
         if m.target_date is None or m.track_id not in tracks or m.status == "dropped":
             continue
         key = f"milestone:{m.id}"
-        kd = from_prd.get((_same_name(m.name), m.target_date))
+        kd = next(
+            (from_prd[x] for x in sorted(_same_as(m.name, m.target_date)) if x in from_prd), None
+        )
         if kd is not None:
             same[key] = kd
             continue
