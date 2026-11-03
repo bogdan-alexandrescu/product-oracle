@@ -914,7 +914,7 @@ async def _disconnect_all(
     provider has revoked the grant. Returns the connections and the synced sources."""
     from oracle.connections.models import Connection
     from oracle.review.publish import record_source_revocation
-    from oracle.sources.models import Source
+    from oracle.sources.service import forget_connection
 
     connections = list(
         await session.scalars(
@@ -939,7 +939,7 @@ async def _disconnect_all(
             {"provider": conn.provider, "account": conn.account_label,
              "provider_revoke": "pending", **via},
         )  # fmt: skip
-        synced = list(await session.scalars(select(Source).where(Source.connection_id == conn.id)))
+        synced = await forget_connection(session, conn)
         revoked_ids |= {x.id for x in synced}
         await record_source_revocation(
             session, principal, synced, "connection_revoked", drop_links=False

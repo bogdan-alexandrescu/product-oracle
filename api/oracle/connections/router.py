@@ -15,7 +15,6 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
 
 from oracle import audit
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
@@ -486,10 +485,11 @@ async def delete_connection(
     )  # fmt: skip
     # The sources it synced keep their items, but Oracle may no longer read them: record
     # the revocation so the publish gate refuses documents built on them.
+    # Each keeps the account it lost, so connecting that account again links it.
     from oracle.review.publish import record_source_revocation
-    from oracle.sources.models import Source
+    from oracle.sources.service import forget_connection
 
-    sources = list(await db.scalars(select(Source).where(Source.connection_id == conn.id)))
+    sources = await forget_connection(db, conn)
     await record_source_revocation(db, principal, sources, "connection_revoked", drop_links=False)
     await db.delete(conn)
     await db.commit()

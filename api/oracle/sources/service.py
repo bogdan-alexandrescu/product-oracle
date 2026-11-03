@@ -49,6 +49,9 @@ KIND_PROVIDER: dict[str, str | None] = {
 assert set(KIND_PROVIDER) == set(SOURCE_KINDS)
 
 CONNECTOR_UNAVAILABLE = "connector not available yet"
+# The sync errors of a source whose connection is gone: a relink clears these, no other.
+NO_CONNECTION = "This source has no connection: pick one of your connections"
+CONNECTION_REMOVED = "The connection was removed: pick another one"
 
 
 class NotFoundError(Exception):
@@ -178,7 +181,7 @@ async def credential_for(
         return None, None
     connection_id = connection_id or source.connection_id
     if connection_id is None:
-        raise InvalidError("This source has no connection: pick one of your connections")
+        raise InvalidError(NO_CONNECTION)
     try:
         credential = await connections.get_credential(db, connection_id, source.owner_user_id)
     except connections.ConnectionUnavailable as e:
@@ -706,6 +709,7 @@ async def update_source(db: AsyncSession, source: Source, changes: dict[str, Any
                 source.cursor = None
             source.unavailable_items = []
         source.connection_id = connection_id
+        source.lost_provider = source.lost_account_id = None
         source.config = config
         if reconfigure:
             # Narrowing takes effect on save (S5, owner 2026-10-20): what the stored items
@@ -843,6 +847,51 @@ async def delete_source(
     await store.release_links(db, set(item_ids))
     await db.delete(source)
     await db.commit()
+
+
+async def forget_connection(db: AsyncSession, conn: Connection) -> list[Source]:
+    """Before ``conn`` is deleted: unlink the sources it synced, keeping its provider and
+    account on them so :func:`relink_sources` can link them again. Returns them."""
+    sources = list(
+        await db.scalars(select(Source).where(Source.connection_id == conn.id).with_for_update())
+    )
+    for source in sources:
+        source.connection_id = None
+        source.lost_provider = conn.provider
+        source.lost_account_id = conn.account_id
+    await db.flush()
+    return sources
+
+
+async def relink_sources(db: AsyncSession, conn: Connection) -> list[Source]:
+    """The same owner connected an account again: link the sources that lost a connection
+    to that very account (same provider and account id) to ``conn``. Never another
+    account's sources, never another person's."""
+    kinds = [k for k, p in KIND_PROVIDER.items() if p == conn.provider]
+    sources = list(
+        await db.scalars(
+            select(Source)
+            .where(
+                Source.owner_user_id == conn.user_id,
+                Source.connection_id.is_(None),
+                Source.kind.in_(kinds),
+                Source.lost_provider == conn.provider,
+                Source.lost_account_id == conn.account_id,
+            )
+            .with_for_update()
+        )
+    )
+    for source in sources:
+        source.connection_id = conn.id
+        source.lost_provider = source.lost_account_id = None
+        # Same account: the cursor's position still holds. The sync's "no connection"
+        # error no longer does; any other error stands until the next sync.
+        if source.status == "error" and source.last_error in (NO_CONNECTION, CONNECTION_REMOVED):
+            source.status = "active"
+            source.last_error = None
+        source.config_version = Source.config_version + 1
+    await db.flush()
+    return sources
 
 
 async def connection_choices(db: AsyncSession, user_id: uuid.UUID) -> dict[str, list[Connection]]:

@@ -352,7 +352,7 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
     except service.InvalidError as e:
         return await _failed(db, start, stats, str(e))
     except service.NotFoundError:
-        return await _failed(db, start, stats, "The connection was removed: pick another one")
+        return await _failed(db, start, stats, service.CONNECTION_REMOVED)
     # The connection the credential is of: an auth error marks this one, whatever the
     # source points at by then.
     used_id = used.id if used is not None else None
