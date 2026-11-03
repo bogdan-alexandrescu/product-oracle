@@ -196,7 +196,10 @@ const PC1_FEATURES: FeatureSeed[] = [ // MOCK-HOOK
   pc1("F-14", "Project templates for agencies", [{ goal: "g.pc1-first-project", title: PG1, weight: 3, contribution: 1 }, { goal: "g.pc1-churn", title: PG2, weight: 2, contribution: 1 }], ["F-3", "F-9", "F-10"], 3, 0.6), // MOCK-HOOK
 ]; // MOCK-HOOK
 export function pc1Features(scenario: string | null | undefined) { // MOCK-HOOK
-  if (scenario === PC1_SCENARIO && !FEATURES.some((f) => f.key === "F-9")) FEATURES.push(...PC1_FEATURES); // MOCK-HOOK
+  const at = FEATURES.findIndex((f) => f.key === "F-9"); // MOCK-HOOK
+  if (scenario === PC1_SCENARIO && at < 0) FEATURES.push(...PC1_FEATURES); // MOCK-HOOK
+  // Any other scenario drops them again, so they never leak into a later one. // MOCK-HOOK
+  else if (scenario !== PC1_SCENARIO && at >= 0) FEATURES.splice(at, PC1_FEATURES.length); // MOCK-HOOK
 } // MOCK-HOOK
 // MOCK-HOOK
 const round = (n: number) => Math.round(n * 1000) / 1000;

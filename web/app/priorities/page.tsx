@@ -1447,7 +1447,7 @@ function Priorities() {
 
         <Split inspector={!phone && inspector} panel={pc /* MOCK-HOOK */}>
           <Panel>
-            <div className="flex min-h-14 flex-wrap items-center gap-2.5 border-b border-line px-4 py-2.5 max-[600px]:px-3">
+            <div className={`flex min-h-14 flex-wrap items-center gap-2.5 border-b border-line px-4 py-2.5 max-[600px]:px-3 ${pc.v === "b" ? "relative min-[601px]:pr-[156px]" : "" /* MOCK-HOOK: b's switch keeps the head bar's right end */}`}>
               {/* On a phone the method switch and the formula's (i) share one line that never
                   wraps (qa-plan-21); above it the wrapper dissolves and the (i) goes right. */}
               <div className="flex w-full min-w-0 flex-nowrap items-center gap-2 min-[601px]:contents">
@@ -1483,7 +1483,7 @@ function Priorities() {
               </div>
               <span className="flex-1 max-[600px]:hidden min-[601px]:order-2" />
               {pc.v === "b" && ( // MOCK-HOOK
-                <Button className="min-[601px]:order-4 max-[600px]:hidden" icon={pc.open ? "chevron-right" : "chevron-left"} aria-pressed={!pc.open} aria-controls={inspectorId} data-testid="details-switch" onClick={() => (pc.open ? pc.hide() : pc.setOpen(true))}>{/* MOCK-HOOK */}
+                <Button className="min-[601px]:absolute min-[601px]:top-2.5 min-[601px]:right-4 max-[600px]:hidden" icon={pc.open ? "chevron-right" : "chevron-left"} aria-pressed={!pc.open} aria-controls={inspectorId} data-testid="details-switch" onClick={() => (pc.open ? pc.hide() : pc.setOpen(true))}>{/* MOCK-HOOK */}
                   {pc.open ? "Hide details" : "Show details"}{/* MOCK-HOOK */}
                 </Button> // MOCK-HOOK
               )}{/* MOCK-HOOK */}

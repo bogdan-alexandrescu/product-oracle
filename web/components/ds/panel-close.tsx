@@ -10,7 +10,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { Icon } from "./Icon"; // MOCK-HOOK
 // MOCK-HOOK
 export type PC1 = "a" | "b" | "c" | "d"; // MOCK-HOOK
-export type PanelClose = { v: PC1 | null; open: boolean; setOpen: (open: boolean) => void; hide: () => void }; // MOCK-HOOK
+export type PanelClose = { v: PC1 | null; open: boolean; picked: boolean; setOpen: (open: boolean) => void; hide: () => void }; // MOCK-HOOK
 // MOCK-HOOK
 const HIDDEN_KEY = "po-pc1-details-hidden"; // MOCK-HOOK
 // MOCK-HOOK
@@ -18,6 +18,8 @@ const HIDDEN_KEY = "po-pc1-details-hidden"; // MOCK-HOOK
 export function usePanelClose(page: "priorities" | "other" = "other"): PanelClose { // MOCK-HOOK
   const [v, setV] = useState<PC1 | null>(null); // MOCK-HOOK
   const [open, setOpenState] = useState(true); // MOCK-HOOK
+  // c: no row is marked until someone picks one. // MOCK-HOOK
+  const [picked, setPicked] = useState(false); // MOCK-HOOK
   useEffect(() => { // MOCK-HOOK
     const q = new URLSearchParams(window.location.search); // MOCK-HOOK
     const raw = q.get("pc1"); // MOCK-HOOK
@@ -27,13 +29,14 @@ export function usePanelClose(page: "priorities" | "other" = "other"): PanelClos
     // eslint-disable-next-line react-hooks/set-state-in-effect -- MOCK-HOOK: reads the URL once, on the client
     setV(on); // MOCK-HOOK
     const forced = q.get("open"); // MOCK-HOOK
-    if (on === "c") setOpenState(forced === "1"); // MOCK-HOOK
+    if (on === "c") { setOpenState(forced === "1"); setPicked(forced === "1"); } // MOCK-HOOK
     else if (on === "b") setOpenState(forced != null ? forced !== "0" : localStorage.getItem(HIDDEN_KEY) !== "1"); // MOCK-HOOK
     else if (on) setOpenState(forced !== "0"); // MOCK-HOOK
   }, [page]); // MOCK-HOOK
   const setOpen = useCallback( // MOCK-HOOK
     (o: boolean) => { // MOCK-HOOK
       setOpenState(o); // MOCK-HOOK
+      if (o) setPicked(true); // MOCK-HOOK
       if (v === "b") localStorage.setItem(HIDDEN_KEY, o ? "0" : "1"); // MOCK-HOOK
     }, // MOCK-HOOK
     [v], // MOCK-HOOK
@@ -46,7 +49,7 @@ export function usePanelClose(page: "priorities" | "other" = "other"): PanelClos
       row?.focus(); // MOCK-HOOK
     }); // MOCK-HOOK
   }, [setOpen]); // MOCK-HOOK
-  return { v, open, setOpen, hide }; // MOCK-HOOK
+  return { v, open, picked, setOpen, hide }; // MOCK-HOOK
 } // MOCK-HOOK
 // MOCK-HOOK
 export const SplitPanelContext = createContext<PanelClose | null>(null); // MOCK-HOOK
@@ -114,11 +117,11 @@ export function PanelRail({ eyebrow, title, children }: { eyebrow: ReactNode; ti
       aria-label={`Open the details${typeof title === "string" ? `: ${title}` : ""}`} // MOCK-HOOK
       aria-expanded={false} // MOCK-HOOK
       data-testid="panel-rail" // MOCK-HOOK
-      className="flex max-h-[calc(100vh-120px)] min-h-[420px] w-14 flex-col items-center gap-3 overflow-hidden rounded-inspector border border-line bg-hero py-3 text-hero-text shadow-panel hover:bg-hero-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent" // MOCK-HOOK
+      className="flex max-h-[calc(100vh-120px)] min-h-[420px] w-14 flex-col items-center gap-3 overflow-hidden rounded-inspector border border-line bg-surface py-3 text-text shadow-panel hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent" // MOCK-HOOK
     >{/* MOCK-HOOK */}
-      <span className="inline-flex h-8 w-8 flex-none items-center justify-center rounded-md bg-hero-2"><Icon name="chevron-left" size={18} /></span>{/* MOCK-HOOK */}
+      <span className="inline-flex h-8 w-8 flex-none items-center justify-center rounded-md bg-hero text-hero-text"><Icon name="chevron-left" size={18} /></span>{/* MOCK-HOOK */}
       <span className="min-h-0 flex-1 overflow-hidden text-left [writing-mode:vertical-rl]">{/* MOCK-HOOK */}
-        <span className="text-[13px] font-semibold tracking-[0.02em] text-hero-text2">{eyebrow}</span>{/* MOCK-HOOK */}
+        <span className="text-[13px] font-semibold tracking-[0.02em] text-text2">{eyebrow}</span>{/* MOCK-HOOK */}
         <span className="mt-2 block font-display text-[17px] leading-6 font-bold tracking-heading">{title}</span>{/* MOCK-HOOK */}
       </span>{/* MOCK-HOOK */}
     </button> // MOCK-HOOK

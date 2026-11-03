@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { useSplitPanel } from "./panel-close"; // MOCK-HOOK
 
 export type Column<T> = {
   key: string;
@@ -74,7 +75,7 @@ export function DataTable<T>({
   columns,
   rows,
   rowKey,
-  selected,
+  selected: selectedIn /* MOCK-HOOK */,
   onSelect,
   onActivate,
   loading = false,
@@ -117,6 +118,9 @@ export function DataTable<T>({
   detail?: (row: T) => ReactNode;
 }) {
   const body = useRef<HTMLTableSectionElement>(null);
+  const sp = useSplitPanel(); // MOCK-HOOK
+  // PC1 c: a Split page opens with no row marked until someone picks one. // MOCK-HOOK
+  const selected = sp?.v === "c" && !sp.open && !sp.picked ? null : selectedIn; // MOCK-HOOK
   const selectable = !!onSelect;
   const list = rows ?? [];
   const selIndex = list.findIndex((r) => rowKey(r) === selected);
