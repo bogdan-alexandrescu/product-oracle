@@ -201,3 +201,89 @@ async def test_accepted_research_reuses_the_one_unstarted_draft(client, runtime,
     assert len(drafts) == 1
     assert sorted(drafts[0].knobs["intake_gap_ids"]) == sorted(gap_ids)
     assert drafts[0].id == uuid.UUID(run_ids.pop())
+
+
+# Review findings: the reply reaches the proposals; a refused start says why.
+
+
+async def test_the_reply_to_a_follow_up_reaches_the_answers_proposals(client, ctx, fake):
+    """protects=the reply to Oracle's follow-up reaches the PRD patch and the baseline
+    proposal made of the answer, and the change is recorded; fails_when=they keep the
+    thin first answer; no_claim=what the model judges thin."""
+    from tests.test_intake import _document
+
+    from oracle.baseline.models import Proposal
+    from oracle.v2.models import ChangeEvent
+    from tests.intake_helpers import ask_of, create_intake
+
+    doc = await _document(client, ctx)
+    out = await create_intake(client, ctx, who="approver", document=doc)
+    intake_id = out["intake"]["id"]
+    q = question_for(await batch(client, ctx, intake_id), "success_metric")
+    await ask_of(client, ctx, q["id"], "commenter")
+    iv = await team_interview(client, ctx, intake_id)
+    follow_up(fake)
+    first = await turn(client, ctx, iv["id"], question_id=q["id"], body="Checkout time.")
+    [patch] = [p for p in first["recorded"]["proposals"] if p["kind"] == "prd_patch"]
+    [baseline_id] = first["recorded"]["baseline_proposal_ids"]
+    reply = await turn(client, ctx, iv["id"], question_id=q["id"], body="95 s to 45 s by Q3.")
+    assert reply["recorded"]["answer"]["body"] == "Checkout time.\n\n95 s to 45 s by Q3."
+    s = await summary(client, ctx, intake_id)
+    patches = [p for p in s["proposals"] if p["kind"] == "prd_patch" and p["status"] == "proposed"]
+    assert [p["id"] for p in patches] == [patch["id"]]
+    assert "95 s to 45 s by Q3." in patches[0]["detail"]["text"]
+    async with tenant_session(ctx.tenant_id) as db:
+        proposal = await db.get(Proposal, uuid.UUID(baseline_id))
+        assert "95 s to 45 s by Q3." in proposal.payload["fields"]["body"]
+        changes = (
+            await db.scalars(
+                select(ChangeEvent).where(ChangeEvent.subject_id == uuid.UUID(q["gap_id"]))
+            )
+        ).all()
+        assert any(c.cause == "intake_answer:amended" for c in changes)
+
+
+async def test_a_reply_after_an_owners_review_waits_for_review_again(client, ctx, fake):
+    """protects=a commenter's reply that changes a critical answer an owner already
+    reviewed puts its gap back to waiting for an owner's review (B4); fails_when=the
+    changed answer stays reviewed; no_claim=how the owner reviews it in the web."""
+    intake_id, asked = await intake_and_questions(client, ctx)
+    gaps = {g["id"]: g for g in (await summary(client, ctx, intake_id))["gaps"]}
+    q = next(x for x in asked if gaps[x["gap_id"]]["importance"] == "critical")
+    iv = await team_interview(client, ctx, intake_id)
+    follow_up(fake)
+    await turn(client, ctx, iv["id"], question_id=q["id"], body=LONG)
+    # The owner reviews the answer and validates the gap.
+    resp = await client.post(
+        f"/v1/gaps/{q['gap_id']}/decisions",
+        json={"decision": "validate", "rationale": "Reviewed with the team."},
+        headers=ctx.as_("owner"),
+    )
+    assert resp.status_code == 201, resp.text
+    await turn(client, ctx, iv["id"], question_id=q["id"], body="Front desks first.")
+    gap = {g["id"]: g for g in (await summary(client, ctx, intake_id))["gaps"]}[q["gap_id"]]
+    assert gap["status"] == "answered_pending_review"
+
+
+async def test_a_research_run_that_cannot_start_says_why(client, runtime, ctx, monkeypatch):
+    """protects=when Accept cannot start the research, the proposal keeps the reason
+    (result.start_error) for the brief and the question to show; fails_when=Accept
+    answers 200 with nothing saying the run is a draft nobody started; no_claim=the
+    run page's own Estimate and Start."""
+
+    async def refuse(*args, **kwargs):
+        raise runs_service.RunError("no Claude account is registered")
+
+    monkeypatch.setattr(runs_service, "start", refuse)
+    out = await intake_with_source(client, ctx)
+    intake_id = out["intake"]["id"]
+    proposal = await _research(client, ctx, intake_id, "goal_alignment")
+    resp = await client.post(
+        f"/v1/intake-proposals/{proposal['id']}/accept", headers=ctx.as_("approver")
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["result"]["start_error"] == "no Claude account is registered"
+    [listed] = [
+        p for p in (await summary(client, ctx, intake_id))["proposals"] if p["id"] == proposal["id"]
+    ]
+    assert listed["result"]["start_error"] == "no Claude account is registered"
