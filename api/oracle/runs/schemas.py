@@ -278,6 +278,12 @@ class SegmentAgent(BaseModel):
     started_at: datetime | None = None
     heartbeat_at: datetime | None = None
     cost_usd: float | None = None
+    # run-progress: the runtime's last event on the agent's task.
+    event_at: datetime | None = None
+    # run-progress: the latest evidence of its work (its heartbeat, the runtime's last
+    # event, or the run's last proposal written since it started), and which it is.
+    last_work_at: datetime | None = None
+    last_work: Literal["heartbeat", "event", "proposals"] | None = None
 
 
 class PrdLinks(BaseModel):
@@ -779,6 +785,11 @@ class SegmentOut(BaseModel):
     # read since it started); empty once the segment is no longer running.
     agents: list[SegmentAgent] = []
     checked_at: datetime | None = None
+    # run-progress: whether the runtime reported any cost for it yet (False: cost_usd is
+    # 0 only because nothing, or only a zero, was reported: a working agent costs), and
+    # the proposals the run wrote while it runs.
+    cost_reported: bool = False
+    proposals_written: int = 0
     # Why SwarmCloud holds this running segment's step, as on the run's Runs row.
     queue_wait: QueueWait | None = None
 
@@ -1116,12 +1127,25 @@ class ClaudeSweepSummary(BaseModel):
     errors: list[str] = []
 
 
+class TickUnchecked(BaseModel):
+    """run-progress: a run a tick could not check, and why, in words."""
+
+    run_id: uuid.UUID
+    title: str
+    reason: str
+
+
 class TickOut(BaseModel):
     runs_checked: int
     segments_finished: int
     runs_advanced: int
     runs_paused: int
     errors: list[str]
+    # run-progress: the runs checked that were running (runs_checked also counts ended
+    # runs Oracle still watches, a cancel winding down say), and each run the tick could
+    # not check, named, with why.
+    active_runs: int = 0
+    unchecked: list[TickUnchecked] = []
     claude_accounts: ClaudeSweepSummary | None = None
     llm_jobs: LlmJobsTick | None = None
     # Calls a member's disable still owed (a provider revoke, a runtime cancel), retried.

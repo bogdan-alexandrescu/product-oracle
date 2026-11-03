@@ -120,6 +120,7 @@ import contextvars
 import copy
 import hashlib
 import logging
+import re
 import time
 import uuid
 import weakref
@@ -234,6 +235,7 @@ from oracle.runs.schemas import (
     SegmentOut,
     TargetGoal,
     TickOut,
+    TickUnchecked,
 )
 from oracle.runs.scope_models import PrdScope
 from oracle.runtokens import RunToken, mint_run_token, revoke_run_tokens
@@ -1138,6 +1140,7 @@ def _segment_out(
     can_retry_draft_import: bool = False,
     zone: str = company_time.DEFAULT_ZONE,
     draft_retry_refused: str | None = None,
+    proposals: tuple[int, datetime | None] = (0, None),
 ) -> SegmentOut:
     sdef = _flow(run).segment(segment.name)
     art = segment.artifacts or {}
@@ -1181,10 +1184,27 @@ def _segment_out(
         finished_at=segment.finished_at,
         error=readable_refusal(segment.error, zone, past=segment.status == "failed"),
         # #258: only while it runs, and only what was read of its current workflow.
-        agents=[SegmentAgent(**a) for a in progress.get("agents") or []],
+        agents=[_agent_out(a, proposals[1]) for a in progress.get("agents") or []],
         checked_at=progress.get("checked_at"),
+        cost_reported=bool(segment.cost_usd)
+        or any(a.get("cost_usd") for a in progress.get("agents") or []),
+        proposals_written=proposals[0] if progress else 0,
         queue_wait=_queue_wait_out(run, segment.seq) if segment.status == "running" else None,
     )
+
+
+def _agent_out(agent: dict[str, Any], proposed_at: datetime | None) -> SegmentAgent:
+    """run-progress: a running agent with the latest evidence of its work: its heartbeat,
+    the runtime's last event on its task, or the run's last proposal written since it
+    started, whichever is latest."""
+    out = SegmentAgent(**agent)
+    if proposed_at is not None and out.started_at is not None and proposed_at < out.started_at:
+        proposed_at = None  # written before this agent started
+    signs = [(out.heartbeat_at, "heartbeat"), (out.event_at, "event"), (proposed_at, "proposals")]
+    seen = [(at, what) for at, what in signs if at is not None]
+    if seen:
+        out.last_work_at, out.last_work = max(seen, key=lambda s: s[0])  # type: ignore[assignment]
+    return out
 
 
 # D11: how a decision reads for the run's agents and on the run page.
@@ -1354,6 +1374,21 @@ async def decisions_of_runs(
     return out
 
 
+async def _proposals_since(
+    db: AsyncSession, run: Run, segments: list[RunSegment]
+) -> tuple[int, datetime | None]:
+    """run-progress: the proposals the run wrote since its running segment started, and
+    when the last was written: evidence that its agents work."""
+    running = next((s for s in segments if s.status == "running"), None)
+    if running is None:
+        return 0, None
+    q = select(func.count(), func.max(Proposal.created_at)).where(Proposal.run_id == run.id)
+    if running.started_at is not None:
+        q = q.where(Proposal.created_at >= running.started_at)
+    count, last = (await db.execute(q)).one()
+    return int(count or 0), last
+
+
 async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | None) -> RunOut:
     run = await _get_run(db, run_id)
     segments = await _segments(db, run.id)
@@ -1371,6 +1406,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     waiting = next((c for c in checkpoints if c.status == "pending"), None)
     retries = _draft_retries(run, segments, checkpoints, kind, principal)
     version = _run_version(segments, checkpoints)
+    proposed = await _proposals_since(db, run, segments)
     runtime = get_runtime()
     notes: list[str] = []
     note_refs: list[RunNoteRefs] = []
@@ -1424,6 +1460,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
                 s.seq in retries,
                 zone=refs.zone,
                 draft_retry_refused=_retry_refused(run, s, version),
+                proposals=proposed if s.status == "running" else (0, None),
             )  # fmt: skip
             for s in segments
         ],
@@ -3404,6 +3441,7 @@ def _record_agents(
             "started_at": st.started_at.isoformat() if st.started_at else None,
             "heartbeat_at": st.heartbeat_at.isoformat() if st.heartbeat_at else None,
             "cost_usd": float(st.cost_usd) if st.cost_usd is not None else None,
+            "event_at": st.event_at.isoformat() if st.event_at else None,
         }
         for st in status.steps
         if st.state in WORKING and (steps is None or st.step_id in steps)
@@ -5877,6 +5915,8 @@ async def checked_items(
 @dataclass
 class _TickStats:
     checked: int = 0
+    # run-progress: runs checked that were running when their pass began.
+    active: set[uuid.UUID] = field(default_factory=set)
     finished: int = 0
     advanced: int = 0
     paused: int = 0
@@ -5896,12 +5936,14 @@ def _dates_pending(exc: BaseException) -> bool:
 
 def _resetter(stats: _TickStats) -> Callable[[], None]:
     """``reset`` for one :func:`_replay`: puts ``stats`` back as they are now, before it."""
-    saved = replace(stats, errors=list(stats.errors))
+    saved = replace(stats, errors=list(stats.errors), active=set(stats.active))
 
     def reset() -> None:
         for f in ("checked", "finished", "advanced", "paused"):
             setattr(stats, f, getattr(saved, f))
         stats.errors[:] = saved.errors
+        stats.active.clear()
+        stats.active.update(saved.active)
 
     return reset
 
@@ -7957,9 +7999,68 @@ async def _tick_one(
         await db.rollback()
         return False
     stats.checked += 1
+    if run.status == "running":
+        stats.active.add(run.id)
     await _tick_run(db, run, stats, deadline)
     await db.commit()
     return True
+
+
+async def _stamp_checked(db: AsyncSession, run_id: uuid.UUID, since: datetime) -> None:
+    """run-progress: a running run this tick read shows it was checked now, even where
+    its pass recorded no agents (they stay as last read)."""
+    run = await db.scalar(select(Run).where(Run.id == run_id).with_for_update(skip_locked=True))
+    if run is None or run.status != "running":
+        await db.rollback()
+        return
+    current = next((s for s in await _segments(db, run_id) if s.status == "running"), None)
+    if current is None or not current.swarm_workflow_id:
+        await db.rollback()
+        return
+    art = _art(current)
+    progress = art.get("progress") or {}
+    if (at := _parse_at(progress.get("checked_at"))) is not None and at >= since:
+        await db.rollback()
+        return
+    same = progress.get("workflow_id") == current.swarm_workflow_id
+    art["progress"] = {
+        "workflow_id": current.swarm_workflow_id,
+        "checked_at": _now().isoformat(),
+        "agents": progress.get("agents") or [] if same else [],
+    }
+    _set_art(current, art)
+    await db.commit()
+
+
+_RUN_ERROR = re.compile(r"^run ([0-9a-fA-F-]{36}): (.+)$", re.S)
+
+
+def _unchecked_reason(text: str) -> str:
+    """run-progress: why a tick could not check a run, in words, from its error."""
+    if text == "dates_pending":
+        return "its roadmap's dates are still being worked out; the next check tries again"
+    if text.startswith("parse_busy"):
+        return "Oracle was busy reading other files; the next check tries again"
+    if re.fullmatch(r"[A-Z][A-Za-z]*(Error|Exception)?", text):
+        return f"something went wrong while reading it ({text}); the next check tries again"
+    return text.rstrip(".")
+
+
+async def _unchecked(db: AsyncSession, errors: list[str]) -> list[TickUnchecked]:
+    """run-progress: each run named in the tick's errors, once, with its first reason."""
+    why: dict[uuid.UUID, str] = {}
+    for e in errors:
+        # A file SwarmCloud refused to send: the run was checked; the run page says it.
+        if (m := _RUN_ERROR.match(e)) is not None and "refused to send" not in m.group(2):
+            why.setdefault(uuid.UUID(m.group(1)), _unchecked_reason(m.group(2)))
+    if not why:
+        return []
+    titles = {r.id: _flow(r).title for r in await db.scalars(select(Run).where(Run.id.in_(why)))}
+    await db.rollback()
+    return [
+        TickUnchecked(run_id=rid, title=titles.get(rid, "A run"), reason=w)
+        for rid, w in why.items()
+    ]
 
 
 async def _has_waiting(db: AsyncSession, run_id: uuid.UUID) -> bool:
@@ -8006,6 +8107,7 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
         # One cap on the runtime calls of this run's whole pass, its submission included.
         deadline = loop.time() + TICK_RUN_SECONDS
         stats.pass_id = uuid.uuid4().hex
+        began = _now()
         try:
             # Its parses count against the run (oracle.safe_yaml.MAX_PER_OWNER).
             with safe_yaml.parse_owner(str(run_id)):
@@ -8037,6 +8139,7 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
                     if owed is None:
                         continue
                     stats.checked += 1  # counted once: by its pass when that ran
+                await _stamp_checked(db, run_id, began)
                 if (refused := await refresh_key(db, run_id, deadline=deadline)) is not None:
                     errors.append(refused)
                 if await _has_waiting(db, run_id):
@@ -8061,12 +8164,16 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
             await db.rollback()
             errors.append(f"run {run_id}: {type(exc).__name__}")
     errors += stats.errors
+    unchecked = await _unchecked(db, errors)
     return TickOut(
         runs_checked=stats.checked,
         segments_finished=stats.finished,
         runs_advanced=stats.advanced,
         runs_paused=stats.paused,
         errors=errors,
+        # A run that could not be checked is named, not counted as checked.
+        active_runs=len(stats.active - {u.run_id for u in unchecked}),
+        unchecked=unchecked,
     )
 
 
