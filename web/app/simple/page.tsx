@@ -18,15 +18,8 @@ import { NewPrdButton, NewPrdSheet, StartedCard, useCanStartPrd, useStartedPrds 
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { QuestionRow, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
 import { SimplePage } from "@/components/simple/SimplePage";
-import { FitAsk, FitHomeCard, useFit } from "@/components/simple/FitDate"; // MOCK-HOOK
+import { FitAskOpener, FitGreet, FitHomeCard, FitSince, useFit } from "@/components/simple/FitDate"; // MOCK-HOOK
 import { Suspense } from "react"; // MOCK-HOOK
-
-// MOCK-HOOK: mk-fitdate FD1 b (a prompt on Home) and c (an Ask Oracle question).
-function FitHome() { // MOCK-HOOK
-  const f = useFit(); // MOCK-HOOK
-  if (!f.on || f.fd1 === "a") return null; // MOCK-HOOK
-  return f.fd1 === "b" ? <FitHomeCard /> : <FitAsk />; // MOCK-HOOK
-} // MOCK-HOOK
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay, formatInZone, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
@@ -48,6 +41,13 @@ import {
 } from "@/lib/simple-home";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, waitingChanged } from "@/lib/waiting";
+
+// MOCK-HOOK: mk-fitdate FD1 b (a prompt on Home); FD1 c asks in the Ask Oracle panel, opened here.
+function FitHome() { // MOCK-HOOK
+  const f = useFit(); // MOCK-HOOK
+  if (!f.on || f.fd1 === "a") return null; // MOCK-HOOK
+  return f.fd1 === "b" ? <FitHomeCard /> : <FitAskOpener />; // MOCK-HOOK
+} // MOCK-HOOK
 
 type Change = Schemas["SimpleChangeOut"];
 type Decision = Schemas["DecisionOut"];
@@ -566,7 +566,7 @@ export default function SimpleHome() {
       <header data-testid="home-greeting" className="-mt-4 flex flex-col gap-1">
         <p className="simple-small tnum">{formatInZone(now.toISOString(), zone, { weekday: "long", month: "long", day: "numeric" })}</p>
         <p className="simple-lead max-[600px]:min-h-[2lh]">
-          {greeting(hour)}
+          <Suspense fallback={greeting(hour)}><FitGreet text={greeting(hour)} /></Suspense>{/* MOCK-HOOK */}
           {firstName ? `, ${firstName}` : ""}. <span data-testid="home-sentence">{sentence}</span>
         </p>
         {/* NP1: New PRD beside the walk, opening the guided sheet. */}
@@ -1070,7 +1070,7 @@ export default function SimpleHome() {
               ].sort((a, b) => b.at.localeCompare(a.at));
               return recent.length === 0 ? (
                 <p className="simple-small" data-testid="home-since-empty">
-                  Nothing changed since your last visit.
+                  <Suspense fallback="Nothing changed since your last visit."><FitSince text="Nothing changed since your last visit." /></Suspense> {/* MOCK-HOOK */}
                 </p>
               ) : (
                 <Top rows={recent} max={5} more="/simple/decisions" what="of the changes">

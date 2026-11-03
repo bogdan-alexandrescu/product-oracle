@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as KeyEvent, type ReactNode, type RefObject } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as KeyEvent, type ReactNode, type RefObject } from "react";
 
 import { Icon, Mark } from "@/components/ds";
 import { SIMPLE_ASK_PANEL_ID } from "@/components/simple/SimpleShell";
@@ -11,6 +11,7 @@ import { askSay, askThread, linkAsk, recentChats, type ChatMessage, type ChatSum
 import { dayIn, formatInZone, todayIn, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { openStream } from "@/lib/stream";
+import { FitAskGate } from "@/components/simple/FitDate"; // MOCK-HOOK
 import { GENERAL, pageName, useCurrentScreenSubject, type ScreenSubject } from "@/lib/screen-subject";
 import { errorMessage } from "@/lib/use-query";
 
@@ -239,6 +240,8 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
         </p>
       </div>
 
+      <Suspense fallback={null}> {/* MOCK-HOOK: mk-fitdate FD1 c asks here */}
+      <FitAskGate> {/* MOCK-HOOK */}
       <ChatView
         key={session}
         chat={chat}
@@ -293,6 +296,8 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
           )
         }
       />
+      </FitAskGate> {/* MOCK-HOOK */}
+      </Suspense> {/* MOCK-HOOK */}
     </div>
   );
 }

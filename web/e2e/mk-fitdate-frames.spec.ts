@@ -23,30 +23,32 @@ const FRAMES: Frame[] = [
   // FD1: where the owner asks.
   { file: "fd1-a-rest", url: road("fd1=a"), size: DESK },
   { file: "fd1-a-open", url: road("fd1=a"), size: DESK, act: async (p) => p.getByTestId("fit-ask").click() },
-  { file: "fd1-a-hard-1512", url: road("fd1=a&phase=hard"), size: WIDE },
+  { file: "fd1-a-hard-1512", url: road("fd1=a&phase=hard&open=0"), size: WIDE },
   { file: "fd1-a-phone", url: road("fd1=a"), size: PHONE },
+  { file: "fd1-a-phone-dark", url: road("fd1=a"), size: PHONE, theme: "dark" },
   { file: "fd1-a-dark", url: road("fd1=a"), size: DESK, theme: "dark" },
   { file: "fd1-b-rest", url: home("fd1=b"), size: DESK },
   { file: "fd1-b-open", url: home("fd1=b"), size: DESK, act: async (p) => p.getByRole("button", { name: "See what to cut" }).click() },
-  { file: "fd1-b-hard-1512", url: home("fd1=b&phase=hard"), size: WIDE },
+  { file: "fd1-b-hard-1512", url: home("fd1=b&phase=hard&open=0"), size: WIDE },
   { file: "fd1-b-phone", url: home("fd1=b"), size: PHONE },
   { file: "fd1-b-dark", url: home("fd1=b"), size: DESK, theme: "dark" },
   { file: "fd1-c-rest", url: home("fd1=c"), size: DESK },
   { file: "fd1-c-open", url: home("fd1=c"), size: DESK, act: async (p) => p.getByRole("button", { name: "Pick the changes" }).click() },
-  { file: "fd1-c-hard-1512", url: home("fd1=c&phase=hard"), size: WIDE },
+  { file: "fd1-c-hard-1512", url: home("fd1=c&phase=hard&open=0"), size: WIDE },
   { file: "fd1-c-after", url: home("fd1=c&phase=adjusted"), size: DESK },
-  { file: "fd1-c-phone", url: home("fd1=c"), size: PHONE },
+  { file: "fd1-c-phone", url: home("fd1=c"), size: PHONE, act: async (p) => p.getByRole("button", { name: "Ask Oracle" }).locator("visible=true").first().click() },
   { file: "fd1-c-dark", url: home("fd1=c"), size: DESK, theme: "dark" },
   // FD2: how Oracle shows its picks (asked from Roadmap, FD1 a).
   { file: "fd2-a-open", url: road("fd2=a&phase=open"), size: DESK },
   { file: "fd2-a-mid", url: road("fd2=a&phase=mid"), size: DESK },
-  { file: "fd2-a-picked", url: road("fd2=a&phase=mid"), size: DESK, act: async (p) => { await tick(/Reply time chart/)(p); await tick(/Tone presets/)(p); } },
+  { file: "fd2-a-picked", url: road("fd2=a&phase=mid"), size: DESK, act: async (p) => { await tick(/Import saved snippets/)(p); await tick(/Team focus/)(p); } },
   { file: "fd2-a-hard-1512", url: road("fd2=a&phase=hard"), size: WIDE },
-  { file: "fd2-a-phone", url: road("fd2=a&phase=mid"), size: PHONE },
+  { file: "fd2-a-phone", url: road("fd2=a&phase=open"), size: PHONE, act: async (p) => p.getByTestId("fit-ranked").locator("li").nth(4).scrollIntoViewIfNeeded() },
+  { file: "fd2-a-phone-dark", url: road("fd2=a&phase=open"), size: PHONE, theme: "dark" },
   { file: "fd2-a-dark", url: road("fd2=a&phase=mid"), size: DESK, theme: "dark" },
   { file: "fd2-b-open", url: road("fd2=b&phase=open"), size: DESK },
   { file: "fd2-b-mid", url: road("fd2=b&phase=mid"), size: DESK },
-  { file: "fd2-b-picked", url: road("fd2=b&phase=mid"), size: DESK, act: async (p) => p.getByTestId("fit-panel").getByRole("radio").nth(1).check() },
+  { file: "fd2-b-picked", url: road("fd2=b&phase=mid"), size: DESK, act: async (p) => p.getByTestId("fit-panel").getByRole("radio").nth(2).check() },
   { file: "fd2-b-hard-1512", url: road("fd2=b&phase=hard"), size: WIDE },
   { file: "fd2-b-phone", url: road("fd2=b&phase=open"), size: PHONE },
   { file: "fd2-b-dark", url: road("fd2=b&phase=open"), size: DESK, theme: "dark" },
@@ -60,8 +62,9 @@ const FRAMES: Frame[] = [
   { file: "fd3-a-result", url: road("fd3=a&phase=result"), size: DESK },
   { file: "fd3-a-adjusted", url: road("fd3=a&phase=adjusted"), size: DESK },
   { file: "fd3-a-home", url: home("fd1=b&fd3=a&phase=adjusted"), size: DESK },
-  { file: "fd3-a-hard-1512", url: road("fd3=a&phase=hard"), size: WIDE },
+  { file: "fd3-a-hard-1512", url: road("fd3=a&phase=hard&step=result"), size: WIDE },
   { file: "fd3-a-phone", url: road("fd3=a&phase=result"), size: PHONE },
+  { file: "fd3-a-phone-dark", url: road("fd3=a&phase=result"), size: PHONE, theme: "dark" },
   { file: "fd3-a-dark", url: road("fd3=a&phase=adjusted"), size: DESK, theme: "dark" },
   { file: "fd3-b-open", url: road("fd3=b&phase=open"), size: DESK },
   { file: "fd3-b-result", url: road("fd3=b&phase=result"), size: DESK },
@@ -145,7 +148,8 @@ test("mk-fitdate frames", async ({ page }) => {
     await page.setViewportSize(f.size);
     await page.emulateMedia({ colorScheme: theme });
     await page.goto(`${f.url}&theme=${theme}`);
-    await expect(page.locator("[data-testid=fit-roadmap], [data-testid=fit-home], [data-testid=fit-ask-chat]").first()).toBeVisible();
+    await expect(page.locator("[data-testid=fit-roadmap], [data-testid=fit-home], [data-testid=fit-ask-chat], [data-testid=home-greeting]").locator("visible=true").first()).toBeVisible();
+    await page.waitForTimeout(400);
     if (f.act) await f.act(page);
     await page.waitForTimeout(600);
     await snapshot(page, f);

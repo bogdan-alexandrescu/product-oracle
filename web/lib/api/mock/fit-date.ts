@@ -15,7 +15,7 @@ export type FitRec = {
   days: number;
   moves: { what: string; before: string; after: string }[];
   cost: string;
-  costKind: "goal" | "gate" | "guard" | "none" | "risk";
+  costKind: "goal" | "gate" | "guard" | "none" | "risk" | "must";
   pick: boolean;
 };
 
@@ -41,7 +41,7 @@ export const FIT_TEAM = {
 export const FIT_GOAL = {
   // MOCK-HOOK
   title: "40 replied threads per agent per day",
-  now: "26 today",
+  now: "26 replied threads per agent today",
   prd: "Reply faster in the shared inbox",
   prdVersion: 3,
   roadmapVersion: 6,
@@ -186,7 +186,7 @@ export const FIT_RECS: FitRec[] = [
   {
     id: "summary",
     lever: "slice",
-    title: "Ship only the slice M2 reads",
+    title: "Ship only the slice M2 needs",
     item: "Thread summary card",
     effect: "4 person-weeks down to 2: read-only summary, no edit",
     pwSaved: 2,
@@ -247,8 +247,8 @@ export const FIT_RECS: FitRec[] = [
     pwSaved: 6,
     days: 18,
     moves: [{ what: "M2 Agent reply flow", before: "—", after: "—" }],
-    cost: "Must-include: the goal cannot move without drafts. Oracle ranks it last.",
-    costKind: "gate",
+    cost: "The goal cannot move without drafts, so Oracle ranks it last and will not tick it.",
+    costKind: "must",
     pick: false,
   },
 ];
@@ -279,6 +279,7 @@ export const FIT_PACKAGES = [
     reach: false,
     gives:
       "Keeps every feature; one wait overlaps and two items ship a first slice.",
+    hardGives: "Keeps every feature, and lands far after the date.",
   },
   {
     id: "fit",
@@ -286,7 +287,8 @@ export const FIT_PACKAGES = [
     recs: ["bulk", "analytics", "hold", "summary", "tone"],
     date: "Jan 25",
     reach: true,
-    gives: "Reaches Jan 29 with 4 days to spare. The goal starts at 34 of 40.",
+    gives: "The goal starts at 34 of 40.",
+    hardGives: "It fits Jan 29, not Jan 8. The goal starts at 34 of 40.",
   },
   {
     id: "deep",
@@ -295,6 +297,8 @@ export const FIT_PACKAGES = [
     date: "Jan 16",
     reach: true,
     gives: "Two weeks of room; support shifts move outside the team.",
+    hardGives:
+      "Still misses it. Gives up the most: support shifts move outside the team and snippets with pictures wait.",
   },
 ];
 
@@ -302,7 +306,7 @@ export const FIT_DIFF = {
   // MOCK-HOOK
   prd: [
     { change: "Moved to M3", item: "Reply to similar threads at once" },
-    { change: "Off M2's gate, still on the roadmap", item: "Reply time chart" },
+    { change: "No longer holds M2; still built, lands Mar 5", item: "Reply time chart" },
     {
       change: "First slice only in M2",
       item: "Thread summary card (4 to 2 person-weeks)",
@@ -311,26 +315,44 @@ export const FIT_DIFF = {
     { change: "34 of 40 replied threads at launch; 40 after M3", item: "The goal" },
   ],
   dates: [
-    {
-      what: "M2 Agent reply flow",
-      before: "Mar 12",
-      after: "Jan 25",
-      kind: "in",
-    },
+    { what: "M2 Agent reply flow", before: "Mar 12", after: "Jan 25", kind: "in" },
     {
       what: "Goal: 40 replied threads per agent per day",
       before: "Mar 12",
-      after: "Apr 9",
+      after: "Jan 25",
       kind: "split",
+      note: "Launches at 34 of 40; the full 40 comes with M3 Team inbox, Apr 9",
     },
-    {
-      what: "Thread summary card",
-      before: "Jan 22",
-      after: "Jan 8",
-      kind: "in",
-    },
-    { what: "Reply time chart", before: "Feb 19", after: "Mar 5", kind: "out" },
+    { what: "Thread summary card (first slice)", before: "Jan 22", after: "Jan 8", kind: "in" },
+    { what: "Import saved snippets", before: "Mar 5", after: "Jan 18", kind: "in" },
+    { what: "Hide card numbers in drafts", before: "Mar 12", after: "Jan 25", kind: "in" },
+    { what: "Reply time chart (no longer holds M2)", before: "Feb 19", after: "Mar 5", kind: "out" },
+    { what: "Reply to similar threads at once (to M3)", before: "Feb 12", after: "Mar 19", kind: "out" },
     { what: "M3 Team inbox", before: "Apr 2", after: "Apr 9", kind: "out" },
+    { what: "Tone presets (to the next PRD)", before: "Feb 26", after: "Not dated", kind: "out" },
+  ],
+  /** The hard case (target Jan 8): every change picked, and the target itself moves. */
+  hardDates: [
+    { what: "M2 target", before: "Jan 8", after: "Jan 16", kind: "out", note: "No set of cuts reaches Jan 8, so you approve the new target too" },
+    { what: "M2 Agent reply flow", before: "Mar 12", after: "Jan 16", kind: "in" },
+    {
+      what: "Goal: 40 replied threads per agent per day",
+      before: "Mar 12",
+      after: "Jan 16",
+      kind: "split",
+      note: "Launches at 34 of 40; the full 40 comes with M3 Team inbox, Apr 9",
+    },
+    { what: "Thread summary card (first slice)", before: "Jan 22", after: "Jan 8", kind: "in" },
+    { what: "Import saved snippets (first slice)", before: "Mar 5", after: "Jan 14", kind: "in" },
+    { what: "Hide card numbers in drafts", before: "Mar 12", after: "Jan 16", kind: "in" },
+    { what: "Reply time chart (no longer holds M2)", before: "Feb 19", after: "Mar 5", kind: "out" },
+    { what: "Reply to similar threads at once (to M3)", before: "Feb 12", after: "Mar 19", kind: "out" },
+    { what: "M3 Team inbox", before: "Apr 2", after: "Apr 9", kind: "out" },
+    { what: "Tone presets (to the next PRD)", before: "Feb 26", after: "Not dated", kind: "out" },
+  ],
+  hardPrd: [
+    { change: "First slice only in M2 (plain text)", item: "Import saved snippets" },
+    { change: "70% to 80%; support shifts move to two people outside the team for 10 weeks", item: "Team focus" },
   ],
   run: {
     took: "about 40 seconds",
@@ -366,6 +388,7 @@ export const FIT_AFTER = [
         was: "Mar 12",
         lock: true,
       },
+      { t: "Reply time chart (no longer holds M2)", d: "Mar 5", was: "Feb 19" },
     ],
   },
   {
@@ -373,9 +396,8 @@ export const FIT_AFTER = [
     date: "Apr 9",
     was: "Apr 2",
     items: [
-      { t: "Reply time chart (off M2's gate)", d: "Mar 5", was: "Feb 19" },
       { t: "Reply to similar threads at once", d: "Mar 19", was: "Feb 12" },
-      { t: "Thread summary card (edit)", d: "Apr 2" },
+      { t: "Edit a thread summary", d: "Apr 2" },
     ],
   },
   {
