@@ -124,8 +124,9 @@ export function NewPrdSheet({ onClose, onStarted }: { onClose: () => void; onSta
   const [name, setName] = useState("");
   const [problem, setProblem] = useState("");
   const [who, setWho] = useState("");
-  // undefined until a chip is pressed: the sheet opens with no goal picked, "Not sure yet" included.
-  const [goal, setGoal] = useState<string | null | undefined>(undefined);
+  // The goals ticked, any number; null once "Not sure yet" is picked (it clears them, a goal
+  // clears it). The sheet opens with nothing picked, "Not sure yet" included.
+  const [picks, setPicks] = useState<string[] | null>([]);
   const [intake, setIntake] = useState<Intake | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [given, setGiven] = useState<Given[]>([]);
@@ -186,7 +187,7 @@ export function NewPrdSheet({ onClose, onStarted }: { onClose: () => void; onSta
             source_ids: [],
             ai_extraction: true,
             batch_size: ASK,
-            goal_ids: goal ? [goal] : [],
+            goal_ids: picks ?? [],
             out_of_scope: [],
             prd_answers: null,
             request_ids: [],
@@ -321,17 +322,20 @@ export function NewPrdSheet({ onClose, onStarted }: { onClose: () => void; onSta
           <input className={FIELD} placeholder="The people this is for" value={who} maxLength={400} onChange={(e) => setWho(e.target.value)} />
         </label>
         <fieldset className="flex flex-col gap-1.5">
-          <legend className={`${LABEL} mb-1.5`}>The goal it helps</legend>
+          <legend className={`${LABEL} mb-1.5`}>The goals it helps</legend>
           <div className="flex flex-wrap gap-2">
             {[...goalList.map((g) => ({ id: g.id as string | null, name: g.title })), { id: null, name: "Not sure yet" }].map((g) => {
-              const on = goal === g.id;
+              const on = g.id === null ? picks === null : !!picks?.includes(g.id);
               return (
                 <button
                   key={g.id ?? "none"}
                   type="button"
                   aria-pressed={on}
                   className={`simple-chip ${on ? "border-accent! bg-accent! font-semibold text-on-accent!" : ""}`}
-                  onClick={() => setGoal(g.id)}
+                  onClick={() => {
+                    const id = g.id;
+                    setPicks((p) => (id === null ? null : p?.includes(id) ? p.filter((x) => x !== id) : [...(p ?? []), id]));
+                  }}
                 >
                   {on && <Icon name="check" size={16} />}
                   {g.name}
@@ -497,8 +501,8 @@ export type Started = {
   people: Map<string, Person>;
   /** Changed in the last few minutes, when it was read. */
   fresh: boolean;
-  /** The goal it serves, by name. */
-  goal: string | undefined;
+  /** The goals it serves, by name, as picked. */
+  goals: string[];
 };
 
 const GONE = new Set<Intake["status"]>(["archived"]);
@@ -517,8 +521,8 @@ async function loadStarted(me: string): Promise<Started[]> {
         unwrap(api.GET("/v1/gaps", { params: { query } })),
         unwrap(api.GET("/v1/intakes/{intake_id}/summary", { params: { path: { intake_id: intake.id } } })),
       ]);
-      const goal = summary.intake.goal_ids.map((id) => goals.find((g) => g.id === id)?.title).find(Boolean);
-      return { intake, goal, questions: questions.filter((q) => q.batch != null && q.status !== "withdrawn" && q.status !== "draft"), gaps: new Map(gaps.map((g) => [g.id, g])) };
+      const named = summary.intake.goal_ids.map((id) => goals.find((g) => g.id === id)?.title).filter((t): t is string => !!t);
+      return { intake, goals: named, questions: questions.filter((q) => q.batch != null && q.status !== "withdrawn" && q.status !== "draft"), gaps: new Map(gaps.map((g) => [g.id, g])) };
     }),
   );
   const people = await peopleByIds(rows.flatMap((r) => r.questions.filter((q) => q.status === "delegated").map((q) => q.asked_to))).catch(() => new Map<string, Person>());
@@ -530,6 +534,11 @@ async function loadStarted(me: string): Promise<Started[]> {
 export function useStartedPrds(enabled: boolean) {
   const { me } = useMe();
   return useQuery(`simple|started-prds|${me?.user_id ?? ""}`, () => (enabled && me?.user_id ? loadStarted(me.user_id) : Promise.resolve([] as Started[])));
+}
+
+/** "A", "A and B", "A, B and C". */
+function andList(names: string[]): string {
+  return names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 }
 
 function drafting(s: Started): boolean {
@@ -571,7 +580,7 @@ export function StartedCard({ started: all }: { started: Started[] }) {
       </header>
       {started.map((s) => {
         const answered = s.questions.filter((q) => q.status === "answered").length;
-        const goal = s.goal;
+        const goal = andList(s.goals);
         const unknown = s.questions.filter((q) => q.status === "asked" && q.gap_id && s.gaps.get(q.gap_id)?.status === "unknown");
         const notYet = s.questions.filter((q) => q.status === "asked" && !unknown.includes(q));
         return (
@@ -618,6 +627,11 @@ export function StartedRows({ started }: { started: Started[] }) {
               {s.intake.title}
             </Link>
             <StatusChip s={s} />
+            {s.goals.length > 0 && (
+              <span className="simple-small" data-testid="one-pager-started-goals">
+                For {andList(s.goals)}
+              </span>
+            )}
             {waits && <span className="simple-small">{waits}</span>}
             <span className="simple-small ml-auto">{s.fresh ? "Updated just now" : `Updated ${dmy(dayIn(s.intake.updated_at, zone))}`}</span>
           </li>
