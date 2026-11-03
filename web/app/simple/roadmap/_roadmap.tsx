@@ -780,6 +780,15 @@ export function SimpleRoadmap() {
   const gone = emptied && wide.data && !wide.loading ? PICKS.filter((k) => f[k] && !wide.data![k].has(f[k])) : [];
   const linked = gone.filter((k) => k !== "track" && params.get(k) === f[k]);
   const dropped = gone.filter((k) => !linked.includes(k));
+  // roadmap-stale-filters review: Clear takes the link's picks out of the address too (Next
+  // keeps useSearchParams in step), so a reload does not bring the note back.
+  const clearLinked = () => {
+    setF({ ...f, ...Object.fromEntries(linked.map((k) => [k, ""])) });
+    const next = new URLSearchParams(window.location.search);
+    for (const k of linked) next.delete(k);
+    const s = next.toString();
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${s ? `?${s}` : ""}${window.location.hash}`);
+  };
   if (dropped.length) {
     const next = { ...f };
     for (const k of dropped) next[k] = "";
@@ -1357,7 +1366,7 @@ export function SimpleRoadmap() {
             <p className="text-[15px] font-semibold">
               {linked.length > 1 ? "That PRD and goal are no longer on this roadmap" : linked[0] === "prd" ? "That PRD is no longer on this roadmap" : "That goal is no longer on this roadmap"}
             </p>
-            <Button onClick={() => setF({ ...f, ...Object.fromEntries(linked.map((k) => [k, ""])) })}>Clear</Button>
+            <Button onClick={clearLinked}>Clear</Button>
           </div>
         ) : filtered && !data.items.length ? (
           // fix4 qa-simple-roadmap-12: no bare axis when the filters leave nothing: say so, and a way back.
