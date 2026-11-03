@@ -566,11 +566,18 @@ export async function routeTeamInterviews(db: InterviewsDb, ctx: TeamContext, re
     said.push(text);
     add("interviewee", "answer", text);
   } else add("interviewee", "skip", "Skip, record my answer");
+  // brief-answers: the test's knob loses this turn's reply on the way back once (as the web's
+  // proxy cut a slow turn off): the answer is saved, the browser gets a bare 500.
+  const sent = (payload: unknown) => {
+    if (localStorage.getItem("po-mock-lost") !== "turns") return json(200, payload);
+    localStorage.removeItem("po-mock-lost");
+    return new Response("Internal Server Error", { status: 500, headers: { "content-type": "text/plain" } });
+  };
   if (followedUp && saved) {
     // The reply to Oracle's follow-up adds to the answer recorded with it.
     saved.answer.body = said.join("\n\n");
     add("oracle", "closing", RECORDED);
-    return json(200, { messages: added, recorded: asResult(saved), next_question_id: ctx.nextQuestion(r.intake_id ?? "", qid) });
+    return sent({ messages: added, recorded: asResult(saved), next_question_id: ctx.nextQuestion(r.intake_id ?? "", qid) });
   }
   const res = await ctx.recordAnswer(qid, said.join("\n\n"));
   if (!res.ok) {
@@ -580,8 +587,8 @@ export async function routeTeamInterviews(db: InterviewsDb, ctx: TeamContext, re
   const recorded = await res.json();
   if (!followedUp && !input.skip_follow_up && words(text) < THIN_WORDS) {
     add("oracle", "follow_up", MOCK_TEAM_FOLLOW_UP);
-    return json(200, { messages: added, recorded, next_question_id: null });
+    return sent({ messages: added, recorded, next_question_id: null });
   }
   add("oracle", "closing", RECORDED);
-  return json(200, { messages: added, recorded, next_question_id: ctx.nextQuestion(r.intake_id ?? "", qid) });
+  return sent({ messages: added, recorded, next_question_id: ctx.nextQuestion(r.intake_id ?? "", qid) });
 }
