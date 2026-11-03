@@ -24,7 +24,7 @@ import {
 } from "./common";
 import { figure, fillable, gapLabel, horizonLabel, missingTip, OwnerName, targetText, typedTarget, useOwners } from "./goal-fields";
 import { byTitle } from "./order";
-import { MkHandle } from "@/components/simple/MkGoalOrder"; // MOCK-HOOK
+import { MkHandle, useMkTick } from "@/components/simple/MkGoalOrder"; // MOCK-HOOK
 import { mk, mkOrder } from "@/lib/mk-goalorder"; // MOCK-HOOK
 
 type Props = {
@@ -216,6 +216,7 @@ function fillAsk(goals: EntityOut[]) {
  * G-tags with their strength.
  */
 export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm, onAdd, onFill, onMakeMeasurable, vague = 0, onInterviewVague, goalsNote, onAddSubgoal }: Props) {
+  useMkTick(); // MOCK-HOOK: re-sorts the goals after a reorder
   const low = trace?.low ?? DEFAULT_LOW;
   const live = graph.entities.filter((e) => e.status !== "rejected");
   const goals = sortedGoals(graph);

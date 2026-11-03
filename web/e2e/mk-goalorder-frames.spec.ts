@@ -166,7 +166,7 @@ test("go1-a", async ({ page }) => {
   await resetOrder(page);
   await start(page, { go1: "a", goals: "9" }, 1512);
   await open(page, `${base}&goals=9`, "[data-testid=mk-handle]");
-  await goalsTable(page);
+  await page.getByRole("button", { name: "Move Faster page loads" }).evaluate((e) => e.scrollIntoView({ block: "center" }));
   await page.getByRole("button", { name: "Move Faster page loads" }).click();
   await snap(page, "go1-a-hard-1512");
   await page.setViewportSize(SIZE[390]);

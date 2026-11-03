@@ -1,0 +1,320 @@
+{
+  "title": "How the owner sets the goals' order",
+  "subtitle": "Mock-ups (Nov 3): one goal order, left to right and top to bottom, kept on every page. Invented company and people.",
+  "decisions": [
+    {
+      "code": "GO1",
+      "name": "Where the owner reorders goals",
+      "question": "Where and how should the owner change the goals' order?",
+      "common": "Only owners and approvers see the control; everyone else sees the same order with no control. Saving shows a toast with Undo, and every page (Home, Roadmap, Priorities, Plan, Baseline, a PRD, exports) shows the new order at once. Archived goals are not in the order. The story in each: move Grow paid conversion from place 3 to place 1.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Handles on Baseline's list",
+          "recommended": false,
+          "what": "In Detailed > Baseline, each top-level goal in the Goals table gets a handle and its number. The owner drags a row, or presses the handle for Move up, Move down and Make it goal 1. The order saves on drop, a toast says where the goal now sits and offers Undo, and every page shows the new order at once. Only owners and approvers see the handles; others see the same order with no handle.",
+          "plus": "The table already lists every goal, its subgoals and its status; the order sits next to the rest of the goal's facts. No new page.",
+          "cost": "Simple has no way to change the order: an owner who lives in Simple must switch to Detailed and find a table far down the page. On a phone the handle is a small target in a long stacked list.",
+          "frames": [
+            {
+              "file": "frames/go1-a-rest.html",
+              "caption": "Detailed > Baseline: a handle and a number before each goal in the Goals table."
+            },
+            {
+              "file": "frames/go1-a-cost.html",
+              "caption": "The cost: Simple Home has no control, so the owner has to switch to Detailed to reorder."
+            },
+            {
+              "file": "frames/go1-a-open.html",
+              "caption": "The owner presses the handle on Grow paid conversion: drag the row, or Move up, Move down, Make it goal 1."
+            },
+            {
+              "file": "frames/go1-a-mid.html",
+              "caption": "Mid-drag: the row is lifted; a blue line above Faster activation shows where it lands."
+            },
+            {
+              "file": "frames/go1-a-saved.html",
+              "caption": "Dropped at the top: the table re-sorts and a toast says it is goal 1 of 5, with Undo."
+            },
+            {
+              "file": "frames/go1-a-result.html",
+              "caption": "Right after: Simple Home (left) and Roadmap (right) both show Grow paid conversion first."
+            },
+            {
+              "file": "frames/go1-a-hard-1512.html",
+              "caption": "Eight goals, one archived (not listed) and one long title, at 1512: the handle on goal 8 opened."
+            },
+            {
+              "file": "frames/go1-a-phone-390.html",
+              "caption": "Phone 390: the handle and number sit beside each goal's stacked block."
+            },
+            {
+              "file": "frames/go1-a-dark.html",
+              "caption": "Dark: the handle's menu open on Grow paid conversion."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Reorder on Home's row",
+          "recommended": true,
+          "what": "Simple Home's goal row gets a quiet Change order button for owners and approvers. It turns the cards into a numbered row: each card has a grip to drag and left / right arrows. Save order keeps it; a toast says every page shows the new order and offers Undo. Cancel leaves it as it was. Detailed pages follow the same stored order; others see the row with no button.",
+          "why": "The owner changes the order on the very row it shows on, left to right, and sees the result before saving. It is in Simple, where the owner works, and the arrows make it work without dragging, on a phone too.",
+          "plus": "What you see is what every page gets; one save for several moves; Undo after.",
+          "cost": "A second mode for Home's row (cards slim down while ordering). With eight or more goals the row wraps, so left / right becomes a wrap across rows; on a phone the cards stack and the owner scrolls a long list.",
+          "frames": [
+            {
+              "file": "frames/go1-b-rest.html",
+              "caption": "Simple Home: Change order sits over the goal row, for owners and approvers only."
+            },
+            {
+              "file": "frames/go1-b-open.html",
+              "caption": "Change order: each card gets a number, a grip and left / right arrows; Cancel or Save order."
+            },
+            {
+              "file": "frames/go1-b-mid.html",
+              "caption": "Mid-drag: Grow paid conversion is lifted and moving to place 2."
+            },
+            {
+              "file": "frames/go1-b-saved.html",
+              "caption": "After two moves left and Save order: Home shows the new order at once, with a toast and Undo."
+            },
+            {
+              "file": "frames/go1-b-result.html",
+              "caption": "Right after: Home (left) and Roadmap (right) both start with Grow paid conversion."
+            },
+            {
+              "file": "frames/go1-b-viewer.html",
+              "caption": "A viewer sees the same order and no Change order button."
+            },
+            {
+              "file": "frames/go1-b-hard-1512.html",
+              "caption": "Eight goals at 1512 while ordering: the row wraps to two lines; the long title wraps in its card."
+            },
+            {
+              "file": "frames/go1-b-phone-390.html",
+              "caption": "Phone 390 while ordering: one card per line with its arrows; Save order sits above the list."
+            },
+            {
+              "file": "frames/go1-b-dark.html",
+              "caption": "Dark: mid-drag."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Order list with arrows",
+          "recommended": false,
+          "what": "Change order on Simple Home opens a small Goal order window: a numbered list, one line per goal, with up and down arrows. A moved goal is marked. Save order keeps it with a toast and Undo; Cancel asks before throwing changes away. Only owners and approvers see the button.",
+          "plus": "Plain and the same at every width: the long title and eight goals fit as lines; arrows work by tap and keyboard.",
+          "cost": "The order is set away from where it shows: the owner reads up and down a list, not left to right, and only sees the row after saving. One more window to open.",
+          "frames": [
+            {
+              "file": "frames/go1-c-rest.html",
+              "caption": "Simple Home with Change order over the goal row."
+            },
+            {
+              "file": "frames/go1-c-open.html",
+              "caption": "Goal order opens: the goals as a numbered list with up and down arrows."
+            },
+            {
+              "file": "frames/go1-c-mid.html",
+              "caption": "Grow paid conversion moved up to 1, marked Moved."
+            },
+            {
+              "file": "frames/go1-c-saved.html",
+              "caption": "Saved: Home shows the new order at once, with a toast and Undo."
+            },
+            {
+              "file": "frames/go1-c-result.html",
+              "caption": "Right after: Home (left) and Roadmap (right) both show the new order."
+            },
+            {
+              "file": "frames/go1-c-hard-1512.html",
+              "caption": "Eight goals at 1512: every goal is one line; the long title wraps to two."
+            },
+            {
+              "file": "frames/go1-c-phone-390.html",
+              "caption": "Phone 390: the list fills the screen; arrows are large enough to tap."
+            },
+            {
+              "file": "frames/go1-c-dark.html",
+              "caption": "Dark: the list after one move."
+            }
+          ]
+        },
+        {
+          "letter": "d",
+          "name": "Move left / right on a goal",
+          "recommended": false,
+          "what": "A goal's own panel (Detailed > Baseline, open a goal) gets an Order line: \"Goal 3 of 5\" with Move left and Move right. Each press saves at once, with a toast and Undo. Owners and approvers see the buttons; others see only \"Goal 3 of 5\".",
+          "plus": "No new mode or window; the place is written on each goal, next to its other facts.",
+          "cost": "One goal and one step at a time: bringing goal 8 to the front takes seven presses, and the owner never sees the whole row while doing it. Detailed only.",
+          "frames": [
+            {
+              "file": "frames/go1-d-rest.html",
+              "caption": "Detailed > Baseline: the Goals table, no order control on it."
+            },
+            {
+              "file": "frames/go1-d-open.html",
+              "caption": "The goal's panel opened: Order says Goal 3 of 5, with Move left and Move right."
+            },
+            {
+              "file": "frames/go1-d-mid.html",
+              "caption": "One press of Move left: Goal 2 of 5, saved at once, toast with Undo."
+            },
+            {
+              "file": "frames/go1-d-saved.html",
+              "caption": "A second press: Goal 1 of 5, shown first; the goal columns re-sort too."
+            },
+            {
+              "file": "frames/go1-d-result.html",
+              "caption": "Right after: Home (left) and Roadmap (right) both show it first."
+            },
+            {
+              "file": "frames/go1-d-hard-1512.html",
+              "caption": "The cost at 1512: Faster page loads is goal 8 of 8, seven presses from the front."
+            },
+            {
+              "file": "frames/go1-d-phone-390.html",
+              "caption": "Phone 390: the panel fills the screen; Order sits below the goal's figures."
+            },
+            {
+              "file": "frames/go1-d-dark.html",
+              "caption": "Dark: the panel with its Order line."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "GO2",
+      "name": "How readers see the order",
+      "question": "How should a reader see that the goals' order is deliberate?",
+      "common": "Every page lists goals in the owner's order, left to right and top to bottom; Simple's and Detailed's designs stay as built; the mark (if any) is the same on every page.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "A number on each goal",
+          "recommended": true,
+          "what": "A small grey number before every goal's name, 1 to n, wherever goals are listed: Home's cards, the Roadmap's goal cards and goal lanes, Baseline's table. Nothing else changes.",
+          "why": "A number says 'this is a set order' without words, matches what the owner sees while ordering, and lets people say 'goal 2' in a meeting. It stays readable with eight goals and on a phone.",
+          "plus": "Tiny, the same on every page and in exports.",
+          "cost": "One more mark on every card; people may read it as a rank of worth rather than the owner's chosen order.",
+          "frames": [
+            {
+              "file": "frames/go2-a-home.html",
+              "caption": "Home: 1 to 5 before each goal's name."
+            },
+            {
+              "file": "frames/go2-a-roadmap.html",
+              "caption": "Roadmap: the goal cards and the goal lanes carry the same numbers."
+            },
+            {
+              "file": "frames/go2-a-hard-1512.html",
+              "caption": "Eight goals at 1512: numbers run across both rows; the long title wraps after its number."
+            },
+            {
+              "file": "frames/go2-a-phone-390.html",
+              "caption": "Phone 390: the number leads each stacked card."
+            },
+            {
+              "file": "frames/go2-a-dark.html",
+              "caption": "Dark: Roadmap with the numbers."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "First goal marked main",
+          "recommended": false,
+          "what": "Goal 1 alone gets a 'Main goal' tag and a thin accent line on its card; the others are unmarked and follow in order.",
+          "plus": "Says the one thing most readers want: which goal comes first.",
+          "cost": "Says nothing about goals 2 to n, so a reader cannot tell a set order from a random one past the first.",
+          "frames": [
+            {
+              "file": "frames/go2-b-home.html",
+              "caption": "Home: Main goal on Faster activation, with an accent line on its card."
+            },
+            {
+              "file": "frames/go2-b-roadmap.html",
+              "caption": "Roadmap: Main goal on the first goal card and the first lane."
+            },
+            {
+              "file": "frames/go2-b-hard-1512.html",
+              "caption": "Eight goals at 1512: only the first is marked."
+            },
+            {
+              "file": "frames/go2-b-phone-390.html",
+              "caption": "Phone 390: the tag before the first goal's name."
+            },
+            {
+              "file": "frames/go2-b-dark.html",
+              "caption": "Dark: Roadmap with Main goal."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "One line says so",
+          "recommended": false,
+          "what": "One short line over the goals: 'Most important first, in the order Dana Okafor set on Nov 3.' The cards stay as they are.",
+          "plus": "Says who set it and when, in words; no mark on every card.",
+          "cost": "One more line on each page, easy to skip; the reader still counts to know a goal's place.",
+          "frames": [
+            {
+              "file": "frames/go2-c-home.html",
+              "caption": "Home: the line over the goal row."
+            },
+            {
+              "file": "frames/go2-c-roadmap.html",
+              "caption": "Roadmap: the same line over the goal cards."
+            },
+            {
+              "file": "frames/go2-c-hard-1512.html",
+              "caption": "Eight goals at 1512: the line, then two rows of cards."
+            },
+            {
+              "file": "frames/go2-c-phone-390.html",
+              "caption": "Phone 390: the line wraps to two lines over the cards."
+            },
+            {
+              "file": "frames/go2-c-dark.html",
+              "caption": "Dark: Roadmap with the line."
+            }
+          ]
+        },
+        {
+          "letter": "d",
+          "name": "Nothing extra",
+          "recommended": false,
+          "what": "No mark at all: the goals simply show in the owner's order on every page.",
+          "plus": "Keeps Simple's design exactly as built; nothing to learn.",
+          "cost": "A reader cannot tell the order is deliberate; it looks like any sort.",
+          "frames": [
+            {
+              "file": "frames/go2-d-home.html",
+              "caption": "Home: the goals in order, no mark."
+            },
+            {
+              "file": "frames/go2-d-roadmap.html",
+              "caption": "Roadmap: the goal cards and lanes in the same order."
+            },
+            {
+              "file": "frames/go2-d-hard-1512.html",
+              "caption": "Eight goals at 1512, no mark."
+            },
+            {
+              "file": "frames/go2-d-phone-390.html",
+              "caption": "Phone 390, no mark."
+            },
+            {
+              "file": "frames/go2-d-dark.html",
+              "caption": "Dark: Roadmap, no mark."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
