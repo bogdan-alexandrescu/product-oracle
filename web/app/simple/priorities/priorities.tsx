@@ -1697,10 +1697,8 @@ function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }
 
 /** A row's own mark when it misses the line; compact (Value/effort's side list, B): a small "Misses" chip, the line in its title. */
 function MissesTag({ data, row, compact = false }: { data: Out; row?: Row; compact?: boolean }) {
-  // qa-simple-plan-27: a feature tagged with the very milestone the line is drawn at misses its own milestone
-  // (prio-line-once: a PRD's milestone is listed once, as its key date "From the PRD").
-  const atMilestone = data.line?.kind === "milestone" || (data.line?.kind === "key_date" && !!data.line.prd);
-  const own = !!row?.milestone && atMilestone && data.line!.label.split(" · ")[0] === row.milestone;
+  // qa-simple-plan-27: a feature tagged with the very milestone the line is drawn at misses its own milestone.
+  const own = !!row?.milestone && data.line?.kind === "milestone" && data.line.label.split(" · ")[0] === row.milestone;
   if (own && !compact)
     return (
       <span data-testid="prio-misses" data-own="true" className="min-w-0 max-w-full rounded-full bg-crit-bg px-2 text-[length:var(--simple-small)] font-medium text-crit">
