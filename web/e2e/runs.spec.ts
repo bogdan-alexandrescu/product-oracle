@@ -598,8 +598,12 @@ test("fix-work review: a check that could not read some runs says so on a run th
   await expect(result).toContainText(/2 runs could not be checked at .+\.$/);
 });
 
-test("artifact-skip-refused: a file SwarmCloud refuses that the step needs is said in words, not only counted", async ({ page }) => {
-  await openRuns(page);
+/** artifact-skip-refused: the baseline step runs again and SwarmCloud will not send its baseline.yaml. */
+async function refusedBaseline(page: Page) {
+  await login(page);
+  // A phone keeps the side nav folded away: the Runs page by its address.
+  await page.goto("/runs");
+  await expect(page.getByRole("heading", { level: 1, name: "Runs" })).toBeVisible();
   await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
   await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
   // The baseline step runs again.
@@ -621,4 +625,16 @@ test("artifact-skip-refused: a file SwarmCloud refuses that the step needs is sa
   const notes = page.getByTestId("run-notes").locator("li").filter({ hasText: "baseline.yaml" });
   await expect(notes).toHaveCount(1);
   await expect(notes).toContainText("SwarmCloud refused to send baseline.yaml (422 validation_error: artifact name not allowed)");
+}
+
+test("artifact-skip-refused: a file SwarmCloud refuses that the step needs is said in words, not only counted", async ({ page }) => {
+  await refusedBaseline(page);
+});
+
+test.describe("phone", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("artifact-skip-refused: on a phone, the refused file is said in words", async ({ page }) => {
+    await refusedBaseline(page);
+  });
 });
