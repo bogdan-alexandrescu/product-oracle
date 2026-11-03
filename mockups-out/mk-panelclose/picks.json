@@ -1,0 +1,175 @@
+{
+  "title": "Closing the feature panel on Detailed Priorities",
+  "subtitle": "Detailed › Priorities on a desktop: the panel beside the ranking can close, so the table gets the full width. Pick one way.",
+  "decisions": [
+    {
+      "code": "PC1",
+      "name": "How the desktop panel closes and comes back",
+      "question": "How does the feature panel on Detailed Priorities close on a desktop, and how does it come back?",
+      "common": "In every proposal the panel on a desktop can be closed. Closed, the table takes its room: Goal and Depends on get wider and words wrap whole, never cut. Esc closes the panel and focus goes back to the selected row; Tab order stays top bar, page, panel. The phone at 390 px is unchanged: a feature still opens in its bottom sheet, which closes as before. Each proposal says whether its control is for Priorities only or for every page with a side panel (Baseline, Company › Decisions, Metrics, Rituals, Strategy, Market alternatives, PRDs, a PRD's Composition and the rest).",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "× in the panel",
+          "recommended": true,
+          "what": "An × sits in the panel's head, beside its title. Clicking it (or Esc) closes the panel and the table widens to the full width. Picking any row opens the panel again on that row. The same × comes to every page with a side panel, so closing works the same way everywhere.",
+          "why": "It puts the close where people look for it, on the thing being closed, and brings the panel back with the act that means 'show me this one': picking a row. Nothing is remembered behind the person's back, and one rule serves all ten pages.",
+          "plus": "Plain and familiar; no new button in the table's head; the same on every page with a side panel; nothing hidden on the next visit.",
+          "cost": "Picking a row to read it opens the panel and narrows the table again; someone who wants the wide table while moving through rows closes it each time.",
+          "frames": [
+            {
+              "file": "frames/pc1-a-rest.html",
+              "caption": "At rest: the panel shows the top feature, Address lookup service, with an × in its head."
+            },
+            {
+              "file": "frames/pc1-a-control.html",
+              "caption": "The × reached with Tab, ringed in blue; pointed at, it reads Close the details (Esc)."
+            },
+            {
+              "file": "frames/pc1-a-closed.html",
+              "caption": "After the ×: the table takes the full width; feature names sit on one line and Goal and Depends on have room. Focus is back on the selected row."
+            },
+            {
+              "file": "frames/pc1-a-reopen.html",
+              "caption": "Picking Guided first project with sample tasks opens the panel again, on that feature, and the table narrows."
+            },
+            {
+              "file": "frames/pc1-a-esc.html",
+              "caption": "Esc in the panel closes it; focus goes back to Guided first project with sample tasks, ringed in blue."
+            },
+            {
+              "file": "frames/pc1-a-open-1280.html",
+              "caption": "Hard case, 1280 px with the panel open: Confidence and Depends on drop out of the table, as today. The × gives them back."
+            },
+            {
+              "file": "frames/pc1-a-closed-1512.html",
+              "caption": "Hard case, 1512 px with the panel closed: every column shows; a long goal takes two lines and three dependencies three short lines."
+            },
+            {
+              "file": "frames/pc1-a-decisions.html",
+              "caption": "Every page with a side panel: Company › Decisions gets the same × in its panel's head."
+            },
+            {
+              "file": "frames/pc1-a-phone-390.html",
+              "caption": "Phone, 390 px, unchanged: Guided first project with sample tasks opens in the bottom sheet, which closes as before (the same in every proposal)."
+            }
+          ]
+        },
+        {
+          "letter": "B",
+          "name": "Hide details switch",
+          "recommended": false,
+          "what": "A Hide details button sits at the right end of the table's head bar. It closes the panel and turns into Show details. The choice is kept for each person, so the next visit opens the way they left it. Picking a row while the details are hidden only marks the row. Priorities only: the other pages with a side panel stay as built.",
+          "plus": "Someone who wants the wide table gets it on every visit without closing anything again; the button names what it does.",
+          "cost": "With details hidden, picking a row shows nothing about it until Show details, and a person who hid them last week may not know why. Only Priorities gets it; the other pages still cannot close their panel.",
+          "frames": [
+            {
+              "file": "frames/pc1-b-rest.html",
+              "caption": "At rest: a Hide details button at the right of the table's head bar; the panel shows Address lookup service."
+            },
+            {
+              "file": "frames/pc1-b-closed.html",
+              "caption": "After Hide details: the table at full width; the button now reads Show details."
+            },
+            {
+              "file": "frames/pc1-b-kept.html",
+              "caption": "Next visit: the details stay hidden for this person. Picking Guided first project with sample tasks marks the row but opens nothing."
+            },
+            {
+              "file": "frames/pc1-b-reopen.html",
+              "caption": "Show details brings the panel back on the picked feature."
+            },
+            {
+              "file": "frames/pc1-b-esc.html",
+              "caption": "Esc in the panel hides it too, and that is kept; focus goes back to the selected row."
+            },
+            {
+              "file": "frames/pc1-b-closed-1280.html",
+              "caption": "Hard case, 1280 px with details hidden: Confidence and Depends on are back, beside wider goal names."
+            },
+            {
+              "file": "frames/pc1-b-decisions.html",
+              "caption": "Priorities only: Company › Decisions keeps its panel as built, with no way to close it."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "Closed until picked",
+          "recommended": false,
+          "what": "Every page with a side panel opens with the panel closed and no row picked, so the table starts at the full width. Picking a row opens the panel on it; its × or Esc closes it again.",
+          "plus": "The table always starts at its full width; the panel shows only when someone asks for it.",
+          "cost": "Nobody sees how the top feature got its score until they pick a row; on Company › Decisions and the other pages the first look has no details at all, a change for people used to the panel.",
+          "frames": [
+            {
+              "file": "frames/pc1-c-rest.html",
+              "caption": "At rest: the page opens with no panel and no row picked; the table has the full width."
+            },
+            {
+              "file": "frames/pc1-c-open.html",
+              "caption": "Picking Usage alerts opens its panel, with an × in the head."
+            },
+            {
+              "file": "frames/pc1-c-esc.html",
+              "caption": "Esc (or the ×) closes it; focus goes back to Usage alerts, ringed in blue."
+            },
+            {
+              "file": "frames/pc1-c-open-1280.html",
+              "caption": "Hard case, 1280 px with a feature open: Confidence and Depends on drop out while the panel is open."
+            },
+            {
+              "file": "frames/pc1-c-rest-1512.html",
+              "caption": "Hard case, 1512 px on arrival: the full table, but nothing says how #1 got its score until a row is picked."
+            },
+            {
+              "file": "frames/pc1-c-decisions.html",
+              "caption": "Every page with a side panel: Company › Decisions also opens without its panel; D-5 stays marked, but its question and options show only once picked."
+            }
+          ]
+        },
+        {
+          "letter": "D",
+          "name": "Slim rail",
+          "recommended": false,
+          "what": "An arrow in the panel's head folds it to a slim rail that keeps the picked item's name. Picking another row changes the name on the rail; clicking the rail opens the panel again. Esc folds it too. Every page with a side panel gets the rail.",
+          "plus": "The picked item's name stays in sight, and one click brings its details back.",
+          "cost": "The rail keeps 56 px, so the table never has the full width; Goal and Depends on keep today's widths and still wrap long names onto many lines. A name read sideways is slow to read.",
+          "frames": [
+            {
+              "file": "frames/pc1-d-rest.html",
+              "caption": "At rest: the panel on Address lookup service, with a fold arrow in its head."
+            },
+            {
+              "file": "frames/pc1-d-rail.html",
+              "caption": "Folded: a 56 px rail keeps the feature's name; the table gains 324 px."
+            },
+            {
+              "file": "frames/pc1-d-rail-pick.html",
+              "caption": "Picking Usage alerts changes the name on the rail; the panel stays folded."
+            },
+            {
+              "file": "frames/pc1-d-reopen.html",
+              "caption": "Clicking the rail opens the panel on Usage alerts."
+            },
+            {
+              "file": "frames/pc1-d-esc.html",
+              "caption": "Esc folds it back to the rail; focus goes back to Usage alerts."
+            },
+            {
+              "file": "frames/pc1-d-rail-1280.html",
+              "caption": "Hard case, 1280 px folded: every column shows, but goals and dependencies keep today's narrow widths."
+            },
+            {
+              "file": "frames/pc1-d-rail-1512.html",
+              "caption": "Hard case, 1512 px folded: more room for Feature, while Goal and Depends on stay narrow."
+            },
+            {
+              "file": "frames/pc1-d-decisions.html",
+              "caption": "Every page with a side panel: Company › Decisions folds to a rail with the decision's name."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
