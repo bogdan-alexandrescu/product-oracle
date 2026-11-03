@@ -6,7 +6,7 @@ import { createContext, Fragment, useContext, type ReactNode } from "react";
 import { Icon } from "@/components/ds";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { isSafeHref, parseBlocks, type Block, type Inline } from "@/lib/markdown";
-import { noRawTokens } from "@/lib/raw-tokens";
+import { answerWords, noRawTokens } from "@/lib/raw-tokens";
 
 /**
  * Oracle's answer in Simple's Ask panel, as the owner's pick C draws it (ask-panel fidelity,
@@ -18,11 +18,6 @@ import { noRawTokens } from "@/lib/raw-tokens";
  * read's `[l:n]` (General chat, meeting notes) is a raised number after the context's ones,
  * named for the read; any other token is never shown (chat-citations: noRawTokens).
  */
-
-/** An answer's words with each live read's `[l:n]` as a footnote, and no raw token left. */
-function footnoted(text: string): string {
-  return noRawTokens(text.replace(/\[l:(\d{1,4})\]/g, "[c:l.$1]"));
-}
 
 /** "7:42 PM": a line's time in the company's time zone, with no zone after it. */
 export function chatTime(iso: string, zone: string): string {
@@ -41,9 +36,6 @@ export function Who({ name, at, zone, mine }: { name: string; at: string; zone: 
 
 /** A citation as an answer carries it (oracle.discussions.context: n, kind, title, url). */
 export type AnswerCite = { n?: number; kind?: string; title?: string; url?: string | null; label?: string; ref?: string; source?: string; read_at?: string };
-
-/** A marker still being written at the end of a streaming answer ("[", "[c", "[c:1"). */
-const PARTIAL = /\[([cl](:\d{0,4})?)?$/;
 
 function plain(nodes: Inline[]): boolean {
   return nodes.every((n) => n.t === "cite" || (n.t === "text" && !n.v.trim()));
@@ -138,7 +130,7 @@ function Cite({ id }: { id: string }) {
 
 /** The answer's text as the pick draws it: title, lines, labels over short lists. */
 export function AnswerText({ text, live = false, cites = [] }: { text: string; live?: boolean; cites?: AnswerCite[] }) {
-  const blocks = parseBlocks(footnoted(live ? text.replace(PARTIAL, "") : text));
+  const blocks = parseBlocks(answerWords(text, live));
   const title = titleOf(blocks[0]);
   const rest = title ? blocks.slice(1) : blocks;
   const out: ReactNode[] = [];
