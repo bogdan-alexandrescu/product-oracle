@@ -130,12 +130,12 @@ const ORDER: number[] = (() => {
   return Array.from({ length: 60 }, (_, i) => slots[i] ?? n++);
 })();
 
-export function csPriorityRows<R extends { title: string; feature_id: string; code: string; rank: number; above_line: boolean; oracle_rank?: number | null }>(rows: R[], cs: Cs | null): R[] {
+export function csPriorityRows<R extends { title: string; feature_id: string; code: string; short_code?: string | null; rank: number; above_line: boolean; oracle_rank?: number | null }>(rows: R[], cs: Cs | null): R[] {
   if (!cs?.cs2 || rows.length === 0) return rows;
   const all = ORDER.map((k, i) => {
     const f = CS_FEATURES[k];
     const base = rows[i % rows.length];
-    return { ...base, title: f.name, feature_id: `cs-${f.id}`, code: `F-${String(i + 1).padStart(2, "0")}`, rank: i + 1, oracle_rank: i + 1, above_line: i < 14 };
+    return { ...base, title: f.name, feature_id: `cs-${f.id}`, code: `F-${String(i + 1).padStart(2, "0")}`, short_code: `F-${f.id.slice(2)}`, rank: i + 1, oracle_rank: i + 1, above_line: i < 14 };
   });
   const shown = cs.phase === "done" ? all.filter((r) => csFeature(r.title)?.stage === "new") : all;
   return cs.hard || cs.phase === "done" ? shown : shown.slice(0, 18);
@@ -174,12 +174,12 @@ export function CsRowMark({ title }: { title: string }) {
 const desired = CS_FEATURES.filter((f) => f.stage !== "exists");
 const current = CS_FEATURES.filter((f) => f.stage === "exists");
 
-function Tabs({ view }: { view: "desired" | "current" }) {
+function Tabs({ view, moved = 0 }: { view: "desired" | "current"; moved?: number }) {
   return (
     <div role="tablist" className="mb-4 flex gap-1 border-b border-line" data-testid="cs-tabs">
       {[
-        { k: "desired", label: "Desired state", n: desired.length, tip: "What the product should become" },
-        { k: "current", label: "Current state", n: current.length, tip: "What runs today" },
+        { k: "desired", label: "Desired state", n: desired.length - moved, tip: "What the product should become" },
+        { k: "current", label: "Current state", n: current.length + moved, tip: "What runs today" },
       ].map((t) => (
         <button key={t.k} role="tab" aria-selected={view === t.k} title={t.tip} className={`-mb-px border-b-2 px-3 py-2 text-[14px] ${view === t.k ? "border-accent font-semibold text-text" : "border-transparent text-text2"}`}>
           {t.label} <span className="tabular-nums text-text2">{t.n}</span>
@@ -217,7 +217,7 @@ function ProofTable({ phase, phone }: { phase: string; phone: boolean }) {
   return (
     <div className="overflow-hidden rounded-xl border border-line bg-surface" data-testid="cs1-table">
       {!phone && (
-        <div className="grid grid-cols-[minmax(220px,1.3fr)_150px_minmax(260px,2fr)_190px] gap-3 border-b border-line bg-surface2 px-4 py-2 text-[12px] font-semibold uppercase tracking-wide text-text2">
+        <div className="grid grid-cols-[minmax(170px,1.2fr)_96px_minmax(200px,2fr)_minmax(150px,1fr)] gap-3 border-b border-line bg-surface2 px-4 py-2 text-[12px] font-semibold uppercase tracking-wide text-text2">
           <span>Feature</span>
           <span>Shipped</span>
           <span>Proof</span>
@@ -228,14 +228,14 @@ function ProofTable({ phase, phone }: { phase: string; phone: boolean }) {
         const focus = f === STALE;
         return (
           <div key={f.id} className={`border-b border-line last:border-b-0 ${focus && phase !== "done" ? "bg-warn-bg/40" : ""}`} data-testid="cs1-row">
-            <div className={phone ? "space-y-1 px-3 py-2.5" : "grid grid-cols-[minmax(220px,1.3fr)_150px_minmax(260px,2fr)_190px] items-center gap-3 px-4 py-2.5"}>
+            <div className={phone ? "space-y-1 px-3 py-2.5" : "grid grid-cols-[minmax(170px,1.2fr)_96px_minmax(200px,2fr)_minmax(150px,1fr)] items-center gap-3 px-4 py-2.5"}>
               <span className="flex items-center gap-2 font-medium">
                 <Glyph stage="exists" stale={f.stale && !(focus && phase === "done")} />
                 {f.name}
               </span>
               <span className="text-[13px] text-text2">{f.shipped}, 2026</span>
               <Proof f={f} wide={!phone} />
-              <span className="flex items-center gap-2">
+              <span className="flex flex-wrap items-center gap-2">
                 <Fresh f={f} phase={phase} focus={focus} />
                 {focus && phase === "rest" && (
                   <Button variant="secondary">
@@ -255,7 +255,7 @@ function ProofTable({ phase, phone }: { phase: string; phone: boolean }) {
                 </ul>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="primary">Yes, still runs</Button>
-                  <Button variant="secondary">Changed: tell Oracle what</Button>
+                  <Button variant="secondary">Something changed</Button>
                   <Button variant="ghost">No longer runs</Button>
                 </div>
               </div>
@@ -357,12 +357,12 @@ function Shipped({ phase, phone }: { phase: string; phone: boolean }) {
               const focus = f === STALE;
               const stale = f.stale && !(focus && phase === "done");
               return (
-                <div key={f.id} className={`relative ml-2 border-l-2 pb-3 pl-4 ${stale ? "border-dashed border-warn" : "border-pass"}`}>
+                <div key={f.id} data-cs-focus={focus ? "" : undefined} className={`relative ml-2 border-l-2 pb-3 pl-4 ${stale ? "border-dashed border-warn" : "border-pass"}`}>
                   <span className="absolute -left-[8px] top-0.5"><Glyph stage="exists" stale={stale} /></span>
                   <p className={`font-medium ${stale ? "text-text2" : ""}`}>
                     {f.name} <span className="font-normal text-text2">· shipped {f.shipped}</span>
                   </p>
-                  {!phone || !stale ? <Proof f={f} wide={!phone} /> : null}
+                  {!phone || !stale ? <Proof f={focus && phase === "done" ? { ...f, measured: "3,520 sent in October" } : f} wide={!phone} /> : null}
                   {stale && (
                     <p className="mt-1 text-[13px] text-warn">
                       Not checked since {f.checked}. {phase === "rest" && <button className="font-semibold underline">Ask Lena Fischbach</button>}
@@ -376,7 +376,7 @@ function Shipped({ phase, phone }: { phase: string; phone: boolean }) {
                     </div>
                   )}
                   {focus && phase === "mid" && <p className="mt-1 text-[13px] text-accent-ink">Asked Lena Fischbach Nov 3, 9:12 AM · waiting for an answer</p>}
-                  {focus && phase === "done" && <p className="mt-1 text-[13px] font-semibold text-pass">Lena Fischbach confirmed Nov 3: still runs, 3,520 sent in October</p>}
+                  {focus && phase === "done" && <p className="mt-1 text-[13px] font-semibold text-pass">Lena Fischbach confirmed Nov 3: still runs</p>}
                 </div>
               );
             })}
@@ -391,17 +391,16 @@ function Shipped({ phase, phone }: { phase: string; phone: boolean }) {
 
 const READY = desired.filter((f) => f.ready);
 
-function DesiredList({ mark, moving, phase, variant, phone, hard }: { mark: string; moving: CsFeature[]; phase: string; variant: string; phone: boolean; hard: boolean }) {
-  const shown = hard ? desired : desired.slice(0, phone ? 9 : 14);
+function DesiredList({ mark, moving, phone, hard }: { mark: string; moving: CsFeature[]; phone: boolean; hard: boolean }) {
+  const left = desired.filter((f) => !moving.includes(f));
+  const shown = hard ? left : left.slice(0, phone ? 9 : 14);
   return (
     <div className="overflow-hidden rounded-xl border border-line bg-surface" data-testid="cs-desired">
       {shown.map((f) => {
-        const isMoving = moving.includes(f);
-        const gone = isMoving && phase === "done" && variant !== "a";
         return (
-          <div key={f.id} className={`flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-2 last:border-b-0 ${isMoving && !gone ? "bg-pass-bg/50" : ""}`}>
+          <div key={f.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-2 last:border-b-0">
             <FeatureMark variant={mark} stage={f.stage} compact={phone} />
-            <span className={`min-w-[10rem] flex-1 font-medium ${gone ? "text-text2 line-through" : ""}`}>{f.name}</span>
+            <span className={"min-w-[10rem] flex-1 font-medium"}>{f.name}</span>
             {!phone && <span className="w-[200px] text-[13px] text-text2">{f.area}</span>}
             {!phone && <span className="w-[140px] text-[13px] text-text2">{f.milestone}</span>}
             {f.stage === "progress" && (
@@ -409,11 +408,10 @@ function DesiredList({ mark, moving, phase, variant, phone, hard }: { mark: stri
                 {f.ready ? "Proof is in" : `${f.tasks?.[0]} of ${f.tasks?.[1]} tasks done`}
               </span>
             )}
-            {gone && <span className="text-[13px] text-text2">Moved to Current state</span>}
           </div>
         );
       })}
-      {!hard && <p className="px-4 py-2 text-[13px] text-text2">and {desired.length - shown.length} more</p>}
+      {!hard && <p className="px-4 py-2 text-[13px] text-text2">and {left.length - shown.length} more</p>}
     </div>
   );
 }
@@ -443,7 +441,7 @@ function ProofDialog({ f, phase }: { f: CsFeature; phase: string }) {
 
 function Toast({ children }: { children: ReactNode }) {
   return (
-    <div role="status" className="fixed bottom-6 left-1/2 z-40 flex max-w-[calc(100vw-24px)] -translate-x-1/2 items-center gap-4 rounded-xl bg-[var(--tip)] px-4 py-3 text-[14px] text-[var(--tip-text)] shadow-xl" data-testid="cs3-toast">
+    <div role="status" className="fixed bottom-6 left-1/2 z-40 flex w-max max-w-[calc(100vw-24px)] max-[600px]:bottom-[76px] -translate-x-1/2 items-center gap-4 rounded-xl bg-[var(--tip)] px-4 py-3 text-[14px] text-[var(--tip-text)] shadow-xl" data-testid="cs3-toast">
       {children}
     </div>
   );
@@ -469,12 +467,13 @@ function CurrentList({ moved, how, phone }: { moved: CsFeature[]; how: string; p
 
 function Move({ v, phase, phone, hard }: { v: string; phase: string; phone: boolean; hard: boolean }) {
   const one = READY[0];
-  const many = hard ? desired.filter((f) => f.stage === "progress") : READY;
+  const many = READY;
+  const gone = v === "a" && (phase === "open" || phase === "mid") ? [one] : v === "a" && hard ? READY : []; // moved by Oracle, out of Desired state
   if (phase === "done") {
     const moved = v === "c" ? READY : [one];
     return (
       <>
-        <Tabs view="current" />
+        <Tabs view="current" moved={moved.length} />
         {v === "c" && <Banner tone="pass">Friday check done: 2 moved to Current state, 1 stays in Desired state (Report builder: 5 tasks still open).</Banner>}
         <CurrentList moved={moved} phone={phone} how={v === "a" ? "Moved today on proof" : v === "b" ? "Moved Nov 3 · you confirmed" : "Moved Nov 6 · Friday check"} />
         {v === "a" && (
@@ -488,10 +487,10 @@ function Move({ v, phase, phone, hard }: { v: string; phase: string; phone: bool
   }
   return (
     <>
-      <Tabs view="desired" />
+      <Tabs view="desired" moved={gone.length} />
       {v === "b" && (
         <Banner tone="pass" testId="cs3-ready">
-          <b>{many.length} ready to move</b>: shipped, with proof. {hard ? "Each one needs your yes." : ""}
+          <b>{many.length} ready to move</b>: shipped, with proof. Each one needs your yes.
           <span className="ml-2 inline-flex flex-wrap gap-1.5">
             {many.map((f) => (
               <button key={f.id} className={`rounded-full border border-line bg-surface px-2.5 py-0.5 text-[13px] ${f === one && phase !== "rest" ? "ring-2 ring-accent" : ""}`}>{f.name}</button>
@@ -520,7 +519,7 @@ function Move({ v, phase, phone, hard }: { v: string; phase: string; phone: bool
           </div>
         </div>
       )}
-      <DesiredList mark="a" moving={v === "a" && phase !== "rest" ? (hard ? many.filter((f) => f.ready) : [one]) : []} phase={phase} variant={v} phone={phone} hard={hard} />
+      <DesiredList mark="a" moving={gone} phone={phone} hard={hard} />
       {v === "b" && (phase === "open" || phase === "mid") && <ProofDialog f={one} phase={phase} />}
       {v === "a" && phase === "open" && (
         <Toast>
@@ -565,9 +564,10 @@ export function CsPage({ cs }: { cs: Cs }) {
   const phone = usePhone();
   const { phase, hard } = cs;
   const view = cs.cs1 || (cs.cs3 && phase === "done") ? "current" : "desired";
-  const title = view === "current" ? "Current state" : "Desired state";
-  const sub =
-    view === "current"
+  const title = cs.cs2 ? "Where the mark shows" : view === "current" ? "Current state" : "Desired state";
+  const sub = cs.cs2
+    ? "The same three marks where Oracle names a feature outside Priorities: a roadmap bar, a one-pager line, an Ask Oracle answer and a meeting agenda item."
+    : view === "current"
       ? "What runs today: each built feature with its proof, and how fresh that proof is."
       : "What the product should become: goals, areas of focus, milestones and the planned features.";
   return (
@@ -579,7 +579,7 @@ export function CsPage({ cs }: { cs: Cs }) {
           <Tabs view="current" />
           <div className="mb-3 flex flex-wrap items-center gap-3 text-[14px]">
             <span><b>10</b> running</span>
-            <span className="text-warn"><b>1</b> with old proof</span>
+            {phase === "done" ? <span className="text-text2"><b>0</b> with old proof</span> : <span className="text-warn"><b>1</b> with old proof</span>}
             <span className="text-text2">6 in progress in Desired state</span>
             <span className="text-text2">· Oracle reads code maps, merged pull requests and done tasks each night; you confirm.</span>
           </div>
@@ -589,6 +589,7 @@ export function CsPage({ cs }: { cs: Cs }) {
           {hard && <HardNote />}
         </>
       )}
+      {cs.cs2 && phase === "places" && <Places v={cs.cs2} phone={phone} />}
       {cs.cs3 && <Move v={cs.cs3} phase={phase} phone={phone} hard={hard} />}
     </Page>
   );
@@ -605,6 +606,85 @@ function HardNote() {
           </span>
         ))}
       </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ CS2: the mark in other places */
+
+/** A feature's name with its mark, as it sits inside a line of text. */
+function Named({ v, name }: { v: string; name: string }) {
+  const f = csFeature(name)!;
+  return (
+    <span className="inline-flex items-baseline gap-1 whitespace-nowrap font-semibold">
+      <span className="self-center"><FeatureMark variant={v} stage={f.stage} stale={f.stale} /></span>
+      {f.name}
+    </span>
+  );
+}
+
+function Place({ title, where, focus, children }: { title: string; where: string; focus?: boolean; children: ReactNode }) {
+  return (
+    <section data-cs-focus={focus ? "" : undefined} className="rounded-xl border border-line bg-surface p-4" data-testid="cs2-place">
+      <h3 className="text-[14px] font-semibold">{title}</h3>
+      <p className="mb-3 text-[12px] text-text2">{where}</p>
+      {children}
+    </section>
+  );
+}
+
+/** CS2: the mark on a roadmap bar, a one-pager line, a chat answer and an agenda item (MOCK-HOOK). */
+function Places({ v, phone }: { v: string; phone: boolean }) {
+  const bars: { name: string; from: number; span: number }[] = [
+    { name: "Card payments", from: 0, span: 2 },
+    { name: "Retry failed payments", from: 1, span: 2 },
+    { name: "Yearly billing", from: 3, span: 1 },
+    { name: "Bank transfer payments", from: 3, span: 2 },
+    { name: "Tax by country", from: 5, span: 1 },
+  ];
+  const cols = 6;
+  return (
+    <div className={`grid gap-4 ${phone ? "grid-cols-1" : "grid-cols-2"}`} data-testid="cs2-places">
+      <Place title="Roadmap bar" where="Detailed › Plan › Billing, Nov to Apr">
+        <div className="mb-1 grid text-[11px] text-text2" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+          {["Nov", "Dec", "Jan", "Feb", "Mar", "Apr"].map((m) => <span key={m} className="border-l border-line pl-1">{m}</span>)}
+        </div>
+        <div className="space-y-1.5">
+          {bars.map((b) => {
+            const f = csFeature(b.name)!;
+            return (
+              <div key={b.name} className="grid" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+                <div className="flex h-7 min-w-0 items-center gap-1.5 overflow-hidden rounded-md border border-accent/40 bg-accent-soft px-1.5 text-[12px] font-medium" style={{ gridColumn: `${b.from + 1} / span ${b.span}` }} title={f.name}>
+                  <FeatureMark variant={v} stage={f.stage} stale={f.stale} compact />
+                  <span className="truncate">{f.name}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Place>
+      <Place title="One-pager line" where="Detailed › PRDs › Billing one-pager, What we build">
+        <ul className="list-disc space-y-2 pl-5 text-[14px] leading-6">
+          <li><Named v={v} name="Card payments" />: customers pay by card at checkout.</li>
+          <li><Named v={v} name="Retry failed payments" />: try a failed card again after one, three and seven days.</li>
+          <li><Named v={v} name="Yearly billing" />: pay for a year at once, with two months free.</li>
+          <li><Named v={v} name="Invoices as PDF" />: each invoice also goes out as a PDF.</li>
+        </ul>
+      </Place>
+      <Place title="Ask Oracle answer" focus={phone} where="The Ask Oracle panel, asked “What is left to do in Billing?”">
+        <div className="rounded-xl bg-surface2 p-3 text-[14px] leading-7">
+          Billing has one feature that runs today, <Named v={v} name="Card payments" />, and one being built,{" "}
+          <Named v={v} name="Retry failed payments" />. Nothing is built yet for <Named v={v} name="Yearly billing" /> or{" "}
+          <Named v={v} name="Tax by country" />. <Named v={v} name="Invoices as PDF" /> runs, but its proof is 41 days old.
+        </div>
+      </Place>
+      <Place title="Meeting agenda item" where="Company › Rituals › Billing weekly, Nov 5">
+        <ol className="list-decimal space-y-2 pl-5 text-[14px] leading-6">
+          <li>Is <Named v={v} name="Retry failed payments" /> ready to move to Current state? · Tomas Lind · 10 min</li>
+          <li>Scope <Named v={v} name="Yearly billing" /> for the Spring release · Mira Okafor · 15 min</li>
+          <li>Check <Named v={v} name="Invoices as PDF" /> still runs · Lena Fischbach · 5 min</li>
+        </ol>
+      </Place>
     </div>
   );
 }

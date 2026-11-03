@@ -66,7 +66,9 @@ function build(): CsFeature[] { // MOCK-HOOK
     out.push({ ...f, id: `f-${out.length + 1}`, stage, goal: GOALS[i % GOALS.length], milestone: stage === "exists" ? "Shipped" : MILESTONES[i % MILESTONES.length], owner: PEOPLE[i % PEOPLE.length] });
   EXISTS.forEach((f, i) => add("exists", f, i));
   PROGRESS.forEach((f, i) => add("progress", f, i));
-  NEW_NAMES.forEach((name, i) => add("new", { name, area: CS_AREAS[Math.floor(i / 7.34)] ?? CS_AREAS[5] }, i));
+  const sizes = [7, 8, 7, 7, 7, 8]; // MOCK-HOOK: the new features, in NEW_NAMES order, per area
+  const areaOf = (i: number) => CS_AREAS[sizes.findIndex((_, k) => i < sizes.slice(0, k + 1).reduce((x, y) => x + y, 0))];
+  NEW_NAMES.forEach((name, i) => add("new", { name, area: areaOf(i) }, i));
   return out;
 }
 

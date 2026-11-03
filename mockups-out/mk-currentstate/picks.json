@@ -1,12 +1,12 @@
 {
  "title": "Desired state and Current state, and the new / existing mark on every feature",
- "subtitle": "Detailed \u203a Baseline becomes Desired state (what the product should become); a new Current state holds what runs today, with proof. Every feature carries one mark: New, In progress or Exists. Invented data: 60 features, 10 exist (one with old proof), 6 in progress, 44 new.",
+ "subtitle": "Detailed \u203a Baseline becomes Desired state (the left menu item too) (what the product should become); a new Current state holds what runs today, with proof. Every feature carries one mark: New, In progress or Exists. Invented data: 60 features, 10 exist (one with old proof), 6 in progress, 44 new.",
  "decisions": [
   {
    "code": "CS1",
    "name": "How Current state is shown and kept true",
    "question": "How should Current state show what runs today, and what does an item with old or missing proof look like?",
-   "common": "A Current state tab beside Desired state in Detailed. Each built feature lists its proof: code map files, merged pull requests, tracker tasks done and a measured value, read by Oracle each night. The owner confirms. The one feature whose proof is 41 days old (Invoices as PDF) stands out and can be checked again.",
+   "common": "A Current state tab beside Desired state in Detailed. Each built feature lists its proof: code map files, merged pull requests, tracker tasks done and a measured value, read by Oracle each night. The owner confirms. The one feature whose proof is 41 days old (Invoices as PDF) stands out and can be checked again. In Detailed the left menu item Baseline is renamed Desired state.",
    "proposals": [
     {
      "letter": "a",
@@ -31,11 +31,11 @@
       },
       {
        "file": "cs1-a-done.html",
-       "caption": "The result: the owner said Yes, still runs; the row reads Checked Nov 3 \u00b7 you confirmed."
+       "caption": "The result: the owner said Yes, still runs; the row reads Checked Nov 3 \u00b7 you confirmed and the top says 0 with old proof."
       },
       {
        "file": "cs1-a-hard-1512.html",
-       "caption": "Hard case at 1512: the 10 running features, with the 50 still in Desired state (6 in progress, 44 new) listed below."
+       "caption": "Hard case at 1512: the 10 running features with Check again in full beside the Ask rail, and the 50 still in Desired state (6 in progress, 44 new) below."
       },
       {
        "file": "cs1-a-phone-390.html",
@@ -49,7 +49,7 @@
      "recommended": false,
      "what": "Current state is grouped by area of focus: one card per area, each running feature with a freshness bar that shortens as its proof ages. Old proof gets a dashed amber border. Opening a feature shows a side panel with its proof, newest first, and the owner's confirm.",
      "plus": "Shows at a glance which areas are thin or empty today; freshness reads as a picture.",
-     "cost": "Proof details are hidden until a feature is opened; with 10 features half the cards are near empty and the side panel takes a third of the width.",
+     "cost": "Proof details are hidden until a feature is opened; with 10 features half the cards are near empty and the side panel takes about a quarter of the width.",
      "frames": [
       {
        "file": "cs1-b-rest.html",
@@ -65,7 +65,7 @@
       },
       {
        "file": "cs1-b-done.html",
-       "caption": "The result: the card is solid again, Checked Nov 3 \u00b7 you confirmed."
+       "caption": "The result: the card is solid again, Checked Nov 3 \u00b7 you confirmed; the top says 0 with old proof."
       },
       {
        "file": "cs1-b-hard-1512.html",
@@ -87,11 +87,11 @@
      "frames": [
       {
        "file": "cs1-c-rest.html",
-       "caption": "At rest: entries by month; Invoices as PDF (May) is grey with Not checked since Sep 23."
+       "caption": "At rest: entries by month; Invoices as PDF (May) is amber, dashed, with Not checked since Sep 23."
       },
       {
        "file": "cs1-c-open.html",
-       "caption": "Ask Lena Fischbach opened: a prefilled question about the old proof."
+       "caption": "Scrolled down to May: Ask Lena Fischbach opened under Invoices as PDF, with a prefilled question and Send."
       },
       {
        "file": "cs1-c-mid.html",
@@ -99,7 +99,7 @@
       },
       {
        "file": "cs1-c-done.html",
-       "caption": "The result: Lena Fischbach confirmed Nov 3 with October's number."
+       "caption": "The result: Lena Fischbach confirmed Nov 3; the proof line now reads 3,520 sent in October, and the top says 0 with old proof."
       },
       {
        "file": "cs1-c-hard-1512.html",
@@ -107,7 +107,7 @@
       },
       {
        "file": "cs1-c-phone-390.html",
-       "caption": "Phone 390, dark: one column; the stale entry hides its proof line to fit."
+       "caption": "Phone 390, dark, scrolled to May: the stale entry hides its proof line to fit; the ask box opens under it."
       }
      ]
     }
@@ -117,7 +117,7 @@
    "code": "CS2",
    "name": "The new / in progress / exists mark",
    "question": "How should every feature show whether it is new, in progress or already exists?",
-   "common": "One mark per feature, with three states: New (asked for or planned, nothing built), In progress (being built) and Exists (runs today, with proof); Exists with old proof is told apart. Shown here on Simple \u203a Priorities, with a Show filter that counts each kind; the same mark goes on roadmap bars, one-pager lines, chat answers, meeting agenda items and Home. Clicking a mark says what it means and its proof.",
+   "common": "One mark per feature, with three states: New (asked for or planned, nothing built), In progress (being built) and Exists (runs today, with proof); Exists with old proof is told apart. Shown on Simple \u203a Priorities, with a Show filter that counts each kind; the same mark goes on roadmap bars, one-pager lines, Ask Oracle answers, meeting agenda items and Home (the places frames show four of them). Clicking a mark says what it means and its proof. Each feature has its own code.",
    "proposals": [
     {
      "letter": "a",
@@ -151,6 +151,18 @@
       {
        "file": "cs2-a-phone-390.html",
        "caption": "Phone 390, dark: the shape and word fit beside the code on each row."
+      },
+      {
+       "file": "cs2-a-places.html",
+       "caption": "The mark in four other places, side by side: a Billing roadmap bar, a one-pager line, an Ask Oracle answer and a meeting agenda item. On a roadmap bar the word is dropped and only the shape shows; in a sentence the word reads well."
+      },
+      {
+       "file": "cs2-a-places-390.html",
+       "caption": "Phone 390, dark: the roadmap bars and the one-pager line."
+      },
+      {
+       "file": "cs2-a-places-lower-390.html",
+       "caption": "Phone 390, dark, scrolled on: the Ask Oracle answer and the agenda item."
       }
      ]
     },
@@ -180,11 +192,23 @@
       },
       {
        "file": "cs2-b-hard-1512.html",
-       "caption": "Hard case at 1512: 60 rows, pills line up but take a column."
+       "caption": "Hard case at 1512: 60 rows; the pills differ in width, so the titles after them start at different places."
       },
       {
        "file": "cs2-b-phone-390.html",
        "caption": "Phone 390, dark: the pill pushes the title onto its own line on every row."
+      },
+      {
+       "file": "cs2-b-places.html",
+       "caption": "The mark in four other places, side by side: a Billing roadmap bar, a one-pager line, an Ask Oracle answer and a meeting agenda item. On a roadmap bar the pill leaves almost no room, so short bars show just 'Yea\u2026'; in sentences it reads well."
+      },
+      {
+       "file": "cs2-b-places-390.html",
+       "caption": "Phone 390, dark: the roadmap bars and the one-pager line."
+      },
+      {
+       "file": "cs2-b-places-lower-390.html",
+       "caption": "Phone 390, dark, scrolled on: the Ask Oracle answer and the agenda item."
       }
      ]
     },
@@ -219,6 +243,18 @@
       {
        "file": "cs2-c-phone-390.html",
        "caption": "Phone 390, dark: stripes fit, but the meaning lives only in the filter at the top."
+      },
+      {
+       "file": "cs2-c-places.html",
+       "caption": "The mark in four other places, side by side: a Billing roadmap bar, a one-pager line, an Ask Oracle answer and a meeting agenda item. In a sentence the stripe reads as a stray bar with no meaning; on a roadmap bar it fits well."
+      },
+      {
+       "file": "cs2-c-places-390.html",
+       "caption": "Phone 390, dark: the roadmap bars and the one-pager line."
+      },
+      {
+       "file": "cs2-c-places-lower-390.html",
+       "caption": "Phone 390, dark, scrolled on: the Ask Oracle answer and the agenda item."
       }
      ]
     }
@@ -244,23 +280,23 @@
       },
       {
        "file": "cs3-a-open.html",
-       "caption": "Saved searches moved by itself: the message with Undo and See proof."
+       "caption": "Saved searches moved by itself: it leaves the list (Desired state 49, Current state 11), and the message offers Undo and See proof."
       },
       {
        "file": "cs3-a-mid.html",
-       "caption": "Mid: the owner pressed Undo and is asked to confirm it."
+       "caption": "Mid: the owner pressed Undo and is asked to confirm it; Saved searches is still out of the list until they say yes."
       },
       {
        "file": "cs3-a-done.html",
-       "caption": "The result after keeping it: Current state lists Saved searches, Moved today on proof."
+       "caption": "The result after keeping it: Current state (11) lists Saved searches, Moved today on proof."
       },
       {
        "file": "cs3-a-hard-1512.html",
-       "caption": "Hard case at 1512: two moved overnight in one message, among 50 in Desired state."
+       "caption": "Hard case at 1512: two moved overnight in one message; both are gone from the 48 left in Desired state, Current state reads 12."
       },
       {
        "file": "cs3-a-phone-390.html",
-       "caption": "Phone 390, dark: the message covers the lower list; Undo is the only way to see what moved."
+       "caption": "Phone 390, dark: the message spans the width just above the tab bar and wraps to two lines; Undo is the only way to see what moved."
       }
      ]
     },
@@ -287,11 +323,11 @@
       },
       {
        "file": "cs3-b-done.html",
-       "caption": "The result: Current state lists Saved searches, Moved Nov 3 \u00b7 you confirmed."
+       "caption": "The result: Current state (11) lists Saved searches, Moved Nov 3 \u00b7 you confirmed; Desired state reads 49."
       },
       {
        "file": "cs3-b-hard-1512.html",
-       "caption": "Hard case at 1512: all 6 in progress shown in the band, each needs a yes, above 50 features."
+       "caption": "Hard case at 1512: only the 2 with proof sit in the band, each needs a yes; the other 4 in progress stay in the list of 50 with their tasks left."
       },
       {
        "file": "cs3-b-phone-390.html",
@@ -321,7 +357,7 @@
       },
       {
        "file": "cs3-c-done.html",
-       "caption": "The result: Current state shows 2 moved, 1 left in Desired state with why."
+       "caption": "The result: Current state (12) shows 2 moved, 1 left in Desired state (48) with why."
       },
       {
        "file": "cs3-c-hard-1512.html",

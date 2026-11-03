@@ -25,6 +25,7 @@ import { initialsOf } from "./Figures";
 import { Button } from "./Button";
 import { Icon, type IconName } from "./Icon";
 import { Notice } from "./Layout";
+import { useCs } from "@/components/mock/CurrentState"; // MOCK-HOOK
 import { ModeRoot, ModeSwitch, SEGMENTED } from "./ModeSwitch";
 import { usePageInfo } from "./page-info";
 import { onRadioKeys, radioTabIndex } from "./radio-keys";
@@ -411,16 +412,18 @@ function UserMenu({ placement, emailBeside = false }: { placement: "rail" | "hea
 
 function RailLink({ d, pathname, home, badge }: { d: Dest; pathname: string; home?: string; badge?: number | null }) {
   const active = isActive(pathname, d, home);
+  const cs = useCs(); // MOCK-HOOK
+  const label = cs && d.label === "Baseline" ? "Desired state" : d.label; // MOCK-HOOK
   return (
     <Link
       href={d.href}
       data-testid={d.testId}
       aria-current={active ? "page" : undefined}
-      aria-label={badgedName(d.label, badge)}
+      aria-label={badgedName(label, badge)}
       className={`relative flex w-[70px] flex-none flex-col items-center gap-0.5 rounded-[10px] pt-[7px] pb-1.5 text-[13px] leading-4 font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text ${RAIL_SELECTED}`}
     >
       <Icon name={d.icon} stroke={1.7} />
-      {d.label}
+      {label} {/* MOCK-HOOK */}
       {badge !== undefined && <Badge n={badge} testId={`${d.testId}-badge`} />}
     </Link>
   );
