@@ -27,6 +27,8 @@ async function signIn(page: Page, email: string, scenario: string | null = "simp
   await expect(page).not.toHaveURL(/\/login/);
   await page.goto("/simple");
   await expect(page.getByTestId("home-sentence")).toBeVisible();
+  // Home has read what waits (its sections answered): a click lands on the loaded page.
+  await expect(page.getByTestId("home-sentence")).not.toHaveText("Checking what waits on you…");
 }
 
 /** The broken-links tile's number, once it has loaded. */
