@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "./test";
 
-import { MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
+import { MOCK_SCENARIO_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
 import { ADMIN } from "./helpers";
 
 /*
@@ -14,11 +14,15 @@ import { ADMIN } from "./helpers";
  *   "Nothing waits on you today." or a partial count, then changes to another claim.
  * - the buttons: protects=New PRD is at the same place from its first paint to the loaded
  *   page; fails_when="Walk me through it" arrives late and pushes New PRD to the right.
+ * - nothing to walk: protects=on a new company (nothing waits, no review due) New PRD stays
+ *   where it was first painted once Home knows there is no walk; fails_when=the walk's
+ *   kept place is dropped and New PRD jumps left under the pointer.
  * - Trash: protects=with every roadmap and PRD moved to Trash (through their menus),
  *   "Decisions waiting for you" and "Since your last visit" load, and "Next review
  *   meeting" says the monthly roadmap refresh reviews a roadmap in Trash, linking the
  *   ritual's settings; fails_when=a section says "Oracle could not load this part" or the
- *   refresh shows as if its roadmap were live; no_claim=the API's filters (pytest:
+ *   refresh shows as if its roadmap were live, or, opened on a wide window, the ritual's
+ *   sheet pops open once the window narrows to a phone; no_claim=the API's filters (pytest:
  *   test_home_sections_trash.py, test_home_ritual_trash.py).
  */
 
@@ -84,6 +88,32 @@ test("Home says nothing about what waits until it knows, and New PRD never moves
   await honestHeader(page);
 });
 
+/** A new company (nothing waits, no review due): Home finds there is no walk, and New PRD stays put. */
+async function nothingToWalk(page: Page) {
+  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "empty"] as const);
+  await signIn(page);
+  await page.evaluate(
+    ([slowKey, msKey]) => {
+      localStorage.setItem(slowKey, "/v1/simple/decisions/waiting");
+      localStorage.setItem(msKey, "2500");
+    },
+    [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY] as const,
+  );
+  await watchHeader(page);
+  await page.goto("/simple");
+  const sentence = simple(page).getByTestId("home-sentence");
+  await expect(sentence).toHaveText("Nothing waits on you today.", { timeout: 15_000 });
+  await expect(simple(page).getByRole("button", { name: "Walk me through it" })).toHaveCount(0);
+  const xs = await page.evaluate(() => (window as unknown as { __prdX: number[] }).__prdX);
+  expect(xs.length).toBe(1);
+  await simple(page).getByTestId("np-new-prd").click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+}
+
+test("with nothing to walk, New PRD stays where it was first painted", async ({ page }) => {
+  await nothingToWalk(page);
+});
+
 test.describe("on a phone", () => {
   test.use({ viewport: { width: 390, height: 844 } });
   test("Home says nothing about what waits until it knows, and New PRD never moves", async ({ page }) => {
@@ -91,6 +121,9 @@ test.describe("on a phone", () => {
   });
   test("with every roadmap and PRD in Trash, Home's sections load and the roadmap review says so", async ({ page }) => {
     await everythingInTrash(page);
+  });
+  test("with nothing to walk, New PRD stays where it was first painted", async ({ page }) => {
+    await nothingToWalk(page);
   });
 });
 
@@ -178,4 +211,12 @@ async function everythingInTrash(page: Page) {
   await expect(page).toHaveURL(/\/company\/rituals\?ritual=/);
   // The ritual's settings open (beside the table, or in a sheet on a phone).
   await expect(page.getByRole("heading", { name: "Monthly roadmap refresh" }).filter({ visible: true })).toBeVisible();
+  if ((page.viewportSize()?.width ?? 0) > 600) {
+    // Opened on a wider window, the ritual sits beside the table: narrowing the window to a
+    // phone's width does not pop its sheet open.
+    await expect(page.getByTestId("ritual-sheet")).toHaveCount(0);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByTestId("ritual-row").first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Monthly roadmap refresh" }).filter({ visible: true })).toHaveCount(0);
+  }
 }
