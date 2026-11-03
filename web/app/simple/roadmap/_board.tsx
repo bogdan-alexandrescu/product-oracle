@@ -1,5 +1,6 @@
 "use client";
 
+import { MsBoardRow } from "./_msmock"; // MOCK-HOOK
 import { useEffect, useLayoutEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 import { barKind, broken, brokenLinks, closedItem, spanWords, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
@@ -461,6 +462,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
               {c.below.length > 0 && `, ${c.below.length} cut`}
             </span>
           </header>
+          <MsBoardRow horizon={c.key} /> {/* MOCK-HOOK mk-milestones */}
           {c.groups.map((g) => (
             <div key={g.key} className="mb-2" data-testid="board-group">
               <h3

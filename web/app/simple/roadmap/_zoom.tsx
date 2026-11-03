@@ -3,6 +3,7 @@
 // state has its own look with the key on top (QR2 A), broken links sit in a panel above the
 // chart (QR3 A) and an item opens in a side panel (QR4 A; a sheet on a phone).
 
+import { MsLayer, type MsLane, type MsRow } from "./_msmock"; // MOCK-HOOK
 import {
   memo,
   useLayoutEffect,
@@ -745,11 +746,34 @@ function DayChart(props: TimelineProps) {
               />
             );
           })}
+          {/* MOCK-HOOK mk-milestones: the milestone layer over the Timeline */}
+          <MsLayer view="timeline" x={x} left={labelW} top={44} axisY={33} height={msRows(rows, moved).h} width={labelW + trackW} rows={msRows(rows, moved).rows} lanes={msRows(rows, moved).lanes} phone={phone} />
         </div>
       </div>
     </div>
   );
 }
+
+// MOCK-HOOK mk-milestones: each row's place, for the milestone layer.
+function msRows(rows: Row[], moved: Record<string, [string, string]>): { rows: MsRow[]; lanes: MsLane[]; h: number } { // MOCK-HOOK
+  let y = 44; // MOCK-HOOK
+  const out: MsRow[] = []; // MOCK-HOOK
+  const lanes: MsLane[] = []; // MOCK-HOOK
+  let lane = ""; // MOCK-HOOK
+  for (const r of rows) { // MOCK-HOOK
+    if (r.kind === "lane") { // MOCK-HOOK
+      lane = r.title; // MOCK-HOOK
+      lanes.push({ title: r.title, y0: y, y1: y + 32 }); // MOCK-HOOK
+      y += 32; // MOCK-HOOK
+      continue; // MOCK-HOOK
+    } // MOCK-HOOK
+    const [s, e] = moved[r.item.id] ?? barSpan(r.item); // MOCK-HOOK
+    out.push({ key: r.item.key, title: r.item.title, lane, y, h: ROW_H, start: s, end: e }); // MOCK-HOOK
+    y += ROW_H; // MOCK-HOOK
+    lanes[lanes.length - 1].y1 = y; // MOCK-HOOK
+  } // MOCK-HOOK
+  return { rows: out, lanes, h: y }; // MOCK-HOOK
+} // MOCK-HOOK
 
 const NO_WARN: string[] = [];
 

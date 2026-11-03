@@ -16,6 +16,7 @@ import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 import { QuickAdd } from "./_add";
+import { MsLayer, MsPickBar, MsTypeBar } from "./_msmock"; // MOCK-HOOK
 import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, MARK_WORDS, PM_LANE, type Horizon, type LegendEntry } from "./_board";
 import { useKeyBurst } from "./_burst";
 import { changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
@@ -620,7 +621,7 @@ export function SimpleRoadmap() {
   // or to one roadmap (?roadmap=<id or slug>).
   const params = useSearchParams();
   const [f, setF] = useState<Filters>(() => ({ ...NO_FILTERS, prd: params.get("prd") ?? "", roadmap: params.get("roadmap") ?? "", goal: params.get("goal") ?? "" }));
-  const [format, setFormat] = useState<Format>("timeline");
+  const [format, setFormat] = useState<Format>(() => (params.get("fmt") as Format | null) ?? "timeline"); // MOCK-HOOK mk-milestones: &fmt=gantt|board
   const [unit, setUnit] = useState<GanttUnit>("week");
   const [card, setCard] = useState<{ id: string; left: number; top: number } | null>(null);
   const [pop, setPop] = useState<{ id: string; left: number; top: number; above: number } | null>(null);
@@ -1283,6 +1284,8 @@ export function SimpleRoadmap() {
       )}
       {/* fix4 qa-simple-roadmap-44: a phone's page actions sit near the top, as a desktop's do. */}
       {phone && actions}
+      <MsTypeBar /> {/* MOCK-HOOK mk-milestones */}
+      <MsPickBar phone={phone} /> {/* MOCK-HOOK mk-milestones */}
       {!phone && canChange && addable.length > 0 && <QuickAdd phone={false} options={addOptions} verb={addVerb} onAdd={onAdd} target={target?.title ?? null} roadmaps={askRoadmap ? addable.map((r) => r.roadmap) : []} />}
       {!phone && goalCounters}
       <StartSheet open={starting} onClose={() => setStarting(false)} origin="roadmap" prefer={reviewPrd} from={reviewFrom} />
@@ -1412,6 +1415,7 @@ export function SimpleRoadmap() {
               setCard(null);
               setPop({ id: item.id, ...anchorOf(item.id) });
             }}
+            overlay={(l, sc) => <MsGantt l={l} sc={sc} data={laned ?? data} phone={phone} />} // MOCK-HOOK mk-milestones
           />
           </>
         )}
@@ -1530,3 +1534,20 @@ export function SimpleRoadmap() {
     </div>
   );
 }
+
+// MOCK-HOOK mk-milestones: the milestone layer over the Gantt, in the chart's pixels.
+function MsGantt({ l, sc, data, phone }: { l: Parameters<NonNullable<Parameters<typeof Chart>[0]["overlay"]>>[0]; sc: Parameters<NonNullable<Parameters<typeof Chart>[0]["overlay"]>>[1]; data: Roadmap; phone: boolean }) { // MOCK-HOOK
+  const byId = new Map(data.items.map((i) => [i.id, i])); // MOCK-HOOK
+  const rows = []; // MOCK-HOOK
+  const lanes: { title: string; y0: number; y1: number }[] = []; // MOCK-HOOK
+  for (const g of data.groups) { // MOCK-HOOK
+    const ys = g.item_ids.map((id) => l.y.get(id)).filter((y): y is number => y != null); // MOCK-HOOK
+    if (ys.length) lanes.push({ title: g.title, y0: Math.min(...ys) - l.rowH, y1: Math.max(...ys) + l.rowH }); // MOCK-HOOK
+    for (const id of g.item_ids) { // MOCK-HOOK
+      const i = byId.get(id); // MOCK-HOOK
+      const y = l.y.get(id); // MOCK-HOOK
+      if (i && y != null) rows.push({ key: i.key, title: i.title, lane: g.title, y, h: l.rowH, start: i.start.date, end: i.end.date }); // MOCK-HOOK
+    } // MOCK-HOOK
+  } // MOCK-HOOK
+  return <MsLayer view="gantt" x={(d) => sc.x(d) + sc.px / 2} top={l.top} axisY={l.top - 12} height={l.height} width={sc.width} rows={rows} lanes={lanes} phone={phone} />; // MOCK-HOOK
+} // MOCK-HOOK

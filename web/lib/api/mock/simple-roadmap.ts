@@ -292,6 +292,13 @@ const SEED: SeedItem[] = [
   { key: "price-tiers", title: "New plan tiers", horizon: "next", roadmap: "pricing-roadmap", confidence: "medium" },
 ];
 
+// MOCK-HOOK mk-milestones: `&many=1` puts 26 more invented items under Grow retention (30 in all), the milestones' hard case.
+function msMockMany(): SeedItem[] { // MOCK-HOOK
+  if (typeof window === "undefined" || !new URLSearchParams(window.location.search).has("many")) return []; // MOCK-HOOK
+  const names = ["Quiet hours", "Snooze rules", "Alert templates", "Slack alert cards", "Email alert layout", "Alert owners", "Team alert inbox", "Alert search", "Muted alert list", "Alert sound picker", "Daily summary", "Alert rate limits", "Escalation steps", "On-call handoff", "Alert labels", "Bulk mute", "Alert audit log", "Retry failed sends", "Alert preview", "Read receipts", "Digest timing", "Alert colours", "Weekend mode", "Pinned alerts", "Alert feedback", "Alert health page"]; // MOCK-HOOK
+  return names.map((title, n) => ({ key: `ms-many-${n}`, title, horizon: n < 14 ? "now" : "next", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 6 + n * 4, end: 30 + n * 5, source: "typed" }) as SeedItem); // MOCK-HOOK
+} // MOCK-HOOK
+
 /**
  * walkb-roadmap review: the flow drawn on the PRD's one-pager for the bet an item was built
  * from (service.bet_flows): the bet naming the item's code or title, else the one bet drawn
@@ -706,6 +713,8 @@ export function canEditRoadmap(db: SimpleDb, roadmap: string, me: { id: string; 
 
 function visibleItems(db: SimpleDb, role: Role): SeedItem[] {
   const restricted = role === "commenter" || role === "viewer";
+  if (typeof window !== "undefined" && !new URLSearchParams(window.location.search).has("many")) db.items = db.items.filter((x) => !x.key.startsWith("ms-many-")); // MOCK-HOOK
+  for (const m of msMockMany()) if (!db.items.some((x) => x.key === m.key)) { db.items.push(m); db.ids[m.key] = stableUuid(`simple-item/${m.key}`); } // MOCK-HOOK mk-milestones: &many=1 on a seeded db
   return db.items.filter((s) => !restricted || ROADMAPS[s.roadmap].visibility === "company");
 }
 
