@@ -26019,6 +26019,11 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            /**
+             * From Ask
+             * @default false
+             */
+            from_ask: boolean;
         };
         /**
          * InboxSimpleMinutes

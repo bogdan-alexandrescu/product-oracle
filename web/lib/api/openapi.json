@@ -81238,6 +81238,11 @@
             "type": "boolean",
             "title": "Can Decide",
             "default": false
+          },
+          "from_ask": {
+            "type": "boolean",
+            "title": "From Ask",
+            "default": false
           }
         },
         "type": "object",

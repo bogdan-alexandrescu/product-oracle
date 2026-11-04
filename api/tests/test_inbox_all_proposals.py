@@ -29,6 +29,11 @@ async def _inbox(client, w, who: str) -> dict:
     return r.json()
 
 
+def _name(w, who: str) -> str:
+    u = w.ctx.users[who]
+    return u.name or u.email
+
+
 def _row(inbox: dict, change_id: str) -> dict | None:
     rows = [x for x in inbox["simple_proposals"] if x["id"] == change_id]
     return rows[0] if rows else None
@@ -49,7 +54,7 @@ async def test_an_ask_oracle_proposal_says_it_came_from_ask_oracle(client):
     assert row["asked"] and "Cut A" in row["asked"]
     assert row["from_ask"] is True
     assert row["from_meeting"] is None
-    assert row["by_name"] == w.ctx.users["commenter"].name
+    assert row["by_name"] == _name(w, "commenter")
     assert row["can_decide"] is True
     assert inbox["total"] == before + 1
     r = await client.post(f"{CHANGES}/{change['id']}/accept", json={},
@@ -74,7 +79,7 @@ async def test_a_teammates_proposal_names_the_teammate(client):
     assert row["asked"] == "cut Cut A"
     assert row["from_ask"] is False
     assert row["from_meeting"] is None
-    assert row["by_name"] == w.ctx.users["commenter"].name
+    assert row["by_name"] == _name(w, "commenter")
     assert row["can_decide"] is True
     r = await client.post(f"{CHANGES}/{change['id']}/decline", json={},
                           headers=w.ctx.as_("decider"))  # fmt: skip

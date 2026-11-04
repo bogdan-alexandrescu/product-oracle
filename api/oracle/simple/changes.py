@@ -81,7 +81,13 @@ from oracle.authz import has_role
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import HORIZONS, RoadmapItem
 from oracle.simple import drafts, service
-from oracle.simple.models import RoadmapDateSuggestion, SimpleChange, SimpleDraft, SimpleSession
+from oracle.simple.models import (
+    RoadmapDateSuggestion,
+    SimpleChange,
+    SimpleChatCard,
+    SimpleDraft,
+    SimpleSession,
+)
 from oracle.simple.schemas import (
     InboxSimpleChange,
     SimpleChangeIn,
@@ -1463,6 +1469,20 @@ async def inbox_rows(
     asked = await agenda.meetings_of(db, {c.session_id for c in waiting + decided})
     # inbox-meeting-proposals: whether I may accept or decline each waiting one now.
     v = await _view(db, principal, waiting) if waiting else None
+    # inbox-meeting-proposals owner: the waiting ones asked through Ask Oracle (a card
+    # applied outside a meeting became the proposal).
+    via_ask = (
+        set(
+            await db.scalars(
+                select(SimpleChatCard.change_id).where(
+                    SimpleChatCard.change_id.in_([c.id for c in waiting]),
+                    SimpleChatCard.meeting_id.is_(None),
+                )
+            )
+        )
+        if waiting
+        else set()
+    )
 
     def row(c: SimpleChange, at: datetime | None, state: str | None = None) -> InboxSimpleChange:
         iid = uuid.UUID(str(c.target["item_id"])) if c.target.get("item_id") else None
@@ -1472,6 +1492,7 @@ async def inbox_rows(
             from_meeting=SimpleChangeMeeting(id=m.id, title=m.title) if m else None,
             asked=change_words.phrase(c.op, c.target, c.before, c.after, title),
             can_decide=v is not None and c.status == "proposed" and v.may_decide(c),
+            from_ask=c.id in via_ask and m is None,
             id=c.id, op=c.op, status=c.status, item_id=iid,  # type: ignore[arg-type]
             item_title=titles.get(iid) if iid else None, document_id=c.document_id, by=c.by,
             by_name=names.get(c.by, "someone"), at=c.at, decided_by=c.decided_by,

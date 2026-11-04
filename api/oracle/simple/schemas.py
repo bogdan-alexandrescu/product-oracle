@@ -704,6 +704,9 @@ class InboxSimpleChange(BaseModel):
     # ("cut Delivery integrity"), and whether I may accept or decline it now.
     asked: str | None = None
     can_decide: bool = False
+    # inbox-meeting-proposals owner: asked through Ask Oracle (by ``by_name``), not on the
+    # page nor in a meeting.
+    from_ask: bool = False
 
 
 DraftStatus = Literal["working", "submitted", "approved", "discarded"]
