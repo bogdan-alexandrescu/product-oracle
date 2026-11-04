@@ -919,6 +919,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   const reviewedShown = shownSections.filter((s) => s.verdict).length;
   const error = docQ.error || verQ.error;
   const warnings = version?.warnings ?? [];
+  // date-warnings-honest: one date warning per date and item that lacks a basis (the API
+  // counts them so); the header names how many and opens Plan › Dates filtered to them.
+  const dateWarnings = warnings.filter((w) => w.code === "unverified_date");
+  const otherWarnings = warnings.length - dateWarnings.length;
+  const lackingDays = [...new Set(dateWarnings.map(warningDay).filter((d): d is string => !!d))];
+  const datesHref = (days: string[]) => planDatesHref(version?.source?.document_id ?? null, days);
 
   // Feedback: one list, one definition of "open" (lib/feedback.ts) for every count.
   const entries = useMemo(
@@ -1195,10 +1201,17 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                 </span>
               )}
               {latest != null && n !== latest && <Chip kind="na">Earlier version</Chip>}
-              {warnings.length > 0 && (
+              {otherWarnings > 0 && (
                 <Chip kind="warn">
-                  {warnings.length} warning{warnings.length === 1 ? "" : "s"}
+                  {otherWarnings} warning{otherWarnings === 1 ? "" : "s"}
                 </Chip>
+              )}
+              {dateWarnings.length > 0 && (
+                <Link href={datesHref(lackingDays)} data-testid="dates-lacking" className="inline-flex">
+                  <Chip kind="warn">
+                    {dateWarnings.length} date{dateWarnings.length === 1 ? " lacks" : "s lack"} a basis
+                  </Chip>
+                </Link>
               )}
               {/* #370: someone who can do nothing on the version reads it with View only. */}
               {capsReady && <RoleBadge />}
@@ -1376,7 +1389,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                 <p className="min-w-0 flex-1 font-medium">{w.message}</p>
                 {/* #396: a date warning says to record a date basis on Plan › Dates (F3). */}
                 {w.code === "unverified_date" && (
-                  <Link href="/plan/dates" className="font-medium underline underline-offset-2">
+                  <Link href={datesHref([warningDay(w)].filter((d): d is string => !!d))} className="font-medium underline underline-offset-2">
                     Open Plan › Dates
                   </Link>
                 )}
@@ -1624,3 +1637,18 @@ function fitPhoneBars() {
 
 const NO_HIGHLIGHTS: Highlight[] = [];
 const NO_COUNTS: ReadonlyMap<string, number> = new Map();
+
+/** The day a date warning is about (YYYY-MM-DD): its refs' day, else the date as written when it is one. */
+function warningDay(w: { refs?: Record<string, string | string[]> }): string | null {
+  const day = w.refs?.day ?? w.refs?.date;
+  return typeof day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
+}
+
+/** date-warnings-honest: Plan › Dates filtered to a PRD's dates that lack a basis. */
+function planDatesHref(prd: string | null, days: string[]): string {
+  const q = new URLSearchParams();
+  if (prd) q.set("prd", prd);
+  if (days.length) q.set("dates", days.join(","));
+  const query = q.toString();
+  return query ? `/plan/dates?${query}` : "/plan/dates";
+}

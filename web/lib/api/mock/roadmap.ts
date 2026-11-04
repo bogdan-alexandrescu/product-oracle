@@ -1135,6 +1135,8 @@ const MARK_RANK = { withdrawn: 0, unverified: 1, verified: 2 } as const;
 const ITEM_ANCHOR = /^(?:now|next|later)-(.+)$/;
 /** walkb-roadmap, as doc_dates: not schedule dates (the "As of" line, Changes since last version). */
 const AS_OF = /\bas of\s*$/i;
+const HISTORY = /\b(?:history|changes|change[ -]?log|revisions?|what changed)\b/i;
+const DECISION = /\b(?:needed|decide[sd]?|decisions?|answers?|answered|reply|input|sign-?off)\b[^.;!?]{0,40}?\b(?:by|before|due|on)\s*$/i;
 /** The roadmap's own sections, which no item owns: an item's verified basis backs a date there. */
 const NOT_ITEMS = new Set(["title", "roadmap", "summary", "goals", "problems", "brief-items", "brief-roadmap", "not-doing", "top-risks", "decisions", "full", "layout", "now", "next", "later", "risks"]);
 
@@ -1155,7 +1157,9 @@ export function dateMarks(
   const own = new Set(sections.map((s) => ITEM_ANCHOR.exec(s.section_key)?.[1] ?? s.section_key).filter((k) => !NOT_ITEMS.has(k)));
   let sourcesLevel: number | null = null;
   for (const s of sections) {
-    if (s.section_key === "sources" || s.section_key === "changes") {
+    // date-warnings-honest: a history or changes section records what moved, not a schedule.
+    const history = !ITEM_ANCHOR.test(s.section_key) && HISTORY.test(`${s.section_key.replace(/-/g, " ")} ${s.heading}`);
+    if (s.section_key === "sources" || s.section_key === "changes" || history) {
       sourcesLevel = s.level;
       continue;
     }
@@ -1170,6 +1174,9 @@ export function dateMarks(
     for (const [where, text] of places) {
       for (const [at, written, days] of datesIn(text)) {
         if (AS_OF.test(text.slice(Math.max(0, at - 12), at))) continue;
+        // date-warnings-honest: a decision's due date and a quoted source's words are not schedule claims.
+        const lineStart = text.lastIndexOf("\n", at) + 1;
+        if (DECISION.test(text.slice(Math.max(lineStart, at - 60), at)) || text.slice(lineStart).startsWith(">")) continue;
         const day = days[0];
         const covers = (b: Basis, d: string) => b.prd_document_id === prdId && b.supports_date === d && (!b.item_key || b.item_key === owner || (NOT_ITEMS.has(s.section_key) && own.has(b.item_key)));
         // O4: a date that reads two ways (03/04/2027) is backed only when each reading is.
@@ -1198,6 +1205,55 @@ export function dateMarks(
     }
   }
   return [...out.values()];
+}
+
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** A day as the API's shown_day writes it: "Dec 15, 2026". */
+const shownDay = (iso: string) => `${MONTH_SHORT[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}, ${iso.slice(0, 4)}`;
+
+/**
+ * date-warnings-honest: a roadmap version's warnings with its date warnings re-checked
+ * against the bases as they stand (as api/oracle/docs/service.py date_warnings): one
+ * unverified_date warning per distinct date and item that lacks a basis, never one per
+ * mention, worded as doc_dates.problem_message.
+ */
+export function dateWarnings(
+  stored: Schemas["VersionWarning"][],
+  marks: Schemas["DateMarkOut"][],
+  sections: { section_key: string; heading: string; body_md: string }[],
+  prd: { title: string; slug: string } | null,
+): Schemas["VersionWarning"][] {
+  const kept = stored.filter((w) => w.code !== "unverified_date");
+  const groups = new Map<string, { mark: Schemas["DateMarkOut"]; item: string | null; times: number }>();
+  for (const m of marks) {
+    if (m.status === "verified") continue;
+    const item = ITEM_ANCHOR.exec(m.section_key)?.[1] ?? null;
+    const key = `${(m.days ?? [m.date]).join("|")}|${item ?? ""}`;
+    const had = groups.get(key);
+    if (!had) groups.set(key, { mark: m, item, times: 1 });
+    else {
+      had.times += 1;
+      if (MARK_RANK[m.status] < MARK_RANK[had.mark.status]) had.mark = m;
+    }
+  }
+  const of = prd ? `the PRD "${prd.title}"` : "the roadmap's PRD (none is known)";
+  const fresh = [...groups.values()].map(({ mark: m, item, times }) => {
+    const s = sections.find((x) => x.section_key === m.section_key);
+    const heading = `"${s?.heading ?? "an untitled section"}"`;
+    const line = (s?.body_md ?? "").split("\n").findIndex((l) => l.includes(m.text)) + 1;
+    const where = m.where === "title" ? "the title" : m.where === "heading" || line < 1 ? `the heading ${heading}` : `${heading}, line ${line}`;
+    const shown = (m.days?.length ?? 1) > 1 ? m.text : shownDay(m.date);
+    const message =
+      m.status === "withdrawn"
+        ? `the date ${shown} (${where}) was backed by ${m.bases.join(", ")}, which was withdrawn; drop the date or ${RECORD_DATE_BASIS}`
+        : `the date ${shown} (${where}) is not backed by a confirmed schedule: no verified estimate, capacity or commitment of ${of} for this item; ${RECORD_DATE_BASIS} or drop the date. Oracle never invents dates`;
+    const refs: Record<string, string> = { date: m.text, shown, day: m.date };
+    if (item) refs.item = item;
+    if (prd) refs.prd = prd.slug;
+    if (times > 1) refs.mentions = String(times);
+    return { code: "unverified_date", message, section_keys: [m.section_key].filter(Boolean), refs };
+  });
+  return [...kept, ...fresh];
 }
 
 // --- F1 Plan screen: GET /v1/plan, GET /v1/plan/items/history -----------------------------
