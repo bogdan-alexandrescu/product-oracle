@@ -281,7 +281,9 @@ export function MsLayer(props: MsLayerProps) {
         el.style.width = wrap ? `${cw}px` : "";
         el.style.left = `${roomR >= w || (wrap && roomR >= roomL) ? startR - lx : mx - 6 - cw}px`;
         el.style.top = `${t0}px`;
-        for (let n = 0; wrap && n < 4; n++) {
+        // Any label that meets one placed before steps down below it (one flipped left of a diamond
+        // near the right edge lands where the row's earlier labels are).
+        for (let n = 0; n < 4; n++) {
           const r = el.getBoundingClientRect();
           const hit = placed.find((o) => r.left < o.right + 2 && o.left < r.right + 2 && r.top < o.bottom + 1 && o.top < r.bottom + 1);
           if (!hit) break;
