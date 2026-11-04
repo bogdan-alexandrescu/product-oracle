@@ -18,6 +18,9 @@ Test cards (protects / fails_when / no_claim):
   writes the roadmap's next version with the PRD's items at their re-planned dates, approved
   by the roadmap's decider, so the board, the Gantt, Priorities and Home read them;
   fails_when=only the PRD's version changes and the roadmap keeps the old dates.
+- test_hard_case_says_what_an_engineer_does (review): protects=when no set reaches the
+  target the answer says what one more engineer, counted after a 3-week start, does to the
+  best date; fails_when=the hard case gives no reason more people do not help.
 - test_draft_claims_no_run (review): protects=the draft, computed from the capacity queue,
   claims no run time or cost; fails_when=a fixed "40 seconds, $0.20" is sent.
 """
@@ -155,3 +158,14 @@ async def test_draft_claims_no_run(client):
     assert "run_seconds" not in d.json() and "run_usd" not in d.json()
     a = await client.get(URL, params={"milestone": "M2"}, headers=ctx.as_("owner"))
     assert "run_seconds" not in a.json() and "run_usd" not in a.json()
+
+
+async def test_hard_case_says_what_an_engineer_does(client):
+    ctx = await make_ctx()
+    await seed(ctx, BODY)
+    a = (await client.get(URL, params={"milestone": "M2"}, headers=ctx.as_("owner"))).json()
+    assert a["reachable"] is False
+    hire = a["hire"]
+    assert hire["start_weeks"] == 3
+    assert hire["date"] <= a["best_date"]
+    assert hire["reaches"] is (hire["date"] <= a["target"])
