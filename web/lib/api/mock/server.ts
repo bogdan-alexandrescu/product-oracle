@@ -172,7 +172,7 @@ import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visual
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
-import { appliedVersionOf, approvedPrdToDraft, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { appliedVersionOf, approvedPrdToDraft, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -570,6 +570,7 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * pricing roadmap's decider (#723 S1 Home review).
  * "simple-home-move" as "simple-home" plus a "Move the dependents" proposal Home's Accept confirms.
  * "simple-home-same-name" as "simple-home" plus a second goal named Grow retention and a proposal to change an owner.
+ * "goal-order" as "simple-home" with five goals in a set order, each with work; "goal-order-hard" adds three more and an archived one.
  * "simple-500" as the default company with 500 invented items on Simple's roadmap (S4, dod-perf:
  * 12 more roadmaps each from its own PRD, 8 goals, 6 tracks, dated and undated, with dependencies).
  * "simple-chat" as "simple-home" plus S9's invented meeting, Weekly plan review (the owner
@@ -1241,6 +1242,50 @@ function seedSimpleHomeScenario(): Db {
   seedSimpleProposal(db.simple_roadmap, who, "edit_title", "alert-export", { title: "Alert history export" }, { title: "Alert history as CSV" }, "2026-10-26T15:00:00Z", "Says what people get");
   seedSimpleProposal(db.simple_roadmap, who, "change_horizon", "setup-ideas", { horizon: "next" }, { horizon: "now" }, "2026-10-26T16:30:00Z");
   seedSimpleProposal(db.simple_roadmap, who, "add_item_task", "alert-digest", {}, { title: "Digest email for team leads" }, "2026-10-26T17:00:00Z", "A new step in the digest flow");
+  return db;
+}
+
+/**
+ * build-goal-order-control, the "goal-order" scenario: "simple-home" with five confirmed goals in
+ * a set order (Faster activation, Grow retention, Grow paid conversion, Keep alerts quiet, Cut
+ * support load), each with work on the roadmap. "goal-order-hard" adds three more (one with a
+ * long name) and an archived one, which is not in the order. Invented data.
+ */
+function seedGoalOrderScenario(hard = false): Db {
+  const db = seedSimpleHomeScenario();
+  const rm = db.simple_roadmap!;
+  const template = db.baseline.entities.find((e) => e.key === "grow-retention")!;
+  const goal = (key: string, title: string, status: "confirmed" | "rejected" = "confirmed") => {
+    db.baseline.entities.push({ ...template, id: stableUuid(`simple-goal/${key}`), key, title, attrs: { metric: "Weekly count", target_text: "up 10%", weight: 1 }, status });
+  };
+  const paid = db.baseline.entities.find((e) => e.key === "g.paid-conversion")!;
+  paid.status = "confirmed";
+  goal("support-load", "Cut support load");
+  if (hard) {
+    goal("guided-week", "Make the first week feel guided for every new team, from sign-up to their first shared report");
+    goal("mid-size", "Win more mid-size teams");
+    goal("page-speed", "Faster page loads");
+    goal("partner-store", "Open a partner app store", "rejected");
+  }
+  const order = ["faster-activation", "grow-retention", "g.paid-conversion", "quiet-alerts", "support-load", ...(hard ? ["guided-week", "mid-size", "page-speed"] : [])];
+  for (const e of db.baseline.entities) if (order.includes(e.key)) e.attrs = { ...e.attrs, position: order.indexOf(e.key) + 1 };
+  const items: SimpleDb["items"] = [
+    { key: "go-trial-nudge", title: "Trial end reminders", horizon: "now", roadmap: "pricing-roadmap", goal: "g.paid-conversion", confidence: "high", start: 5, end: 40, source: "typed", status: "in_progress" },
+    { key: "go-plan-compare", title: "Plan compare page", horizon: "next", roadmap: "pricing-roadmap", goal: "g.paid-conversion", confidence: "medium", start: 45, end: 85, source: "typed" },
+    { key: "go-mute-rules", title: "Smart mute rules", horizon: "now", roadmap: "alerts-roadmap", goal: "quiet-alerts", track: "alerts", confidence: "medium", start: 15, end: 55, source: "typed", status: "in_progress" },
+    { key: "go-help-search", title: "Help center search", horizon: "now", roadmap: "onboarding-roadmap", goal: "support-load", confidence: "high", start: 0, end: 35, source: "typed", status: "in_progress" },
+    ...(hard
+      ? ([
+          { key: "go-first-report", title: "First report wizard", horizon: "next", roadmap: "onboarding-roadmap", goal: "guided-week", confidence: "low", start: 40, end: 80, source: "typed" },
+          { key: "go-team-plans", title: "Team plan bundles", horizon: "next", roadmap: "pricing-roadmap", goal: "mid-size", confidence: "medium", start: 50, end: 90, source: "typed" },
+          { key: "go-fast-load", title: "Lighter dashboard load", horizon: "now", roadmap: "alerts-roadmap", goal: "page-speed", confidence: "high", start: 10, end: 30, source: "engineering", status: "in_progress" },
+        ] as SimpleDb["items"])
+      : []),
+  ];
+  for (const i of items) {
+    rm.items.push(i);
+    rm.ids[i.key] = stableUuid(`simple-item/${i.key}`);
+  }
   return db;
 }
 
@@ -3169,6 +3214,10 @@ function load(): Db {
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-move"
                 ? seedSimpleHomeMoveScenario
+              : scenario === "goal-order"
+                ? () => seedGoalOrderScenario()
+              : scenario === "goal-order-hard"
+                ? () => seedGoalOrderScenario(true)
               : scenario === "simple-home-same-name"
                 ? seedSimpleHomeSameNameScenario
               : scenario === "simple-home-deciders"
@@ -6180,6 +6229,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   const simpleRoute = async (r: Request): Promise<Response | null> => {
     // goal-order: Simple's goals follow the baseline's one goal order.
     knowCompanyGoals(db.baseline.entities.filter((e) => e.type === "goal"));
+    // build-goal-order-control: the "goal-order" scenarios' added goals name their roadmap work on every load.
+    knowGoalOrderGoals(db.baseline.entities);
     // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
     // served the same invented page under its own slug and title, with its own draft and changes.
     const onePagerDb = await onePagerOf(db, r, p);

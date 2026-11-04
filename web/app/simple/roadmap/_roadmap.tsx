@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { Button, clearToast, Notice, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
 import { GoalPanel, goalRows, SuggestionCard, useGoalSuggestions, type GoalBrief, type GoalPanelStart, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
 import { DecisionNotes, LeftOutLine } from "@/components/simple/DecisionNotes";
+import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { Loading } from "@/components/ui";
 import { getBranding, logoDataUrl } from "@/lib/api/branding";
@@ -14,6 +15,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { CARD_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { displayZone, plainClock } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
+import { goalNumbers } from "@/lib/goal-tree";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
@@ -207,6 +209,7 @@ function ganttLegend(data: Roadmap, noWork: { start: string; end: string; label?
  * an item with no goal of its own under the goal its plan moves), live work only, PM-owned
  * work in its own lane as the chart draws it. */
 function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadmap; byGoal: boolean; suggestions: GoalSuggestionsApi; onGoal: (g: GoalBrief) => void; only: { key: string; title: string } | null }) {
+  const numbers = useContext(GoalNumbers);
   const count = (id: string) => (suggestions.data?.suggestions ?? []).filter((s) => s.goal.id === id).length;
   // qa4-simple-roadmap-10: a goal its plan names (no id of its own here) is found by its title.
   const known = (id: string, title?: string) => suggestions.data?.goals.find((g) => g.goal.id === id || (!!title && g.goal.title === title))?.goal;
@@ -253,9 +256,11 @@ function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadm
       </button>
     ) : null;
   };
+  const numberOf = (id: string, title: string) => numbers.get(id) ?? numbers.get(title) ?? null;
   const counterCard = (id: string, g: (typeof cards)[number][1]) => (
     <li key={id} data-testid="goal-counter" className="rounded-xl border border-line bg-surface px-3 py-2">
       <p className="truncate text-[15px] font-semibold" title={g.title}>
+        <GoalNum n={numberOf(id, g.title)} />
         {g.title}
       </p>
       {/* fix4 qa-simple-roadmap-49: the metric wraps to a second line, its full words on hover past that. */}
@@ -277,6 +282,7 @@ function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadm
   const emptyCard = (g: (typeof empty)[number]) => (
     <li key={g.goal.id} data-testid="goal-counter-empty" className="rounded-xl border border-dashed border-line-strong bg-surface px-3 py-2">
       <p className="truncate text-[15px] font-semibold" title={g.goal.title}>
+        <GoalNum n={numberOf(g.goal.id, g.goal.title)} />
         {g.goal.title}
       </p>
       <p className="truncate text-sm text-text2">{g.empty ? "No items yet" : "No items in these filters"}</p>
@@ -766,6 +772,9 @@ export function SimpleRoadmap() {
       }),
     { keepPrevious: true },
   );
+  // build-goal-order-control: each goal's number (1 to n, Home's order) on its card and its lane.
+  const goalList = useQuery("simple-roadmap-goal-order", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })));
+  const numbers = useMemo(() => goalNumbers(goalList.data ?? []), [goalList.data]);
   const proposals = useQuery("simple-proposals", () => unwrap(api.GET("/v1/simple/changes", { params: { query: { status: "proposed" } } })));
   // A working draft belongs to one roadmap: a chosen roadmap's page lists its own drafts only.
   const drafts = useQuery(`simple-drafts:${f.roadmap ?? ""}`, () =>
@@ -1344,7 +1353,8 @@ export function SimpleRoadmap() {
   );
 
   return (
-    // A phone's page ends clear of the tab bar (#36: its filters lead the chart, not the foot).
+    <GoalNumbers.Provider value={numbers}>
+    {/* A phone's page ends clear of the tab bar (#36: its filters lead the chart, not the foot). */}
     <div className="simple-mode space-y-3 px-4 py-4 max-[600px]:pb-[calc(var(--phone-tab-bar)+16px)] min-[641px]:px-6" data-testid="simple-roadmap" data-phone={phone ? "true" : "false"}>
       <header className={`relative flex flex-wrap items-center ${phone ? "gap-2" : "gap-3"}`}>
         {/* A phone's header bar names the page (D3): the H1 is for screen readers there. */}
@@ -1670,5 +1680,6 @@ export function SimpleRoadmap() {
       )}
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} start={goalStart} onClose={() => setGoalPanel(null)} />}
     </div>
+    </GoalNumbers.Provider>
   );
 }

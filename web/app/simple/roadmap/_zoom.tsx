@@ -5,6 +5,7 @@
 
 import {
   memo,
+  useContext,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -15,6 +16,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
 import { addMonths } from "@/lib/dates";
 
 import { FixButtons, type Act } from "./_card";
@@ -362,6 +364,8 @@ export function ConflictPanel({
 /** A desktop's chart: one row per item, days to scale, zoomed to six months around today. */
 function DayChart(props: TimelineProps) {
   const { data, phone, openKey, onOpen } = props;
+  // build-goal-order-control: a goal lane's header leads with the goal's number.
+  const numbers = useContext(GoalNumbers);
   const rows = useMemo(() => rowsOf(data), [data]);
   const [zoom, setZoom] = useState<Zoom>("6m");
   const fit = zoom === "all";
@@ -736,6 +740,7 @@ function DayChart(props: TimelineProps) {
                   className="pointer-events-none relative z-[11] flex h-8 items-end border-b border-line bg-surface2/70"
                 >
                   <div className="sticky left-0 px-3 pb-1 text-sm font-semibold whitespace-nowrap">
+                    {data.group === "goal" && r.key !== "none" && r.key !== "below" && <GoalNum n={numbers.get(r.key) ?? numbers.get(r.title)} />}
                     {r.title}{" "}
                     <span className="font-normal text-text2">
                       · {r.count} {r.count === 1 ? "item" : "items"}

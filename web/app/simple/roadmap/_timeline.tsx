@@ -1,6 +1,7 @@
 "use client";
 
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
+import { memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 import { APPLIED_EVENT, lastPreview, PREVIEW_EVENT, type AppliedDetail, type ChatPreview, type PreviewDetail } from "@/lib/api/simple-chat";
 
@@ -386,6 +387,9 @@ declare global {
 
 export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef, dropTargets, lane = data.group, noWork = [], onOffscreen, pulled }: ChartProps) {
   const box = useRef<HTMLDivElement>(null);
+  // build-goal-order-control: a goal lane's header leads with the goal's number.
+  const numbers = useContext(GoalNumbers);
+  const laneNum = (r: { key: string; title: string; below?: boolean }) => (lane === "goal" && !r.below && goalLane(r.key) ? (numbers.get(r.key) ?? numbers.get(r.title) ?? null) : null);
   const [width, setWidth] = useState(900);
   const flash = useAppliedFlash();
   useEffect(() => {
@@ -674,6 +678,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                 // painted over by the next row.
                 <>
                   <span className={`truncate font-semibold ${compact ? "text-sm leading-[16px]" : "text-[15px] leading-[18px]"}`} title={r.title}>
+                    <GoalNum n={laneNum(r)} />
                     {r.title}
                   </span>
                   {r.metric && (
@@ -686,6 +691,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                 <>
                   <span className={`flex min-w-0 items-baseline ${wrapRows ? "flex-wrap gap-x-2" : "gap-2"}`}>
                     <span className={`${wrapRows ? "min-w-0 break-words" : "truncate"} font-semibold ${compact ? "text-sm leading-[16px]" : "text-[15px] leading-tight"}`} title={r.title}>
+                      <GoalNum n={laneNum(r)} />
                       {r.title}
                     </span>
                     {r.count != null && !r.below && (
