@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   Basis,
@@ -55,7 +55,8 @@ export function DatesTab() {
   const params = useSearchParams();
   const wantedPrd = params.get("prd");
   const lacking = (params.get("dates") ?? "").split(",").filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
-  const rows = bases.data?.filter((b) => !wantedPrd || b.prd_document_id === wantedPrd);
+  // Memoised: a new array each render would re-run the people lookup below without end.
+  const rows = useMemo(() => bases.data?.filter((b) => !wantedPrd || b.prd_document_id === wantedPrd), [bases.data, wantedPrd]);
   useEffect(() => {
     if (!rows) return;
     const ids = rows.flatMap((b) => [b.proposed_by, b.verified_by, b.withdrawn_by, b.rejected_by]);
