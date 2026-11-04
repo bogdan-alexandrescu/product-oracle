@@ -268,6 +268,16 @@ def _on_or_after(month: int, day: int, ref: date) -> date | None:
     return None
 
 
+def _on_or_before(month: int, day: int, ref: date) -> date | None:
+    """The most recent ``month``/``day`` on or before ``ref`` (a past event's year-less
+    date)."""
+    for year in (ref.year, ref.year - 1, ref.year - 2, ref.year - 3, ref.year - 4):
+        found = _safe(year, month, day)
+        if found is not None and found <= ref:
+            return found
+    return None
+
+
 def _days(kind: str, m: re.Match[str], ref: date) -> tuple[date, ...]:
     """The day(s) a match reads as: none when it is no real day."""
     if kind == "dmy":
@@ -297,6 +307,9 @@ class Hit:
     start: int
     end: int
     days: tuple[date, ...]
+    # Written without a year: ``days`` is the first such day on or after the reference;
+    # ``past`` the most recent on or before it (date-past: a done thing's day).
+    past: date | None = None
 
 
 _DIGIT = re.compile(r"[0-9]")
@@ -340,7 +353,11 @@ def _hits(text: str, ref: date) -> list[Hit]:
                     continue
                 days = _days(kind, m, ref)
                 if days:
-                    out.append(Hit(m.start(), m.end(), days))
+                    past = None
+                    if kind == "md":
+                        month = _MONTHS[m["month"].lower().rstrip(".")]
+                        past = _on_or_before(month, int(m["day"]), ref)
+                    out.append(Hit(m.start(), m.end(), days, past))
                     taken[m.start() : m.end()] = b"\x01" * (m.end() - m.start())
     return sorted(out, key=lambda h: h.start)
 
@@ -498,6 +515,9 @@ class _Block:
     # whether the block is quoted (a blockquote: a source's words, not a schedule claim).
     links: list[tuple[int, str]] = field(default_factory=list)
     quoted: bool = False
+    # date-past: a table row's cells, each its span in the rendered text and its column's
+    # header ("Counts when").
+    cells: list[tuple[int, int, str]] = field(default_factory=list)
 
 
 def _item_link(href: str) -> str | None:
@@ -644,11 +664,23 @@ def _render_body(body: str, *, skip_yaml: bool) -> tuple[_Rendered, list[_Block]
     row: _Block | None = None
     row_index = -1
     quotes = 0
+    headers: list[str] = []  # the current table's column headers
+    head = False
+    column = -1
     for t in _md.parse(body):
+        if t.type in ("thead_open", "thead_close"):
+            head = t.type == "thead_open"
+            if head:
+                headers = []
+            continue
+        if t.type in ("th_open", "td_open"):
+            column += 1
+            continue
         if t.type in ("blockquote_open", "blockquote_close"):
             quotes += 1 if t.type == "blockquote_open" else -1
             continue
         if t.type == "tr_open":
+            column = -1
             out.separate()
             row = _Block(out.size, out.size, quoted=quotes > 0)
             blocks.append(row)
@@ -687,8 +719,14 @@ def _render_body(body: str, *, skip_yaml: bool) -> tuple[_Rendered, list[_Block]
                 out.add(" ", -1, -1, block=row_index)  # between cells
             blk, index = row, row_index
         pos = src.locate(t.content, t.map[0])
+        cell_start = out.size
         _render_inline(out, t.children or [], t.content, pos, index, blk, src.starts)
         blk.end = out.size
+        if row is not None:
+            if head:
+                headers.append(t.content.strip())
+            header = headers[column] if 0 <= column < len(headers) else ""
+            blk.cells.append((cell_start, out.size, header))
     return out, blocks, src.starts
 
 
@@ -793,6 +831,7 @@ def _found_in(
         about: set[str] = {section_item} if section_item else set()
         named: set[str] = set()
         index = next((rendered.owner[k] for k in range(a, b) if rendered.owner[k] >= 0), -1)
+        blk = None
         if 0 <= index < len(blocks):
             blk = blocks[index]
             if blk.quoted:
@@ -810,6 +849,15 @@ def _found_in(
             continue  # the document's own day, in its title
         if not _claim(rendered.text[block_start:a]):
             continue
+        cell = next((c for c in blk.cells if c[0] <= a < c[1]), None) if blk else None
+        if cell and _NOT_SCHEDULE.search(cell[2]):
+            continue  # a Counts when, evidence or sources cell
+        start_at = cell[0] if cell else block_start
+        if not cell and _NOT_SCHEDULE_LABEL.match(rendered.text[block_start:a].lstrip()):
+            continue  # "Counts when: ...", "Evidence: ..." prose
+        plan_cell = cell is not None and _DATE_COLUMN.search(cell[2])
+        if not plan_cell and _done(hit, rendered.text[start_at:a], ref):
+            continue  # a done thing's day, not a schedule date
         out.append(
             Found(
                 section_key,
@@ -855,6 +903,48 @@ _DECISION = re.compile(
 )
 _RANGE = re.compile(r"\s*(?:-|\u2013|\u2014|to|through|thru|until)\s*", re.IGNORECASE)
 _SENTENCE_END = re.compile(r"[.;!?](?:\s|$)")
+
+
+# date-past (production, Nov 4): where a date is no schedule date. A Counts when, evidence
+# or sources column or labelled line says how a thing counts or what shows it; the plan
+# tables' own date columns keep the usual reading. A year-less date after a past or done
+# word ("closed on Oct 27") is a done thing's day: its most recent past occurrence.
+_NOT_SCHEDULE = re.compile(
+    r"\b(?:counts? when|evidence|sources?|proof|measured (?:by|when)|how (?:it|we) "
+    r"(?:counts?|measure|know))\b",
+    re.IGNORECASE,
+)
+_NOT_SCHEDULE_LABEL = re.compile(
+    r"(?:[*_]+\s*)?(?:counts? when|evidence|sources?|proof|measured (?:by|when))\s*[*_]*\s*:",
+    re.IGNORECASE,
+)
+_DATE_COLUMN = re.compile(r"^\s*(?:start|end|date|dates|due|target|delivery)\s*$", re.IGNORECASE)
+_PAST = re.compile(
+    r"(?:\b(?:closed|shipped|merged|released|launched|landed|completed|finished|delivered|"
+    r"resolved|fixed|deployed|started|began|opened|filed|signed off|went live|done)"
+    r"\s+(?:on\s+)?|\bsince\s+|\b(?:was|were)\b(?:(?!\b(?:then|and|but)\b)"
+    r"[^.;!?,]){0,40}?\bon\s+)(?:the\s+)?\(?$",
+    re.IGNORECASE,
+)
+# A plan's words around the done word: "to be delivered on", "will have shipped on".
+_PLANNED = re.compile(
+    r"\b(?:will|shall|going to|to be|to have|planned|scheduled|expected|due|set to|should|"
+    r"must|would|could|can)\b",
+    re.IGNORECASE,
+)
+
+
+def _done(hit: Hit, before: str, ref: date) -> bool:
+    """Whether a date (``before``: its block's or cell's text up to it) is a done thing's
+    day: after a past or done word, and on or before the version's day as it reads (a
+    year-less one as its most recent past occurrence)."""
+    before = before[-80:]
+    m = _PAST.search(before)
+    if not m or _PLANNED.search(before, max(0, m.start() - 25)):
+        return False
+    if hit.past is not None:
+        return True
+    return all(day <= ref for day in hit.days)
 
 
 def _role(key: str, heading: str) -> str:
