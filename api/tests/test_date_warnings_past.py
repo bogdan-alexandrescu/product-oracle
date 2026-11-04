@@ -122,7 +122,7 @@ def test_a_future_milestone_date_without_a_basis_still_warns():
     ],
 )
 def test_a_far_or_planned_past_reading_still_warns(line):
-    found = flagged(f"## Notes {{#notes}}\n\n{line}\n\n" + ITEMS, ref=DAY)
+    found = flagged(f"## Notes {{#notes}}\n\n{line}\n", bases=[], ref=DAY)
     assert len(found) == 1 and found[0][0] == "notes", found
 
 
@@ -136,7 +136,7 @@ def test_a_far_or_planned_past_reading_still_warns(line):
     ],
 )
 def test_a_far_past_reading_in_a_table_still_warns(table):
-    assert flagged(f"## Notes {{#notes}}\n\n{table}\n\n" + ITEMS, ref=DAY) == [("notes", "Dec 15")]
+    assert flagged(f"## Notes {{#notes}}\n\n{table}\n", bases=[], ref=DAY) == [("notes", "Dec 15")]
 
 
 @pytest.mark.parametrize("header", ["Proof due", "Sources & dates"])
@@ -180,6 +180,19 @@ async def test_a_future_milestone_date_without_a_basis_blocks_approval(client, o
     md = ROADMAP_MD.replace(beta, f"| Beta | Nov 30, 2026 | Payment step | {CELL} |")
     # The plan tables must give the engineering dates: the unbacked one is in prose.
     md = with_line("The holiday milestone lands on Dec 10.", "summary", md)
+    version = await _run_roadmap(client, auth, runtime, md)
+    assert len(_date_warnings(version)) == 1
+    resp = await client.post(f"{VERSIONS}/1/approve", headers=auth)
+    assert resp.status_code == 409, resp.text
+    assert "not backed by a confirmed schedule: Dec 10, 2026" in resp.json()["detail"]
+
+
+async def test_a_far_past_reading_blocks_approval(client, owner, runtime):  # noqa: F811
+    # "done on Dec 10" in a Nov 4 version: Dec 10, 2025 is 11 months back, so it is the
+    # next Dec 10, with no basis.
+    _, auth = owner
+    await approved_prd(client, auth)
+    md = with_line("M2: done on Dec 10.", "summary", ROADMAP_MD)
     version = await _run_roadmap(client, auth, runtime, md)
     assert len(_date_warnings(version)) == 1
     resp = await client.post(f"{VERSIONS}/1/approve", headers=auth)
