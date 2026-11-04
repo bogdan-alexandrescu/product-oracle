@@ -108,13 +108,13 @@ for (const size of ["desktop", "phone"] as const) {
       await expect(rows).toHaveCount(total);
     });
 
-    test("the same pill on the Simple roadmap's rows (Timeline and Gantt); Home's tasks: walkc-roadmap-tasks.spec.ts", async ({ page }) => {
+    test("the same pill on the Simple roadmap's Gantt rows (Home's tasks: walkc-roadmap-tasks.spec.ts)", async ({ page }) => {
       await open(page, "/simple/roadmap");
-      await expect(page.locator('[data-testid="cs-mark"]').first()).toBeVisible();
-      await expect(page.locator('[data-testid="cs-mark"][data-mark="in_progress"]').first()).toBeVisible();
-      await expect(page.locator('[data-testid="cs-mark"][data-mark="exists_old"]').first()).toBeVisible();
       await page.getByTestId("format-gantt").click();
-      await expect(page.locator('[data-testid="cs-mark"][data-mark="exists"]').first()).toBeVisible();
+      const label = (title: string) => page.getByTestId("label-title").filter({ hasText: title }).locator("xpath=..");
+      await expect(label("Setup checklist").getByTestId("cs-mark")).toHaveText("In progress");
+      await expect(label("Weekly alert digest").getByTestId("cs-mark")).toHaveText("Exists");
+      await expect(page.locator('[data-testid="cs-mark"][data-mark="exists_old"]').first()).toBeVisible();
     });
   });
 }
