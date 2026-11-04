@@ -1713,8 +1713,8 @@ async def occurrences_for_version(
         )
     )
     exempt = await version_template_dates(db, version, version_day(version, zone))
-    items = await own_items(db, None, version)
-    return await check(db, found, prds, exempt=exempt, items=items)
+    items = await own_items(db, None, version) if any(not f.items for f in found) else None
+    return await check(db, found, prds, exempt=exempt, items=items or frozenset())
 
 
 async def version_template_dates(

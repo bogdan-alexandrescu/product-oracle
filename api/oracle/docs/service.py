@@ -753,7 +753,9 @@ async def _check_document_dates(
     else:
         prd_id = await doc_dates.prd_of(db, document.id, source_version_id, draft.front_matter)
         prds = [prd_id] if prd_id is not None else []
-    items = await doc_dates.own_items(db, document) if document.kind == "roadmap" else None
+    # A roadmap whose items have no section of their own: the run's items scope its dates.
+    sectionless = document.kind == "roadmap" and any(not f.items for f in found)
+    items = await doc_dates.own_items(db, document) if sectionless else None
     marks = await doc_dates.check(db, found, prds, exempt=exempt, items=items or frozenset())
     bad = [
         m
