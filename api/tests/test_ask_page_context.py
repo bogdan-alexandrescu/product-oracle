@@ -25,6 +25,7 @@ VIEW = {
         " needs you because: no outcome named",
     ],
 }
+DATES = {"name": "Dates · Plan", "lines": ["Beta, Dec 15"]}
 
 
 async def review_stop(ctx) -> tuple[str, str]:
@@ -82,7 +83,7 @@ async def test_a_screen_chat_is_named_by_its_page_and_reads_what_it_shows(client
         client, ctx,
         {
             "subject_kind": "screen",
-            "subject": {"path": "/plan/dates", "view": {"name": "Dates · Plan", "lines": ["Beta, Dec 15"]}},
+            "subject": {"path": "/plan/dates", "view": DATES},
             "origin": "panel", "visibility": "private",
         },
     )  # fmt: skip
