@@ -120,6 +120,14 @@ layout:
 
 <!-- Dates moved, scope added or cut, and why. -->
 
+## Plan {#plan}
+
+<!-- The plan approving this version applies to Simple. A table with the columns Key, Item, Start, End, Dates from, Status: one row per item of the roadmap's items, dates month first (Nov 30, 2026). End is the engineering date; Start stays empty when the engineering dates give none. Dates from says what the end rests on: estimate, team queue, commitment, or no date yet. Status is planned, shipped or next PRD. -->
+
+## Milestones {#plan-milestones}
+
+<!-- A table with the columns Milestone, Date, Gates, Counts when: each milestone the items name, its engineering date (month first), the items it gates by title, and how it counts. -->
+
 ## Sources and data points {#sources}
 
 <!-- Generated: tracker sync time and links, PRD versions, estimates used. Format background: Aha! releases roadmap (https://www.aha.io/roadmapping/roadmap-templates); ProductPlan release plan template (https://www.productplan.com/learn/roadmap-template-examples). -->

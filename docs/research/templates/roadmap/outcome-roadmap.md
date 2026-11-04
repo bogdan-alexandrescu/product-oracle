@@ -156,6 +156,14 @@ layout:
 
 <!-- Goals added or reweighted, items moved between goals or horizons, and why. -->
 
+## Plan {#plan}
+
+<!-- The plan approving this version applies to Simple. A table with the columns Key, Item, Start, End, Dates from, Status: one row per item of the roadmap's items, dates month first (Nov 30, 2026). End is the engineering date; Start stays empty when the engineering dates give none. Dates from says what the end rests on: estimate, team queue, commitment, or no date yet. Status is planned, shipped or next PRD. -->
+
+## Milestones {#plan-milestones}
+
+<!-- A table with the columns Milestone, Date, Gates, Counts when: each milestone the items name, its engineering date (month first), the items it gates by title, and how it counts. -->
+
 ## Sources and data points {#sources}
 
 <!-- Generated: every citation behind goals, metrics and items, with retrieval dates. Format background: Cagan, "The Alternative to Roadmaps" (https://www.svpg.com/the-alternative-to-roadmaps/); opportunity solution trees, Teresa Torres (https://www.producttalk.org/). -->
