@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import { Button, Chip, type Column, DataTable, Empty, InfoTip, PageSkeleton, Panel, SegmentedControl, Sheet, Split, ViewOnly, confirmInPage } from "@/components/ds";
-import { usePhone } from "@/components/ds/page-info";
+import { PHONE, usePhone } from "@/components/ds/page-info";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
@@ -65,7 +65,12 @@ function Rituals() {
   const [adding, setAdding] = useState(false);
   // qa-company-6: on a phone the selected ritual opens in a sheet, as Decisions does.
   const phone = usePhone();
-  const [sheetOpen, setSheetOpen] = useState(!!asked);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  // The asked ritual opens in its sheet on a phone only: a wider window shows it beside the
+  // table, and a later resize to a phone must not pop a sheet nobody asked for.
+  useEffect(() => {
+    if (asked && window.matchMedia(PHONE).matches) setSheetOpen(true);
+  }, [asked]);
   const companyZone = useCompanyZone();
   const zone = zoneText(companyZone, !!zoneQ.data?.is_default);
   const rows = ritualsQ.data ?? [];
