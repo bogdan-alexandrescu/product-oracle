@@ -471,6 +471,8 @@ function bare(ctx: MeetingsCtx, c: Change): Change {
   return {
     id, session_id, document_id, draft_ids, op, target, before, after, status, by, by_name, at, decided_by, decided_at, reason, decision_reason, routed_to, undoes_id, undone,
     can_decide: status === "proposed" && (ctx.me.role === "owner" || routed_to.includes(ctx.me.id)), can_undo: false,
+    // meeting-changes-only-its-agenda (SimpleChangeOut.from_meeting): the meeting that asked for it.
+    from_meeting: c.from_meeting ?? null, off_agenda: c.off_agenda ?? null,
   };
 }
 

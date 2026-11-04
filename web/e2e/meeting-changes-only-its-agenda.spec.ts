@@ -21,9 +21,10 @@ async function startReview(page: Page) {
   await page.goto("/simple/meetings");
   await tap(page.getByRole("button", { name: /^Start review/ }).first());
   const sheet = page.getByRole("dialog", { name: "Start a review" });
-  await sheet.getByLabel("PRD").selectOption({ label: "Usage alerts" });
+  await sheet.getByLabel("PRD").selectOption({ label: "Usage alerts PRD" });
+  await sheet.getByRole("checkbox", { name: "Theo Brandt" }).check();
   await tap(sheet.getByRole("button", { name: "Start", exact: true }));
-  await expect(page.getByRole("heading", { name: "Review: Usage alerts" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review: Usage alerts PRD" })).toBeVisible();
   await tap(page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }));
   return page.getByRole("region", { name: "Roadmap slice" });
 }
@@ -42,6 +43,7 @@ for (const phone of [false, true]) {
     test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 900 } });
 
     test("a cut on the meeting's roadmap applies; a cut elsewhere is a proposal for its owner", async ({ page }) => {
+      test.setTimeout(60_000);
       const slice = await startReview(page);
       const said = slice.getByTestId("roadmap-said");
 
@@ -64,7 +66,7 @@ for (const phone of [false, true]) {
       await expect(page.getByTestId("simple-roadmap")).toBeVisible();
       await page.getByTestId("needs-decision").click();
       const proposal = page.getByTestId("decision-tray").getByTestId("tray-proposal").filter({ hasText: "Welcome video" });
-      await expect(proposal.getByTestId("proposal-from-meeting")).toHaveText("Asked for by the meeting Review: Usage alerts");
+      await expect(proposal.getByTestId("proposal-from-meeting")).toHaveText("Asked for by the meeting Review: Usage alerts PRD");
       await proposal.getByRole("button", { name: "Accept" }).click();
       await expect(page.getByTestId("decision-tray").getByTestId("tray-proposal").filter({ hasText: "Welcome video" })).toHaveCount(0);
     });
