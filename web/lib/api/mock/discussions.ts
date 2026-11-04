@@ -12,6 +12,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import type { ChangeOut, ChangeStatus, ChangeVerb } from "@/lib/api/discussion-changes";
+import { pageNameOnly } from "@/lib/page-context";
 
 import { companyDayInWords } from "./connections";
 import { IN_CHAT, IN_CHAT_CODE, type LiveReply } from "./live";
@@ -241,7 +242,9 @@ export function pageReply(d: Pick<DiscussionRow, "subject" | "origin" | "visibil
   if (!view?.lines?.length || d.origin !== "panel" || d.visibility !== "private") return null;
   if (!/\b(these|this page|on the page|listed)\b/i.test(question)) return null;
   const items = view.lines.filter((l) => l.includes(" · horizon "));
-  const names = (items.length ? items : view.lines).slice(0, 4).map((l) => l.split(" · ")[0]);
+  // A table's row comes as "Column: value · Column: value" (readShownPage): its first value names it.
+  const rows = view.lines.filter((l) => /^[^:·]{1,40}: .+ · [^:·]{1,40}: /.test(l));
+  const names = (items.length ? items : rows.length ? rows : view.lines).slice(0, 4).map((l) => l.split(" · ")[0].replace(/^[^:·]{1,40}: /, ""));
   return { pieces: [`On ${view.name ?? "this page"} I can see `, names.join(", "), ". Each can take a date once its milestone has one."], citations: [] };
 }
 
@@ -947,7 +950,8 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     const s = summary(d);
     return {
       ...s,
-      subject: d.subject,
+      // ask-page-context: the page's view stays stored for the reply only (as the API).
+      subject: withoutView(d.subject),
       participants: active(d).map((x) => {
         const who = member(x.user_id);
         return { ...ref(x.user_id), role: who?.role ?? "viewer", can_write: writes(who), added_via: x.added_via };
@@ -1392,7 +1396,8 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         id: ctx.uuid(),
         subject_kind: input.subject_kind,
         // ask-page-context: what the page showed stays in the person's own panel chat (as the API).
-        subject: panel ? (input.subject ?? {}) : withoutView(input.subject ?? {}),
+        // AUD-9: a person's own page is its name only, whatever the client sends (as the API).
+        subject: panel && !(input.subject_kind === "screen" && pageNameOnly(String(input.subject?.path ?? ""))) ? (input.subject ?? {}) : withoutView(input.subject ?? {}),
         subject_key: info.key,
         subject_label: info.label,
         subject_url: info.url,

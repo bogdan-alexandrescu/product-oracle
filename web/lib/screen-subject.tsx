@@ -52,14 +52,64 @@ function bounded(v: PageView): PageView {
   };
 }
 
+const shownText = (el: HTMLElement) => el.innerText.replace(/\s+/g, " ").trim();
+const isShown = (el: Element) => el.getClientRects().length > 0;
+
+/**
+ * A table's rows, one line each, with their columns' names ("Document: Checkout · Status:
+ * Draft"): the same whatever the layout (on a phone the header is for screen readers only and
+ * each row wraps its cells onto lines of their own).
+ */
+function tableLines(table: HTMLTableElement): string[] {
+  const head = table.tHead?.rows[0];
+  // As shown: a phone's header is for screen readers only, but still drawn (a 1 px box).
+  const names = head ? Array.from(head.cells, shownText) : [];
+  const out: string[] = [];
+  for (const body of Array.from(table.tBodies)) {
+    for (const row of Array.from(body.rows)) {
+      if (!isShown(row) || row.getAttribute("aria-hidden") === "true") continue;
+      const cells = Array.from(row.cells).map((cell, i) => {
+        if (!isShown(cell)) return "";
+        const name = row.cells.length === names.length ? names[i] : "";
+        // A phone shows a cell's own label before its value: the column's name says it once.
+        const shown = shownText(cell);
+        const rest = name && shown.startsWith(name) ? shown.slice(name.length) : "";
+        const text = /^[\s\dA-Z]/.test(rest) ? rest.trim() : shown;
+        return text && name ? `${name}: ${text}` : text;
+      });
+      const line = cells.filter(Boolean).join(" · ");
+      if (line) out.push(line);
+    }
+  }
+  return out;
+}
+
+/** An element's shown text as lines, a table's rows as tableLines. */
+function shownLines(el: HTMLElement, out: string[]) {
+  if (!isShown(el)) return;
+  if (el instanceof HTMLTableElement) {
+    out.push(...tableLines(el));
+    return;
+  }
+  if (!el.querySelector("table")) {
+    out.push(...el.innerText.split("\n"));
+    return;
+  }
+  for (const node of Array.from(el.childNodes)) {
+    if (node instanceof HTMLElement) shownLines(node, out);
+    else if (node.nodeType === Node.TEXT_NODE) out.push(node.textContent ?? "");
+  }
+}
+
 /**
  * The shown page's main content, as text: the app's one <main>, whose hidden routes (Next keeps
  * recent ones mounted, `hidden`) have no shown text. The panel and its sheet are outside it.
  */
 export function readShownPage(name: string): PageView {
   const main = typeof document === "undefined" ? null : document.querySelector("main");
-  const text = main instanceof HTMLElement ? main.innerText : "";
-  const lines = text.split("\n").map((l) => l.trim()).filter((l, i, all) => l && l !== all[i - 1]);
+  const raw: string[] = [];
+  if (main instanceof HTMLElement) shownLines(main, raw);
+  const lines = raw.map((l) => l.trim()).filter((l, i, all) => l && l !== all[i - 1]);
   return bounded({ name, lines });
 }
 
