@@ -75,7 +75,7 @@ for (const [where, use] of [
       // The link works: it opens Detailed's Baseline.
       await empty.getByRole("link", { name: "Detailed › Baseline" }).click();
       await expect(page).toHaveURL(/\/baseline$/);
-      await expect(page.getByRole("heading", { name: "Baseline" }).first()).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Desired state" }).first()).toBeVisible();
     });
   });
 }

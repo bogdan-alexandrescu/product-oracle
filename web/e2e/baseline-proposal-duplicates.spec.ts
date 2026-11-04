@@ -11,7 +11,7 @@ async function openProposals(page: Page) {
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "proposal-duplicates"));
   await login(page);
   await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
   await page.getByRole("tab", { name: /Proposals/ }).click();
   await expect(page.getByTestId("proposal").first()).toBeVisible();
 }

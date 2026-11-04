@@ -17,6 +17,10 @@ Test cards (protects / fails_when / no_claim):
   with or without milestone text of its own; fails_when=the record is dropped, so items
   whose texts differ split into rows or a linked item falls into "No milestone";
   no_claim=which record wins when two name the item (the first, as before).
+- test_rows_name_their_items: protects=each strip row lists the ids of the roadmap items in
+  it (once each, a sliced item in each milestone it has a slice in), so the one-pager lists
+  them under the row with their marks; fails_when=a row carries no item ids;
+  no_claim=drawing.
 - test_legacy_shortened_line_shows_its_own_fact: protects="Show all" of a line an older
   build stored shortened (no whole text kept) is that line's own source fact, not all its
   sections' facts joined; fails_when=the expanded line reads every bullet of the section;
@@ -78,7 +82,11 @@ def test_plan_strip_cases(case):
         for i in case["items"]
     ]
     got = plan_strip.strip(items, date.fromisoformat(case["today"]))
-    assert (got.model_dump(mode="json") if got else None) == case["expected"]
+    # The rules shared with the web's mirror; which items a row holds is the one-pager's.
+    dumped = (
+        got.model_dump(mode="json", exclude={"rows": {"__all__": {"item_ids"}}}) if got else None
+    )
+    assert dumped == case["expected"]
 
 
 # CLD's production walk (2026-10-27): a skeleton PRD and a long problem line.
@@ -197,6 +205,41 @@ def test_items_carry_their_linked_milestone_record():
     ]
     plan = plan_strip.strip(one_pager.plan_items(items), date(2026, 10, 27))
     assert [(r.name, r.items) for r in plan.rows] == [("Beta launch", 2)]
+
+
+def test_rows_name_their_items():
+    day = SimpleNamespace(date=date(2026, 11, 2))
+    later = SimpleNamespace(date=date(2026, 12, 1))
+    m1 = SimpleNamespace(name="M1 · Prove it", date=date(2026, 11, 20), record_id=None,
+                         record_name=None, start_date=None)  # fmt: skip
+    a, b, c = (uuid.uuid4() for _ in range(3))
+    sl = SimpleNamespace(start_date=day.date, end_date=later.date, milestone="M2",
+                         milestone_name="Ship it", milestone_start=day.date,
+                         milestone_end=later.date)  # fmt: skip
+    items = [
+        SimpleNamespace(id=a, start=day, end=day, estimated=False, status="planned", milestone=m1),
+        SimpleNamespace(
+            id=b, start=day, end=later, estimated=True, status="planned", milestone=None
+        ),
+        SimpleNamespace(
+            id=c,
+            start=day,
+            end=later,
+            estimated=False,
+            status="planned",
+            milestone=None,
+            slices=[sl, sl],
+        ),  # fmt: skip
+        SimpleNamespace(
+            id=uuid.uuid4(), start=day, end=day, estimated=False, status="cut", milestone=m1
+        ),  # fmt: skip
+    ]
+    plan = plan_strip.strip(one_pager.plan_items(items), date(2026, 10, 27))
+    assert [(r.name, r.items, r.item_ids) for r in plan.rows] == [
+        ("M1 · Prove it", 1, [a]),
+        ("M2 · Ship it", 2, [c]),
+        ("No milestone", 1, [b]),
+    ]
 
 
 SETUP = (

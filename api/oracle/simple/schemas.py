@@ -1343,6 +1343,8 @@ class SimplePlanRow(BaseModel):
     milestone: bool
     # Its date falls after the strip's last month.
     past_edge: bool = False
+    # The one-pager: its roadmap items' ids (OnePagerOut.timeline), each once, in plan order.
+    item_ids: list[uuid.UUID] = []
 
 
 class SimplePlanStrip(BaseModel):

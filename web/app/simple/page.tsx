@@ -8,6 +8,7 @@ import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRo
 import { Walk } from "@/app/simple/_home/walk";
 import { runStopsOf, StopCard } from "@/app/simple/_home/run-stops";
 import { SimpleWelcome } from "@/app/simple/_home/welcome";
+import { MarkForItem, WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { Icon } from "@/components/ds/Icon";
 import { Button } from "@/components/ds/Button";
 import { Dialog } from "@/components/ds/Dialog";
@@ -830,18 +831,20 @@ export default function SimpleHome() {
 
       {!reads && myTasks.length > 0 && (
         <HomeCard id="tasks" icon="check" title="Tasks waiting for you" count={myTasks.length} all="/simple/roadmap" allLabel="Open the roadmap">
+          <WithFeatureMarks>
           <ul className="space-y-2" data-testid="home-task-list">
             {myTasks.map((t) => (
               <li key={t.id} data-testid="home-task" className="simple-small [overflow-wrap:anywhere]">
                 <Link href={`/simple/roadmap?roadmap=${t.roadmap_id}`} className="simple-link">
                   {t.title}
                 </Link>{" "}
-                · {t.item_title}
+                · <MarkForItem itemId={t.item_id} /> {t.item_title}
                 {t.due_date ? ` · due ${calendarDay(t.due_date)}` : ""}
                 {t.late ? " · late" : ""}
               </li>
             ))}
           </ul>
+          </WithFeatureMarks>
         </HomeCard>
       )}
 

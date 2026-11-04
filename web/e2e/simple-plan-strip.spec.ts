@@ -11,7 +11,7 @@ import { expect, test, type Page } from "./test";
  * month (Oct-Jan) with one row per milestone ("Milestone M1 · 12 items" and its date), the items with
  * no milestone summed in one row, today's line and the commitment past the edge, and never a
  * bar per item; clicking a milestone opens the roadmap filtered to the PRD; fails_when = the
- * block lists each roadmap item, loses a milestone's count, or the row does not filter the
+ * block draws a bar per roadmap item, loses a milestone's count, or the row does not filter the
  * roadmap; no_claim = the PDF's drawing (api tests/test_simple_one_pager_polish.py).
  *
  * Card plan-strip-owner: protects = the meta names the PRD's owner, and a PRD with none reads
@@ -62,8 +62,8 @@ for (const phone of [false, true]) {
           await expect(strip.getByTestId("plan-strip-row").first()).toContainText("Nov 20");
           await expect(strip.getByTestId("plan-strip-today")).toHaveCount(1);
           await expect(strip.getByTestId("plan-strip-edge")).toHaveText("1 roadmap item with no milestone ends after Jan");
-          // One page: no bar per roadmap item.
-          await expect(strip).not.toContainText("Setup step 1");
+          // One page: no bar per roadmap item (each row lists its items by name, build-current-state review 2).
+          await expect(strip.getByTestId("plan-strip-span")).toHaveCount(4);
           await expect(strip.getByTestId("plan-strip-more")).toHaveCount(0);
           if (!phone) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1366);
           else expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);

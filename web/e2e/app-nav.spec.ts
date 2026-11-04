@@ -6,7 +6,7 @@ import { ADMIN, login } from "./helpers";
 const DESTINATIONS = [
   ["nav-home", "Home", "/home"],
   ["nav-requests", "Requests", "/requests"],
-  ["nav-baseline", "Baseline", "/baseline"],
+  ["nav-baseline", "Desired state", "/baseline"],
   ["nav-prds", "PRDs", "/documents"],
   ["nav-priorities", "Priorities", "/priorities"],
   ["nav-plan", "Plan", "/plan"],
@@ -53,7 +53,7 @@ test("app shell: each destination routes to its page", async ({ page }) => {
   for (const [id, heading, path] of [
     ["nav-home", "Home", "/home"],
     ["nav-requests", "Requests", "/requests"],
-    ["nav-baseline", "Baseline", "/baseline"],
+    ["nav-baseline", "Desired state", "/baseline"],
     ["nav-runs", "Runs", "/runs"],
     ["nav-priorities", "Priorities", "/priorities"],
     ["nav-plan", "Plan", "/plan"],
@@ -168,7 +168,7 @@ test("phone: a tab bar with Home, PRDs, Plan, Inbox and More, no sideways scroll
   }
   await tabs.getByTestId("tab-more").click();
   const more = page.getByRole("dialog", { name: "More" });
-  await more.getByRole("link", { name: "Baseline" }).click();
+  await more.getByRole("link", { name: "Desired state" }).click();
   await expect(page).toHaveURL(/\/baseline$/);
   await expect(more).toHaveCount(0);
   const [sw, cw] = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);

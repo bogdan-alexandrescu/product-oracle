@@ -41,7 +41,7 @@ type Dest = { label: string; href: string; icon: IconName; testId: string; match
 export const DESTINATIONS: Dest[] = [
   { label: "Home", href: "/home", icon: "home", testId: "nav-home" },
   { label: "Requests", href: "/requests", icon: "requests", testId: "nav-requests" },
-  { label: "Baseline", href: "/baseline", icon: "baseline", testId: "nav-baseline" },
+  { label: "Desired state", href: "/baseline", icon: "baseline", testId: "nav-baseline" },
   { label: "PRDs", href: "/documents", icon: "prds", testId: "nav-prds" },
   { label: "Priorities", href: "/priorities", icon: "priorities", testId: "nav-priorities" },
   { label: "Plan", href: "/plan", icon: "roadmap", testId: "nav-plan" },

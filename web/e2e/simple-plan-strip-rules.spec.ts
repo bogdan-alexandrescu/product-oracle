@@ -20,6 +20,9 @@ const CASES: Case[] = JSON.parse(readFileSync(path.join(__dirname, "../../api/te
 
 for (const c of CASES) {
   test(`the plan strip as the API draws it: ${c.name}`, () => {
-    expect(planByMonth(c.items, c.today)).toEqual(c.expected);
+    // The shared rules; which items a row holds is the one-pager's (its own spec).
+    const got = planByMonth(c.items, c.today);
+    for (const r of got?.rows ?? []) delete (r as { item_ids?: string[] }).item_ids;
+    expect(got).toEqual(c.expected);
   });
 }

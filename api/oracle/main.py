@@ -29,6 +29,7 @@ from oracle.connections.browse_google import router as drive_browse_router
 from oracle.connections.browse_slack import router as slack_browse_router
 from oracle.connections.notion_pages import router as notion_pages_router
 from oracle.connections.router import router as connections_router
+from oracle.currentstate.router import router as currentstate_router
 from oracle.db import dispose_engine, get_engine
 from oracle.decisions.router import router as decisions_router
 from oracle.discussions.router import router as discussions_router
@@ -316,6 +317,8 @@ def create_app() -> FastAPI:
     app.include_router(simple_meetings_router)
     app.include_router(simple_priorities_router)
     app.include_router(simple_visuals_router)
+    # Current state beside Desired state: features that already run, with their proof.
+    app.include_router(currentstate_router)
     app.include_router(strategy_router)
     app.include_router(launches_router)
     app.include_router(metrics_router)

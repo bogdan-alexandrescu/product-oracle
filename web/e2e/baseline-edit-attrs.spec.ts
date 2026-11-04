@@ -5,7 +5,7 @@ import { login } from "./helpers";
 async function openFeature(page: Page, key: string, title: string) {
   await login(page);
   await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
   await page.getByTestId(`feature-${key}`).getByRole("button", { name: title }).click();
   return page.getByRole("dialog", { name: title });
 }

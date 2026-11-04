@@ -110,7 +110,7 @@ test("qa-shell-30: on a phone the Baseline's counts say No goals yet in full", a
   await emptyCompany(page);
   await login(page);
   await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
   for (const [id, text] of [
     ["kpi-goals", "No goals yet"],
     ["kpi-traced", "No features yet"],

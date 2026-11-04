@@ -43,7 +43,7 @@ async function inOrder(list: Locator, want: string[]) {
 
 async function setPositions(page: Page) {
   await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
   for (const [key, name, position] of POSITIONS) {
     const row = page.getByTestId(`goal-${key}`);
     await row.getByRole("button", { name, exact: true }).click();

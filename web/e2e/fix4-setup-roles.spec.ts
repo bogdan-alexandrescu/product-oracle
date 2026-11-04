@@ -90,7 +90,7 @@ for (const r of ROLES) {
 
     // Baseline's ?build=1: the build for an approver; for the others, who builds it.
     await page.goto(OWNER_LINKS.build);
-    await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
     const sheet = page.getByRole("dialog", { name: "Build the baseline" });
     if (r.builds) {
       await expect(sheet).toBeVisible();

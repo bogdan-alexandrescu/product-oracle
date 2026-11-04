@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { createContext, Fragment, useContext, type ReactNode } from "react";
 
+import { MarkFor, WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { Icon } from "@/components/ds";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { isSafeHref, parseBlocks, type Block, type Inline } from "@/lib/markdown";
@@ -41,13 +42,14 @@ function plain(nodes: Inline[]): boolean {
   return nodes.every((n) => n.t === "cite" || (n.t === "text" && !n.v.trim()));
 }
 
-/** The answer's first block is its title: a heading, or a line that is all bold. */
-function titleOf(b: Block | undefined): Inline[] | null {
+/** The answer's first block is its title: a heading, or a line that is all bold (its markers kept, for the pill of what it names). */
+function titleOf(b: Block | undefined): { c: Inline[]; cites: string[] } | null {
   if (!b) return null;
-  if (b.t === "h") return b.c;
+  if (b.t === "h") return { c: b.c, cites: [] };
   if (b.t !== "p") return null;
   const strong = b.c.filter((n) => n.t === "strong");
-  return strong.length === 1 && plain(b.c.filter((n) => n.t !== "strong")) ? (strong[0] as { c: Inline[] }).c : null;
+  const cites = b.c.flatMap((n) => (n.t === "cite" ? [n.key] : []));
+  return strong.length === 1 && plain(b.c.filter((n) => n.t !== "strong")) ? { c: (strong[0] as { c: Inline[] }).c, cites } : null;
 }
 
 function inline(nodes: Inline[]): ReactNode {
@@ -120,12 +122,34 @@ function Cite({ id }: { id: string }) {
   const s = c ? source(c) : null;
   if (!s?.url) return null;
   return (
-    <sup className={SUP}>
-      <Link href={s.url} data-testid="answer-cite" data-n={num} aria-label={`Source ${num}: ${s.words}`} title={s.words} className="text-accent-ink hover:underline">
-        {num}
-      </Link>
-    </sup>
+    <>
+      <sup className={SUP}>
+        <Link href={s.url} data-testid="answer-cite" data-n={num} aria-label={`Source ${num}: ${s.words}`} title={s.words} className="text-accent-ink hover:underline">
+          {num}
+        </Link>
+      </sup>
+      <CiteMark id={id} />
+    </>
   );
+}
+
+/** A feature (or the roadmap item standing for one) a marker cites: its Current-state pill. */
+function CiteMark({ id }: { id: string }) {
+  const c = useContext(Cites).find((x) => x.kind !== "live" && String(x.n) === id);
+  const mark = c && markOf(c);
+  return mark ? (
+    <span className="ml-1.5 inline-flex align-middle empty:hidden" data-testid="answer-mark">
+      <MarkFor {...mark} />
+    </span>
+  ) : null;
+}
+
+/** The feature a citation names, by its id (a baseline feature) or its roadmap item's id. */
+function markOf(c: AnswerCite): { featureId?: string; itemId?: string } | null {
+  if (!c.ref) return null;
+  if (c.kind === "roadmap_item") return { itemId: c.ref };
+  if (c.kind === "entity" && String(c.title ?? "").startsWith("Feature: ")) return { featureId: c.ref };
+  return null;
 }
 
 /** The answer's text as the pick draws it: title, lines, labels over short lists. */
@@ -137,7 +161,10 @@ export function AnswerText({ text, live = false, cites = [] }: { text: string; l
   if (title)
     out.push(
       <p key="t" className="text-base leading-[22px] font-[650]" data-testid="answer-title">
-        {inline(title)}
+        {inline(title.c)}
+        {title.cites.map((id) => (
+          <CiteMark key={id} id={id} />
+        ))}
       </p>,
     );
   rest.forEach((b, i) => {
@@ -189,11 +216,13 @@ export function AnswerText({ text, live = false, cites = [] }: { text: string; l
         </p>,
       );
   });
-  return (
+  const body = (
     <Cites.Provider value={cites}>
       <div data-testid="chat-message-body">{out}</div>
     </Cites.Provider>
   );
+  // The states are read only for an answer that names a feature.
+  return cites.some((c) => c.kind !== "live" && markOf(c)) ? <WithFeatureMarks>{body}</WithFeatureMarks> : body;
 }
 
 /** One source under an answer: an icon, its words, a link when it has one. */
