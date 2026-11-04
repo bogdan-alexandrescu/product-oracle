@@ -11,11 +11,14 @@ from oracle.docs.models import Document, DocumentVersion
 from oracle.swarm import Outcome
 from oracle.tenancy import tenant_session
 from tests.test_roadmap import (  # noqa: F401 - fixtures
+    ITEMS,
     PLAN_TABLES,
+    PRD,
     ROADMAP,
     ROADMAP_MD,
     approved_prd,
     built_roadmap,
+    create,
     get,
     owner,
     runtime,
@@ -109,3 +112,65 @@ async def test_a_faked_loop_draft_copies_the_tables_and_is_imported(client, owne
     _, auth = owner
     run = await _loop(client, auth, runtime, None)
     assert run["segments"][0]["draft_import"]["version"] == 2, run
+
+
+SHIPPED_ROW = "| shipping-step | Shipping step |  |  | no date yet | shipped |"
+SHIPPED_MD = ROADMAP_MD.replace(
+    "| shipping-step | Shipping step |  |  | no date yet | planned |", SHIPPED_ROW
+)
+
+
+async def _loop_after_shipped(client, auth, runtime, markdown: str | None) -> dict:  # noqa: F811
+    """Version 1 marks Shipping step shipped and is approved (its plan applied: the item's
+    plan_state is shipped); then a feedback-loop draft of the roadmap."""
+    await approved_prd(client, auth)
+    runtime.script["roadmap_items"] = [Outcome(artifacts={"roadmap_items.yaml": ITEMS})]
+    runtime.script["roadmap_draft"] = [Outcome(artifacts={"roadmap.md": SHIPPED_MD})]
+    off = {"roadmap_items": False, "roadmap_review": False}
+    built = await start(
+        client, auth, await create(client, auth, source=PRD, knobs={"checkpoints": off})
+    )
+    await tick(client, auth)
+    await tick(client, auth)
+    assert (await get(client, auth, built["id"]))["status"] == "succeeded"
+    resp = await client.post(f"/v1/documents/{ROADMAP}/versions/1/approve", headers=auth)
+    assert resp.status_code == 200, resp.text
+    if markdown is not None:
+        runtime.script["next_draft"] = [Outcome(artifacts={"roadmap.md": markdown})]
+    resp = await client.post("/v1/runs", json=LOOP, headers=auth)
+    assert resp.status_code in (200, 201), resp.text
+    run = await start(client, auth, resp.json())
+    await tick(client, auth)
+    return await get(client, auth, run["id"])
+
+
+async def test_a_loop_draft_keeping_a_shipped_row_is_imported(client, owner, runtime):  # noqa: F811
+    """The review's major: an approved version marked a row shipped (carried forward as the
+    item's plan_state); the loop draft keeps that row and is imported, not refused with
+    'is in the Plan table but not on the roadmap'."""
+    tenant_id, auth = owner
+    next_md = SHIPPED_MD.replace("Make checkout predictable", "Make checkout predictable and quick")
+    run = await _loop_after_shipped(client, auth, runtime, next_md)
+    assert _codes(run) == [], run["segments"][0]["draft_import"]
+    assert run["status"] == "succeeded", run
+    assert await _versions(tenant_id) == [1, 2]
+
+
+async def test_the_loop_brief_shows_a_shipped_row_with_its_status(client, owner, runtime):  # noqa: F811
+    _, auth = owner
+    run = await _loop_after_shipped(client, auth, runtime, None)
+    prompt = runtime.submitted[-1].steps[-1].prompt
+    assert SHIPPED_ROW in prompt
+    assert "| payment-step | Payment step |  | Nov 30, 2026 | estimate | planned |" in prompt
+    # The fake runtime's draft copies the brief's tables, the shipped row too: imported.
+    assert run["segments"][0]["draft_import"]["version"] == 2, run
+
+
+async def test_the_loop_writer_is_told_it_cannot_add_or_remove_items(client, owner, runtime):  # noqa: F811
+    _, auth = owner
+    await _loop(client, auth, runtime, NEXT_MD)
+    prompt = runtime.submitted[-1].steps[-1].prompt
+    assert "cannot add or remove roadmap items" in prompt
+    assert "Simple's add-item flow" in prompt
+    assert "writes the roadmap draft" in prompt
+    assert "writes the prd draft" not in prompt
