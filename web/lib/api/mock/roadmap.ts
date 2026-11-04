@@ -1138,7 +1138,7 @@ const ITEM_ANCHOR = /^(?:now|next|later)-(.+)$/;
 /** walkb-roadmap, as doc_dates: not schedule dates (the "As of" line, Changes since last version). */
 const AS_OF = /\bas of\s*$/i;
 const HISTORY = /\b(?:history|changes|change[ -]?log|revisions?|what changed)\b/i;
-const DECISION = /\b(?:needed|decide[sd]?|decisions?|answers?|answered|reply|input|sign-?off)\b[^.;!?]{0,40}?\b(?:by|before|due|on)\s*$/i;
+const DECISION = /\b(?:needed|decide[sd]?|decisions?|answers?|answered|reply|input|sign-?off)\b(?:(?!\bthen\b)[^.;!?,]){0,40}?\b(?:by|before|due|on)\s*$/i;
 /** The roadmap's own sections, which no item owns: an item's verified basis backs a date there. */
 const NOT_ITEMS = new Set(["title", "roadmap", "summary", "goals", "problems", "brief-items", "brief-roadmap", "not-doing", "top-risks", "decisions", "full", "layout", "now", "next", "later", "risks"]);
 

@@ -845,7 +845,9 @@ _OWN_DAY = re.compile(
 )
 _DECISION = re.compile(
     r"\b(?:needed|decide[sd]?|decisions?|answers?|answered|reply|input|sign-?off)\b"
-    r"[^.;!?]{0,40}?\b(?:by|before|due|on)\s*$",
+    # The due word in the decision's own clause: a comma or "then" starts another one
+    # ("Sign-off from legal, then ship on Mar 3" claims a ship date).
+    r"(?:(?!\bthen\b)[^.;!?,]){0,40}?\b(?:by|before|due|on)\s*$",
     re.IGNORECASE,
 )
 _RANGE = re.compile(r"\s*(?:-|\u2013|\u2014|to|through|thru|until)\s*", re.IGNORECASE)
