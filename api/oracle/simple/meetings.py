@@ -1782,7 +1782,7 @@ async def redraft(db: AsyncSession, principal: Any, meeting_id: uuid.UUID) -> Si
                 principal=principal,
             )  # fmt: skip
     except jobs.JobError as e:
-        raise MeetingError(e.status, e.detail) from e
+        raise MeetingError(e.status, str(e)) from e
     m.minutes_job_id, m.minutes_state = job.id, "drafting"
     await db.flush()
     await audit.record(db, principal, "simple_meeting.redraft", "simple_meeting", m.id,

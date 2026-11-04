@@ -48,6 +48,8 @@ const PAIRS: [simple: string, detailed: string][] = [
 /**
  * simple-replaced-prds: the home a PRD marked replaced reports (it is under "/documents", so the
  * rail still lights PRDs); Simple shows no one-pager of it, so the switch opens One-pagers.
+ * It is a flag, compared only as `documentHome` in switchTarget; never navigated to (no page
+ * lives at this path).
  */
 export const REPLACED_PRD_HOME = "/documents/replaced";
 
