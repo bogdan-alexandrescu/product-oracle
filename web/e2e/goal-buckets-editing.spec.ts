@@ -77,6 +77,15 @@ for (const size of SIZES) {
       await expect(made).toHaveCount(0);
     });
 
+    test("the intro and the chips read as the frames do", async ({ page }) => {
+      await open(page, size.viewport);
+      // mk-goalbuckets: the intro, then the plan's quarter.
+      await expect(page.getByTestId("prio-subtitle")).toHaveText("Where the engineer-weeks go, goal by goal. Q4 2026.");
+      // gb1-a-result, gb3: a feature that serves several goals shows "+1 goal" beside its name.
+      await expect(bucket(page, "Reliability").locator('[data-code="F-06"]').getByTestId("also-goals")).toHaveText("+1 goal");
+      await expect(bucket(page, "Growth").locator('[data-code="F-05"]').getByTestId("also-goals")).toHaveText("+1 goal");
+    });
+
     test("edit a goal in place, then Undo", async ({ page }) => {
       await open(page, size.viewport);
       const card = bucket(page, "Reliability");
@@ -113,6 +122,13 @@ for (const size of SIZES) {
       await expect(dialog).toHaveCount(0);
       await expect(bucket(page, "Revenue")).toHaveCount(0);
       await expect(note(page)).toContainText("Archived Revenue. 4 features moved to Reliability, 1 to the other goal it serves.");
+      // gb2-a-result: the page is not left scrolled with the note over the bucket titles.
+      const noteBox = (await note(page).boundingBox())!;
+      for (const title of await page.locator('[data-testid="plan-goal"] h3').all()) {
+        const t = await title.boundingBox();
+        if (t) expect(t.y >= noteBox.y + noteBox.height || t.y + t.height <= noteBox.y, `a goal title under the note at y=${t.y}`).toBe(true);
+      }
+      if (size.name === "desktop") await expect(bucket(page, "Reliability").locator("h3")).toBeInViewport();
       await expect(bucket(page, "Reliability").locator('[data-code="F-11"]')).toBeVisible();
       await expect(bucket(page, "Growth").locator('[data-code="F-14"]')).toBeVisible();
       await note(page).getByRole("button", { name: "Undo" }).click();

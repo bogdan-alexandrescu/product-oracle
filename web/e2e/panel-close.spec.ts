@@ -108,6 +108,9 @@ test.describe("desktop", () => {
     await expect(featurePanel(page)).toBeHidden();
     await expect(guided).toBeFocused();
     expect(await focusRinged(guided)).toBe(true);
+    // pc1-a-esc: the picked row's name is plain text, no underline, though the pointer is still on it.
+    await guided.getByTestId("feature-name").hover();
+    expect(await guided.getByTestId("feature-name").evaluate((e) => getComputedStyle(e).textDecorationLine)).toBe("none");
 
     // Enter on a row opens it again too.
     await page.keyboard.press("ArrowDown");
@@ -210,6 +213,15 @@ test.describe("phone", () => {
     const sheet = page.getByTestId("priority-sheet");
     await expect(sheet.getByRole("dialog")).toBeVisible();
     await expect(close(page)).toBeHidden();
+    // pc1-a-phone-390: the sheet's title wraps onto two lines in bold, never cut with an ellipsis.
+    const title = sheet.getByRole("heading", { level: 2, name: "Guided first project with sample tasks", exact: true }).first();
+    const look = await title.evaluate((e) => {
+      const s = getComputedStyle(e);
+      return { weight: Number(s.fontWeight), cut: e.scrollWidth > e.clientWidth + 1 || s.textOverflow === "ellipsis", lines: Math.round(e.getBoundingClientRect().height / parseFloat(s.lineHeight)) };
+    });
+    expect(look.weight).toBeGreaterThanOrEqual(700);
+    expect(look.cut).toBe(false);
+    expect(look.lines).toBe(2);
     await page.keyboard.press("Escape");
     await expect(sheet).toHaveCount(0);
     await expect(page.getByTestId("priority-table")).toBeVisible();
