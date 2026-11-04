@@ -23855,6 +23855,13 @@ export interface components {
             /** Roadmap Version */
             roadmap_version?: number | null;
             /**
+             * Roadmap Live
+             * @default false
+             */
+            roadmap_live: boolean;
+            /** Roadmap Decider */
+            roadmap_decider?: string | null;
+            /**
              * Was
              * Format: date
              */
@@ -23904,6 +23911,8 @@ export interface components {
              * @default false
              */
             roadmap_live: boolean;
+            /** Roadmap Decider */
+            roadmap_decider?: string | null;
         };
         /** FitChangeOut */
         FitChangeOut: {

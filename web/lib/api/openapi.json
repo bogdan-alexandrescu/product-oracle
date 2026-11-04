@@ -75886,6 +75886,22 @@
             ],
             "title": "Roadmap Version"
           },
+          "roadmap_live": {
+            "type": "boolean",
+            "title": "Roadmap Live",
+            "default": false
+          },
+          "roadmap_decider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Decider"
+          },
           "was": {
             "type": "string",
             "format": "date",
@@ -75968,6 +75984,17 @@
             "type": "boolean",
             "title": "Roadmap Live",
             "default": false
+          },
+          "roadmap_decider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Decider"
           }
         },
         "type": "object",
