@@ -260,7 +260,7 @@ async def queue(
     # Milestone order: horizon, then where the milestone first shows on the roadmap.
     first: dict[str, tuple[int, int]] = {}
     for r in rows:
-        name = (r.milestone or {}).get("name") if isinstance(r.milestone, dict) else None
+        name = _milestone_name(r.milestone)
         if name and name not in first:
             first[name] = (HORIZON_ORDER.get(r.horizon, 3), r.position)
     # The company goal order: the first goal each item's feature supports.
@@ -287,7 +287,7 @@ async def queue(
     last = (True, LAST)
 
     def order(r: RoadmapItem) -> tuple:
-        name = (r.milestone or {}).get("name") if isinstance(r.milestone, dict) else None
+        name = _milestone_name(r.milestone)
         place = first.get(name) if name else None
         return (
             place is None,
@@ -302,13 +302,31 @@ async def queue(
         for p in await refs(db, list({r.prd_document_id for r in rows if r.prd_document_id}))
     }
     per_week = _per_week(cap)
-    today = await company_time.company_today(db)
+    today = await run_day(db, as_of)
     out: list[Queued] = []
     ordered = sorted(rows, key=order)
     for r, (start, end) in zip(ordered, _dates([_effort(r) for r in ordered], per_week, today),
                                strict=True):  # fmt: skip
         out.append(Queued(r, prds.get(r.prd_document_id), _effort(r), start, end, order(r)))
     return cap, out
+
+
+def _milestone_name(milestone: Any) -> str | None:
+    """The name of an item's milestone (stored as {name, ...}; a run's file may name it
+    alone)."""
+    if isinstance(milestone, str):
+        return milestone.strip() or None
+    if isinstance(milestone, dict) and isinstance(milestone.get("name"), str):
+        return milestone["name"].strip() or None
+    return None
+
+
+async def run_day(db: AsyncSession, as_of: datetime | None = None) -> date:
+    """The company's day at ``as_of`` (a run's start), else today: a run's prompt and its
+    check date the queue from the same day though the run crosses the company's midnight."""
+    if as_of is None:
+        return await company_time.company_today(db)
+    return company_time.day(as_of, await company_time.company_time_zone(db))
 
 
 def _per_week(cap: dict[str, Any]) -> float:
@@ -341,7 +359,7 @@ async def run_queue(
     if company_doc is None:
         return []
     cap, rows = await queue(db, as_of)
-    today = (await company_time.company_today(db)).isoformat()
+    today = (await run_day(db, as_of)).isoformat()
     return [
         {
             "key": q.item.item_key,
@@ -350,6 +368,7 @@ async def run_queue(
             "start": q.start.isoformat(),
             "end": q.end.isoformat(),
             "ours": q.item.prd_document_id == prd_id,
+            "milestone": _milestone_name(q.item.milestone),
             # What with_run_items re-plans the queue from.
             "effort_weeks": q.effort_weeks,
             "order": q.order,
@@ -362,9 +381,11 @@ async def run_queue(
 
 def with_run_items(rows: list[dict[str, Any]], items_text: str | None) -> list[dict[str, Any]]:
     """The shared queue with this run's items file in it: the run's PRD's rows are replaced
-    by the file's items (an item already on the roadmap keeps its place; a new one goes
-    after its horizon's items, in file order) and the queue is planned again as one team,
-    so the run's own items and every other PRD's take their place together."""
+    by the file's items (an item that names a milestone takes that milestone's place, a new
+    milestone the place of its first item; else an item already on the roadmap keeps its
+    place and a new one goes after its horizon's items, in file order) and the queue is
+    planned again as one team, so the run's own items and every other PRD's take their place
+    together."""
     if not rows or not items_text:
         return rows
     from oracle.runs.roadmap import ItemsYamlError, load_items_yaml
@@ -379,6 +400,9 @@ def with_run_items(rows: list[dict[str, Any]], items_text: str | None) -> list[d
     ours = {r["key"]: r for r in rows if r["ours"]}
     prd = next((r["prd"] for r in ours.values()), "")
     merged = [r for r in rows if not r["ours"]]
+    # Each milestone's place in the queue: where its first item sits (queue's order[1]).
+    places = {r["milestone"]: tuple(r["order"][1]) for r in rows
+              if r.get("milestone") and not r["order"][0]}  # fmt: skip
     for i, raw in enumerate(entries):
         key = str(raw.get("id") or "").strip() if isinstance(raw, dict) else ""
         if not key or any(r["key"] == key for r in merged):
@@ -394,9 +418,14 @@ def with_run_items(rows: list[dict[str, Any]], items_text: str | None) -> list[d
             horizon = HORIZON_ORDER.get(str(raw.get("horizon") or ""), 3)
             order = (True, (horizon, NEW + i), (True, LAST), -_priority(item), NEW + i)
             effort = _effort(item)
+        milestone = _milestone_name(raw.get("milestone"))
+        if milestone:
+            place = places.setdefault(milestone, tuple(order[1]))
+            order = (False, place, *tuple(order)[2:])
         title = str(raw.get("title") or "").strip() or key
         merged.append({"key": key, "title": title, "prd": prd, "ours": True,
-                       "effort_weeks": effort, "order": order})  # fmt: skip
+                       "milestone": milestone, "effort_weeks": effort,
+                       "order": order})  # fmt: skip
     first = rows[0]
     merged.sort(key=lambda r: tuple(r["order"]))
     planned = _dates([r["effort_weeks"] for r in merged], first["per_week"],

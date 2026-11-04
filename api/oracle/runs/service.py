@@ -4719,7 +4719,7 @@ async def _plan_table_problems(
     plan = plan_tables.engineering_plan(
         items, [b.as_json() for b in bases], others=roadmap_company.with_run_items(others, items)
     )
-    return plan_tables.check(markdown, plan, await company_time.company_today(db))
+    return plan_tables.check(markdown, plan, await roadmap_company.run_day(db, run.created_at))
 
 
 async def _draft_source(db: AsyncSession, run: Run) -> uuid.UUID | None:
