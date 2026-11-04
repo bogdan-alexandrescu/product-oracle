@@ -111,6 +111,7 @@ class World:
                 )
             s.add(proof("tracked", kind="tasks", count=0, total=0, ok=False, checked_at=old))
             await s.commit()
+            self.item_id = str(item.id)
             self.ids = {k: str(e.id) for k, e in f.items()} | {"idea": str(idea.id)}
         return self
 
@@ -307,3 +308,12 @@ async def test_the_tick_rereads_proof_once_a_night(client, clock):
     async with tenant_session(w.ctx.tenant_id) as s:
         st = await service.state_of(s, w.ids["running"])
         assert st is not None and st.checked_at == NOW + timedelta(days=1)
+
+
+async def test_each_feature_names_its_roadmap_items(client, clock):
+    """protects=a roadmap bar finds its feature's pill: each feature lists its items' ids;
+    fails_when=item_ids is missing or empty for a feature with an item; no_claim=draft items."""
+    w = await world()
+    rows = await w.rows(client)
+    assert rows["tracked"]["item_ids"] == [w.item_id]
+    assert rows["idea"]["item_ids"] == []
