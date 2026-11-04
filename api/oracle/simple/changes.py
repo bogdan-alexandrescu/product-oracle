@@ -1464,6 +1464,12 @@ async def inbox_rows(
             c
             for c in waiting
             if me in current_route(c, by_id, read_.deciders, owners, qs, c.session_id in met)
+            # A question decided since (on Decisions, in a meeting) leaves nothing to decide.
+            and not (
+                c.op in QUESTION_OPS
+                and (d := qs.get(str(c.target.get("decision_id")))) is not None
+                and d.status != "proposed"
+            )
         ]
     decided = [c for c in rows if c.status != "proposed"]
     if not waiting and not decided:
