@@ -24,6 +24,8 @@ async function open(page: Page, scenario?: string) {
   await expect(page.getByTestId("gm-page")).toBeVisible();
 }
 
+// The phone list sits in the page too (hidden past 600px): desktop checks read the ladder only.
+const ladder = (page: Page) => page.getByTestId("gm-ladder");
 const lanes = (page: Page) => page.getByTestId("gm-lane").locator("span.font-semibold");
 
 test.describe("desktop", () => {
@@ -46,14 +48,14 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("gm-guardrail")).toContainText("Guardrail: Customer complaints = 0 every day");
     await expect(page.getByTestId("gm-guardrail")).toContainText("0 today · held 7 of 7 days");
     await expect(page.getByTestId("gm-ladder")).toContainText("3 of 7 steps shown at a time");
-    const gate = page.locator('[data-testid="gm-gate"]', { hasText: "25 sign-ups per rep" });
+    const gate = ladder(page).getByTestId("gm-gate").filter({ hasText: "25 sign-ups per rep" }).filter({ hasText: "Step 1 ·" });
     await expect(gate).toContainText("Step 1 · due Oct", { ignoreCase: true });
     await expect(gate).toContainText("Met");
     await expect(gate).toContainText("Held 7 days in a row on a live rep · confirmed by Dana Whitlock, Nov 2");
     await expect(lanes(page)).toHaveText(["1. Scale per rep", "2. Customer safety", "3. Conversions (incl. new channels)", "4. Onboarding & revenue"]);
-    await expect(page.getByTestId("gm-feature").filter({ hasText: "Guided first week" })).toHaveCount(1);
-    await expect(page.getByTestId("gm-feature-also").filter({ hasText: "Guided first week" })).toContainText("its card is under 50 sign-ups per rep");
-    await expect(page.getByTestId("gm-feature").filter({ hasText: "Rep call script hints" })).toContainText("Not helping");
+    await expect(ladder(page).getByTestId("gm-feature").filter({ hasText: "Guided first week" })).toHaveCount(1);
+    await expect(ladder(page).getByTestId("gm-feature-also").filter({ hasText: "Guided first week" })).toContainText("its card is under 50 sign-ups per rep");
+    await expect(ladder(page).getByTestId("gm-feature").filter({ hasText: "Rep call script hints" })).toContainText("Not helping");
   });
 
   test("adds an area and moves it up; the order holds after a reload", async ({ page }) => {
@@ -125,10 +127,10 @@ test.describe("desktop", () => {
     await ed.getByRole("button", { name: /Trial reminder texts/ }).click();
     await ed.getByTestId("gm-save").click();
     await expect(page.getByTestId("gm-flash")).toHaveText("Attached: Trial reminder texts now also serves 10 paid conversions per rep.");
-    const card = page.getByTestId("gm-feature").filter({ hasText: "Trial reminder texts" });
+    const card = ladder(page).getByTestId("gm-feature").filter({ hasText: "Trial reminder texts" });
     await expect(card).toHaveCount(1);
     await expect(card).toContainText("Also serves 10 paid conversions per rep");
-    await expect(page.getByTestId("gm-feature-also").filter({ hasText: "Trial reminder texts" })).toHaveCount(1);
+    await expect(ladder(page).getByTestId("gm-feature-also").filter({ hasText: "Trial reminder texts" })).toHaveCount(1);
   });
 
   test("starts a New PRD from a milestone: Simple's New PRD form opens prefilled", async ({ page }) => {
@@ -151,7 +153,7 @@ test.describe("desktop", () => {
     // protects=clicking a feature card opens the roadmap's item panel for it; fails_when=nothing opens;
     // no_claim=the panel's own edits (the roadmap specs).
     await open(page);
-    await page.getByTestId("gm-feature").filter({ hasText: "One-tap sign-up link" }).click();
+    await ladder(page).getByTestId("gm-feature").filter({ hasText: "One-tap sign-up link" }).click();
     await expect(page.getByTestId("gm-feature-panel")).toBeVisible();
     await expect(page.getByTestId("gm-feature-panel").getByRole("button", { name: /Close/ }).first()).toBeVisible();
   });
