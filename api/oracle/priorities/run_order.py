@@ -605,20 +605,23 @@ async def accept_new(db: AsyncSession, snapshot: PrioritySnapshot, principal: An
         .where(Proposal.run_id == snapshot.run_id, Proposal.status == "open")
         .order_by(Proposal.created_at, Proposal.id)
     )
-    added: set[str] = set()
+    first: dict[str, Proposal] = {}
     for p in list(open_):
         fields = (p.payload or {}).get("fields") or {}
         key = fields.get("key")
         if (p.payload or {}).get("op") != "create" or key not in keys:
             continue
-        if key in added:
+        if key in first:
+            # Rejected before the first is accepted, which would close it as already done.
             await decide_proposal(db, p.id, principal, False, SAME_FEATURE)
             continue
+        first[key] = p
+    for p in first.values():
         # As proposed: an accepted create is confirmed unless its fields say otherwise.
+        fields = (p.payload or {}).get("fields") or {}
         p.payload = {**p.payload, "fields": {**fields, "status": "proposed"}}
         await decide_proposal(db, p.id, principal, True, "Added by the approved order")
-        added.add(key)
-    return len(added)
+    return len(first)
 
 
 # Why an approved order rejects a second open create of a feature it already added.

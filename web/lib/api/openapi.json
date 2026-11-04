@@ -97359,6 +97359,37 @@
         "type": "object",
         "title": "ProposalAccept"
       },
+      "ProposalAlso": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "by": {
+            "type": "string",
+            "title": "By"
+          },
+          "fields": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Fields"
+          },
+          "same": {
+            "type": "boolean",
+            "title": "Same"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "by",
+          "fields",
+          "same"
+        ],
+        "title": "ProposalAlso",
+        "description": "Another of the run's open proposals of the same change, shown on this one's card."
+      },
       "ProposalCreate": {
         "properties": {
           "op": {
@@ -97430,6 +97461,18 @@
               }
             ],
             "title": "Reason"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
           }
         },
         "type": "object",
@@ -97577,6 +97620,50 @@
             },
             "type": "array",
             "title": "Overlaps",
+            "default": []
+          },
+          "duplicate_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duplicate Of"
+          },
+          "also_proposed": {
+            "items": {
+              "$ref": "#/components/schemas/ProposalAlso"
+            },
+            "type": "array",
+            "title": "Also Proposed",
+            "default": []
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "already_done",
+                  "not_chosen"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "closed_as_done": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Closed As Done",
             "default": []
           }
         },
