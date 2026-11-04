@@ -11,6 +11,7 @@ import { SimpleWelcome } from "@/app/simple/_home/welcome";
 import { Icon } from "@/components/ds/Icon";
 import { Dialog } from "@/components/ds/Dialog";
 import { setToastPlace, toast } from "@/components/ds/Toast";
+import { FitHomeCard } from "@/components/simple/FitDate";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { usePhone } from "@/components/simple/FlowViews";
 import { meetingMoment } from "@/components/simple/FlowVisual";
@@ -609,6 +610,8 @@ export default function SimpleHome() {
 
       {!walking && (
       <>
+      {/* Bring a date in (FD3 a): an approved re-plan's milestone on its date, and what moved. */}
+      <FitHomeCard />
       <StartedCard started={started.data ?? []} />
       {/* qa-onboarding-6: an invited member's role welcome, in Simple too (dismissed in one mode, gone in both). */}
       <SimpleWelcome show={setupQ.data?.welcome === true} onDismissed={() => void setupQ.reload()} />
