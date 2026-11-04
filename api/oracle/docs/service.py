@@ -1442,6 +1442,12 @@ async def import_draft(
         # #306: an agent names the codes it writes; a draft that does not is flagged. A
         # roadmap's date words too (roadmap-draft-wording).
         warnings += draft_checks.run_warnings(document.kind, draft.sections)
+        if document.kind == "prd" and run_id is not None:
+            # Walk 2, problem 17: a PRD drafted from an intake never calls missing what a
+            # pinned source or a baseline feature the brief names describes.
+            from oracle.intake import draft_check
+
+            warnings += await draft_check.check(db, run_id, draft.sections)
     if previous is not None:
         locked = await review_service.locked_section_keys(db, previous.id)
         if locked:
