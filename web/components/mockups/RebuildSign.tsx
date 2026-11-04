@@ -69,8 +69,8 @@ function makeRuns(state: State, hard: string | null, tick: number, polls: number
     slug: REBUILD_PRD,
     title: "Checkout redesign PRD",
     kind: "prd",
-    from: 3,
-    to: 4,
+    from: 2,
+    to: 3,
     step: prdStep,
     steps: PRD_STEPS,
     minutesLeft: left,
@@ -137,7 +137,7 @@ function stepsWord(r: Run) {
 function line(r: Run) {
   switch (r.state) {
     case "running":
-      return r.kind === "roadmap" ? `Rebuilding the roadmap · ${stepsWord(r)} · about ${r.minutesLeft} min` : `Rebuilding v${r.to} · ${stepsWord(r)} · about ${r.minutesLeft} min`;
+      return r.kind === "roadmap" ? `Rebuilding ${r.title} v${r.to} · ${stepsWord(r)} · about ${r.minutesLeft} min` : `Rebuilding v${r.to} · ${stepsWord(r)} · about ${r.minutesLeft} min`;
     case "scheduled":
       return r.scheduledFor.startsWith("after") ? `Rebuild waits ${r.scheduledFor}` : `Rebuild scheduled ${r.scheduledFor}`;
     case "waiting":
@@ -245,8 +245,8 @@ function outcome(r: Run) {
   if (r.state === "done") return `v${r.to} is a draft until it is approved. This page shows v${r.from} until then.`;
   if (r.state === "failed") return `${r.failed.reason} at "${r.steps[r.step - 1]}". Nothing changed: you still read v${r.from}.`;
   return r.kind === "roadmap"
-    ? `It makes a new draft, v${r.to}. You keep seeing the approved roadmap (v${r.from}) until it is approved.`
-    : `It makes a new draft, v${r.to}. You keep seeing the approved v${r.from} until it is approved.`;
+    ? `It makes a new draft, v${r.to}. You keep seeing the approved roadmap (v${r.from}) until v${r.to} is approved.`
+    : `It makes a new draft, v${r.to}. This page keeps showing v${r.from} until v${r.to} is approved.`;
 }
 
 function RunAction({ r, onOpen }: { r: Run; onOpen?: () => void }) {
@@ -448,10 +448,11 @@ function Note({ runs, onOpen }: { runs: Run[]; onOpen: () => void }) {
  * MOCK-HOOK: one slot per place a PRD or roadmap shows. `place` names where; `slot` is inline
  * (beside the version or title) or block (under the header). Draws nothing without ?rb=.
  */
-export function RebuildSign({ place, slug, kind = "prd", slot }: { place: Where; slug: string; kind?: "prd" | "roadmap"; slot: "inline" | "block" }) {
+export function RebuildSign({ place, slug, kind = "prd", slot, version }: { place: Where; slug: string; kind?: "prd" | "roadmap"; slot: "inline" | "block"; version?: number | null }) {
   const rb = useRebuilds();
   if (!rb) return null;
-  const runs = runsFor(rb, slug, kind);
+  // The new version is the one after what the page shows.
+  const runs = runsFor(rb, slug, kind).map((r) => (version != null && r.slug === slug ? { ...r, from: version, to: version + 1 } : r));
   if (!runs.length) return null;
   // The new version lands: the sign says so until it is opened (or approved), then goes away.
   if (rb.state === "done" && rb.opened) return null;

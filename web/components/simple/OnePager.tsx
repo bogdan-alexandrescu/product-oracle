@@ -543,7 +543,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
           }}
         />
         {/* MOCK-HOOK: rebuild sign (B banner / C note) under the header. */}
-        {!presenting && <RebuildSign place="one-pager" slug={v.document.slug} slot="block" />}
+        {!presenting && <RebuildSign place="one-pager" slug={v.document.slug} slot="block" version={v.version} />}
         {toast}
         {error && <ErrorNote>{error}</ErrorNote>}
         {planShown && updating && (
@@ -889,7 +889,7 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeet
         {!approved && run !== "waiting" && summary && <span data-testid="one-pager-status"><PrdStatus d={summary} /></span>}
         <span>{phone && plan ? `v${v.version}` : `Version ${v.version}`}{published ? ` · ${published}` : ""}</span>
         {/* MOCK-HOOK: rebuild sign (A chip / C marker) beside the version. */}
-        <RebuildSign place="one-pager" slug={v.document.slug} slot="inline" />
+        <RebuildSign place="one-pager" slug={v.document.slug} slot="inline" version={v.version} />
         {sep}
         {v.owner ? <span>Owner <b className="font-[650] text-text">{v.owner.name}</b></span> : <span>No owner yet</span>}
         {!plan && v.decider && (

@@ -61,7 +61,7 @@ export default function OnePagers() {
                 </Link>
                 <PrdStatus d={d} />
                 {/* MOCK-HOOK: rebuild sign in the row. */}
-                <span className="relative z-[1]"><RebuildSign place="list-row" slug={d.slug} slot="inline" /></span>
+                <span className="relative z-[1]"><RebuildSign place="list-row" slug={d.slug} slot="inline" version={d.latest_version} /></span>
                 <span className="simple-small ml-auto">Updated {dmy(dayIn(d.updated_at, zone))}</span>
               </li>
             ))}
