@@ -546,8 +546,10 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
               />
               <CodeChip r={r} />
               <span className="min-w-[12rem] flex-1 font-medium" data-testid="prio-title">
-                {/* build-feature-panel: a feature's name opens the one feature panel. */}
-                <button type="button" data-feature={r.title} className="text-left hover:underline">
+                {/* build-feature-panel: a feature's name opens the one feature panel, by its
+                 * roadmap item id (the stable feature key, r.code, when the role cannot see
+                 * the item): two features sharing a title would else open the wrong one. */}
+                <button type="button" data-feature={r.item_id ?? r.code} className="text-left hover:underline">
                   {r.title}
                 </button>
               </span>
@@ -1847,7 +1849,8 @@ function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestion
                     <li key={c} className="flex items-center gap-1.5">
                       {r && <CodeChip r={r} />}
                       {r ? (
-                        <button type="button" data-feature={r.title} className="text-left hover:underline">
+                        // build-feature-panel: the roadmap item id (r.code, the feature key, when the role cannot see it).
+                        <button type="button" data-feature={r.item_id ?? r.code} className="text-left hover:underline">
                           {r.title}
                         </button>
                       ) : (

@@ -46,7 +46,7 @@ export function FeaturePanelHost({ children }: { children: ReactNode }) {
 
 /** The opened feature, read (and read again after each change) only while the panel is open. */
 function Opened({ feature, phone, canChange, onClose }: { feature: string; phone: boolean; canChange: boolean; onClose: () => void }) {
-  const { data, reload } = useQuery("simple-roadmap:feature-panel", () => unwrap(api.GET("/v1/simple/roadmap", {})));
+  const { data, loading, reload } = useQuery("simple-roadmap:feature-panel", () => unwrap(api.GET("/v1/simple/roadmap", {})));
   const items = useMemo(() => new Map((data?.items ?? []).map((i: Item) => [i.id, i])), [data]);
   const item = items.get(feature) ?? [...items.values()].find((i) => i.title === feature || i.key === feature);
   const act: Act = useCallback(
@@ -61,6 +61,12 @@ function Opened({ feature, phone, canChange, onClose }: { feature: string; phone
     },
     [reload],
   );
+  // No roadmap item matches (once loaded): say so in a toast and close, rather than doing nothing.
+  useEffect(() => {
+    if (loading || item) return;
+    toast({ message: "This feature is not on a roadmap yet, so it has no panel." });
+    onClose();
+  }, [loading, item, onClose]);
   if (!item) return null;
   return <FloatingCard item={item} items={items} proposals={[]} phone={phone} style={{}} act={act} canChange={canChange} onDecide={() => undefined} onClose={onClose} />;
 }
