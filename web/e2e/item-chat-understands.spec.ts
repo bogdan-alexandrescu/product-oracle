@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "./test";
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN } from "./helpers";
 
 /*
@@ -102,6 +102,55 @@ for (const phone of [false, true]) {
       await expect(last(talk).getByTestId("chat-choices").getByRole("button")).toHaveText(["Mark it as already shipped?", "Add this as a task?", "Neither"]);
       await tap(last(talk).getByTestId("chat-choices").getByRole("button", { name: "Mark it as already shipped?" }));
       await expect(talk.getByTestId("chat-card").last().getByTestId("chat-card-summary")).toHaveText("Mark as already shipped: Adaptive pacing");
+    });
+    /**
+     * Card item-chat-not-shipped (review): protects = a line saying the opposite ("this isn't
+     * already live") gets no "Mark as already shipped" card, and a commenter, who cannot apply
+     * it, is not offered "Mark it as already shipped?" among the choices; fails_when = either
+     * one offers it; no_claim = the other choices' order.
+     */
+    test(`"this isn't already live" offers no shipped mark (${where})`, async ({ page }) => {
+      await signIn(page);
+      const { talk } = await openTalk(page, phone);
+      await say(talk, "this isn't already live");
+      await expect(last(talk).getByTestId("chat-message-body")).toHaveText("What should I do with that?");
+      await expect(talk).not.toContainText("Mark as already shipped");
+      await expect(last(talk).getByTestId("chat-choices").getByRole("button")).toHaveText(["Add this as a task?", "Add it as a feature ask?", "Neither"]);
+    });
+
+    test(`a commenter is not offered "Mark it as already shipped?" (${where})`, async ({ page }) => {
+      await page.addInitScript(([key, role]) => localStorage.setItem(key, role), [MOCK_ROLE_KEY, "commenter"] as const);
+      await signIn(page);
+      const { talk } = await openTalk(page, phone);
+      await say(talk, "folks have been using a version of this for a while");
+      await expect(last(talk).getByTestId("chat-message-body")).toHaveText("What should I do with that?");
+      await expect(last(talk).getByTestId("chat-choices").getByRole("button")).toHaveText(["Add this as a task?", "Add it as a feature ask?", "Neither"]);
+    });
+  });
+
+  test.describe(`${where}, an item done by its tracker`, () => {
+    test.beforeEach(async ({ context, page }) => {
+      await context.addInitScript((key) => localStorage.setItem(key, "roadmap-talk-tracker-done"), MOCK_SCENARIO_KEY);
+      await page.setViewportSize(phone ? { width: 390, height: 844 } : { width: 1366, height: 820 });
+    });
+
+    /**
+     * Card item-chat-tracker-done (review, as the API): an item that reads Done because of its
+     * tracker has no shipped mark of its own, so "this already exists" still offers "Mark as
+     * already shipped" and the choices still offer it; fails_when = the reply is "marked as
+     * shipped already" or the choice is missing; no_claim = Apply (as the first card).
+     */
+    test(`an item done by its tracker can still be marked as already shipped (${where})`, async ({ page }) => {
+      await signIn(page);
+      const { card, talk } = await openTalk(page, phone);
+      if (phone) await tap(card.getByRole("tab", { name: "Details" }));
+      await expect(card.getByTestId("card-status")).toHaveText("Done");
+      if (phone) await tap(card.getByRole("tab", { name: "Talk to Oracle" }));
+      await say(talk, "this is already live in the partner app");
+      await expect(talk).not.toContainText("marked as shipped already");
+      await expect(talk.getByTestId("chat-card").last().getByTestId("chat-card-summary")).toHaveText("Mark as already shipped: Adaptive pacing");
+      await say(talk, "folks have been using a version of this for a while");
+      await expect(last(talk).getByTestId("chat-choices").getByRole("button").first()).toHaveText("Mark it as already shipped?");
     });
   });
 }
