@@ -9,7 +9,7 @@ import uuid
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import func, or_, select
@@ -133,8 +133,26 @@ class ExposureMismatch(Exception):
 # --- subjects -----------------------------------------------------------------------------
 
 
+class PageView(BaseModel):
+    """What the open page shows, as Ask Oracle's "This page" sends it (ask-page-context): the
+    page's own name, the filters in use and its main content as lines (a run review's
+    items with their horizon, milestone, confidence and why each needs the owner). Read
+    only in the person's own private panel chat (oracle.discussions.context)."""
+
+    model_config = ConfigDict(extra="forbid")
+    name: str | None = Field(default=None, max_length=200)
+    filters: list[Annotated[str, Field(max_length=200)]] = Field(
+        default_factory=list, max_length=20
+    )
+    lines: list[Annotated[str, Field(max_length=1000)]] = Field(
+        default_factory=list, max_length=300
+    )
+
+
 class _Subject(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    # ask-page-context: a panel chat's page, as it showed when the chat started.
+    view: PageView | None = None
 
 
 class DocumentSubject(_Subject):
@@ -440,7 +458,9 @@ class Labels:
             return "Priority order", "/priorities"
         from oracle.discussions.context import page_name
 
-        return page_name(s["path"]), s["path"]
+        # ask-page-context: the page's own name, as its heading reads ("Runs" no more).
+        named = (s.get("view") or {}).get("name")
+        return (named or page_name(s["path"])), s["path"]
 
 
 # --- people -------------------------------------------------------------------------------
@@ -1039,6 +1059,8 @@ async def start(
     found = await resolve_subject(db, principal, body.subject_kind, subject)
     author_only = found.finding_author is not None
     panel = body.origin == "panel"
+    if not panel:  # ask-page-context: what one person's page showed stays in their own chat
+        subject.pop("view", None)
     # G7 "Panel chats" (owner, 2026-10-21): only you, until shared.
     visibility = "private" if author_only or panel else body.visibility
     picked = list(dict.fromkeys(u for u in body.participants if u != me))
@@ -1231,7 +1253,9 @@ async def share(
     d, _first = await start(
         db, principal,
         DiscussionCreate(
-            subject_kind=chat.subject_kind, subject=chat.subject, title=body.title,
+            subject_kind=chat.subject_kind,
+            subject={k: v for k, v in chat.subject.items() if k != "view"},
+            title=body.title,
             message=DiscussionMessageIn(body=body.first_message),
         ),
     )  # fmt: skip
