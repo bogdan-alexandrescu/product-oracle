@@ -186,6 +186,8 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
+// The Help desk roadmap's decider (invented).
+const DECIDER = "Noor Hale";
 const APPROVERS = new Set(["owner", "decider", "approver"]);
 
 /** GET /v1/simple/fit-date, GET|POST /v1/simple/prds/{prd}/fit-date[/live|/draft|/approve]. */
@@ -211,6 +213,9 @@ export async function routeFitDate(scenario: string | null, role: string, req: R
   if (p[5] === "approve") {
     if (picks.length === 0) return json(422, { detail: "Pick at least one change." });
     const d = draft(s, picks);
+    // The roadmap's version is live when the approver decides the roadmap (an owner or its
+    // decider), else it waits in review with its decider, as the API's _roadmap_follows.
+    const live = role !== "approver";
     const was = shift(PROJECTED, saved(s.picks).days);
     s.version += 1;
     s.roadmapVersion += 1;
@@ -219,7 +224,7 @@ export async function routeFitDate(scenario: string | null, role: string, req: R
     // The roadmap follows: its items take the draft's new dates ("Thread summary card (first slice)": Thread summary card).
     fitDateApproved(d.dates.map((x) => ({ item: x.what.replace(/ \(.*\)$/, ""), end: x.after })), d.needs_estimate.map((n) => n.item));
     s.approved = {
-      at: new Date(Date.parse(MOCK_NOW) + 3 * 3600000 + 14 * 60000).toISOString(), by_me: true, version: s.version, roadmap_version: s.roadmapVersion, roadmap_live: true,
+      at: new Date(Date.parse(MOCK_NOW) + 3 * 3600000 + 14 * 60000).toISOString(), by_me: true, version: s.version, roadmap_version: s.roadmapVersion, roadmap_live: live, roadmap_decider: live ? null : DECIDER,
       was, date: d.date, target: s.target,
       moves: [
         ...(picks.includes("bulk") ? ["Reply to similar threads at once moved to M3 Team inbox: it lands Mar 19, and M3 lands Apr 9 (was Apr 2)."] : []),
@@ -228,7 +233,7 @@ export async function routeFitDate(scenario: string | null, role: string, req: R
         ...(picks.includes("bulk") ? ["The goal starts at 34 of 40 replied threads at launch and reaches 40 with M3."] : []),
       ],
     };
-    return json(200, { prd: PRD, version: s.version, date: d.date, target: s.target, approved_at: s.approved.at, needs_estimate: d.needs_estimate, roadmap_version: s.roadmapVersion, roadmap_live: true });
+    return json(200, { prd: PRD, version: s.version, date: d.date, target: s.target, approved_at: s.approved.at, needs_estimate: d.needs_estimate, roadmap_version: s.roadmapVersion, roadmap_live: live, roadmap_decider: live ? null : DECIDER });
   }
   return null;
 }

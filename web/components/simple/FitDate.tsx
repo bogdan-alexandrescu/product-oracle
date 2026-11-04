@@ -394,7 +394,10 @@ export function FitRoadmap({ roadmapId, itemOf, onItem }: { roadmapId?: string |
             <Icon name="check" className="mt-0.5 flex-none text-pass" />
             <span>
               Approved on {formatInZone(done.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}. PRD version {done.version}
-              {done.roadmap_version != null && ` and roadmap version ${done.roadmap_version}`} are live: {g.milestone} lands {day(done.date)}. Home and Priorities show the new dates.
+              {done.roadmap_version != null && done.roadmap_live
+                ? ` and roadmap version ${done.roadmap_version} are live: ${g.milestone} lands ${day(done.date)}. Home and Priorities show the new dates.`
+                : ` is live: ${g.milestone} lands ${day(done.date)}.`}
+              {done.roadmap_version != null && !done.roadmap_live && ` Roadmap version ${done.roadmap_version} is in review with ${done.roadmap_decider ?? "its decider"}.`}
             </span>
           </p>
         </div>

@@ -120425,6 +120425,11 @@
             "title": "End Estimated",
             "default": false
           },
+          "estimate_pending": {
+            "type": "boolean",
+            "title": "Estimate Pending",
+            "default": false
+          },
           "no_goal": {
             "type": "boolean",
             "title": "No Goal",
@@ -121027,6 +121032,11 @@
           "estimated": {
             "type": "boolean",
             "title": "Estimated"
+          },
+          "estimate_pending": {
+            "type": "boolean",
+            "title": "Estimate Pending",
+            "default": false
           },
           "suggestion": {
             "anyOf": [

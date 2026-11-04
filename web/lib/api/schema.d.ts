@@ -40325,7 +40325,7 @@ export interface components {
              * Estimate Pending
              * @default false
              */
-            estimate_pending?: boolean;
+            estimate_pending: boolean;
             /**
              * No Goal
              * @default false
@@ -40530,11 +40530,6 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /**
-             * Estimate Pending
-             * @default false
-             */
-            estimate_pending?: boolean;
             /** Key */
             key: string;
             /** Code */
@@ -40573,6 +40568,11 @@ export interface components {
             source: "typed" | "accepted" | "engineering" | "tracker" | "estimated";
             /** Estimated */
             estimated: boolean;
+            /**
+             * Estimate Pending
+             * @default false
+             */
+            estimate_pending: boolean;
             suggestion?: components["schemas"]["DateSuggestionOut"] | null;
             milestone?: components["schemas"]["SimpleItemMilestone"] | null;
             /** Phases */
