@@ -119,6 +119,9 @@ class FitApprovalOut(BaseModel):
     by_me: bool
     version: int
     roadmap_version: int | None = None
+    # Whether that roadmap version is approved; when not, who decides it.
+    roadmap_live: bool = False
+    roadmap_decider: str | None = None
     was: dt.date
     date: dt.date
     target: dt.date
@@ -211,6 +214,7 @@ class FitApprovedOut(BaseModel):
     # roadmap, else in review with its decider; None when nothing on it moved.
     roadmap_version: int | None = None
     roadmap_live: bool = False
+    roadmap_decider: str | None = None
 
 
 # --------------------------------------------------------------------------- reading
@@ -340,12 +344,78 @@ async def _approval(db, principal, document: Document, milestone: str) -> FitApp
     if ev is None or ev.data.get("milestone") != milestone or "was" not in ev.data:
         return None
     d = ev.data
+    live, decider = False, None
+    rm, n = await _roadmap(db, document)
+    if rm is not None and d.get("roadmap_version") is not None:
+        at = await db.scalar(
+            select(DocumentVersion.approved_at).where(
+                DocumentVersion.document_id == rm.id,
+                DocumentVersion.number == d["roadmap_version"],
+            )
+        )
+        live = at is not None
+        decider = None if live else await _decider(db, rm.id)
     return FitApprovalOut(
         at=ev.created_at, by_me=ev.actor == f"user:{getattr(principal, 'user_id', '')}",
         version=d["version"], roadmap_version=d.get("roadmap_version"),
+        roadmap_live=live, roadmap_decider=decider,
         was=dt.date.fromisoformat(d["was"]), date=dt.date.fromisoformat(d["date"]),
         target=dt.date.fromisoformat(d["target"]), moves=d.get("moves", []),
     )  # fmt: skip
+
+
+async def _decider(db, roadmap_id) -> str | None:
+    """Who decides the roadmap, by name: its decider, else its owners."""
+    from oracle.simple import drafts
+    from oracle.simple.changes import _names
+
+    w = await drafts.who(db, {roadmap_id})
+    ids = (
+        [w.deciders.get(roadmap_id)]
+        if w.deciders.get(roadmap_id)
+        else sorted(w.owners.get(roadmap_id, set()), key=str)
+    )
+    names = await _names(db, set(ids))
+    got = [names[i] for i in ids if i in names]
+    return drafts._people(got) if got else None
+
+
+async def _foreign_edits(db, document: Document) -> str | None:
+    """Who has changes of their own in the roadmap's working draft, by name: approving the
+    re-plan publishes that draft, so it must hold only this PRD's own writes. None when it
+    holds nothing else (or there is no working draft)."""
+    from oracle.roadmap.models import ProductTrack, RoadmapItem
+    from oracle.simple import drafts, prd_roadmap
+    from oracle.simple.changes import _names
+    from oracle.simple.models import SimpleDraft
+
+    rid = await db.scalar(
+        select(ProductTrack.roadmap_document_id).where(ProductTrack.prd_document_id == document.id)
+    )
+    d = rid and await db.scalar(
+        select(SimpleDraft).where(SimpleDraft.document_id == rid, SimpleDraft.status == "working")
+    )
+    if not d:
+        return None
+    overlay = d.overlay or {}
+    sources = overlay.get(prd_roadmap.KEY) or {}
+    ours = sources.get(str(document.id)) or {}
+    mine = {str(i) for i in ours.get("items") or []} | set(ours.get(prd_roadmap.KEY_DATES) or [])
+    other = [k for k in overlay if k not in (prd_roadmap.KEY, prd_roadmap.KEY_DATES, *mine)]
+    other += [k for k in overlay.get(prd_roadmap.KEY_DATES) or {} if k not in mine]
+    other += [k for k, v in sources.items() if k != str(document.id) and v.get("items")]
+    added = await db.scalars(
+        select(RoadmapItem.id).where(
+            RoadmapItem.simple_draft_id == d.id, RoadmapItem.roadmap_version_id.is_(None)
+        )
+    )
+    other += [str(i) for i in added if str(i) not in mine]
+    changes = await drafts._live_changes(db, d)
+    if not other and not changes:
+        return None
+    ids = list(dict.fromkeys([*(c.by for c in changes), d.created_by]))
+    names = await _names(db, set(ids))
+    return drafts._people([names[i] for i in ids if i in names] or ["Someone"])
 
 
 def _ref(d: Document) -> SimpleDocRef:
@@ -615,13 +685,23 @@ async def _roadmap_follows(
     overlay[prd_roadmap.KEY] = sources
     draft.overlay = overlay
     await db.flush()
+    # Submitted as its next version whoever approves: by the approver when they change the
+    # roadmap, else on behalf of the draft's routed author (its decider, prd_roadmap._draft).
+    w = await drafts.who(db, {rid})
+    sender = principal
+    if not drafts.can_edit(principal, rid, w) and draft.created_by != drafts._me(principal):
+        sender = await drafts.principal_for(db, principal.tenant_id, draft.created_by)
     try:
         async with db.begin_nested():
-            await drafts.submit(db, principal, draft.id)
+            await drafts.submit(db, sender, draft.id)
+    except drafts.DraftError:
+        return None, False
+    try:
+        async with db.begin_nested():
             await drafts.approve(db, principal, draft.id)
     except drafts.DraftError:
-        # Not this approver's to decide: the roadmap's owner reviews the draft.
-        return None, False
+        # Not this approver's to decide: it waits in review on the roadmap's decider.
+        pass
     await db.refresh(draft)
     version = await db.get(DocumentVersion, draft.version_id)
     return version.number, draft.status == "approved"
@@ -640,6 +720,13 @@ async def fit_date_approve(
     d = fd.draft(p, body.picks)
     if not d.prd:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Pick at least one change.")
+    who = await _foreign_edits(db, document)
+    if who is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{who} {'has' if ' and ' not in who else 'have'} unsaved changes in this roadmap's "
+            "draft; ask them to submit or discard first.",
+        )
     text = replan_markdown(v.markdown, p, d, body.picks)
     try:
         res = await docs.import_draft(db, document.slug, text, principal, base_version=v.number,
@@ -665,9 +752,12 @@ async def fit_date_approve(
         "milestone": p.milestone, "was": was.isoformat(), "date": date.isoformat(),
         "target": (d.new_target or p.target).isoformat(), "moves": moves,
     })  # fmt: skip
+    rm = (await _roadmap(db, document))[0]
+    decider = await _decider(db, rm.id) if rm is not None and not live else None
     await db.commit()
     return FitApprovedOut(
         prd=_ref(doc), version=nv.number, date=fd.schedule(d.plan).milestones[p.milestone],
         target=d.new_target or p.target, approved_at=nv.approved_at,
         needs_estimate=_estimates(p, d), roadmap_version=rv, roadmap_live=live,
+        roadmap_decider=decider,
     )  # fmt: skip

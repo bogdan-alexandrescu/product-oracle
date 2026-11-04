@@ -37,8 +37,8 @@ import re
 import pytest
 from sqlalchemy import func, select
 
-from oracle.docs.models import Document, DocumentVersion
 from oracle.auth.models import User
+from oracle.docs.models import Document, DocumentVersion
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import drafts
 from oracle.simple.models import SimpleDraft
