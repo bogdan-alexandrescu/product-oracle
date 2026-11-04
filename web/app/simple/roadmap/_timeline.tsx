@@ -114,14 +114,21 @@ export function layout(
   // qa4-simple-roadmap-16: each row's height (one rowH, unless `wrap` makes it taller) and top.
   const room = labelW - 24;
   const lines = (s: string, size: number, weight: number, w: number) => Math.max(1, Math.ceil((textWidth(s, size, weight) * 1.08) / w));
-  // A phone's item name wraps whole beside the chips after it (`tails`: their width by item id):
-  // past two lines its row grows, 14 px a line, so no name is ever cut.
+  // A phone's item name wraps whole, 14 px a line, with its Current-state pill (`tails`: its width
+  // by item id) beside it when both fit on one line, else on a line of its own under it; a row
+  // that needs more than its rowH grows, so no name or pill is ever cut.
   const nameH = new Map<string, number>();
   if (compact)
     for (const r of rows) {
       if (r.kind !== "item") continue;
-      const n = wordLines(r.item.title, 12.5, 400, labelW - 16 - (tails?.get(r.item.id) ?? 0));
-      if (n > 2) nameH.set(r.item.id, rowH + (n - 2) * 14);
+      const it = r.item;
+      // The name's group: the row less its padding, or its 60% when other chips share the row.
+      const w = (labelW - 16) * (r.place != null || it.draft || it.estimate_pending ? 0.6 : 1);
+      const tail = tails?.get(it.id) ?? 0;
+      const n = wordLines(it.title, 12.5, 400, w);
+      const beside = !tail || (n === 1 && textWidth(it.title, 12.5, 400) + tail <= w);
+      const h = 4 + n * 14 + (beside ? 0 : 20);
+      if (h > rowH) nameH.set(it.id, h);
     }
   const hs = rows.map((r) => {
     const base = r.kind === "item" ? (nameH.get(r.item.id) ?? rowH) : rowH;
@@ -781,17 +788,20 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                   {ordinal(r.place)} to return
                 </span>
               )}
-              <span
-                data-testid="label-title"
-                title={r.item.title}
-                // fix4 qa-simple-roadmap-6: a phone's name wraps whole instead of being cut mid-word.
-                // (on a phone the name takes 60% of the row at least, room for two words a line beside its chips)
-                className={`flex-1 ${compact ? "min-w-[60%] text-[12.5px] leading-[14px] break-words" : "min-w-[45%] truncate"} ${closedItem(r.item) ? "text-text2 line-through" : ""}`}
-              >
-                {r.item.title}
+              {/* The Current-state pill follows the name, as chips do, so every name starts at one x.
+                  On a phone the two wrap as a group (the name takes 60% of the row at least): the
+                  pill beside a short name, under a long one, so neither is cut (layout's nameH). */}
+              <span className={compact ? "flex min-w-[60%] flex-1 flex-wrap items-center gap-x-1 gap-y-0.5" : "contents"}>
+                <span
+                  data-testid="label-title"
+                  title={r.item.title}
+                  // fix4 qa-simple-roadmap-6: a phone's name wraps whole instead of being cut mid-word.
+                  className={`${compact ? "min-w-0 max-w-full text-[12.5px] leading-[14px] break-words" : "min-w-[45%] flex-1 truncate"} ${closedItem(r.item) ? "text-text2 line-through" : ""}`}
+                >
+                  {r.item.title}
+                </span>
+                <MarkForItem itemId={r.item.id} compact={compact} />
               </span>
-              {/* The Current-state pill follows the name, as chips do, so every name starts at one x. */}
-              <MarkForItem itemId={r.item.id} compact={compact} />
               {r.item.draft && !closedItem(r.item) && (
                 <span className="max-w-[48px] min-w-0 shrink truncate rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag" title="Draft">
                   Draft

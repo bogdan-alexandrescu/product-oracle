@@ -131,15 +131,17 @@ for (const size of ["desktop", "phone"] as const) {
       // The pill follows the name; the names start at one x and wrap whole, never cut.
       await pillAfter(label("Setup checklist").getByTestId("label-title"), label("Setup checklist").getByTestId("cs-mark"));
       const names = page.getByTestId("label-title");
-      const xs = await names.evaluateAll((els) => els.filter((e) => !e.parentElement?.querySelector('[data-testid="return-place"]')).map((e) => Math.round(e.getBoundingClientRect().x)));
+      const xs = await names.evaluateAll((els) => els.filter((e) => !e.closest("button")?.querySelector('[data-testid="return-place"]')).map((e) => Math.round(e.getBoundingClientRect().x)));
       expect(new Set(xs).size).toBe(1);
       for (const n of await names.all()) {
         const whole = await n.evaluate((el) => {
           const row = el.closest("button")!.getBoundingClientRect();
           const r = el.getBoundingClientRect();
-          return el.scrollHeight <= el.clientHeight + 1 && r.top >= row.top - 1 && r.bottom <= row.bottom + 1;
+          const pill = el.parentElement?.querySelector('[data-testid="cs-mark"]')?.getBoundingClientRect();
+          const inside = (b: DOMRect) => b.top >= row.top - 1 && b.bottom <= row.bottom + 1 && b.right <= row.right + 1;
+          return el.scrollHeight <= el.clientHeight + 1 && inside(r) && (!pill || inside(pill));
         });
-        expect(whole, `${await n.textContent()} is whole, inside its row`).toBe(true);
+        expect(whole, `${await n.textContent()} and its pill are whole, inside its row`).toBe(true);
       }
       await expect(page.locator('[data-testid="cs-mark"][data-mark="exists_old"]').first()).toBeVisible();
     });
