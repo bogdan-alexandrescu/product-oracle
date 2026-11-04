@@ -1,12 +1,48 @@
 "use client";
 
+import Link from "next/link";
+
 import { Button, LinkButton } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
+import { formatDateRange, formatDateTime } from "@/lib/format";
 
 import { isNew, type Act, type StatedNeed } from "./_needs";
 
 type Proposal = Schemas["InboxSimpleChange"];
+type DateSuggestion = Schemas["InboxSimpleDateSuggestion"];
+type GoalSuggestion = Schemas["InboxSimpleGoalSuggestion"];
+type Approval = Schemas["InboxSimpleApproval"];
+
+/** The item's feature panel on its roadmap (Simple's one panel for a feature). */
+const panelHref = (documentId: string, itemId: string) => `/simple/roadmap?roadmap=${documentId}&item=${itemId}`;
+
+/** The feature's name, opening its feature panel when it is on a roadmap. */
+function FeatureName({ name, itemId, documentId }: { name: string; itemId?: string | null; documentId?: string | null }) {
+  if (!itemId || !documentId)
+    return (
+      <span className="min-w-0 truncate" title={name}>
+        {name}
+      </span>
+    );
+  return (
+    <Link href={panelHref(documentId, itemId)} className="min-w-0 truncate font-medium text-accent-ink underline-offset-2 hover:underline" title={`Open ${name}'s panel`} data-testid="feature-name">
+      {name}
+    </Link>
+  );
+}
+
+/**
+ * Where a proposal is decided: its roadmap's Needs a decision when it has one; else where its
+ * op is decided (Requests for a feature ask, Priorities for a priority or an estimate).
+ */
+export function proposalHref(p: Pick<Proposal, "op" | "document_id" | "item_id">): string {
+  if (p.document_id) return `/simple/roadmap?roadmap=${p.document_id}&review=proposals`;
+  if (p.op === "add_feature_ask") return "/requests";
+  return p.item_id ? `/simple/priorities?show=${p.item_id}` : "/simple/priorities";
+}
+
+/** Where a proposal is decided, in words, for Open's label. */
+const proposalWhere = (p: Proposal): string => (p.document_id ? "on its roadmap" : p.op === "add_feature_ask" ? "in Requests" : "in Priorities");
 
 const upper = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
@@ -37,9 +73,7 @@ export function proposalRows(proposals: Proposal[], busy: string | null, act: Ac
         // The item cell keeps its room (it wraps): what was asked, by whom or what and when, under the name.
         item: (
           <>
-            <span className="min-w-0 truncate" title={name}>
-              {name}
-            </span>
+            <FeatureName name={name} itemId={p.item_id} documentId={p.document_id} />
             <span className="block basis-full text-sm break-words whitespace-normal text-text2" data-testid="meeting-proposal-context">
               {upper(p.asked ?? "a change")} · {askedBy(p)} on {formatDateTime(p.at)}
             </span>
@@ -62,13 +96,116 @@ export function proposalRows(proposals: Proposal[], busy: string | null, act: Ac
                 </Button>
               </>
             )}
-            {p.document_id && (
-              <LinkButton href={`/simple/roadmap?roadmap=${p.document_id}&review=proposals`} aria-label={`Open ${name} on its roadmap`}>
-                Open
-              </LinkButton>
-            )}
+            <LinkButton href={proposalHref(p)} aria-label={`Open ${name} ${proposalWhere(p)}`}>
+              Open
+            </LinkButton>
           </>
         ),
       };
     });
+}
+
+/**
+ * inbox-meeting-proposals fix: Oracle's open date suggestions I may decide (the API's
+ * `simple_date_suggestions`), one row per item: its name (opening its feature panel), the
+ * dates and why; Open goes to the item on its roadmap with the suggestion open, where it is
+ * accepted, edited or dismissed.
+ */
+export function dateSuggestionRows(rows: DateSuggestion[], seenBefore: string | null | undefined): StatedNeed[] {
+  return rows.map((s) => ({
+    key: `date-suggestion-${s.id}`,
+    icon: "clock",
+    kind: "Dates",
+    item: (
+      <>
+        <FeatureName name={s.item_title} itemId={s.item_id} documentId={s.document_id} />
+        <span className="block basis-full text-sm break-words whitespace-normal text-text2" data-testid="date-suggestion-context">
+          Oracle suggests {formatDateRange(s.start_date, s.end_date)}
+        </span>
+      </>
+    ),
+    context: <span className="block truncate text-text2">{s.basis}</span>,
+    at: s.at,
+    state: isNew(s.at, seenBefore) ? "new" : "open",
+    counted: true,
+    group: "proposals",
+    action: (
+      <LinkButton href={`/simple/roadmap?roadmap=${s.document_id}&dates=${s.item_id}`} aria-label={`Open Oracle's dates for ${s.item_title}`}>
+        Open
+      </LinkButton>
+    ),
+  }));
+}
+
+/**
+ * inbox-meeting-proposals fix: the open features suggested for goals whose suggestions I
+ * decide (the API's `simple_goal_suggestions`): the feature and its goal, who suggested it;
+ * Open goes to the goal's suggestions, where it is accepted or rejected.
+ */
+export function goalSuggestionRows(rows: GoalSuggestion[], seenBefore: string | null | undefined): StatedNeed[] {
+  return rows.map((s) => {
+    const where = `/simple/roadmap?${s.document_id ? `roadmap=${s.document_id}&` : ""}suggestions=${s.goal.id}`;
+    return {
+      key: `goal-suggestion-${s.id}`,
+      icon: "flag",
+      kind: "Suggestion",
+      item: (
+        <>
+          <span className="min-w-0 truncate" title={s.title}>
+            {s.title}
+          </span>
+          <span className="block basis-full text-sm break-words whitespace-normal text-text2" data-testid="goal-suggestion-context">
+            {s.from_oracle ? "Oracle suggests it" : `${s.proposed_by_name ?? "A teammate"} suggests it`} for the goal {s.goal.title} on {formatDateTime(s.at)}
+          </span>
+        </>
+      ),
+      context: <span className="block truncate text-text2">{s.outcome || "Waiting for your decision"}</span>,
+      at: s.at,
+      state: isNew(s.at, seenBefore) ? "new" : "open",
+      counted: true,
+      group: "proposals",
+      action: (
+        <LinkButton href={where} aria-label={`Open the suggestions for ${s.goal.title}`}>
+          Open
+        </LinkButton>
+      ),
+    };
+  });
+}
+
+/**
+ * Simple S3b, inbox-meeting-proposals fix: roadmap versions from Simple drafts waiting for my
+ * approval as a required reviewer (the API's `simple_approvals`): the roadmap by name, the
+ * version, who sent it and when; Open goes to the roadmap, whose draft banner approves it.
+ */
+export function approvalRows(rows: Approval[], seenBefore: string | null | undefined): StatedNeed[] {
+  return rows.map((a) => {
+    const what = `${a.document.title}${a.version ? ` version ${a.version}` : ""}`;
+    return {
+      key: `simple-approval-${a.draft_id}`,
+      icon: "roadmap",
+      kind: "Approval",
+      item: (
+        <>
+          <span className="min-w-0 truncate" title={what}>
+            {what}
+          </span>
+          <span className="block basis-full text-sm break-words whitespace-normal text-text2" data-testid="simple-approval-context">
+            Sent for review by {a.submitted_by_name ?? "a teammate"}
+            {a.submitted_at ? ` on ${formatDateTime(a.submitted_at)}` : ""}
+          </span>
+        </>
+      ),
+      context: <span className="block truncate text-text2">{a.decider_approved ? "The decider approved it: waiting for you" : "Waiting for your approval"}</span>,
+      at: a.submitted_at,
+      state: isNew(a.submitted_at, seenBefore) ? "new" : "open",
+      counted: true,
+      group: "proposals",
+      action: (
+        <LinkButton href={`/simple/roadmap?roadmap=${a.document.id}&approve=${a.draft_id}`} aria-label={`Open ${what} to approve it`}>
+          Open
+        </LinkButton>
+      ),
+    };
+  });
 }

@@ -10,6 +10,7 @@ import { DecisionNotes, LeftOutLine } from "@/components/simple/DecisionNotes";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { Loading } from "@/components/ui";
 import { getBranding, logoDataUrl } from "@/lib/api/branding";
+import { invalidateWaiting } from "@/lib/waiting";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { CARD_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { displayZone, plainClock } from "@/lib/dates";
@@ -329,7 +330,7 @@ function prdWords(p: { prd: { title: string }; version?: number | null; items: n
 }
 
 /** The working-draft banner (D18 as amended: one shared draft per roadmap). */
-function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onReview, titleOf }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; onReview: (prdSlug: string) => void; titleOf: (id: string | null) => string | undefined }) {
+function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onReview, titleOf }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; onApprove: (d: Draft) => void; onReview: (prdSlug: string) => void; titleOf: (id: string | null) => string | undefined }) {
   const [open, setOpen] = useState(false);
   const working = drafts.filter((d) => d.status === "working" || d.status === "submitted");
   if (!working.length) {
@@ -366,6 +367,20 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onReview, title
           Send for review
         </Button>
       </div>
+      {/* inbox-meeting-proposals fix: a version sent for review that I may approve (a required reviewer, the decider). */}
+      {working
+        .filter((d) => d.status === "submitted" && d.can_approve)
+        .map((d) => (
+          <p key={d.id} className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" data-testid="draft-approval">
+            <span className="min-w-0">
+              {d.document.title}
+              {d.version ? ` version ${d.version}` : ""} is waiting for your approval
+            </span>
+            <Button variant="solid" onClick={() => onApprove(d)}>
+              Approve
+            </Button>
+          </p>
+        ))}
       {fromPrds.length > 0 && (
         <ul className="mt-1.5 space-y-1 text-sm" data-testid="draft-from-prds">
           {fromPrds.map((p) => (
@@ -901,6 +916,31 @@ export function SimpleRoadmap() {
     });
   }
   const byId = useMemo(() => new Map((data?.items ?? []).map((i) => [i.id, i])), [data]);
+  // inbox-meeting-proposals fix: a link (the Inbox) opens one item's feature panel
+  // (?item=<id>), Oracle's dates for one item (?dates=<item id>) or a goal's suggestions
+  // (?suggestions=<goal id>), once, when the roadmap has loaded.
+  const itemLinked = useRef(false);
+  useEffect(() => {
+    if (itemLinked.current || !data) return;
+    const it = byId.get(params.get("item") ?? "");
+    const dated = byId.get(params.get("dates") ?? "");
+    if (!it && !dated?.suggestion) return;
+    itemLinked.current = true;
+    requestAnimationFrame(() => {
+      if (it) setCard({ id: it.id, ...anchorOf(it.id) });
+      else if (dated) setPop({ id: dated.id, ...anchorOf(dated.id) });
+    });
+    // anchorOf reads the drawn bars when it runs; it is not a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, byId, params]);
+  const goalLinked = useRef(false);
+  useEffect(() => {
+    const asked = params.get("suggestions");
+    const g = asked ? suggestions.data?.goals.find((x) => x.goal.id === asked || x.goal.key === asked) : undefined;
+    if (goalLinked.current || !g) return;
+    goalLinked.current = true;
+    setGoalPanel(g.goal);
+  }, [params, suggestions.data]);
   const titleOf = useCallback((id: string | null) => (id ? byId.get(id)?.title : undefined), [byId]);
   const canChange = can("create_simple_change");
   // The items as last loaded, for a burst sent after the render that started it.
@@ -1338,6 +1378,12 @@ export function SimpleRoadmap() {
           if (!r.data) toast({ message: `${d.document.title} could not be sent for review` });
         }
         toast({ message: ds.every((d) => d.published) ? "Sent for review: the approved roadmap stays published until it passes" : "Sent for review: the roadmap is published once it passes" });
+        await reload();
+      }}
+      onApprove={async (d) => {
+        const r = await api.POST("/v1/simple/drafts/{draft_id}/approve", { params: { path: { draft_id: d.id } } });
+        toast({ message: !r.data ? `${d.document.title} could not be approved` : r.data.status === "approved" ? `Approved: ${d.document.title} is published` : "Approved: it waits for the other approvals" });
+        invalidateWaiting();
         await reload();
       }}
     />

@@ -16,7 +16,7 @@ import type { Schemas } from "@/lib/api/client";
 import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { newCompany, stableUuid } from "./ids";
-import { canEditRoadmap, closed, GOALS, goalId, goalPositionOf, goalRank, knowTalkGoals, lookalikes, matchesOf, TALK_GOALS, type GoalSuggestionRow, type SimpleDb } from "./simple-roadmap";
+import { canEditRoadmap, closed, GOALS, goalId, goalPositionOf, goalRank, knowTalkGoals, roadmapId, lookalikes, matchesOf, TALK_GOALS, type GoalSuggestionRow, type SimpleDb } from "./simple-roadmap";
 
 type Role = Schemas["Me"]["role"];
 
@@ -201,6 +201,25 @@ function out(db: SimpleDb, s: GoalSuggestionRow, ctx: Ctx): Schemas["SimpleGoalS
     // oracle.simple.quality: a suggestion that failed its checks twice is the owners' to look at.
     needs_look: ctx.role === "owner" ? [...(s.checks ?? [])] : [],
   };
+}
+
+/**
+ * inbox-meeting-proposals fix (additions.inbox_rows): the open suggestions of the goals whose
+ * suggestions I decide, oldest first (a held one only to owners). The mock seeds goal
+ * suggestions when a page first lists them, so the Inbox lists them from then on.
+ */
+export function goalSuggestionInboxRows(db: SimpleDb | undefined, ctx: Ctx, seen: string | null): Schemas["InboxSimpleGoalSuggestion"][] {
+  return (db?.goal_suggestions ?? [])
+    .filter((s) => s.status === "open" && (ctx.role === "owner" || !s.checks?.length) && goalDecider(db!, s.goal, ctx).mine)
+    .sort((a, b) => (a.created_at < b.created_at ? -1 : 1))
+    .map((s) => {
+      const rm = roadmapOf(db!, s.goal);
+      return {
+        id: s.id, goal: { id: idOf(ctx, s.goal), key: s.goal, title: titleOf(ctx, s.goal) }, title: s.title, outcome: s.outcome,
+        from_oracle: s.origin !== "person", proposed_by_name: s.proposed_by ? (ctx.names[s.proposed_by] ?? "someone") : null,
+        document_id: rm ? roadmapId(rm) : null, at: s.created_at, state: !seen || s.created_at > seen ? "new" : "open",
+      };
+    });
 }
 
 function json(status: number, body: unknown): Response {

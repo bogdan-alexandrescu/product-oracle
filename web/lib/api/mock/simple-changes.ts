@@ -409,7 +409,7 @@ function draftOut(db: SimpleDb, ctx: SimpleChangesCtx, d: MockDraft): Schemas["S
     ...d.out, changes: draftChanges(db, d.out.id), change_log: changeLog(db, d.out.id), from_prds: draftPrds(d),
     can_submit: d.out.status === "working" && edits,
     can_resume: d.out.status === "working" && (d.out.created_by === ctx.id || decider === ctx.id),
-    can_approve: d.out.status === "submitted" && edits,
+    can_approve: d.out.status === "submitted" && (edits || d.out.waiting_on.includes(ctx.id)),
     can_withdraw: d.out.status === "submitted" && (d.out.created_by === ctx.id || edits),
     published: !(db.unapproved ?? []).includes(d.roadmap),
     // decisions-reversed-or-trashed: notes on decisions it cited that were reversed since.
@@ -434,14 +434,20 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
     if (!canEditRoadmap(db, d.roadmap, ctx)) return json(403, { detail: "Only an owner or the roadmap's decider (with none, its owner) submits" });
     if (d.out.status !== "working") return json(409, { detail: `This draft is ${d.out.status} already` });
     if (!draftChanges(db, d.out.id) && !draftPrds(d).length) return json(422, { detail: "Nothing to submit: the draft has no changes" });
-    Object.assign(d.out, { status: "submitted", version: (d.out.base_version ?? 1) + 1, submitted_at: now, submitted_by: ctx.id });
+    // inbox-meeting-proposals fix: it waits on the roadmap's required reviewers (not the one who sent it).
+    const waiting = (db.reviewers?.[d.roadmap] ?? []).filter((r) => r !== ctx.id);
+    Object.assign(d.out, { status: "submitted", version: (d.out.base_version ?? 1) + 1, submitted_at: now, submitted_by: ctx.id, waiting_on: waiting });
     return json(200, draftOut(db, ctx, d));
   }
   if (p[4] === "approve") {
     if (d.out.status !== "submitted") return json(409, { detail: `This draft is ${d.out.status}: only a submitted draft is approved` });
-    if (!canEditRoadmap(db, d.roadmap, ctx)) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
-    // No required reviewers in the mock: the approval publishes the version.
-    Object.assign(d.out, { decider_approved: true, status: "approved", approved_at: now });
+    const reviewer = d.out.waiting_on.includes(ctx.id);
+    if (!reviewer && !canEditRoadmap(db, d.roadmap, ctx)) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
+    // A required reviewer's approval takes them off waiting_on; the decider's (or an owner's) is
+    // the decider's. The mock publishes once no required reviewer is left to approve.
+    const waiting = d.out.waiting_on.filter((r) => r !== ctx.id);
+    Object.assign(d.out, { decider_approved: d.out.decider_approved || !reviewer, waiting_on: waiting });
+    if (!waiting.length) Object.assign(d.out, { status: "approved", approved_at: now });
     return json(200, draftOut(db, ctx, d));
   }
   if (p[4] === "withdraw") {
@@ -951,7 +957,7 @@ export function simpleInboxRows(
   db: SimpleDb | undefined,
   me: string,
   seen: string | null,
-  who: Pick<SimpleChangesCtx, "owners" | "roles"> & { role?: Role } = { owners: [] },
+  who: Pick<SimpleChangesCtx, "owners" | "roles"> & { role?: Role; names?: Record<string, string> } = { owners: [] },
 ): { simple_proposals: Schemas["InboxSimpleChange"][]; simple_decisions: Schemas["InboxSimpleChange"][]; simple_approvals: Schemas["InboxSimpleApproval"][] } {
   const changes = db?.changes ?? [];
   const row = (c: Change, at: string | null, state?: Schemas["InboxSimpleChange"]["state"]): Schemas["InboxSimpleChange"] => {
@@ -974,8 +980,15 @@ export function simpleInboxRows(
     simple_decisions: changes
       .filter((c) => c.by === me && (c.status === "accepted" || c.status === "declined"))
       .map((c) => row(c, c.decided_at, !seen || (c.decided_at ?? "") > seen ? undefined : "done")),
-    // S3b: the mock's roadmaps name no required reviewers, so no draft waits on anyone.
-    simple_approvals: [],
+    // S3b (drafts.inbox_rows): drafts submitted with me among the required reviewers they wait on.
+    simple_approvals: (db?.drafts ?? [])
+      .filter((d) => d.out.status === "submitted" && d.out.waiting_on.includes(me))
+      .sort((a, b) => ((a.out.submitted_at ?? "") < (b.out.submitted_at ?? "") ? -1 : 1))
+      .map((d) => ({
+        draft_id: d.out.id, document: d.out.document, version: d.out.version ?? null, submitted_by: d.out.submitted_by ?? null,
+        submitted_by_name: d.out.submitted_by ? (who.names?.[d.out.submitted_by] ?? null) : null, submitted_at: d.out.submitted_at ?? null,
+        decider_approved: d.out.decider_approved, state: !seen || (d.out.submitted_at ?? "") > seen ? "new" : "open",
+      })),
   };
 }
 
