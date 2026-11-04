@@ -6090,6 +6090,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       // home-honest-loading: every document of a kind in Trash (trash.only_in_trash).
       onlyInTrash: (kind) =>
         !db.documents.some((d) => d.kind === kind) && (db.trash?.entries ?? []).some((e) => (e.documents as { kind?: string }[]).some((d) => d.kind === kind)),
+      // home-deleted-roadmap: none of a kind left, live or in Trash, and one purged (trash.deleted_for_good).
+      deletedForGood: (kind) =>
+        !db.documents.some((d) => d.kind === kind) &&
+        !(db.trash?.entries ?? []).some((e) => (e.documents as { kind?: string }[]).some((d) => d.kind === kind)) &&
+        (db.trash?.purged ?? []).includes(kind),
       chatLines: (id) =>
         Object.values(db.simple_chat?.threads ?? {})
           .filter((t) => t.meeting_id === id)

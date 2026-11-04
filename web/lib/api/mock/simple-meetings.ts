@@ -86,6 +86,8 @@ export interface MeetingsCtx {
   othersWaiting?: () => number;
   /** home-honest-loading: every document of this kind is in Trash (and there is one). */
   onlyInTrash?: (kind: string) => boolean;
+  /** home-deleted-roadmap: no document of this kind is left, live or in Trash, and one was purged. */
+  deletedForGood?: (kind: string) => boolean;
   /** qa4-simple-prd-1: every PRD document (as the API's start options list each readable PRD by its own title). */
   documents?: () => { id: string; slug: string; title: string }[];
   /** build-rundecide RD1 a: the runs' decided stops on the PRDs shown (./simple-runs.ts), for the Runs card. */
@@ -610,7 +612,12 @@ function upcoming(ctx: MeetingsCtx, db: MeetingsDb, only?: string): Schemas["Sim
   // home-honest-loading: a ritual whose roadmaps are all in Trash says so (meetings.REVIEWS).
   const kindOf = new Map(rituals.map((r) => [r.id, r.kind]));
   const inTrash = ctx.onlyInTrash?.("roadmap") ?? false;
-  for (const row of rows) row.reviews_in_trash = inTrash && kindOf.get(row.ritual_id) === "roadmap_refresh" ? "roadmap" : null;
+  const deleted = ctx.deletedForGood?.("roadmap") ?? false;
+  for (const row of rows) {
+    const reviewsRoadmap = kindOf.get(row.ritual_id) === "roadmap_refresh";
+    row.reviews_in_trash = inTrash && reviewsRoadmap ? "roadmap" : null;
+    row.reviews_deleted = deleted && reviewsRoadmap ? "roadmap" : null;
+  }
   return rows.sort((a, b) => a.due_at.localeCompare(b.due_at)).slice(0, 20);
 }
 
