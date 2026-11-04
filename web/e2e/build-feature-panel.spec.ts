@@ -509,6 +509,101 @@ test.describe("one feature panel, every name that can be picked (review 5)", () 
   });
 });
 
+/*
+ * build-feature-panel review 6: more names that opened nothing. Goal buckets' "Also this quarter,
+ * outside the plan" ("simple-plan"), Ranked's Oracle's order, "After X, which it needs", the
+ * names that miss the line, the Value / effort side row by keyboard, a look-alike in the goal
+ * panel, Home's walk ("simple-chat": a broken link, then a proposal) and a task waiting for me
+ * (given to Avery Stone, the mock owner, from Ask, whose card names the item it is on).
+ */
+test.describe("one feature panel, every name that can be picked (review 6)", () => {
+  test.use(DESKTOP);
+
+  const opens = async (page: Page, name: Locator, title?: string) => {
+    await expect(name).toBeVisible();
+    const words = title ?? ((await name.textContent()) ?? "").trim();
+    await name.click();
+    const panel = page.getByRole("dialog", { name: words, exact: true });
+    await expect(panel.getByTestId("fp-details")).toBeVisible();
+    return panel;
+  };
+
+  test("Goal buckets with a dated plan: a feature outside the plan opens the panel", async ({ page }) => {
+    await go(page, "/simple/priorities", { scenario: "simple-plan" });
+    await page.getByRole("tab", { name: "Goal buckets" }).click();
+    await opens(page, page.getByTestId("plan-outside-goal").first().getByRole("button").first());
+  });
+
+  test("Ranked: Oracle's order opens the panel from a feature's name", async ({ page }) => {
+    await go(page, "/simple/priorities?tab=ranked&compare=1");
+    await opens(page, page.locator('[data-testid="oracle-row"][data-code="alert-digest"]').getByRole("button", { name: "Weekly alert digest", exact: true }));
+  });
+
+  test("Ranked: 'After X, which it needs' opens the panel for X", async ({ page }) => {
+    await go(page, "/simple/priorities?tab=ranked");
+    await opens(page, page.getByTestId("prio-after").getByRole("button", { name: "Alert rules engine", exact: true }).first());
+  });
+
+  test("Ranked: a name that misses the line opens the panel", async ({ page }) => {
+    await go(page, "/simple/priorities?tab=ranked", { scenario: "simple-plan" });
+    await opens(page, page.getByTestId("line-caption").getByRole("button").first());
+  });
+
+  test("Value / effort: Enter on a side row opens the panel and keeps it selected", async ({ page }) => {
+    await go(page, "/simple/priorities?tab=value-effort");
+    const row = page.locator('[data-testid="side-row"][data-code="alert-digest"]');
+    await row.locator("button[aria-pressed]").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("dialog", { name: "Weekly alert digest" }).getByTestId("fp-details")).toBeVisible();
+    await expect(row).toHaveAttribute("data-selected", "true");
+  });
+
+  test("a goal panel's look-alike opens the feature panel over it", async ({ page }) => {
+    await go(page, "/simple/priorities?tab=buckets", { scenario: "simple-plan" });
+    await page.getByTestId("goal-ask-oracle").first().click();
+    const like = page.getByTestId("goal-panel").getByTestId("looks-like-link").first();
+    await expect(like).toBeVisible({ timeout: 15_000 });
+    const title = ((await like.textContent()) ?? "").trim().replace(/^F-\d+\s+/, "");
+    const panel = await opens(page, like, title);
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+    await expect(page.getByTestId("goal-panel")).toBeVisible();
+  });
+
+  test("Home's walk opens the panel from a broken link's feature and a proposal's", async ({ page }) => {
+    await go(page, "/simple", { scenario: "simple-chat" });
+    await page.getByRole("button", { name: "Walk me through it" }).click();
+    const step = page.getByTestId("walk-step");
+    await expect(step).toHaveAttribute("data-kind", "broken_link");
+    let panel = await opens(page, step.getByTestId("walk-step-title").getByRole("button"));
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+    for (let n = 0; n < 12 && (await step.getAttribute("data-kind")) !== "proposal"; n++) await page.getByTestId("walk").getByRole("button", { name: "Skip" }).click();
+    await expect(step).toHaveAttribute("data-kind", "proposal");
+    const title = ((await step.getByTestId("walk-step-title").textContent()) ?? "").trim();
+    await step.getByTestId("walk-step-title").getByRole("button").click();
+    panel = page.getByRole("dialog", { name: title.replace(/^[^:]+: /, ""), exact: true });
+    await expect(panel.getByTestId("fp-details")).toBeVisible();
+  });
+
+  test("Ask's card names its item, and Home's task waiting for me names its feature: each opens the panel", async ({ page }) => {
+    await go(page, "/simple", { scenario: "simple-chat" });
+    await page.getByTestId("simple-ask").filter({ visible: true }).first().click();
+    const ask = page.getByTestId("ask-chat").filter({ visible: true });
+    await ask.getByLabel("Message Oracle").fill("add a task 'Draft the digest email' to Weekly alert digest for Avery Stone by nov 20");
+    await ask.getByRole("button", { name: "Send" }).click();
+    const card = ask.getByTestId("chat-card").filter({ hasText: "Draft the digest email" });
+    let panel = await opens(page, card.getByRole("button", { name: "Weekly alert digest", exact: true }));
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+    await card.getByRole("button", { name: "Apply" }).click();
+    await expect(card.getByTestId("chat-card-outcome")).toContainText("Applied by you");
+    await page.goto("/simple");
+    const task = page.getByTestId("home-task").filter({ hasText: "Draft the digest email" });
+    panel = await opens(page, task.getByRole("button", { name: "Weekly alert digest", exact: true }));
+  });
+});
+
 test.describe("one feature panel, phone", () => {
   test.use(PHONE);
 
