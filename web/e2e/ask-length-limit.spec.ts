@@ -18,8 +18,9 @@ const SIZES = [
 const LINE = "Move Weekly alert digest to next quarter and tell the owners why it slipped. ";
 const words = (n: number) => LINE.repeat(Math.ceil(n / LINE.length)).slice(0, n);
 
-async function openAsk(page: Page): Promise<Locator> {
-  await page.getByTestId("simple-ask").filter({ visible: true }).first().click();
+async function openAsk(page: Page, phone: boolean): Promise<Locator> {
+  // A phone opens Ask Oracle from its tab bar; a desktop from the header.
+  await page.getByTestId(phone ? "phone-ask" : "simple-ask").click();
   const panel = page.getByTestId("hop-panel").filter({ visible: true });
   await expect(panel.getByTestId("ask-chat")).toBeVisible();
   return panel;
@@ -35,7 +36,7 @@ for (const size of SIZES) {
     });
 
     test("a 1,622-character change request is sent, with no count under 3,000", async ({ page }) => {
-      const panel = await openAsk(page);
+      const panel = await openAsk(page, size.name === "phone");
       const box = panel.getByRole("textbox", { name: "Message Oracle" });
       const text = words(1622);
       await box.fill(text);
@@ -48,7 +49,7 @@ for (const size of SIZES) {
     });
 
     test("past 3,000 characters a quiet count shows; past 4,000 Send says so with the limit and keeps the text", async ({ page }) => {
-      const panel = await openAsk(page);
+      const panel = await openAsk(page, size.name === "phone");
       const box = panel.getByRole("textbox", { name: "Message Oracle" });
       await box.fill(words(3000));
       await expect(panel.getByTestId("chat-count")).toHaveCount(0);
