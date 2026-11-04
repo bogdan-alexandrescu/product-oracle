@@ -140,8 +140,9 @@ async def test_a_task_on_another_roadmap_is_a_proposal(client):
     w = await world()
     await with_roadmap_b(w)
     m = await meeting(client, w)
+    after = {"title": "Check the packing list", "owner_id": None, "due_date": None}
     body = {"op": "add_item_task", "target": {"item_id": w.ids["ship-a"]}, "before": {},
-            "after": {"title": "Check the packing list", "owner_id": None, "due_date": None}, "session_id": m["session_id"]}  # fmt: skip
+            "after": after, "session_id": m["session_id"]}  # fmt: skip
     r = await client.post(CHANGES, json=body, headers=w.ctx.as_("owner"))
     assert r.status_code == 201, r.text
     c = r.json()["change"]
