@@ -16,8 +16,10 @@ import { expect, test, type Page } from "./test";
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
 const SHOTS = process.env.MS_COMPARE_DIR;
+// The built states beside the picked frames, light and dark: MS_COMPARE_DIR=<dir> MS_SCHEME=dark.
+const SCHEME: "light" | "dark" = process.env.MS_SCHEME === "dark" ? "dark" : "light";
 
-async function open(page: Page, scenario = "simple-milestones", scheme: "light" | "dark" = "light") {
+async function open(page: Page, scenario = "simple-milestones", scheme: "light" | "dark" = SCHEME) {
   await page.context().addInitScript(
     ([key, value, themeKey, theme]) => {
       localStorage.setItem(key, value);
@@ -32,7 +34,7 @@ async function open(page: Page, scenario = "simple-milestones", scheme: "light" 
 }
 
 const shot = async (page: Page, name: string) => {
-  if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}.png` });
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}${SCHEME === "dark" ? "-dark" : ""}.png` });
 };
 const label = (page: Page, words: string) => page.getByTestId("ms-label").filter({ hasText: words });
 const card = (page: Page) => page.getByTestId("ms-card");
@@ -110,10 +112,37 @@ test.describe("milestones on the Timeline", () => {
     await expect(card(page).getByRole("heading", { name: "Edit M2" })).toBeVisible();
     await shot(page, "ms2-a-open");
     await card(page).getByLabel("Name").fill("65% of teams active at day 90");
+    await shot(page, "ms2-a-mid");
     await card(page).getByTestId("ms-save").click();
     await expect(label(page, "M2 65% of teams active at day 90 · Dec 22")).toBeVisible();
+    await shot(page, "ms2-a-done");
     await toast(page).getByRole("button", { name: "Undo" }).click();
     await expect(label(page, "M2 60% of teams active at day 90 · Dec 22")).toBeVisible();
+  });
+
+  test("two on one day share one diamond with their count on the axis", async ({ page }) => {
+    await open(page);
+    await expect(page.getByTestId("ms-same-day")).toHaveCount(0);
+    await label(page, "M2 60% of teams active at day 90").click();
+    await card(page).getByLabel("Date").fill("2026-11-20");
+    await card(page).getByTestId("ms-save").click();
+    await expect(label(page, "M2 60% of teams active at day 90 · Nov 20")).toBeVisible();
+    await expect(page.getByTestId("ms-same-day")).toHaveText("2 on Nov 20");
+    await expect(page.locator('[data-testid="ms-diamond"][title$="Nov 20, 2026"]')).toHaveCount(1);
+    await expect(label(page, "M1 Alerts live for 50 teams · Nov 20")).toBeVisible();
+    await shot(page, "ms2-a-second");
+    await toast(page).getByRole("button", { name: "Undo" }).click();
+    await expect(label(page, "M2 60% of teams active at day 90 · Dec 22")).toBeVisible();
+    await expect(page.getByTestId("ms-same-day")).toHaveCount(0);
+  });
+
+  test("an item it waits on opens in the item's own panel", async ({ page }) => {
+    await open(page);
+    await label(page, "M2 60% of teams active at day 90").click();
+    await expect(card(page).getByTestId("ms-waits-chip")).toHaveCount(2);
+    await card(page).getByRole("button", { name: "Mobile alert push" }).click();
+    await expect(card(page)).toBeHidden();
+    await expect(page.getByTestId("floating-card").getByRole("heading", { name: "Mobile alert push" })).toBeVisible();
   });
 
   test("a drag on the diamond moves it, a tip says what changes; Undo moves it back", async ({ page }) => {
@@ -190,6 +219,7 @@ test.describe("a PRD's own milestones", () => {
     await expect(prd).toContainText("From the PRD Usage alerts · owned by Nora Vance");
     await shot(page, "ms3-a-open");
     await prd.getByLabel("Date").fill("2027-01-05");
+    await shot(page, "ms3-a-mid");
     await prd.getByRole("button", { name: "Ask to change it" }).click();
     await expect(toast(page)).toContainText("Asked Nora Vance to move M2 Digest for all teams to Jan 5 in the PRD");
     await expect(page.getByTestId("ms-asked")).toHaveText("Asked the PRD: move M2 Digest for all teams to Jan 5 · waits for Nora Vance");
@@ -218,5 +248,57 @@ test.describe("on a phone", () => {
     await card(page).getByTestId("ms-save").click();
     await expect(toast(page)).toContainText(/M\d Teams set 3 rules in week 1 added/);
     await shot(page, "ms1-a-phone-done");
+  });
+});
+
+// The built states the picked frames show that no flow above passes through (only with MS_COMPARE_DIR).
+test.describe("built states beside the picked frames", () => {
+  test.skip(!SHOTS, "only when capturing the side-by-side");
+
+  test.describe("at 1512 wide", () => {
+    test.use({ viewport: { width: 1512, height: 982 } });
+    for (const [n, scenario] of [["ms1", "simple-milestones"], ["ms2", "simple-milestones"], ["ms3", "simple-prd-milestones"]] as const) {
+      test(`${n}: a label near the right edge sits left of its diamond`, async ({ page }) => {
+        await open(page, scenario);
+        await expect(page.getByTestId(n === "ms3" ? "ms-prd-label" : "ms-label").first()).toBeVisible();
+        await shot(page, `${n}-a-hard-1512`);
+      });
+    }
+  });
+
+  test.describe("desktop", () => {
+    test.use(DESKTOP);
+    test("ms2: at rest and on the Gantt", async ({ page }) => {
+      await open(page);
+      await expect(label(page, "M2 60% of teams active at day 90 · Dec 22")).toBeVisible();
+      await shot(page, "ms2-a-rest");
+      await page.getByTestId("format-gantt").click();
+      await expect(page.getByTestId("ms-axis").first()).toBeVisible();
+      await shot(page, "ms2-a-done-gantt");
+    });
+    test("ms3: the PRD's milestones on the Gantt", async ({ page }) => {
+      await open(page, "simple-prd-milestones");
+      await page.getByTestId("format-gantt").click();
+      await expect(page.getByTestId("ms-axis").first()).toBeVisible();
+      await shot(page, "ms3-a-done-gantt");
+    });
+  });
+
+  test.describe("phone", () => {
+    test.use(PHONE);
+    test("ms2: a milestone opens as a sheet", async ({ page }) => {
+      await open(page);
+      await page.getByTestId("format-gantt").click();
+      await label(page, "M1 Alerts live for 50 teams").first().click();
+      await expect(card(page)).toBeVisible();
+      await shot(page, "ms2-a-phone");
+    });
+    test("ms3: a PRD milestone opens as a sheet", async ({ page }) => {
+      await open(page, "simple-prd-milestones");
+      await page.getByTestId("format-gantt").click();
+      await page.getByTestId("ms-prd-label").first().click();
+      await expect(page.getByTestId("ms-prd-card")).toBeVisible();
+      await shot(page, "ms3-a-phone");
+    });
   });
 });
