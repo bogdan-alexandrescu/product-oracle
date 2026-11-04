@@ -282,15 +282,16 @@ const TRACKS: Record<string, string> = { alerts: "Usage alerts track", onboardin
 function fpDigestAfter(): Partial<SeedItem> { // MOCK-HOOK
   const q = typeof location === "undefined" ? null : new URLSearchParams(location.search); // MOCK-HOOK
   if (q?.get("saved") === "1") return { end: 57, source: "typed" }; // MOCK-HOOK: saved in the panel, which stays open
+  if (q?.get("phase") === "added") return { end: 57, source: "typed", depends: ["alert-rules", "alert-mobile"] }; // MOCK-HOOK: saved, then a link added in the panel
   if (!q || q.get("phase") !== "done") return {}; // MOCK-HOOK
-  return q.get("what") === "link" ? { depends: ["alert-rules", "alert-mobile"], start: 81, end: 121, source: "typed" } : { end: 57, source: "typed" }; // MOCK-HOOK
+  return q.get("what") === "link" ? { depends: ["alert-rules", "alert-mobile"], start: 81, end: 108, source: "typed" } : { end: 57, source: "typed" }; // MOCK-HOOK
 } // MOCK-HOOK
 // MOCK-HOOK: the hard case's feature (?feat=big) has its own row on the Timeline, Jan 18 – Mar 3, 2027.
 const fpBig = (): SeedItem[] => // MOCK-HOOK
   typeof location !== "undefined" && new URLSearchParams(location.search).get("feat") === "big" // MOCK-HOOK
     ? [{ key: "alert-team-route", title: "Let workspace admins route, mute and schedule alerts per team, region and on-call rotation across every connected tool", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", confidence: "low", start: 17, end: 61, source: "typed", depends: ["alert-rules"] }] // MOCK-HOOK
     : []; // MOCK-HOOK
-
+// MOCK-HOOK
 const SEED: SeedItem[] = [
   { key: "alert-rules", title: "Alert rules engine", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 40, source: "typed", status: "in_progress", gates: [{ phase: "discover", day: 6 }, { phase: "build", day: 28 }], why: "Admins asked for it most this quarter.", section: "bets" },
   { key: "alert-digest", title: "Weekly alert digest", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 30, end: 70, source: "accepted", depends: ["alert-rules"], milestone: { name: "Beta", day: 60 }, section: "f-06", heading: "F-06 Weekly digest of fired alerts", ...fpDigestAfter() }, // MOCK-HOOK fpDigestAfter

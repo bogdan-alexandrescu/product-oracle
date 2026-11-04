@@ -69,7 +69,7 @@ export const FP_AFTER_SET = { text: "Starts Oct 31, before Alert rules engine en
 export const FP_ADDED: FpDep = { title: "Mobile alert push", dates: "Nov 11 – Dec 20", from: "person", by: FP_ME, conflict: true };
 export const FP_ADDED_CONFLICT = {
   text: "Starts Oct 31, before Alert rules engine ends Nov 10 and before Mobile alert push ends Dec 20.",
-  fixes: [...FIXES("Dec 21 – Jan 30, 2027", "Move the dependencies"), "Remove the new link"],
+  fixes: [...FIXES("Dec 21 – Jan 17, 2027", "Move the dependencies"), "Remove the new link"],
 };
 export const FP_SEARCH = [
   { title: "Mobile alert push", dates: "Nov 11 – Dec 20", roadmap: "Alerts roadmap", note: "" },
@@ -78,7 +78,7 @@ export const FP_SEARCH = [
 ];
 export const FP_QUERY = "push";
 
-/** The hard case: a long title, 8 links it depends on, a date that clashes with one of them. */
+/** The hard case: a long title, 8 links it depends on, a start that clashes with 4 of them. */
 export const FP_BIG: FpFeature = {
   title: "Let workspace admins route, mute and schedule alerts per team, region and on-call rotation across every connected tool",
   outcome: "Each alert reaches the one person on call for it, and nobody else, in every tool a team uses.",
@@ -94,17 +94,20 @@ export const FP_BIG: FpFeature = {
     { title: "Alert rules engine", dates: "Oct 1 – Nov 10", from: "oracle" },
     { title: "Team model with nested teams and shared owners", dates: "Nov 2 – Jan 15, 2027", from: "oracle" },
     { title: "Single sign-on for admins", dates: "Jan 4 – Mar 20, 2027", from: "person", by: "Ana Silva", conflict: true },
-    { title: "On-call calendar import", dates: "Dec 7 – Jan 29, 2027", from: "oracle" },
+    { title: "On-call calendar import", dates: "Dec 7 – Jan 29, 2027", from: "oracle", conflict: true },
     { title: "Region field on workspaces", dates: "Nov 9 – Dec 18", from: "person", by: "Sam Okafor" },
     { title: "Chat tool connector", dates: "Oct 19 – Dec 11", from: "oracle" },
-    { title: "Pager tool connector", dates: "Nov 30 – Jan 22, 2027", from: "oracle" },
-    { title: "Quiet hours per person", dates: "Dec 14 – Feb 12, 2027", from: "person", by: "Ana Silva" },
+    { title: "Pager tool connector", dates: "Nov 30 – Jan 22, 2027", from: "oracle", conflict: true },
+    { title: "Quiet hours per person", dates: "Dec 14 – Feb 12, 2027", from: "person", by: "Ana Silva", conflict: true },
   ],
   neededBy: [
     { title: "Alert reports per team", dates: "Apr 5 – May 28, 2027", from: "oracle" },
     { title: "Escalation rules", dates: "Mar 22 – May 14, 2027", from: "person", by: "Sam Okafor" },
   ],
-  conflict: { text: "Ends Mar 3, before Single sign-on for admins ends Mar 20.", fixes: ["Move the dependents: end Apr 21, 2027", "Move the dependency", "Accept as risk"] },
+  conflict: {
+    text: "Starts Jan 18, 2027, before Single sign-on for admins and 3 more end: On-call calendar import, Pager tool connector and Quiet hours per person. The last ends Mar 20, 2027.",
+    fixes: ["Move the dependents: Mar 21 – May 4, 2027", "Move the dependencies", "Accept as risk"],
+  },
   talk: [
     { who: "Oracle", text: "This is due Mar 3, 2027, the date promised to the board. Engineering estimates Apr 21, 2027." },
     { who: "Ana Silva", text: "What makes it late?" },
