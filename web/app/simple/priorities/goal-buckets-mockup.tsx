@@ -16,9 +16,9 @@ import { CodeTag, PlanBucketsHead, wk } from "./plan-buckets";
 type Plan = Schemas["SimplePlanOut"];
 
 const BTN = "inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-line-strong bg-surface px-3 text-[14px] font-[650] text-text hover:bg-surface2"; // MOCK-HOOK
-const PRIMARY = "inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-accent px-3 text-[14px] font-[650] text-on-accent disabled:opacity-50"; // MOCK-HOOK
+const PRIMARY = "inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-accent px-3 text-[14px] font-[650] text-on-accent disabled:border-line-strong disabled:bg-surface2 disabled:text-text2"; // MOCK-HOOK
 const SOFT = "inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-accent-soft px-3 text-[14px] font-[650] text-accent-ink"; // MOCK-HOOK
-const ICON = "inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-transparent text-[16px] text-text2 hover:border-line-strong hover:bg-surface2"; // MOCK-HOOK
+const ICON = "inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-transparent text-[16px] text-text hover:border-line-strong hover:bg-surface2"; // MOCK-HOOK
 const INPUT = "h-9 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2.5 text-[15px] text-text"; // MOCK-HOOK
 const BAD = "h-9 w-full min-w-0 rounded-lg border-2 border-warn bg-surface px-2.5 text-[15px] text-text"; // MOCK-HOOK
 const MENU = "absolute right-0 top-9 z-30 w-64 rounded-lg border border-line bg-surface p-1 text-[15px] shadow-lg"; // MOCK-HOOK
@@ -56,7 +56,8 @@ function useSwitches() { // MOCK-HOOK
 }
 
 export function GoalBucketsMockup() { // MOCK-HOOK
-  const { can } = useMe();
+  const { can, me } = useMe();
+  const myName = me?.name || me?.email || "you"; // MOCK-HOOK
   const s = useSwitches();
   const { dec, v, phase, hard, go } = s;
   // Owners and approvers edit goals (update_entity); anyone else sees no controls.
@@ -76,7 +77,7 @@ export function GoalBucketsMockup() { // MOCK-HOOK
       toast = <>Saved changes to two goals.</>;
     } else if (v === "d") {
       goals = [...goals, { id: "g9", order: goals.length + 1, title: "Quieter bikes", measure: "", target: "", by: "" }];
-      toast = <>Added Quieter bikes as goal {goals.length}. It needs a measure, a target and a date.</>;
+      if (!hard) toast = <>Added Quieter bikes as goal {goals.length}. It needs a measure, a target and a date.</>;
     } else {
       goals = goals.map((g) => (g.id === "g2" ? { ...g, target: "Under 3%", by: "2027-03-31" } : g));
       toast = <>Saved Fewer bikes in repair: under 3% by Mar 31, 2027.</>;
@@ -108,6 +109,7 @@ export function GoalBucketsMockup() { // MOCK-HOOK
       features = features.map((f) => (f.goals[0] === "g4" ? { ...f, goals: ["g1", ...f.goals.filter((g) => g !== "g4" && g !== "g1")] } : f));
       if (phase === "result") {
         goals = goals.filter((g) => g.id !== "g4");
+        features = features.map((f) => ({ ...f, goals: f.goals.filter((g) => g !== "g4") }));
         toast = <>Archived Grow shop partners. It had no features left.</>;
       } else toast = <>Moved {its.length} features to Faster first ride.</>;
     }
@@ -120,7 +122,7 @@ export function GoalBucketsMockup() { // MOCK-HOOK
     }
     if (v === "d" && phase === "result") {
       features = features.map((f) => {
-        if (f.goals[0] !== "g4") return f;
+        if (f.goals[0] !== "g4") return { ...f, goals: f.goals.filter((g) => g !== "g4") };
         const pick = PER_FEATURE[f.code] ?? f.goals.find((g) => g !== "g4") ?? null;
         return { ...f, goals: pick ? [pick] : [] };
       });
@@ -136,7 +138,7 @@ export function GoalBucketsMockup() { // MOCK-HOOK
       toast = <>Moved three features to Lower support load.</>;
     } else if (v === "d") {
       features = features.map((f) => (f.code === "F-5" ? { ...f, goals: ["g5", "g2"] } : f));
-      toast = <>Battery health alerts now moves Lower support load most; it still serves Fewer bikes in repair.</>;
+      toast = <>Battery health alerts now sits under Lower support load. It still serves Fewer bikes in repair.</>;
     } else {
       features = features.map((f) => (f.code === "F-5" ? { ...f, goals: ["g5"] } : f));
       toast = <>Moved Battery health alerts to Lower support load.</>;
@@ -154,6 +156,7 @@ export function GoalBucketsMockup() { // MOCK-HOOK
     <section aria-label="Goal buckets" data-mockup={`${dec}-${v}-${phase}`} className="pb-20">
       <PlanBucketsHead plan={plan} codeOf={() => null} />
       {edits && <Toolbar dec={dec} v={v} phase={phase} hard={hard} editMode={editMode} ticking={ticking} go={go} />}
+      {toast && <Toast>{toast}</Toast>}
       <ul className="mt-4 grid items-start gap-4 sm:grid-cols-2">
         {goals.map((g) => (
           <GoalCard key={g.id} g={g} list={under(g.id)} goals={goals} edits={edits} editMode={editMode} ticking={ticking} sw={s} features={features} />
@@ -173,7 +176,9 @@ export function GoalBucketsMockup() { // MOCK-HOOK
           <li data-testid="archived-goals" className="rounded-[var(--simple-card-radius)] border border-dashed border-line-strong bg-surface p-4 sm:col-span-2">
             <div className="flex flex-wrap items-center gap-x-2">
               <h3 className="text-[17px] font-[650] leading-6 text-text2">Archived goals · 1</h3>
-              {phase === "result" && <span className="text-[14px] text-text2">kept for the record; their links are dropped</span>}
+              <span className="text-[14px] text-text2">
+                {phase === "result" ? "kept for the record; features no longer count toward them" : `Grow shop partners, held ${its.length} ${its.length === 1 ? "feature" : "features"}`}
+              </span>
             </div>
             {phase === "result" && (
               <ul className="mt-2">
@@ -181,7 +186,7 @@ export function GoalBucketsMockup() { // MOCK-HOOK
                   <li key={g.id} className="flex flex-wrap items-center gap-2 border-b border-line py-[5px] text-[16px] leading-[22px]">
                     <span className="text-text2 line-through">{g.title}</span>
                     <span className="text-[14px] text-text2">
-                      {g.measure}: {g.target} by {day(g.by)} · archived Nov 3 by Robin Okafor · held {its.length} {its.length === 1 ? "feature" : "features"}
+                      {g.measure}: {g.target} by {day(g.by)} · archived Nov 4 by {myName} · held {its.length} {its.length === 1 ? "feature" : "features"}
                     </span>
                     {edits && (
                       <button type="button" className={`${BTN} ml-auto`}>
@@ -199,7 +204,7 @@ export function GoalBucketsMockup() { // MOCK-HOOK
       {dec === "gb2" && phase === "open" && v !== "c" && <ArchiveDialog v={v} goal={archived} list={its} goals={goals} hard={hard} go={go} />}
       {dec === "gb2" && phase === "mid" && (v === "a" || v === "d") && <ArchiveDialog v={v} goal={archived} list={its} goals={goals} hard={hard} go={go} mid />}
       {ticking && phase === "mid" && <MoveBar />}
-      {toast && <Toast>{toast}</Toast>}
+      {dec === "gb3" && v === "a" && phase === "mid" && hard && <EdgeScroll f={features.find((f) => f.code === "F-5")!} />}
     </section>
   );
 }
@@ -217,7 +222,7 @@ function Toolbar({ dec, v, phase, hard, editMode, ticking, go }: { dec: string; 
   const c3 = dec === "gb3" && v === "c";
   if (!b1 && !c1 && !c3) return null;
   return (
-    <div data-testid="mk-toolbar" className="mt-4 flex flex-wrap items-center gap-2">
+    <div data-testid="mk-toolbar" className={`mt-4 flex flex-wrap items-center gap-2 ${editMode ? "z-30 sm:sticky sm:top-0 -mx-1 rounded-lg border border-line bg-surface px-3 py-2 shadow-md" : ""}`}>
       {b1 && (
         <button type="button" className={hard && phase === "add" ? SOFT : BTN} onClick={() => go({ phase: "add" })}>
           + Add goal
@@ -272,7 +277,7 @@ function GoalCard({ g, list, goals, edits, editMode, ticking, sw, features }: { 
   const menuOpen =
     (dec === "gb1" && v === "b" && g.id === "g2" && phase === "open") || (dec === "gb2" && g.id === "g4" && ((phase === "open" && v === "c") || (phase === "mid" && v === "b")));
   const archiving = dec === "gb2" && g.id === "g4";
-  const dropTarget = dec === "gb3" && v === "a" && phase === "mid" && g.id === "g5";
+  const dropTarget = dec === "gb3" && v === "a" && phase === "mid" && !hard && g.id === "g5";
   const incomplete = !g.measure || !g.target || !g.by;
   const also = features.filter((f) => f.goals[0] !== g.id && f.goals.includes(g.id));
   const fixD = dec === "gb1" && v === "d" && g.id === "g9" && hard;
@@ -323,7 +328,7 @@ function GoalCard({ g, list, goals, edits, editMode, ticking, sw, features }: { 
       )}
       {!editMode && <Rows list={list} goals={goals} sw={sw} edits={edits} ticking={ticking} />}
       {editMode && <p className="mt-2 text-[15px] text-text2">{count(list.length)}, hidden while you edit</p>}
-      {dropTarget && <DragGhost f={features.find((f) => f.code === "F-5")!} />}
+      {dropTarget && <DragGhost f={features.find((f) => f.code === "F-5")!} left="18%" top="64px" />}
       {dropTarget && <p className="mt-2 rounded-lg border border-dashed border-accent px-3 py-2 text-[15px] text-accent-ink">Drop here: Lower support load becomes the goal it moves most</p>}
       {also.length > 0 && dec === "gb3" && v === "d" && !editMode && (
         <p className="mt-2 text-[14px] text-text2">
@@ -349,12 +354,11 @@ function GoalMenu({ v, dec, go }: { v: string; dec: string; go: Sw["go"] }) { //
   return (
     <div role="menu" className={MENU}>
       <button type="button" role="menuitem" className={ITEM} onClick={() => go({ phase: "mid" })}>
-        ✎ Edit goal
+        Edit goal
       </button>
       <button type="button" role="menuitem" className={`${ITEM} ${dec === "gb2" ? "bg-surface2" : ""}`} onClick={() => go({ phase: dec === "gb2" && v === "c" ? "mid" : "result" })}>
-        ⌫ Archive goal
+        Archive goal
       </button>
-      <p className="px-3 pb-1 pt-1.5 text-[13px] leading-[18px] text-text2">The order number is set in Baseline.</p>
     </div>
   );
 }
@@ -373,10 +377,10 @@ function Field({ label, children, error }: { label: string; children: ReactNode;
 function GoalForm({ g, bad, onSave, onCancel, title }: { g: MkGoal; bad: boolean; onSave: () => void; onCancel: () => void; title: string }) { // MOCK-HOOK
   return (
     <form data-testid="goal-form" className="grid gap-2" onSubmit={(e) => (e.preventDefault(), onSave())}>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
         <OrderBadge n={g.order} />
-        <h3 className="text-[17px] font-[650]">{title}</h3>
-        <span className="ml-auto text-[13px] text-text2">Goal {g.order} in the order; change it in Baseline</span>
+        <h3 className="whitespace-nowrap text-[17px] font-[650]">{title}</h3>
+        <span className="text-[13px] text-text2 max-sm:basis-full sm:ml-auto">Goal {g.order} in the order; change it in Baseline</span>
       </div>
       <Field label="Goal" error={!g.title ? "Name the goal." : undefined}>
         <textarea rows={g.title.length > 60 ? 2 : 1} defaultValue={g.title} className={`${INPUT} h-auto py-1.5`} />
@@ -399,7 +403,7 @@ function GoalForm({ g, bad, onSave, onCancel, title }: { g: MkGoal; bad: boolean
         <button type="button" className={BTN} onClick={onCancel}>
           Cancel
         </button>
-        {bad && <span className="text-[13px] text-text2">A goal needs a measure, a target and a date.</span>}
+        {bad && <span className="min-w-0 text-[13px] text-text2">A goal needs a measure, a target and a date.</span>}
       </div>
     </form>
   );
@@ -412,11 +416,11 @@ function GoalFields({ g, bad, changed }: { g: MkGoal; bad: boolean; changed: boo
     <div className="grid gap-2">
       <div className="flex items-center gap-2">
         <OrderBadge n={g.order} />
-        <input defaultValue={v.title} aria-label="Goal" className={`${INPUT} font-[650]`} />
+        <textarea rows={v.title.length > 44 ? 3 : 1} defaultValue={v.title} aria-label="Goal" className={`${INPUT} h-auto resize-none py-1.5 font-[650]`} />
         {changed && <span className="flex-none text-[13px] font-[650] text-accent-ink">Changed</span>}
       </div>
-      <div className="grid grid-cols-2 gap-2 pl-8 sm:grid-cols-[1fr_110px_120px]">
-        <input defaultValue={v.measure} aria-label="Measure" className={`${INPUT} col-span-2 sm:col-span-1`} />
+      <div className="grid grid-cols-2 gap-2 pl-8">
+        <input defaultValue={v.measure} aria-label="Measure" className={`${INPUT} col-span-2`} />
         <input defaultValue={v.target} aria-label="Target" className={INPUT} />
         <input defaultValue={day(v.by)} aria-label="By" placeholder="Pick a day" className={v.by ? INPUT : BAD} />
       </div>
@@ -440,12 +444,13 @@ function AddCard({ v, phase, hard, next, go }: { v: string; phase: string; hard:
           <span className="text-[17px] text-text2">+</span>
           <input
             aria-label="New goal"
-            defaultValue={phase === "open" || phase === "mid" ? "Quieter bikes" : ""}
+            defaultValue={phase === "mid" ? "Quieter bikes" : ""}
             placeholder="Add a goal: type its name, then Enter"
             className={`${INPUT} ${phase === "open" || phase === "mid" ? "border-2 border-accent" : ""}`}
           />
         </form>
-        {(phase === "open" || phase === "mid") && <p className="mt-1.5 pl-6 text-[13px] text-text2">It becomes goal {next}. Add its measure, target and date when you know them.</p>}
+        {phase === "mid" && <p className="mt-1.5 pl-6 text-[13px] text-text2">Enter adds it as goal {next}. Add its measure, target and date when you know them.</p>}
+        {phase === "open" && <p className="mt-1.5 pl-6 text-[13px] text-text2">Type the goal&apos;s name. Only the name is needed now.</p>}
       </li>
     );
   }
@@ -536,10 +541,10 @@ function Rows({ list, goals, sw, edits, ticking }: { list: MkFeature[]; goals: M
             key={f.code}
             data-testid="plan-feature"
             data-code={f.code}
-            className={`relative flex items-center gap-2 border-b border-line py-[5px] text-[16px] leading-[22px] ${lifted && phase === "mid" ? "opacity-40" : ""} ${lifted && phase === "open" ? "rounded-md bg-surface2 shadow-md" : ""} ${ticked(f.code) ? "bg-accent-soft" : ""}`}
+            className={`relative flex items-center gap-2 border-b border-line py-[5px] text-[16px] leading-[22px] ${lifted ? "[&>*:not(.mk-ghost)]:opacity-30" : ""} ${ticked(f.code) ? "bg-accent-soft" : ""}`}
           >
             {edits && dec === "gb3" && v === "a" && (
-              <span aria-hidden title="Drag to another goal" className={`flex-none cursor-grab select-none text-[15px] ${lifted ? "text-text" : "text-text2"}`}>
+              <span aria-hidden title="Drag to another goal" className={`flex-none cursor-grab select-none text-[15px] ${lifted ? "text-accent-ink" : "text-text"}`}>
                 ⠿
               </span>
             )}
@@ -566,6 +571,7 @@ function Rows({ list, goals, sw, edits, ticking }: { list: MkFeature[]; goals: M
             <span data-testid="plan-feature-total" className="w-[56px] flex-none text-right text-[15px] tabular-nums text-text2">
               {wk(f.weeks)} wk
             </span>
+            {lifted && phase === "open" && <DragGhost f={f} left="12px" top="-10px" />}
             {edits && dec === "gb3" && (v === "b" || v === "d") && (
               <span className="relative flex-none">
                 <button type="button" aria-label={v === "b" ? `Move ${f.name}` : `Goals ${f.name} serves`} className={`${ICON} h-7 w-7 ${menu || links ? "border-line-strong bg-surface2" : ""}`} onClick={() => go({ phase: "open" })}>
@@ -621,7 +627,10 @@ function LinksPopover({ f, goals, mid, go }: { f: MkFeature; goals: MkGoal[]; mi
               {g.order}. {g.title}
             </span>
             <input type="checkbox" readOnly checked={f.goals.includes(g.id)} aria-label={`Serves ${g.title}`} className="h-4 w-4 justify-self-center accent-[var(--accent)]" />
-            <input type="radio" readOnly checked={main === g.id} aria-label={`Moves ${g.title} most`} className="h-4 w-4 justify-self-center accent-[var(--accent)]" />
+            <span className="flex items-center gap-1 justify-self-start">
+              <input type="radio" readOnly checked={main === g.id} aria-label={`Moves ${g.title} most`} className="h-4 w-4 accent-[var(--accent)]" />
+              <span className={`w-9 text-[12px] font-[650] text-accent-ink ${main === g.id ? "" : "invisible"}`}>most</span>
+            </span>
           </div>
         ))}
       </div>
@@ -637,15 +646,27 @@ function LinksPopover({ f, goals, mid, go }: { f: MkFeature; goals: MkGoal[]; mi
   );
 }
 
+/** GB3 a's hard case: the target is far below, so the drag waits at the window's edge while the page scrolls. */
+function EdgeScroll({ f }: { f: MkFeature }) { // MOCK-HOOK
+  return (
+    <>
+      <DragGhost f={f} left="calc(50% - 120px)" top="calc(100vh - 128px)" fixed />
+      <div aria-hidden className="pointer-events-none fixed inset-x-0 bottom-0 z-30 lg:left-[232px] flex h-16 items-center justify-center border-t-2 border-dashed border-accent bg-accent-soft/90 text-[15px] font-[650] text-accent-ink max-sm:bottom-16">
+        ↓ Scrolling down to goal 8, Cut bike delivery cost: keep holding at the edge
+      </div>
+    </>
+  );
+}
+
 function MoveBar() { // MOCK-HOOK
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line-strong bg-surface px-4 py-3 shadow-lg">
-      <div className="mx-auto flex max-w-[1100px] flex-wrap items-center gap-2 text-[15px]">
+    <div data-testid="move-bar" className="sticky bottom-0 z-40 -mx-1 mt-4 rounded-lg border border-line-strong bg-surface px-4 py-3 shadow-lg max-sm:bottom-[calc(64px+env(safe-area-inset-bottom))]">
+      <div className="flex flex-wrap items-center gap-2 text-[15px]">
         <b className="font-[650]">3 features picked</b>
         <span className="hidden text-text2 sm:inline">Repair booking from the app, Battery health alerts, Spare-parts stock view</span>
         <span className="ml-auto flex items-center gap-2">
           <span className="text-text2">Move to</span>
-          <select aria-label="Move to goal" defaultValue="g5" className="h-8 rounded-lg border border-line-strong bg-surface px-2 text-[14px]">
+          <select aria-label="Move to goal" defaultValue="g5" className="h-8 min-w-0 rounded-lg border border-line-strong bg-surface px-2 text-[14px]">
             <option value="g5">5 · Lower support load</option>
           </select>
           <button type="button" className={PRIMARY}>
@@ -657,9 +678,9 @@ function MoveBar() { // MOCK-HOOK
   );
 }
 
-function DragGhost({ f }: { f: MkFeature }) { // MOCK-HOOK
+function DragGhost({ f, left, top, fixed }: { f: MkFeature; left: string; top: string; fixed?: boolean }) { // MOCK-HOOK
   return (
-    <div aria-hidden className="pointer-events-none absolute z-40 flex w-[420px] max-w-[80vw] rotate-[-1.5deg] items-center gap-2 rounded-md border border-accent bg-surface px-2 py-[5px] text-[16px] shadow-xl" style={{ left: "18%", top: "64px" }}>
+    <div aria-hidden data-testid="drag-ghost" className={`mk-ghost pointer-events-none ${fixed ? "fixed" : "absolute"} z-40 flex w-[420px] max-w-[80vw] rotate-[-1.5deg] items-center gap-2 rounded-md border-2 border-accent bg-surface px-2 py-[5px] text-[16px] shadow-2xl`} style={{ left, top }}>
       <span className="text-[15px]">⠿</span>
       <CodeTag code={f.code} />
       <span className="flex-1">{f.name}</span>
@@ -676,8 +697,8 @@ function ArchiveDialog({ v, goal, list, goals, hard, go, mid }: { v: string; goa
   const feats = `${n} ${n === 1 ? "feature" : "features"}`;
   const multi = list.filter((f) => f.goals.length > 1);
   return (
-    <div data-backdrop="" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={() => go({ phase: "rest" })}>
-      <div role="dialog" aria-modal="true" aria-label={`Archive ${goal.title}`} className="flex max-h-[88vh] w-full max-w-lg flex-col rounded-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg" onClick={(e) => e.stopPropagation()}>
+    <div data-backdrop="" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={() => go({ phase: "rest" })}>
+      <div role="dialog" aria-modal="true" aria-label={`Archive ${goal.title}`} className="flex max-h-[88vh] w-full max-w-lg flex-col rounded-t-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg sm:rounded-[var(--simple-card-radius)]" onClick={(e) => e.stopPropagation()}>
         {v === "b" ? (
           <>
             <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Grow shop partners still has work</h2>
@@ -691,9 +712,17 @@ function ArchiveDialog({ v, goal, list, goals, hard, go, mid }: { v: string; goa
                 </li>
               ))}
             </ul>
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="whitespace-nowrap text-[15px]">Move all {n} to</span>
+              <select aria-label="Move all to goal" defaultValue="g1" className="h-8 min-w-0 max-w-full rounded-lg border-2 border-accent bg-surface px-2 text-[14px]">
+                {others.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.order} · {g.title.length > 40 ? `${g.title.slice(0, 38)}…` : g.title}
+                  </option>
+                ))}
+              </select>
               <button type="button" className={PRIMARY} onClick={() => go({ phase: "mid" })}>
-                Move all {n} to…
+                Move {n}
               </button>
               <button type="button" className={BTN} onClick={() => go({ phase: "rest" })}>
                 Keep the goal
@@ -715,9 +744,10 @@ function ArchiveDialog({ v, goal, list, goals, hard, go, mid }: { v: string; goa
                   </p>
                 )}
                 <p className="font-[650]">The other {n - multi.length}:</p>
-                <label className="flex items-center gap-2">
-                  <input type="radio" name="to" defaultChecked className="h-4 w-4 accent-[var(--accent)]" /> Move to
-                  <select aria-label="Goal" defaultValue="g1" className={`h-8 rounded-lg border px-2 text-[14px] ${mid ? "border-2 border-accent" : "border-line-strong"} bg-surface`}>
+                <label className="flex flex-wrap items-center gap-2">
+                  <input type="radio" name="to" defaultChecked className="h-4 w-4 accent-[var(--accent)]" /> <span className="whitespace-nowrap">Move to</span>
+                  <select aria-label="Goal" defaultValue={mid ? "g1" : ""} className={`h-8 min-w-0 max-w-full rounded-lg border px-2 text-[14px] max-sm:basis-full ${mid ? "border-2 border-accent" : "border-warn"} bg-surface`}>
+                    {!mid && <option value="">Pick a goal</option>}
                     {others.map((g) => (
                       <option key={g.id} value={g.id}>
                         {g.order} · {g.title.length > 40 ? `${g.title.slice(0, 38)}…` : g.title}
@@ -735,10 +765,10 @@ function ArchiveDialog({ v, goal, list, goals, hard, go, mid }: { v: string; goa
                 {list.map((f) => {
                   const pick = f.goals.find((g) => g !== goal.id) ?? (mid ? PER_FEATURE[f.code] : undefined);
                   return (
-                    <li key={f.code} className="flex items-center gap-2 border-b border-line py-1">
+                    <li key={f.code} className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line py-1">
                       <CodeTag code={f.code} />
-                      <span className="min-w-0 flex-1 truncate">{f.name}</span>
-                      <select aria-label={`New goal for ${f.name}`} defaultValue={pick ?? ""} className={`h-8 w-48 flex-none rounded-lg border bg-surface px-2 text-[14px] ${pick ? "border-line-strong" : "border-warn"}`}>
+                      <span className="min-w-0 flex-1 sm:truncate">{f.name}</span>
+                      <select aria-label={`New goal for ${f.name}`} defaultValue={pick ?? ""} className={`h-8 flex-none max-sm:basis-full sm:w-48 rounded-lg border bg-surface px-2 text-[14px] ${pick ? "border-line-strong" : "border-warn"}`}>
                         <option value="">No goal</option>
                         {others.map((g) => (
                           <option key={g.id} value={g.id}>
@@ -752,12 +782,13 @@ function ArchiveDialog({ v, goal, list, goals, hard, go, mid }: { v: string; goa
               </ul>
             )}
             <div className="mt-3 flex items-center gap-2">
-              <button type="button" className={PRIMARY} onClick={() => go({ phase: "result" })}>
+              <button type="button" className={PRIMARY} disabled={v === "a" && !mid} onClick={() => go({ phase: "result" })}>
                 Archive goal
               </button>
               <button type="button" className={BTN} onClick={() => go({ phase: "rest" })}>
                 Cancel
               </button>
+              {v === "a" && !mid && <span className="text-[13px] text-text2">Pick where they go.</span>}
               {v === "d" && <span className="text-[13px] text-text2">{mid ? "Each feature goes where you picked." : "Each starts at another goal it serves, else No goal."}</span>}
             </div>
           </>
@@ -769,7 +800,7 @@ function ArchiveDialog({ v, goal, list, goals, hard, go, mid }: { v: string; goa
 
 function Toast({ children }: { children: ReactNode }) { // MOCK-HOOK
   return (
-    <div role="status" className="fixed bottom-4 left-1/2 z-50 flex w-[min(640px,calc(100vw-24px))] -translate-x-1/2 items-center gap-3 rounded-lg border border-line-strong bg-surface px-4 py-2.5 text-[15px] shadow-lg">
+    <div role="status" data-mk-toast="" className="z-30 mt-4 flex shadow-md sm:sticky sm:top-2 items-center gap-3 rounded-lg border border-accent bg-accent-soft px-4 py-2.5 text-[15px] text-text">
       <span className="min-w-0 flex-1">{children}</span>
       <button type="button" className="flex-none font-[650] text-accent-ink underline">
         Undo
