@@ -1893,12 +1893,14 @@ def step_prompt(
         from oracle.roadmap import company
         from oracle.runs import plan_tables
 
+        items = ctx.prior_outputs.get(plan_tables.ITEMS_FILE)
+        queued = company.with_run_items(ctx.source.company_queue, items)
         plan = plan_tables.engineering_plan(
-            ctx.prior_outputs.get(plan_tables.ITEMS_FILE),
+            items,
             ctx.source.schedule_bases,
-            others=[r for r in ctx.source.company_queue if not r["ours"]],
+            others=queued,
         )
-        lines += company.queue_lines(ctx.source.company_queue)
+        lines += company.queue_lines(queued)
         lines += plan_tables.prompt_lines(plan, critic=role == "critic")
     if ctx.extra_lines:
         lines += ["", *ctx.extra_lines]

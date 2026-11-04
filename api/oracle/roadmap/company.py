@@ -46,6 +46,8 @@ CAPACITY_KEY = "team_capacity"
 DEFAULT_CAPACITY = {"team_size": 1, "focus": 1.0}
 HORIZON_ORDER = {"now": 0, "next": 1, "later": 2}
 CARRIED = "carried from {title}"
+LAST = math.inf
+NEW = 10**9  # a new item of a run: after every item already on the roadmap
 
 
 class CompanyError(Exception):
@@ -203,6 +205,7 @@ class Queued:
     effort_weeks: float
     start: date
     end: date
+    order: tuple = ()
 
 
 def _effort(item: RoadmapItem) -> float:
@@ -274,7 +277,7 @@ async def queue(db: AsyncSession) -> tuple[dict[str, Any], list[Queued]]:
             key = goal_sort_key(goal)
             if src not in goal_of or key < goal_of[src]:
                 goal_of[src] = key
-    last = (True, math.inf)
+    last = (True, LAST)
 
     def order(r: RoadmapItem) -> tuple:
         name = (r.milestone or {}).get("name") if isinstance(r.milestone, dict) else None
@@ -291,17 +294,28 @@ async def queue(db: AsyncSession) -> tuple[dict[str, Any], list[Queued]]:
         p["id"]: p
         for p in await refs(db, list({r.prd_document_id for r in rows if r.prd_document_id}))
     }
-    per_week = max(float(cap["team_size"]) * float(cap["focus"]), 0.01)
-    today = company_time.now().date()
-    done = 0.0
+    per_week = _per_week(cap)
+    today = await company_time.company_today(db)
     out: list[Queued] = []
-    for r in sorted(rows, key=order):
-        effort = _effort(r)
+    ordered = sorted(rows, key=order)
+    for r, (start, end) in zip(ordered, _dates([_effort(r) for r in ordered], per_week, today),
+                               strict=True):  # fmt: skip
+        out.append(Queued(r, prds.get(r.prd_document_id), _effort(r), start, end, order(r)))
+    return cap, out
+
+
+def _per_week(cap: dict[str, Any]) -> float:
+    return max(float(cap["team_size"]) * float(cap["focus"]), 0.01)
+
+
+def _dates(efforts: list[float], per_week: float, today: date) -> list[tuple[date, date]]:
+    """(start, end) of each effort in turn, one team doing ``per_week`` person-weeks a week."""
+    done, out = 0.0, []
+    for effort in efforts:
         start = today + timedelta(days=round(done / per_week * 7))
         done += effort
-        end = today + timedelta(days=round(done / per_week * 7))
-        out.append(Queued(r, prds.get(r.prd_document_id), effort, start, end))
-    return cap, out
+        out.append((start, today + timedelta(days=round(done / per_week * 7))))
+    return out
 
 
 def _day(d: date) -> str:
@@ -315,7 +329,8 @@ async def run_queue(db: AsyncSession, prd_id: uuid.UUID | None) -> list[dict[str
     company_doc = await active(db)
     if company_doc is None:
         return []
-    _, rows = await queue(db)
+    cap, rows = await queue(db)
+    today = (await company_time.company_today(db)).isoformat()
     return [
         {
             "key": q.item.item_key,
@@ -324,9 +339,62 @@ async def run_queue(db: AsyncSession, prd_id: uuid.UUID | None) -> list[dict[str
             "start": q.start.isoformat(),
             "end": q.end.isoformat(),
             "ours": q.item.prd_document_id == prd_id,
+            # What with_run_items re-plans the queue from.
+            "effort_weeks": q.effort_weeks,
+            "order": q.order,
+            "per_week": _per_week(cap),
+            "today": today,
         }
         for q in rows
     ]
+
+
+def with_run_items(rows: list[dict[str, Any]], items_text: str | None) -> list[dict[str, Any]]:
+    """The shared queue with this run's items file in it: the run's PRD's rows are replaced
+    by the file's items (an item already on the roadmap keeps its place; a new one goes
+    after its horizon's items, in file order) and the queue is planned again as one team,
+    so the run's own items and every other PRD's take their place together."""
+    if not rows or not items_text:
+        return rows
+    from oracle.runs.roadmap import ItemsYamlError, load_items_yaml
+
+    try:
+        data = load_items_yaml(items_text)
+    except ItemsYamlError:
+        return rows
+    entries = data.get("items") if isinstance(data, dict) else None
+    if not isinstance(entries, list):
+        return rows
+    ours = {r["key"]: r for r in rows if r["ours"]}
+    prd = next((r["prd"] for r in ours.values()), "")
+    merged = [r for r in rows if not r["ours"]]
+    for i, raw in enumerate(entries):
+        key = str(raw.get("id") or "").strip() if isinstance(raw, dict) else ""
+        if not key or any(r["key"] == key for r in merged):
+            continue
+        old = ours.get(key)
+        if old is not None:
+            order, effort = old["order"], old["effort_weeks"]
+        else:
+            item = RoadmapItem(horizon=raw.get("horizon"), priority=raw.get("priority")
+                               if isinstance(raw.get("priority"), dict) else None,
+                               economics={"declared": raw["economics"]}
+                               if isinstance(raw.get("economics"), dict) else {})  # fmt: skip
+            horizon = HORIZON_ORDER.get(str(raw.get("horizon") or ""), 3)
+            order = (True, (horizon, NEW + i), (True, LAST), -_priority(item), NEW + i)
+            effort = _effort(item)
+        title = str(raw.get("title") or "").strip() or key
+        merged.append({"key": key, "title": title, "prd": prd, "ours": True,
+                       "effort_weeks": effort, "order": order})  # fmt: skip
+    first = rows[0]
+    merged.sort(key=lambda r: tuple(r["order"]))
+    planned = _dates([r["effort_weeks"] for r in merged], first["per_week"],
+                     date.fromisoformat(first["today"]))  # fmt: skip
+    return [
+        {**r, "start": start.isoformat(), "end": end.isoformat(), "per_week": first["per_week"],
+         "today": first["today"]}
+        for r, (start, end) in zip(merged, planned, strict=True)
+    ]  # fmt: skip
 
 
 def queue_lines(rows: list[dict[str, Any]]) -> list[str]:

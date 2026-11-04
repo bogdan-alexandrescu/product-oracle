@@ -110,15 +110,21 @@ def engineering_plan(
 ) -> EngineeringPlan:
     """The run's engineering dates for each item of the items file and its milestones. An
     unreadable or missing items file: no items. ``others`` (one-roadmap-many-prds): the
-    company roadmap's items of other PRDs ({key, title, end}), listed after them as they are
-    in the shared queue (Dates from: team queue), so the tables cover every item."""
+    shared queue with this run's items in it (oracle.roadmap.company.with_run_items,
+    {key, title, end, ours}): the run's own item with no schedule basis of its own takes its
+    queue end (Dates from: team queue); the other PRDs' items are listed after them as they
+    are in the queue, so the tables cover every item."""
     plan = EngineeringPlan()
     if not items_text:
         return plan
     plan = _engineering_plan(items_text, bases)
-    own = {r.key for r in plan.items}
+    own = {r.key: r for r in plan.items}
     for o in others:
-        if o["key"] not in own:
+        row = own.get(o["key"])
+        if row is not None:
+            if o.get("ours") and row.end is None and (end := as_date(o.get("end"))):
+                row.end, row.basis = end, BASIS_WORDS["capacity"]
+        elif not o.get("ours"):
             end = as_date(o.get("end"))
             plan.others += 1
             plan.items.append(

@@ -4715,7 +4715,7 @@ async def _plan_table_problems(
     # one-roadmap-many-prds: the other PRDs' items on the company roadmap are in the tables too.
     others = await roadmap_company.run_queue(db, source.document_id if source else None)
     plan = plan_tables.engineering_plan(
-        items, [b.as_json() for b in bases], others=[r for r in others if not r["ours"]]
+        items, [b.as_json() for b in bases], others=roadmap_company.with_run_items(others, items)
     )
     return plan_tables.check(markdown, plan, await company_time.company_today(db))
 
