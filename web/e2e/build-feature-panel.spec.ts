@@ -378,6 +378,81 @@ test.describe("one feature panel, as the frames draw it (review 2)", () => {
   });
 });
 
+test.describe("one feature panel, as the frames say it (review 3)", () => {
+  test.use(DESKTOP);
+  const toast = (page: Page) => page.getByRole("status").filter({ hasText: /saved:|now depends on|Changed since|No change/ });
+
+  test("Start reads From the capacity plan, Delivery Engineering estimate, and the Reading and Notes rows are drawn", async ({ page }) => {
+    const panel = await openOnRoadmap(page, "alert-digest", { scenario: "feature-panel-frames" });
+    await expect(panel.getByTestId("fp-start-note")).toHaveText("From the capacity plan");
+    await expect(panel.getByTestId("fp-delivery").locator("..")).toContainText("Engineering estimate");
+    await expect(panel.getByTestId("fp-reading")).toHaveText("Today 61% · target 70% by Jun 30, 2027");
+    await expect(panel.getByTestId("fp-notes")).toHaveText("Send on Monday morning in the admin's time zone. Skip teams with no alerts that week.");
+    await expect(panel.getByTestId("fp-outcome")).toHaveText("Admins get every alert fired in the week in one email, so fewer alerts go unread.");
+    await expect(panel.getByText("Oracle's suggestion")).toHaveCount(0);
+  });
+
+  test("saving a delivery says it as the frames do, and Start keeps its own source", async ({ page }) => {
+    const panel = await openOnRoadmap(page, "alert-digest", { scenario: "feature-panel-frames" });
+    const oracle = (await panel.getByTestId("fp-delivery").innerText()).trim();
+    await panel.getByRole("button", { name: "Change Delivery" }).click();
+    const edit = panel.getByTestId("fp-edit");
+    const input = edit.getByRole("textbox", { name: "Delivery" });
+    const [mon, d] = (await input.inputValue()).split(" ");
+    const typed = `${mon} ${Number(d) > 5 ? Number(d) - 3 : Number(d) + 3}`;
+    await input.fill(typed);
+    await edit.getByRole("button", { name: "Save" }).click();
+    await expect(toast(page)).toHaveText(new RegExp(`^Weekly alert digest saved: delivery ${typed}, set by \\S.* \\(Oracle suggested ${oracle}\\)\\.\\s*Undo$`));
+    await expect(page.getByText(/in your working draft/)).toHaveCount(0);
+    await expect(panel.getByTestId("fp-override")).toContainText(`Oracle suggested ${oracle}; set to ${typed}`);
+    await expect(panel.getByTestId("fp-start-note")).toHaveText("From the capacity plan");
+  });
+
+  test("a new link that moves the item says where it now starts", async ({ page }) => {
+    const panel = await openOnRoadmap(page, "alert-mobile", { scenario: "feature-panel-frames" });
+    await panel.getByTestId("fp-list-depends").getByRole("button", { name: "+ Add an item it depends on" }).click();
+    const search = panel.getByTestId("fp-search");
+    await search.getByRole("textbox", { name: "Find an item" }).fill("Weekly");
+    await search.getByRole("button", { name: /Weekly alert digest/ }).click();
+    await expect(toast(page)).toContainText(/^Mobile alert push now depends on Weekly alert digest, and starts after it: [A-Z][a-z]{2} \d+ – [A-Z][a-z]{2} \d+(, \d{4})?\./);
+    await expect(page.getByText(/in your working draft/)).toHaveCount(0);
+  });
+
+  test("the notes are changed in place", async ({ page }) => {
+    const panel = await openOnRoadmap(page, "alert-digest", { scenario: "feature-panel-frames" });
+    await panel.getByRole("button", { name: "Change Notes" }).click();
+    const edit = panel.getByTestId("fp-edit");
+    await edit.getByRole("textbox", { name: "Notes" }).fill("Send on Monday morning.");
+    await edit.getByRole("button", { name: "Save" }).click();
+    await expect(edit).toBeHidden();
+    await expect(panel.getByTestId("fp-notes")).toHaveText("Send on Monday morning.");
+  });
+
+  test("an owner picked after someone else picked them is a conflict, not a no change", async ({ page, context }) => {
+    const panel = await openOnRoadmap(page, "alert-mobile");
+    await panel.getByRole("button", { name: "Change Owner" }).click();
+    const pick = panel.getByTestId("fp-edit").getByRole("combobox", { name: "Owner" });
+    await expect(pick.locator("option").nth(2)).toBeAttached();
+    const was = await pick.inputValue();
+    const options = await pick.locator("option").evaluateAll((os) => os.map((o) => ({ value: (o as HTMLOptionElement).value, label: o.textContent ?? "" })));
+    const next = options.find((o) => o.value && o.value !== was)!;
+    // Meanwhile a second tab makes them the owner.
+    const other = await context.newPage();
+    await other.goto("/simple/roadmap");
+    await openRoadmapItem(other, "alert-mobile");
+    const theirs = other.getByTestId("floating-card");
+    await theirs.getByRole("button", { name: "Change Owner" }).click();
+    await theirs.getByTestId("fp-edit").getByRole("combobox", { name: "Owner" }).selectOption(next.value);
+    await theirs.getByTestId("fp-edit").getByRole("button", { name: "Save" }).click();
+    await expect(theirs.getByTestId("fp-owner")).toHaveText(next.label);
+    await other.close();
+    await pick.selectOption(next.value);
+    await panel.getByTestId("fp-edit").getByRole("button", { name: "Save" }).click();
+    await expect(toast(page)).toContainText("Changed since you saw it");
+    await expect(page.getByText("No change: it is so already")).toHaveCount(0);
+  });
+});
+
 test.describe("one feature panel, phone", () => {
   test.use(PHONE);
 
@@ -391,6 +466,8 @@ test.describe("one feature panel, phone", () => {
     await tabs.getByRole("tab", { name: "Talk to Oracle" }).click();
     await expect(panel.getByRole("tabpanel", { name: "Talk to Oracle" }).getByRole("textbox", { name: "Message Oracle" })).toBeVisible();
     await tabs.getByRole("tab", { name: "Details" }).click();
+    await expect(panel.getByTestId("fp-reading")).toHaveText("Today 61% · target 70% by Jun 30, 2027");
+    await expect(panel.getByTestId("fp-notes")).toBeVisible();
     await panel.getByRole("button", { name: "Change Delivery" }).click();
     await expect(panel.getByTestId("fp-edit").getByRole("button", { name: "Save" })).toBeVisible();
   });

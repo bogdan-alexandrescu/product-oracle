@@ -928,7 +928,8 @@ function seedFeaturePanelFramesScenario(): Db {
   db.simple_roadmap!.people = Object.fromEntries(db.members.map((m) => [m.id, m.name ?? m.email]));
   // As drawn: Delivery is an engineering estimate, and Alert routing by team needs the digest.
   const items = db.simple_roadmap!.items;
-  items.find((x) => x.key === "alert-digest")!.source = "engineering";
+  // review 3: the start from the capacity plan (an accepted date), the delivery an engineering estimate, and its notes.
+  Object.assign(items.find((x) => x.key === "alert-digest")!, { source: "engineering", start_source: "accepted", outcome: "Admins get every alert fired in the week in one email, so fewer alerts go unread.", note: "Send on Monday morning in the admin's time zone. Skip teams with no alerts that week." });
   const routing = items.find((x) => x.key === "alert-sso")!;
   routing.depends = [...(routing.depends ?? []), "alert-digest"];
   db.simple_chat = seedSimpleChat(db.members);

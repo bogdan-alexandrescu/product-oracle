@@ -92,6 +92,7 @@ const FIELDS: Record<string, string[]> = {
   restore: ["cut"],
   edit_title: ["title"],
   edit_outcome: ["outcome"],
+  edit_note: ["note"],
   accept_risk: ["risk"],
   // S6: a draft item confirmed (changes.py confirm_item).
   confirm_item: ["draft"],
@@ -276,6 +277,7 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "cut") out[f] = s.status === "cut";
     else if (f === "title") out[f] = s.title;
     else if (f === "outcome") out[f] = s.outcome ?? null;
+    else if (f === "note") out[f] = s.note ?? null;
     else if (f === "draft") out[f] = !!s.draft;
     else if (f === "depends_on") out[f] = [...(s.depends ?? [])];
     else if (f === "goal_ids") out[f] = goalIdsOf(s);
@@ -299,6 +301,7 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   if ("draft" in values) s.draft = !!values.draft;
   if ("depends_on" in values) s.depends = [...(values.depends_on as string[])];
   if ("outcome" in values) s.outcome = (values.outcome as string | null) ?? null;
+  if ("note" in values) s.note = (values.note as string | null) ?? null;
   if ("own_goal" in values) {
     if (values.own_goal == null) delete s.own_goal;
     else s.own_goal = String(values.own_goal);
@@ -516,8 +519,9 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   const seen = ranking ? Object.fromEntries(Object.keys(before).map((k) => [k, body.before[k] ?? null])) : body.before;
   // build-feature-panel review 2: a milestone is matched by its name and date as the item reads them (changes._seen_milestone).
   const matches = body.op === "set_milestone" ? seenMilestone(before.milestone) === seenMilestone(seen.milestone) : same(before, seen);
-  if ((body.op === "set_owner" || body.op === "set_decider") && same(before, after)) return json(422, { detail: "No change: it is so already" });
+  // build-feature-panel review 3: as changes.py, a stale `before` is a 409 before a no-op is a 422.
   if (!spec.adds && !matches) return conflict(db, ctx, before, [id], "Changed since you saw it");
+  if ((body.op === "set_owner" || body.op === "set_decider") && same(before, after)) return json(422, { detail: "No change: it is so already" });
   if (body.op === "override_priority" && after.override === null && !before.override) return json(409, { detail: "It is at Oracle's rank already" });
   const change: Change = {
     id: crypto.randomUUID(), session_id: session?.id ?? null, document_id: target.item_id ? stableUuid(`simple-doc/${seed(db, keyOf(db, target.item_id)!).roadmap}`) : null,
@@ -750,7 +754,7 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       stored = ["start_date", "end_date", "date_source"];
       // build-feature-panel: Oracle's dates as the item showed them, for the panel's override line.
       const shownNow = roadmapOut(seen, "owner", new URLSearchParams())!.items.find((i) => i.id === target.item_id);
-      if (shownNow && shownNow.source !== "typed" && !shownNow.end.estimated) target.oracle = { start_date: shownNow.start.date, end_date: shownNow.end.date, source: shownNow.source };
+      if (shownNow && shownNow.source !== "typed" && !shownNow.end.estimated) target.oracle = { start_date: shownNow.start.date, end_date: shownNow.end.date, source: shownNow.source, start_source: shownNow.start.source };
     } else if (body.op === "add_link" || body.op === "remove_link" || body.op === "restore_link") {
       const depKey = keyOf(db, target.subject);
       const dep = depKey ? seen.items.find((x) => x.key === depKey) : undefined;
@@ -833,6 +837,11 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       if (!title) return json(422, { detail: "after.title: 1 to 200 characters" });
       after = { title };
     } else if (body.op === "edit_outcome") after = { outcome: a.outcome ?? null };
+    else if (body.op === "edit_note") {
+      const note = a.note == null ? "" : String(a.note).trim();
+      if (note.length > 500) return json(422, { detail: "after.note: at most 500 characters" });
+      after = { note: note || null };
+    }
     else {
       const note = String((a.risk as Values | undefined)?.note ?? "").trim();
       if (!note) return json(422, { detail: "after.risk.note: 1 to 500 characters" });

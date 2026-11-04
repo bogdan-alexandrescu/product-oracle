@@ -29,6 +29,8 @@ import {
 export type Act = (
   what: string,
   body: Parameters<typeof import("./_lib").propose>[0],
+  /** build-feature-panel review 3: the toast's words once the change applied, as the panel's frames say them (else "<what> in your working draft"). */
+  opts?: { words?: (r: import("./_lib").ChangeResult) => string | Promise<string> },
 ) => Promise<void>;
 
 const FIX_WORDS: Record<Flag["fixes"][number], string> = {

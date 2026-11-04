@@ -42,6 +42,7 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
     }
     case "edit_title": return title ? `renamed ${x} to ${title}` : `renamed ${x}`;
     case "edit_outcome": return `changed the outcome of ${x}`;
+    case "edit_note": return `changed the notes of ${x}`;
     case "accept_risk": return `accepted a risk on ${x}`;
     case "shift_dependents": return `moved ${x} and its dependents after what it depends on`;
     case "move_dependency": return `moved what ${x} depends on`;

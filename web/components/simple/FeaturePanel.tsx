@@ -32,7 +32,8 @@ const span = (a: string, b: string) => yearSpan(a, b);
 const SOURCE_WORDS: Record<string, string> = {
   engineering: "Engineering estimate",
   tracker: "From the tracker",
-  accepted: "Oracle's suggestion",
+  // build-feature-panel review 3: as the picked frames say it (an accepted date is Oracle's plan of who is free when).
+  accepted: "From the capacity plan",
   estimated: "Oracle's estimate",
   prd: "From the PRD",
   typed: "Set by a person",
@@ -306,7 +307,37 @@ function GoalFields({ c }: { c: Ctx }) {
       <Row label="Measure">
         <Field label="Measure" value={measure ?? ""} shown={measure ?? <span className="text-text2">Not set yet</span>} edit={edit} onSave={(v) => save(item.goal?.id ?? "", v)} testId="fp-measure" />
       </Row>
+      {item.goal && (
+        <Row label="Reading">
+          <Reading goal={item.goal} />
+        </Row>
+      )}
     </dl>
+  );
+}
+
+/** build-feature-panel review 3 (FP1 B): the goal's latest reading and its target, as the frames draw them ("Today 61% · target 70% by Jun 30, 2027"); it is read here and set on the goal. */
+function Reading({ goal }: { goal: NonNullable<Item["goal"]> }) {
+  const n = (v: number) => `${v.toLocaleString("en-US")}${goal.unit ? (goal.unit === "%" ? "%" : ` ${goal.unit}`) : ""}`;
+  const now = goal.current ?? null;
+  const target = goal.target ?? null;
+  if (now === null && target === null) return <span className="text-text2" data-testid="fp-reading">No reading yet</span>;
+  return (
+    <span className="tnum" data-testid="fp-reading">
+      {now !== null ? (
+        <>
+          Today <b className="font-semibold">{n(now)}</b>
+        </>
+      ) : (
+        "No reading yet"
+      )}
+      {target !== null && (
+        <>
+          {" · "}target <b className="font-semibold">{n(target)}</b>
+          {goal.due ? ` by ${day(goal.due)}` : ""}
+        </>
+      )}
+    </span>
   );
 }
 
@@ -390,9 +421,13 @@ function Dates({ c, late, lateMilestone, added }: { c: Ctx; late: Item[]; lateMi
   const { item, act, edit } = c;
   const o = item.override;
   const oracleSays = !o && item.source !== "typed" && !item.estimated ? item.end.date : null;
+  // Oracle's delivery the new one replaces (FP1 B's toast: "(Oracle suggested Dec 10)").
+  const oracleEnd = o?.end_date ?? oracleSays;
   const move = async (start: string, end: string): Promise<string | null> => {
     if (end < start) return "The delivery can't come before the start.";
-    await act(`Moved '${item.title}' to ${span(start, end)}`, { op: "move_dates", target: { item_id: item.id }, before: storedDates(item), after: { start_date: start, end_date: end } });
+    const parts = [start !== item.start.date && `start ${day(start)}`, end !== item.end.date && `delivery ${day(end)}`].filter(Boolean).join(" and ");
+    const words = (r: { change: { by_name: string } }) => `${item.title} saved: ${parts || `dates ${span(start, end)}`}, set by ${r.change.by_name}${oracleEnd && end !== oracleEnd ? ` (Oracle suggested ${day(oracleEnd)})` : ""}.`;
+    await act(`Moved '${item.title}' to ${span(start, end)}`, { op: "move_dates", target: { item_id: item.id }, before: storedDates(item), after: { start_date: start, end_date: end } }, { words });
     return null;
   };
   const from = (which: "start" | "end") => (item.estimated ? "Oracle's estimate from its horizon" : which === "end" || !item.start.source ? sourceWords(item.end.source ?? item.source) : sourceWords(item.start.source));
@@ -401,7 +436,10 @@ function Dates({ c, late, lateMilestone, added }: { c: Ctx; late: Item[]; lateMi
       <dl>
         <Row label="Start">
           <Field label="Start" value={calendarDay(item.start.date)} shown={day(item.start.date)} edit={edit} onSave={(v) => { const d = readDay(v, item.start.date); return d ? move(d, item.end.date) : "Type a date like Nov 11."; }} testId="fp-start" />
-          <span className="block text-sm text-text2">{o ? `Set by ${o.by ?? "a person"}` : from("start")}</span>
+          {/* build-feature-panel review 3 (FP1 B saved): a start the person left keeps its own source. */}
+          <span className="block text-sm text-text2" data-testid="fp-start-note">
+            {o ? (o.start_date === item.start.date ? sourceWords(o.start_source ?? o.source) : `Set by ${o.by ?? "a person"}`) : from("start")}
+          </span>
         </Row>
         <Row label="Delivery">
           <Field
@@ -555,8 +593,14 @@ function Links({ c, late, onAdded }: { c: Ctx; late: Item[]; onAdded: (i: Item) 
     const l = o.links.find((x) => x.item_id === item.id) ?? (o.depends_on.includes(item.id) ? { item_id: item.id, by: null, removed: false, removed_by: null } : null);
     return l ? [{ item: o, by: l.by ?? null, removed: !!l.removed, removedBy: l.removed_by ?? null, late: false }] : [];
   });
+  // build-feature-panel review 3 (FP3 A done): a new link says where the item now starts when it moved to start after it.
+  const added = async (from: Item, to: Item) => {
+    const now = (await unwrap(api.GET("/v1/simple/roadmap", {}))).items.find((i: Item) => i.id === from.id);
+    const moved = now && now.start.date !== from.start.date && now.start.date > to.end.date;
+    return `${from.title} now depends on ${to.title}${moved ? `, and starts after it: ${span(now.start.date, now.end.date)}` : ""}.`;
+  };
   const link = (op: "add_link" | "remove_link" | "restore_link", from: Item, to: Item, what: string) =>
-    act(what, { op, target: { item_id: from.id, subject: to.id }, before: { depends_on: depKeys(from, items) }, after: {} });
+    act(what, { op, target: { item_id: from.id, subject: to.id }, before: { depends_on: depKeys(from, items) }, after: {} }, op === "add_link" ? { words: () => added(from, to) } : undefined);
   return (
     <div>
       <DepList
@@ -654,6 +698,10 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
             <Owner c={c} />
           </Row>
           <Row label="Confidence">{item.confidence ? confidenceWord(item.confidence) : "Not rated"}</Row>
+          {/* build-feature-panel review 3: the Notes row the picked frames draw (edit_note). */}
+          <Row label="Notes">
+            <Field label="Notes" value={item.note ?? ""} shown={item.note ?? <span className="text-text2">No notes yet</span>} edit={canChange} multiline onSave={async (v) => (v.trim() === (item.note ?? "") ? null : (await act(`Changed the notes of '${item.title}'`, { op: "edit_note", target: { item_id: item.id }, before: { note: item.note ?? null }, after: { note: v.trim() || null } }), null))} testId="fp-notes" />
+          </Row>
         </dl>
       </Section>
       {more}

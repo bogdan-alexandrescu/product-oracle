@@ -61,6 +61,10 @@ interface SeedItem {
   risks?: { flag: Flag["kind"]; note: string; subject?: string | null }[];
   /** Simple S3a's change engine (./simple-changes.ts) edits these. */
   outcome?: string | null;
+  /** build-feature-panel review 3: the item's notes (RoadmapItem.note; edit_note). */
+  note?: string | null;
+  /** build-feature-panel review 3: the start's own source when it is not the end's (`source`). */
+  start_source?: Exclude<Dated["source"], "estimated">;
   position?: number;
   /** S4 (the floating card): the priority's rationale and the PRD section it came from. */
   why?: string;
@@ -282,6 +286,11 @@ function sectionLabel(section: string, heading: string | undefined, name: string
 
 /** S4: each goal's metric (the goal counters' line). */
 const METRICS: Record<string, string> = { "grow-retention": "Teams active after 90 days", "faster-activation": "Days to the first alert", "quiet-alerts": "Teams muting alerts" };
+/** build-feature-panel review 3: each goal's reading (its attrs current, target, unit, due; the panel's Reading row). */
+const READINGS: Record<string, { current: number; target: number; unit: string; due: string }> = {
+  "grow-retention": { current: 61, target: 70, unit: "%", due: "2027-06-30" },
+  "faster-activation": { current: 4, target: 2, unit: "days", due: "2027-03-31" },
+};
 /** roadmap-gantt ("simple-plan-two"): a goal named like a plan goal ("Growth"), for the plan's items only. */
 const PLAN_GOALS: Record<string, string> = { growth: "Growth" };
 export const goalId = (key: string): string => stableUuid(`simple-goal/${key}`);
@@ -538,7 +547,7 @@ function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated
   }
   const end: Dated = s.end !== undefined && s.source ? { date: addDays(w[0], s.end), source: s.source, estimated: false } : { date: w[1], source: "estimated", estimated: true };
   let start: Dated = { date: w[0], source: "estimated", estimated: true };
-  if (s.start !== undefined && s.source) start = { date: addDays(w[0], s.start), source: s.source, estimated: false };
+  if (s.start !== undefined && s.source) start = { date: addDays(w[0], s.start), source: s.start_source ?? s.source, estimated: false };
   else if (end.date < w[0]) start = { date: addDays(end.date, -41), source: "estimated", estimated: true };
   return { start, end };
 }
@@ -958,7 +967,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       code: prdCode(s.section),
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
       prd: ownPrd(s),
-      goal: goalOfSeed(s) ? { id: stableUuid(`simple-goal/${goalOfSeed(s)}`), key: goalOfSeed(s)!, title: GOALS[goalOfSeed(s)!] ?? PLAN_GOALS[goalOfSeed(s)!], metric: METRICS[goalOfSeed(s)!] ?? null, position: goalPositionOf(goalOfSeed(s)!) } : null,
+      goal: goalOfSeed(s) ? { id: stableUuid(`simple-goal/${goalOfSeed(s)}`), key: goalOfSeed(s)!, title: GOALS[goalOfSeed(s)!] ?? PLAN_GOALS[goalOfSeed(s)!], metric: METRICS[goalOfSeed(s)!] ?? null, position: goalPositionOf(goalOfSeed(s)!), ...READINGS[goalOfSeed(s)!] } : null,
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,
       status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),
@@ -966,6 +975,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       start: r.start, end: r.end,
       // approved-roadmap-to-simple: the applied version's words, until a person changes the dates.
       date_basis: s.basis && s.dates && !db.own[s.key] ? s.basis : null,
+      note: s.note ?? null,
       source: r.end.estimated ? r.start.source : r.end.source,
       estimated: r.start.estimated && r.end.estimated,
       suggestion: suggestion ? { ...suggestion, can_decide: decides(s) } : null,

@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 
 import { toast } from "@/components/ds/Toast";
 import { FloatingCard, type Act } from "@/app/simple/roadmap/_card";
-import { ChangeFailed, propose, type Item } from "@/app/simple/roadmap/_lib";
+import { ChangeFailed, propose, undo, type Item } from "@/app/simple/roadmap/_lib";
 import { usePhone } from "@/components/simple/FlowViews";
 import { api, unwrap } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
@@ -60,9 +60,12 @@ function Opened({ feature, phone, canChange, onClose }: { feature: string; phone
   const items = useMemo(() => new Map((data?.items ?? []).map((i: Item) => [i.id, i])), [data]);
   const item = items.get(feature) ?? [...items.values()].find((i) => i.title === feature || i.key === feature || (!!i.code && i.code === feature)) ?? ofBet(items, feature);
   const act: Act = useCallback(
-    async (_what, body) => {
+    async (_what, body, opts) => {
       try {
-        await propose(body);
+        const r = await propose(body);
+        // build-feature-panel review 3: the panel's own words once applied, with Undo, as the frames show.
+        if (r.change.status === "applied" && opts?.words)
+          toast({ message: await opts.words(r), action: r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(reload, (e) => toast({ message: String(e.message) })) } : undefined });
       } catch (e) {
         toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not make this change" });
       } finally {

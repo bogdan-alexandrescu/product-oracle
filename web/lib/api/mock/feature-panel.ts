@@ -52,12 +52,13 @@ export function overrideOf(changes: Change[], item: string): (Schemas["SimpleOve
       let oracle = c.op === "move_dates" ? (c.target.oracle as Values | undefined) : undefined;
       if (!oracle) {
         if (before.date_source == null || before.date_source === "typed" || !before.end_date) continue;
-        oracle = { start_date: before.start_date, end_date: before.end_date, source: before.date_source };
+        oracle = { start_date: before.start_date, end_date: before.end_date, source: before.date_source, start_source: before.date_source };
       }
       kept = {
         start_date: (oracle.start_date as string) ?? null,
         end_date: (oracle.end_date as string) ?? null,
         source: (oracle.source as string) ?? null,
+        start_source: (oracle.start_source as string) ?? null,
         restore: Object.fromEntries(RESTORED.map((f) => [f, before[f] ?? null])),
       };
     }
@@ -89,7 +90,7 @@ export function withPanel(items: Item[], changes: Change[], keyOf: (id: string) 
   for (const i of items) {
     const typed = i.source === "typed";
     const o = typed ? overrideOf(changes, i.id) : null;
-    i.override = o ? { start_date: o.start_date, end_date: o.end_date, source: o.source, by: o.by, at: o.at } : null;
+    i.override = o ? { start_date: o.start_date, end_date: o.end_date, source: o.source, start_source: o.start_source, by: o.by, at: o.at } : null;
     const added = new Map<string, string>();
     const removed = new Map<string, string>();
     const key = keyOf(i.id);
