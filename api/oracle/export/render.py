@@ -43,6 +43,7 @@ from oracle.docs import layers
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
 from oracle.docs.parser import strip_citations
 from oracle.docs.schemas import VersionSource
+from oracle.raw_tokens import citation_labels, markdown_footnotes, strip_raw_tokens
 from oracle.swarm.settings import get_runtime_settings
 from oracle.templates.models import Template, TemplateVersion, Theme
 
@@ -741,8 +742,6 @@ def days_in_words(text: str) -> str:
 
 
 def _render_text(renderer, tokens, idx, options, env) -> str:
-    from oracle.raw_tokens import strip_raw_tokens
-
     return str(escape(days_in_words(strip_raw_tokens(tokens[idx].content))))
 
 
@@ -1262,7 +1261,6 @@ def render_markdown(ev: ExportVersion) -> str:  # full layer only
     are Markdown footnotes (``[^1]``, defined at the end), never raw markers; one that
     points to no citation of the version is dropped (raw-tokens-everywhere).
     """
-    from oracle.raw_tokens import citation_labels, markdown_footnotes
     from oracle.roadmap import doc_dates
 
     banner = f"<!-- {banner_line(ev)} -->\n"

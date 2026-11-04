@@ -17,6 +17,10 @@ RAW_TOKEN = re.compile(r"(?<![ \t])[ \t]*\[[cls]:[^\[\]\n]*\]")
 _OPENER = re.compile(r"\[[cls]:")
 # [c:c1] or [c:c1, c2]
 _CITE = re.compile(r"(?<![ \t])[ \t]*\[c:\s*([^\[\]\n]*?)\s*\]")
+# A fenced code block (``` or ~~~, closed by the same fence or the end): left as written.
+_FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})[^\n]*\n.*?(?:^ {0,3}\1[ \t]*$|\Z)", re.M | re.S)
+# A footnote label the document uses itself ("[^1]", "[^note]").
+_OWN_NOTE = re.compile(r"\[\^([^\]\s]+)\]")
 
 
 def has_raw_tokens(text: str | None) -> bool:
@@ -43,9 +47,23 @@ def markdown_footnotes(markdown: str, label: Callable[[str], str | None]) -> str
     """``markdown`` with each ``[c:id]`` as a Markdown footnote reference (``[^1]``),
     numbered in order of first use, and their definitions at the end (``[^1]: label``).
     A key ``label`` gives None for points to nothing and is dropped; any other raw marker
-    is dropped too."""
+    is dropped too. Numbers the document's own footnotes use are skipped, and fenced code
+    is left as written."""
+    parts: list[tuple[str, bool]] = []
+    last = 0
+    for m in _FENCE.finditer(markdown):
+        parts += [(markdown[last : m.start()], False), (m.group(0), True)]
+        last = m.end()
+    parts.append((markdown[last:], False))
+    taken = {n for text, code in parts if not code for n in _OWN_NOTE.findall(text)}
     numbers: dict[str, int] = {}
     notes: list[str] = []
+
+    def next_number() -> int:
+        n = max(numbers.values(), default=0) + 1
+        while str(n) in taken:
+            n += 1
+        return n
 
     def ref(m: re.Match[str]) -> str:
         refs = []
@@ -56,12 +74,12 @@ def markdown_footnotes(markdown: str, label: Callable[[str], str | None]) -> str
                 text = label(key)
                 if text is None:
                     continue
-                numbers[key] = len(numbers) + 1
+                numbers[key] = next_number()
                 notes.append(f"[^{numbers[key]}]: {strip_raw_tokens(text).strip()}")
             refs.append(f"[^{numbers[key]}]")
         return "".join(refs)
 
-    body = strip_raw_tokens(_CITE.sub(ref, markdown))
+    body = "".join(text if code else strip_raw_tokens(_CITE.sub(ref, text)) for text, code in parts)
     if not notes:
         return body
     return body.rstrip("\n") + "\n\n" + "\n".join(notes) + "\n"
