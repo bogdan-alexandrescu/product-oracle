@@ -23,6 +23,10 @@ async function startReview(page: Page, from?: "Onboarding roadmap") {
   if (from) {
     // Started from a roadmap's own page, with that roadmap picked.
     await page.goto("/simple/roadmap");
+    // A phone keeps the filters behind Filters.
+    await expect(page.getByTestId("start-review")).toBeEnabled();
+    const filters = page.getByRole("button", { name: "Filters", exact: true });
+    if (await filters.isVisible()) await tap(filters);
     await page.getByTestId("filter-roadmap").selectOption({ label: from });
     await expect(page.getByTestId("simple-roadmap")).toContainText(from);
     await tap(page.getByTestId("start-review"));
