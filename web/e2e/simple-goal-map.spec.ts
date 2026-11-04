@@ -208,4 +208,22 @@ test.describe("phone", () => {
     await page.getByTestId("gm-ladder-phone").getByTestId("gm-feature").filter({ hasText: "One-tap sign-up link" }).click();
     await expect(page.getByTestId("gm-feature-panel")).toBeVisible();
   });
+
+  test("starts a New PRD from a milestone on a phone", async ({ page }) => {
+    // protects=New PRD at the top works on a phone and opens Simple's New PRD form prefilled;
+    // fails_when=the button is out of reach or the form opens empty; no_claim=the intake. Adding,
+    // moving an area and Attach a feature sit in the desktop grid only, as the picked phone frame.
+    await login(page, ADMIN.email);
+    await page.goto("/simple/goals");
+    await page.getByTestId("gm-new-prd").click();
+    const ed = page.getByTestId("gm-editor");
+    await ed.getByLabel("Milestone").selectOption({ label: "6 paid conversions per rep" });
+    await ed.locator("label", { hasText: "Customer safety" }).click();
+    await ed.getByTestId("gm-save").click();
+    const sheet = page.getByRole("dialog", { name: /New PRD/ });
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole("textbox").first()).toHaveValue("6 paid conversions per rep");
+    await expect(sheet.getByRole("textbox").nth(1)).toHaveValue(/Areas: Customer safety\./);
+    await expect(page.getByTestId("gm-add-area")).toBeHidden();
+  });
 });
