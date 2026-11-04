@@ -12,6 +12,7 @@ Invented example data only.
 """
 
 import json
+import re
 
 import pytest
 from sqlalchemy import select
@@ -247,3 +248,14 @@ def test_a_long_upload_is_read_by_the_sections_that_speak_to_the_brief():
     assert "computes each quote" in got["excerpt"] and "nearest depot" in got["excerpt"]
     assert "onboarding screens" not in got["excerpt"]
     assert len(got["excerpt"]) <= 600
+
+
+def test_the_intake_spec_names_the_current_prompt():
+    from pathlib import Path
+
+    from oracle.jobs import prompting
+
+    spec = Path(__file__).parents[2] / "docs/product-oracle-v2/specs/spec-INT2.md"
+    current = prompting.current("intake_analysis")[0]
+    named = set(re.findall(r"intake_analysis\.v\d+", spec.read_text()))
+    assert named == {current}
