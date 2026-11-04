@@ -203,6 +203,7 @@ export function FeatureRows({
   grips,
   lifted,
   onGrip,
+  onOpen,
 }: {
   plan: Plan;
   goal: string | null;
@@ -210,6 +211,8 @@ export function FeatureRows({
   grips: boolean;
   lifted: string | null;
   onGrip: (f: Feature, e: React.PointerEvent | React.KeyboardEvent) => void;
+  /** The feature's name opens its item panel (the grip only moves it). */
+  onOpen?: (f: Feature) => void;
 }) {
   const features = planFeatures(plan, goal);
   if (!features.length) return <p className="mt-2 text-[15px] text-text2">Nothing in the plan yet</p>;
@@ -251,7 +254,13 @@ export function FeatureRows({
             )}
             <CodeTag code={f.code} title={f.name} />{" "}
             <span data-testid="plan-feature-name" className="min-w-0 flex-1">
-              {f.name}
+              {onOpen ? (
+                <button type="button" data-testid="plan-feature-open" title={`Open ${f.name}`} className="text-left hover:underline" onClick={() => onOpen(f)}>
+                  {f.name}
+                </button>
+              ) : (
+                f.name
+              )}
               {others.length > 0 && (
                 <span data-testid="also-goals" title={`Also serves ${others.join(", ")}`} className="ml-1.5 inline-flex h-5 items-center whitespace-nowrap rounded-full border border-line-strong px-1.5 align-[1px] text-[12px] font-[650] text-text2">
                   +{others.length} {others.length === 1 ? "goal" : "goals"}

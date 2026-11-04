@@ -177,7 +177,7 @@ for (const size of SIZES) {
     test("a feature's name opens its item panel, as the roadmap's does", async ({ page }) => {
       await open(page, size.viewport);
       await expect(page.getByTestId("item-panel")).toHaveCount(0);
-      await bucket(page, "Revenue").locator('[data-code="F-14"]').getByRole("button", { name: "Plan limits" }).click();
+      await bucket(page, "Revenue").locator('[data-code="F-14"]').getByRole("button", { name: "Plan limits", exact: true }).click();
       const panel = page.getByTestId("item-panel");
       await expect(panel).toHaveCount(1);
       const card = panel.getByTestId("floating-card");
@@ -195,7 +195,7 @@ for (const size of SIZES) {
       await expect(page.getByTestId("add-goal")).toHaveCount(0);
       await expect(page.getByTestId("feature-grip")).toHaveCount(0);
       // A viewer opens a feature's item panel too, to read it.
-      await bucket(page, "Revenue").locator('[data-code="F-14"]').getByRole("button", { name: "Plan limits" }).click();
+      await bucket(page, "Revenue").locator('[data-code="F-14"]').getByRole("button", { name: "Plan limits", exact: true }).click();
       await expect(page.getByTestId("item-panel").getByTestId("floating-card")).toContainText("Plan limits");
       for (const t of await page.getByTestId("plan-chip").allInnerTexts()) expect(t.replace(/\s+/g, " ")).toMatch(/^M\d (Prove it|Scale volume|Open to all)$/);
       for (const t of await page.getByTestId("goal-bar-label").allInnerTexts()) expect(t).toMatch(/^M\d (Prove it|Scale volume|Open to all) · [\d.]+ wk$/);

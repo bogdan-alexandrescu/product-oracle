@@ -15,6 +15,7 @@ import { useMe } from "@/lib/me";
 import { useSetParams } from "@/lib/use-set-params";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
+import { FeaturePanel } from "../roadmap/_panel";
 import { ArchiveDialog, BTN, count, dayOf, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
 import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan } from "./plan-buckets";
@@ -1925,6 +1926,9 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
     .map((b) => ({ b, rows: b.codes.map((c) => rowOf.get(c)).filter((r): r is Row => !!r && !r.in_plan) }))
     .filter((x) => x.rows.length > 0);
   const archivedGoal = gb?.goals.find((g) => g.id === archiving);
+  // A feature's name opens the Simple item panel, as the roadmap does.
+  const phone = usePhone();
+  const [opened, setOpened] = useState<{ code: string; name: string } | null>(null);
   return (
     <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
       <PlanBucketsHead plan={plan} codeOf={codeOf} />
@@ -1997,7 +2001,7 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
                   )}
                 </>
               )}
-              <FeatureRows plan={plan} goal={g} gb={gb} grips={rights.move} lifted={drag.lifted} onGrip={drag.grip} />
+              <FeatureRows plan={plan} goal={g} gb={gb} grips={rights.move} lifted={drag.lifted} onGrip={drag.grip} onOpen={setOpened} />
               {over && (
                 <p data-testid="drop-note" className="mt-2 rounded-lg border border-dashed border-accent px-3 py-2 text-[15px] text-accent-ink">
                   Drop here: {g} becomes the goal it moves most
@@ -2065,7 +2069,7 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
               </span>
             </div>
             <p className="mt-1 text-[15px] text-warn">⚠ Serves no goal in the plan</p>
-            <FeatureRows plan={plan} goal={null} gb={gb} grips={rights.move} lifted={drag.lifted} onGrip={drag.grip} />
+            <FeatureRows plan={plan} goal={null} gb={gb} grips={rights.move} lifted={drag.lifted} onGrip={drag.grip} onOpen={setOpened} />
           </li>
         )}
         {outside.length > 0 && (
@@ -2092,6 +2096,7 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
       </ul>
       {drag.edge}
       {drag.ghost}
+      {opened && <FeaturePanel key={opened.code} feature={{ ...opened, prd: plan.prd }} phone={phone} canChange={can("create_simple_change")} onClose={() => setOpened(null)} />}
       {archivedGoal && gb && (
         <ArchiveDialog
           goal={archivedGoal}
