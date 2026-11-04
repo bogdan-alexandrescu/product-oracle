@@ -120,3 +120,43 @@ for (const [name, viewport] of [["desktop", { width: 1440, height: 900 }], ["pho
     });
   });
 }
+
+/**
+ * Re-review round 3 (the mock's default invented data): once Usage alerts and Guided setup are
+ * marked replaced by Team templates, their history stays on Decisions. The Meetings page's
+ * "Its decisions" link of the past "Review: Usage alerts" opens that meeting with its decision,
+ * and Guided setup's decided question stays outside meetings; only the PRD filter leaves them
+ * out. protects = a replaced PRD's past meetings, their decisions and its decided questions on
+ * Decisions; fails_when = the meeting's link lands on an empty page, or the decided question is
+ * gone; no_claim = the replaced PRD's open questions (the API's tests).
+ */
+test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page);
+  for (const [slug, title] of [["usage-alerts", "Usage alerts"], ["guided-setup", "Guided setup"]]) {
+    await page.goto(`/documents/${slug}`);
+    await expect(page.getByRole("heading", { level: 1 }).filter({ visible: true })).toContainText(title);
+    await page.getByRole("button", { name: "Replaced by" }).click();
+    const dialog = page.getByTestId("replaced-by-dialog");
+    await dialog.getByLabel("Team templates").check();
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByTestId("replaced-by").filter({ visible: true })).toContainText("Replaced by Team templates");
+  }
+
+  await page.goto("/simple/meetings");
+  const row = page.getByTestId("meetings-past").locator("li").filter({ has: page.getByRole("link", { name: "Review: Usage alerts" }) });
+  await row.getByTestId("meetings-its-decisions").click();
+  await expect(page).toHaveURL(/\/simple\/decisions\?meeting=/);
+  const past = page.getByRole("region", { name: "Review: Usage alerts" });
+  await expect(past.getByTestId("decision-row")).toHaveCount(1);
+  await expect(past.getByTestId("decision-row").first()).toContainText("D-4 Moved Weekly alert digest");
+
+  await page.goto("/simple/decisions");
+  await expect(page.getByRole("region", { name: "Outside meetings" })).toContainText("Q1 Data retention period");
+  const filter = page.getByRole("combobox", { name: "PRD", exact: true });
+  await expect(filter.locator("option", { hasText: "Team templates" })).toHaveCount(1);
+  const filters = await optionTexts(filter);
+  expect(filters).not.toContain("Usage alerts");
+  expect(filters).not.toContain("Guided setup");
+});

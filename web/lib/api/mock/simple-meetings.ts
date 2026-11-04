@@ -43,7 +43,7 @@
  * meeting (409 naming it).
  */
 import type { Schemas } from "@/lib/api/client";
-import { agendaOut, decidedOutsideRows, questionsCounts, questionsOfMeeting, questionsOut, routeQuestionChanges, seedQuestions, waitingOut, type QuestionsDb } from "./simple-questions";
+import { agendaOut, decidedOutsideRows, questionsCounts, questionsOfMeeting, questionsOut, questionsPrdReplaced, routeQuestionChanges, seedQuestions, waitingOut, type QuestionsDb } from "./simple-questions";
 import { plainFlow } from "./simple-visuals";
 import { proposeOffAgenda, seedSimpleProposal } from "./simple-changes";
 import { mockNowMs } from "./clock";
@@ -578,7 +578,7 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
     open_decisions: openDecisions(ctx, db, p),
     // The meeting PRD's agenda (questions.due_for): the open questions blocking the soonest
     // one's milestone, whoever decides them, and those decided in this meeting (with Undo).
-    decisions_due: questionsOut(ctx, qdb(ctx, db), p.id).length ? agendaOut(ctx, qdb(ctx, db), { id: m.id, session_id: m.session_id, live: m.status === "live" }) : [],
+    decisions_due: questionsOut(ctx, qdb(ctx, db), p.id, true).length ? agendaOut(ctx, qdb(ctx, db), { id: m.id, session_id: m.session_id, live: m.status === "live" }) : [],
     pending_proposals: proposals(ctx, p),
     drafts: meetingDrafts(ctx, db, m, p),
     waiting_people: [...new Set(meetingDrafts(ctx, db, m, p).flatMap((d) => d.waiting_on))].map((i) => ref(ctx, i)),
@@ -1036,7 +1036,8 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
   const goalQ = q.get("goal");
   const meetingQ = q.get("meeting");
   const prd = prdQ ? ps.find((x) => x.slug === prdQ || x.id === prdQ) : undefined;
-  if (prdQ && !prd) return json(404, { detail: "No such PRD" });
+  // simple-replaced-prds (as decisions_page): a replaced PRD is not a filter; its past meetings stay.
+  if (prdQ && (!prd || prd.replaced)) return json(404, { detail: "No such PRD" });
   const goal = goalQ ? [...goals.values()].find((g) => g.key === goalQ || g.id === goalQ) : undefined;
   if (goalQ && !goal) return json(404, { detail: "No such goal" });
   let match: Set<string> | null = null;
@@ -1079,7 +1080,7 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
     // A decided question taken outside meetings is listed here with its code and answer (open ones wait above).
     other: [...(meetingQ ? [] : decidedOutsideRows(ctx, qd, qs)), ...others.map((d) => row(ctx, d))],
     // qa4-simple-decide-37 (as decisions_page: both from the PRDs the reader reads): every PRD whose questions are shown.
-    prds: [...new Map([...ps.filter((x) => !x.replaced).map((x) => [x.slug, x.title] as const), ...questionsOut(ctx, qd, null).map((x) => [x.prd.slug, x.prd.title] as const)])]
+    prds: [...new Map([...ps.filter((x) => !x.replaced).map((x) => [x.slug, x.title] as const), ...(questionsPrdReplaced(ctx) ? [] : questionsOut(ctx, qd, null)).map((x) => [x.prd.slug, x.prd.title] as const)])]
       .sort((a, b) => a[1].localeCompare(b[1])).map(([id, title]) => ({ id, title })),
     // goal-order (as decisions_page): the Goal filter lists the goals in the one goal order.
     goals: [...goals.values()].sort((a, b) => goalRank(a.key) - goalRank(b.key) || a.key.localeCompare(b.key)).map((g) => ({ id: g.key, title: g.title })),
