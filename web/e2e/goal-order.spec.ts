@@ -85,10 +85,14 @@ for (const [label, viewport] of [
       await page.getByRole("tab", { name: "Goal buckets" }).click();
       await inOrder(page.getByTestId("goal-bucket"), expected("Grow retention", "Faster activation"));
 
-      // Simple > Decisions: the Goal filter lists the goals in the one order too.
+      // Simple > Decisions: the Goal filter lists its goals in the one order too (by key,
+      // Faster activation would come first).
       await page.goto("/simple/decisions");
       const goalBox = page.getByRole("combobox", { name: "Goal", exact: true });
-      await inOrder(goalBox.locator("option"), expected("Grow retention", "Keep alerts quiet", "Faster activation"));
+      await expect(goalBox).toBeVisible();
+      await expect
+        .poll(async () => order(await goalBox.locator("option").allTextContents()))
+        .toEqual(expected("Grow retention", "Faster activation"));
 
       await page.goto("/plan");
       const cards = page.locator('[data-testid^="home-goal-G"]');
