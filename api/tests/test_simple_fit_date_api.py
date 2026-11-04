@@ -51,6 +51,10 @@ Test cards (protects / fails_when / no_claim):
 - test_approve_lands_on_the_company_roadmap (train review): protects=with a company roadmap,
   the answer and the re-plan read and write it, even when the PRD's track points at an
   older roadmap; fails_when=the re-plan is written or approved on the track's old roadmap.
+- test_smaller_goal_shrinks_each_item_to_a_tenth_at_least (smaller goal, owner): protects=each
+  of the goal's own unlocked items counts at least 10% of its effort, a 0.3-week one too, and
+  a safety item keeps its full size like guardrail and must-include ones; fails_when=a small
+  item is rounded down to nothing.
 """
 
 import re
@@ -450,3 +454,35 @@ async def test_approve_lands_on_the_company_roadmap(client):
             select(RoadmapItem).where(RoadmapItem.roadmap_version_id == vs[1].id))}  # fmt: skip
     assert n_old == 1
     assert rows == {"f-06", "f-03"}
+
+
+# Help link (0.3 weeks) is the Activation goal's own unlocked M2 work; Audit trail its safety
+# item.
+TINY = RULED.replace(
+    "| F-08 | Setup tips | M2 | 2 | Activation | then |\n",
+    "| F-08 | Setup tips | M2 | 2 | Activation | then |\n"
+    "| F-09 | Help link | M2 | 0.3 | Activation | then |\n"
+    "| F-10 | Audit trail | M2 | 2 | Activation | then |\n",
+).replace(
+    "- F-07 Consent log: Guardrail: every invite is logged with its consent.\n",
+    "- F-07 Consent log: Guardrail: every invite is logged with its consent.\n"
+    "- F-10 Audit trail: Safety: every admin change can be traced.\n",
+)
+
+
+def test_smaller_goal_shrinks_each_item_to_a_tenth_at_least():
+    """At the floor scale each of the goal's own unlocked items counts at least 10% of its
+    effort, a small one too (never rounded down to nothing); guardrail, safety and
+    must-include items keep their full size."""
+    import datetime as dt
+
+    from oracle.simple import plan
+    from oracle.simple.fit_date_router import build_plan
+
+    today = dt.date(2026, 11, 2)
+    view = plan.compute(plan.parse(TINY, today))
+    p = build_plan(TINY, view, "M2", today, scale=0.1)
+    pw = {i.id: i.pw for i in p.items}
+    assert pw["F-08"] == pytest.approx(0.2)
+    assert pw["F-09"] >= 0.03 - 1e-9, pw
+    assert (pw["F-06"], pw["F-07"], pw["F-10"]) == (4, 3, 2)

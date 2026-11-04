@@ -173,7 +173,7 @@ const HARM: Record<Change["cost_kind"], number> = { none: 0, risk: 1, gate: 2, g
  * saved for the least harm, the must-include change too (the API's answer). */
 function ranked(): Change[] {
   const s = share();
-  return CHANGES.map((c) => (GOAL_WORK[c.id] ? { ...c, days: Math.round(c.days * s), pw_saved: Math.round(c.pw_saved * s * 10) / 10 } : c)).sort(
+  return CHANGES.map((c) => (GOAL_WORK[c.id] ? { ...c, days: Math.round(c.days * s), pw_saved: Math.max(Math.round(c.pw_saved * s * 10) / 10, c.pw_saved * 0.1) } : c)).sort(
     (x, y) => y.days - x.days || HARM[x.cost_kind] - HARM[y.cost_kind] || x.item.localeCompare(y.item),
   );
 }
