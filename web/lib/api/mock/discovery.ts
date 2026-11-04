@@ -16,6 +16,9 @@ const FINDING =
   "\\b(find(s|ing)?|found|figur(e|es|ing)|work(s|ing)? (it|them|this|that|these|those) out|" +
   "learn(s|ing)?|discover(s|ing|y)?|check(s|ing)?|measur(e|es|ing)|test(s|ing)?|" +
   "investigat(e|es|ing|ion)|research(es|ing)?|spike)\\b";
+// "Find out" / "figure out" / "work out", and a stated fact (a number): as the API's _FIND_OUT, _FACT.
+const FIND_OUT = /\b(find(s|ing)?|figur(e|es|ing)|work(s|ing)?)( (it|them|this|that|these|those))? out\b/;
+const FACT = /\d/;
 const PART = "\\bpart of (this|the|our) (work|project|job|plan|build|scope|effort|feature|prd)\\b";
 const FINDING_IS_PART = new RegExp(FINDING + "[^.;!?]{0,80}?" + PART);
 const WE_WILL_FIND = /\b(we'll|we will|we're going to|the team will|will be) (find|figure|work|found|figured|worked)( (it|them|this|that))? out\b/;
@@ -28,7 +31,8 @@ export function isDiscovery(text: string | null | undefined): boolean {
   if (!text?.trim()) return false;
   const t = text.replace(/[‘’]/g, "'").toLowerCase().split(/\s+/).filter(Boolean).join(" ");
   if (NOT_PART.test(t)) return false;
-  if (FINDING_IS_PART.test(t)) return true;
+  // Finding out is part of the work only of what is unknown: a stated fact plans no discovery.
+  if (FINDING_IS_PART.test(t) && (UNKNOWN.test(t) || (FIND_OUT.test(t) && !FACT.test(t)))) return true;
   return UNKNOWN.test(t) && (new RegExp(PART).test(t) || WE_WILL_FIND.test(t) || DISCOVERY_STEP.test(t));
 }
 

@@ -15,6 +15,8 @@ import { login } from "./helpers";
  *   still holds the draft, or no requirement is shown; no_claim=the real engine's reading.
  * - "a bare unknown": protects=a plain "Unknown." still holds the draft (it waits for
  *   review); fails_when=it is taken for planned work; no_claim=other answer paths.
+ * - "a known fact": protects=an answer that states the fact and only plans to test it still
+ *   waits for review; fails_when=it is taken for planned work; no_claim=other phrasings.
  */
 
 const BLOCKERS = "What could stop this from shipping at all?";
@@ -91,6 +93,16 @@ for (const phone of [false, true]) {
     await openIntake(page);
     await answerBlockers(page, "Unknown.");
     // A real answer below the owner role waits for review (B4), and holds the draft.
+    await expect(bubble(page, BLOCKERS)).toContainText("Waiting for review");
+    const panel = await gate(page, phone);
+    await expect(panel.getByTestId("blocking-gap")).toHaveCount(1);
+    await expect(panel.getByTestId("unknown-work")).toHaveCount(0);
+  });
+
+  test(`${where}: a known fact whose testing is part of the work still holds the draft`, async ({ page }) => {
+    if (phone) await page.setViewportSize({ width: 390, height: 844 });
+    await openIntake(page);
+    await answerBlockers(page, "We checked: the payment partner allows 500 calls a minute. Load testing is part of the project.");
     await expect(bubble(page, BLOCKERS)).toContainText("Waiting for review");
     const panel = await gate(page, phone);
     await expect(panel.getByTestId("blocking-gap")).toHaveCount(1);

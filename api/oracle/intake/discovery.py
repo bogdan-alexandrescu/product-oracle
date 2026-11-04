@@ -11,7 +11,9 @@ estimate, and a run's draft that lists it as a blocker, or leaves it out, is ref
 (:func:`draft_problems`, checked in ``oracle.runs.service._import_draft``).
 
 :func:`is_discovery` reads plain words: something is unknown (or not checked yet) and
-finding it out is part of the work, the team will find out, or a discovery step does;
+finding it out is part of the work, the team will find out, or a discovery step does
+(finding out with no unknown counts only when no fact is stated: "it allows 500 a minute;
+testing that is part of this work" is a known fact, not work);
 "not part of this work" and "outside this work" are never work.
 """
 
@@ -47,6 +49,12 @@ _FINDING = (
     r"learn(s|ing)?|discover(s|ing|y)?|check(s|ing)?|measur(e|es|ing)|test(s|ing)?|"
     r"investigat(e|es|ing|ion)|research(es|ing)?|spike)\b"
 )
+# "Find out" / "figure out" / "work out": what someone does with something not known yet.
+_FIND_OUT = re.compile(
+    r"\b(find(s|ing)?|figur(e|es|ing)|work(s|ing)?)( (it|them|this|that|these|those))? out\b"
+)
+# A stated fact (a number): the thing is known, only checking it is planned.
+_FACT = re.compile(r"\d")
 _PART = r"\bpart of (this|the|our) (work|project|job|plan|build|scope|effort|feature|prd)\b"
 _FINDING_IS_PART = re.compile(_FINDING + r"[^.;!?]{0,80}?" + _PART)
 _WE_WILL_FIND = re.compile(
@@ -72,7 +80,11 @@ def is_discovery(text: str | None) -> bool:
     t = _plain(text)
     if _NOT_PART.search(t):
         return False
-    if _FINDING_IS_PART.search(t):
+    if _FINDING_IS_PART.search(t) and (
+        _UNKNOWN.search(t) or (_FIND_OUT.search(t) and not _FACT.search(t))
+    ):
+        # Finding out is part of the work only of what is unknown: "it allows 500 a
+        # minute; testing that is part of this work" states the fact, it plans no discovery.
         return True
     return bool(
         _UNKNOWN.search(t)
@@ -165,9 +177,17 @@ async def run_work(db: AsyncSession, intake_id: uuid.UUID, keep: set[uuid.UUID])
     return await work_of(db, questions, gaps, keep)
 
 
-# A line or heading that holds something up.
+# A heading that holds something up.
 _BLOCKER = re.compile(
     r"\bblock(s|ed|er|ers|ing)?\b|\bwaits? on\b|\bwaiting on\b|\bon hold\b|\bstops? the draft\b",
+    re.IGNORECASE,
+)
+# A cited line that says the cited thing holds something up: it is a blocker, or the
+# work is blocked by it; never a line that merely mentions blocking something else
+# ("before blocking traffic") or an item that waits on it (the discovery item gating it).
+_BLOCKER_LINE = re.compile(
+    r"\bblockers?\b|\b(is|are|stays?|remains?|gets?|be|been) blocked\b|"
+    r"\bblocked (until|on|by)\b|\bon hold\b|\bstops? the draft\b",
     re.IGNORECASE,
 )
 _SECTION_ID = re.compile(r"\{#([^}\s]+)\}")
@@ -236,7 +256,7 @@ def draft_problems(markdown: str, work: Sequence[Work]) -> list[ImportProblem]:
             if line.lstrip().startswith("#"):
                 heading = line
             if any(m in line for m in marks) and (
-                _BLOCKER.search(heading) or _BLOCKER.search(line)
+                _BLOCKER.search(heading) or _BLOCKER_LINE.search(line)
             ):
                 p = _as_blocker(w)
                 section = _SECTION_ID.search(heading)

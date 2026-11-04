@@ -4729,7 +4729,12 @@ async def _work_problems(db: AsyncSession, run: Run, markdown: str) -> list[Impo
     pinned = (run.knobs or {}).get(drafting.ANSWER_IDS)
     if intake_id is None or not isinstance(pinned, list) or (run.knobs or {}).get("intake_gap_ids"):
         return []
-    keep = {uuid.UUID(str(i)) for i in pinned}
+    keep = set()
+    for i in pinned:
+        try:
+            keep.add(uuid.UUID(str(i)))
+        except ValueError:
+            continue  # a malformed knob pins nothing
     return discovery.draft_problems(markdown, await discovery.run_work(db, intake_id, keep))
 
 
