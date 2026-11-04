@@ -3,6 +3,8 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
+import { WithFeatureMarks } from "@/components/current-state/CurrentState";
+
 import { SIMPLE_MODE } from "../_flag";
 import { SimpleRoadmap } from "./_roadmap";
 
@@ -11,7 +13,9 @@ export default function SimpleRoadmapPage() {
   if (!SIMPLE_MODE) notFound();
   return (
     <Suspense>
-      <SimpleRoadmap />
+      <WithFeatureMarks>
+        <SimpleRoadmap />
+      </WithFeatureMarks>
     </Suspense>
   );
 }

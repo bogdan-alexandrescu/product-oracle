@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
+import { MarkForItem } from "@/components/current-state/CurrentState";
 import { APPLIED_EVENT, lastPreview, PREVIEW_EVENT, type AppliedDetail, type ChatPreview, type PreviewDetail } from "@/lib/api/simple-chat";
 
 import {
@@ -721,6 +722,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                   {ordinal(r.place)} to return
                 </span>
               )}
+              <MarkForItem itemId={r.item.id} compact={compact} />
               <span
                 data-testid="label-title"
                 title={r.item.title}

@@ -459,7 +459,12 @@ export const FeatureMarks = createContext<Map<string, FeatureState> | null>(null
 
 export function useFeatureMarks(): Map<string, FeatureState> | null {
   const q = useFeatureStates();
-  return useMemo(() => (q.data ? new Map(q.data.features.map((f) => [f.feature_id, f])) : null), [q.data]);
+  return useMemo(() => {
+    if (!q.data) return null;
+    const m = new Map(q.data.features.map((f) => [f.feature_id, f]));
+    for (const f of q.data.features) for (const id of f.item_ids ?? []) m.set(`item:${id}`, f);
+    return m;
+  }, [q.data]);
 }
 
 /** A feature's pill wherever it is named, from FeatureMarks; nothing until the states are read. */
@@ -471,3 +476,21 @@ export function MarkFor({ featureId, compact = false }: { featureId: string | nu
 
 export type ShowKind = "new" | "in_progress" | "exists";
 export const showsAs = (m: Mark): ShowKind => (m === "exists_old" ? "exists" : m);
+
+/** Gives the page's features their pills (by feature id and by roadmap item id). */
+export function WithFeatureMarks({ children }: { children: ReactNode }) {
+  const marks = useFeatureMarks();
+  return <FeatureMarks.Provider value={marks}>{children}</FeatureMarks.Provider>;
+}
+
+/** A roadmap item's pill: the feature it stands for. Inside the bar's own button (which opens the
+ * item's panel), so the pill is a plain mark whose title says what it means. */
+export function MarkForItem({ itemId, compact = false }: { itemId: string | null | undefined; compact?: boolean }) {
+  const marks = useContext(FeatureMarks);
+  const f = itemId ? marks?.get(`item:${itemId}`) : undefined;
+  return f ? (
+    <span title={`${MARK_WORD[f.mark]}: ${MEANS[f.mark]}`} className="inline-flex flex-none">
+      <FeaturePill mark={f.mark} compact={compact} />
+    </span>
+  ) : null;
+}
