@@ -59,7 +59,7 @@ from oracle.decisions.models import Decision
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError as ImportRejected
 from oracle.models import AuditEvent
-from oracle.roadmap.models import RoadmapItem
+from oracle.roadmap.models import ProductTrack, RoadmapItem
 from oracle.simple import change_words, drafts, minutes
 from oracle.simple.models import (
     SimpleChange,
@@ -490,8 +490,8 @@ async def _reviewed_roadmap(
     db: AsyncSession, principal: Any, document: Document, ref: str | None
 ) -> uuid.UUID | None:
     """meeting-changes-only-its-agenda: the roadmap the meeting reviews: the one named
-    (422 unless a roadmap with the PRD's items), else the one the PRD's items are on;
-    None when they are on several and none is named (the meeting reviews them all)."""
+    (422 unless a roadmap with the PRD's items), else the one the PRD's items are on; on
+    several, the one its track is on; None when none is (the meeting reviews them all)."""
     _, on = await _prd_items(db, document)
     if ref:
         try:
@@ -502,7 +502,13 @@ async def _reviewed_roadmap(
         if rm is None or rm.id not in on or not await _readable(db, principal, rm):
             raise MeetingError(422, f"No roadmap with items of {document.title} is named {ref}")
         return rm.id
-    return next(iter(on)) if len(on) == 1 else None
+    if len(on) <= 1:
+        return next(iter(on), None)
+    # On several: the roadmap of the PRD's own track (one per PRD), else all of them.
+    home = await db.scalar(
+        select(ProductTrack.roadmap_document_id).where(ProductTrack.prd_document_id == document.id)
+    )
+    return home if home in on else None
 
 
 def may_start_ritual(principal: Any, ritual: Any) -> bool:

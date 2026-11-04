@@ -190,3 +190,13 @@ async def test_the_same_prd_on_another_roadmap_is_not_on_the_agenda(client):
     assert not await cut_flag(w, "ship-a")
     r = await cut(client, w, "owner", "cut-a", m["session_id"])
     assert r.json()["change"]["status"] == "applied"
+
+
+async def test_with_no_roadmap_named_it_reviews_the_prds_own_roadmap(client):
+    """A PRD on several roadmaps: the meeting reviews the one its track is on."""
+    w = await world()
+    await with_roadmap_b(w, same_prd=True)
+    m = await meeting(client, w)
+    r = await cut(client, w, "owner", "ship-a", m["session_id"])
+    assert r.json()["change"]["status"] == "proposed", r.text
+    assert not await cut_flag(w, "ship-a")
