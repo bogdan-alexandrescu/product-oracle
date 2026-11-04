@@ -9,10 +9,12 @@ import { Walk } from "@/app/simple/_home/walk";
 import { runStopsOf, StopCard } from "@/app/simple/_home/run-stops";
 import { SimpleWelcome } from "@/app/simple/_home/welcome";
 import { Icon } from "@/components/ds/Icon";
+import { Button } from "@/components/ds/Button";
 import { Dialog } from "@/components/ds/Dialog";
 import { setToastPlace, toast } from "@/components/ds/Toast";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { usePhone } from "@/components/simple/FlowViews";
+import { GoalNum, GoalOrderEdit } from "@/components/simple/GoalOrder";
 import { meetingMoment } from "@/components/simple/FlowVisual";
 import { NewPrdButton, NewPrdSheet, StartedCard, useCanStartPrd, useStartedPrds } from "@/components/simple/NewPrd";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
@@ -264,6 +266,9 @@ export default function SimpleHome() {
     return ids;
   }, [toDecide, broken]);
   const proposedGoals = (goals.data ?? []).filter((g) => g.type === "goal" && g.status === "proposed").length;
+  // build-goal-order-control: Change order turns the row into the numbered one (owners and approvers).
+  const [ordering, setOrdering] = useState(false);
+  const canOrder = can("update_entity");
   const tiles = useMemo(() => (goals.data ? goalTiles(goals.data, roadmap.data, waitingItems) : undefined), [goals.data, roadmap.data, waitingItems]);
   // A new company (no goals yet) leads with its setup; an established company's Simple Home keeps
   // its picked design (Detailed Home keeps the checklist behind its Set up chip).
@@ -615,15 +620,30 @@ export default function SimpleHome() {
       {setupFirst && setup && (can("put_setting") || !setupQ.data?.welcome) && <SetupCard setup={setup} owner={can("put_setting")} onHide={() => void hideSetup()} />}
 
       <section aria-label="Goals" data-testid="home-goals">
+        {canOrder && !ordering && (tiles?.length ?? 0) > 1 && (
+          <div className="mb-2 flex justify-end">
+            <Button variant="ghost" onClick={() => setOrdering(true)} data-testid="goal-order-open">
+              Change order
+            </Button>
+          </div>
+        )}
         <Block q={{ ...goals, data: tiles }} testId="home-goals" skeleton={<GoalBandSkeleton />}>
           {(rows) =>
-            rows.length === 0 ? (
+            ordering && rows.length > 0 ? (
+              <GoalOrderEdit
+                rows={rows}
+                positions={new Map((goals.data ?? []).filter((g) => g.type === "goal").map((g) => [g.id, g.position ?? null]))}
+                archived={(goals.data ?? []).filter((g) => g.type === "goal" && g.status === "rejected" && !g.parent_id).length}
+                onDone={() => setOrdering(false)}
+                onSaved={() => void goals.reload()}
+              />
+            ) : rows.length === 0 ? (
               <p className="simple-small" data-testid="home-goals-empty">
                 No confirmed company goals yet.
               </p>
             ) : (
               <ul className="simple-goal-band">
-                {rows.map((g) => (
+                {rows.map((g, i) => (
                   <li key={g.id} data-testid="home-goal" className="simple-goal">
                     {/* With Ask open the cards narrow: the guardrail tag and the share each keep one line, the share moving under. */}
                     {(g.guardrail || share(g.weight) != null) && (
@@ -643,6 +663,7 @@ export default function SimpleHome() {
                       title={g.code ? `${g.code} · ${g.name}` : g.name}
                       className="font-semibold text-text hover:underline"
                     >
+                      <GoalNum n={i + 1} />
                       {g.name}
                     </Link>
                     {g.path && (

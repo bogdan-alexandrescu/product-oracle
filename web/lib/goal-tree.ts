@@ -91,6 +91,21 @@ export function goalTree<T extends GoalLike>(entities: T[], numbered: GoalLike[]
   return out;
 }
 
+/**
+ * The goals' order as people see it (build-goal-order-control): the confirmed top-level goals,
+ * 1 to n in the one goal order, as Home's row draws them. Proposed and archived goals and
+ * subgoals are not in it. By goal id, key and title, so a roadmap lane named by any finds it.
+ */
+export function goalNumbers(entities: GoalLike[]): Map<string, number> {
+  const out = new Map<string, number>();
+  goalTree(entities.filter((e) => e.type === "goal" && e.status === "confirmed"))
+    .filter((n) => !n.parentId)
+    .forEach((n, i) => {
+      for (const k of [n.goal.id, n.goal.key, n.goal.title]) if (k && !out.has(k)) out.set(k, i + 1);
+    });
+  return out;
+}
+
 const codesOf = new WeakMap<Names, Map<string, string | null>>();
 
 /** The company's goal codes by goal id and by key, subgoals' included ("G-B.1"), from its one lookup. */

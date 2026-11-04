@@ -1,6 +1,7 @@
 "use client";
 
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
+import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
+import { memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 
 import { calendarDay } from "@/lib/dates";
 
@@ -620,6 +621,7 @@ const holidayWords = (noWork: { start: string; end: string }[]) => noWork.map((h
 // ---------------------------------------------------------------- B2: the desktop
 
 function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef, dropTargets, noWork = [] }: LanesProps) {
+  const numbers = useContext(GoalNumbers);
   const [box, boxW] = useWidth(1030);
   const fonts = useFontsReady();
   const flash = useAppliedFlash();
@@ -913,7 +915,10 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
               style={{ height: geo[n].height }}
               className="flex min-w-0 flex-col justify-center border-t border-[var(--simple-rule)] pr-2.5 pl-4"
             >
-              <b className={`text-[15px] leading-5 font-bold ${l.kind === "below" ? "text-text2" : ""}`}>{l.title}</b>
+              <b className={`text-[15px] leading-5 font-bold ${l.kind === "below" ? "text-text2" : ""}`}>
+                {lane === "goal" && l.kind === "group" && <GoalNum n={numbers.get(l.key) ?? numbers.get(l.title)} />}
+                {l.title}
+              </b>
               <small className="text-[12.5px] leading-4 text-text-faint" data-testid="lane-count">
                 {l.count} {l.count === 1 ? "item" : "items"}
                 {l.kind === "pm" ? " · no engineering" : ""}
@@ -1460,6 +1465,7 @@ function runsOf(l: LaneModel): { runs: Run[]; rows: number } {
 }
 
 function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: LanesProps) {
+  const numbers = useContext(GoalNumbers);
   const [box, boxW] = useWidth(332);
   const fonts = useFontsReady();
   const W = boxW;
@@ -1523,7 +1529,9 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
             {lanes.map((l, n) => {
               const g = geo[n];
               const on = l.key === openKey;
-              const name = textWidth(l.title, 14, 700);
+              // build-goal-order-control: a goal lane's name leads with the goal's number.
+              const num = lane === "goal" && l.kind === "group" ? (numbers.get(l.key) ?? numbers.get(l.title) ?? null) : null;
+              const name = (num ? textWidth(`${num}`, 12, 700) + 6 : 0) + textWidth(l.title, 14, 700);
               const count = `${l.count} ${l.count === 1 ? "item" : "items"}`;
               const words = name + 4 + textWidth(count, 12.5, 400);
               const chipW = textWidth("Listed below", 12, 650) + 16;
@@ -1557,7 +1565,12 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
                   {/* The lane's name on the paper (the lines run behind it, B3). */}
                   <rect x={0} y={midY - 9} width={words + 4} height={18} rx={4} fill="var(--simple-paper)" />
                   <text y={midY} dominantBaseline="central" fill="var(--text)">
-                    <tspan fontSize={14} fontWeight={700} data-testid="phone-lane-name">
+                    {num && (
+                      <tspan fontSize={12} fontWeight={700} fill="var(--text2)" dx={0} data-testid="goal-num">
+                        {num}
+                      </tspan>
+                    )}
+                    <tspan fontSize={14} fontWeight={700} dx={num ? 6 : 0} data-testid="phone-lane-name">
                       {l.title}
                     </tspan>
                     <tspan dx={4} fontSize={12.5} fill="var(--text-faint)" data-testid="lane-count">

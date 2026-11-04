@@ -1428,3 +1428,12 @@ code .date-mark {
     }
   }
 }
+
+/* build-goal-order-control: a goal's place (1 to n) before its name, and Home's row while ordering. */
+.goal-num { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 5px; margin-right: 6px; border-radius: 999px; background: var(--surface2); color: var(--text2); font-size: 12px; font-weight: 700; line-height: 1; vertical-align: 1px; }
+.goal-order-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; padding: 8px 12px; border-radius: 12px; background: var(--accent-soft); }
+.simple-goal.goal-order-card { min-height: 120px; outline: 1px dashed var(--line-strong); cursor: grab; user-select: none; }
+.simple-goal.goal-order-lifted { position: relative; z-index: 5; transform: translate(10px, -14px) rotate(-2.5deg); outline: 2px solid var(--accent); box-shadow: 0 22px 44px rgb(0 0 0 / 0.32); cursor: grabbing; }
+.goal-order-grip { color: var(--text-faint); font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 6px; cursor: grab; touch-action: none; }
+.goal-order-arrow { min-width: 44px; height: 44px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--text); font-weight: 700; }
+.goal-order-arrow:disabled { opacity: 0.35; }
