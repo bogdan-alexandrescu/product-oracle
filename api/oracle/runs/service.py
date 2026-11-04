@@ -4767,6 +4767,24 @@ async def _prd_links(db: AsyncSession, markdown: str, source: VersionSource) -> 
     return {"resolved": resolved, "unresolved": unresolved}
 
 
+async def _work_problems(db: AsyncSession, run: Run, markdown: str) -> list[ImportProblem]:
+    """A PRD draft's problems with the work its brief's answers made (an answer saying
+    finding out is part of this work: a requirement cited to it, never a blocker)."""
+    from oracle.intake import discovery, drafting
+
+    intake_id = drafting._intake_id(run)
+    pinned = (run.knobs or {}).get(drafting.ANSWER_IDS)
+    if intake_id is None or not isinstance(pinned, list) or (run.knobs or {}).get("intake_gap_ids"):
+        return []
+    keep = set()
+    for i in pinned:
+        try:
+            keep.add(uuid.UUID(str(i)))
+        except ValueError:
+            continue  # a malformed knob pins nothing
+    return discovery.draft_problems(markdown, await discovery.run_work(db, intake_id, keep))
+
+
 async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) -> dict[str, Any]:
     """Import the draft as the next version of the run's document (of ``kind``, with
     the run's provenance), in its own transaction."""
@@ -4794,6 +4812,9 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
         problems = await _plan_table_problems(db, run, markdown, source_id)
         if problems:
             return rejection.refused(name, problems)
+    if kind == "prd" and (problems := await _work_problems(db, run, markdown)):
+        # Walk 2 problem 19: what the brief's answers made work is never a blocker.
+        return rejection.refused(name, problems)
     async with tenant_session(tenant_id) as s:
         try:
             result = await docs_service.import_draft(
@@ -5929,7 +5950,29 @@ async def _checked(
     check = await roadmap.check_items_async(
         text, prd_slug=slug, prd_version=version, prd_sections=keys, date_bases=bases
     )
+    if source_id is not None and check.items:
+        check = await _with_work_problems(db, source_id, check)
     return check, slug, version, keys
+
+
+async def _with_work_problems(
+    db: AsyncSession, source_id: uuid.UUID, check: roadmap.ItemsCheck
+) -> roadmap.ItemsCheck:
+    """``check`` with the items' problems with the work the PRD version planned from its
+    brief's answers (walk 2 problem 19: a finding-out is never a blocker). A new check:
+    ``check`` may be the parse cache's."""
+    from oracle.intake import discovery
+
+    prd = await db.get(DocumentVersion, source_id)
+    if prd is None:
+        return check
+    found = discovery.items_problems(check.items, await discovery.version_work(db, prd.markdown))
+    if not found:
+        return check
+    out = roadmap.ItemsCheck(list(check.items), list(check.problems), list(check.resolutions))
+    for code, message, item in found:
+        out.add(code, message, item)
+    return out
 
 
 async def checked_items(

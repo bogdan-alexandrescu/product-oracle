@@ -551,6 +551,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * first run's feature set (AQ1's hard case, ./agent-questions.ts);
  * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
  * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting);
+ * "unknown-work" as "before-drafting" with its critical Blockers question still asked of the
+ * approver, holding the draft (walk 2 problem 19);
  * "draft-gate" as the default company where Oracle reads a critical blocker in every new
  * brief, so drafting waits until it is answered or an owner accepts its risk (C5);
  * "late-answers" as "before-drafting" with that brief drafting into Checkout redesign: an answer
@@ -825,6 +827,22 @@ function seedBeforeDraftingScenario(): Db {
   const db = seed();
   const approver = db.members.find((m) => m.email === "approver@example.com")!;
   seedBeforeDrafting(ensureV2(db), db.user_id, approver.id);
+  return db;
+}
+
+/**
+ * Walk 2 problem 19: the "before-drafting" brief with its critical Blockers question still
+ * asked of the approver (no answer yet), so it holds the draft: see MOCK_SCENARIO_KEY.
+ */
+function seedUnknownWorkScenario(): Db {
+  const db = seedBeforeDraftingScenario();
+  const v2 = ensureV2(db);
+  const approver = db.members.find((m) => m.email === "approver@example.com")!;
+  const q = v2.questions.find((x) => x.intake_id === BEFORE_DRAFTING.intakeId && x.category === "blockers")!;
+  v2.answers = v2.answers.filter((a) => a.question_id !== q.id);
+  v2.intake_proposals = (v2.intake_proposals ?? []).filter((p) => p.question_id !== q.id);
+  Object.assign(q, { status: "asked", asked_to: approver.id });
+  Object.assign(v2.gaps.find((g) => g.id === q.gap_id)!, { status: "asked", knowledge_state: "unknown" });
   return db;
 }
 
@@ -3307,6 +3325,8 @@ function load(): Db {
             ? () => seedNextDraft(scenario === "next-draft-costly")
           : scenario === "before-drafting"
             ? seedBeforeDraftingScenario
+          : scenario === "unknown-work"
+            ? seedUnknownWorkScenario
           : scenario === "draft-gate"
             ? seedDraftGateScenario
           : scenario === "late-answers"

@@ -68873,6 +68873,48 @@
         ],
         "title": "DiffOut"
       },
+      "DiscoveryWork": {
+        "properties": {
+          "gap_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Gap Id"
+          },
+          "question_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Question Id"
+          },
+          "answer_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Answer Id"
+          },
+          "requirement": {
+            "type": "string",
+            "title": "Requirement"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "cite_ref": {
+            "type": "string",
+            "title": "Cite Ref"
+          }
+        },
+        "type": "object",
+        "required": [
+          "gap_id",
+          "question_id",
+          "answer_id",
+          "requirement",
+          "answer",
+          "cite_ref"
+        ],
+        "title": "DiscoveryWork",
+        "description": "An answer that says the thing is unknown and finding it out is part of this work\n(walk 2 problem 19): a requirement in the PRD and an early discovery item on the\nplan, cited to the answer (``cite_ref``), never a blocker."
+      },
       "DiscussionChangeCounts": {
         "properties": {
           "proposed": {
@@ -84136,6 +84178,14 @@
                 "type": "null"
               }
             ]
+          },
+          "work": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryWork"
+            },
+            "type": "array",
+            "title": "Work",
+            "default": []
           }
         },
         "type": "object",
