@@ -97,6 +97,8 @@ const SETTING_DEFAULTS: Record<string, unknown> = {
   company_shared_drives: [],
   // A1, B2 Goals framework: Now = the current quarter, Next = the next 2, Later = 12-24 months.
   planning_horizons: { short_quarters: 1, medium_quarters: 2, long_from_months: 12, long_to_months: 24 },
+  // one-roadmap-many-prds: one team plans every PRD's items (team size x focus).
+  team_capacity: { team_size: 1, focus: 1.0 },
   // F6: the weekly alignment report, Monday 08:00 in the Company time zone; the channel once Slack is connected.
   alignment_report: { enabled: true, weekday: "mon", time: "08:00", slack_channel: null },
   // The Company time zone: goals' today, the weekly report and rituals (Los Angeles until an

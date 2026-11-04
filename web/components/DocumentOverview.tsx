@@ -458,7 +458,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
               action={
                 <>
                   {d.kind === "prd" && <LinkButton href={`/documents/${d.slug}/composition`}>Composition</LinkButton>}
-                  {d.kind === "prd" && <BuildRoadmapButton prd={d} />}
+                  {d.kind === "prd" && !d.replaced_by?.length && <BuildRoadmapButton prd={d} />}
                   {d.kind === "pricing" && <PricingDecide slug={d.slug} />}
                   {statesQ.data && <ReviewSettingsButton doc={doc} sections={states} onSaved={statesQ.reload} />}
                   {templateOnly && <DraftWithOracleButton slug={d.slug} />}
@@ -471,6 +471,21 @@ export function DocumentOverview({ doc }: { doc: string }) {
                 </>
               }
             />
+            {/* one-roadmap-many-prds: a PRD replaced by area PRDs is read-only and names them at its top. */}
+            {(d.replaced_by?.length ?? 0) > 0 && (
+              <p data-testid="replaced-by" className="mb-3 text-sm text-text2">
+                Replaced by{" "}
+                {d.replaced_by!.map((r, i, all) => (
+                  <span key={r.id}>
+                    {i > 0 && (i === all.length - 1 ? " and " : ", ")}
+                    <Link href={`/documents/${r.slug}`} className="font-medium text-text underline">
+                      {r.title}
+                    </Link>
+                  </span>
+                ))}
+                . Read-only: its items no longer feed the roadmap.
+              </p>
+            )}
             {names.failed && (d.template || d.theme) && (
               <p data-testid="template-names-failed" role="status" className="mb-3 text-[13px] text-text2">
                 {NAMES_FAILED}

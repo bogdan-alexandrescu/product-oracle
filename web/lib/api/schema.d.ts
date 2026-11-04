@@ -9452,6 +9452,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/roadmaps/company": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Company Roadmap
+         * @description The company's one roadmap, which every PRD feeds.
+         */
+        get: operations["get_company_roadmap"];
+        put?: never;
+        /**
+         * Create Company Roadmap
+         * @description Create the company roadmap ('Product roadmap') empty when none exists (the first-run
+         *     step); with one, return it (200). Approvers and owners.
+         */
+        post: operations["create_company_roadmap"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/company/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Company Queue
+         * @description Every item on the company roadmap planned as one team's capacity queue (team size x
+         *     focus; milestone order, then the company goal order, then priority). ``prd`` (slug or
+         *     id): only that PRD's items, with their places in the shared queue.
+         */
+        get: operations["get_company_queue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/replaced-by": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Replaced By
+         * @description Mark a PRD replaced by one or more PRDs (one per area of focus): it turns read-only,
+         *     names them at its top, its items stop feeding the roadmap, and its verified schedule
+         *     bases follow their items to the replacing PRDs ('carried from <title>').
+         */
+        post: operations["set_replaced_by"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/roadmaps/{doc}/items": {
         parameters: {
             query?: never;
@@ -15422,7 +15491,7 @@ export interface components {
              * Format: date-time
              */
             generated_at: string;
-            roadmap: components["schemas"]["DocumentRef"];
+            roadmap: components["schemas"]["oracle__roadmap__schemas__DocumentRef"];
             /** Track Id */
             track_id: string | null;
             connector: components["schemas"]["TrackerConnectorOut"];
@@ -19062,6 +19131,18 @@ export interface components {
             /** Kinds */
             kinds: components["schemas"]["CompanyKindCoverage"][];
         };
+        /** CompanyRoadmapOut */
+        CompanyRoadmapOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+        };
         /** CompareCheckpoint */
         CompareCheckpoint: {
             /**
@@ -21800,6 +21881,11 @@ export interface components {
             approved_version?: number | null;
             source?: components["schemas"]["VersionSource"] | null;
             /**
+             * Company Roadmap
+             * @default false
+             */
+            company_roadmap: boolean;
+            /**
              * Created At
              * Format: date-time
              */
@@ -21815,26 +21901,15 @@ export interface components {
              */
             versions: components["schemas"]["VersionSummary"][];
             /**
+             * Replaced By
+             * @default []
+             */
+            replaced_by: components["schemas"]["oracle__docs__schemas__DocumentRef"][];
+            /**
              * Changes In Review
              * @default 0
              */
             changes_in_review: number;
-        };
-        /** DocumentRef */
-        DocumentRef: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Slug */
-            slug: string;
-            /** Title */
-            title: string;
-            /** Version */
-            version?: number | null;
-            /** Approved */
-            approved?: boolean | null;
         };
         /** DocumentSectionLinkOut */
         DocumentSectionLinkOut: {
@@ -21951,6 +22026,11 @@ export interface components {
             /** Approved Version */
             approved_version?: number | null;
             source?: components["schemas"]["VersionSource"] | null;
+            /**
+             * Company Roadmap
+             * @default false
+             */
+            company_roadmap: boolean;
             /**
              * Created At
              * Format: date-time
@@ -25118,7 +25198,7 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
-            prd: components["schemas"]["DocumentRef"];
+            prd: components["schemas"]["oracle__roadmap__schemas__DocumentRef"];
         };
         /**
          * InboxDecision
@@ -27449,8 +27529,8 @@ export interface components {
         };
         /** ItemsImportOut */
         ItemsImportOut: {
-            roadmap: components["schemas"]["DocumentRef"];
-            source: components["schemas"]["DocumentRef"] | null;
+            roadmap: components["schemas"]["oracle__roadmap__schemas__DocumentRef"];
+            source: components["schemas"]["oracle__roadmap__schemas__DocumentRef"] | null;
             /** Track Id */
             track_id: string | null;
             /**
@@ -27500,7 +27580,7 @@ export interface components {
             kind: "prd_draft" | "roadmap";
             /** Label */
             label: string;
-            document: components["schemas"]["DocumentRef"];
+            document: components["schemas"]["oracle__roadmap__schemas__DocumentRef"];
         };
         /**
          * ItemsResolution
@@ -31358,7 +31438,7 @@ export interface components {
         };
         /** PrdAnchor */
         PrdAnchor: {
-            document: components["schemas"]["DocumentRef"] | null;
+            document: components["schemas"]["oracle__roadmap__schemas__DocumentRef"] | null;
             /** Section Key */
             section_key: string | null;
             /** Section Hash */
@@ -32809,6 +32889,41 @@ export interface components {
             /** Question Ids */
             question_ids: string[];
         };
+        /** QueueItem */
+        QueueItem: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            prd?: components["schemas"]["oracle__docs__schemas__DocumentRef"] | null;
+            /** Milestone */
+            milestone?: string | null;
+            /** Effort Weeks */
+            effort_weeks: number;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+        };
+        /** QueueOut */
+        QueueOut: {
+            roadmap?: components["schemas"]["CompanyRoadmapOut"] | null;
+            /** Team Size */
+            team_size: number;
+            /** Focus */
+            focus: number;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["QueueItem"][];
+        };
         /**
          * QueueWait
          * @description Why SwarmCloud holds the run's current step (oracle.runs.waits), as Oracle last
@@ -33418,6 +33533,11 @@ export interface components {
             key: string;
             /** Position */
             position: number;
+        };
+        /** ReplacedByIn */
+        ReplacedByIn: {
+            /** Prds */
+            prds: string[];
         };
         /** ReplyCounts */
         ReplyCounts: {
@@ -35210,7 +35330,7 @@ export interface components {
         };
         /** RoadmapItemHistoryOut */
         RoadmapItemHistoryOut: {
-            prd: components["schemas"]["DocumentRef"];
+            prd: components["schemas"]["oracle__roadmap__schemas__DocumentRef"];
             /** Item Key */
             item_key: string;
             /** Entries */
@@ -35323,8 +35443,8 @@ export interface components {
         };
         /** RoadmapItemsOut */
         RoadmapItemsOut: {
-            roadmap: components["schemas"]["DocumentRef"];
-            source: components["schemas"]["DocumentRef"] | null;
+            roadmap: components["schemas"]["oracle__roadmap__schemas__DocumentRef"];
+            source: components["schemas"]["oracle__roadmap__schemas__DocumentRef"] | null;
             /** Track Id */
             track_id: string | null;
             /**
@@ -43913,14 +44033,14 @@ export interface components {
             status: "active" | "paused" | "closed";
             /** Owner Id */
             owner_id: string | null;
-            prd: components["schemas"]["DocumentRef"];
+            prd: components["schemas"]["oracle__roadmap__schemas__DocumentRef"];
             /** Started Version */
             started_version: number | null;
             /** Current Version */
             current_version: number | null;
             /** Latest Approved Version */
             latest_approved_version: number | null;
-            roadmap: components["schemas"]["DocumentRef"] | null;
+            roadmap: components["schemas"]["oracle__roadmap__schemas__DocumentRef"] | null;
             /** Lock Version */
             lock_version: number;
             /**
@@ -43980,14 +44100,14 @@ export interface components {
             status: "active" | "paused" | "closed";
             /** Owner Id */
             owner_id: string | null;
-            prd: components["schemas"]["DocumentRef"];
+            prd: components["schemas"]["oracle__roadmap__schemas__DocumentRef"];
             /** Started Version */
             started_version: number | null;
             /** Current Version */
             current_version: number | null;
             /** Latest Approved Version */
             latest_approved_version: number | null;
-            roadmap: components["schemas"]["DocumentRef"] | null;
+            roadmap: components["schemas"]["oracle__roadmap__schemas__DocumentRef"] | null;
             /** Lock Version */
             lock_version: number;
             /**
@@ -45424,6 +45544,18 @@ export interface components {
              */
             goal_id: string;
         };
+        /** DocumentRef */
+        oracle__docs__schemas__DocumentRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+        };
         /**
          * PredictionIn
          * @description A prediction a person writes: its typed figures must agree with each other.
@@ -45459,6 +45591,22 @@ export interface components {
              * Format: uuid
              */
             into_id: string;
+        };
+        /** DocumentRef */
+        oracle__roadmap__schemas__DocumentRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version?: number | null;
+            /** Approved */
+            approved?: boolean | null;
         };
         /** RefreshOut */
         oracle__simple__schemas__RefreshOut: {
@@ -64701,6 +64849,128 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DesignReviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_company_roadmap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyRoadmapOut"];
+                };
+            };
+            /** @description The company has no company roadmap yet */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_company_roadmap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description It already exists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyRoadmapOut"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyRoadmapOut"];
+                };
+            };
+        };
+    };
+    get_company_queue: {
+        parameters: {
+            query?: {
+                prd?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_replaced_by: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplacedByIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
                 };
             };
             /** @description Validation Error */

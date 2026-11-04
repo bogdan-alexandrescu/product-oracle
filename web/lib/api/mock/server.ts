@@ -170,6 +170,7 @@ import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
+import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { appliedVersionOf, approvedPrdToDraft, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
@@ -201,6 +202,8 @@ import {
  */
 export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source" | "visibility" | "period"> & {
   visibility?: Schemas["DocumentSummary"]["visibility"];
+  /** one-roadmap-many-prds: the PRDs that replace this one (ids, in order); read-only while any. */
+  replaced_by?: string[];
 };
 export type VersionRow = Omit<Schemas["VersionOut"], "sections" | "date_marks"> & {
   sections: (Omit<Schemas["SectionOut"], "verdict" | "spec_states"> & Partial<Pick<Schemas["SectionOut"], "spec_states">>)[];
@@ -1208,6 +1211,30 @@ function seedApprovedRoadmapScenario(): Db {
   }
   roadmap.updated_at = "2026-10-20T09:00:00Z";
   db.simple_roadmap = seedTrails(seedSimpleRoadmap());
+  return db;
+}
+
+/**
+ * one-roadmap-many-prds ("one-roadmap", ./one-roadmap.ts): the default company plus the area PRDs
+ * User Safety and Scale feeding the one Product roadmap, and the older PRD Trust plan replaced by
+ * both (read-only), whose own roadmap stays as history.
+ */
+function seedOneRoadmapScenario(): Db {
+  const db = seed();
+  const at = "2026-10-01T09:00:00Z";
+  const doc = (id: string, slug: string, title: string, kind: "prd" | "roadmap", extra: Partial<DocumentRow> = {}): DocumentRow => {
+    const row: DocumentRow = { id, slug, title, status: "approved", kind, template: null, template_version: null, theme: null, created_at: at, updated_at: at, ...extra };
+    db.documents.push(row);
+    const v = buildVersion(row, { number: 1, created_at: at, sections: [{ key: "summary", level: 2, heading: "Summary", body: `${title}, invented for the example.` }], citations: [] });
+    v.approved_at = at;
+    db.versions.push(v);
+    return row;
+  };
+  const areas = AREA_PRDS.map(([slug, title]) => doc(oneRoadmapPrd(slug, title).id, slug, title, "prd"));
+  doc(oneRoadmapPrd(...OLD_PRD).id, OLD_PRD[0], OLD_PRD[1], "prd", { replaced_by: areas.map((a) => a.id) });
+  doc(uuid(), OLD_ROADMAP[0], OLD_ROADMAP[1], "roadmap");
+  doc(uuid(), COMPANY_SLUG, COMPANY_TITLE, "roadmap", { company_roadmap: true });
+  db.simple_roadmap = seedCompanyRoadmap(seedSimpleRoadmap());
   return db;
 }
 
@@ -3274,6 +3301,8 @@ function load(): Db {
                   }
               : scenario === APPROVED_ROADMAP_SCENARIO
                 ? seedApprovedRoadmapScenario
+              : scenario === ONE_ROADMAP_SCENARIO
+                ? seedOneRoadmapScenario
               : scenario === "simple-500"
                 ? () => ({ ...seed(), simple_roadmap: seedSimpleMany() })
                 : scenario === "strategy" || scenario === "strategy-no-vision"
@@ -3859,8 +3888,9 @@ function documentSummary(db: Db, d: DocumentRow): Schemas["DocumentSummary"] {
   const vs = docVersions(db, d);
   const latest = vs[vs.length - 1];
   const period = d.kind === "update" ? ((latest?.front_matter.period as UpdatePeriod | undefined) ?? null) : null;
+  const { replaced_by: _replaced, ...row } = d;
   return {
-    ...d,
+    ...row,
     kind: d.kind ?? "prd",
     visibility: d.visibility ?? "company",
     // O5: a roadmap without a default audience reads as "team"; other kinds have none.
@@ -6504,7 +6534,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   const doc = findDocument(db, p[2]);
   if (!doc) return notFound("Document");
   if (p.length === 3) {
-    return json(200, { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary) });
+    // one-roadmap-many-prds: the PRDs that replace it, by name (oracle.roadmap.company.refs).
+    const replacedBy = (doc.replaced_by ?? []).flatMap((id) => db.documents.filter((x) => x.id === id).map((x) => ({ id: x.id, slug: x.slug, title: x.title })));
+    return json(200, { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary), replaced_by: replacedBy });
   }
   // H8: who sees the document (owners only, with a reason; the API audits it).
   if (p[3] === "visibility" && p.length === 4 && m === "PATCH") {
