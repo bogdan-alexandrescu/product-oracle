@@ -38,6 +38,7 @@ const STATUS: Record<GmStatus, { label: string; cls: string }> = {
   at_risk: { label: "At risk", cls: "bg-warn-bg text-warn" },
   missed: { label: "Missed", cls: "bg-crit-bg text-crit" },
   not_measured: { label: "Not measured yet", cls: "bg-na-bg text-na" },
+  no_gate: { label: "No gate yet", cls: "bg-na-bg text-na" },
 };
 const LIFT: Record<GmLift, { label: string; cls: string }> = {
   helping: { label: "Helping", cls: "bg-pass-bg text-pass" },
@@ -90,7 +91,7 @@ function Bar({ current, target, status }: { current: number | null; target: numb
 
 /** The 7 daily readings a milestone's 'met' rule counts, and who confirmed it. */
 function Proof({ m, compact, week }: { m: GmMilestone; compact?: boolean; week: string[] }) {
-  const ok = (v: number | null) => v !== null && (m.measure.startsWith("days") ? v === 0 : v >= m.threshold);
+  const ok = (v: number | null) => v !== null && m.threshold !== null && (m.measure.startsWith("days") ? v === 0 : v >= m.threshold);
   return (
     <span className="flex min-w-0 max-w-full flex-col gap-1">
       <span className={`flex w-full gap-1 ${compact ? "" : "flex-wrap"}`} aria-label="Last 7 days">
@@ -109,7 +110,9 @@ function Proof({ m, compact, week }: { m: GmMilestone; compact?: boolean; week: 
       <span className="simple-small text-[14px]! leading-5">
         {m.status === "met"
           ? `Held 7 days in a row on a live rep${m.confirmed ? ` · confirmed by ${m.confirmed}${m.confirmed_on ? `, ${m.confirmed_on}` : ""}` : ""}`
-          : m.status === "not_measured"
+          : m.status === "no_gate"
+            ? "No gate yet: set the reading it must hold"
+            : m.status === "not_measured"
             ? "No daily reading yet"
             : m.status === "missed"
               ? `${m.due ? `Due ${m.due} · ` : ""}held ${m.days.filter(ok).length} of 7 days`
@@ -135,17 +138,20 @@ function Guardrail({ map }: { map: GoalMap }) {
 }
 
 /** Feature line: expected lift and, once released, what it measured. */
-function FeatureCard({ f, area, tight, also, fresh, serves = "Also serves", onOpen }: { f: GmFeature; area?: string; tight?: boolean; also?: string[]; fresh?: string; serves?: string; onOpen: (f: GmFeature) => void }) {
+function FeatureCard({ f: all, milestone, area, tight, also, fresh, serves = "Also serves", onOpen }: { f: GmFeature; milestone?: string; area?: string; tight?: boolean; also?: string[]; fresh?: string; serves?: string; onOpen: (f: GmFeature) => void }) {
+  // In a milestone's cell: what it is expected to do for that milestone, and what it did.
+  const link = all.links.find((l) => l.milestone === milestone);
+  const f = link ? { ...all, expected: link.expected, confidence: link.confidence, measured: link.measured, lift: link.lift } : all;
   return (
     <div
       role="button"
       tabIndex={0}
       aria-label={`Open ${f.name}`}
-      onClick={() => onOpen(f)}
+      onClick={() => onOpen(all)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          onOpen(f);
+          onOpen(all);
         }
       }}
       data-testid="gm-feature"
@@ -156,7 +162,7 @@ function FeatureCard({ f, area, tight, also, fresh, serves = "Also serves", onOp
       <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <LiftPill l={f.lift} />
         <span className="simple-small text-[14px]! leading-5">
-          {area ? `${area} · ` : ""}Expects {lower(f.expected)} ({f.confidence.toLowerCase()} confidence)
+          {area ? `${area} · ` : ""}{f.expected ? `Expects ${lower(f.expected)}` : "No expected lift yet"} ({f.confidence.toLowerCase()} confidence)
           {f.measured ? ` · measured ${f.measured}` : f.released ? " · out, no reading yet" : " · not out yet"}
         </span>
       </span>
@@ -200,10 +206,10 @@ function reveal(sel: string, block: ScrollLogicalPosition = "center") {
 const lower = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
 
 function goalWarning(map: GoalMap, goal: GmGoal, target: string): string {
-  const ms = map.milestones.filter((m) => m.goal === goal.id).sort((a, b) => b.threshold - a.threshold);
+  const ms = map.milestones.filter((m) => m.goal === goal.id).filter((m) => m.threshold !== null).sort((a, b) => b.threshold! - a.threshold!);
   const top = ms[0];
   const words = `${num(goal.target, goal.unit)} → ${num(Number(target), goal.unit)}: its ${ms.length} milestones keep their own thresholds.`;
-  return top && top.threshold < Number(target) ? `${words} The highest, “${top.name}”, would now stop short of the goal.` : words;
+  return top && top.threshold! < Number(target) ? `${words} The highest, “${top.name}”, would now stop short of the goal.` : words;
 }
 
 function depth(ms: GmMilestone[]): Record<string, number> {
@@ -270,8 +276,11 @@ interface Draft {
   confirm: boolean;
 }
 
+/** The goal's last milestone in the map's order: what a new one of that goal comes after by default. */
+const lastOf = (map: GoalMap, goal: string) => [...map.milestones].reverse().find((m) => m.goal === goal)?.id ?? "";
+
 function emptyDraft(map: GoalMap): Draft {
-  return { name: "", goal: map.goals[0]?.id ?? "", threshold: "", areas: [], after: "", target: "", feature: "", search: "", milestone: "", areaName: "", area: "", expected: "", confirm: false };
+  return { name: "", goal: map.goals[0]?.id ?? "", threshold: "", areas: [], after: lastOf(map, map.goals[0]?.id ?? ""), target: "", feature: "", search: "", milestone: "", areaName: "", area: "", expected: "", confirm: false };
 }
 
 /* ---------- The page ---------- */
@@ -295,7 +304,8 @@ export function GoalMapPage() {
     setFlash(null);
     setEdit(e);
     const m = map.milestones.find((x) => x.id === milestone);
-    setDraft({ ...emptyDraft(map), milestone: milestone ?? "", area: area ?? "", threshold: e === "gate" && m ? String(m.threshold) : "" });
+    const gate = e === "gate" && m ? { threshold: m.threshold === null ? "" : String(m.threshold), after: m.depends[0] ?? "" } : {};
+    setDraft({ ...emptyDraft(map), milestone: milestone ?? "", area: area ?? "", ...gate });
   };
   const close = () => {
     setEdit(null);
@@ -360,7 +370,7 @@ export function GoalMapPage() {
     if (edit === "gate") {
       const m = map.milestones.find((x) => x.id === draft.milestone)!;
       const ok = await send(
-        api.PATCH("/v1/simple/goal-map/milestones/{milestone_id}", { params: { path: { milestone_id: m.id } }, body: { threshold: Number(draft.threshold), confirm: draft.confirm } }),
+        api.PATCH("/v1/simple/goal-map/milestones/{milestone_id}", { params: { path: { milestone_id: m.id } }, body: { threshold: Number(draft.threshold), after: draft.after || null, confirm: draft.confirm } }),
         () => (draft.confirm ? `Gate confirmed: ${m.name}, at least ${num(Number(draft.threshold), m.unit)} for 7 days.` : `Gate saved: ${m.name}, at least ${num(Number(draft.threshold), m.unit)} for 7 days.`),
       );
       if (!ok) return;
@@ -372,7 +382,7 @@ export function GoalMapPage() {
       const g = map.guardrail;
       setPrd({
         name: m.name,
-        problem: `Reach ${m.name} (${goal?.name.toLowerCase() ?? m.measure}, at least ${num(m.threshold, m.unit)}, held 7 days in a row; now ${num(m.current, m.unit)}). Areas: ${areas.join(", ")}.${g ? ` Guardrail: ${g.name.toLowerCase()} ${g.rule}.` : ""}`,
+        problem: `Reach ${m.name} (${goal?.name.toLowerCase() ?? m.measure}, ${m.threshold === null ? "no gate yet" : `at least ${num(m.threshold, m.unit)}, held 7 days in a row`}; now ${num(m.current, m.unit)}). Areas: ${areas.join(", ")}.${g ? ` Guardrail: ${g.name.toLowerCase()} ${g.rule}.` : ""}`,
       });
     }
     if (edit === "area") {
@@ -445,6 +455,12 @@ function AttachDrawer({ map, draft, set, onClose, onSave }: { map: GoalMap; draf
   const term = draft.search.toLowerCase();
   const named = (roadmap.data?.items ?? []).map((i) => ({ id: i.id, name: on.get(i.id)?.name ?? i.title }));
   const list = named.filter((i) => !on.get(i.id)?.milestones.includes(draft.milestone) && (!term || i.name.toLowerCase().includes(term)));
+  // A feature sits in one area: attached from another area's cell, it moves there.
+  const picked = on.get(draft.feature);
+  const areaName = (id: string | null) => map.areas.find((a) => a.id === id)?.name;
+  const from = areaName(picked?.area ?? null);
+  const to = areaName(draft.area);
+  const moves = !!picked && !!from && !!to && picked.area !== draft.area;
   return (
     <Drawer title="Attach a feature to a milestone" onClose={onClose} testId="gm-editor">
       <label className={label}>
@@ -469,6 +485,11 @@ function AttachDrawer({ map, draft, set, onClose, onSave }: { map: GoalMap; draf
         Feature
         <input className={field} value={draft.search} placeholder="Search the roadmap" onChange={(e) => set({ search: e.target.value })} />
       </label>
+      {moves && (
+        <p data-testid="gm-attach-moves" className="rounded-xl bg-warn-bg px-3 py-2 text-[15px] text-warn">
+          {picked!.name} is filed under {from}: attached here, it moves to {to}.
+        </p>
+      )}
       <ul className="flex max-h-72 flex-col gap-1.5 overflow-y-auto" data-testid="gm-attach-list">
         {!roadmap.data && <li className="simple-small">{roadmap.error ? errorMessage(roadmap.error) : "Loading the roadmap…"}</li>}
         {roadmap.data && !list.length && <li className="simple-small">No roadmap feature left to attach</li>}
@@ -511,7 +532,7 @@ function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: Go
         </label>
         <label className={label}>
           Goal it moves
-          <select className={field} value={draft.goal} onChange={(e) => set({ goal: e.target.value })}>
+          <select className={field} value={draft.goal} onChange={(e) => set({ goal: e.target.value, after: lastOf(map, e.target.value) })}>
             {map.goals.map((g) => (
               <option key={g.id} value={g.id}>{g.name}</option>
             ))}
@@ -528,7 +549,7 @@ function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: Go
         </span>
         <label className={label}>
           Comes after
-          <select className={field} value={draft.after} onChange={(e) => set({ after: e.target.value })}>
+          <select className={field} data-testid="gm-after" value={draft.after} onChange={(e) => set({ after: e.target.value })}>
             <option value="">Nothing: it can start now</option>
             {map.milestones.map((m) => (
               <option key={m.id} value={m.id}>{m.name}</option>
@@ -584,7 +605,16 @@ function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: Go
           At least
           <input className={field} inputMode="decimal" value={draft.threshold} onChange={(e) => set({ threshold: e.target.value })} />
         </label>
-        {m.proposed ? (
+        <label className={label}>
+          Comes after
+          <select className={field} data-testid="gm-after" value={draft.after} onChange={(e) => set({ after: e.target.value })}>
+            <option value="">Nothing: it can start now</option>
+            {map.milestones.filter((x) => x.id !== m.id).map((x) => (
+              <option key={x.id} value={x.id}>{x.name}</option>
+            ))}
+          </select>
+        </label>
+        {m.proposed || !m.confirmed ? (
           <label className="flex items-center gap-2 font-semibold">
             <input type="checkbox" checked={draft.confirm} onChange={(e) => set({ confirm: e.target.checked })} /> Confirm this gate
           </label>
@@ -687,7 +717,7 @@ function Goals({ map, open, arrows = true }: Ctx & { arrows?: boolean }) {
 function sortMs(map: GoalMap): GmMilestone[] {
   const d = depth(map.milestones);
   const order = ["Oct", "Nov", "Dec", "Jan", "Feb"];
-  return [...map.milestones].sort((a, b) => d[a.id] - d[b.id] || order.indexOf(a.month) - order.indexOf(b.month) || a.goal.localeCompare(b.goal) || a.threshold - b.threshold);
+  return [...map.milestones].sort((a, b) => d[a.id] - d[b.id] || order.indexOf(a.month) - order.indexOf(b.month) || a.goal.localeCompare(b.goal) || (a.threshold ?? 0) - (b.threshold ?? 0));
 }
 
 function afterWords(m: GmMilestone, map: GoalMap): string {
@@ -745,7 +775,7 @@ function Ladder(ctx: Ctx) {
                       <span className="text-[17px] font-semibold leading-6">{m.name}</span>
                     )}
                     <span className="text-[16px] leading-6 text-text2">
-                      {num(m.current, m.unit)} of {num(m.threshold, m.unit)} · {afterWords(m, map)}
+                      {m.threshold === null ? `${num(m.current, m.unit)} now · no gate yet` : `${num(m.current, m.unit)} of ${num(m.threshold, m.unit)}`} · {afterWords(m, map)}
                     </span>
                     <Proof m={m} compact week={ctx.week} />
                   </div>
@@ -785,7 +815,7 @@ function LadderRow({ a, ai, n, ms, map, open, moveArea, onOpen, home, proposed }
           <div key={m.id} className={`flex flex-col gap-1.5 border-b border-r border-line p-2 ${serves ? "bg-surface2/60" : ""} ${m.id === proposed ? "border-x-2 border-dashed border-x-accent" : ""}`}>
             {fs.map((f) =>
               home[f.id] === m.id ? (
-                <FeatureCard key={f.id} f={f} tight onOpen={onOpen} also={f.milestones.filter((x) => x !== m.id).map((x) => msName(map, x))} />
+                <FeatureCard key={f.id} f={f} milestone={m.id} tight onOpen={onOpen} also={f.milestones.filter((x) => x !== m.id).map((x) => msName(map, x))} />
               ) : (
                 <AlsoHere key={f.id} f={f} onOpen={onOpen} under={msName(map, home[f.id])} />
               ),
@@ -814,7 +844,7 @@ function LadderPhone({ map, ms, home, onOpen, week }: Ctx & { ms: GmMilestone[];
             <StatusPill s={m.status} />
           </span>
           <span className="simple-small">
-            {num(m.current, m.unit)} of {num(m.threshold, m.unit)} · {afterWords(m, map)}
+            {m.threshold === null ? `${num(m.current, m.unit)} now · no gate yet` : `${num(m.current, m.unit)} of ${num(m.threshold, m.unit)}`} · {afterWords(m, map)}
           </span>
           <Proof m={m} compact week={week} />
           {map.areas
@@ -826,7 +856,7 @@ function LadderPhone({ map, ms, home, onOpen, week }: Ctx & { ms: GmMilestone[];
                   .filter((f) => f.area === a.id && f.milestones.includes(m.id))
                   .map((f) =>
                     home[f.id] === m.id ? (
-                      <FeatureCard key={f.id} f={f} tight onOpen={onOpen} also={f.milestones.filter((x) => x !== m.id).map((x) => msName(map, x))} />
+                      <FeatureCard key={f.id} f={f} milestone={m.id} tight onOpen={onOpen} also={f.milestones.filter((x) => x !== m.id).map((x) => msName(map, x))} />
                     ) : (
                       <AlsoHere key={f.id} f={f} onOpen={onOpen} under={msName(map, home[f.id])} />
                     ),

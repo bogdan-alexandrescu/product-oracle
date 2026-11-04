@@ -129,8 +129,8 @@ const MILESTONES: GmMilestone[] = [
   ms("m3", "3 paid conversions per rep", "conversions", 3, 5.6, "met", ["conv"], ["m1"], "Oct"),
   ms("m4", "6 paid conversions per rep", "conversions", 6, 5.6, "at_risk", ["conv", "safety"], ["m3"], "Nov"),
   ms("m5", "$12k revenue per day", "revenue", 12000, 11200, "on_track", ["onboard"], ["m3"], "Nov", "$"),
-  ms("m6", "10 paid conversions per rep", "conversions", 10, 5.6, "at_risk", ["conv", "onboard"], ["m2", "m4"], "Dec"),
-  ms("m7", "$20k revenue per day", "revenue", 20000, 11200, "at_risk", ["onboard", "scale"], ["m5", "m6"], "Jan"),
+  ms("m6", "10 paid conversions per rep", "conversions", 10, 5.6, "at_risk", ["conv", "onboard"], ["m4"], "Dec"),
+  ms("m7", "$20k revenue per day", "revenue", 20000, 11200, "at_risk", ["onboard", "scale"], ["m6"], "Jan"),
 ];
 
 function ft(
@@ -158,7 +158,11 @@ const FEATURES: GmFeature[] = [
   ft("f7", "Partner referral channel", "conv", ["m4", "m6"], "Conversion rate", "+4 points", "Low", "not_measured", null, false),
   ft("f8", "Pricing page test", "conv", ["m4"], "Conversion rate", "+2 points", "Medium", "not_helping", "−1 point"),
   ft("f9", "Guided first week", "onboard", ["m2", "m5"], "Value per conversion", "+$40 each", "Medium", "helping", "+$55 each"),
-  ft("f10", "Annual plan offer", "onboard", ["m5", "m7"], "Value per conversion", "+$90 each", "Low", "not_measured", null, false),
+  // Linked to $20k first: its card, under $12k, shows what it is expected to do there (+$90), not for $20k.
+  { ...ft("f10", "Annual plan offer", "onboard", ["m7", "m5"], "Value per conversion", "+$60 each", "Low", "not_measured", null, false), links: [
+    { milestone: "m7", expected: "+$60 each", confidence: "Low", measured: null, lift: "not_measured" },
+    { milestone: "m5", expected: "+$90 each", confidence: "Medium", measured: null, lift: "not_measured" },
+  ] },
   ft("f11", "Team invite at sign-up", "onboard", ["m7"], "Value per conversion", "+$30 each", "Medium", "not_measured", null, false), // serves the revenue milestone
   ft("f12", "Rep daily scoreboard", "scale", ["m7"], "Sign-ups per rep", "+3 a day", "Medium", "not_measured", null, false),
 ];
@@ -261,8 +265,36 @@ function withIds(map: GoalMap): GoalMap {
   };
 }
 
+/** A goal milestone added on the roadmap with no gate yet (no threshold). */
+function noGate(): GoalMap {
+  const map = plain();
+  const m = ms("m8", "Sign-ups at every rep", "signups", 0, 31, "no_gate", ["scale"], ["m2"], "Dec");
+  map.milestones.push({ ...m, threshold: null, confirmed: null, confirmed_on: null });
+  return map;
+}
+
 export function seedGoalMap(scenario: string | null): GoalMap {
-  return withIds(scenario === "goal-map-hard" ? hard() : plain());
+  return withIds(scenario === "goal-map-hard" ? hard() : scenario === "goal-map-no-gate" ? noGate() : plain());
+}
+
+/** As the API orders them: by what each comes after, then as added. */
+function ordered(milestones: GmMilestone[]): GmMilestone[] {
+  const by = new Map(milestones.map((m) => [m.id, m]));
+  const depth = (m: GmMilestone, seen: Set<string> = new Set()): number => {
+    const up = m.depends[0] ? by.get(m.depends[0]) : undefined;
+    return !up || seen.has(up.id) ? 0 : 1 + depth(up, new Set([...seen, m.id]));
+  };
+  return milestones.map((m, i) => ({ m, i, d: depth(m) })).sort((a, b) => a.d - b.d || a.i - b.i).map((x) => x.m);
+}
+
+/** The milestone picked to come after: on the map, never itself or one after it. */
+function afterOf(map: GoalMap, m: GmMilestone | null, after: string | null): GmMilestone | null | Response {
+  if (!after) return null;
+  const up = map.milestones.find((x) => x.id === after);
+  if (!up) return json(422, { detail: "Pick a milestone it comes after" });
+  for (let step: GmMilestone | undefined = up, n = 0; m && step && n < 100; step = map.milestones.find((x) => x.id === step!.depends[0]), n++)
+    if (step.id === m.id) return json(422, { detail: "A milestone cannot come after one that comes after it" });
+  return up;
 }
 
 function json(status: number, body: unknown): Response {
@@ -319,21 +351,37 @@ export async function routeGoalMap(
     const g = map.goals.find((x) => x.id === body?.goal);
     if (!g) return json(422, { detail: "Pick a goal" });
     const name = String(body?.name ?? "").trim();
-    if (map.milestones.some((m) => m.name === name)) return json(409, { detail: "A milestone with this name is already on the track" });
-    const after = body?.after ? map.milestones.find((m) => m.id === body.after) : undefined;
-    if (body?.after && !after) return json(422, { detail: "Pick a milestone it comes after" });
+    if (!(Number(body?.threshold) > 0)) return json(422, { detail: "The threshold must be above 0" });
+    if (map.milestones.some((m) => m.name === name)) return json(409, { detail: "A milestone with this name is already on the roadmap" });
+    // Not sent: it comes after the goal's last milestone.
+    const after = body && "after" in body ? afterOf(map, null, body.after) : [...map.milestones].reverse().find((m) => m.goal === g.id) ?? null;
+    if (after instanceof Response) return after;
     const days = DAYS_BACK.map((i) => (g.current === null ? null : Math.round((g.current - i * 0.6) * 10) / 10));
     map.milestones.push({
       id: crypto.randomUUID(), name, goal: g.id, measure: g.measure, threshold: Number(body?.threshold), unit: g.unit, current: g.current,
       status: g.current === null ? "not_measured" : "on_track", areas: body?.areas ?? [], depends: after ? [after.id] : [], month: "Nov", due: null, days, confirmed: null, confirmed_on: null, proposed: true,
     });
+    map.milestones = ordered(map.milestones);
     return out();
   }
   if (req.method === "PATCH" && p[3] === "milestones" && p[4]) {
     const m = map.milestones.find((x) => x.id === p[4]);
     if (!m) return json(404, { detail: "No such milestone" });
-    if (body?.threshold != null) m.threshold = Number(body.threshold);
-    if (body?.confirm) Object.assign(m, { confirmed: me.name, confirmed_on: "Nov 3", proposed: false });
+    if (body?.threshold != null && !(Number(body.threshold) > 0)) return json(422, { detail: "The threshold must be above 0" });
+    if (body && "after" in body) {
+      const after = afterOf(map, m, body.after);
+      if (after instanceof Response) return after;
+      m.depends = after ? [after.id] : [];
+    }
+    if (body?.threshold != null) {
+      if (m.threshold === null) Object.assign(m, { status: m.current === null ? "not_measured" : "on_track", proposed: !m.confirmed });
+      m.threshold = Number(body.threshold);
+    }
+    if (body?.confirm) {
+      if (m.threshold === null) return json(422, { detail: "Set a threshold before confirming the gate" });
+      Object.assign(m, { confirmed: me.name, confirmed_on: "Nov 3", proposed: false });
+    }
+    map.milestones = ordered(map.milestones);
     return out();
   }
   if (req.method === "POST" && p[3] === "links") {
@@ -351,7 +399,8 @@ export async function routeGoalMap(
         known.milestones.push(m.id);
         known.links.push(link);
       }
-      known.area ??= area.id;
+      // A feature sits in one area: attached from another area's cell, it moves there.
+      Object.assign(known, { area: area.id, lever: area.lever });
     } else {
       map.features.push({ id: String(body.feature), name: it!.title, area: area.id, milestones: [m.id], lever: area.lever, expected, confidence, released: false, measured: null, lift: "not_measured", links: [link] });
     }
