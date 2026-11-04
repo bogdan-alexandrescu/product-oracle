@@ -61,6 +61,7 @@ async def test_override_keeps_oracles_dates_and_restore(client):
         "start_date": "2026-10-01",
         "end_date": "2026-11-15",
         "source": "engineering",
+        "start_source": "engineering",
         "by": "Dee Cider",
         "at": it["override"]["at"],
     }
@@ -313,3 +314,53 @@ async def test_owner_back_to_track_when_from_track_records_nothing(client):
         assert (
             await s.scalars(select(SimpleChange).where(SimpleChange.op == "set_owner"))
         ).all() == []
+
+
+async def test_panel_reads_the_goals_reading_the_notes_and_the_starts_source(client):
+    """build-feature-panel review 3: the picked frames' Reading and Notes rows, and Start's
+    note after only the delivery moved. protects=the item's goal carries its reading
+    (``current``, ``target``, ``unit``, ``due``, from the goal's attrs); the item reads its
+    ``note``, which ``edit_note`` changes (viewers 403, over 500 characters 422); a
+    ``move_dates`` keeps the start's own source (``override.start_source``);
+    fails_when=any is missing; no_claim=a goal with a linked metric's pull."""
+    import uuid
+
+    from oracle.baseline.models import Entity
+
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, ops=["fp"])
+    a = w.ids["fp-a"]
+    grow, _ = await _goals_for(ctx, a)
+    async with tenant_session(ctx.tenant_id) as s:
+        g = await s.get(Entity, uuid.UUID(grow))
+        g.attrs = {**g.attrs, "unit": "%", "comparison": ">=", "target": 70, "current": 61,
+                   "current_as_of": "2026-10-20", "due": "2027-06-30"}  # fmt: skip
+        await s.execute(
+            update(RoadmapItem).where(RoadmapItem.id == uuid.UUID(a))
+            .values(date_source="engineering", note="Send on Monday morning.")
+        )  # fmt: skip
+        await s.commit()
+    it = await item_of(client, ctx, "decider", a)
+    goal = it["goal"]
+    assert (goal["current"], goal["target"], goal["unit"], goal["due"]) == (
+        61, 70, "%", "2027-06-30",
+    )  # fmt: skip
+    assert it["note"] == "Send on Monday morning."
+    r = await post(client, ctx, "viewer", "edit_note", {"item_id": a},
+                   {"note": "Send on Monday morning."}, {"note": "Skip quiet teams."})  # fmt: skip
+    assert r.status_code == 403, r.text
+    r = await post(client, ctx, "decider", "edit_note", {"item_id": a},
+                   {"note": "Send on Monday morning."}, {"note": "x" * 501})  # fmt: skip
+    assert r.status_code == 422, r.text
+    seen = {"note": "Send on Monday morning."}
+    r = await post(client, ctx, "decider", "edit_note", {"item_id": a}, seen,
+                   {"note": "  Skip quiet teams.  "})  # fmt: skip
+    assert r.status_code == 201, r.text
+    it = await item_of(client, ctx, "decider", a)
+    assert it["note"] == "Skip quiet teams."
+    r = await post(client, ctx, "decider", "move_dates", {"item_id": a},
+                   {"start_date": "2026-10-01", "end_date": "2026-11-15"},
+                   {"start_date": "2026-10-01", "end_date": "2026-11-05"})  # fmt: skip
+    assert r.status_code == 201, r.text
+    it = await item_of(client, ctx, "decider", a)
+    assert (it["override"]["source"], it["override"]["start_source"]) == ("engineering",) * 2
