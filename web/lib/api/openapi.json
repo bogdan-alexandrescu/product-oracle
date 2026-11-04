@@ -77423,6 +77423,11 @@
             "type": "string",
             "title": "Code"
           },
+          "ref": {
+            "type": "string",
+            "title": "Ref",
+            "default": ""
+          },
           "label": {
             "type": "string",
             "title": "Label"

@@ -2554,63 +2554,78 @@ function gateMessage(gate: CheckpointOut["gate"] | undefined): string | null {
 
 /** D3: the blocking reasons still open under the decision, each waivable one with Waive…. */
 function GateList({ gate, message, onWaive }: { gate: NonNullable<CheckpointOut["gate"]>; message: string; onWaive?: (body: ActionIn) => Promise<void> }) {
-  const [waiving, setWaiving] = useState<string | null>(null);
-  const [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false);
-  const key = (x: { item: string; code: string }) => `${x.item}|${x.code}`;
+  // Each problem by its own ref: two of the same code on one feature are two rows, each with its own Waive….
+  const seen = new Set<string>();
+  const rows = gate.left.filter((x) => {
+    const k = gateKey(x);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
   return (
     <div className="mt-2 text-sm" data-testid="approve-gate">
       <p className="text-warn">{message}</p>
       <ul className="mt-1 space-y-1">
-        {gate.left.map((x) => (
-          <li key={key(x)} data-testid="gate-reason">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">{x.item_title ?? x.item}</span>
-              <Chip kind="crit" className={REASON_CHIP}>
-                {x.label}
-              </Chip>
-              {x.waivable && onWaive && waiving !== key(x) && (
-                <button
-                  type="button"
-                  className="inline-flex min-h-6 items-center font-medium text-accent-ink underline max-[600px]:min-h-11"
-                  onClick={() => {
-                    setWaiving(key(x));
-                    setReason("");
-                  }}
-                >
-                  Waive…
-                </button>
-              )}
-            </div>
-            {waiving === key(x) && onWaive && (
-              <form
-                className="mt-1 flex flex-wrap items-center gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  setBusy(true);
-                  void onWaive({ item_key: x.item, kind: "waive", answers: [x.code], value: { reason: reason.trim() } }).finally(() => {
-                    setBusy(false);
-                    // Another reason's form may have opened meanwhile: only this one closes.
-                    setWaiving((open) => (open === key(x) ? null : open));
-                  });
-                }}
-              >
-                <input
-                  aria-label={`Reason to waive: ${x.label}`}
-                  placeholder="Why this is fine for now"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  className={`${INPUT} h-8 min-w-0 flex-1`}
-                />
-                <Button type="submit" className="h-8 px-2.5 text-sm" disabled={busy || !reason.trim()}>
-                  Waive
-                </Button>
-              </form>
-            )}
-          </li>
+        {rows.map((x) => (
+          <GateRow key={gateKey(x)} x={x} onWaive={onWaive} />
         ))}
       </ul>
     </div>
+  );
+}
+
+const gateKey = (x: { item: string; code: string; ref?: string }) => `${x.item}|${x.ref || x.code}`;
+
+/** One blocking reason: its own reason box, text and Waive, so waiving it waives it alone. */
+function GateRow({ x, onWaive }: { x: NonNullable<CheckpointOut["gate"]>["left"][number]; onWaive?: (body: ActionIn) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <li data-testid="gate-reason">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-medium">{x.item_title ?? x.item}</span>
+        <Chip kind="crit" className={REASON_CHIP}>
+          {x.label}
+        </Chip>
+        {x.waivable && onWaive && !open && (
+          <button
+            type="button"
+            className="inline-flex min-h-6 items-center font-medium text-accent-ink underline max-[600px]:min-h-11"
+            onClick={() => {
+              setOpen(true);
+              setReason("");
+            }}
+          >
+            Waive…
+          </button>
+        )}
+      </div>
+      {open && onWaive && (
+        <form
+          className="mt-1 flex flex-wrap items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setBusy(true);
+            void onWaive({ item_key: x.item, kind: "waive", answers: [x.ref || x.code], value: { reason: reason.trim() } }).finally(() => {
+              setBusy(false);
+              setOpen(false);
+            });
+          }}
+        >
+          <input
+            aria-label={`Reason to waive: ${x.label}`}
+            placeholder="Why this is fine for now"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className={`${INPUT} h-8 min-w-0 flex-1`}
+          />
+          <Button type="submit" className="h-8 px-2.5 text-sm" disabled={busy || !reason.trim()}>
+            Waive
+          </Button>
+        </form>
+      )}
+    </li>
   );
 }
 
