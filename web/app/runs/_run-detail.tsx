@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react";
-import { createPortal, flushSync } from "react-dom";
+import { createPortal } from "react-dom";
 
 import { DeleteDialog, DeleteMenu } from "@/components/ArtifactMenu";
 import { decisionSentence, runLabel } from "@/lib/labels";
@@ -104,7 +104,7 @@ type Decide = (
   note: string,
   revision?: number | null,
   onChanged?: (message: string) => void,
-) => void;
+) => void | Promise<void>;
 
 /**
  * D1: a Roadmap items stop is decided on its review screen; the run page shows its summary.
@@ -1095,23 +1095,20 @@ function SegmentItem({
   const saveNote = async (cpId: string, text: string) => {
     draft.accept(await unwrap(api.PUT("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note", { ...draftPath(cpId), body: { note: text || null } })));
   };
-  // Send back to writer: the Request changes flow of this segment's review, its note the
-  // summary of what Oracle refused (kept with anything already written), to edit and send.
-  // The segment's own stop (its kind), never another stop that waits on the same segment.
+  // Send back to writer (Nov 3): requests changes at this segment's review with what Oracle
+  // refused, which the API sends to the writer with the note written so far (if any); the next
+  // attempt starts. The segment's own stop (its kind), never another stop that waits on it.
   const review = deciding.find((cp) => cp.kind === kind && cp.console?.needs !== "redo_or_continue");
+  const [sending, setSending] = useState(false);
   const sendBack =
     rejected && review
-      ? () => {
-          const imp = s.draft_import!;
-          const text = imp.summary ?? `Draft not imported: ${imp.error}`;
-          const had = (notes[review.id] ?? "").trim();
-          const note = !had ? text : had.includes(text) ? had : `${text}\n\n${had}`;
-          flushSync(() => setNotes((n) => ({ ...n, [review.id]: note })));
-          const field = noteFields.current[review.id];
-          if (!field) return;
-          field.scrollIntoView({ block: "center" });
-          field.focus({ preventScroll: true });
-          field.setSelectionRange(note.length, note.length);
+      ? async () => {
+          setSending(true);
+          try {
+            await onDecide(review, "changes_requested", (notes[review.id] ?? "").trim(), null);
+          } finally {
+            setSending(false);
+          }
         }
       : undefined;
   return (
@@ -1311,6 +1308,7 @@ function SegmentItem({
               sentBack={s.sent_back}
               onRetry={s.can_retry_draft_import ? () => onRetryImport(s.seq) : undefined}
               onSendBack={sendBack}
+              sending={sending}
               retryRefused={s.draft_retry_refused}
               // A finished run's refused draft (#583 review): a new run drafts it again, and its
               // import clears the Inbox's No document row.
@@ -1488,6 +1486,7 @@ function DraftImportLine({
   sentBack = false,
   onRetry,
   onSendBack,
+  sending = false,
   retryRefused,
   newRun,
 }: {
@@ -1505,9 +1504,22 @@ function DraftImportLine({
   onRetry?: () => void;
   /** The import was refused and this member decides its review: Send back to writer. */
   onSendBack?: () => void;
+  /** Send back to writer is on its way: the problems go to the writer, the next attempt starts. */
+  sending?: boolean;
 }) {
   if (imp.error)
-    return <DraftRejected imp={imp} busy={busy} sentBack={sentBack} onRetry={onRetry} onSendBack={onSendBack} retryRefused={retryRefused} newRun={newRun} />;
+    return (
+      <DraftRejected
+        imp={imp}
+        busy={busy}
+        sentBack={sentBack}
+        onRetry={onRetry}
+        onSendBack={onSendBack}
+        sending={sending}
+        retryRefused={retryRefused}
+        newRun={newRun}
+      />
+    );
   return (
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-text">
       <span>
@@ -1545,6 +1557,7 @@ function DraftRejected({
   sentBack = false,
   onRetry,
   onSendBack,
+  sending = false,
   retryRefused,
   newRun,
 }: {
@@ -1553,6 +1566,7 @@ function DraftRejected({
   sentBack?: boolean;
   onRetry?: () => void;
   onSendBack?: () => void;
+  sending?: boolean;
   retryRefused?: string | null;
   newRun?: RunStart;
 }) {
@@ -1612,11 +1626,16 @@ function DraftRejected({
         </Button>
       )}
       {starting && newRun && <NewRunDialog onClose={() => setStarting(false)} start={newRun} />}
+      {sending && (
+        <p className="text-text2" role="status" data-testid="draft-sending-back">
+          Sending the problems to the writer; the next attempt starts when they are sent.
+        </p>
+      )}
       {(onRetry || onSendBack) && (
         <div className="flex flex-wrap gap-2">
           {onSendBack && (
             <Button disabled={busy} onClick={onSendBack}>
-              Send back to writer
+              {sending ? "Sending back…" : "Send back to writer"}
             </Button>
           )}
           {onRetry && (

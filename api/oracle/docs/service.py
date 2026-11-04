@@ -1190,9 +1190,29 @@ async def import_draft(
                 section_keys=sorted(held),
             )
         )
-    resolutions = draft.resolutions
+    for message in draft.dropped_resolutions:
+        # A malformed resolution is dropped, never a refusal of the draft (Nov 3).
+        warnings.append(VersionWarning(code="resolution_dropped", message=message))
+    if draft.note_resolutions:
+        # A send-back's note answered point by point: recorded against the note (the
+        # version keeps the entries in its front matter); no feedback item is closed.
+        answers = draft.note_resolutions
+        declined = sum(1 for a in answers if a.status == "declined")
+        n = len(answers)
+        warnings.append(
+            VersionWarning(
+                code="note_answered",
+                message=f"the draft answers the send-back note: {n} "
+                f"{'point' if n == 1 else 'points'} ({n - declined} addressed, "
+                f"{declined} declined)",
+                refs={"note_points": [a.id for a in answers]},
+            )
+        )
+    resolutions = await _known_resolutions(db, document, draft, warnings)
     if origin == "run" and previous is not None and resolutions:
-        resolutions, skipped = await _run_resolutions(db, document, previous, draft, revisions)
+        resolutions, skipped = await _run_resolutions(
+            db, document, previous, resolutions, revisions
+        )
         if skipped:
             # #396: the sections by heading; the feedback ids in refs.
             message, refs = wording.feedback_left_open(
@@ -1562,11 +1582,43 @@ async def _check_base(
         )
 
 
+async def _known_resolutions(
+    db: AsyncSession, document: Document, draft: ParsedDraft, warnings: list[VersionWarning]
+) -> list:
+    """The draft's resolutions that name feedback items of the document. One whose
+    feedback_id names no item is dropped with a ``resolution_dropped`` warning, never a
+    refusal of the draft (Nov 3)."""
+    from oracle.review.models import FeedbackItem
+
+    if not draft.resolutions:
+        return []
+    ids = [r.feedback_id for r in draft.resolutions]
+    known = set(
+        await db.scalars(
+            select(FeedbackItem.id).where(
+                FeedbackItem.document_id == document.id, FeedbackItem.id.in_(ids)
+            )
+        )
+    )
+    keep = []
+    for n, res in zip(draft.resolution_numbers, draft.resolutions, strict=True):
+        if res.feedback_id in known:
+            keep.append(res)
+        else:
+            warnings.append(
+                VersionWarning(
+                    code="resolution_dropped",
+                    message=f"resolution #{n} was dropped: its feedback_id names no feedback item",
+                )
+            )
+    return keep
+
+
 async def _run_resolutions(
     db: AsyncSession,
     document: Document,
     previous: DocumentVersion,
-    draft: ParsedDraft,
+    resolutions: list,
     revisions: dict[str, str],
 ) -> tuple[list, dict[str, str | None]]:
     """The resolutions of an agent's draft it may apply, and the ones it may not (feedback
@@ -1574,12 +1626,13 @@ async def _run_resolutions(
     when the item is on a section whose revision this version changes: it never
     declines feedback, never closes a document-level item, and never closes an item on a
     section it left alone (an approved section it changed is held, so it is left alone
-    until its patch is accepted). Unknown ids pass through (the import refuses them)."""
+    until its patch is accepted). ``resolutions`` name items of the document only
+    (:func:`_known_resolutions` dropped the rest)."""
     from oracle.review.models import FeedbackItem
 
     before = {k: s.revision for k, s in (await _section_rows(db, previous.id)).items()}
     changed = {k for k, r in revisions.items() if before.get(k) != r}
-    ids = [r.feedback_id for r in draft.resolutions]
+    ids = [r.feedback_id for r in resolutions]
     items = {
         i.id: i
         for i in await db.scalars(
@@ -1589,7 +1642,7 @@ async def _run_resolutions(
         )
     }
     keep, skipped = [], {}
-    for res in draft.resolutions:
+    for res in resolutions:
         item = items.get(res.feedback_id)
         if item is None or (
             res.status == "addressed" and item.section_key and item.section_key in changed

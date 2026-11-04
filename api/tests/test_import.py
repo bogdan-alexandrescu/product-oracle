@@ -287,17 +287,20 @@ async def test_removed_locked_section_is_reported(client):
     assert v2["warnings"][0]["section_keys"] == ["open-questions"]
 
 
-async def test_unknown_resolution_ids_reject_the_import(client):
+async def test_unknown_resolution_ids_are_dropped_not_refused(client):
+    # A resolution whose feedback_id names no item of the document is dropped with a
+    # warning; the draft is still imported (Nov 3).
     tenant_id, auth = await seed_auth()
     await import_draft(client, auth, draft("prd_v1.md"))
     resp = await import_draft(client, auth, draft("prd_v2.md"))  # no feedback items exist
-    assert resp.status_code == 422
-    errors = resp.json()["errors"]
-    assert [e["code"] for e in errors] == ["unknown_feedback_item"] * 2
-    assert str(FEEDBACK_SHIPPING) in errors[0]["message"]
-    assert str(FEEDBACK_GUEST) in errors[1]["message"]
+    assert resp.status_code == 201, resp.text
+    dropped = [w for w in resp.json()["warnings"] if w["code"] == "resolution_dropped"]
+    assert [w["message"] for w in dropped] == [
+        "resolution #1 was dropped: its feedback_id names no feedback item",
+        "resolution #2 was dropped: its feedback_id names no feedback item",
+    ]
     async with tenant_session(tenant_id) as s:
-        assert await s.scalar(select(func.count()).select_from(DocumentVersion)) == 1
+        assert await s.scalar(select(func.count()).select_from(DocumentVersion)) == 2
 
 
 async def test_front_matter_document_must_match_target(client):
@@ -349,3 +352,27 @@ async def test_non_utf8_body_is_rejected(client):
     )
     assert resp.status_code == 422
     assert resp.json()["errors"][0]["code"] == "invalid_encoding"
+
+
+async def test_a_known_resolution_applies_beside_a_dropped_unknown_one(client):
+    tenant_id, auth = await seed_auth()
+    v1 = (await import_draft(client, auth, draft("prd_v1.md"))).json()
+    async with tenant_session(tenant_id) as s:
+        s.add(
+            FeedbackItem(
+                id=FEEDBACK_SHIPPING,
+                document_id=uuid.UUID(v1["document_id"]),
+                raised_on_version=1,
+                kind="section_review",
+                section_key="s-5-2",
+                summary="Shipping cost needs an address; how is it shown early?",
+            )
+        )
+        await s.commit()
+    resp = await import_draft(client, auth, draft("prd_v2.md"))  # FEEDBACK_GUEST is unknown
+    assert resp.status_code == 201, resp.text
+    dropped = [w["message"] for w in resp.json()["warnings"] if w["code"] == "resolution_dropped"]
+    assert dropped == ["resolution #2 was dropped: its feedback_id names no feedback item"]
+    async with tenant_session(tenant_id) as s:
+        item = await s.get(FeedbackItem, FEEDBACK_SHIPPING)
+        assert item.status == "addressed" and item.addressed_in_version == 2
