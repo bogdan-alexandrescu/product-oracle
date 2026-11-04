@@ -441,9 +441,13 @@ export function storedDates(db: SimpleDb, key: string): { start: string | null; 
   const own = db.own[key];
   if (own) return { start: own.start, end: own.end };
   const s = db.items.find((x) => x.key === key)!;
-  if (s.source !== "typed" && s.source !== "accepted") return { start: null, end: null };
+  const stored = (src: SeedItem["source"]) => src === "typed" || src === "accepted";
   const w = simpleWindows(companyToday())[s.horizon];
-  return { start: s.start !== undefined ? addDays(w[0], s.start) : null, end: s.end !== undefined ? addDays(w[0], s.end) : null };
+  // build-feature-panel review 3: a start of its own source (an accepted start before an engineering delivery) is stored alone.
+  return {
+    start: s.start !== undefined && stored(s.start_source ?? s.source) ? addDays(w[0], s.start) : null,
+    end: s.end !== undefined && stored(s.source) ? addDays(w[0], s.end) : null,
+  };
 }
 
 /**
