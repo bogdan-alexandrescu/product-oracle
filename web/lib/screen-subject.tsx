@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { createContext, useContext, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import type { Schemas } from "@/lib/api/client";
 import { pageNameOnly } from "@/lib/page-context";
@@ -188,36 +188,54 @@ export function subjectKey(s: ScreenSubject): string | null {
   }
 }
 
-type Held = { path: string; value: ScreenSubject } | null;
-type HeldView = { path: string; value: PageView } | null;
-type HeldName = { path: string; value: string } | null;
-const Ctx = createContext<{
-  set: Held;
-  put: Dispatch<SetStateAction<Held>>;
-  view: HeldView;
-  putView: Dispatch<SetStateAction<HeldView>>;
-  name: HeldName;
-  putName: Dispatch<SetStateAction<HeldName>>;
-} | null>(null);
+type Held<T> = { path: string; value: T } | null;
+type Shown = { set: Held<ScreenSubject>; view: Held<PageView>; name: Held<string> };
+type Slot = keyof Shown;
+const NOTHING: Shown = { set: null, view: null, name: null };
+
+/**
+ * What the open page says it shows, held outside React's state: the shell's provider never
+ * changes its context, so a page saying it while it still streams (every page names itself as
+ * it mounts) never re-renders the shell above the parts still on their way. A context change
+ * there makes React drop those parts' server HTML and draw them afresh, leaving the streamed
+ * copy (a hidden second rail, user menu and page) in the document. Only the panel reads it.
+ */
+function shownStore() {
+  let now = NOTHING;
+  const heard = new Set<() => void>();
+  return {
+    get: () => now,
+    subscribe(hear: () => void) {
+      heard.add(hear);
+      return () => heard.delete(hear);
+    },
+    put<K extends Slot>(slot: K, next: (held: Shown[K]) => Shown[K]) {
+      const value = next(now[slot]);
+      if (value === now[slot]) return;
+      now = { ...now, [slot]: value };
+      heard.forEach((hear) => hear());
+    },
+  };
+}
+type ShownStore = ReturnType<typeof shownStore>;
+const Ctx = createContext<ShownStore | null>(null);
 
 export function ScreenSubjectProvider({ children }: { children: ReactNode }) {
-  const [set, put] = useState<Held>(null);
-  const [view, putView] = useState<HeldView>(null);
-  const [name, putName] = useState<HeldName>(null);
-  const value = useMemo(() => ({ set, put, view, putView, name, putName }), [set, view, name]);
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  const [store] = useState(shownStore);
+  return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }
 
 /** Holds a value for the open path while the calling page is mounted (a hidden route never clears the next page's). */
-function useHeld<T>(put: Dispatch<SetStateAction<{ path: string; value: T } | null>> | undefined, value: T | null) {
+function useHeld<K extends Slot>(slot: K, value: NonNullable<Shown[K]>["value"] | null) {
+  const store = useContext(Ctx);
   const pathname = usePathname();
   const key = value == null ? null : JSON.stringify(value);
   useEffect(() => {
-    if (!put || key == null) return;
-    const mine = { path: pathname, value: JSON.parse(key) as T };
-    put(mine);
-    return () => put((now) => (now === mine ? null : now));
-  }, [put, key, pathname]);
+    if (!store || key == null) return;
+    const mine = { path: pathname, value: JSON.parse(key) } as Shown[K];
+    store.put(slot, () => mine);
+    return () => store.put(slot, (now) => (now === mine ? null : now));
+  }, [store, slot, key, pathname]);
 }
 
 /**
@@ -225,12 +243,12 @@ function useHeld<T>(put: Dispatch<SetStateAction<{ path: string; value: T } | nu
  * when its main region's text would say less (lib/page-context.ts lists every route's provider).
  */
 export function usePageView(view: PageView | null) {
-  useHeld(useContext(Ctx)?.putView, view);
+  useHeld("view", view);
 }
 
 /** The shell's name for the open page, from its heading ("Dates · Plan"): what "This page" is titled. */
 export function useShownPageName(name: string | null) {
-  useHeld(useContext(Ctx)?.putName, name || null);
+  useHeld("name", name || null);
 }
 
 /**
@@ -238,19 +256,8 @@ export function useShownPageName(name: string | null) {
  * Cleared when the page goes.
  */
 export function useScreenSubject(subject: Pick<ScreenSubject, "kind" | "subject"> | null, label: string | null | undefined) {
-  const ctx = useContext(Ctx);
-  const pathname = usePathname();
-  const put = ctx?.put;
-  const key = subject && label ? JSON.stringify([subject.kind, subject.subject, label]) : null;
-  useEffect(() => {
-    if (!put) return;
-    if (!key) return;
-    const [kind, value, text] = JSON.parse(key) as [ScreenSubject["kind"], Record<string, unknown>, string];
-    const mine: Held = { path: pathname, value: { kind, subject: value, label: text } };
-    put(mine);
-    // Only this page's own subject is cleared: a hidden route (Next keeps recent ones mounted) never clears the next page's.
-    return () => put((now) => (now === mine ? null : now));
-  }, [put, key, pathname]);
+  // Only this page's own subject is cleared: a hidden route (Next keeps recent ones mounted) never clears the next page's.
+  useHeld("set", subject && label ? { kind: subject.kind, subject: subject.subject, label } : null);
 }
 
 /**
@@ -265,13 +272,17 @@ function screenLabel(path: string, shown: string | null): string {
   return shown;
 }
 
+const noStore = () => () => {};
+const nothing = () => NOTHING;
+
 /** What is on screen now: the page's subject, else its `screen` subject; with what the page shows. */
 export function useCurrentScreenSubject(): ScreenSubject {
-  const ctx = useContext(Ctx);
+  const store = useContext(Ctx);
+  const ctx = useSyncExternalStore(store?.subscribe ?? noStore, store?.get ?? nothing, nothing);
   const pathname = usePathname();
-  const held = ctx?.view && ctx.view.path === pathname ? ctx.view.value : null;
-  const shown = ctx?.name && ctx.name.path === pathname ? ctx.name.value : null;
-  const own = ctx?.set && ctx.set.path === pathname ? ctx.set.value : null;
+  const held = ctx.view && ctx.view.path === pathname ? ctx.view.value : null;
+  const shown = ctx.name && ctx.name.path === pathname ? ctx.name.value : null;
+  const own = ctx.set && ctx.set.path === pathname ? ctx.set.value : null;
   // One object while nothing changes: callers keep it in their hooks' dependencies.
   return useMemo(() => {
     const view: ScreenSubject["view"] = held ?? (pageNameOnly(pathname) ? undefined : "shown");
