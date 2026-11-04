@@ -17,6 +17,7 @@ import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
 import { DownloadNote, useDownloadNote } from "@/components/DownloadNote";
+import { DecisionNotes, LeftOutLine } from "@/components/simple/DecisionNotes";
 import { downloadedNote } from "@/lib/export-note";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -484,8 +485,12 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
               {v.draft.reminded_at && <span data-testid="reminded-at">Reminded {ago(v.draft.reminded_at)}</span>}
             </span>
           )}
+          {/* decisions-reversed-or-trashed: a decision this draft cited was reversed since. */}
+          <DecisionNotes notes={v.draft.decision_notes ?? []} className="basis-full text-[15px]" />
         </div>
       )}
+      {/* The lines' decisions left out as no longer standing, one quiet line under the banner. */}
+      {!presenting && <LeftOutLine leftOut={v.left_out} className="simple-noprint border-b border-[var(--simple-rule)] px-4 py-2 text-[15px] text-text-faint" />}
       {sending && v.draft?.can_submit && (
         <SendForApproval v={v} busy={busy} onClose={() => setSending(false)} onSend={(ids) => { setSending(false); void submit(ids); }} />
       )}

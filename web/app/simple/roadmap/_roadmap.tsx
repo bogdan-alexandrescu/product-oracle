@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 
 import { Button, clearToast, Notice, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
 import { GoalPanel, goalRows, SuggestionCard, useGoalSuggestions, type GoalBrief, type GoalPanelStart, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
+import { DecisionNotes, LeftOutLine } from "@/components/simple/DecisionNotes";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { Loading } from "@/components/ui";
 import { getBranding, logoDataUrl } from "@/lib/api/branding";
@@ -359,6 +360,8 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onReview, title
           ))}
         </ul>
       )}
+      {/* decisions-reversed-or-trashed: a decision the draft cited was reversed since. */}
+      <DecisionNotes notes={working.flatMap((d) => d.decision_notes ?? [])} className="mt-1.5 text-sm" />
       {open && (
         <ol className="mt-2 space-y-1 text-sm text-text" data-testid="draft-changes">
           {log.map((c) => (
@@ -1287,6 +1290,8 @@ export function SimpleRoadmap() {
       {!phone && goalCounters}
       <StartSheet open={starting} onClose={() => setStarting(false)} origin="roadmap" prefer={reviewPrd} from={reviewFrom} />
       {draftBanner}
+      {/* The items' decisions left out as no longer standing, one quiet line under the banner. */}
+      <LeftOutLine leftOut={data.left_out} className="px-1 text-sm text-text-faint" />
       {/* #36: on a phone, Roadmap/Goal/Track and Group by read before the chart, not after
        * the legend and goal cards at the page's foot. */}
       {!blank && filters}
