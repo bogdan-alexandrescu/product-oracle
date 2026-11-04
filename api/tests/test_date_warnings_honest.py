@@ -297,3 +297,31 @@ async def test_stored_warnings_follow_a_tracker_re_match(client, owner, runtime)
     await match("payment-step")
     doc = (await client.get(f"/v1/documents/{ROADMAP}", headers=auth)).json()
     assert _stored_date_warnings(doc) == []
+
+
+async def test_a_basis_change_re_checks_only_each_document_s_latest_version(  # noqa: F811
+    client, owner, runtime, monkeypatch
+):
+    # Review minor: the refresh runs inside the request, so it re-finds the dates of each
+    # document's latest version only (an older version's read still re-checks its own).
+    from tests.fixtures import import_draft
+    from tests.test_roadmap import ROADMAP_MD
+
+    _, auth = owner
+    await approved_prd(client, auth)
+    await _run_roadmap(client, auth, runtime, with_line("GA on 2026-12-15."))
+    resp = await import_draft(client, auth, ROADMAP_MD, ROADMAP)
+    assert resp.status_code == 201, resp.text
+
+    checked: list[int] = []
+    real = doc_dates.occurrences_for_version
+
+    async def counted(db, version, sections):
+        checked.append(version.number)
+        return await real(db, version, sections)
+
+    monkeypatch.setattr(doc_dates, "occurrences_for_version", counted)
+    await record(client, auth, "ENG-78", "2026-12-15", item_key="payment-step")
+    assert checked == [2]
+    # The older version's own read still follows the bases.
+    assert _date_warnings((await client.get(f"{VERSIONS}/1", headers=auth)).json()) == []
