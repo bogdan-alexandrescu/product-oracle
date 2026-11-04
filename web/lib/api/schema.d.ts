@@ -23535,6 +23535,11 @@ export interface components {
             move_how?: ("owner_confirmed" | "marked_shipped") | null;
             /** Proofs */
             proofs: components["schemas"]["FeatureProofOut"][];
+            /**
+             * Item Ids
+             * @default []
+             */
+            item_ids: string[];
         };
         /** FeatureStatesOut */
         FeatureStatesOut: {

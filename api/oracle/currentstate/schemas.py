@@ -48,6 +48,8 @@ class FeatureStateOut(BaseModel):
     moved_at: datetime | None = None
     move_how: Literal["owner_confirmed", "marked_shipped"] | None = None
     proofs: list[FeatureProofOut]
+    # The feature's roadmap items (a roadmap bar finds its feature's pill by these).
+    item_ids: list[uuid.UUID] = []
 
 
 class FeatureStatesOut(BaseModel):

@@ -316,4 +316,4 @@ async def test_each_feature_names_its_roadmap_items(client, clock):
     w = await world()
     rows = await w.rows(client)
     assert rows["tracked"]["item_ids"] == [w.item_id]
-    assert rows["idea"]["item_ids"] == []
+    assert rows["gone"]["item_ids"] == []

@@ -8,7 +8,7 @@ import type { Schemas } from "@/lib/api/client";
 
 type State = Schemas["FeatureStateOut"];
 type Proof = Schemas["FeatureProofOut"];
-type Row = { feature_id: string; code: string; title: string; milestone?: string | null; goal?: { title: string } | null };
+type Row = { feature_id: string; item_id?: string | null; code: string; title: string; milestone?: string | null; goal?: { title: string } | null };
 
 export interface CurrentStateDb {
   // Per feature: what the API stores (feature_states and feature_proofs).
@@ -93,6 +93,7 @@ function stateOut(db: CurrentStateDb, r: Row, i: number, today: number): State {
     answered_at: s?.answered_at ?? null,
     moved_at: s?.moved_at ?? null,
     move_how: s?.move_how ?? null,
+    item_ids: r.item_id ? [r.item_id] : [],
     proofs: ps.map((p) => ({ ...p, note: p.kind === "measured" && p.value && p.period && p.period !== thisMonth ? "not read yet" : null })),
   };
 }

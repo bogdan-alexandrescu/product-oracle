@@ -75031,6 +75031,15 @@
             },
             "type": "array",
             "title": "Proofs"
+          },
+          "item_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Item Ids",
+            "default": []
           }
         },
         "type": "object",

@@ -371,6 +371,7 @@ async def outs(db: AsyncSession, features: list[Entity], now: datetime) -> list[
                 moved_at=st.moved_at if st else None,
                 move_how=_move_how(st),  # type: ignore[arg-type]
                 proofs=[_proof_out(p, now) for p in ps],
+                item_ids=[i.id for i in items.get(f.id, [])],
             )
         )
     return out
