@@ -47,7 +47,7 @@
       },
       {
        "file": "frames/gb1-a-viewer.html",
-       "caption": "A viewer or commenter sees the same buckets with no pencil and no \"+ Add goal\"."
+       "caption": "Someone who may not edit goals (a viewer or commenter) sees the same buckets with no pencil and no \"+ Add goal\"."
       }
      ]
     },

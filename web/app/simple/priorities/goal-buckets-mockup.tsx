@@ -1,7 +1,7 @@
 "use client";
 // MOCK-HOOK: the whole file. Mock-ups (mk-goalbuckets) for adding, editing and archiving goals and
 // moving features right in Goal buckets: `?gb1=a|b|c|d` (add and edit), `?gb2=a|b|c|d` (archive),
-// `?gb3=a|b|c|d` (move features), with `&phase=rest|open|mid|result|add`, `&hard=1` and `&role=viewer`.
+// `?gb3=a|b|c|d` (move features), with `&phase=rest|open|mid|result|add`, `&hard=1`.
 
 import { useRouter, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
@@ -52,7 +52,7 @@ function useSwitches() { // MOCK-HOOK
     for (const [k, v] of Object.entries(patch)) next.set(k, v);
     router.replace(`?${next.toString()}`, { scroll: false });
   };
-  return { dec, v: p.get(dec) ?? "a", phase: p.get("phase") ?? "rest", hard: p.get("hard") === "1", viewer: p.get("role") === "viewer", go };
+  return { dec, v: p.get(dec) ?? "a", phase: p.get("phase") ?? "rest", hard: p.get("hard") === "1", go };
 }
 
 export function GoalBucketsMockup() { // MOCK-HOOK
@@ -60,7 +60,7 @@ export function GoalBucketsMockup() { // MOCK-HOOK
   const s = useSwitches();
   const { dec, v, phase, hard, go } = s;
   // Owners and approvers edit goals (update_entity); anyone else sees no controls.
-  const edits = can("update_entity") && !s.viewer;
+  const edits = can("update_entity");
   const start = mkGoalBuckets(hard);
   let goals = start.goals;
   let features = start.features;
@@ -151,7 +151,7 @@ export function GoalBucketsMockup() { // MOCK-HOOK
   const ticking = dec === "gb3" && v === "c" && (phase === "open" || phase === "mid");
 
   return (
-    <section aria-label="Goal buckets" data-mockup={`${dec}-${v}-${phase}`}>
+    <section aria-label="Goal buckets" data-mockup={`${dec}-${v}-${phase}`} className="pb-20">
       <PlanBucketsHead plan={plan} codeOf={() => null} />
       {edits && <Toolbar dec={dec} v={v} phase={phase} hard={hard} editMode={editMode} ticking={ticking} go={go} />}
       <ul className="mt-4 grid items-start gap-4 sm:grid-cols-2">
@@ -415,8 +415,8 @@ function GoalFields({ g, bad, changed }: { g: MkGoal; bad: boolean; changed: boo
         <input defaultValue={v.title} aria-label="Goal" className={`${INPUT} font-[650]`} />
         {changed && <span className="flex-none text-[13px] font-[650] text-accent-ink">Changed</span>}
       </div>
-      <div className="grid grid-cols-[1fr_110px_120px] gap-2 pl-8">
-        <input defaultValue={v.measure} aria-label="Measure" className={INPUT} />
+      <div className="grid grid-cols-2 gap-2 pl-8 sm:grid-cols-[1fr_110px_120px]">
+        <input defaultValue={v.measure} aria-label="Measure" className={`${INPUT} col-span-2 sm:col-span-1`} />
         <input defaultValue={v.target} aria-label="Target" className={INPUT} />
         <input defaultValue={day(v.by)} aria-label="By" placeholder="Pick a day" className={v.by ? INPUT : BAD} />
       </div>
@@ -642,7 +642,7 @@ function MoveBar() { // MOCK-HOOK
     <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line-strong bg-surface px-4 py-3 shadow-lg">
       <div className="mx-auto flex max-w-[1100px] flex-wrap items-center gap-2 text-[15px]">
         <b className="font-[650]">3 features picked</b>
-        <span className="text-text2">Repair booking from the app, Battery health alerts, Spare-parts stock view</span>
+        <span className="hidden text-text2 sm:inline">Repair booking from the app, Battery health alerts, Spare-parts stock view</span>
         <span className="ml-auto flex items-center gap-2">
           <span className="text-text2">Move to</span>
           <select aria-label="Move to goal" defaultValue="g5" className="h-8 rounded-lg border border-line-strong bg-surface px-2 text-[14px]">
