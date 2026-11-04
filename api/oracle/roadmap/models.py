@@ -271,7 +271,9 @@ class RoadmapItem(TenantScoped, Base):
     one owner each.
 
     Rows of an approved roadmap version are never rewritten; only their freshness
-    columns move (as ``artifact_dependencies`` do, §11.5).
+    columns move (as ``artifact_dependencies`` do, §11.5), and approving the version
+    applies its own plan to them once (oracle.simple.approved_roadmap: dates, plan state,
+    added items).
     """
 
     __tablename__ = "roadmap_items"

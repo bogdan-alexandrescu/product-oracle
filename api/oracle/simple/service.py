@@ -13,6 +13,10 @@ items by those who may see it (``overlays``); everyone else gets the published v
 ``changes_in_review``. A version submitted from a draft is never shown before it is
 approved.
 
+approved-roadmap-to-simple: items an applied roadmap version took off the plan (shipped,
+next PRD) are not read; each item says the version's words for its dates (``date_basis``)
+and ``applied_versions`` which version the roadmap matches (oracle.simple.approved_roadmap).
+
 It reads in bulk, a fixed number of statements whatever the company's size, and writes
 nothing. :func:`load` is also what the daily suggestions read, as Oracle (no principal).
 """
