@@ -151,6 +151,9 @@ class StepStatus:
     started_at: datetime | None = None
     heartbeat_at: datetime | None = None
     cost_usd: Decimal | None = None
+    # run-progress: the runtime's last event on the task (a file written, a state change),
+    # a sign of work when the agent sends no heartbeat.
+    event_at: datetime | None = None
 
 
 @dataclass(frozen=True)

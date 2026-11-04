@@ -112635,6 +112635,46 @@
               }
             ],
             "title": "Cost Usd"
+          },
+          "event_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event At"
+          },
+          "last_work_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Work At"
+          },
+          "last_work": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "heartbeat",
+                  "event",
+                  "proposals"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Work"
           }
         },
         "type": "object",
@@ -113064,6 +113104,16 @@
               }
             ],
             "title": "Checked At"
+          },
+          "cost_reported": {
+            "type": "boolean",
+            "title": "Cost Reported",
+            "default": false
+          },
+          "proposals_written": {
+            "type": "integer",
+            "title": "Proposals Written",
+            "default": 0
           },
           "queue_wait": {
             "anyOf": [
@@ -128049,6 +128099,19 @@
             "type": "array",
             "title": "Errors"
           },
+          "active_runs": {
+            "type": "integer",
+            "title": "Active Runs",
+            "default": 0
+          },
+          "unchecked": {
+            "items": {
+              "$ref": "#/components/schemas/TickUnchecked"
+            },
+            "type": "array",
+            "title": "Unchecked",
+            "default": []
+          },
           "claude_accounts": {
             "anyOf": [
               {
@@ -128084,6 +128147,31 @@
           "errors"
         ],
         "title": "TickOut"
+      },
+      "TickUnchecked": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "title",
+          "reason"
+        ],
+        "title": "TickUnchecked",
+        "description": "run-progress: a run a tick could not check, and why, in words."
       },
       "TierSuggestion": {
         "properties": {

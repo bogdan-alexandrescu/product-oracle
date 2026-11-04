@@ -170,7 +170,7 @@ export function RunDetail({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // #258: what the last "Refresh progress" checked, said once it answers.
-  const [checked, setChecked] = useState<string | null>(null);
+  const [checked, setChecked] = useState<TickResult | null>(null);
   const run = q.data;
   const { reload } = q;
   // G7 3.3: the panel is about the waiting checkpoint, else the run's page.
@@ -522,7 +522,22 @@ export function RunDetail({ id }: { id: string }) {
           </Notice>
         )}
         {run.status === "paused_overrun" && <OverrunHeld run={run} mayResume={can("resume_run")} />}
-        {checked && <Notice testId="tick-result">{checked}</Notice>}
+        {checked && (
+          <Notice testId="tick-result">
+            {!checked.lead && checked.text}
+            {/* run-progress: each run the check could not read, named with why, and a link to it; this run first. */}
+            {checked.unchecked.map((u, i) => (
+              <span key={u.run_id} data-testid="tick-unchecked">
+                {checked.lead && i === 0 ? null : " "}
+                <Link href={`/runs/${u.run_id}`} className="underline">
+                  {u.run_id === run.id ? "This run" : u.title}
+                </Link>{" "}
+                could not be checked: {u.reason}.
+              </span>
+            ))}
+            {checked.lead && checked.text}
+          </Notice>
+        )}
         <Panel
           // qa-work-9: no run id in the panel head; the page names the run.
           title="Segments"
@@ -636,21 +651,25 @@ function OverrunHeld({ run, mayResume }: { run: RunOut; mayResume: boolean }) {
   );
 }
 
+/** ``lead``: this run could not be checked, so the result leads with it (``unchecked`` first, then ``text``). */
+type TickResult = { text: string; unchecked: Schemas["TickUnchecked"][]; lead?: boolean };
+
 /**
  * #258: what "Refresh progress" checked: "Checked 1 active run at 9:24 AM: 1 segment finished."
  * qa-work-20: with no agent at work, why, from this run's state: "No agents are working right
- * now; the run is waiting for your review." Runs the check could not read are still named.
+ * now; the run is waiting for your review." run-progress: only the runs at work are counted; each
+ * run the check could not read is named after it, with why (the API's ``unchecked``).
  */
-function tickResult(out: Schemas["TickOut"], run: RunOut, mine: boolean): string {
+function tickResult(out: Schemas["TickOut"], run: RunOut, mine: boolean): TickResult {
   const at = formatTime(new Date().toISOString());
   // artifact-skip-refused: a file this run's step needs that SwarmCloud refused is said in
-  // words ("run <id>: SwarmCloud refused to send ..."), not only counted. Other errors carry codes.
+  // words ("run <id>: SwarmCloud refused to send ..."), not only counted.
   const prefix = `run ${run.id}: SwarmCloud refused to send `;
   const own = out.errors.filter((e) => e.startsWith(prefix)).map((e) => `${e.slice(`run ${run.id}: `.length)}.`);
   const said = own.length ? ` ${own.join(" ")}` : "";
-  const others = out.errors.length - own.length;
+  const unchecked = out.unchecked;
   // This run is not at work (it waits on a person, or between segments): say so, whatever other runs the check read.
-  if (run.status !== "running" || (out.runs_checked === 0 && out.errors.length === 0)) {
+  if (run.status !== "running" || (out.active_runs === 0 && unchecked.length === 0)) {
     const why =
       run.status === "awaiting_checkpoint"
         ? mine
@@ -662,13 +681,18 @@ function tickResult(out: Schemas["TickOut"], run: RunOut, mine: boolean): string
             ? "the run is paused over its budget"
             : "the run is between segments";
     // fix-work review: the check's own trouble stays in view, whatever this run is waiting on.
-    const failed = others ? ` ${plural(others, "run")} could not be checked at ${at}.` : "";
-    return `No agents are working right now; ${why}.${failed}${said}`;
+    const failed = unchecked.length ? ` Checked at ${at}:` : "";
+    return { text: `No agents are working right now; ${why}.${failed}${said}`, unchecked };
   }
   const parts = [out.segments_finished ? `${plural(out.segments_finished, "segment")} finished` : "no segment finished yet"];
   if (out.runs_paused) parts.push(`${plural(out.runs_paused, "run")} paused over budget`);
-  if (others) parts.push(`${plural(others, "run")} could not be checked`);
-  return `Checked ${plural(out.runs_checked, "active run")} at ${at}: ${parts.join(", ")}.${said}`;
+  // run-progress review: this run could not be checked: said first, then what else the check read.
+  if (unchecked.some((u) => u.run_id === run.id)) {
+    const first = [...unchecked.filter((u) => u.run_id === run.id), ...unchecked.filter((u) => u.run_id !== run.id)];
+    const others = out.active_runs ? ` ${plural(out.active_runs, "other active run")} at ${at}: ${parts.join(", ")}` : ` at ${at}`;
+    return { text: ` Checked${others}.${said}`, unchecked: first, lead: true };
+  }
+  return { text: `Checked ${plural(out.active_runs, "active run")} at ${at}: ${parts.join(", ")}.${said}`, unchecked };
 }
 
 /**
@@ -892,6 +916,18 @@ function duration(ms: number): string {
   return `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, "0")}m`;
 }
 
+/**
+ * run-progress: an agent's latest sign of work: its heartbeat, SwarmCloud's last event on its
+ * task, or the proposals the run wrote ("12 proposals written, last 30s ago").
+ */
+function lastWork(a: Schemas["SegmentAgent"], since: (at: string) => string): string {
+  const at = a.last_work_at ?? a.heartbeat_at;
+  if (!at) return "no sign of work yet";
+  if (a.last_work === "proposals") return `last proposal ${since(at)} ago`;
+  if (a.last_work === "event") return `last activity ${since(at)} ago`;
+  return `last heartbeat ${since(at)} ago`;
+}
+
 /** #258: a running segment's agents as Oracle last read them, and what it has spent so far. */
 function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
   // The elapsed times count on between reads.
@@ -905,7 +941,14 @@ function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
   return (
     <div data-testid="segment-progress" className="space-y-1 text-text2">
       <p className="tnum">
-        {usd(s.cost_usd)} spent so far ·{" "}
+        {/* run-progress: "$0.00" only once SwarmCloud reports a cost; until then, say so. */}
+        <span data-testid="segment-cost">{s.cost_reported ? `${usd(s.cost_usd)} spent so far` : "Cost not reported yet"}</span> ·{" "}
+        {/* run-progress review: the run's proposals are counted once for the step, not on each agent. */}
+        {s.checked_at && s.proposals_written > 0 && (
+          <>
+            <span data-testid="segment-proposals">{plural(s.proposals_written, "proposal")} written</span> ·{" "}
+          </>
+        )}
         {s.checked_at ? `checked ${since(s.checked_at)} ago` : "Not checked yet: the agents' progress shows after the next check"}
       </p>
       {s.checked_at &&
@@ -918,8 +961,8 @@ function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
                 </span>{" "}
                 · {a.state.charAt(0).toUpperCase() + a.state.slice(1)} ·{" "}
                 <span data-testid="agent-elapsed">{a.started_at ? `${since(a.started_at)} elapsed` : "start not read"}</span> ·{" "}
-                <span data-testid="agent-heartbeat">{a.heartbeat_at ? `last heartbeat ${since(a.heartbeat_at)} ago` : "no heartbeat yet"}</span>
-                {a.cost_usd != null && <> · {usd(a.cost_usd)}</>}
+                <span data-testid="agent-heartbeat">{lastWork(a, since)}</span>
+                {!!a.cost_usd && <> · {usd(a.cost_usd)}</>}
               </li>
             ))}
           </ul>

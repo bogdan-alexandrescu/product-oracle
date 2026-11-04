@@ -22,7 +22,8 @@ test("a running segment shows its agents and the cost so far, and Refresh progre
   const items = page.getByTestId("segment-roadmap_items");
   await expect(items.getByTestId("segment-state")).toHaveText("Running");
   const progress = items.getByTestId("segment-progress");
-  await expect(progress).toContainText("$0.00 spent so far");
+  // run-progress: nothing reported yet, not "$0.00".
+  await expect(progress.getByTestId("segment-cost")).toHaveText("Cost not reported yet");
   await expect(progress).toContainText("Not checked yet");
   // fix4 qa-work-16: in plain words.
   await expect(progress).not.toContainText("Oracle reads the agents");

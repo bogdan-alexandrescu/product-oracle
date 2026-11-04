@@ -37292,6 +37292,12 @@ export interface components {
             heartbeat_at?: string | null;
             /** Cost Usd */
             cost_usd?: number | null;
+            /** Event At */
+            event_at?: string | null;
+            /** Last Work At */
+            last_work_at?: string | null;
+            /** Last Work */
+            last_work?: ("heartbeat" | "event" | "proposals") | null;
         };
         /** SegmentAttempt */
         SegmentAttempt: {
@@ -37408,6 +37414,16 @@ export interface components {
             agents: components["schemas"]["SegmentAgent"][];
             /** Checked At */
             checked_at?: string | null;
+            /**
+             * Cost Reported
+             * @default false
+             */
+            cost_reported: boolean;
+            /**
+             * Proposals Written
+             * @default 0
+             */
+            proposals_written: number;
             queue_wait?: components["schemas"]["QueueWait"] | null;
         };
         /** SettingIn */
@@ -43032,6 +43048,16 @@ export interface components {
             runs_paused: number;
             /** Errors */
             errors: string[];
+            /**
+             * Active Runs
+             * @default 0
+             */
+            active_runs: number;
+            /**
+             * Unchecked
+             * @default []
+             */
+            unchecked: components["schemas"]["TickUnchecked"][];
             claude_accounts?: components["schemas"]["ClaudeSweepSummary"] | null;
             llm_jobs?: components["schemas"]["LlmJobsTick"] | null;
             /**
@@ -43039,6 +43065,21 @@ export interface components {
              * @default 0
              */
             member_follow_ups: number;
+        };
+        /**
+         * TickUnchecked
+         * @description run-progress: a run a tick could not check, and why, in words.
+         */
+        TickUnchecked: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Title */
+            title: string;
+            /** Reason */
+            reason: string;
         };
         /** TierSuggestion */
         TierSuggestion: {
