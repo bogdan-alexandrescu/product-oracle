@@ -144,7 +144,7 @@ for (const [where, use] of [
         // build-feature-panel: the one feature panel (FP1 B): its head, Dates, Links, then the card's own parts.
         await expect(card.getByRole("heading", { name: "Weekly alert digest", exact: true })).toBeVisible();
         await expect(card.getByTestId("fp-details")).toContainText("No owner yet");
-        await expect(card.getByTestId("fp-details")).toContainText("Oracle's suggestion");
+        await expect(card.getByTestId("fp-details")).toContainText("From the capacity plan");
         await expect(card.getByTestId("fp-list-depends").getByTestId("fp-dep")).toContainText("Alert rules engine");
         await expect(card.getByTestId("card-reasons")).toContainText("Serves the goal Grow retention.");
         await expect(card.getByTestId("card-decisions")).toContainText("Send the digest weekly or daily?");
