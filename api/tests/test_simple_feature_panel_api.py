@@ -19,11 +19,12 @@ Test cards (protects / fails_when / no_claim):
   Restore makes it a person's; no_claim=a person's link removed (it simply goes).
 """
 
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import select, update
 
 from oracle.roadmap.models import RoadmapItem
+from oracle.simple.models import SimpleChange
 from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import CHANGES, World, clock, make_people  # noqa: F401
 
@@ -186,7 +187,7 @@ async def _goals_for(ctx, item_id: str) -> tuple[str, str]:
         return str(grow.id), str(reply.id)
 
 
-async def test_own_goal_wins_over_oracles_and_restores(client):
+async def test_own_goal_wins_over_oracles_and_restores(client, clock):  # noqa: F811
     """build-feature-panel review 2: the panel's Serves and Measure fields. protects=``set_goal``
     gives the item its own goal (``goal_ids``) and measure, which win over the goal its feature
     supports (Oracle's); ``goal_set`` names Oracle's goal and who set the item's;
@@ -202,6 +203,7 @@ async def test_own_goal_wins_over_oracles_and_restores(client):
     r = await post(client, ctx, "viewer", "set_goal", {"item_id": a}, {"goal_ids": []},
                    {"goal_ids": [reply]})  # fmt: skip
     assert r.status_code == 403, r.text
+    clock["now"] += timedelta(minutes=1)
     r = await post(client, ctx, "decider", "set_goal", {"item_id": a}, {"goal_ids": []},
                    {"goal_ids": [reply], "measure": "Median minutes to first reply"})  # fmt: skip
     assert r.status_code == 201, r.text
@@ -212,15 +214,53 @@ async def test_own_goal_wins_over_oracles_and_restores(client):
         grow, "Grow retention", "Dee Cider", "Median minutes to first reply",
     )  # fmt: skip
     # Not a goal: refused.
+    clock["now"] += timedelta(minutes=1)
     r = await post(client, ctx, "decider", "set_goal", {"item_id": a}, {"goal_ids": [reply]},
                    {"goal_ids": [a]})  # fmt: skip
     assert r.status_code == 422, r.text
+    clock["now"] += timedelta(minutes=1)
     r = await post(client, ctx, "decider", "restore_goal", {"item_id": a}, {"goal_ids": [reply]})
     assert r.status_code == 201, r.text
     it = await item_of(client, ctx, "decider", a)
     assert it["goal"]["id"] == grow and it["goal_set"] is None and it["goal_ids"] == []
+    clock["now"] += timedelta(minutes=1)
     r = await post(client, ctx, "decider", "restore_goal", {"item_id": a}, {"goal_ids": []})
     assert r.status_code == 422, r.text
+
+
+async def test_restore_goal_at_the_same_moment_still_wins(client, clock):  # noqa: F811
+    """build-feature-panel review 3: protects=a ``set_goal`` and the ``restore_goal`` that
+    answers it, written at the same ``at`` (a frozen clock, one batch's now), apply in the
+    order they were written, so Oracle's goal is back; fails_when=two changes with one ``at``
+    are ordered by their random ids (the restore first: the person's goal stays);
+    no_claim=changes written out of order on purpose."""
+    import uuid
+
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, ops=["fp"])
+    a = w.ids["fp-a"]
+    grow, reply = await _goals_for(ctx, a)
+    r = await post(client, ctx, "decider", "set_goal", {"item_id": a}, {"goal_ids": []},
+                   {"goal_ids": [reply]})  # fmt: skip
+    assert r.status_code == 201, r.text
+    r = await post(client, ctx, "decider", "restore_goal", {"item_id": a}, {"goal_ids": [reply]})
+    assert r.status_code == 201, r.text
+    # The clock did not move: both have one ``at``. Give the restore the lower id, so an
+    # order by (at, id) puts it first, every time.
+    async with tenant_session(ctx.tenant_id) as s:
+        rows = {c.op: c for c in await s.scalars(
+            select(SimpleChange).where(SimpleChange.op.in_(("set_goal", "restore_goal")))
+        )}  # fmt: skip
+        assert rows["set_goal"].at == rows["restore_goal"].at
+        for op, new in (("set_goal", "ffffffff-ffff-4fff-bfff-ffffffffffff"),
+                        ("restore_goal", "00000000-0000-4000-8000-000000000000")):  # fmt: skip
+            await s.execute(
+                update(SimpleChange).where(SimpleChange.id == rows[op].id)
+                .values(id=uuid.UUID(new))
+            )  # fmt: skip
+        await s.commit()
+    it = await item_of(client, ctx, "decider", a)
+    assert it["goal"]["id"] == grow and it["goal_set"] is None and it["goal_ids"] == []
 
 
 async def test_engine_written_milestone_renames(client):
