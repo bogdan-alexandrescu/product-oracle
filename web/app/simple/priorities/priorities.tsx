@@ -54,8 +54,20 @@ export function usePhone(): boolean {
 const fmt = (n: number | null | undefined, digits = 1): string => (n == null ? "–" : Number(n.toFixed(digits)).toString());
 /** A score, always to two places (1.60 · 1.25 · 1.00), so a list of them reads one way (qa-plan-53). */
 
-/** A feature as people read it: its title and its short code ("Sample data import (F-12)"), never its key. */
-const nameOf = (r: { title: string; short_code?: string | null }): string => (r.short_code ? `${r.title} (${r.short_code})` : r.title);
+/** A feature as people read it: its title and its own key when it has one ("Sample data import (F-12)"), never a made-up code. */
+const nameOf = (r: { title: string; own_key?: string | null }): string => (r.own_key ? `${r.title} (${r.own_key})` : r.title);
+
+/** prio-company: a move or an estimate names the item, or the feature itself when it is on no roadmap (a move then adds it to the company roadmap). */
+const targetOf = (r: { item_id?: string | null; feature_id: string }) => (r.item_id ? { item_id: r.item_id } : { feature_id: r.feature_id });
+
+/** prio-company: the feature's own key beside its name, only when it has one. */
+function OwnKey({ r }: { r: { own_key?: string | null } }) {
+  return r.own_key ? (
+    <span data-testid="prio-own-key" className="ml-1.5 whitespace-nowrap text-[length:var(--simple-small)] font-normal tabular-nums text-text2">
+      {r.own_key}
+    </span>
+  ) : null;
+}
 
 /** qa-simple-plan-3: what the score is, in words (the API's formula: Σ goal weight × contribution × confidence ÷ effort). */
 const SCORE_WORDS = "Score = goal value × Oracle's confidence in it (0 to 1) ÷ effort in engineer-weeks.";
@@ -474,7 +486,7 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
   const goalOf = goalOfRow(data);
   // qa-simple-plan-4: the override ends (after.clear) and the feature takes Oracle's rank again; Undo puts it back.
   async function backToOracle(r: Row) {
-    const sent = await send({ op: "override_priority", target: { item_id: r.item_id }, before: { override: r.before_override ?? null }, after: { clear: true }, reason: "Back to Oracle's rank" });
+    const sent = await send({ op: "override_priority", target: targetOf(r), before: { override: r.before_override ?? null }, after: { clear: true }, reason: "Back to Oracle's rank" });
     await changed(sent, r.applies ? `Moved ${nameOf(r)} back to Oracle's rank` : `Proposed putting ${nameOf(r)} back at Oracle's rank`, r);
   }
   return (
@@ -552,8 +564,10 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
                 className={`inline-block h-3 w-3 flex-none rounded-full border-2 border-accent ${r.above_line ? "bg-accent" : "bg-transparent"}`}
                 data-testid="prio-line-mark"
               />
-              <CodeChip r={r} />
-              <span className="min-w-[12rem] flex-1 font-medium" data-testid="prio-title">{r.title}</span>
+              <span className="min-w-[12rem] flex-1 font-medium" data-testid="prio-title">
+                {r.title}
+                <OwnKey r={r} />
+              </span>
               {/* walkb-priorities: no ml-auto, so details that wrap under the title start at the left on every row. */}
               <span data-testid="prio-details" className={`${half ? "basis-full sm:pl-12" : ""} flex min-w-0 max-w-full flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--simple-small)] text-text2`}>
                 {/* The chips stay together, wrapping as one group. */}
@@ -569,7 +583,7 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
                 {/* walkb-priorities: a long milestone name wraps inside the card (a phone scrolled sideways). */}
                 {r.milestone && <span data-testid="prio-milestone" className="min-w-0 max-w-full [overflow-wrap:anywhere]">Milestone {r.milestone}</span>}
                 {/* qa-simple-plan-3: value · confidence · weeks · score, in the order of the score's formula; no bar. */}
-                <Numbers r={r} />
+                <Numbers r={r} mayChange={mayChange} changed={changed} />
               </span>
             </div>
             {/* qa4-simple-plan-25: Oracle's rank and the move sit in a slot of their own under the row, so the row keeps its layout. */}
@@ -587,9 +601,14 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
                 {words && <MovedTag words={words} />}
               </p>
             )}
+            {mayChange && r.can_reorder && !r.on_roadmap && data.company_roadmap && (
+              <p className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12" data-testid="prio-adds">
+                Not on {data.company_roadmap.title} yet: moving it adds it there, under Later.
+              </p>
+            )}
             {mayChange && !r.can_reorder && (
               <p className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12" data-testid="prio-locked">
-                Only people with access to this feature&apos;s roadmap can move it. Ask the owner for access.
+                {r.on_roadmap ? "Only people with access to this feature's roadmap can move it. Ask the owner for access." : "Only an owner can add this feature to the company roadmap to move it. Ask an owner."}
               </p>
             )}
             {r.after && (
@@ -666,8 +685,10 @@ function OracleOrder({ data }: { data: Out }) {
                 title={r.above_line ? "Above the line" : "Below the line"}
                 className={`inline-block h-3 w-3 flex-none rounded-full border-2 border-accent ${r.above_line ? "bg-accent" : "bg-transparent"}`}
               />
-              <CodeChip r={r} />
-              <span className="min-w-[8rem] flex-1 font-medium">{r.title}</span>
+              <span className="min-w-[8rem] flex-1 font-medium">
+                {r.title}
+                <OwnKey r={r} />
+              </span>
               <span className="flex flex-wrap items-center gap-x-3 text-[length:var(--simple-small)] text-text2">
                 {goalOf(r) ? (
                   <span data-testid="oracle-goal">{goalOf(r)}</span>
@@ -738,7 +759,7 @@ function MoveDialog({ move, rows, dated, onClose, changed }: { move: { row: Row;
     setError(null);
     const r = await send({
       op: "override_priority",
-      target: { item_id: row.item_id },
+      target: targetOf(row),
       before: { override: row.before_override ?? null },
       after: { position, reason: reason.trim(), ...(confirm ? { confirm: true } : {}) },
       reason: reason.trim(),
@@ -1198,7 +1219,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
     await changed(
       await send({
         op: "estimate_feature",
-        target: { item_id: r.item_id },
+        target: targetOf(r),
         before: { goal_value: r.value_estimated ? (r.goal_value ?? null) : null, effort: r.effort ?? null },
         after,
       }),
@@ -1275,7 +1296,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
     { name: "Later", at: "bottom-[22px] right-[10px] text-right" },
   ];
   // B's legend: "Codes are the one-pager's feature codes" when every mark's code is one, else codes stay with the item.
-  const fCodes = rows.length > 0 && rows.every((r) => /^F-\d+$/.test(r.short_code || r.code));
+  const fCodes = rows.length > 0 && rows.every((r) => !!r.own_key);
   const effortAt = xPct(byEffort.median);
   const valueAt = yPct(byValue.median);
   // B writes "middle effort" at the foot of its line and "middle value" under its line at 82%
@@ -1381,7 +1402,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   data-shape={shapeOf(r)}
                   aria-pressed={isSelected}
                   aria-label={`#${r.rank} ${nameOf(r)}: goal value ${fmt(r.goal_value)}, ${r.effort == null ? "PM-owned, no effort" : `effort ${fmt(r.effort)} ${r.effort === 1 ? "week" : "weeks"}`}${r.above_line ? "" : ", below the line"}${goalOf(r) ? "" : ", no goal"}`}
-                  title={`#${r.rank} ${r.short_code || r.code} · ${r.title}`}
+                  title={`#${r.rank} ${r.own_key ? `${r.own_key} · ` : ""}${r.title}`}
                   className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ${isSelected ? "z-20 ring-[3px] ring-accent ring-offset-2 ring-offset-surface" : isMoved ? "z-10 ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""} ${mayChange && r.can_reorder ? "cursor-grab touch-none" : "cursor-pointer"}`}
                   style={{ left, top }}
                   onClick={() => {
@@ -1403,7 +1424,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   onPointerCancel={() => setDrag(null)}
                   onKeyDown={(e) => key(e, r)}
                 >
-                  <ShapeMark shape={shapeOf(r)} hollow={!r.above_line} code={r.short_code || r.code} />
+                  <ShapeMark shape={shapeOf(r)} hollow={!r.above_line} code={r.own_key || String(r.rank)} />
                 </button>
               );
             })}
@@ -1451,7 +1472,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
             </li>
           )}
           <li>
-            {fCodes ? "Each mark shows the feature's code from its one-pager; its rank is in the list." : "Each mark shows the feature's code; its rank is in the list."} Hollow: below the line ({lineWords(data)}). A mark on a middle line counts on the side its rank puts it.
+            {fCodes ? "Each mark shows the feature's own key; its rank is in the list." : "Each mark shows the feature's own key, else its rank."} Hollow: below the line ({lineWords(data)}). A mark on a middle line counts on the side its rank puts it.
           </li>
         </ul>
         <p className="mt-1 pl-6 text-[15px] leading-[22px] text-text2">
@@ -1485,16 +1506,18 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   <span className="w-5 flex-none text-right font-[650] tabular-nums" data-testid="side-rank">
                     {r.rank}
                   </span>
-                  <span className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text" data-testid="side-code" title={r.title}>
-                    {r.short_code || r.title}
-                  </span>
+                  {r.own_key && (
+                    <span className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text" data-testid="side-code" title={r.title}>
+                      {r.own_key}
+                    </span>
+                  )}
                   <span className="min-w-0 flex-1 truncate" data-testid="prio-title" title={r.title}>
                     {r.title}
                   </span>
                   {/* qa4-simple-plan-8: why a score is out of order: a person's move, or a feature it needs. */}
                   {r.after ? (
                     <span data-testid="side-held" title={`After ${r.after.title}, which it needs`} className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2">
-                      after {rows.find((x) => x.code === r.after!.code)?.short_code || r.after.title}
+                      after {r.after.title}
                     </span>
                   ) : (
                     r.oracle_rank != null &&
@@ -1615,7 +1638,7 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
             // priorities-keydates: a PRD's milestone is a key date marked as the roadmap marks it ("From the PRD", in
             // place of "Key date", so the chosen line fits a phone's box); it changes in the PRD, never here.
             <option key={l.key} value={l.key} title={l.prd ? `A key date from the PRD; change it in the PRD, ${l.prd.title}` : undefined}>
-              {l.kind === "key_date" ? `${l.prd ? "From the PRD" : "Key date"}: ${l.label}` : l.kind === "milestone" ? `Milestone: ${l.label}` : l.label}
+              {l.kind === "key_date" ? `${l.prd ? `From ${l.prd.title}` : "Key date"}: ${l.label}` : l.kind === "milestone" ? `${l.prd ? `Milestone of ${l.prd.title}` : "Milestone"}: ${l.label}` : l.label}
             </option>
           ))}
           {current.kind === "date" && <option value="picked">{`Date: ${current.label.replace(/^By /, "")}`}</option>}
@@ -1680,26 +1703,40 @@ function lineSplit(rows: Row[]): number {
 }
 
 /**
- * Above the list: "N of M miss <line>" and the names of those that miss it. Compact (Value/effort's
- * 320 px side list): three names and "and N more", every name in its title.
+ * Above the list: "N of M miss <line>" and, under "Show them", each feature that misses it on a line
+ * of its own, each opening the feature's panel (prio-company: never one run-on sentence of names).
  */
 function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }) {
-  const misses = data.rows.filter((r) => !r.above_line).map((r) => r.title);
-  // qa-simple-plan-19: "and N more" opens the rest.
-  const [all, setAll] = useState(false);
-  const cut = compact && misses.length > 3 && !all;
+  const misses = data.rows.filter((r) => !r.above_line);
+  const [open, setOpen] = useState(false);
+  const [opened, setOpened] = useState<{ code: string; name: string } | null>(null);
+  const phone = usePhone();
+  const { can } = useMe();
   return (
-    <p data-testid="line-caption" className={`mb-2 text-[length:var(--simple-small)] text-text2 ${compact ? "leading-[21px]" : ""}`}>
-      <span className="font-medium text-accent-ink">
-        {misses.length} of {data.rows.length} miss {lineLabel(data)}
-      </span>
-      {misses.length > 0 && `: ${cut ? `${misses.slice(0, 3).join(", ")} ` : misses.join(", ")}`}
-      {cut && (
-        <button type="button" data-testid="line-caption-more" aria-expanded={false} onClick={() => setAll(true)} className="font-semibold text-accent-ink underline">
-          and {misses.length - 3} more
-        </button>
+    <div data-testid="line-caption" className={`mb-2 text-[length:var(--simple-small)] text-text2 ${compact ? "leading-[21px]" : ""}`}>
+      <p className="flex flex-wrap items-center gap-x-2">
+        <span className="font-medium text-accent-ink">
+          {misses.length} of {data.rows.length} miss {lineLabel(data)}
+        </span>
+        {misses.length > 0 && (
+          <button type="button" data-testid="line-caption-more" aria-expanded={open} aria-controls="line-misses" onClick={() => setOpen(!open)} className="font-semibold text-accent-ink underline">
+            {open ? "Hide them" : "Show them"}
+          </button>
+        )}
+      </p>
+      {open && (
+        <ul id="line-misses" data-testid="line-misses" className="mt-1 flex flex-col">
+          {misses.map((r) => (
+            <li key={r.feature_id}>
+              <button type="button" data-testid="line-miss" className="py-0.5 text-left text-text underline decoration-line-strong underline-offset-2 hover:decoration-accent" onClick={() => setOpened({ code: r.code, name: r.title })}>
+                {nameOf(r)}
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
-    </p>
+      {opened && <FeaturePanel key={opened.code} feature={opened} phone={phone} canChange={can("create_simple_change")} onClose={() => setOpened(null)} />}
+    </div>
   );
 }
 
@@ -1740,12 +1777,15 @@ function PartHead({ data, makes, n }: { data: Out; makes: boolean; n: number }) 
 }
 
 /** A row's numbers, each keeping its "·" with it so a wrapped line never starts or ends with a stray dot. */
-function Numbers({ r }: { r: Row }) {
+function Numbers({ r, mayChange = false, changed }: { r: Row; mayChange?: boolean; changed?: Changed }) {
   const parts = [
     <span key="value">value {fmt(r.goal_value)}</span>,
     ...(r.effort == null
       ? // qa-simple-plan-8: PM-owned work has no engineer-weeks, so no score.
-        [<span key="pm" data-testid="prio-pm-owned">PM-owned, no engineer-weeks, no score</span>]
+        [
+          <span key="pm" data-testid="prio-pm-owned">PM-owned, no engineer-weeks, no score</span>,
+          ...(mayChange && changed ? [<EffortEdit key="effort" r={r} changed={changed} />] : []),
+        ]
       : [
           <span key="confidence" data-testid="prio-confidence" title={SCORE_WORDS}>confidence {fmt(r.confidence, 2)}</span>,
           <span key="weeks">{fmt(r.effort)} wk</span>,
@@ -1768,6 +1808,74 @@ function Numbers({ r }: { r: Row }) {
           </span>
         ))}
       </span>
+    </span>
+  );
+}
+
+/** prio-company: a PM-owned row's effort, set in place; its score then appears. */
+function EffortEdit({ r, changed }: { r: Row; changed: Changed }) {
+  const [editing, setEditing] = useState(false);
+  const [weeks, setWeeks] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const n = Number(weeks);
+  const ok = weeks.trim() !== "" && Number.isFinite(n) && n > 0;
+  async function save() {
+    if (!ok) return;
+    setBusy(true);
+    setError(null);
+    const effort = Math.round(n * 10) / 10;
+    const sent = await send({
+      op: "estimate_feature",
+      target: targetOf(r),
+      before: { goal_value: r.value_estimated ? (r.goal_value ?? null) : null, effort: null },
+      after: { effort },
+    });
+    setBusy(false);
+    if (!sent.ok) return setError(sent.message);
+    setEditing(false);
+    await changed(sent, `Estimated ${nameOf(r)}: effort ${effort} wk`, r, true, `effort ${effort} wk`);
+  }
+  if (!editing)
+    return (
+      <button type="button" data-testid="prio-add-effort" className="font-semibold text-accent-ink underline" onClick={() => setEditing(true)}>
+        Add effort
+      </button>
+    );
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5" data-testid="prio-effort-edit">
+      <label className="inline-flex items-center gap-1">
+        <span>Effort</span>
+        <input
+          type="number"
+          min="0.5"
+          step="0.5"
+          autoFocus
+          inputMode="decimal"
+          aria-label={`Effort for ${r.title}, in engineer-weeks`}
+          className="h-7 w-16 rounded-md border border-line-strong bg-surface px-1.5 text-text"
+          value={weeks}
+          onChange={(e) => setWeeks(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void save();
+            } else if (e.key === "Escape") setEditing(false);
+          }}
+        />
+        <span>wk</span>
+      </label>
+      <Button type="button" onClick={() => void save()} disabled={!ok || busy}>
+        Save
+      </Button>
+      <Button type="button" variant="ghost" onClick={() => setEditing(false)}>
+        Cancel
+      </Button>
+      {error && (
+        <span role="alert" className="text-crit">
+          {error}
+        </span>
+      )}
     </span>
   );
 }

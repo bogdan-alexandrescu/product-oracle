@@ -13,6 +13,8 @@ import type { Schemas } from "@/lib/api/client";
 import { PLAN_PRD_SLUG, planOut, planSlices } from "./simple-plan";
 import { closed, companyToday, goalRank, roadmapOut, type SimpleDb } from "./simple-roadmap";
 import { flowFor } from "./simple-visuals";
+import { stableUuid } from "./ids";
+import { COMPANY_TITLE } from "./one-roadmap";
 
 type Row = Schemas["SimplePriorityRow"];
 type Item = Schemas["SimpleRoadmapItem"];
@@ -231,19 +233,45 @@ const sameAs = (name: string, day: string): string[] => {
  * with a PRD key date's name on its day is left out (listed once, "From the PRD"); `same` is
  * the key date's line by the left-out milestone's key, so a saved pick of it draws that line.
  */
+/** priorities.readable: a template's literal placeholder ("Milestone N agents", "<name>") is no name. */
+const readable = (name: string | null | undefined): string | null => {
+  const n = (name ?? "").trim();
+  return n && !/(^|\s)N(\s|$)|[{<[][^}>\]]*[}>\]]/.test(n) ? n : null;
+};
+
+/** priorities._code_of: a milestone's code ("M1" of "M1 · Measured"), null for a name with none. */
+const codeOf = (name: string): string | null => (/^[A-Z][A-Z0-9]*-?[0-9]+[a-z]?/.test(name) ? name.split(/[\s·:.–—]/)[0] : null);
+
 function linesOf(read: Schemas["SimpleRoadmapOut"]): { lines: Line[]; same: Map<string, Line> } {
   const tracks = new Set(read.items.map((i) => i.track?.id).filter(Boolean));
-  const keyDates = (read.key_dates ?? []).map((k): Line => ({ key: `key_date:${k.id}`, kind: "key_date", label: `${k.name} · ${lineDay(k.date)}`, date: k.date, prd: k.prd ?? null }));
+  // prio-company: each line names its PRD (a milestone its track's); a PRD's code on any day, or a line already listed, once.
+  const prdOf = new Map(read.items.filter((i) => i.track && i.prd).map((i) => [i.track!.id, i.prd!]));
+  const keyDates = (read.key_dates ?? []).filter((k) => readable(k.name)).map((k): Line => ({ key: `key_date:${k.id}`, kind: "key_date", label: `${k.name} · ${lineDay(k.date)}`, date: k.date, prd: k.prd ?? null }));
   const fromPrd = new Map<string, Line>();
-  (read.key_dates ?? []).forEach((k, i) => k.prd && sameAs(k.name, k.date).forEach((x) => fromPrd.has(x) || fromPrd.set(x, keyDates[i])));
+  const byCode = new Map<string, Line>();
+  (read.key_dates ?? []).filter((k) => readable(k.name)).forEach((k, i) => {
+    if (!k.prd) return;
+    sameAs(k.name, k.date).forEach((x) => fromPrd.has(x) || fromPrd.set(x, keyDates[i]));
+    const code = codeOf(k.name);
+    if (code && !byCode.has(`${k.prd.id}|${code}`)) byCode.set(`${k.prd.id}|${code}`, keyDates[i]);
+  });
   const same = new Map<string, Line>();
   const milestones: Line[] = [];
+  const seen = new Map(keyDates.map((l) => [`${l.label}|${l.prd?.id ?? ""}`, l]));
   for (const m of read.milestones) {
-    if (!m.date || !tracks.has(m.track_id) || m.status === "dropped") continue;
+    if (!m.date || !tracks.has(m.track_id) || m.status === "dropped" || !readable(m.name)) continue;
     const key = `milestone:${m.id}`;
-    const kd = sameAs(m.name, m.date).map((x) => fromPrd.get(x)).find(Boolean);
+    const prd = prdOf.get(m.track_id);
+    const ref = prd ? { id: prd.id, slug: prd.slug, title: prd.title } : null;
+    const label = `${m.name} · ${lineDay(m.date)}`;
+    const code = codeOf(m.name);
+    const kd = sameAs(m.name, m.date).map((x) => fromPrd.get(x)).find(Boolean) ?? (code && ref ? byCode.get(`${ref.id}|${code}`) : undefined) ?? seen.get(`${label}|${ref?.id ?? ""}`);
     if (kd) same.set(key, kd);
-    else milestones.push({ key, kind: "milestone", label: `${m.name} · ${lineDay(m.date)}`, date: m.date });
+    else {
+      const ln: Line = { key, kind: "milestone", label, date: m.date, prd: ref };
+      seen.set(`${label}|${ref?.id ?? ""}`, ln);
+      milestones.push(ln);
+    }
   }
   // Key dates and milestones in date order, one list (Now first).
   return { lines: [NOW_LINE, ...[...keyDates, ...milestones].sort((a, b) => (a.date! < b.date! ? -1 : a.date! > b.date! ? 1 : 0))], same };
@@ -325,9 +353,10 @@ export function prioritiesOut(
       item_id: mine ? i.id : null,
       code: i.key,
       short_code: "",
+      own_key: null,
       title: i.title,
       goal: i.goal ? { key: i.goal.key, title: i.goal.title, position: i.goal.position ?? null } : null,
-      milestone: mine ? (i.milestone?.name ?? null) : null,
+      milestone: mine ? readable(i.milestone?.name) : null,
       horizon: mine ? i.horizon : null,
       goal_value: e.value,
       effort: e.effort,
@@ -342,8 +371,10 @@ export function prioritiesOut(
       end_estimated: mine && readItems.get(i.id)!.end.estimated,
       no_goal: !i.goal,
       in_plan: false,
-      can_reorder: can && mine,
-      applies: mine && decides(i.id),
+      // prio-company: an owner moves every row (a move adds a feature to the company roadmap).
+      can_reorder: can && (mine || ctx.role === "owner"),
+      on_roadmap: mine,
+      applies: mine ? decides(i.id) : ctx.role === "owner",
       before_override: (stored(db, i.id).override as Record<string, unknown> | undefined) ?? null,
     };
   });
@@ -359,6 +390,8 @@ export function prioritiesOut(
   const shorts = shortCodes(created, prdCodes, names);
   const short = new Map(created.map((k, n) => [k, shorts[n]]));
   yours.forEach((i, n) => (rows[n].short_code = short.get(featureKey(i.key))!));
+  // prio-company: the feature's own code beside its name (priorities.FEATURE_CODE), never letters made up.
+  rows.forEach((r) => (r.own_key = /^[A-Z]{1,3}-\d+$/.test(r.short_code) ? r.short_code : null));
   const codes = new Map(read.items.map((i) => [i.id, i]));
   const proposals: Schemas["SimplePriorityProposal"][] = (db.changes ?? [])
     // Ranking proposals, and a draft's Confirm or Merge (S7: a merge_item), as priorities.py.
@@ -408,6 +441,7 @@ export function prioritiesOut(
     today, quarter: read.span ?? quarter(today), method: "goal_weighted",
     formula: "score = Σ(goal weight × contribution) × confidence × track record ÷ effort",
     rows, proposals, drafts, buckets, weeks_total: total, can_change: can, line, lines,
+    company_roadmap: db.company_roadmap ? { id: stableUuid(`simple-doc/${db.company_roadmap}`), slug: db.company_roadmap, title: COMPANY_TITLE } : null,
     // plan-charts: the plan this quarter is, when the reader sees its PRD's items.
     plan,
   };
