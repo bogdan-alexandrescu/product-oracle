@@ -61,6 +61,17 @@ async def trashed_about(db: AsyncSession, ds: list[Decision]) -> dict[uuid.UUID,
     if not ds:
         return {}
     every = {INCLUDE_TRASHED: True}
+    # Nothing in Trash (the usual case): one small read, not one per subject kind.
+    if (
+        await db.scalar(
+            select(Document.id)
+            .where(Document.deleted_at.is_not(None))
+            .limit(1)
+            .execution_options(**every)
+        )
+        is None
+    ):
+        return {}
     docs: dict[uuid.UUID, set[uuid.UUID]] = {
         d.id: _subject_ids(d, ("document", "section")) for d in ds
     }
