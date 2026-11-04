@@ -83,6 +83,9 @@ class PlanMilestone:
 class Plan:
     items: list[PlanItem] = field(default_factory=list)
     milestones: list[PlanMilestone] = field(default_factory=list)
+    # Whether the text has each table, rows or not (oracle.runs.plan_tables checks a draft).
+    has_items_table: bool = False
+    has_milestones_table: bool = False
 
     @property
     def empty(self) -> bool:
@@ -166,7 +169,7 @@ def parse(markdown: str, today: date) -> Plan:
             rows.append(_cells(lines[j]) + [""] * len(header))
             j += 1
         if not seen_items and "item" in low and "start" in low and "end" in low:
-            seen_items = True
+            seen_items = plan.has_items_table = True
             key, item = _col(header, "key", "id"), _col(header, "item")
             start, end = _col(header, "start"), _col(header, "end")
             basis, state = _col(header, "dates from", "source"), _col(header, "status")
@@ -183,7 +186,7 @@ def parse(markdown: str, today: date) -> Plan:
                     state=_state(r[state]) if state is not None else None,
                 ))  # fmt: skip
         elif not seen_milestones and "milestone" in low and "date" in low:
-            seen_milestones = True
+            seen_milestones = plan.has_milestones_table = True
             name, day = _col(header, "milestone"), _col(header, "date")
             gates, counts = _col(header, "gates"), _col(header, "counts when", "counts")
             for r in rows:

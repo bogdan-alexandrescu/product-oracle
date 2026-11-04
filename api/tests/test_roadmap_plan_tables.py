@@ -39,13 +39,13 @@ BASES = [
 ]  # fmt: skip
 
 
-async def _run(client, auth, tenant_id, runtime, markdown: str) -> dict:
+async def _run(client, auth, tenant_id, runtime, markdown: str, checkpoints=OFF) -> dict:
     await approved_prd(client, auth)
     await seed_baseline(tenant_id)
     runtime.script["roadmap_items"] = [Outcome(artifacts={"roadmap_items.yaml": ITEMS})]
     runtime.script["roadmap_draft"] = [Outcome(artifacts={"roadmap.md": markdown})]
     run = await start(client, auth, await create(client, auth, source="checkout-redesign",
-                                                 knobs={"checkpoints": OFF}))  # fmt: skip
+                                                 knobs={"checkpoints": checkpoints}))  # fmt: skip
     await tick(client, auth)
     await tick(client, auth)
     return await get(client, auth, run["id"])
@@ -118,7 +118,9 @@ async def test_the_writer_and_the_critic_are_given_the_tables(client, owner, run
 
 async def test_a_draft_without_the_tables_is_refused(client, owner, runtime):
     tenant_id, auth = owner
-    run = await _run(client, auth, tenant_id, runtime, ROADMAP_MD.replace(PLAN_TABLES, ""))
+    bare = ROADMAP_MD.replace(PLAN_TABLES, "")
+    run = await _run(client, auth, tenant_id, runtime, bare, {"roadmap_items": False})
+    # Refused, and waits at the review with the problems the writer must fix.
     assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "roadmap_review"
     assert _codes(run) == ["missing_plan_table", "missing_milestones_table"]
     assert "has no Plan table" in run["segments"][1]["draft_import"]["error"]
