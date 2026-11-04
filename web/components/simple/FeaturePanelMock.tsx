@@ -16,7 +16,8 @@ const NEW_END = FP_NEW_END;
 // The Timeline row of the digest and of the hard case's feature (mock data keys).
 const DIGEST_KEY = "alert-digest";
 const BIG_KEY = "alert-team-route";
-// The hard case's links that have a bar on the Alerts Timeline (the others are on other roadmaps).
+const MOBILE_KEY = "alert-mobile";
+// The hard case's links that have a bar on this Timeline (the others are not on it).
 const BAR_KEY: Record<string, string> = { "Alert rules engine": "alert-rules" };
 
 /** The element on the page that names `title` (the smallest visible one), or null. */
@@ -109,7 +110,7 @@ export function FeaturePanelMock() {
     <div data-fp-mock="" data-testid="fp-mock">
       {done && <PageResult o={o} />}
       {fp3 === "b" && phase === "deps" && open && <PickMarks o={o} />}
-      {fp3 === "b" && (phase === "added" || done) && <LinkLine from={FP_ADDED.title} to={FP_DIGEST.title} />}
+      {fp3 === "b" && (phase === "added" || done) && <LinkLine from={MOBILE_KEY} to={DIGEST_KEY} clash={!done} />}
       {open && !done && <Panel o={o} anchor={anchor} bar={bar} onClose={() => setOpen(false)} />}
     </div>
   );
@@ -330,7 +331,8 @@ function Section({ title, o, id, children, wide }: { title: string; o: Opts; id:
   );
 }
 
-const afterSet = (p: Phase) => p === "set" || p === "mid2";
+// The delivery saved in the panel holds through the later steps (a link added, the page after).
+const afterSet = (p: Phase) => p === "set" || p === "mid2" || p === "added" || p === "done";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -650,7 +652,7 @@ function PickHint({ o }: { o: Opts }) {
     return (
       <div className="my-2 rounded-lg border-2 border-accent bg-accent-soft px-3 py-2 text-sm" data-testid="fp-pick">
         <b className="font-medium">{o.phone ? "No picking on a phone: type the item's name." : "This page has no chart: type the item's name."}</b>
-        <input readOnly value={FP_QUERY} className="mt-1.5 h-9 w-full rounded-md border border-line-strong bg-surface px-2 text-[15px]" />
+        <Search />
       </div>
     );
   const off = o.big ? o.f.dependsOn.filter((d) => !onRoadmap(d.title)) : [];
@@ -659,7 +661,7 @@ function PickHint({ o }: { o: Opts }) {
       <b className="font-medium">Click the item it depends on, on the roadmap.</b>
       {o.big && (
         <p className="mt-1" data-testid="fp-pick-off">
-          {o.f.dependsOn.length - off.length} of its {o.f.dependsOn.length} links are drawn on the chart. {off.length} are on other roadmaps, so they are not drawn: {off.map((d) => d.title).join(", ")}.
+          {o.f.dependsOn.length - off.length} of its {o.f.dependsOn.length} links {o.f.dependsOn.length - off.length === 1 ? "is" : "are"} drawn on the chart. {off.length} are not on this Timeline, so they are not drawn: {off.map((d) => d.title).join(", ")}.
         </p>
       )}
       <input readOnly value="" placeholder="Or type its name" className="mt-1.5 h-9 w-full rounded-md border border-line-strong bg-surface px-2 text-[15px]" />
@@ -775,23 +777,36 @@ function PickMarks({ o }: { o: Opts }) {
       )}
       {offAt && off > 0 && (
         <span className="pointer-events-none fixed z-[59] rounded-full border border-line-strong bg-surface px-2 py-px text-xs text-text2 shadow-tip" style={{ right: innerWidth - offAt.left + 6, top: offAt.top + offAt.height / 2 - 10 }} data-testid="fp-off-chart">
-          + {off} links to items on other roadmaps, not drawn
+          + {off} links to items not on this Timeline, not drawn
         </span>
       )}
     </>
   );
 }
 
-function LinkLine({ from, to }: { from: string; to: string }) {
-  const a = useRect(from, 0);
-  const b = useRect(to, 0);
+/** FP3 b: the new link on the Timeline, from the end of the bar it depends on to the start of the digest's bar; red while their dates clash. */
+function LinkLine({ from, to, clash }: { from: string; to: string; clash: boolean }) {
+  const a = useBarRect(from, 0);
+  const b = useBarRect(to, 0);
   if (!a || !b) return null;
+  // The chart's names stay clear: the line is drawn only right of their column.
+  const names = document.querySelector('[data-testid="timeline-row"] button[title]')?.getBoundingClientRect().right ?? 0;
   const x1 = a.right, y1 = a.top + a.height / 2, x2 = b.left, y2 = b.top + b.height / 2;
-  const mx = (x1 + x2) / 2;
+  // Going back (the digest starts before its dependency ends), the line turns at the gap between the two rows and comes in from the left.
+  const k = 14, ym = (y1 + y2) / 2;
+  const d = x2 > x1 + 2 * k ? `M${x1},${y1} C${(x1 + x2) / 2},${y1} ${(x1 + x2) / 2},${y2} ${x2},${y2}` : `M${x1},${y1} C${x1 + k},${y1} ${x1 + k},${ym} ${x1},${ym} L${x2},${ym} C${x2 - k},${ym} ${x2 - k},${y2} ${x2},${y2}`;
+  const color = clash ? "var(--crit)" : "var(--accent)";
   return (
     <svg aria-hidden className="pointer-events-none fixed inset-0 z-[57] h-full w-full">
-      <path d={`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`} fill="none" stroke="var(--crit)" strokeWidth="2" strokeDasharray="5 4" />
-      <circle cx={x2} cy={y2} r="4" fill="var(--crit)" />
+      <defs>
+        <clipPath id="fp-link-clip">
+          <rect x={names} y="0" width="100%" height="100%" />
+        </clipPath>
+      </defs>
+      <g clipPath="url(#fp-link-clip)">
+        <path d={d} fill="none" stroke={color} strokeWidth="2" strokeDasharray={clash ? "5 4" : undefined} />
+        <circle cx={x2} cy={y2} r="4" fill={color} />
+      </g>
     </svg>
   );
 }
@@ -800,7 +815,7 @@ function LinkLine({ from, to }: { from: string; to: string }) {
 function PageResult({ o }: { o: Opts }) {
   const r = useRect(FP_DIGEST.title, 0);
   const msg = new URLSearchParams(location.search).get("what") === "link" // MOCK-HOOK
-    ? "Weekly alert digest now depends on Mobile alert push, and starts after it: Dec 21 – Jan 30, 2027."
+    ? "Weekly alert digest now depends on Mobile alert push, and starts after it: Dec 21 – Jan 17, 2027."
     : `Weekly alert digest saved: delivery Nov 27, set by ${FP_ME} (Oracle suggested Dec 10).`;
   return (
     <>
