@@ -467,10 +467,11 @@ export function useFeatureMarks(): Map<string, FeatureState> | null {
   }, [q.data]);
 }
 
-/** A feature's pill wherever it is named, from FeatureMarks; nothing until the states are read. */
-export function MarkFor({ featureId, compact = false }: { featureId: string | null | undefined; compact?: boolean }) {
+/** A feature's pill wherever it is named, from FeatureMarks; nothing until the states are read.
+ * By the feature's id, or by a roadmap item's id (the feature the item stands for). */
+export function MarkFor({ featureId, itemId, compact = false }: { featureId?: string | null; itemId?: string | null; compact?: boolean }) {
   const marks = useContext(FeatureMarks);
-  const f = featureId ? marks?.get(featureId) : undefined;
+  const f = featureId ? marks?.get(featureId) : itemId ? marks?.get(`item:${itemId}`) : undefined;
   return f ? <PillButton f={f} compact={compact} /> : null;
 }
 
@@ -479,8 +480,20 @@ export const showsAs = (m: Mark): ShowKind => (m === "exists_old" ? "exists" : m
 
 /** Gives the page's features their pills (by feature id and by roadmap item id). */
 export function WithFeatureMarks({ children }: { children: ReactNode }) {
+  // Inside a page that already gives them (an answer on Home), the page's own are used: read once.
+  return useContext(MarksGiven) ? <>{children}</> : <ReadFeatureMarks>{children}</ReadFeatureMarks>;
+}
+
+/** Whether a WithFeatureMarks above already reads the states (it never changes for a place, so the tree stays). */
+const MarksGiven = createContext(false);
+
+function ReadFeatureMarks({ children }: { children: ReactNode }) {
   const marks = useFeatureMarks();
-  return <FeatureMarks.Provider value={marks}>{children}</FeatureMarks.Provider>;
+  return (
+    <MarksGiven.Provider value>
+      <FeatureMarks.Provider value={marks}>{children}</FeatureMarks.Provider>
+    </MarksGiven.Provider>
+  );
 }
 
 /** A roadmap item's pill: the feature it stands for. Inside the bar's own button (which opens the
