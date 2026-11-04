@@ -126,3 +126,62 @@ async def test_start_sheet_refuses_the_replaced_prd(client):
     assert r.status_code == 404, r.text
     options = await _get(client, ctx, "/v1/simple/meetings/options?prd=scale")
     assert [p["document"]["title"] for p in options["prds"]] == ["Scale"]
+
+
+async def test_replaced_prds_past_meeting_and_its_decisions_stay_on_decisions(client):
+    """Re-review round 3: marking a PRD replaced leaves it out of the Decisions page's PRD
+    filter and its open questions only. Its past review meeting, the decisions taken in it
+    and its decided questions stay on GET /v1/simple/decisions and ?meeting=<id>, as the
+    Meetings page and the minutes inbox still link there."""
+    from sqlalchemy import select
+
+    from oracle.decisions.models import Decision
+    from oracle.simple.models import SimpleMeeting, SimpleMeetingDecision, SimpleSession
+
+    ctx = await make_ctx()
+    owner = ctx.users["owner"].id
+    async with tenant_session(ctx.tenant_id) as s:
+        old = await _prd(s, "trust-plan", OLD, QUESTIONS)
+        for slug, title in (("user-safety", "User Safety"), ("scale", "Scale")):
+            await _prd(s, slug, title, QUESTIONS.replace("Guided setup", title))
+        await s.commit()
+    # The questions are read in, then one of Trust plan's is decided in its review meeting.
+    await _get(client, ctx, "/v1/simple/decisions")
+    async with tenant_session(ctx.tenant_id) as s:
+        qs = [d for d in await s.scalars(select(Decision).where(Decision.origin == "prd"))
+              if d.prd_question["document_id"] == str(old.id)]  # fmt: skip
+        assert len(qs) > 1
+        decided = min(qs, key=lambda d: d.number)
+        decided.status, decided.chosen_option, decided.rationale = "decided", "a", "Decided"
+        decided.decided_at, decided.decided_by, decided.decided_actor = NOW, owner, "user"
+        session = SimpleSession(kind="meeting", started_by=owner, started_at=NOW)
+        s.add(session)
+        await s.flush()
+        m = SimpleMeeting(title="Trust plan review", prd_document_id=old.id, origin="one_pager",
+                          session_id=session.id, presenter_id=owner, started_at=NOW,
+                          status="ended", ended_at=NOW)  # fmt: skip
+        s.add(m)
+        await s.flush()
+        s.add(SimpleMeetingDecision(meeting_id=m.id, decision_id=decided.id, at=NOW))
+        await s.commit()
+        meeting_id, number = str(m.id), decided.number
+    r = await client.post("/v1/documents/trust-plan/replaced-by", headers=ctx.as_("owner"),
+                          json={"prds": ["user-safety", "scale"]})  # fmt: skip
+    assert r.status_code == 200, r.text
+
+    page = await _get(client, ctx, "/v1/simple/decisions")
+    assert {o["title"] for o in page["prds"]} == AREAS
+    assert meeting_id in {o["id"] for o in page["meeting_options"]}
+    group = next(g for g in page["meetings"] if g["meeting"]["id"] == meeting_id)
+    assert [d["number"] for d in group["decisions"]] == [number]
+    old_qs = [q for q in page["questions"] if q["prd"]["title"] == OLD]
+    assert [(q["number"], q["status"]) for q in old_qs] == [(number, "decided")]
+
+    one = await _get(client, ctx, f"/v1/simple/decisions?meeting={meeting_id}")
+    assert [g["meeting"]["id"] for g in one["meetings"]] == [meeting_id]
+    assert [d["number"] for d in one["meetings"][0]["decisions"]] == [number]
+    assert [q["number"] for q in one["questions"]] == [number]
+
+    r = await client.get("/v1/simple/decisions?prd=trust-plan", headers=ctx.as_("owner"))
+    assert r.status_code == 404, r.text
+    assert r.json()["detail"] == "No such PRD"
