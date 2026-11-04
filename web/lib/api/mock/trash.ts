@@ -144,7 +144,8 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
   const owner = atLeast(ctx.me.role, "owner");
   const ownerOnly = json(403, { detail: "Requires the owner role" });
   const now = ctx.now();
-  // The purge the ticker does: entries past their 30 days are gone.
+  // The purge the ticker does, on every request routed here (Home's included), not only Trash's:
+  // entries past their 30 days are gone.
   for (const e of ctx.db.entries) if (daysLeft(e, now) <= 0) purge(ctx.db, e);
 
   if (p[1] === "trash") {
