@@ -1178,7 +1178,14 @@ export function dateMarks(
         const lineStart = text.lastIndexOf("\n", at) + 1;
         if (DECISION.test(text.slice(Math.max(lineStart, at - 60), at)) || text.slice(lineStart).startsWith(">")) continue;
         const day = days[0];
-        const covers = (b: Basis, d: string) => b.prd_document_id === prdId && b.supports_date === d && (!b.item_key || b.item_key === owner || (NOT_ITEMS.has(s.section_key) && own.has(b.item_key)));
+        // date-warnings-honest: the items the date's line links, and a commitment its line names (as the API's).
+        const raw = where === "body" ? (s.body_md.split("\n")[text.slice(0, at).split("\n").length - 1] ?? "") : s.heading;
+        const linked = new Set([...raw.matchAll(/\]\(#(?:now|next|later)-([^)\s]+)\)/g)].map((x) => x[1]));
+        const lineText = text.slice(lineStart, (text.indexOf("\n", at) + 1 || text.length + 1) - 1);
+        const covers = (b: Basis, d: string) =>
+          b.prd_document_id === prdId &&
+          b.supports_date === d &&
+          (!b.item_key || b.item_key === owner || linked.has(b.item_key) || (b.kind === "commitment" && lineText.includes(b.reference)) || (NOT_ITEMS.has(s.section_key) && own.has(b.item_key)));
         // O4: a date that reads two ways (03/04/2027) is backed only when each reading is.
         const backedBy = (status: Basis["status"]) => {
           const per = days.map((d) => db.bases.filter((b) => b.status === status && covers(b, d)));
