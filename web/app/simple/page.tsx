@@ -657,15 +657,18 @@ export default function SimpleHome() {
                       </div>
                     )}
                     {/* A goal card opens Priorities filtered to that goal (its key; the name only says which); its code (qa-simple-home-13) only in the tooltip. */}
-                    <Link
-                      href={`/simple/priorities?goal=${encodeURIComponent(g.key)}&name=${encodeURIComponent(g.name)}`}
-                      data-testid="home-goal-link"
-                      title={g.code ? `${g.code} · ${g.name}` : g.name}
-                      className="font-semibold text-text hover:underline"
-                    >
+                    {/* build-goal-order-control: the goal's number sits before its name, outside the link's words. */}
+                    <span>
                       <GoalNum n={i + 1} />
-                      {g.name}
-                    </Link>
+                      <Link
+                        href={`/simple/priorities?goal=${encodeURIComponent(g.key)}&name=${encodeURIComponent(g.name)}`}
+                        data-testid="home-goal-link"
+                        title={g.code ? `${g.code} · ${g.name}` : g.name}
+                        className="font-semibold text-text hover:underline"
+                      >
+                        {g.name}
+                      </Link>
+                    </span>
                     {g.path && (
                       <span data-testid="home-goal-path" className="simple-small tnum">
                         {g.path}
