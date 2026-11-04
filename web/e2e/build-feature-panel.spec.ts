@@ -172,6 +172,27 @@ test.describe("one feature panel, desktop", () => {
   });
 });
 
+test.describe("one feature panel, Meetings", () => {
+  test.use(DESKTOP);
+
+  test("a review's Roadmap step opens the same panel from a feature's name", async ({ page }) => {
+    await go(page, "/simple/meetings");
+    await page.getByRole("button", { name: /^Start review/ }).first().click();
+    const sheet = page.getByRole("dialog", { name: "Start a review" });
+    await sheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
+    await sheet.getByRole("checkbox", { name: "Theo Brandt" }).check();
+    await sheet.getByRole("button", { name: "Start", exact: true }).click();
+    await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }).click();
+    const name = page.getByRole("region", { name: "Roadmap slice" }).locator("li[data-item] button[data-feature]").first();
+    await expect(name).toBeVisible();
+    const title = (await name.innerText()).trim();
+    await name.click();
+    const panel = page.getByRole("dialog", { name: title });
+    await expect(panel.getByTestId("fp-details")).toBeVisible();
+    await expect(panel.getByTestId("fp-list-depends")).toBeVisible();
+  });
+});
+
 test.describe("one feature panel, phone", () => {
   test.use(PHONE);
 
