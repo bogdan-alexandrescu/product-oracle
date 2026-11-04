@@ -26036,6 +26036,12 @@ export interface components {
              * @default false
              */
             from_ask: boolean;
+            /** Subject */
+            subject?: string | null;
+            /** Question Id */
+            question_id?: string | null;
+            /** Line Id */
+            line_id?: string | null;
         };
         /**
          * InboxSimpleDateSuggestion

@@ -707,6 +707,12 @@ class InboxSimpleChange(BaseModel):
     # inbox-meeting-proposals owner: asked through Ask Oracle (by ``by_name``), not on the
     # page nor in a meeting.
     from_ask: bool = False
+    # inbox-meeting-proposals fix: what a proposal on no item is on, so its row is named and
+    # opens where it is decided: a PRD question ("Q3 Offline mode scope", ``question_id``) or
+    # a one-pager line (as it reads, ``line_id``).
+    subject: str | None = None
+    question_id: uuid.UUID | None = None
+    line_id: str | None = None
 
 
 DraftStatus = Literal["working", "submitted", "approved", "discarded"]

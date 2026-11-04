@@ -42,7 +42,8 @@ def _row(inbox: dict, change_id: str) -> dict | None:
 async def test_a_proposed_question_answer_waits_named_by_its_question(client, op):
     ctx = await make_ctx()
     await q_tests.seed(ctx)
-    q3 = next(q for q in (await q_tests.page(client, ctx, "owner"))["questions"] if q["code"] == "Q3")
+    qs = (await q_tests.page(client, ctx, "owner"))["questions"]
+    q3 = next(q for q in qs if q["code"] == "Q3")
     before = (await _inbox(client, ctx, "decider"))["total"]
     after = (
         {"option": "recommended"}
@@ -69,7 +70,8 @@ async def test_a_proposed_question_answer_waits_named_by_its_question(client, op
     assert r.status_code == 200, r.text
     inbox = await _inbox(client, ctx, "decider")
     assert _row(inbox, change["id"]) is None
-    assert inbox["total"] == before
+    # A new decider named: Q3 itself no longer waits on the old one either.
+    assert inbox["total"] == before - (op == "name_decider")
 
 
 async def test_a_proposed_one_pager_wording_waits_named_by_its_line(client):

@@ -1408,6 +1408,21 @@ async def listing(
     return [_out(c, v, names) for c in shown]
 
 
+def _subject(c: SimpleChange, questions: dict[str, Any]) -> dict[str, Any]:
+    """What a proposal on no item is on (InboxSimpleChange's subject, question_id, line_id):
+    its PRD question by code and title, or its one-pager line as it read."""
+    if c.op in QUESTION_OPS:
+        d = questions.get(str(c.target.get("decision_id")))
+        if d is None:
+            return {}
+        code = (d.prd_question or {}).get("code") or ""
+        return {"subject": f"{code} {d.title}".strip(), "question_id": d.id}
+    if c.op == "edit_line":
+        line = " ".join(str((c.before or {}).get("line") or "").split())
+        return {"subject": line or None, "line_id": c.target.get("line_id")}
+    return {}
+
+
 async def inbox_rows(
     db: AsyncSession, principal: Any, seen: datetime | None
 ) -> tuple[list[InboxSimpleChange], list[InboxSimpleChange]]:
@@ -1463,6 +1478,8 @@ async def inbox_rows(
         r.id: r.title
         for r in await db.scalars(select(RoadmapItem).where(RoadmapItem.id.in_(item_ids)))
     }
+    # inbox-meeting-proposals fix: the PRD questions they are on (their code and title).
+    on_questions = await _questions(db, waiting + decided)
     names = await _names(db, {c.by for c in waiting + decided})
     from oracle.simple import agenda, change_words
 
@@ -1493,6 +1510,7 @@ async def inbox_rows(
             asked=change_words.phrase(c.op, c.target, c.before, c.after, title),
             can_decide=v is not None and c.status == "proposed" and v.may_decide(c),
             from_ask=c.id in via_ask and m is None,
+            **_subject(c, on_questions),
             id=c.id, op=c.op, status=c.status, item_id=iid,  # type: ignore[arg-type]
             item_title=titles.get(iid) if iid else None, document_id=c.document_id, by=c.by,
             by_name=names.get(c.by, "someone"), at=c.at, decided_by=c.decided_by,
