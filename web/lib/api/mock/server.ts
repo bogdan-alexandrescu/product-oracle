@@ -160,7 +160,7 @@ import {
   type PricingContext,
   type PricingDb,
 } from "./pricing";
-import { routeGoalBuckets } from "./goal-buckets";
+import { routeGoalBuckets, seedGoalBucketsHard } from "./goal-buckets";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
@@ -1186,6 +1186,80 @@ function seedSimplePlanTwoScenario(): Db {
   rm.plan = { ...rm.plan!, prds: ["usage-alerts"], hidden: ["usage-alerts"] };
   const signup = rm.items.find((x) => x.key === "plan-f-13");
   if (signup) signup.goal = "growth";
+  return db;
+}
+
+/**
+ * GB2 "goal-buckets-hard" (mk-goalbuckets gb2-a-hard): "simple-plan" (dated) plus its scenario's
+ * extra feature (F-22, plan.big_goal) and the goal buckets' Grow partner network goal, which
+ * holds all 15 features the plan places only in M2 and M3, four of which also serve Growth.
+ * Invented data.
+ */
+export const GOAL_BUCKETS_HARD_SCENARIO = "goal-buckets-hard";
+
+function seedGoalBucketsHardScenario(): Db {
+  const db = seedSimplePlanScenario(true);
+  const rm = db.simple_roadmap!;
+  rm.plan = { ...rm.plan!, big_goal: true };
+  rm.goal_buckets = seedGoalBucketsHard();
+  return db;
+}
+
+/** mk-milestones "roadmap-milestones-hard": 26 more alert features for Grow retention's roadmap
+ * work, so its goal card reads 30 items (invented, every one about the team's alert work). */
+const ROADMAP_MILESTONES_HARD_ITEMS: [string, string][] = [
+  ["alert-quiet-hours", "Quiet hours"],
+  ["alert-snooze-rules", "Snooze rules"],
+  ["alert-templates", "Alert templates"],
+  ["alert-slack-cards", "Slack alert cards"],
+  ["alert-email-layout", "Email alert layout"],
+  ["alert-owners", "Alert owners"],
+  ["alert-team-inbox", "Team alert inbox"],
+  ["alert-search", "Alert search"],
+  ["alert-muted-list", "Muted alert list"],
+  ["alert-sound-picker", "Alert sound picker"],
+  ["alert-daily-summary", "Daily summary"],
+  ["alert-rate-limits", "Alert rate limits"],
+  ["alert-escalation-steps", "Escalation steps"],
+  ["alert-oncall-handoff", "On-call handoff"],
+  ["alert-labels", "Alert labels"],
+  ["alert-bulk-mute", "Bulk mute"],
+  ["alert-audit-log", "Alert audit log"],
+  ["alert-retry-sends", "Retry failed sends"],
+  ["alert-preview", "Alert preview"],
+  ["alert-read-receipts", "Read receipts"],
+  ["alert-digest-timing", "Digest timing"],
+  ["alert-colours", "Alert colours"],
+  ["alert-weekend-mode", "Weekend mode"],
+  ["alert-pinned", "Pinned alerts"],
+  ["alert-feedback", "Alert feedback"],
+  ["alert-health-page", "Alert health page"],
+];
+
+/**
+ * mk-milestones "roadmap-milestones-hard" (ms1/ms2/ms3-a-hard-1512): "simple-milestones" grown so
+ * Grow retention holds 30 items (its usual four, plus 26 more dated alert features); two more of
+ * its own milestones, M3 Jan 20 and M4 Feb 17, and a second milestone on Faster activation, M2
+ * Dec 22 (the same day as Grow retention's own M2): the Timeline's axis reads "2 on Dec 22", and
+ * M3 waits on Alert routing by team, M2 on Team invite nudges, each ending after it ("Ends after
+ * M3 ..." and "Ends after M2 ...", as the frames draw). Invented data.
+ */
+export const ROADMAP_MILESTONES_HARD_SCENARIO = "roadmap-milestones-hard";
+
+function seedRoadmapMilestonesHardScenario(): Db {
+  const db = seed();
+  const rm = (db.simple_roadmap = seedSimpleRoadmap());
+  ROADMAP_MILESTONES_HARD_ITEMS.forEach(([key, title], i) => {
+    const start = -15 + (i % 8) * 4;
+    rm.items.push({ key, title, horizon: "later", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", start, end: start + 25 + (i % 5) * 6 });
+    rm.ids[key] = stableUuid(`simple-item/${key}`);
+  });
+  rm.goal_milestones = [
+    ...seedOwnMilestones(),
+    { id: stableUuid("simple-gm/m3"), roadmap: "alerts-roadmap", code: "M3", name: "Teams set 3 rules in week 1", date: "2027-01-20", goal: "grow-retention", gates: ["alert-sso"], counts_when: "Holds 7 days in a row", progress: "not_started" },
+    { id: stableUuid("simple-gm/m4"), roadmap: "alerts-roadmap", code: "M4", name: "Digest opened by 70%", date: "2027-02-17", goal: "grow-retention", gates: [], counts_when: "Sent to every team 2 weeks in a row", progress: "not_started" },
+    { id: stableUuid("simple-gm/a2"), roadmap: "onboarding-roadmap", code: "M2", name: "Half of new teams invite a teammate", date: "2026-12-22", goal: "faster-activation", gates: ["setup-ideas"], counts_when: "Holds 14 days in a row on all teams", progress: "not_started" },
+  ];
   return db;
 }
 
@@ -3256,6 +3330,10 @@ function load(): Db {
                     (db.simple_roadmap = seedSimpleRoadmap()).goal_milestones = scenario === "simple-milestones" ? seedOwnMilestones() : seedPrdMilestones();
                     return db;
                   }
+              : scenario === ROADMAP_MILESTONES_HARD_SCENARIO
+                ? seedRoadmapMilestonesHardScenario
+              : scenario === GOAL_BUCKETS_HARD_SCENARIO
+                ? seedGoalBucketsHardScenario
               : scenario === "simple-plan"
                 ? () => seedSimplePlanScenario()
               : scenario === "roadmap-keydates"

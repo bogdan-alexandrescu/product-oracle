@@ -477,7 +477,8 @@ export function MsLayer(props: MsLayerProps) {
         }}
       />,
     );
-    if (ms.hover && !(d && !d.id)) {
+    // No "+ Milestone" hint while a milestone is dragged along the axis (ms3-a-mid).
+    if (ms.hover && !ms.moving && !(d && !d.id)) {
       const hx = X(ms.hover);
       out.push(<Diamond key="ghost" x={hx} y={axisY} code="M1" hollow dashed color="var(--accent-ink)" title="New milestone here" testid="ms-ghost" />);
       out.push(<div key="ghost-l" aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: hx - 0.5, top: axisY + 6, height: height - axisY - 6, borderLeft: "1px dashed var(--accent-ink)" }} />);

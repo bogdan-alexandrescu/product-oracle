@@ -1185,7 +1185,8 @@ function Priorities() {
               e.stopPropagation();
               pick(f.key);
             }}
-            className="block max-w-full text-left font-medium break-words hover:underline"
+            // The picked row's name stays plain text, also under the pointer after Esc (pc1-a-esc).
+            className={`block max-w-full text-left font-medium break-words ${on ? "" : "hover:underline"}`}
             data-testid="feature-name"
           >
             {fonts && featureRoom ? fitWords(f.title, featureRoom, 500, 15) : f.title}

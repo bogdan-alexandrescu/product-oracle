@@ -33,11 +33,32 @@ export function seedGoalBuckets(): GoalBucketsDb {
     const goal = goals.find((g) => g.title === s.goal);
     features.push({ id: stableUuid(`feature-bucket/${s.feature_code}`), key: s.feature_code, title: s.name.replace(/, part \d+ of \d+$/, ""), goal_ids: goal ? [goal.id] : [] });
   }
-  // One feature serves a second goal too, so its row reads "+1 goal".
-  const second = features.find((f) => f.key === "F-14");
-  const growth = goals.find((g) => g.title === "Growth");
-  if (second && growth && !second.goal_ids.includes(growth.id)) second.goal_ids.push(growth.id);
+  // Some features serve a second goal too, so their rows read "+1 goal" (mk-goalbuckets gb1-a-result:
+  // one in each of the first two buckets, and Plan limits in Revenue, then Growth).
+  const alsoServes: [string, string][] = [["F-14", "Growth"], ["F-06", "Activation"], ["F-05", "Activation"]];
+  for (const [key, title] of alsoServes) {
+    const feature = features.find((f) => f.key === key);
+    const goal = goals.find((g) => g.title === title);
+    if (feature && goal && !feature.goal_ids.includes(goal.id)) feature.goal_ids.push(goal.id);
+  }
   return { goals, features };
+}
+
+/**
+ * GB2 "goal-buckets-hard" (mk-goalbuckets gb2-a-hard): a fifth goal, Grow partner network, holds
+ * all 15 of the plan's features that fall only in M2 and M3 (the plan's F-07..F-20 confined to
+ * those two, plus F-22, the scenario's extra one), four of which also serve Growth. Invented data.
+ */
+export function seedGoalBucketsHard(): GoalBucketsDb {
+  const base = seedGoalBuckets();
+  const bigId = stableUuid("goal-bucket/grow-partner-network");
+  const big: Goal = { id: bigId, title: "Grow partner network", order: base.goals.length + 1, measure: "Live partner integrations", target: "40 partners", due: "2027-03-31", archived: false };
+  const growth = base.goals.find((g) => g.title === "Growth")!;
+  const codes = ["F-07", "F-08", "F-09", "F-10", "F-11", "F-12", "F-13", "F-14", "F-15", "F-16", "F-17", "F-18", "F-19", "F-20", "F-22"];
+  const also = new Set(["F-09", "F-12", "F-15", "F-19"]);
+  const features = base.features.map((f) => (codes.includes(f.key) ? { ...f, goal_ids: also.has(f.key) ? [bigId, growth.id] : [bigId] } : f));
+  if (!features.some((f) => f.key === "F-22")) features.push({ id: stableUuid("feature-bucket/F-22"), key: "F-22", title: "Partner directory listing", goal_ids: [bigId] });
+  return { goals: [...base.goals, big], features };
 }
 
 function json(status: number, body: unknown): Response {
