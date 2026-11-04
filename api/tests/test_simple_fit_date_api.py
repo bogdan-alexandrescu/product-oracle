@@ -34,6 +34,14 @@ Test cards (protects / fails_when / no_claim):
   so; fails_when=the resized item's date reads as settled or nobody is asked.
 - test_draft_claims_no_run (review): protects=the draft, computed from the capacity queue,
   claims no run time or cost; fails_when=a fixed "40 seconds, $0.20" is sent.
+- test_answer_ties_its_baseline_goal (smaller goal): protects=the answer names the Baseline
+  goal the milestone's gate counts toward (id, target, the PRD's target) and whether the
+  reader may edit it; fails_when=the answer only has the plan's goal text.
+- test_no_baseline_goal_reads_none (smaller goal): protects=no goal by that name reads
+  None, so the panel shows no dead button.
+- test_smaller_goal_reaches_the_date (smaller goal): protects=after the goal's target is
+  lowered through the Baseline edit, the answer and the live date count the goal's own work
+  in proportion and the hard case reaches its date; fails_when=the answer ignores the goal.
 """
 
 import re
@@ -276,3 +284,60 @@ async def test_resized_items_wait_on_an_estimate(client):
     assert board.status_code == 200, board.text
     pending = {i["key"]: i.get("estimate_pending") for i in board.json()["items"]}
     assert pending.get("f-06") is True, pending
+
+
+# --------------------------------------------------------------------------- smaller goal
+
+# M2 ends Dec 21: no set of cuts reaches it while the Activation goal asks for 55%.
+HARD = BODY.replace("| 30 Nov 2026 | 25 Dec 2026 |", "| 30 Nov 2026 | 21 Dec 2026 |")
+
+
+async def _activation(client, ctx, target=55):
+    from tests.baseline_helpers import entity
+
+    return await entity(client, ctx, type="goal", key="activation", title="Activation",
+                        attrs={"metric": "new teams that finish setup", "unit": "%",
+                               "comparison": "at_least", "target": target, "start": 40})  # fmt: skip
+
+
+async def test_answer_ties_its_baseline_goal(client):
+    ctx = await make_ctx()
+    await seed(ctx, HARD)
+    goal = await _activation(client, ctx)
+    a = (await client.get(URL, params={"milestone": "M2"}, headers=ctx.as_("owner"))).json()
+    g = a["baseline_goal"]
+    assert g["id"] == goal["id"] and g["title"] == "Activation"
+    assert g["target"] == 55 and g["unit"] == "%" and g["plan_target"] == 55
+    assert g["smaller"] is False and g["can_edit"] is True
+    viewer = await client.get(URL, params={"milestone": "M2"}, headers=ctx.as_("viewer"))
+    assert viewer.json()["baseline_goal"]["can_edit"] is False
+
+
+async def test_no_baseline_goal_reads_none(client):
+    ctx = await make_ctx()
+    await seed(ctx, HARD)
+    a = (await client.get(URL, params={"milestone": "M2"}, headers=ctx.as_("owner"))).json()
+    assert a["baseline_goal"] is None
+
+
+async def test_smaller_goal_reaches_the_date(client):
+    """Lowering the Baseline goal's target (PATCH /v1/baseline/entities/{id}) shrinks the
+    goal's own work in the milestone in proportion, so the answer, the live date and the
+    draft read the date against the smaller goal."""
+    ctx = await make_ctx()
+    await seed(ctx, HARD)
+    goal = await _activation(client, ctx)
+    h = ctx.as_("owner")
+    before = (await client.get(URL, params={"milestone": "M2"}, headers=h)).json()
+    assert before["reachable"] is False, before
+    r = await client.patch(f"/v1/baseline/entities/{goal['id']}", json={"attrs": {"target": 44}},
+                           headers=h)  # fmt: skip
+    assert r.status_code == 200, r.text
+    after = (await client.get(URL, params={"milestone": "M2"}, headers=h)).json()
+    assert after["target"] == before["target"]
+    assert after["baseline_goal"]["target"] == 44 and after["baseline_goal"]["smaller"] is True
+    assert after["reachable"] is True, after
+    assert after["best_date"] < before["best_date"]
+    live = await client.post(f"{URL}/live", json={"milestone": "M2", "picks": after["pick"]},
+                             headers=h)  # fmt: skip
+    assert live.json()["over_days"] <= 0
