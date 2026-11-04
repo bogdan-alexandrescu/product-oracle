@@ -44,6 +44,9 @@ for (const size of ["desktop", "phone"] as const) {
       await expect(check).toContainText("not read yet");
       await expect(check.locator('[data-ok="true"]')).toHaveCount(3);
       await expect(check.locator('[data-ok="false"]')).toHaveCount(1);
+      // The re-read is done: the row says how old the proof is again, not "Checking now…".
+      await expect(first).toContainText("Proof is 41 days old");
+      await expect(first).not.toContainText("Checking now");
       await check.getByRole("button", { name: "Yes, still runs" }).click();
       await expect(check).toBeHidden();
       await expect(page.getByTestId("cs-summary")).toContainText("0 with old proof");

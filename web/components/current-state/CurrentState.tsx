@@ -279,8 +279,6 @@ export function ProofTable({ data, phone, onChanged }: { data: FeatureStates; ph
                   <span className="text-[13px] text-accent-ink">Checking now…</span>
                 ) : said === "still_runs" && f.checked_at ? (
                   <span className="text-[13px] font-semibold text-pass">Checked {day(f.checked_at)} · you confirmed</span>
-                ) : isOpen ? (
-                  <span className="text-[13px] text-accent-ink">Checking now…</span>
                 ) : old ? (
                   <span className="whitespace-nowrap rounded-full bg-warn-bg px-2 py-0.5 text-[13px] font-semibold text-warn">Proof is {f.proof_days} days old</span>
                 ) : f.no_proof_yet ? (
