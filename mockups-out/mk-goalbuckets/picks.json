@@ -216,7 +216,7 @@
           "frames": [
             {
               "file": "frames/gb2-a-rest.html",
-              "caption": "At rest: a \"⋯\" on each goal opens its menu, which holds Archive goal."
+              "caption": "At rest: a \"⋯\" on each goal; its menu is closed here."
             },
             {
               "file": "frames/gb2-a-open.html",
@@ -228,7 +228,7 @@
             },
             {
               "file": "frames/gb2-a-result.html",
-              "caption": "Result: the bucket is gone, both features sit under Faster first ride, and the note above offers Undo. The goal numbers skip 4 (1, 2, 3, 5): they are the owner's order from Baseline, so the gap is on purpose."
+              "caption": "Result: the bucket is gone, both features sit under Faster first ride, and the note above offers Undo. Goal numbers, where shown, are the owner's order from Baseline, so they skip the archived goal 4 on purpose."
             },
             {
               "file": "frames/gb2-a-hard.html",
@@ -274,7 +274,7 @@
             },
             {
               "file": "frames/gb2-b-result.html",
-              "caption": "Result: archived; the note above offers Undo. The goal numbers skip 4 (1, 2, 3, 5): they are the owner's order from Baseline, so the gap is on purpose."
+              "caption": "Result: archived; the note above offers Undo. Goal numbers, where shown, are the owner's order from Baseline, so they skip the archived goal 4 on purpose."
             },
             {
               "file": "frames/gb2-b-hard.html",
@@ -324,11 +324,11 @@
             },
             {
               "file": "frames/gb2-c-hard.html",
-              "caption": "Hard case: Grow shop partners held 15 features; the 11 with no other goal land under No goal at once. The goal numbers skip 4 (1, 2, 3, 5): they are the owner's order from Baseline, so the gap is on purpose."
+              "caption": "Hard case: Grow shop partners held 15 features; the 11 with no other goal land under No goal at once. Goal numbers, where shown, are the owner's order from Baseline, so they skip the archived goal 4 on purpose."
             },
             {
               "file": "frames/gb2-c-hard-1512.html",
-              "caption": "The same hard case. At the owner's 1512 window: the picture is scaled down to 1440 px wide; the page file opens at full size. The goal numbers skip 4 (1, 2, 3, 5): they are the owner's order from Baseline, so the gap is on purpose."
+              "caption": "The same hard case. At the owner's 1512 window: the picture is scaled down to 1440 px wide; the page file opens at full size. Goal numbers, where shown, are the owner's order from Baseline, so they skip the archived goal 4 on purpose."
             },
             {
               "file": "frames/gb2-c-mid-dark.html",
@@ -336,11 +336,11 @@
             },
             {
               "file": "frames/gb2-c-phone-390.html",
-              "caption": "On a phone No goal sits after all the goals; the note with Undo sits above the tab bar. Phone, dark. The goal numbers skip 4 (1, 2, 3, 5): they are the owner's order from Baseline, so the gap is on purpose."
+              "caption": "On a phone No goal sits after all the goals; the note with Undo sits above the tab bar. Phone, dark. Goal numbers, where shown, are the owner's order from Baseline, so they skip the archived goal 4 on purpose."
             },
             {
               "file": "frames/gb2-c-phone-390-light.html",
-              "caption": "The same phone view in light. The goal numbers skip 4 (1, 2, 3, 5): they are the owner's order from Baseline, so the gap is on purpose."
+              "caption": "The same phone view in light. Goal numbers, where shown, are the owner's order from Baseline, so they skip the archived goal 4 on purpose."
             }
           ]
         },
@@ -354,7 +354,7 @@
           "frames": [
             {
               "file": "frames/gb2-a-rest.html",
-              "caption": "At rest: a \"⋯\" on each goal; its menu is closed here."
+              "caption": "At rest: the same buckets as A, a \"⋯\" on each goal."
             },
             {
               "file": "frames/gb2-d-open.html",
@@ -366,7 +366,7 @@
             },
             {
               "file": "frames/gb2-d-result.html",
-              "caption": "Result: the goal is gone; each feature sits under its picked goal, and the note above offers Undo. The goal numbers skip 4 (1, 2, 3, 5): they are the owner's order from Baseline, so the gap is on purpose."
+              "caption": "Result: the goal is gone; each feature sits under its picked goal, and the note above offers Undo. Goal numbers, where shown, are the owner's order from Baseline, so they skip the archived goal 4 on purpose."
             },
             {
               "file": "frames/gb2-d-hard.html",

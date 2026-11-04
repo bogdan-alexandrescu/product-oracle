@@ -8,7 +8,7 @@ import path from "node:path";
 
 import { ADMIN } from "./helpers";
 
-type Frame = { name: string; q: string; focus: string | null; block: string; dy?: number; phone?: boolean; theme?: string; w1512?: boolean; user?: string };
+type Frame = { name: string; q: string; focus: string | null; block: string; dy?: number; full?: boolean; phone?: boolean; theme?: string; w1512?: boolean; user?: string };
 
 const OUT = path.resolve(__dirname, "../../mockups-out/mk-goalbuckets");
 const ON = process.env.MK_CAPTURE === "1";
@@ -89,7 +89,7 @@ test.describe("mk-goalbuckets frames", () => {
       if (f.focus) {
         // Scroll the window (never an inner element) so the subject sits where the frame wants it.
         const y = await page.evaluate(
-          ([s, b, dy]) => {
+          ([s, b, dy, pad]) => {
             const e = document.querySelector(s as string);
             if (!e) throw new Error("no " + s);
             e.setAttribute("data-mk-focus", "");
@@ -97,9 +97,10 @@ test.describe("mk-goalbuckets frames", () => {
             const H = window.innerHeight;
             let t = b === "start" ? r.top + scrollY : b === "end" ? r.bottom + scrollY - H : r.top + scrollY - (H - r.height) / 2;
             t += dy as number;
-            return Math.max(0, Math.min(document.documentElement.scrollHeight - H - 90, t));
+            return Math.max(0, Math.min(document.documentElement.scrollHeight - H - (pad as number), t));
           },
-          [f.focus, f.block, f.dy ?? 0] as const,
+          // a frame marked full may scroll to the page's very end
+          [f.focus, f.block, f.dy ?? 0, f.full ? 0 : 90] as const,
         );
         await page.evaluate((t) => window.scrollTo(0, t), y);
       }
