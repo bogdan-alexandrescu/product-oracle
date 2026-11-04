@@ -1624,6 +1624,7 @@ type RoadmapAnswers = Schemas["RoadmapAnswers"];
 
 export function recommendPrd(a: PrdAnswers): [string, string] {
   if (a.decision === "start_or_not") {
+    if (a.model_driven) return ["one-pager", "You want a go / no-go first; a one-pager settles that. Add behaviour and evals when it becomes an AI feature PRD."];
     return ["one-pager", "You want a go / no-go first: a one-pager agrees the problem, audience and success measure fast."];
   }
   if (a.decision === "technical_design") {
@@ -1642,13 +1643,14 @@ export function recommendPrd(a: PrdAnswers): [string, string] {
   if (a.model_driven) {
     return ["ai-feature", "The output comes from a model: this template specifies behaviour, evals, fallbacks and cost."];
   }
-  if (a.readers === "leadership") {
+  const readers = a.readers ?? [];
+  if (readers.includes("leadership")) {
     return ["narrative-memo", "Leadership or the board reads it: a narrative memo argues the case in prose and is read in one sitting."];
   }
-  if (a.decision == null && a.size === "small_change" && (a.readers == null || a.readers === "founder")) {
+  if (a.decision == null && a.size === "small_change" && readers.every((r) => r === "founder")) {
     return ["one-pager", "A small change for the founder: a one-pager is enough to decide."];
   }
-  if (a.readers === "engineers_or_agents") {
+  if (readers.includes("engineers_or_agents")) {
     return ["oracle-default", "Engineers or coding agents build from it: the goal-traced PRD has numbered requirements with Given / When / Then criteria."];
   }
   return ["oracle-default", "A cross-functional build: the goal-traced PRD agrees the problem, then the prioritized solution, then launch."];

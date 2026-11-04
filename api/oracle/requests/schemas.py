@@ -401,6 +401,18 @@ class RequestThemeOut(BaseModel):
 # --- triage and found items (lane 3) -------------------------------------------------
 
 
+class ReleaseFromTrashIn(_In):
+    """Release it (New PRD 4): the requests a new brief would take."""
+
+    request_ids: list[uuid.UUID] = Field(max_length=50)
+
+
+class ReleaseFromTrashOut(BaseModel):
+    """The requests whose link to a PRD in Trash was cleared."""
+
+    released: list[uuid.UUID]
+
+
 class TriageStart(_In):
     depth: Literal["quick", "standard"] | None = None
 

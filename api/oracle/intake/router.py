@@ -88,7 +88,8 @@ views.register()
 
 
 def _http(exc: service.IntakeError) -> HTTPException:
-    return HTTPException(exc.status, str(exc))
+    detail = {"code": exc.code, "message": str(exc)} if exc.code else str(exc)
+    return HTTPException(exc.status, detail)
 
 
 async def _intake(db: TenantDB, intake_id: uuid.UUID):

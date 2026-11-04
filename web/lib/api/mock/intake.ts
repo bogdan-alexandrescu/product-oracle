@@ -89,7 +89,7 @@ export interface IntakeContext {
   /** C1 lane 2, "Requests behind it": why these requests cannot be behind a brief (null when
    * they can), linking them to the new brief, and releasing them when it is archived. */
   requests?: {
-    refusal: (ids: string[]) => { status: number; detail: string } | null;
+    refusal: (ids: string[]) => { status: number; detail: string | { code: string; message: string } } | null;
     link: (intakeId: string, ids: string[]) => void;
     release: (intakeId: string) => void;
   };
@@ -677,7 +677,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     }
     const requestIds = [...new Set(raw)];
     const refused = requestIds.length ? ctx.requests?.refusal(requestIds) : null;
-    if (refused) return fail(refused.status, refused.detail);
+    if (refused) return json(refused.status, { detail: refused.detail });
     const intake = addIntake(db, ctx.userId, input.title, input.brief, input.source_ids ?? []);
     Object.assign(intake, fields);
     if (requestIds.length) ctx.requests?.link(intake.id, requestIds);

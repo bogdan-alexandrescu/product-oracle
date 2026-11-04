@@ -72,9 +72,15 @@ OWNER_NAMES_REQUESTER = "Only an owner files a request in someone else's name"
 
 
 class RequestError(Exception):
-    def __init__(self, status: int, message: str) -> None:
+    def __init__(self, status: int, message: str, code: str | None = None) -> None:
         super().__init__(message)
         self.status = status
+        # A refusal the app acts on (LINKED_IN_TRASH) carries a code, so it never reads words.
+        self.code = code
+
+
+# New PRD (4): a request still linked to a PRD in Trash; the app offers Release it.
+LINKED_IN_TRASH = "linked_in_trash"
 
 
 def _not_found(what: str = "Request") -> RequestError:
@@ -85,8 +91,8 @@ def _invalid(message: str) -> RequestError:
     return RequestError(422, message)
 
 
-def _conflict(message: str) -> RequestError:
-    return RequestError(409, message)
+def _conflict(message: str, code: str | None = None) -> RequestError:
+    return RequestError(409, message, code)
 
 
 def _forbidden(message: str) -> RequestError:
@@ -1479,10 +1485,143 @@ async def _not_taken(db: AsyncSession, rows: list[ProductRequest]) -> None:
                 f'"{row.title}" is already behind the brief "{title or "another brief"}"'
             )
         if row.document_id is not None:
+            from oracle.trash import service as trash
+
             title = await db.scalar(select(Document.title).where(Document.id == row.document_id))
+            if title is None:
+                # A PRD in Trash is left out of every read: Trash's own read names it.
+                gone = (await trash.trashed_documents(db, {row.document_id})).get(row.document_id)
+                if gone is not None:
+                    raise _conflict(
+                        f'"{row.title}" is still linked to the PRD "{gone.title}", which is '
+                        "in Trash. Release it to link it here.",
+                        LINKED_IN_TRASH,
+                    )
             raise _conflict(
                 f'"{row.title}" is already linked to the PRD "{title or "another PRD"}"'
             )
+
+
+async def release_from_trash(
+    db: AsyncSession, principal: Principal, request_ids: list[uuid.UUID]
+) -> list[uuid.UUID]:
+    """Release it (New PRD 4): each of these requests still linked to a PRD in Trash loses
+    that link and its brief, so a new brief may take it. A live PRD's link stays. Returns
+    the ids released."""
+    if not request_ids:
+        return []
+    from oracle.trash import service as trash
+
+    rows = list(
+        await db.scalars(
+            select(ProductRequest)
+            .where(ProductRequest.id.in_(request_ids), ProductRequest.document_id.is_not(None))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    gone = await trash.trashed_documents(db, {r.document_id for r in rows if r.document_id})
+    released = [r for r in rows if r.document_id in gone]
+    for row in released:
+        was = row.document_id
+        row.document_id = None
+        row.intake_id = None
+        row.updated_at = _now()
+        await audit.record(
+            db,
+            principal,
+            "request.updated",
+            "request",
+            row.id,
+            {"document_id": None, "released_from": str(was)},
+        )
+    await db.flush()
+    return [r.id for r in released]
+
+
+async def release_documents(
+    db: AsyncSession, principal: Principal, document_ids: set[uuid.UUID]
+) -> list[dict[str, str | None]]:
+    """Moving PRDs to Trash releases the requests linked to them (New PRD 4): their PRD and
+    brief links are cleared, so a new brief may take them. Returns what each had, for
+    :func:`relink_documents` on restore."""
+    if not document_ids:
+        return []
+    rows = list(
+        await db.scalars(
+            select(ProductRequest)
+            .where(ProductRequest.document_id.in_(document_ids))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    out: list[dict[str, str | None]] = []
+    for row in rows:
+        out.append(
+            {
+                "request_id": str(row.id),
+                "document_id": str(row.document_id),
+                "intake_id": str(row.intake_id) if row.intake_id else None,
+            }
+        )
+        was = row.document_id
+        row.document_id = None
+        row.intake_id = None
+        row.updated_at = _now()
+        await audit.record(
+            db,
+            principal,
+            "request.updated",
+            "request",
+            row.id,
+            {"document_id": None, "released_from": str(was)},
+        )
+    await db.flush()
+    return out
+
+
+async def relink_documents(
+    db: AsyncSession, principal: Principal, released: list[dict[str, str | None]]
+) -> int:
+    """Restoring the PRDs links back each request :func:`release_documents` released that
+    is still free (no brief and no PRD since). Returns how many."""
+    by_id = {uuid.UUID(str(r["request_id"])): r for r in released}
+    if not by_id:
+        return 0
+    rows = list(
+        await db.scalars(
+            select(ProductRequest)
+            .where(
+                ProductRequest.id.in_(by_id),
+                ProductRequest.document_id.is_(None),
+                ProductRequest.intake_id.is_(None),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    intake_ids = {uuid.UUID(str(r["intake_id"])) for r in released if r.get("intake_id")}
+    live_intakes = (
+        set(await db.scalars(select(ProductIntake.id).where(ProductIntake.id.in_(intake_ids))))
+        if intake_ids
+        else set()
+    )
+    for row in rows:
+        was = by_id[row.id]
+        row.document_id = uuid.UUID(str(was["document_id"]))
+        intake = uuid.UUID(str(was["intake_id"])) if was.get("intake_id") else None
+        row.intake_id = intake if intake in live_intakes else None
+        row.updated_at = _now()
+        await audit.record(
+            db,
+            principal,
+            "request.updated",
+            "request",
+            row.id,
+            {"document_id": str(row.document_id), "relinked": True},
+        )
+    await db.flush()
+    return len(rows)
 
 
 async def release_brief(db: AsyncSession, principal: Principal, intake_id: uuid.UUID) -> int:

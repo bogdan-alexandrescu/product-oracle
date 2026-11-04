@@ -331,7 +331,8 @@ recommended template with a one-line reason and let the user override.
    new product or market. (New product → `pr-faq`.)
 3. **Who reads and approves it?** Founder only / product + eng team / leadership or
    board / external engineers or coding agents. (Board → `narrative-memo` or `pr-faq`;
-   agents → templates with numbered requirements.)
+   agents → templates with numbered requirements.) Several may apply: the picker takes
+   any number of them (stored as a list), and any one of them counts.
 4. **Does model output drive the feature?** Yes → `ai-feature` (or add its behaviour
    and eval sections to the chosen template).
 

@@ -45,8 +45,10 @@ from oracle.v2.models import KnowledgeGap, ProductIntake, StakeholderAnswer, Sta
 
 
 class IntakeError(Exception):
-    def __init__(self, status: int, message: str):
+    def __init__(self, status: int, message: str, code: str | None = None):
         self.status = status
+        # Served as {"detail": {"code", "message"}} when set (a request's linked_in_trash).
+        self.code = code
         super().__init__(message)
 
 
@@ -206,7 +208,7 @@ async def create(db: AsyncSession, principal: Principal, body: IntakeCreate) -> 
     try:
         linked = await requests_service.put_behind_brief(db, principal, intake.id, body.request_ids)
     except requests_service.RequestError as e:
-        raise IntakeError(e.status, str(e)) from e
+        raise IntakeError(e.status, str(e), e.code) from e
     await engine.analyze(db, intake)
     # Before the first batch: the brief's goals and out-of-scope lines answer their
     # questions, so neither is asked.
