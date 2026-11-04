@@ -520,3 +520,25 @@ async def only_in_trash(db: AsyncSession, kind: str) -> bool:
     )
     at = list(kinds)
     return bool(at) and all(d is not None for d in at)
+
+
+async def deleted_for_good(db: AsyncSession, kind: str) -> bool:
+    """No document of this kind is left, live or in Trash, and one was purged: a review of
+    them reviews what was deleted for good (Home's "Next review meeting")."""
+    from oracle.models import AuditEvent
+
+    left = await db.scalar(
+        select(Document.id).where(Document.kind == kind).limit(1).execution_options(**ALL)
+    )
+    if left is not None:
+        return False
+    purged = await db.scalar(
+        select(AuditEvent.id)
+        .where(
+            AuditEvent.action == "trash.purge",
+            (AuditEvent.data["root"]["kind"].astext == kind)
+            | AuditEvent.data["items"].contains([{"kind": kind}]),
+        )
+        .limit(1)
+    )
+    return purged is not None

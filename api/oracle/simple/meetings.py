@@ -1427,6 +1427,10 @@ async def _upcoming(
     trashed: dict[str, bool] = {}
     for kind in {REVIEWS[r.kind] for _, r in rows if r.kind in REVIEWS}:
         trashed[kind] = await trash_service.only_in_trash(db, kind)
+    # home-deleted-roadmap: and one whose documents were all deleted for good says that.
+    deleted: dict[str, bool] = {}
+    for kind in {REVIEWS[r.kind] for _, r in rows if r.kind in REVIEWS}:
+        deleted[kind] = await trash_service.deleted_for_good(db, kind)
     out = []
     for o, r in rows:
         due = o.due_at if o is not None else r.next_due_at
@@ -1445,6 +1449,7 @@ async def _upcoming(
             pre_read_ready=o is not None and o.status == "ready",
             can_start=may_start_ritual(principal, r),
             reviews_in_trash=REVIEWS[r.kind] if trashed.get(REVIEWS.get(r.kind, "")) else None,
+            reviews_deleted=REVIEWS[r.kind] if deleted.get(REVIEWS.get(r.kind, "")) else None,
         ))  # fmt: skip
     return out
 

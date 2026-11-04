@@ -120612,6 +120612,18 @@
               }
             ],
             "title": "Reviews In Trash"
+          },
+          "reviews_deleted": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "roadmap"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviews Deleted"
           }
         },
         "type": "object",
