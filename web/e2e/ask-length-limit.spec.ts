@@ -35,17 +35,51 @@ for (const size of SIZES) {
       await page.goto("/simple/one-pagers/guided-setup");
     });
 
-    test("a 1,622-character change request is sent, with no count under 3,000", async ({ page }) => {
+    test("a 2,600-character change request is sent whole, with no count under 3,000", async ({ page }) => {
+      // Past the old 2,000 the box and the mock took, so this fails without the 4,000 limit.
       const panel = await openAsk(page, size.name === "phone");
       const box = panel.getByRole("textbox", { name: "Message Oracle" });
-      const text = words(1622);
+      const text = words(2600).trim();
       await box.fill(text);
+      await expect(box).toHaveValue(text);
       await expect(panel.getByTestId("chat-count")).toHaveCount(0);
       await panel.getByRole("button", { name: "Send" }).click();
-      await expect(panel.locator('[data-testid="chat-message"][data-author="person"]')).toHaveCount(1);
+      const mine = panel.locator('[data-testid="chat-message"][data-author="person"]');
+      await expect(mine).toHaveCount(1);
+      await expect(mine).toContainText(text.slice(-60));
       await expect(panel.locator('[data-testid="chat-message"][data-author="oracle"]').first()).toBeVisible();
       await expect(panel.getByText("Something went wrong")).toHaveCount(0);
       await expect(box).toHaveValue("");
+    });
+
+    test("a line with more than five changes gets five cards and names each change it did not use", async ({ page }) => {
+      const panel = await openAsk(page, size.name === "phone");
+      const items = ["Mobile alert push", "Alert history export", "Alert routing by team", "Sample data import", "In-app tour", "Welcome video", "Team invite nudges"];
+      await panel.getByRole("textbox", { name: "Message Oracle" }).fill(items.map((i) => `cut ${i}`).join("; "));
+      await panel.getByRole("button", { name: "Send" }).click();
+      const reply = panel.locator('[data-testid="chat-message"][data-author="oracle"]').last();
+      await expect(reply.getByTestId("chat-message-body")).toContainText("I did not use these changes yet; say them again: “Cut Welcome video”; “Cut Team invite nudges”.");
+      await expect(reply.getByTestId("chat-message-body")).toContainText("I understood 5 changes");
+    });
+
+    test("a length refusal from the server reads as the length message, with the server's limit", async ({ page }) => {
+      // The server's own check (here one stricter than the browser's) says the same words, never "Something went wrong".
+      await page.route("**/v1/simple/chat/messages", (route) =>
+        route.request().method() === "POST"
+          ? route.fulfill({
+              status: 422,
+              contentType: "application/json",
+              body: JSON.stringify({ detail: [{ type: "string_too_long", loc: ["body", "text"], msg: "String should have at most 3000 characters", input: "", ctx: { max_length: 3000 } }] }),
+            })
+          : route.fallback(),
+      );
+      const panel = await openAsk(page, size.name === "phone");
+      const box = panel.getByRole("textbox", { name: "Message Oracle" });
+      const text = words(2500).trim();
+      await box.fill(text);
+      await panel.getByRole("button", { name: "Send" }).click();
+      await expect(panel.getByRole("alert")).toHaveText(`This message is ${text.length.toLocaleString("en-US")} characters; Oracle takes up to 3,000. Shorten it and send again.`);
+      await expect(box).toHaveValue(text);
     });
 
     test("past 3,000 characters a quiet count shows; past 4,000 Send says so with the limit and keeps the text", async ({ page }) => {
