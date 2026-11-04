@@ -354,7 +354,7 @@ async def test_live_sources_make_a_feature_ready(client, clock):
     w = await world()
     fid = w.ids["tracked"]
     content = {**MAP, "modules": [*MAP["modules"], {"id": "module:tracked", "path": "api/tracked",
-               "summary": "The Tracked feature", "depends_on": []}]}  # fmt: skip
+               "summary": "The tracked steps of pay-1", "depends_on": []}]}  # fmt: skip
     map_id = await shared_map(w.ctx.tenant_id, content)
     async with tenant_session(w.ctx.tenant_id) as s:
         code_map = await s.get(CodeMap, map_id)

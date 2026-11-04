@@ -187,11 +187,17 @@ Reader = Callable[[AsyncSession, Entity, FeatureProof, datetime], Awaitable[bool
 
 async def _names(db: AsyncSession, f: Entity) -> list[str]:
     """The words that name the feature in code and pull requests: its key, its title (as
-    words and as a slug) and its roadmap items' keys."""
+    words and as a slug) and its roadmap items' keys (the explicit link). A bare word
+    ("Search", "search") is not a name here: a pull request or a module that merely uses it
+    proves nothing, so a name holds two words or more, or a digit ("pay-1", "F-26")."""
     title = (f.title or "").strip()
     slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
     words = [f.key, title, slug, *(i.item_key for i in (await _items(db, [f.id])).get(f.id, []))]
-    return sorted({w.lower() for w in words if w and len(w) > 2})
+    return sorted({w.lower() for w in words if w and len(w) > 2 and _named(w)})
+
+
+def _named(word: str) -> bool:
+    return len(re.findall(r"[a-z0-9]+", word.lower())) > 1 or any(c.isdigit() for c in word)
 
 
 def _names_in(names: list[str], text: str) -> bool:

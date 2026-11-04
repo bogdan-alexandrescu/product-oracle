@@ -39833,6 +39833,11 @@ export interface components {
              * @default false
              */
             past_edge: boolean;
+            /**
+             * Item Ids
+             * @default []
+             */
+            item_ids: string[];
         };
         /**
          * SimplePlanSpan
