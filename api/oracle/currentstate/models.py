@@ -1,4 +1,4 @@
-"""Current state (migration 0101_feature_states): a feature's place (Desired, marked as
+"""Current state (migration 0107_feature_states): a feature's place (Desired, marked as
 already shipped, or moved to Current state by the owner) and its proof.
 
 ``feature_states``: one row per feature. ``status`` is ``desired`` (the default),

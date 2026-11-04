@@ -4,8 +4,8 @@
 the approved PRD a new PRD replaces and the area of it the new PRD covers; null for a
 brief that replaces none.
 
-Revision ID: 0104_intake_replaces
-Revises: 0103_approved_roadmap_plan
+Revision ID: 0109_intake_replaces
+Revises: 0108_goal_map
 """
 
 from collections.abc import Sequence
@@ -14,8 +14,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
 
-revision: str = "0104_intake_replaces"
-down_revision: str | None = "0103_approved_roadmap_plan"
+revision: str = "0109_intake_replaces"
+down_revision: str | None = "0108_goal_map"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

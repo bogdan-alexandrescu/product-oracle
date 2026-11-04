@@ -5,8 +5,8 @@ Current state by the owner), with the owner's Not yet and "still runs?" answer a
 its proof was last read. ``feature_proofs``: one row per feature and kind (code map, pull
 requests, tasks, measured). The downgrade drops both tables.
 
-Revision ID: 0101_feature_states
-Revises: 0100_source_lost_connection
+Revision ID: 0107_feature_states
+Revises: 0106_company_roadmap
 """
 
 from collections.abc import Sequence
@@ -14,8 +14,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0101_feature_states"
-down_revision: str | None = "0100_source_lost_connection"
+revision: str = "0107_feature_states"
+down_revision: str | None = "0106_company_roadmap"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
