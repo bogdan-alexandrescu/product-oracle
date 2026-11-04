@@ -589,10 +589,11 @@ def _shown_day(value: Any) -> str:
 
 
 def _own_effort(item: ItemView) -> str | None:
-    """The item's own effort as written in its economics ("1 week"), or None."""
+    """The item's own effort as written in its economics ("1 week"), or None. A number
+    with no unit (2) says nothing on its own: None (the card's Effort line shows it)."""
     for k, v in item.economics.items():
-        if str(k).lower() == "effort" and isinstance(v, str | int | float) and v != "":
-            return str(v)
+        if str(k).lower() == "effort" and isinstance(v, str) and re.search(r"[^\W\d_]", v):
+            return v.strip()
     return None
 
 

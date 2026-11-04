@@ -27,6 +27,8 @@ from oracle.docs.schemas import VersionWarning
 _QUEUE_AS_ESTIMATE = re.compile(
     r"\bdates?\b[^.!?]{0,160}?\bown\s+(?:engineering\s+)?estimates?\b", re.I
 )
+# A sentence that denies it ("these dates are not from each item's own estimate").
+_DENIED = re.compile(r"\b(?:not|never|no)\b|n['\u2019]t\b", re.I)
 _UNVERIFIED = re.compile(
     r"\bdates?\s+unverified\b|\bunverified\s+dates?\b|[\[(]\s*unverified\s*[\])]", re.I
 )
@@ -46,7 +48,7 @@ def check(sections: Iterable[ParsedSection]) -> list[VersionWarning]:
             continue
         where = _plain(s.heading) or s.section_key
         text = f"{s.heading}\n{s.body_md}"
-        if _QUEUE_AS_ESTIMATE.search(text):
+        if any(not _DENIED.search(m[0]) for m in _QUEUE_AS_ESTIMATE.finditer(text)):
             queue[s.section_key] = where
         if _UNVERIFIED.search(text):
             unverified[s.section_key] = where
