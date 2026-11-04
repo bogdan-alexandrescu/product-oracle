@@ -140,6 +140,7 @@ async def _roadmap(db: AsyncSession, ctx: Any) -> None:
 
 
 async def _decisions(db: AsyncSession, ctx: Any) -> None:
+    from oracle.decisions import standing
     from oracle.decisions.models import Decision
 
     rows = await db.scalars(
@@ -148,10 +149,14 @@ async def _decisions(db: AsyncSession, ctx: Any) -> None:
         .order_by(Decision.number.desc())
         .limit(MAX_DECISIONS)
     )
-    for d in reversed(list(rows)):
+    # One about something in Trash is not part of the plan (decisions-reversed-or-trashed).
+    kept, left = await standing.split(db, list(rows))
+    for d in reversed(kept):
         ctx.add("decision", str(d.id), f"Open decision D-{d.number}", sharing.one_line(
                     d.title + (f" ({d.question})" if d.question else ""), 400),
                 url="/simple/decisions")  # fmt: skip
+    if line := standing.left_out_line(left):
+        ctx.note(line)
 
 
 async def add(db: AsyncSession, ctx: Any) -> None:

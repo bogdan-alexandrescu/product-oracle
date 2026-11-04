@@ -66196,6 +66196,17 @@
               }
             ]
           },
+          "trash_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trash Note"
+          },
           "question": {
             "anyOf": [
               {
@@ -67097,6 +67108,17 @@
                 "type": "null"
               }
             ]
+          },
+          "trash_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trash Note"
           }
         },
         "type": "object",
@@ -92225,6 +92247,14 @@
             "type": "array",
             "title": "Blocked By",
             "default": []
+          },
+          "decision_notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Decision Notes",
+            "default": []
           }
         },
         "type": "object",
@@ -115243,6 +115273,14 @@
             "type": "boolean",
             "title": "Can Withdraw",
             "default": false
+          },
+          "decision_notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Decision Notes",
+            "default": []
           },
           "from_prds": {
             "items": {

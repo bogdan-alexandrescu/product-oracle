@@ -2166,7 +2166,11 @@ async def decided_in(
         .where(or_(*[Decision.subjects.contains([{"kind": k, "id": i}]) for k, i, _ in wanted]))
         .order_by(Decision.number.desc())
     )
-    for d in rows:
+    from oracle.decisions import standing
+
+    # None about something in Trash (decisions-reversed-or-trashed).
+    kept, _ = await standing.split(db, list(rows))
+    for d in kept:
         for s in d.subjects or []:
             for key in (
                 (s.get("kind"), s.get("id"), s.get("ref")),

@@ -727,6 +727,8 @@ class SimpleDraftOut(BaseModel):
     published: bool = True
     # The draft's author or the decider withdraws a submitted draft back to working.
     can_withdraw: bool = False
+    # decisions-reversed-or-trashed: decisions this draft cited that were reversed since.
+    decision_notes: list[str] = []
     # approved-prd-roadmap: the items and key dates approved PRDs put in it.
     from_prds: list[SimpleDraftPrd] = []
 
@@ -1192,6 +1194,9 @@ class OnePagerDraft(BaseModel):
     # What else, besides ``waiting_on``, holds a decider-approved draft back (#723 review:
     # "Sections Scope need a reviewer"), as the meeting's banner says it.
     blocked_by: list[str] = []
+    # decisions-reversed-or-trashed: decisions this draft cited that were reversed since
+    # ("D-4 Cut bulk export was reversed: ...").
+    decision_notes: list[str] = []
 
 
 class OnePagerRemindOut(BaseModel):

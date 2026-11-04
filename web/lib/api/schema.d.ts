@@ -20431,6 +20431,8 @@ export interface components {
              */
             created_at: string;
             source?: components["schemas"]["DecisionSource"] | null;
+            /** Trash Note */
+            trash_note?: string | null;
             /** Question */
             question?: string | null;
             /** Context */
@@ -20726,6 +20728,8 @@ export interface components {
              */
             created_at: string;
             source?: components["schemas"]["DecisionSource"] | null;
+            /** Trash Note */
+            trash_note?: string | null;
         };
         /**
          * DeckOut
@@ -30118,6 +30122,11 @@ export interface components {
              * @default []
              */
             blocked_by: string[];
+            /**
+             * Decision Notes
+             * @default []
+             */
+            decision_notes: string[];
         };
         /**
          * OnePagerFlow
@@ -38288,6 +38297,11 @@ export interface components {
              * @default false
              */
             can_withdraw: boolean;
+            /**
+             * Decision Notes
+             * @default []
+             */
+            decision_notes: string[];
             /**
              * From Prds
              * @default []

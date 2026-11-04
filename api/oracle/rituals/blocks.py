@@ -324,14 +324,18 @@ async def needs_decision(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]
         rows.append({"kind": "checkpoint", "id": str(c.id), "title": what,
                      "run_id": str(c.run_id), "document_id": _str(document_id),
                      "href": f"/runs/{c.run_id}", "text": f"Run stop: {what}"})  # fmt: skip
-    for d in await db.scalars(
+    from oracle.decisions import standing
+
+    kept, left = await standing.split(db, list(await db.scalars(
         select(Decision)
         .where(Decision.status == "proposed", Decision.approver_id == ctx.ritual_owner_id)
         .order_by(Decision.number)
-    ):
+    )))  # fmt: skip
+    for d in kept:
         rows.append({"kind": "decision", "id": str(d.id), "decision_id": str(d.id),
                      "title": d.title, "href": f"/company/decisions?d={d.number}",
                      "text": f"D-{d.number} {d.title}"})  # fmt: skip
+    rows.extend(_left_out(left))
     # #689 review: never a run of a flow private to its creator (Oracle's read of an
     # intake): the block is built once and read by every attendee.
     for r in await db.scalars(
@@ -584,34 +588,41 @@ def _decision_row(d: Any) -> dict[str, Any]:
             "text": f"D-{d.number} {d.title}"}  # fmt: skip
 
 
+def _left_out(left: list[Any]) -> list[dict[str, Any]]:
+    """A brief's sources say when a decision was left out (decisions-reversed-or-trashed)."""
+    from oracle.decisions import standing
+
+    line = standing.left_out_line(left)
+    return [{"kind": "left_out", "title": line, "text": line}] if line else []
+
+
+async def _standing_rows(db: AsyncSession, query: Any) -> list[dict[str, Any]]:
+    from oracle.decisions import standing
+
+    kept, left = await standing.split(db, list(await db.scalars(query)))
+    return [_decision_row(d) for d in kept] + _left_out(left)
+
+
 async def decisions_due(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
     """Decided judgement calls whose review date has come by the due time (H1's
-    ``review_due``)."""
+    ``review_due``); none about something in Trash."""
     from oracle.decisions.models import Decision
 
-    return [
-        _decision_row(d)
-        for d in await db.scalars(
-            select(Decision)
-            .where(Decision.status == "decided", Decision.origin != "checkpoint",
-                   Decision.review_at <= ctx.period_to.date())
-            .order_by(Decision.review_at, Decision.number)
-        )
-    ]  # fmt: skip
+    return await _standing_rows(db,
+        select(Decision)
+        .where(Decision.status == "decided", Decision.origin != "checkpoint",
+               Decision.review_at <= ctx.period_to.date())
+        .order_by(Decision.review_at, Decision.number))  # fmt: skip
 
 
 async def decisions_made(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
     from oracle.decisions.models import Decision
 
-    return [
-        _decision_row(d)
-        for d in await db.scalars(
-            select(Decision)
-            .where(Decision.status == "decided",
-                   Decision.decided_at.between(ctx.period_from, ctx.period_to))
-            .order_by(Decision.decided_at)
-        )
-    ]  # fmt: skip
+    return await _standing_rows(db,
+        select(Decision)
+        .where(Decision.status == "decided",
+               Decision.decided_at.between(ctx.period_from, ctx.period_to))
+        .order_by(Decision.decided_at))  # fmt: skip
 
 
 async def strategy_drift(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:

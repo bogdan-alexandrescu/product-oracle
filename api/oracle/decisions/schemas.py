@@ -211,6 +211,9 @@ class DecisionSummary(BaseModel):
     run_id: uuid.UUID | None = None
     created_at: datetime
     source: DecisionSource | None = None
+    # Made about something now in Trash: "Made about a roadmap now in Trash". Drafts
+    # leave it out (oracle.decisions.standing).
+    trash_note: str | None = None
 
 
 class DecisionEntityRef(BaseModel):
