@@ -39,7 +39,7 @@ BASES = [
 ]  # fmt: skip
 
 
-async def _run(client, auth, tenant_id, runtime, markdown: str, checkpoints=OFF) -> dict:
+async def _run(client, auth, tenant_id, runtime, markdown: str, checkpoints=OFF) -> dict:  # noqa: F811
     await approved_prd(client, auth)
     await seed_baseline(tenant_id)
     runtime.script["roadmap_items"] = [Outcome(artifacts={"roadmap_items.yaml": ITEMS})]
@@ -96,27 +96,30 @@ def test_the_check_finds_each_problem():
         "| shipping-step |")  # fmt: skip
     (p,) = plan_tables.check(extra, plan, today)
     assert p.code == "unknown_plan_item" and p.message.startswith("Gift cards is in the Plan")
-    moved = ROADMAP_MD.replace("| Payment step |  | Nov 30, 2026 |", "| Payment step |  | Dec 4, 2026 |")
+    moved = ROADMAP_MD.replace("|  | Nov 30, 2026 | estimate", "|  | Dec 4, 2026 | estimate")
     (p,) = plan_tables.check(moved, plan, today)
     assert p.code == "plan_date_differs"
-    assert p.message == "Payment step's end is Nov 30, 2026 in the engineering dates, not Dec 4, 2026"
+    assert p.message == (
+        "Payment step's end is Nov 30, 2026 in the engineering dates, not Dec 4, 2026"
+    )
 
 
 # --------------------------------------------------------------------------- the run
 
 
-async def test_the_writer_and_the_critic_are_given_the_tables(client, owner, runtime):
+async def test_the_writer_and_the_critic_are_given_the_tables(client, owner, runtime):  # noqa: F811
     tenant_id, auth = owner
     await _run(client, auth, tenant_id, runtime, ROADMAP_MD)
     writer, critic = runtime.submitted[1].steps
+    row = "| payment-step | Payment step |  | Nov 30, 2026 | estimate | planned |"
     for step in (writer, critic):
         assert "--- plan tables ---" in step.prompt
-        assert "| payment-step | Payment step |  | Nov 30, 2026 | estimate | planned |" in step.prompt
+        assert row in step.prompt
         assert "| Beta | Nov 30, 2026 | Payment step |  |" in step.prompt
     assert "not a warning" in critic.prompt and "not a warning" not in writer.prompt
 
 
-async def test_a_draft_without_the_tables_is_refused(client, owner, runtime):
+async def test_a_draft_without_the_tables_is_refused(client, owner, runtime):  # noqa: F811
     tenant_id, auth = owner
     bare = ROADMAP_MD.replace(PLAN_TABLES, "")
     run = await _run(client, auth, tenant_id, runtime, bare, {"roadmap_items": False})
@@ -128,7 +131,7 @@ async def test_a_draft_without_the_tables_is_refused(client, owner, runtime):
         assert await s.scalar(select(Document).where(Document.slug == ROADMAP)) is None
 
 
-async def test_a_date_other_than_the_engineering_date_is_refused(client, owner, runtime):
+async def test_a_date_other_than_the_engineering_date_is_refused(client, owner, runtime):  # noqa: F811
     tenant_id, auth = owner
     moved = ROADMAP_MD.replace("| Beta | Nov 30, 2026 |", "| Beta | Dec 11, 2026 |")
     run = await _run(client, auth, tenant_id, runtime, moved)
@@ -137,7 +140,7 @@ async def test_a_date_other_than_the_engineering_date_is_refused(client, owner, 
             in run["segments"][1]["draft_import"]["error"])  # fmt: skip
 
 
-async def test_a_draft_with_the_tables_imports_and_approval_applies_its_dates(
+async def test_a_draft_with_the_tables_imports_and_approval_applies_its_dates(  # noqa: F811
     client, owner, runtime
 ):
     tenant_id, auth = owner
