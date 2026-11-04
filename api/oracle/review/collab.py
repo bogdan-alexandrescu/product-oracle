@@ -19,6 +19,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.raw_tokens import strip_raw_tokens
 from oracle.review.models import (
     Comment,
     FeedbackItem,
@@ -70,6 +71,8 @@ async def notify(
     ids = list(dict.fromkeys(r for r in recipients if r is not None))
     if not ids:
         return 0
+    # A title may quote a draft: people never read its raw citation tokens.
+    title = strip_raw_tokens(title)
     stmt = select(User.id).where(User.id.in_(ids), User.disabled_at.is_(None))
     if document_id is not None:
         # H8: nobody hears about a document they may not see (an update reaches owners
