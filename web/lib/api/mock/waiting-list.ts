@@ -42,7 +42,7 @@ export async function waitingItems(get: (path: string) => Promise<unknown>, meId
   for (const c of [...(inbox?.checkpoints ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
     if (!c.can_decide || c.status !== "pending") continue;
     const action = STOP_ACTION[c.kind] ?? "Open the stop";
-    out.push({ kind: "run_stop", key: `run_stop:${c.id}`, ref_id: c.id, title: action, detail: c.document_title || c.flow_title || "A run", action, href: `/runs/${c.run_id}`, at: c.created_at, op: null });
+    out.push({ kind: "run_stop", key: `run_stop:${c.id}`, ref_id: c.id, title: action, detail: c.document_title || (c.document_slug ? `${c.document_slug.replace(/-/g, " ").replace(/^./, (x) => x.toUpperCase())} PRD` : c.flow_title || "A run"), action, href: `/runs/${c.run_id}`, at: c.created_at, op: null });
   }
   for (const q of questions) {
     out.push({ kind: "question", key: `question:${q.id}`, ref_id: q.id, title: `${q.code} ${q.title}`.trim(), detail: q.prd.title, action: "Decide", href: `/simple/decisions?prd=${q.prd.slug}`, at: null, op: null });

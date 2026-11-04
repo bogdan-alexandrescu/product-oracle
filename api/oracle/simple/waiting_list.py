@@ -39,11 +39,21 @@ async def _stops(db: AsyncSession, principal: Any) -> list[SimpleWaitingItem]:
         out.append(SimpleWaitingItem(
             kind="run_stop", key=f"run_stop:{c.id}", ref_id=str(c.id),
             title=_STOP_ACTION.get(c.kind, "Open the stop"),
-            detail=c.document_title or c.flow_title or "A run",
+            detail=_stop_for(c),
             action=_STOP_ACTION.get(c.kind, "Open the stop"),
             href=f"/runs/{c.run_id}", at=c.created_at,
         ))  # fmt: skip
     return out
+
+
+def _stop_for(c: Any) -> str:
+    """What the run is for, as Home's stop card says it: its PRD, else the flow."""
+    if c.document_title:
+        return c.document_title
+    if c.document_slug:
+        words = c.document_slug.replace("-", " ")
+        return f"{words[:1].upper()}{words[1:]} PRD"
+    return c.flow_title or "A run"
 
 
 async def _roadmap(db: AsyncSession, principal: Any) -> list[SimpleWaitingItem]:
