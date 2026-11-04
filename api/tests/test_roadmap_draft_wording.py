@@ -32,13 +32,13 @@ kind: roadmap
 
 | Horizon | Item | Goal | Outcome |
 |---|---|---|---|
-| Now | [Detectors](#now-detectors) | G-B, G-C, G-A1 | Fewer missed alerts |
+| Now | [Alert checks](#now-alert-checks) | G-B, G-C, G-A1 | Fewer missed alerts |
 
 ## Timeline {#timeline}
 
 Each end date comes from that item's own engineering estimate.
 
-- [Detectors](#now-detectors) ends Nov 30, 2026 (date unverified).
+- [Alert checks](#now-alert-checks) ends Nov 30, 2026 (date unverified).
 
 ## M2 Pilot {#m2}
 
@@ -59,12 +59,12 @@ kind: roadmap
 An end date is the item's place in the team's queue (team size, focus and milestone
 order), not how long the item takes.
 
-- [Detectors](#now-detectors) ends Feb 12, 2027: its place in the team's queue; its own
+- [Alert checks](#now-alert-checks) ends Feb 12, 2027: its place in the team's queue; its own
   effort is 1 week.
 
 ## M2 Pilot {#m2}
 
-Depends on: F-03 Sensor feed, F-07 Alert rules. Held back per D-12 Ship detectors first.
+Depends on: F-03 Sensor feed, F-07 Alert rules. Held back per D-12 Ship alert-checks first.
 """
 
 
@@ -74,7 +74,7 @@ Depends on: F-03 Sensor feed, F-07 Alert rules. Held back per D-12 Ship detector
 def test_a_goal_column_of_bare_goal_codes_is_unnamed_not_a_list():
     found = named_codes.findings(
         "| Horizon | Item | Goal | Outcome |\n|---|---|---|---|\n"
-        "| Now | [Detectors](#now-detectors) | G-B, G-C, G-A1 | Fewer missed alerts |"
+        "| Now | [Alert checks](#now-alert-checks) | G-B, G-C, G-A1 | Fewer missed alerts |"
     )
     assert found.unnamed == ["G-B", "G-C", "G-A1"]
     assert found.runs == []
@@ -146,8 +146,8 @@ def test_the_writer_never_marks_a_date_unverified_itself():
 
 
 def _item(**kw) -> variants.ItemView:
-    base = dict(key="detectors", title="Detectors", outcome="Fewer missed alerts", horizon="now",
-                position=0)  # fmt: skip
+    base = dict(key="alert-checks", title="Alert checks", outcome="Fewer missed alerts",
+                horizon="now", position=0)  # fmt: skip
     return variants.ItemView(**{**base, **kw})
 
 
@@ -162,7 +162,7 @@ def test_a_written_goal_cell_of_bare_codes_renders_the_items_goal_by_name():
     item = _item(goals=["Faster setup"])
     written = (
         "| Horizon | Item | Goal | Outcome |\n|---|---|---|---|\n"
-        "| Now | Detectors | G-B, G-C, G-A1 | Fewer missed alerts |"
+        "| Now | Alert checks | G-B, G-C, G-A1 | Fewer missed alerts |"
     )
     table = variants._table(written, _shown(item), variants.VARIANTS["engineering"],
                             {item.key: item}, {})  # fmt: skip
