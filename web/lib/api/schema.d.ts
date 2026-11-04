@@ -7996,8 +7996,9 @@ export interface paths {
         put?: never;
         /**
          * Accept Intake Proposal
-         * @description Accept: a research proposal becomes a draft run; a PRD patch becomes feedback on
-         *     the PRD's latest version.
+         * @description Accept: a research proposal's run is estimated and started (the intake's one
+         *     unstarted research draft is reused); a PRD patch becomes feedback on the PRD's
+         *     latest version.
          */
         post: operations["accept_intake_proposal"];
         delete?: never;
