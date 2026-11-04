@@ -272,7 +272,12 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
   const approver = ctx.members.find((m) => m.email === "approver@example.com")?.id;
   const commenter = ctx.members.find((m) => m.email === "commenter@example.com");
   const people = [owner, approver, commenter?.id].filter((x): x is string => !!x);
+  // simple-replaced-prds: the past meeting was held before any PRD was marked replaced, so it
+  // names its items whether or not they still feed the roadmap (first read after a replace too).
+  const replaced = ctx.roadmap.replaced_prds;
+  ctx.roadmap.replaced_prds = undefined;
   const all = items(ctx);
+  ctx.roadmap.replaced_prds = replaced;
   const item = (key: string) => all.find((i) => i.key === key);
   const alerts = prds(ctx)[1];
   const setup = prds(ctx)[0];

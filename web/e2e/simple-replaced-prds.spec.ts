@@ -162,7 +162,8 @@ test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
 
   await page.goto("/simple/priorities?tab=buckets");
   const buckets = page.getByRole("region", { name: "Goal buckets" });
-  await expect(buckets.getByText("New plan tiers").first()).toBeVisible();
+  // Guided setup's plan goes with its items (priorities.plan_in_play): the buckets read without a plan.
+  await expect(buckets.getByText(/^Grouped by goal for this quarter/)).toBeVisible();
   for (const title of GONE) await expect(buckets.getByText(title, { exact: true })).toHaveCount(0);
 
   await page.goto("/simple/meetings");
