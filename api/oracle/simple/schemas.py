@@ -1538,6 +1538,9 @@ class ChatCardOut(BaseModel):
     # it cuts (changes.cut_route), and whether that is outside the meeting.
     asks_with_dependents: list[str] = []
     asks_with_dependents_outside: bool = False
+    # meeting-changes-only-its-agenda: in a meeting, the card's item is not on its agenda:
+    # "Delivery integrity is on another roadmap: sent to its owner to decide".
+    elsewhere: str | None = None
 
 
 class ChatChoiceOut(BaseModel):
@@ -1984,6 +1987,9 @@ class SimpleMeetingIn(BaseModel):
     # row's due time: a start the ritual has moved past is 409, never next week's review.
     ritual_id: uuid.UUID | None = None
     due_at: dt.datetime | None = None
+    # meeting-changes-only-its-agenda: the roadmap it reviews (slug or id), when the PRD's
+    # items are on several; else the one they are on.
+    roadmap: str | None = Field(default=None, max_length=200)
     attendee_ids: list[uuid.UUID] = Field(default_factory=list, max_length=50)
     change_mode: ChangeMode = "everyone"
     change_people: list[uuid.UUID] = Field(default_factory=list, max_length=2)

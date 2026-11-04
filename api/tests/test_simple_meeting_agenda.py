@@ -34,19 +34,29 @@ from oracle.simple.models import SimpleChange
 from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import CHANGES, World
 from tests.test_simple_changes_api import clock as clock  # noqa: F401
+from tests.test_simple_chat_api import say
+from tests.test_simple_chat_reader import act, actions, read
 from tests.test_simple_meetings_api import start, uid, world
 from tests.test_simple_roadmap_api import Seed
 
 INBOX = "/v1/inbox"
 
 
-async def with_roadmap_b(w: World) -> str:
-    """Roadmap B ("shipping", its own PRD), decided by reviewer2; its item ``ship-a``."""
+async def with_roadmap_b(w: World, same_prd: bool = False) -> str:
+    """Roadmap B ("shipping", its own PRD; ``same_prd``: an item of payments-prd too, as a
+    test roadmap built from the same PRD), decided by reviewer2; its item ``ship-a``."""
     async with tenant_session(w.ctx.tenant_id) as s:
         seed = Seed(s)
         _, pv, rm, rv = await seed.roadmap("shipping")
-        track = await seed.track(pv, rm, title="Shipping")
-        row = await seed.item(rv, pv, "ship-a", title="Delivery integrity", track_id=track.id,
+        if same_prd:
+            from oracle.docs.models import Document, DocumentVersion
+
+            prd = await s.scalar(select(Document).where(Document.slug == "payments-prd"))
+            pv = await s.scalar(select(DocumentVersion).where(DocumentVersion.document_id
+                                                              == prd.id))  # fmt: skip
+        track = None if same_prd else await seed.track(pv, rm, title="Shipping")
+        tid = track.id if track else None
+        row = await seed.item(rv, pv, "ship-a", title="Delivery integrity", track_id=tid,
                               start_date=date(2026, 10, 1), end_date=date(2026, 11, 15),
                               date_source="typed")  # fmt: skip
         s.add(DocumentReviewPolicy(document_id=rm.id, decider_id=w.ctx.users["reviewer2"].id))
@@ -68,9 +78,9 @@ async def cut(client, w: World, who: str, key: str, sid: str):
     return await client.post(CHANGES, json=body, headers=w.ctx.as_(who))
 
 
-async def meeting(client, w: World) -> dict:
+async def meeting(client, w: World, **over) -> dict:
     return await start(client, w, "owner", title="Payments review",
-                       attendee_ids=[uid(w, "decider"), uid(w, "commenter")])  # fmt: skip
+                       attendee_ids=[uid(w, "decider"), uid(w, "commenter")], **over)  # fmt: skip
 
 
 async def test_a_cut_on_another_roadmap_is_a_proposal_for_its_owner(client):
@@ -149,3 +159,34 @@ async def test_a_task_on_another_roadmap_is_a_proposal(client):
     assert c["status"] == "proposed"
     assert c["routed_to"] == [uid(w, "reviewer2")]
     assert c["off_agenda"] is True
+
+
+async def test_the_meetings_agent_makes_no_card_off_its_agenda(client):
+    w = await world()
+    await with_roadmap_b(w)
+    m = await meeting(client, w)
+    mid = uuid.UUID(m["id"])
+    # The meeting's agent (the chat reader, a fake answer) reads a line as a cut on B.
+    await say(client, w.ctx, "owner", "drop the delivery work", mid)
+    await read(w.ctx, actions(act("cut", item=w.ids["ship-a"])))
+    r = await client.get(f"/v1/simple/meetings/{mid}/chat", headers=w.ctx.as_("owner"))
+    assert [c for x in r.json()["messages"] for c in x["cards"]] == []
+    assert not await cut_flag(w, "ship-a")
+
+
+async def test_the_same_prd_on_another_roadmap_is_not_on_the_agenda(client):
+    """The production case: a meeting started on roadmap A of a PRD whose items are on B
+    too changes only A; started with neither named, it is 422-free and reviews both."""
+    w = await world()
+    await with_roadmap_b(w, same_prd=True)
+    body = {"prd": "payments-prd", "roadmap": "shipping-prd"}
+    r = await client.post("/v1/simple/meetings", json=body, headers=w.ctx.as_("owner"))
+    assert r.status_code == 422, r.text
+    m = await meeting(client, w, roadmap="payments")
+    r = await cut(client, w, "owner", "ship-a", m["session_id"])
+    assert r.status_code == 201, r.text
+    assert r.json()["change"]["status"] == "proposed"
+    assert r.json()["change"]["routed_to"] == [uid(w, "reviewer2")]
+    assert not await cut_flag(w, "ship-a")
+    r = await cut(client, w, "owner", "cut-a", m["session_id"])
+    assert r.json()["change"]["status"] == "applied"
