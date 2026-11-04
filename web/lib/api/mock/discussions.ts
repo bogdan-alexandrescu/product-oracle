@@ -244,7 +244,11 @@ export function pageReply(d: Pick<DiscussionRow, "subject" | "origin" | "visibil
   const items = view.lines.filter((l) => l.includes(" · horizon "));
   // A table's row comes as "Column: value · Column: value" (readShownPage): its first value names it.
   const rows = view.lines.filter((l) => /^[^:·]{1,40}: .+ · [^:·]{1,40}: /.test(l));
-  const names = (items.length ? items : rows.length ? rows : view.lines).slice(0, 4).map((l) => l.split(" · ")[0].replace(/^[^:·]{1,40}: /, ""));
+  const row = (l: string) => {
+    const [first, next] = l.split(" · ");
+    return `${first.replace(/^[^:·]{1,40}: /, "")} (${next})`;
+  };
+  const names = items.length ? items.slice(0, 4).map((l) => l.split(" · ")[0]) : rows.length ? rows.slice(0, 4).map(row) : view.lines.slice(0, 4);
   return { pieces: [`On ${view.name ?? "this page"} I can see `, names.join(", "), ". Each can take a date once its milestone has one."], citations: [] };
 }
 
