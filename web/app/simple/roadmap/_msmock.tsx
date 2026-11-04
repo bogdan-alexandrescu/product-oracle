@@ -4,7 +4,7 @@
  * ?ms3=a|b|c (a PRD's own milestones), &phase=rest|open|mid|done|second|move|removed|hard, &many=1. */
 
 import { useSearchParams } from "next/navigation";
-import type { CSSProperties, ReactNode } from "react";
+import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 
 import { MS_NEW, MS_OWN, MS_PRD, MS_SAME_DAY, MS_SECOND, type MsMock } from "@/lib/api/mock/ms-mock";
 
@@ -30,9 +30,10 @@ const fullDay = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en
 function drawn(ms: ReturnType<typeof useMs>): { list: (MsMock & { ghost?: boolean; late?: boolean; proposed?: string })[]; prd: MsMock[] } {
   const p = ms.phase;
   const list: (MsMock & { ghost?: boolean; proposed?: string })[] = ms.decision === "ms3" ? MS_OWN.filter((m) => m.goal !== "Grow retention") : [...MS_OWN];
-  const added = (["done", "second", "move", "hard", "removed"].includes(p) || (p === "open" && ms.decision === "ms2")) && ms.decision !== "ms3";
+  const added = (["done", "second", "move", "hard", "removed", "board"].includes(p) || (p === "open" && ms.decision === "ms2")) && ms.decision !== "ms3";
   if (added && p !== "removed") list.push(p === "move" ? { ...MS_NEW, date: "2027-01-27" } : MS_NEW);
-  if (p === "second" && ms.decision === "ms1") list.push({ ...MS_SECOND, ghost: true });
+  if (p === "second" && ms.decision !== "ms3") list.push({ ...MS_SECOND, ghost: true });
+  if (p === "open" && ms.decision === "ms1" && ms.ms1 === "c") list.push({ ...MS_NEW, ghost: true });
   if (p === "hard" && ms.decision !== "ms3") list.push(MS_SAME_DAY, MS_SECOND);
   let prd: MsMock[] = [];
   if (ms.ms3) {
@@ -51,19 +52,25 @@ function Diamond({ x, y, code, size = 12, hollow = false, dashed = false, title,
         className="block h-full w-full rotate-45 rounded-[2px]"
         style={{ background: hollow ? "var(--surface)" : msEdge(code), border: `1.5px ${dashed ? "dashed" : "solid"} ${msEdge(code)}` }}
       />
-      {lock && (
-        <svg aria-hidden viewBox="0 0 10 10" className="absolute -top-2.5 -right-2.5 h-3 w-3" fill="var(--text2)">
-          <rect x="1.5" y="4.5" width="7" height="5" rx="1" />
-          <path d="M3 4.5V3a2 2 0 0 1 4 0v1.5" stroke="var(--text2)" strokeWidth="1.2" fill="none" />
-        </svg>
-      )}
     </span>
   );
 }
 
-function Chip({ children, style, className = "" }: { children: ReactNode; style?: CSSProperties; className?: string }) {
+function Lock() {
   return (
-    <span className={`absolute z-[14] overflow-hidden text-ellipsis rounded-full px-2 text-xs leading-5 font-semibold whitespace-nowrap ${className}`} style={style}>
+    <svg aria-hidden viewBox="0 0 10 10" className="mr-1 inline-block h-3 w-3 align-[-1px]" fill="var(--text2)">
+      <rect x="1.5" y="4.5" width="7" height="5" rx="1" />
+      <path d="M3 4.5V3a2 2 0 0 1 4 0v1.5" stroke="var(--text2)" strokeWidth="1.2" fill="none" />
+    </svg>
+  );
+}
+
+/** A label's width at text-xs semibold, near enough to keep labels apart. */
+const textW = (t: string) => Math.ceil(t.length * 7.1) + 22;
+
+function Chip({ children, style, className = "", mx }: { children: ReactNode; style?: CSSProperties; className?: string; mx?: number }) {
+  return (
+    <span data-ms-label={mx != null ? "" : undefined} data-mx={mx} className={`absolute z-[14] overflow-hidden text-ellipsis rounded-full px-2 text-xs leading-5 font-semibold whitespace-nowrap ${className}`} style={style}>
       {children}
     </span>
   );
@@ -87,6 +94,27 @@ export interface MsLayerProps {
 /** The milestone layer drawn over the Timeline or the Gantt. */
 export function MsLayer(props: MsLayerProps) {
   const ms = useMs();
+  const ref = useRef<HTMLDivElement>(null);
+  // A label that would run past the chart's visible right edge sits to the left of its diamond.
+  useLayoutEffect(() => {
+    const layer = ref.current;
+    let sc = layer?.parentElement ?? null;
+    while (sc && !(sc.scrollWidth > sc.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(sc).overflowX))) sc = sc.parentElement;
+    if (!layer || !sc) return;
+    const box = sc;
+    const fit = () => {
+      const right = box.getBoundingClientRect().right - 6;
+      const lx = layer.getBoundingClientRect().left;
+      for (const el of layer.querySelectorAll<HTMLElement>("[data-ms-label]")) {
+        const mx = Number(el.dataset.mx);
+        const w = el.offsetWidth;
+        el.style.left = `${lx + mx + 6 + w > right ? mx - 6 - w : mx + 6}px`;
+      }
+    };
+    fit();
+    box.addEventListener("scroll", fit);
+    return () => box.removeEventListener("scroll", fit);
+  });
   if (!ms.on) return null;
   const { x, top, axisY, height, rows, lanes, phone, left = 0, view } = props;
   const X = (d: string) => left + x(d);
@@ -101,11 +129,29 @@ export function MsLayer(props: MsLayerProps) {
   for (const m of list) byDay.set(m.date, (byDay.get(m.date) ?? 0) + 1);
   const seenDay = new Map<string, number>();
 
-  // Each label has room up to the next milestone in its goal.
-  const room = (m: MsMock) => {
-    const next = list.filter((o) => (style === "b" || o.goal === m.goal) && o.date > m.date).map((o) => X(o.date)).sort((a, b) => a - b)[0];
-    return next != null ? Math.max(28, next - X(m.date) - 12) : 420;
+  // Labels in a goal's header row: each keeps its name; one that has no room moves to the row below,
+  // and one near the right edge sits to the left of its diamond. They keep off the built "Beta" flag's word.
+  const tiers = new Map<string, number[]>();
+  const labelAt = (band: string, mx: number, y0: number, text: string, cap = phone ? 120 : 320) => {
+    const w = Math.min(textW(text), cap);
+    let left = mx + 6;
+    if (left + w > props.width - 6) left = mx - 6 - w;
+    const ends = tiers.get(band) ?? [];
+    let t = ends.findIndex((e) => left >= e + 4);
+    if (t < 0) t = ends.length < 2 ? ends.length : ends.indexOf(Math.min(...ends));
+    ends[t] = left + w;
+    tiers.set(band, ends);
+    return { left, top: y0 + 6 + t * 24, maxWidth: w };
   };
+  const order = [...list.map((m) => ({ m, prd: false })), ...prd.map((m) => ({ m, prd: true }))].sort((a, b) => a.m.date.localeCompare(b.m.date));
+  const at = new Map<string, { left: number; top: number; maxWidth: number }>();
+  for (const { m, prd: fromPrd } of order) {
+    const lane = laneOf(m.goal);
+    const words = fromPrd ? `${ms.ms3 === "c" ? "Copied · " : "PRD · "}${m.code} ${m.name}` : style === "c" ? `${m.code} ${m.name}` : `${m.code} ${m.name} · ${day(m.date)}`;
+    if (style === "b" && !fromPrd) at.set(m.id, labelAt("all", X(m.date), top - 4, words));
+    else if (style === "c" && !fromPrd && lane) at.set(m.id, labelAt(m.goal, X(m.date) - 13, lane.y0, `${words}  `));
+    else if (lane) at.set(m.id, labelAt(m.goal, X(m.date), lane.y0, words + (ms.ms3 === "b" ? "  " : "")));
+  }
   for (const m of list) {
     const mx = X(m.date);
     const lane = laneOf(m.goal);
@@ -118,16 +164,21 @@ export function MsLayer(props: MsLayerProps) {
     }
     if (style === "c") {
       // C: the diamond on the axis, and a small one in the goal's header.
-      if (lane) out.push(<Diamond key={`l-${m.id}`} x={mx} y={lane.y0 + 16} code={m.code} size={9} title={m.name} testid="ms-lane-diamond" />);
-      if (lane && !phone) out.push(<Chip key={`t-${m.id}`} style={{ left: mx + 8, top: lane.y0 + 6, color: msInk(m.code) }}>{m.code}</Chip>);
+      if (lane)
+        out.push(
+          <Chip key={`t-${m.id}`} className="bg-surface !pl-1" style={{ ...at.get(m.id), color: msInk(m.code) }}>
+            <i aria-hidden data-testid="ms-lane-diamond" className="mr-1 inline-block h-2 w-2 rotate-45 align-[1px]" style={{ background: msEdge(m.code) }} />
+            {m.code} {m.name}
+          </Chip>,
+        );
       continue;
     }
     if (style === "b") {
       // B: one line down the whole chart, its flag at the top of the rows.
       out.push(<div key={`v-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: height - axisY - 6, borderLeft: `1.5px solid ${msEdge(m.code)}` }} />);
       out.push(
-        <Chip key={`f-${m.id}`} style={{ left: mx + 4, top: top + 2 + n * 22, maxWidth: room(m), background: msFill(m.code), color: msInk(m.code), border: `1px solid ${msEdge(m.code)}` }}>
-          {m.code} {phone ? "" : m.name}
+        <Chip key={`f-${m.id}`} mx={mx} style={{ ...at.get(m.id), background: msFill(m.code), color: msInk(m.code), border: `1px ${m.ghost ? "dashed" : "solid"} ${msEdge(m.code)}` }}>
+          {m.code} {m.name}
         </Chip>,
       );
     } else if (lane) {
@@ -135,8 +186,8 @@ export function MsLayer(props: MsLayerProps) {
       out.push(<div key={`v-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: `1.5px ${m.ghost ? "dashed" : "solid"} ${msEdge(m.code)}` }} />);
       out.push(<div key={`s-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: lane.y0 - axisY - 6, borderLeft: `1px dotted ${msEdge(m.code)}`, opacity: 0.6 }} />);
       out.push(
-        <Chip key={`f-${m.id}`} style={{ left: mx + 6, top: lane.y0 + 6, maxWidth: room(m), background: msFill(m.code), color: msInk(m.code), border: `1px ${m.ghost ? "dashed" : "solid"} ${msEdge(m.code)}` }}>
-          {m.code} {phone ? "" : `${m.name} · ${day(m.date)}`}
+        <Chip key={`f-${m.id}`} mx={mx} style={{ ...at.get(m.id), background: m.ghost ? "var(--surface)" : msFill(m.code), color: msInk(m.code), border: `1px ${m.ghost ? "dashed" : "solid"} ${msEdge(m.code)}` }}>
+          {m.code} {m.name} · {day(m.date)}
         </Chip>,
       );
     }
@@ -153,7 +204,7 @@ export function MsLayer(props: MsLayerProps) {
       }
       if (late && style !== "c")
         out.push(
-          <Chip key={`late-${m.id}-${k}`} className="border border-crit bg-crit-bg text-crit" style={{ left: Math.min(mx + 8, props.width - 150), top: cy - 10 }}>
+          <Chip key={`late-${m.id}-${k}`} className="border border-crit bg-crit-bg text-crit" style={{ left: mx - 10 - textW(`Ends after ${m.code}`), top: cy - 10 }}>
             Ends after {m.code}
           </Chip>,
         );
@@ -165,32 +216,48 @@ export function MsLayer(props: MsLayerProps) {
     const mx = X(m.date);
     const lane = laneOf(m.goal);
     const proposed = ms.ms3 === "a" && ["mid", "done"].includes(p) && m.id === "p2";
-    const at = proposed ? X("2027-01-05") : mx;
+    const to = proposed ? X("2027-01-05") : mx;
     out.push(<Diamond key={`p-${m.id}`} x={mx} y={axisY} code={m.code} hollow={ms.ms3 !== "c"} title={`${m.code} ${m.name} (from the PRD ${m.prd})`} lock={ms.ms3 === "b"} testid="ms-prd-diamond" />);
     if (lane)
       out.push(<div key={`pv-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: `1.5px ${ms.ms3 === "c" ? "solid" : "dashed"} ${msEdge(m.code)}`, opacity: proposed ? 0.4 : 1 }} />);
     if (lane)
       out.push(
-        <Chip key={`pc-${m.id}`} className="border" style={{ background: ms.ms3 === "c" ? msFill(m.code) : "var(--surface)", left: mx + 6, top: lane.y0 + 6, maxWidth: (() => { const nx = prd.map((o) => X(o.date)).filter((v) => v > mx).sort((a, b) => a - b)[0]; return nx != null ? Math.max(28, nx - mx - 12) : 420; })(), color: msInk(m.code), borderColor: msEdge(m.code), opacity: proposed ? 0.5 : 1 }}>
-          <span className="font-normal text-text2">{ms.ms3 === "c" ? "Copied · " : "PRD · "}</span>{m.code} {phone ? "" : m.name}
+        <Chip key={`pc-${m.id}`} mx={mx} className="border" style={{ background: ms.ms3 === "c" ? msFill(m.code) : "var(--surface)", ...at.get(m.id), borderStyle: ms.ms3 === "c" ? "solid" : "dashed", color: msInk(m.code), borderColor: msEdge(m.code), opacity: proposed ? 0.5 : 1 }}>
+          {ms.ms3 === "b" && <Lock />}
+          <span className="font-normal text-text2">{ms.ms3 === "c" ? "Copied · " : "PRD · "}</span>{m.code} {m.name}
         </Chip>,
       );
     if (proposed && lane) {
-      out.push(<Diamond key={`pp-${m.id}`} x={at} y={axisY} code={m.code} hollow dashed title="Proposed" testid="ms-proposed" />);
-      out.push(<div key={`ppv-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: at - 0.75, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: "1.5px dashed var(--color-warn)" }} />);
+      out.push(<Diamond key={`pp-${m.id}`} x={to} y={axisY} code={m.code} hollow dashed title="Proposed" testid="ms-proposed" />);
+      out.push(<div key={`ppv-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: to - 0.75, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: `1.5px dashed ${msEdge(m.code)}` }} />);
       out.push(
-        <Chip key={`ppc-${m.id}`} className="border border-warn bg-warn-bg text-warn" style={{ left: at + 6, top: lane.y0 + 30 }}>
-          {p === "mid" ? `Moving to ${day("2027-01-05")}` : `Asked the PRD: move ${m.code} to ${day("2027-01-05")} · waits for Nora Vance`}
+        <Chip key={`ppc-${m.id}`} className="border border-warn bg-warn-bg text-warn" style={{ left: to + 6, top: lane.y0 + 54 }}>
+          {p === "mid" ? `Moving ${m.code} ${m.name} to ${day("2027-01-05")}` : `Asked the PRD: move ${m.code} ${m.name} to ${day("2027-01-05")} · waits for Nora Vance`}
         </Chip>,
       );
     }
   }
 
+  if (ms.ms3 && !(ms.ms3 === "c" && p !== "done"))
+    out.push(
+      // The key for the PRD's milestones, pinned to the chart's top-left corner.
+      <div key="ms3-key" className="sticky top-0 left-0 z-[30] h-0 w-0">
+        <span data-testid="ms3-key" className="absolute flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 text-xs leading-6 whitespace-nowrap text-text2" style={{ left: 8, top: view === "timeline" ? 6 : axisY - 12 }}>
+          {ms.ms3 === "c" ? (
+            <><i aria-hidden className="inline-block h-2.5 w-2.5 rotate-45" style={{ background: msEdge("M1") }} /> Copied from the PRD Usage alerts: the roadmap’s own now</>
+          ) : (
+            <><i aria-hidden className="inline-block h-2.5 w-2.5 rotate-45 border-[1.5px] border-dashed" style={{ borderColor: msEdge("M1") }} /> Hollow, dashed: from the PRD Usage alerts{ms.ms3 === "b" && <> · <Lock />changes only there</>}{ms.ms3 === "a" && <> · a change asks its owner</>}</>
+          )}
+        </span>
+      </div>,
+    );
   if (ms.ms3 === "c" && p !== "done" && !phone)
     out.push(
-      <Chip key="tray" className="z-[26] border border-dashed border-line-strong bg-surface text-text" style={{ left: X("2026-11-24"), top: axisY - 10 }}>
-        The PRD Usage alerts has 4 milestones · <span className="text-accent-ink underline">Copy onto the roadmap</span>
-      </Chip>,
+      <div key="tray" className="sticky top-0 left-0 z-[30] h-0 w-0">
+        <span data-testid="ms3-tray" className="absolute rounded-full border border-dashed border-line-strong bg-surface px-2.5 text-xs leading-6 font-semibold whitespace-nowrap text-text" style={{ left: 8, top: view === "timeline" ? 6 : axisY - 12 }}>
+          The PRD Usage alerts has 4 milestones · <span className="text-accent-ink underline">Copy onto the roadmap</span>
+        </span>
+      </div>,
     );
   if (ms.ms3 === "b" && p === "mid") {
     const lx = X("2026-12-15");
@@ -236,18 +303,13 @@ export function MsLayer(props: MsLayerProps) {
       if (r && p === "open") out.push(<span key={`tick-${k}`} aria-hidden className="absolute z-[13] flex h-4 w-4 items-center justify-center rounded bg-accent text-[11px] font-bold text-on-accent" style={{ left: Math.max(4, X(r.start) - 22), top: r.y + r.h / 2 - 8 }}>✓</span>);
     }
   }
-  if (ms.decision === "ms1" && ms.ms1 === "c" && p === "open") {
-    out.push(<Diamond key="ghost" x={nx} y={axisY} code="M3" hollow dashed title="Preview" testid="ms-ghost" />);
-    if (newLane) out.push(<div key="ghost-l" aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: nx - 0.5, top: newLane.y0, height: newLane.y1 - newLane.y0, borderLeft: "1.5px dashed var(--accent-ink)" }} />);
-    if (newLane) out.push(<Chip key="ghost-c" className="border border-dashed border-accent-ink bg-surface text-accent-ink" style={{ left: nx + 6, top: newLane.y0 + 6 }}>M3 Teams set 3 rules in week 1 · {day(MS_NEW.date)}</Chip>);
-  }
   if (ms.decision === "ms1" && ms.ms1 === "d" && ["open"].includes(p)) {
-    const gx = X("2027-01-18");
+    const gx = nx;
     if (newLane) out.push(<div key="drop" aria-hidden className="pointer-events-none absolute z-[11]" style={{ left: 0, top: newLane.y0, width: props.width, height: newLane.y1 - newLane.y0, background: "var(--accent-soft)", opacity: 0.45 }} />);
     out.push(<div key="ghost-l" aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: gx, top: axisY + 6, height: height - axisY - 6, borderLeft: "1px dashed var(--accent-ink)" }} />);
     out.push(
       <span key="drag" className="absolute z-[16] flex items-center gap-1.5 rounded-full border border-accent-ink bg-surface px-2.5 text-xs leading-6 font-semibold text-accent-ink shadow-lg" style={{ left: gx - 10, top: (newLane?.y0 ?? top) + 40, transform: "rotate(-3deg)" }}>
-        <i aria-hidden className="inline-block h-2.5 w-2.5 rotate-45 bg-accent-ink" /> Milestone · drop on {day("2027-01-18")} in Grow retention
+        <i aria-hidden className="inline-block h-2.5 w-2.5 rotate-45 bg-accent-ink" /> Milestone · drop on {day(MS_NEW.date)} in Grow retention
       </span>,
     );
   }
@@ -263,7 +325,7 @@ export function MsLayer(props: MsLayerProps) {
   // MS2: moving one on the axis.
   if (ms.decision === "ms2" && p === "move") {
     out.push(
-      <span key="mv" className="absolute z-[16] rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text" style={{ left: X("2027-01-27") - 60, top: axisY + 12 }}>
+      <span key="mv" className="absolute z-[16] rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text" style={{ left: X("2027-01-27") + 16, top: axisY + 8 }}>
         M3 {day("2027-01-20")} → {day("2027-01-27")} · 1 item still ends after it
       </span>,
     );
@@ -278,7 +340,7 @@ export function MsLayer(props: MsLayerProps) {
   if (ms.decision === "ms3" && p === "open") out.push(<PrdCard key="card" ms={ms} at={cardAt("2026-12-15")} phone={phone} gantt={view === "gantt"} />);
 
   return (
-    <div data-testid="ms-layer" className="pointer-events-none absolute inset-0 [&>*]:pointer-events-auto">
+    <div ref={ref} data-testid="ms-layer" className="pointer-events-none absolute inset-0 [&>*]:pointer-events-auto">
       {out}
       <MsToast ms={ms} phone={phone} />
     </div>
@@ -312,18 +374,30 @@ const ITEM_WORDS: Record<string, string> = { "alert-mobile": "Mobile alert push"
 function AddCard({ ms, m, at, phone, gantt, second = false, edit = false }: { ms: ReturnType<typeof useMs>; m: MsMock; at: { left: number; top: number }; phone: boolean; gantt: boolean; second?: boolean; edit?: boolean }) {
   const style = ms.decision === "ms2" ? ms.ms2 : "a";
   const picking = !second;
-  const gates = (
+  const pickedFirst = ms.decision === "ms1" && ms.ms1 === "b";
+  const tickList = (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-semibold text-text2">Items it waits on · tick them, or tap bars</span>
+      {["alert-rules", "alert-digest", "alert-mobile", "alert-sso"].map((k) => (
+        <span key={k} className="flex items-center gap-2 text-sm">
+          <i aria-hidden className={`inline-block h-3.5 w-3.5 rounded border ${(second ? [] : m.gates).includes(k) ? "border-accent bg-accent" : "border-line-strong"}`} /> {ITEM_WORDS[k]}
+          {k === "alert-sso" && !second && <span className="text-xs font-semibold text-crit">ends Aug 20, after it</span>}
+        </span>
+      ))}
+    </div>
+  );
+  const gates = style === "b" ? tickList : (
     <div className="flex flex-col gap-1">
       <span className="text-xs font-semibold text-text2">Items it waits on {picking ? <span className="font-normal">{style === "b" ? "· tick them below or tap bars" : "· tap bars on the chart to add"}</span> : null}</span>
       <div className="flex flex-wrap gap-1.5">
-        {(second ? [] : m.gates).map((k) => (
+        {(second && !pickedFirst ? [] : m.gates).map((k) => (
           <span key={k} className="inline-flex items-center gap-1 rounded-full border border-line-strong bg-surface2 px-2 text-xs leading-6">
             {ITEM_WORDS[k] ?? k}
             {k === "alert-sso" && <span className="font-semibold text-crit">· ends Aug 20, after it</span>}
             <span aria-hidden className="text-text2">×</span>
           </span>
         ))}
-        {second && <span className="text-xs text-text2">None yet</span>}
+        {second && !pickedFirst && <span className="text-xs text-text2">None yet</span>}
       </div>
     </div>
   );
@@ -365,20 +439,12 @@ function AddCard({ ms, m, at, phone, gantt, second = false, edit = false }: { ms
           <span className="text-text2">×</span>
         </div>
         {fields}
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-semibold text-text2">All of Grow retention</span>
-          {["Alert rules engine", "Weekly alert digest", "Mobile alert push", "Alert routing by team", "Alert history export"].map((t) => (
-            <span key={t} className="flex items-center gap-2 text-sm">
-              <i aria-hidden className={`inline-block h-3.5 w-3.5 rounded border ${["Mobile alert push", "Alert routing by team"].includes(t) ? "border-accent bg-accent" : "border-line-strong"}`} /> {t}
-            </span>
-          ))}
-        </div>
         {buttons}
       </aside>
     );
-  const cls = phone ? "fixed right-0 bottom-0 left-0 z-[60] max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-line" : gantt ? "fixed right-6 bottom-6 z-[60] w-[360px] rounded-xl border border-line" : "absolute z-[40] w-[360px] rounded-xl border border-line";
+  const cls = phone ? "fixed right-0 bottom-0 left-0 z-[60] max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-line" : "fixed top-4 right-6 z-[60] w-[360px] rounded-xl border border-line";
   return (
-    <div data-testid="ms-card" className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`} style={phone || gantt ? undefined : at}>
+    <div data-testid="ms-card" className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`} data-at={at.left} data-gantt={gantt}>
       {phone && <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />}
       <div className="flex items-center justify-between">
         <h2 className="text-[15px] font-semibold">{head}</h2>
@@ -393,9 +459,10 @@ function AddCard({ ms, m, at, phone, gantt, second = false, edit = false }: { ms
 /** MS3: a PRD milestone opened on the chart. */
 function PrdCard({ ms, at, phone, gantt }: { ms: ReturnType<typeof useMs>; at: { left: number; top: number }; phone: boolean; gantt: boolean }) {
   const m = MS_PRD[1];
-  const cls = phone ? "fixed right-0 bottom-0 left-0 z-[60] rounded-t-2xl border-t border-line" : gantt ? "fixed right-6 bottom-6 z-[60] w-[360px] rounded-xl border border-line" : "absolute z-[40] w-[360px] rounded-xl border border-line";
+  const cls = phone ? "fixed right-0 bottom-0 left-0 z-[60] rounded-t-2xl border-t border-line" : "fixed top-4 right-6 z-[60] w-[360px] rounded-xl border border-line";
   return (
-    <div data-testid="ms-prd-card" className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`} style={phone || gantt ? undefined : at}>
+    <div data-testid="ms-prd-card" className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`} data-at={at.left} data-gantt={gantt}>
+      {phone && <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />}
       <div className="flex items-center justify-between">
         <h2 className="text-[15px] font-semibold">
           <span style={{ color: msInk(m.code) }}>{m.code}</span> {m.name}
@@ -448,13 +515,13 @@ function MsToast({ ms, phone }: { ms: ReturnType<typeof useMs>; phone: boolean }
   const p = ms.phase;
   let words = "";
   if (ms.decision === "ms1" && p === "done") words = "M3 Teams set 3 rules in week 1 added to Grow retention";
-  if (ms.decision === "ms2" && p === "done") words = "M3 added · 1 item it waits on ends after it";
+  if (ms.decision === "ms2" && p === "done") words = ms.ms2 === "c" ? "M3 added" : "M3 added · 1 item it waits on ends after it";
   if (ms.decision === "ms2" && p === "move") words = "";
   if (ms.decision === "ms2" && p === "removed") words = "M3 Teams set 3 rules in week 1 removed";
   if (ms.decision === "ms3" && p === "done") words = ms.ms3 === "a" ? "Asked Nora Vance to move M2 to Jan 5 in the PRD" : ms.ms3 === "c" ? "4 milestones copied from the PRD Usage alerts" : "";
   if (!words) return null;
   return (
-    <div data-testid="ms-toast" className={`fixed z-[70] flex items-center gap-3 rounded-lg bg-tip px-4 py-3 text-sm text-tip-text shadow-xl ${phone ? "right-3 bottom-20 left-3" : "right-6 bottom-6"}`}>
+    <div data-testid="ms-toast" className={`fixed z-[70] flex items-center gap-3 rounded-lg bg-tip px-4 py-3 text-sm text-tip-text shadow-xl ${phone ? "top-3 right-3 left-3" : "top-4 right-6"}`}>
       <span>{words}</span>
       <span className="font-semibold underline">Undo</span>
     </div>
@@ -465,7 +532,7 @@ function MsToast({ ms, phone }: { ms: ReturnType<typeof useMs>; phone: boolean }
 export function MsTypeBar() {
   const ms = useMs();
   if (!ms.on || ms.decision !== "ms1" || ms.ms1 !== "c") return null;
-  const typed = ms.phase === "open" ? "M3 Teams set 3 rules in week 1 by Jan 20" : ms.phase === "second" ? "M4 Digest opened by 70% by Feb 1|" : "";
+  const typed = ms.phase === "open" ? "M3 Teams set 3 rules in week 1 by Jan 20" : ms.phase === "second" ? "M4 Digest opened by 70% by Feb 17|" : "";
   return (
     <div data-testid="ms-typebar" className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-line-strong bg-surface px-3 py-2.5">
       <span className="text-[15px] font-semibold">Add a milestone</span>
@@ -486,8 +553,8 @@ export function MsPickBar({ phone }: { phone: boolean }) {
     return <p className="text-xs text-text2" data-testid="ms-pick-hint">Tip: tick items, then make a milestone after them.</p>;
   return (
     <div data-testid="ms-pickbar" className={`z-[70] flex items-center gap-3 rounded-xl bg-tip px-4 py-2.5 text-sm text-tip-text shadow-xl ${phone ? "fixed right-3 bottom-20 left-3" : "fixed bottom-6 left-1/2 -translate-x-1/2"}`}>
-      <span>2 items picked: Mobile alert push, Alert routing by team</span>
-      <span className="rounded-lg bg-surface px-3 leading-8 font-semibold text-text">Make a milestone after these</span>
+      <span className={phone ? "whitespace-nowrap" : ""}>{phone ? "2 items picked" : "2 items picked: Mobile alert push, Alert routing by team"}</span>
+      <span className="rounded-lg bg-surface px-3 leading-8 font-semibold whitespace-nowrap text-text">{phone ? "Make a milestone" : "Make a milestone after these"}</span>
       <span className="underline">Clear</span>
     </div>
   );

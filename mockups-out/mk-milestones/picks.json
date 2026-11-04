@@ -1,383 +1,483 @@
 {
- "title": "Milestones on Simple Roadmap's Timeline and Gantt",
- "subtitle": "Add one or more milestones right on the chart, see them on the goal's ladder, and see a PRD's own milestones. Invented company and data.",
- "decisions": [
-  {
-   "code": "MS1",
-   "name": "How to add on the chart",
-   "question": "How does the owner add one or more milestones right on the Timeline, Gantt and Now / Next / Later?",
-   "common": "Everything stays in Simple. Every way ends in the same card (MS2) and draws the milestone on the Timeline, the Gantt and Now / Next / Later at once, with Undo.",
-   "proposals": [
+  "title": "Milestones on Simple Roadmap's Timeline and Gantt",
+  "subtitle": "Add one or more milestones right on the chart, see them on the goal's ladder, and see a PRD's own milestones. Invented company and data.",
+  "decisions": [
     {
-     "letter": "a",
-     "name": "Click the time axis",
-     "recommended": true,
-     "what": "Pointing at the time axis shows a hollow diamond and “+ Milestone on <day>” that follow the pointer. A click drops it on that day and opens the card there, in the goal whose rows are under it; bars tapped while the card is open become the items it waits on. “Add and place another” saves it and keeps the add going for the next click. On a phone a tap on the axis does the same and the card comes up as a sheet. Now / Next / Later gets a “+ Milestone” in each horizon.",
-     "plus": "The day is picked by where you click, so no date typing; works the same on Timeline, Gantt and phone; several in a row without closing anything.",
-     "cost": "A thin target on the axis; the pointer guide is new drawing to build and test on both charts.",
-     "frames": [
-      {
-       "file": "frames/ms1-a-rest.html",
-       "caption": "At rest: the Timeline with Grow retention's ladder (M1 Nov 20, M2 Dec 22) and Faster activation's M1; a faint “+ Milestone” sits on the time axis."
-      },
-      {
-       "file": "frames/ms1-a-open.html",
-       "caption": "The pointer on the time axis at Jan 20: a hollow diamond and “+ Milestone on Jan 20, 2027” follow it, with a guide line down the chart."
-      },
-      {
-       "file": "frames/ms1-a-mid.html",
-       "caption": "Clicked: the card opens at that day with Grow retention picked; two bars tapped on the chart are its items, and one ends after it."
-      },
-      {
-       "file": "frames/ms1-a-done.html",
-       "caption": "Added: M3 sits on the axis with its line across Grow retention, its two items tied to it; Undo in the corner."
-      },
-      {
-       "file": "frames/ms1-a-phone-done.html",
-       "caption": "Phone 390: M3 added, its words cut to the code where room is short."
-      },
-      {
-       "file": "frames/ms1-a-done-gantt.html",
-       "caption": "The same M3 on the Gantt, drawn the same way over the week columns."
-      },
-      {
-       "file": "frames/ms1-a-second.html",
-       "caption": "“Add and place another”: M3 stays (dashed until saved), the card moves on to the next day picked, Feb 17, for M4."
-      },
-      {
-       "file": "frames/ms1-a-board.html",
-       "caption": "Now / Next / Later: each horizon lists its milestones above its cards, with its own “+ Milestone”."
-      },
-      {
-       "file": "frames/ms1-a-hard-1512.html",
-       "caption": "Hard case at 1512, Gantt with 30 items in Grow retention: M2 and Faster activation's M2 on the same day (one diamond, “2 on Dec 22”), M3 before an item it waits on."
-      },
-      {
-       "file": "frames/ms1-a-phone.html",
-       "caption": "Phone 390, Gantt: a tap on the axis opens the same card as a sheet from the bottom."
-      },
-      {
-       "file": "frames/ms1-a-dark.html",
-       "caption": "The result in dark mode."
-      },
-      {
-       "file": "frames/ms1-a-phone-dark.html",
-       "caption": "Phone 390 in dark mode."
-      }
-     ],
-     "why": "It is the most direct answer to “create one directly on the timeline or Gantt”: one click on the day, then the same card everywhere, and it repeats for a ladder of milestones."
+      "code": "MS1",
+      "name": "How to add on the chart",
+      "question": "How does the owner add one or more milestones right on the Timeline, Gantt and Now / Next / Later?",
+      "common": "Everything stays in Simple. Every way ends in the same card (MS2) and draws the milestone on the Timeline, the Gantt and Now / Next / Later at once, with Undo.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Click the time axis",
+          "recommended": true,
+          "what": "Pointing at the time axis shows a hollow diamond and “+ Milestone on <day>” that follow the pointer. A click drops it on that day and opens the card in the chart's top corner, in the goal whose rows are under it; bars tapped while the card is open become the items it waits on. “Add and place another” saves it and keeps the add going for the next click. On a phone a tap on the axis does the same and the card comes up as a sheet. Now / Next / Later gets a “+ Milestone” in each horizon.",
+          "plus": "The day is picked by where you click, so no date typing; works the same on Timeline, Gantt and phone; several in a row without closing anything.",
+          "cost": "A thin target on the axis; the pointer guide is new drawing to build and test on both charts.",
+          "frames": [
+            {
+              "file": "frames/ms1-a-rest.html",
+              "caption": "At rest: Grow retention's ladder (M1 Nov 20, M2 Dec 22) and Faster activation's M1, each named in its goal's row; a faint “+ Milestone” sits on the time axis."
+            },
+            {
+              "file": "frames/ms1-a-open.html",
+              "caption": "The pointer on the time axis at Jan 20: a hollow diamond and “+ Milestone on Jan 20, 2027” follow it, with a guide line down the chart."
+            },
+            {
+              "file": "frames/ms1-a-mid.html",
+              "caption": "Clicked: the card opens in the chart's top corner with Grow retention picked; the two bars tapped on the chart are outlined as its items, and one ends after it."
+            },
+            {
+              "file": "frames/ms1-a-done.html",
+              "caption": "Added: M3 sits on the axis with its line across Grow retention, its two items tied to it; Undo in the top corner."
+            },
+            {
+              "file": "frames/ms1-a-done-gantt.html",
+              "caption": "The same M3 on the Gantt, drawn the same way over the week columns."
+            },
+            {
+              "file": "frames/ms1-a-second.html",
+              "caption": "“Add and place another”: M3 is saved, M4 waits dashed on Feb 17 and the card asks for its name."
+            },
+            {
+              "file": "frames/ms1-a-board.html",
+              "caption": "Now / Next / Later after M3 is added: each horizon lists its milestones above its cards, with its own “+ Milestone”."
+            },
+            {
+              "file": "frames/ms1-a-hard-1512.html",
+              "caption": "Hard case at 1512, Gantt with 30 items in Grow retention: M2 and Faster activation's M2 on the same day (one diamond, “2 on Dec 22”), M3 before an item it waits on, M4 after it."
+            },
+            {
+              "file": "frames/ms1-a-phone.html",
+              "caption": "Phone 390, Gantt: a tap on the axis opens the same card as a sheet from the bottom."
+            },
+            {
+              "file": "frames/ms1-a-phone-done.html",
+              "caption": "Phone 390: M3 added; each label keeps its first words, and one near the edge sits left of its diamond."
+            },
+            {
+              "file": "frames/ms1-a-dark.html",
+              "caption": "The Timeline result in dark mode."
+            },
+            {
+              "file": "frames/ms1-a-phone-dark.html",
+              "caption": "Phone 390 in dark mode."
+            }
+          ],
+          "why": "It is the most direct answer to “create one directly on the timeline or Gantt”: one click on the day, then the same card everywhere, and it repeats for a ladder of milestones."
+        },
+        {
+          "letter": "b",
+          "name": "Pick items, then mark",
+          "recommended": false,
+          "what": "The owner ticks the items a milestone waits on, then “Make a milestone after these” in a bar at the foot. The card opens with those items in it and the day after the last one ends.",
+          "plus": "The items it waits on come first, so a milestone is never empty; the date is right by default.",
+          "cost": "Two steps before anything shows on the chart; no way to make a milestone that waits on nothing yet; ticks on rows are new on both charts.",
+          "frames": [
+            {
+              "file": "frames/ms1-b-rest.html",
+              "caption": "At rest: nothing new on the chart; a tip above the add bar says to tick items first."
+            },
+            {
+              "file": "frames/ms1-b-open.html",
+              "caption": "Two items ticked (their bars outlined); a bar at the foot offers “Make a milestone after these”."
+            },
+            {
+              "file": "frames/ms1-b-mid.html",
+              "caption": "The card opens with the two picked items already in it; the owner names it and sets the day."
+            },
+            {
+              "file": "frames/ms1-b-done.html",
+              "caption": "Added: M3 on the Timeline, tied to the two items picked."
+            },
+            {
+              "file": "frames/ms1-b-done-gantt.html",
+              "caption": "The same M3 on the Gantt."
+            },
+            {
+              "file": "frames/ms1-b-second.html",
+              "caption": "The next one: Weekly alert digest ticked, the card opens for M4 with it already in."
+            },
+            {
+              "file": "frames/ms1-b-hard-1512.html",
+              "caption": "Hard case at 1512, Gantt with 30 items in Grow retention: the same two on Dec 22 and M3 before an item it waits on. Cost: among 30 rows, every item has to be found and ticked first."
+            },
+            {
+              "file": "frames/ms1-b-phone.html",
+              "caption": "Phone 390: ticks on the bars and a short bar at the foot, “Make a milestone”."
+            },
+            {
+              "file": "frames/ms1-b-dark.html",
+              "caption": "The Gantt result in dark mode. Cost: a milestone with no items yet cannot be made this way."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Type it in a bar",
+          "recommended": false,
+          "what": "A second bar under “Add an item” takes a milestone in words (“M3 Teams set 3 rules by Jan 20”). A dashed preview shows where it lands; Enter adds it and the bar stays ready for the next one.",
+          "plus": "Fastest for a list of milestones; works on any view, phone too.",
+          "cost": "Not on the chart itself; dates must be typed; the items it waits on are added later; one more bar on a busy page.",
+          "frames": [
+            {
+              "file": "frames/ms1-c-rest.html",
+              "caption": "At rest: a second add bar, “Add a milestone”, under the item add bar."
+            },
+            {
+              "file": "frames/ms1-c-open.html",
+              "caption": "Typed “M3 Teams set 3 rules in week 1 by Jan 20”: a dashed preview shows where it lands before Enter."
+            },
+            {
+              "file": "frames/ms1-c-done.html",
+              "caption": "Enter: M3 is drawn; the items it waits on still have to be added from its diamond."
+            },
+            {
+              "file": "frames/ms1-c-done-gantt.html",
+              "caption": "The same M3 on the Gantt, with no items tied to it."
+            },
+            {
+              "file": "frames/ms1-c-second.html",
+              "caption": "The bar stays ready for the next one: “M4 Digest opened by 70% by Feb 17” typed, M4 shown dashed on Feb 17. Cost: one more bar on the page."
+            },
+            {
+              "file": "frames/ms1-c-hard-1512.html",
+              "caption": "Hard case at 1512, Gantt with 30 items in Grow retention: the same two on Dec 22; nothing says which items M3 waits on."
+            },
+            {
+              "file": "frames/ms1-c-phone.html",
+              "caption": "Phone 390: the add bar takes the words on a phone too."
+            },
+            {
+              "file": "frames/ms1-c-dark.html",
+              "caption": "The Gantt result in dark mode."
+            }
+          ]
+        },
+        {
+          "letter": "d",
+          "name": "Drag from a chip",
+          "recommended": false,
+          "what": "A “Drag a milestone onto a date” chip sits in the chart's corner. Dragging it shades the goal row under it and shows the day; dropping opens the card.",
+          "plus": "Easy to find; the drop picks both the day and the goal.",
+          "cost": "One drag per milestone; no room to drag on a phone, so a phone cannot add; drag code is the costliest to test.",
+          "frames": [
+            {
+              "file": "frames/ms1-d-rest.html",
+              "caption": "At rest: a “Drag a milestone onto a date” chip in the chart's corner."
+            },
+            {
+              "file": "frames/ms1-d-open.html",
+              "caption": "Dragging the chip: Grow retention's rows are shaded and a guide line shows the day it drops on, Jan 20."
+            },
+            {
+              "file": "frames/ms1-d-mid.html",
+              "caption": "Dropped on Jan 20: the same card as the others opens to name it and pick its items."
+            },
+            {
+              "file": "frames/ms1-d-done.html",
+              "caption": "Added: M3 on Jan 20 on the Timeline."
+            },
+            {
+              "file": "frames/ms1-d-done-gantt.html",
+              "caption": "The same M3 on the Gantt."
+            },
+            {
+              "file": "frames/ms1-d-second.html",
+              "caption": "The next one: the chip dragged again, onto Feb 17, and the card opens for M4. Cost: one drag per milestone."
+            },
+            {
+              "file": "frames/ms1-d-hard-1512.html",
+              "caption": "Hard case at 1512, Gantt with 30 items in Grow retention: the same two on Dec 22; with the chart scrolled, the drop day is harder to aim at."
+            },
+            {
+              "file": "frames/ms1-d-phone.html",
+              "caption": "Phone 390: no room to drag a chip, so a phone has no way to add with this one."
+            },
+            {
+              "file": "frames/ms1-d-dark.html",
+              "caption": "The Gantt result in dark mode."
+            }
+          ]
+        }
+      ]
     },
     {
-     "letter": "b",
-     "name": "Pick items, then mark",
-     "recommended": false,
-     "what": "The owner ticks the items a milestone waits on, then “Make a milestone after these” in a bar at the foot. The card opens with those items in it and the day after the last one ends.",
-     "plus": "The items it waits on come first, so a milestone is never empty; the date is right by default.",
-     "cost": "Two steps before anything shows on the chart; no way to make a milestone that waits on nothing yet; ticks on rows are new on both charts.",
-     "frames": [
-      {
-       "file": "frames/ms1-b-rest.html",
-       "caption": "At rest: nothing new on the chart; a tip under the add bar says to tick items first."
-      },
-      {
-       "file": "frames/ms1-b-open.html",
-       "caption": "Two items ticked (their bars outlined); a bar at the foot offers “Make a milestone after these”."
-      },
-      {
-       "file": "frames/ms1-b-mid.html",
-       "caption": "The card opens with the two picked items already in it; the owner names it and sets the day."
-      },
-      {
-       "file": "frames/ms1-b-done-gantt.html",
-       "caption": "Added: M3 on the Gantt. Cost: a milestone with no items yet cannot be made this way."
-      },
-      {
-       "file": "frames/ms1-b-hard-1512.html",
-       "caption": "Hard case at 1512, Gantt with 30 items in Grow retention: M2 and Faster activation's M2 on the same day (one diamond, “2 on Dec 22”), M3 before an item it waits on."
-      }
-     ]
+      "code": "MS2",
+      "name": "What it asks and shows",
+      "question": "What does a new milestone ask for, how is it drawn, and how is it moved, edited and removed?",
+      "common": "A milestone has a name with its code (M3), a date, a goal, the items it waits on, a rule for when it counts and a status. A diamond on the time axis marks its day; a drag on the axis moves it; a click opens it; every change has Undo.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Card, line per goal",
+          "recommended": true,
+          "what": "A small card in the chart's top corner asks for name, date, goal, the items it waits on (tapped on the chart) and when it counts. It is drawn as a diamond on the axis and a line across its own goal's rows only, with its items tied to it by dotted lines; an item that ends after it says “Ends after M3” in red. A drag on the diamond moves it, a click opens the card to edit or remove, with Undo.",
+          "plus": "Each goal reads as its own ladder; late items show where they are; the card asks for everything in one place without leaving the chart.",
+          "cost": "More lines on a busy chart; ties and late marks need drawing on both charts and on a phone.",
+          "frames": [
+            {
+              "file": "frames/ms2-a-rest.html",
+              "caption": "At rest: each milestone a diamond on the axis, a line across its own goal's rows, named in the goal's row."
+            },
+            {
+              "file": "frames/ms2-a-open.html",
+              "caption": "A click on M3 opens its card to edit, with Remove."
+            },
+            {
+              "file": "frames/ms2-a-mid.html",
+              "caption": "Adding: the card asks for name, date, goal, the items it waits on (tapped on the chart) and when it counts."
+            },
+            {
+              "file": "frames/ms2-a-done.html",
+              "caption": "Drawn: a diamond on the axis, a line across its own goal's rows only, its items tied by dotted lines, and “Ends after M3” on the late one."
+            },
+            {
+              "file": "frames/ms2-a-done-gantt.html",
+              "caption": "The same on the Gantt."
+            },
+            {
+              "file": "frames/ms2-a-second.html",
+              "caption": "A second in a row: M4 waits dashed on Feb 17 while its card asks for the rest."
+            },
+            {
+              "file": "frames/ms2-a-move.html",
+              "caption": "Moving: the diamond dragged along the axis to Jan 27; a tip says what changes as it goes."
+            },
+            {
+              "file": "frames/ms2-a-removed.html",
+              "caption": "Removed: M3 is gone, with Undo in the top corner."
+            },
+            {
+              "file": "frames/ms2-a-hard-1512.html",
+              "caption": "Hard case at 1512, 30 items in Grow retention: two milestones on Dec 22, and an item that ends after M3."
+            },
+            {
+              "file": "frames/ms2-a-phone.html",
+              "caption": "Phone 390: lines and ties kept; labels keep their first words."
+            },
+            {
+              "file": "frames/ms2-a-dark.html",
+              "caption": "The Gantt result in dark mode."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Side panel, full line",
+          "recommended": false,
+          "what": "A panel at the right asks for every field, the status, and the goal's items as a tick list. It is drawn as one line down the whole chart with its name at the top; late items are marked, with no ties.",
+          "plus": "Room for long names and rules; the tick list is easy with 30 items.",
+          "cost": "The panel hides part of the chart while picking; full-height lines cross other goals' rows and read as theirs; on a phone the sheet hides the chart.",
+          "frames": [
+            {
+              "file": "frames/ms2-b-rest.html",
+              "caption": "At rest: each milestone a line down the whole chart, named at the top of the rows."
+            },
+            {
+              "file": "frames/ms2-b-open.html",
+              "caption": "A click on M3 opens the side panel to edit, with Remove; the panel covers the right of the chart."
+            },
+            {
+              "file": "frames/ms2-b-mid.html",
+              "caption": "Adding: the panel has every field and the status, and ticks the goal's items it waits on. Cost: it covers the right of the chart, where M3 sits."
+            },
+            {
+              "file": "frames/ms2-b-done.html",
+              "caption": "Drawn: a line down the whole chart with its name at the top; no ties, the late item marked."
+            },
+            {
+              "file": "frames/ms2-b-done-gantt.html",
+              "caption": "The same on the Gantt: every milestone crosses every goal's rows."
+            },
+            {
+              "file": "frames/ms2-b-second.html",
+              "caption": "A second in a row: M4's line dashed on Feb 17, the panel open again for it."
+            },
+            {
+              "file": "frames/ms2-b-hard-1512.html",
+              "caption": "Hard case at 1512, 30 items in Grow retention: two milestones on Dec 22, and an item that ends after M3; every line crosses all 30 rows."
+            },
+            {
+              "file": "frames/ms2-b-phone.html",
+              "caption": "Phone 390: the panel becomes a sheet; the chart is hidden under it."
+            },
+            {
+              "file": "frames/ms2-b-dark.html",
+              "caption": "The Gantt result in dark mode."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Name and date only",
+          "recommended": false,
+          "what": "A small card asks for a name and a date only; the rest is added later from its diamond. It is drawn as a diamond on the axis and a small one in the goal's header row.",
+          "plus": "Quickest to add; least clutter.",
+          "cost": "Shows nothing about what it waits on or what is late, so the chart cannot warn; the rest is easy to forget.",
+          "frames": [
+            {
+              "file": "frames/ms2-c-rest.html",
+              "caption": "At rest: a diamond on the axis, and the milestone named with a small diamond in its goal's row; no lines."
+            },
+            {
+              "file": "frames/ms2-c-open.html",
+              "caption": "A click on M3 opens a small card to edit its name and date, with Remove."
+            },
+            {
+              "file": "frames/ms2-c-mid.html",
+              "caption": "Adding: a small card asks only for a name and a date."
+            },
+            {
+              "file": "frames/ms2-c-done.html",
+              "caption": "Drawn: a diamond on the axis and its name in the goal's row; nothing on the items. The toast only says “M3 added”."
+            },
+            {
+              "file": "frames/ms2-c-done-gantt.html",
+              "caption": "The same on the Gantt: least clutter, but no sign of what it waits on or what is late."
+            },
+            {
+              "file": "frames/ms2-c-second.html",
+              "caption": "A second in a row: M4 named in the row on Feb 17, the small card open for it."
+            },
+            {
+              "file": "frames/ms2-c-hard-1512.html",
+              "caption": "Hard case at 1512, 30 items in Grow retention: two milestones on Dec 22; the item that ends after M3 is not marked."
+            },
+            {
+              "file": "frames/ms2-c-phone.html",
+              "caption": "Phone 390: the names in the goal rows, nothing on the items."
+            },
+            {
+              "file": "frames/ms2-c-dark.html",
+              "caption": "The Gantt result in dark mode."
+            }
+          ]
+        }
+      ]
     },
     {
-     "letter": "c",
-     "name": "Type it in a bar",
-     "recommended": false,
-     "what": "A second bar under “Add an item” takes a milestone in words (“M3 Teams set 3 rules by Jan 20”). A dashed preview shows where it lands; Enter adds it and the bar stays ready for the next one.",
-     "plus": "Fastest for a list of milestones; works on any view, phone too.",
-     "cost": "Not on the chart itself; dates must be typed; the items it waits on are added later; one more bar on a busy page.",
-     "frames": [
-      {
-       "file": "frames/ms1-c-rest.html",
-       "caption": "At rest: a second add bar, “Add a milestone”, under the item add bar."
-      },
-      {
-       "file": "frames/ms1-c-open.html",
-       "caption": "Typed “M3 Teams set 3 rules in week 1 by Jan 20”: a dashed preview shows where it lands before Enter."
-      },
-      {
-       "file": "frames/ms1-c-done.html",
-       "caption": "Enter: M3 is drawn; items it waits on still have to be added from its diamond."
-      },
-      {
-       "file": "frames/ms1-c-second.html",
-       "caption": "The bar stays ready for the next one (M4 typed). Cost: one more bar on the page, and no items picked."
-      },
-      {
-       "file": "frames/ms1-c-hard-1512.html",
-       "caption": "Hard case at 1512, Gantt with 30 items in Grow retention: M2 and Faster activation's M2 on the same day (one diamond, “2 on Dec 22”), M3 before an item it waits on."
-      }
-     ]
-    },
-    {
-     "letter": "d",
-     "name": "Drag from a chip",
-     "recommended": false,
-     "what": "A “Drag a milestone onto a date” chip sits in the chart's corner. Dragging it shades the goal row under it and shows the day; dropping opens the card.",
-     "plus": "Easy to find; the drop picks both the day and the goal.",
-     "cost": "One drag per milestone; no room to drag on a phone, so a phone cannot add; drag code is the costliest to test.",
-     "frames": [
-      {
-       "file": "frames/ms1-d-rest.html",
-       "caption": "At rest: a “Drag a milestone onto a date” chip in the chart's corner."
-      },
-      {
-       "file": "frames/ms1-d-open.html",
-       "caption": "Dragging the chip: the goal row under it is shaded and a guide line shows the day it drops on."
-      },
-      {
-       "file": "frames/ms1-d-mid.html",
-       "caption": "Dropped: the same card as the others opens to name it and pick its items."
-      },
-      {
-       "file": "frames/ms1-d-done-gantt.html",
-       "caption": "Added on the Gantt. Cost: one drag per milestone, and no chip on a phone (next frame)."
-      },
-      {
-       "file": "frames/ms1-d-hard-1512.html",
-       "caption": "Hard case at 1512, Gantt with 30 items in Grow retention: M2 and Faster activation's M2 on the same day (one diamond, “2 on Dec 22”), M3 before an item it waits on."
-      },
-      {
-       "file": "frames/ms1-d-phone.html",
-       "caption": "Phone 390: no room to drag a chip, so a phone has no way to add with this one."
-      }
-     ]
+      "code": "MS3",
+      "name": "A PRD's own milestones",
+      "question": "How do a PRD's own milestones show on the roadmap, and what happens when one is changed there?",
+      "common": "A roadmap built from a PRD draws the PRD's milestones on its goal (today it shows none). They are drawn hollow and marked as the PRD's, apart from the roadmap's own.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Edit asks the PRD",
+          "recommended": true,
+          "what": "The PRD's milestones are drawn hollow with dashed lines and a “PRD” tag. They can be dragged or edited like the roadmap's own, but the change is sent to the PRD's owner as a change to approve; until then the asked-for day shows dashed amber beside the real one. No “second in a row” here: MS3 is about changing a PRD's milestone, not adding one.",
+          "plus": "One place to plan; the PRD stays the source and its owner decides; the owner never leaves Simple.",
+          "cost": "A waiting change has two places on the chart for a while; needs the PRD change flow to accept milestone changes.",
+          "frames": [
+            {
+              "file": "frames/ms3-a-rest.html",
+              "caption": "A roadmap built with the PRD Usage alerts: its four milestones drawn hollow with dashed lines, each label starting “PRD”, and a key in the corner."
+            },
+            {
+              "file": "frames/ms3-a-open.html",
+              "caption": "Opened: it says it comes from the PRD and who owns it; a change here is sent to her to approve."
+            },
+            {
+              "file": "frames/ms3-a-mid.html",
+              "caption": "M2 Digest for all teams dragged to Jan 5: the old place fades; the new place is a dashed M2 diamond with an amber “Moving” tag."
+            },
+            {
+              "file": "frames/ms3-a-done.html",
+              "caption": "Asked: the PRD's M2 stays put until Nora Vance says yes; the asked-for day waits beside it."
+            },
+            {
+              "file": "frames/ms3-a-done-gantt.html",
+              "caption": "The same waiting change on the Gantt."
+            },
+            {
+              "file": "frames/ms3-a-hard-1512.html",
+              "caption": "Hard case at 1512, 30 items in Grow retention: the PRD's four milestones named over the long goal."
+            },
+            {
+              "file": "frames/ms3-a-phone.html",
+              "caption": "Phone 390: the PRD milestone opens as a sheet from the bottom."
+            },
+            {
+              "file": "frames/ms3-a-dark.html",
+              "caption": "The asked change in dark mode."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Locked, link to PRD",
+          "recommended": false,
+          "what": "The PRD's milestones are drawn hollow with a lock. Opening one is read only, with “Open it in the PRD”; a drag is refused on the spot with the same link. No result or “second in a row” frames: a drag is refused and nothing changes.",
+          "plus": "Simple to build; the PRD is plainly the only place to change it.",
+          "cost": "The owner has to leave the roadmap to move a date; the chart feels stuck.",
+          "frames": [
+            {
+              "file": "frames/ms3-b-rest.html",
+              "caption": "The PRD's four milestones drawn hollow, each label with a lock; the key says they change only in the PRD."
+            },
+            {
+              "file": "frames/ms3-b-open.html",
+              "caption": "Opened: read only, with “Open it in the PRD”."
+            },
+            {
+              "file": "frames/ms3-b-mid.html",
+              "caption": "A drag is refused on the spot, with a link to the PRD. Nothing changes, so there is no result to show."
+            },
+            {
+              "file": "frames/ms3-b-hard-1512.html",
+              "caption": "Hard case at 1512, 30 items in Grow retention: the PRD's four locked milestones over the long goal."
+            },
+            {
+              "file": "frames/ms3-b-phone.html",
+              "caption": "Phone 390: the read-only sheet."
+            },
+            {
+              "file": "frames/ms3-b-dark.html",
+              "caption": "At rest in dark mode."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Copy onto roadmap",
+          "recommended": false,
+          "what": "The PRD's milestones are not drawn; a line on the axis says the PRD has 4 and offers to copy them. Copies belong to the roadmap and move freely. No “second in a row”: one copy brings all four over.",
+          "plus": "Full freedom on the roadmap; nothing to approve.",
+          "cost": "Copies drift from the PRD with no warning; two sets of the same milestones to keep straight.",
+          "frames": [
+            {
+              "file": "frames/ms3-c-rest.html",
+              "caption": "Not drawn: one line in the chart's corner says the PRD has 4 milestones, with “Copy onto the roadmap”."
+            },
+            {
+              "file": "frames/ms3-c-open.html",
+              "caption": "The copy list: tick which to bring over."
+            },
+            {
+              "file": "frames/ms3-c-done.html",
+              "caption": "Copied: they now belong to the roadmap and move freely; the PRD stays as it is, and the two can drift apart."
+            },
+            {
+              "file": "frames/ms3-c-done-gantt.html",
+              "caption": "The copies on the Gantt."
+            },
+            {
+              "file": "frames/ms3-c-hard-1512.html",
+              "caption": "Hard case at 1512, 30 items in Grow retention: nothing of the PRD is drawn until it is copied, only the line in the corner."
+            },
+            {
+              "file": "frames/ms3-c-phone.html",
+              "caption": "Phone 390: the copies; on a phone the copy line is not shown, so copying waits for a desktop."
+            },
+            {
+              "file": "frames/ms3-c-dark.html",
+              "caption": "The copies in dark mode."
+            }
+          ]
+        }
+      ]
     }
-   ]
-  },
-  {
-   "code": "MS2",
-   "name": "What it asks and shows",
-   "question": "What does a new milestone ask for, how is it drawn, and how is it moved, edited and removed?",
-   "common": "A milestone has a name with its code (M3), a date, a goal, the items it waits on, a rule for when it counts and a status. A diamond on the time axis marks its day; a drag on the axis moves it; a click opens it; every change has Undo.",
-   "proposals": [
-    {
-     "letter": "a",
-     "name": "Card, line per goal",
-     "recommended": true,
-     "what": "A small card at the day asks for name, date, goal, the items it waits on (tapped on the chart) and when it counts. It is drawn as a diamond on the axis and a line across its own goal's rows only, with its items tied to it by dotted lines; an item that ends after it says “Ends after M3” in red. A drag on the diamond moves it, a click opens the card to edit or remove, with Undo.",
-     "plus": "Each goal reads as its own ladder; late items show where they are; the card asks for everything in one place without leaving the chart.",
-     "cost": "More lines on a busy chart; ties and late marks need drawing on both charts and on a phone.",
-     "frames": [
-      {
-       "file": "frames/ms2-a-open.html",
-       "caption": "A click on M3 opens it to edit, with Remove."
-      },
-      {
-       "file": "frames/ms2-a-mid.html",
-       "caption": "The card asks for name, date, goal, the items it waits on (tapped on the chart) and when it counts."
-      },
-      {
-       "file": "frames/ms2-a-done.html",
-       "caption": "Drawn: a diamond on the axis, a line across its own goal's rows only, its items tied by dotted lines, and “Ends after M3” on the late one."
-      },
-      {
-       "file": "frames/ms2-a-done-gantt.html",
-       "caption": "The same on the Gantt."
-      },
-      {
-       "file": "frames/ms2-a-move.html",
-       "caption": "Moving: the diamond dragged along the axis to Jan 27; a tip says what changes as it goes."
-      },
-      {
-       "file": "frames/ms2-a-removed.html",
-       "caption": "Removed: M3 is gone, with Undo in the corner."
-      },
-      {
-       "file": "frames/ms2-a-hard-1512.html",
-       "caption": "Hard case at 1512, 30 items: two milestones on Dec 22, and an item that ends after M3."
-      },
-      {
-       "file": "frames/ms2-a-phone.html",
-       "caption": "Phone 390: lines and ties kept, labels cut to the code."
-      },
-      {
-       "file": "frames/ms2-a-dark.html",
-       "caption": "The Gantt result in dark mode."
-      }
-     ]
-    },
-    {
-     "letter": "b",
-     "name": "Side panel, full line",
-     "recommended": false,
-     "what": "A panel at the right asks for every field, the status, and the goal's items as a tick list. It is drawn as one line down the whole chart with its name at the top; late items are marked, with no ties.",
-     "plus": "Room for long names and rules; the tick list is easy with 30 items.",
-     "cost": "The panel hides part of the chart while picking; full-height lines cross other goals' rows and read as theirs; on a phone the sheet hides the chart.",
-     "frames": [
-      {
-       "file": "frames/ms2-b-mid.html",
-       "caption": "A panel at the right with every field, the status, and a tick list of all the goal's items."
-      },
-      {
-       "file": "frames/ms2-b-done.html",
-       "caption": "Drawn: a line down the whole chart with its name at the top; no ties, the late item marked."
-      },
-      {
-       "file": "frames/ms2-b-done-gantt.html",
-       "caption": "The same on the Gantt: every milestone crosses every goal's rows."
-      },
-      {
-       "file": "frames/ms2-b-hard-1512.html",
-       "caption": "Hard case at 1512, 30 items: two milestones on Dec 22, and an item that ends after M3."
-      },
-      {
-       "file": "frames/ms2-b-phone.html",
-       "caption": "Phone 390: the panel becomes a sheet; the chart is hidden under it."
-      }
-     ]
-    },
-    {
-     "letter": "c",
-     "name": "Name and date only",
-     "recommended": false,
-     "what": "A small card asks for a name and a date only; the rest is added later from its diamond. It is drawn as a diamond on the axis and a small one in the goal's header row.",
-     "plus": "Quickest to add; least clutter.",
-     "cost": "Shows nothing about what it waits on or what is late, so the chart cannot warn; the rest is easy to forget.",
-     "frames": [
-      {
-       "file": "frames/ms2-c-mid.html",
-       "caption": "A small card asks only for a name and a date."
-      },
-      {
-       "file": "frames/ms2-c-done.html",
-       "caption": "Drawn: a diamond on the axis and a small one in the goal's header row; nothing on the items."
-      },
-      {
-       "file": "frames/ms2-c-done-gantt.html",
-       "caption": "The same on the Gantt: least clutter, but no sign of what it waits on or what is late."
-      },
-      {
-       "file": "frames/ms2-c-hard-1512.html",
-       "caption": "Hard case at 1512, 30 items: two milestones on Dec 22, and an item that ends after M3."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "code": "MS3",
-   "name": "A PRD's own milestones",
-   "question": "How do a PRD's own milestones show on the roadmap, and what happens when one is changed there?",
-   "common": "A roadmap built from a PRD draws the PRD's milestones on its goal (today it shows none). They are drawn hollow and marked as the PRD's, apart from the roadmap's own.",
-   "proposals": [
-    {
-     "letter": "a",
-     "name": "Edit asks the PRD",
-     "recommended": true,
-     "what": "The PRD's milestones are drawn hollow with dashed lines and a “PRD” tag. They can be dragged or edited like the roadmap's own, but the change is sent to the PRD's owner as a change to approve; until then the asked-for day shows dashed amber beside the real one.",
-     "plus": "One place to plan; the PRD stays the source and its owner decides; the owner never leaves Simple.",
-     "cost": "A waiting change has two places on the chart for a while; needs the PRD change flow to accept milestone changes.",
-     "frames": [
-      {
-       "file": "frames/ms3-a-rest.html",
-       "caption": "A roadmap built from the PRD Usage alerts: its four milestones drawn hollow with dashed lines, each label starting “PRD”."
-      },
-      {
-       "file": "frames/ms3-a-open.html",
-       "caption": "Opened: it says it comes from the PRD and who owns it; a change here is sent to her to approve."
-      },
-      {
-       "file": "frames/ms3-a-mid.html",
-       "caption": "M2 dragged to Jan 5: the old place fades, the new one is dashed amber."
-      },
-      {
-       "file": "frames/ms3-a-done.html",
-       "caption": "Asked: the PRD's M2 stays put until Nora Vance says yes; the asked-for day waits beside it."
-      },
-      {
-       "file": "frames/ms3-a-done-gantt.html",
-       "caption": "The same waiting change on the Gantt."
-      },
-      {
-       "file": "frames/ms3-a-hard-1512.html",
-       "caption": "Hard case at 1512, 30 items: the PRD's four milestones over the long goal."
-      },
-      {
-       "file": "frames/ms3-a-phone.html",
-       "caption": "Phone 390: the PRD milestone opens as a sheet."
-      }
-     ]
-    },
-    {
-     "letter": "b",
-     "name": "Locked, link to PRD",
-     "recommended": false,
-     "what": "The PRD's milestones are drawn hollow with a lock. Opening one is read only, with “Open it in the PRD”; a drag is refused on the spot with the same link.",
-     "plus": "Simple to build; the PRD is plainly the only place to change it.",
-     "cost": "The owner has to leave the roadmap to move a date; the chart feels stuck.",
-     "frames": [
-      {
-       "file": "frames/ms3-b-rest.html",
-       "caption": "The PRD's four milestones drawn hollow with a lock."
-      },
-      {
-       "file": "frames/ms3-b-open.html",
-       "caption": "Opened: read only, with “Open it in the PRD”."
-      },
-      {
-       "file": "frames/ms3-b-mid.html",
-       "caption": "A drag is refused on the spot, with a link to the PRD."
-      },
-      {
-       "file": "frames/ms3-b-hard-1512.html",
-       "caption": "Hard case at 1512, 30 items: the PRD's four milestones over the long goal."
-      },
-      {
-       "file": "frames/ms3-b-phone.html",
-       "caption": "Phone 390: the read-only sheet."
-      }
-     ]
-    },
-    {
-     "letter": "c",
-     "name": "Copy onto roadmap",
-     "recommended": false,
-     "what": "The PRD's milestones are not drawn; a line on the axis says the PRD has 4 and offers to copy them. Copies belong to the roadmap and move freely.",
-     "plus": "Full freedom on the roadmap; nothing to approve.",
-     "cost": "Copies drift from the PRD with no warning; two sets of the same milestones to keep straight.",
-     "frames": [
-      {
-       "file": "frames/ms3-c-rest.html",
-       "caption": "Not drawn: one line on the axis says the PRD has 4 milestones, with “Copy onto the roadmap”."
-      },
-      {
-       "file": "frames/ms3-c-open.html",
-       "caption": "The copy list: tick which to bring over."
-      },
-      {
-       "file": "frames/ms3-c-done.html",
-       "caption": "Copied: they now belong to the roadmap and move freely; the PRD stays as it is, and the two can drift apart."
-      },
-      {
-       "file": "frames/ms3-c-done-gantt.html",
-       "caption": "The copies on the Gantt."
-      },
-      {
-       "file": "frames/ms3-c-hard-1512.html",
-       "caption": "Hard case at 1512, 30 items: the PRD's four milestones over the long goal."
-      }
-     ]
-    }
-   ]
-  }
- ]
+  ]
 }

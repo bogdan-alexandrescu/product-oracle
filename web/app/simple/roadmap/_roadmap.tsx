@@ -1549,5 +1549,5 @@ function MsGantt({ l, sc, data, phone }: { l: Parameters<NonNullable<Parameters<
       if (i && y != null) rows.push({ key: i.key, title: i.title, lane: g.title, y, h: l.rowH, start: i.start.date, end: i.end.date }); // MOCK-HOOK
     } // MOCK-HOOK
   } // MOCK-HOOK
-  return <MsLayer view="gantt" x={(d) => sc.x(d) + sc.px / 2} top={l.top} axisY={l.top - 12} height={l.height} width={sc.width} rows={rows} lanes={lanes} phone={phone} />; // MOCK-HOOK
+  return <MsLayer view="gantt" x={(d) => sc.x(d) + sc.px / 2} top={l.top} axisY={l.top - 2} height={l.height} width={sc.width} rows={rows} lanes={lanes} phone={phone} />; // MOCK-HOOK
 } // MOCK-HOOK

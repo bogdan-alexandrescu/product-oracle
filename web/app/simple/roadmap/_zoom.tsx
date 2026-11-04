@@ -747,7 +747,7 @@ function DayChart(props: TimelineProps) {
             );
           })}
           {/* MOCK-HOOK mk-milestones: the milestone layer over the Timeline */}
-          <MsLayer view="timeline" x={x} left={labelW} top={44} axisY={33} height={msRows(rows, moved).h} width={labelW + trackW} rows={msRows(rows, moved).rows} lanes={msRows(rows, moved).lanes} phone={phone} />
+          <MsLayer view="timeline" x={x} left={labelW} top={44} axisY={33} height={msRows(rows, moved).h} width={labelW + trackW} rows={msRows(rows, moved).rows} lanes={msRows(rows, moved).lanes} phone={phone} /> {/* MOCK-HOOK */}
         </div>
       </div>
     </div>
