@@ -56,7 +56,7 @@ test("goal names: one Tab stop each, Enter opens the goal, no card covers the fi
 // prod-2, qa-company-44: the ring says it is confidence, and shows only once there is a value.
 test("goals: the confidence ring is named and hidden without a current value; the change is in words", async ({ page }) => {
   await openHome(page);
-  const g1 = page.getByTestId("home-goal-G1");
+  const g1 = page.getByTestId("home-goal-G3");
   await expect(g1.getByTestId("goal-confidence")).toBeVisible();
   await expect(g1.getByTestId("goal-confidence")).toContainText("confidence");
   // qa-plan-4: no evidence yet, so no score, as on the Baseline page.
@@ -64,7 +64,7 @@ test("goals: the confidence ring is named and hidden without a current value; th
   await expect(g1.getByTestId("goal-change")).toHaveText("+7 pts in 6 months");
 
   // Cut early churn has no current value: no ring, no number beside the "–".
-  const g3 = page.getByTestId("home-goal-G3");
+  const g3 = page.getByTestId("home-goal-G1");
   await expect(g3.getByTestId("goal-to-go")).toHaveText("No current value yet");
   await expect(g3.getByTestId("goal-confidence")).toHaveCount(0);
   await expect(g3.getByRole("img", { name: /^Confidence/ })).toHaveCount(0);
@@ -72,8 +72,8 @@ test("goals: the confidence ring is named and hidden without a current value; th
   // Plan's Goals band is the same panel.
   await page.goto("/plan");
   const plan = page.getByTestId("plan-goals").filter({ visible: true });
-  await expect(plan.getByTestId("home-goal-G1").getByTestId("goal-confidence")).toContainText("confidence");
-  await expect(plan.getByTestId("home-goal-G3").getByTestId("goal-confidence")).toHaveCount(0);
+  await expect(plan.getByTestId("home-goal-G3").getByTestId("goal-confidence")).toContainText("confidence");
+  await expect(plan.getByTestId("home-goal-G1").getByTestId("goal-confidence")).toHaveCount(0);
 });
 
 // prod-1: while the goals load, the band holds skeleton cards rather than an empty box.
@@ -86,7 +86,7 @@ test("goals: skeleton cards while the goals load, then the goals", async ({ page
   const goals = page.getByTestId("home-goals");
   await expect(goals.getByTestId("goals-loading")).toBeVisible();
   await expect(goals.getByTestId("goals-loading").locator("li")).toHaveCount(4);
-  await expect(page.getByTestId("home-goal-G1")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("home-goal-G3")).toBeVisible({ timeout: 15_000 });
   await expect(goals.getByTestId("goals-loading")).toHaveCount(0);
 });
 
@@ -153,9 +153,9 @@ test.describe("on a phone", () => {
 
   test("goals and in flight read the same on a phone, with no sideways scroll", async ({ page }) => {
     await openHome(page);
-    await expect(page.getByTestId("home-goal-G1").getByTestId("goal-confidence")).toBeVisible();
-    await expect(page.getByTestId("home-goal-G3").getByTestId("goal-confidence")).toHaveCount(0);
-    await expect(page.getByTestId("home-goal-G1").getByTestId("goal-change")).toHaveText("+7 pts in 6 months");
+    await expect(page.getByTestId("home-goal-G3").getByTestId("goal-confidence")).toBeVisible();
+    await expect(page.getByTestId("home-goal-G1").getByTestId("goal-confidence")).toHaveCount(0);
+    await expect(page.getByTestId("home-goal-G3").getByTestId("goal-change")).toHaveText("+7 pts in 6 months");
     await expect(flight(page, "team-workspaces").getByTestId("row-paused")).toBeVisible();
     await expect(flight(page, "checkout-redesign", "prd").getByTestId("row-journey")).toContainText("Step 8 of 9");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);

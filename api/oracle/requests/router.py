@@ -31,6 +31,8 @@ from oracle.requests.schemas import (
     KeepNoIn,
     MergeIn,
     QualifyIn,
+    ReleaseFromTrashIn,
+    ReleaseFromTrashOut,
     ReopenIn,
     ReplyOut,
     ReplyPatch,
@@ -63,7 +65,8 @@ Approver = Annotated[Principal, Depends(require_role_now("approver"))]
 
 
 def _http(exc: service.RequestError | triage.TriageError) -> HTTPException:
-    return HTTPException(exc.status, str(exc))
+    code = getattr(exc, "code", None)
+    return HTTPException(exc.status, {"code": code, "message": str(exc)} if code else str(exc))
 
 
 @router.get("/requests", response_model=RequestList)
@@ -161,6 +164,21 @@ async def start_request_triage(data: TriageStart, db: TenantDB, principal: Appro
         raise HTTPException(e.status, str(e)) from e
     await runs_service.submit_queued(db, run_id)
     return await runs_service.read_run(db, run_id, principal)
+
+
+@router.post(
+    "/requests/release-from-trash",
+    response_model=ReleaseFromTrashOut,
+    dependencies=[Depends(same_origin)],
+)
+async def release_requests_from_trash(
+    data: ReleaseFromTrashIn, db: TenantDB, principal: Commenter
+) -> ReleaseFromTrashOut:
+    """Release it (New PRD 4): each of these requests still linked to a PRD in Trash loses
+    that link and its brief, so a new brief may take it. A live PRD's link stays."""
+    released = await service.release_from_trash(db, principal, data.request_ids)
+    await db.commit()
+    return ReleaseFromTrashOut(released=released)
 
 
 @router.get("/requests/{request_id}", response_model=RequestDetail)

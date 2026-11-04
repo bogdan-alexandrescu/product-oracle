@@ -595,7 +595,9 @@ test("fix-work review: a check that could not read some runs says so on a run th
   const result = page.getByTestId("tick-result");
   // Why no agent works on this run, and the runs the check could not read.
   await expect(result).toContainText("No agents are working right now; the run is waiting for your review.");
-  await expect(result).toContainText(/2 runs could not be checked at .+\.$/);
+  // run-progress: each named, with why.
+  await expect(result.getByTestId("tick-unchecked")).toHaveCount(2);
+  await expect(result.getByTestId("tick-unchecked").first()).toContainText(/could not be checked: SwarmCloud had a problem on its side; the next check tries again\.$/);
 });
 
 /** artifact-skip-refused: the baseline step runs again and SwarmCloud will not send its baseline.yaml. */
@@ -625,6 +627,9 @@ async function refusedBaseline(page: Page) {
   const notes = page.getByTestId("run-notes").locator("li").filter({ hasText: "baseline.yaml" });
   await expect(notes).toHaveCount(1);
   await expect(notes).toContainText("SwarmCloud refused to send baseline.yaml (422 validation_error: artifact name not allowed)");
+  // SwarmCloud refuses the file by its name, so starting the run again would not help.
+  await expect(notes).toContainText("ask whoever runs SwarmCloud why it refuses this file");
+  await expect(notes).not.toContainText("start it again");
 }
 
 test("artifact-skip-refused: a file SwarmCloud refuses that the step needs is said in words, not only counted", async ({ page }) => {

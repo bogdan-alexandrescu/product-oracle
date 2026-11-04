@@ -11,7 +11,7 @@ import { parseBlocks, plainText, type Inline } from "@/lib/markdown";
 import { mockName as displayName } from "./people";
 
 import { MOCK_SCENARIO_KEY, mockUuid, seeded, stableUuid } from "./ids";
-import { addDecisionEntity, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, readMetricIntoGoal, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
+import { addDecisionEntity, addDuplicateProposals, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, readMetricIntoGoal, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
@@ -25,6 +25,7 @@ import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
+import { generalReply } from "./general-chat";
 import { afterAccept, goalInterviewReply, proposeVersion, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
 import { goalCheck } from "./goals";
 import {
@@ -83,6 +84,7 @@ import {
   seedPriorityRuns,
   seedRunReviewRun,
   seedNoDocumentRuns,
+  proposalRun,
   seedRuns,
   seedScopeReviewRuns,
   seedStoredRefusalRun,
@@ -105,6 +107,9 @@ import { digestBlocks, emptyMarket, routeMarket, seedMarket, type MarketDb } fro
 import {
   addInterviewRequest,
   behindBriefRefusal,
+  relinkDocuments,
+  releaseDocuments,
+  type ReleasedRequest,
   linkIntakeDocument,
   putBehindBrief,
   releaseBrief,
@@ -165,7 +170,7 @@ import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
-import { approvedPrdToDraft, itemSubjectName, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { approvedPrdToDraft, itemSubjectName, knowCompanyGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -496,7 +501,9 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * Slack install (./reports.ts, F6);
  * "undelivered" as the default company where SwarmCloud takes no checkpoint decision until the
  * next tick (recorded, the decide call answers 503; ./runs.ts); "slow-agents" as the default
- * company where a segment's agents take two ticks: the first reads them working (#258); "questions" as the default
+ * company where a segment's agents take two ticks: the first reads them working (#258); "quiet-agents" as
+ * "slow-agents" where the first tick reads agents with no heartbeat and no cost reported that wrote 12 proposals
+ * (run-progress); "questions" as the default
  * company plus an "Oracle asks" question on an intake with no PRD and an "Approver asks"
  * question on a PRD section, both asked of the signed-in owner, and one delegated to
  * approver@example.com (C2); "private-finding" as "questions" plus a private finding (S6) on
@@ -590,6 +597,8 @@ export const MOCK_FAIL_KEY = "po-mock-fail";
 export const MOCK_FAIL_ONCE_KEY = "po-mock-fail-once";
 /** Tests set this localStorage key to a path ("/v1/decisions/5") to make its GETs answer late, after calls made later, or to "METHOD /path" for that call (made at once, answered late). A path ending in "*" slows every GET under it. */
 export const MOCK_SLOW_KEY = "po-mock-slow";
+/** brief-answers review: tests set this localStorage key to a refusal's words to have Start refuse an accepted research run with them. */
+export const MOCK_RUN_START_REFUSED_KEY = "po-mock-run-start-refused";
 export const MOCK_SLOW_MS = 1500;
 /** A test may hold the slow call longer (ms, in localStorage). */
 export const MOCK_SLOW_MS_KEY = "po-mock-slow-ms";
@@ -2829,6 +2838,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     },
     undelivered: localStorage.getItem(MOCK_SCENARIO_KEY) === "undelivered",
     slowAgents: localStorage.getItem(MOCK_SCENARIO_KEY) === "slow-agents",
+    quietAgents: localStorage.getItem(MOCK_SCENARIO_KEY) === "quiet-agents",
     // H11 Order priorities: Oracle saves a run's order within the limits at Act.
     autonomy: {
       level: () => levelFor((db.autonomy ??= emptyAutonomy()), "priorities"),
@@ -3342,6 +3352,7 @@ function load(): Db {
     db.autonomy.actions.push(seedOracleDid(db.user_id, uuid(), "Moved 'Saved addresses' up 2 within G-B, ahead of G-Z"));
   }
   if (scenario === "proposal-overlap") addOverlappingProposals(db.baseline, uuid);
+  if (scenario === "proposal-duplicates") addDuplicateProposals(db.baseline, uuid);
   if (scenario === "proposal-overlap-status") addStatusOverlapProposals(db.baseline, uuid);
   if (scenario === "conflict-3way") addThreeWayConflict(db.baseline, uuid);
   if (scenario === "goal-words") addGoalWords(db.baseline, db.members.find((m) => m.email === "approver@example.com")!.id);
@@ -3651,7 +3662,7 @@ function routeBaselineFor(db: Db, me: { id: string; role: Schemas["Me"]["role"] 
   const runOf = (runId: string): Schemas["ProposalRun"] | null => {
     db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
     const r = db.runs.runs.find((x) => x.id === runId);
-    return r ? { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at } : null;
+    return r ? proposalRun({ documents: db.documents }, r) : null;
   };
   const memberEmail = (userId: string) => db.members.find((m) => m.id === userId)?.email ?? null;
   const member = db.members.find((m) => m.id === me.id);
@@ -4924,6 +4935,18 @@ function ensureDecisions(db: Db, ctx: DecisionsContext): DecisionsDb {
   return db.decisions;
 }
 
+/** New PRD (4): Trash keeps a PRD's request links, as a PRD trashed before the release did. */
+export const TRASH_KEPT_LINKS_SCENARIO = "trash-kept-links";
+
+/** New PRD (4): the title of a document in Trash; null when it is not there. */
+function trashedTitle(db: Db, id: string): string | null {
+  for (const e of db.trash?.entries ?? []) {
+    const d = (e.documents as { id: string; title: string }[]).find((x) => x.id === id);
+    if (d) return d.title;
+  }
+  return null;
+}
+
 function requestsContext(db: Db, userId: string, role: Role): RequestsContext {
   const me = db.members.find((x) => x.id === userId);
   const decisionsCtx = me ? decisionsContext(db, me) : null;
@@ -4935,6 +4958,7 @@ function requestsContext(db: Db, userId: string, role: Role): RequestsContext {
     decisions: decisionsCtx ? requestDecisions(decisionsCtx, () => ensureDecisions(db, decisionsCtx)) : undefined,
     zone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
     intakeTitle: (id) => ensureV2(db).intakes.find((i) => i.id === id)?.title ?? null,
+    trashedTitle: (id) => trashedTitle(db, id),
     suggestionsShown: () => ["recommend", "act"].includes(levelFor((db.autonomy ??= emptyAutonomy()), "requests")),
     goals: () => db.baseline.entities.filter((e) => e.type === "goal"),
     features: () => db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected"),
@@ -5273,6 +5297,10 @@ async function route(db: Db, req: Request): Promise<Response> {
       specRequests: () => (db.specs ??= specsSeed(db)).specs.map((s) => ({ source_document_id: s.request.source_document_id, document_slug: s.document_slug })),
       me,
       deciderOf: (id) => db.review_v2?.policies.find((x) => x.document_id === id)?.decider_id ?? null,
+      // New PRD (4): a PRD moved to Trash releases its requests; Restore links back the free ones.
+      // TRASH_KEPT_LINKS_SCENARIO: a PRD trashed before this release kept its request links.
+      onTrash: (ids) => (localStorage.getItem(MOCK_SCENARIO_KEY) === TRASH_KEPT_LINKS_SCENARIO ? undefined : releaseDocuments(ensureRequests(db), ids)),
+      onRestore: (released) => relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
       uuid,
       now,
     },
@@ -5421,7 +5449,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       current: () => load().discussions ?? emptyDiscussions(),
       // B6: the scripted Oracle of a goals interview.
       // Simple's Ask reads the company's plan first (./simple-chat.ts planAnswer).
-      replyScript: (d, asked) => goalInterviewReply(db.baseline, d, asked.body, (id) => activeMember(db, id)) ?? simplePlanReply(db, me, d, asked.body),
+      // chat-citations: General chat reads the baseline's features too (./general-chat.ts).
+      replyScript: (d, asked) =>
+        goalInterviewReply(db.baseline, d, asked.body, (id) => activeMember(db, id)) ??
+        simplePlanReply(db, me, d, asked.body) ??
+        generalReply(db.baseline, d.subject_kind === "screen" ? String((d.subject as { path?: string }).path ?? "") : "", asked.body, now()),
       // #710: Oracle reads the asker's Fireflies live in a private chat (./live.ts).
       liveReply: (asked, alone) => liveReply(asked.body, alone),
       // G8: the link to a Slack thread needs Oracle's Slack install (./slack.ts).
@@ -5763,6 +5795,13 @@ async function route(db: Db, req: Request): Promise<Response> {
         question: (id) => v2db.questions.find((x) => x.id === id) ?? null,
         nextQuestion,
         recordAnswer,
+        saved: (id) => {
+          const question = v2db.questions.find((x) => x.id === id);
+          if (!question || question.status !== "answered") return null;
+          const answer = v2db.answers.filter((a) => a.question_id === id).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+          if (!answer || answer.kind !== "answer" || answer.answered_by !== me.id) return null;
+          return { answer, question, gap: v2db.gaps.find((g) => g.id === question.gap_id) ?? null };
+        },
       },
       req,
       p,
@@ -5812,6 +5851,18 @@ async function route(db: Db, req: Request): Promise<Response> {
       const patch = new Request(new URL(`/v1/runs/${id}`, req.url), { method: "PATCH", body: JSON.stringify(body) });
       return routeRuns({ ...runsContext(db), db: db.runs! }, patch, ["v1", "runs", id]).then((r) => r ?? notFound("Route"));
     };
+    const runStatus = (id: string) => db.runs?.runs.find((r) => r.id === id)?.status ?? null;
+    // brief-answers review: the refusal's words when the run cannot start (as answers.start_research keeps them).
+    const startRun = async (id: string): Promise<string | null> => {
+      for (const step of ["estimate", "start"]) {
+        const refused = step === "start" ? localStorage.getItem(MOCK_RUN_START_REFUSED_KEY) : null;
+        if (refused) return refused;
+        const call = new Request(new URL(`/v1/runs/${id}/${step}`, req.url), { method: "POST" });
+        const resp = await routeRuns({ ...runsContext(db), db: db.runs! }, call, ["v1", "runs", id, step]);
+        if (!resp?.ok) return resp ? (((await resp.json()) as { detail?: unknown }).detail as string) ?? "The run could not start" : "The run could not start";
+      }
+      return null;
+    };
     const confirmedGoals = () => new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.title]));
     const goalKeys = () => new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.key]));
     const lockedSections = (ref: string) => {
@@ -5829,6 +5880,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         behindBriefRefusal(ensureRequests(db), ids, {
           intake: (id) => ensureV2(db).intakes.find((i) => i.id === id)?.title ?? null,
           document: (id) => db.documents.find((d) => d.id === id)?.title ?? null,
+          trashed: (id) => trashedTitle(db, id),
         }),
       link: (intakeId: string, ids: string[]) => putBehindBrief(ensureRequests(db), intakeId, ids),
       release: (intakeId: string) => releaseBrief(ensureRequests(db), intakeId),
@@ -5878,7 +5930,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     };
     const intake = await routeIntake(
       v2db,
-      { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, goalKeys, lockedSections, requests, questionsLevel: () => levelFor((db.autonomy ??= emptyAutonomy()), "questions"), learned: () => nudges(db.quality?.learnings, "question_category"), raiseFeedback, withdrawFeedback },
+      { userId: me.id, role: me.role, createRun, updateRun, runStatus, startRun, people: db.members, subjects, confirmedGoals, goalKeys, lockedSections, requests, questionsLevel: () => levelFor((db.autonomy ??= emptyAutonomy()), "questions"), learned: () => nudges(db.quality?.learnings, "question_category"), raiseFeedback, withdrawFeedback },
       req,
       p,
       q,
@@ -6032,6 +6084,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
   const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
   const simpleRoute = async (r: Request): Promise<Response | null> => {
+    // goal-order: Simple's goals follow the baseline's one goal order.
+    knowCompanyGoals(db.baseline.entities.filter((e) => e.type === "goal"));
     // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
     // served the same invented page under its own slug and title, with its own draft and changes.
     const onePagerDb = await onePagerOf(db, r, p);
@@ -6091,6 +6145,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       onePager: db.simple_one_pager,
       rituals: ensureRituals(db, me),
       documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title })),
+      // home-honest-loading: every document of a kind in Trash (trash.only_in_trash).
+      onlyInTrash: (kind) =>
+        !db.documents.some((d) => d.kind === kind) && (db.trash?.entries ?? []).some((e) => (e.documents as { kind?: string }[]).some((d) => d.kind === kind)),
       chatLines: (id) =>
         Object.values(db.simple_chat?.threads ?? {})
           .filter((t) => t.meeting_id === id)

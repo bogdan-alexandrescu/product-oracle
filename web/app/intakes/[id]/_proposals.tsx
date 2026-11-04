@@ -49,6 +49,8 @@ function ProposalDiff({ p }: { p: Proposal }) {
 function Outcome({ p }: { p: Proposal }) {
   if (p.status === "accepted") {
     const run = text(p.result.run_id);
+    const refused = text(p.result.start_error);
+    if (run && refused) return <p className="text-sm break-words text-warn">Research did not start: {refused}</p>;
     if (run)
       return (
         <Link href={`/runs/${run}`} className="text-sm font-semibold text-accent-ink underline">
@@ -86,7 +88,7 @@ function ProposalCard({ p, approver, onChanged }: { p: Proposal; approver: boole
   const dismiss = () => act(() => unwrap(api.POST("/v1/intake-proposals/{proposal_id}/dismiss", { ...path, body: { reason: reason.trim() || null } })));
 
   return (
-    <li data-testid="proposal" className="flex min-w-0 flex-col gap-2 rounded-card border border-line bg-surface p-3 text-text">
+    <li id={`proposal-${p.id}`} data-testid="proposal" className="flex min-w-0 scroll-mt-16 flex-col gap-2 rounded-card border border-line bg-surface p-3 text-text">
       <div className="flex min-w-0 flex-wrap items-start gap-2">
         <p className="min-w-0 flex-1 basis-60 text-[15px] font-semibold break-words">{p.title}</p>
         <span className="flex flex-wrap gap-1.5">
@@ -135,7 +137,7 @@ function ProposalCard({ p, approver, onChanged }: { p: Proposal; approver: boole
 
 /**
  * The brief's proposals (#343): research runs and PRD patches, each with what it would
- * change. An approver accepts (a research run starts; a patch becomes feedback on the PRD)
+ * change. An approver accepts (the research run is estimated and started; a patch becomes feedback on the PRD)
  * or dismisses, with an optional reason. Others do not see those controls (a control a role
  * can never use is hidden, owner rule #370); the note says who decides.
  */

@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from oracle.baseline.goal_order import goal_position
 from oracle.baseline.goals import GoalCheck, goal_check
 
 EntityType = Literal[
@@ -117,11 +118,15 @@ class EntityOut(ORM):
     # #345: the goal this one is a subgoal of, and a goal's progress with its roll-up.
     parent_id: uuid.UUID | None = None
     progress: GoalProgress | None = None
+    # goal-order: a goal's place on every page (its attrs.position, 1 = first); null otherwise.
+    position: int | None = None
 
     @model_validator(mode="after")
     def _check_goal(self) -> "EntityOut":
         if self.type == "goal" and self.goal_check is None:
             self.goal_check = GoalCheck(**goal_check(self.attrs, status=self.status))
+        if self.type == "goal":
+            self.position = goal_position(self.attrs)
         return self
 
 
@@ -315,6 +320,9 @@ class ProposalCreate(BaseModel):
     fields: dict[str, Any] = {}
     run_id: uuid.UUID | None = None
     reason: str | None = None
+    # The run's role that proposes it ("writer", "critic"): a duplicate reads "Also
+    # proposed by Critic".
+    role: str | None = Field(default=None, max_length=60)
 
 
 class ProposalRun(BaseModel):
@@ -325,6 +333,10 @@ class ProposalRun(BaseModel):
     flow_title: str
     status: str
     created_at: datetime
+    # codes-and-chips: the title of the document a reason's requirement numbers (FR-06)
+    # come from: the run's source version's document, else the run's own document; None
+    # when the run has neither.
+    source_title: str | None = None
 
 
 class ProposalProposer(BaseModel):
@@ -352,6 +364,17 @@ class ProposalOverlap(BaseModel):
     by: Literal["proposal", "edit"]
 
 
+class ProposalAlso(BaseModel):
+    """Another of the run's open proposals of the same change, shown on this one's card."""
+
+    id: uuid.UUID
+    # Its role ("Critic"), else who made it.
+    by: str
+    # Its fields; ``same`` is false when it sets them to other values (a choice).
+    fields: dict[str, Any]
+    same: bool
+
+
 class ProposalOut(ORM):
     id: uuid.UUID
     entity_id: uuid.UUID | None = None
@@ -372,6 +395,16 @@ class ProposalOut(ORM):
     # An open update's fields whose value changed since it was written; accepting it
     # would undo that change.
     overlaps: list[ProposalOverlap] = []
+    # The open proposal of the same run whose card shows this one (same change, proposed
+    # again); null when it has its own card.
+    duplicate_of: uuid.UUID | None = None
+    # The open proposals shown on this card: "Also proposed by Critic", or a choice.
+    also_proposed: list[ProposalAlso] = []
+    # How it closed when no one decided it: "already_done" (an accept made it a no-op,
+    # or the link it adds exists), "not_chosen" (another choice of it was accepted).
+    outcome: Literal["already_done", "not_chosen"] | None = None
+    # On an accept: the other open proposals it closed as already done.
+    closed_as_done: list[uuid.UUID] = []
 
 
 class ProposalDecision(BaseModel):
@@ -479,6 +512,8 @@ class TraceGoal(BaseModel):
     key: str
     title: str
     status: NodeStatus
+    # goal-order: its place on every page (attrs.position, 1 = first); null otherwise.
+    position: int | None = None
     weight: float | None = None
     confidence: float | None = None
     features: list[TraceGoalFeature]

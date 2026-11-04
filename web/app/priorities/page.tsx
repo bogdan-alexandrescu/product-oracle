@@ -32,7 +32,8 @@ import { codeTagRoom } from "@/components/ds/CodeChip";
 import { usePhone } from "@/components/ds/page-info";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { named, namedText } from "@/lib/codes";
+import { named, namedText, useNames, type Names } from "@/lib/codes";
+import { byGoalOrder } from "@/lib/goal-order";
 import { formatDateTime, isHttpUrl, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { displayName } from "@/lib/names";
@@ -712,8 +713,11 @@ function AssumedMark() {
 
 type GoalRow = { id: string; title: string; count: number; top: number };
 
-/** Each goal, the features ranked for it and its best rank. Derived from the ranking. */
-function byGoal(features: RankedFeature[]): GoalRow[] {
+/**
+ * Each goal, the features ranked for it and its best rank. Derived from the ranking; the goals
+ * in the one goal order (lib/goal-order.ts), read from the company's goals when known.
+ */
+function byGoal(features: RankedFeature[], names?: Names): GoalRow[] {
   const m = new Map<string, GoalRow>();
   for (const f of features) {
     for (const g of f.explanation.goals) {
@@ -723,7 +727,9 @@ function byGoal(features: RankedFeature[]): GoalRow[] {
       m.set(g.goal, row);
     }
   }
-  return [...m.values()].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+  const terms = new Map(features.flatMap((f) => f.explanation.goals.map((g) => [g.goal, g] as const)));
+  const goal = (r: GoalRow) => names?.byKey.get(r.id) ?? { id: r.id, title: r.title, position: terms.get(r.id)?.position ?? null };
+  return [...m.values()].sort((a, b) => byGoalOrder(goal(a), goal(b)) || a.id.localeCompare(b.id, undefined, { numeric: true }));
 }
 
 /**
@@ -956,6 +962,7 @@ export default function PrioritiesPage() {
 }
 
 function Priorities() {
+  const names = useNames();
   // Run mode (C8): /priorities?snapshot=<id> shows a run's order next to the live ranking.
   const snapshotId = useSearchParams().get("snapshot");
   const [compareKey, setCompareKey] = useState(0);
@@ -1350,7 +1357,7 @@ function Priorities() {
       : []),
   ];
 
-  const goals = byGoal(features);
+  const goals = byGoal(features, names);
   const counts = r?.counts;
   const inspector = current && (
     <FeatureInspector

@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import company_time
 from oracle.baseline import figures
+from oracle.baseline.goal_order import position_ok
 
 CURRENCIES = ("USD", "EUR", "GBP")
 UNITS = ("%", *CURRENCIES, "ms", "s", "min", "h", "days")
@@ -48,6 +49,7 @@ MESSAGES = {
     "bad_horizon": "The horizon is short, medium or long",
     "owner_not_member": "The owner must be a member of this Oracle",
     "weight_out_of_range": "The weight is a number above 0 and at most 10",
+    "bad_position": "The position is a whole number, 1 or more (1 = first)",
 }
 
 
@@ -65,6 +67,8 @@ class GoalAttrs(BaseModel):
     due: date | None = None
     owner: uuid.UUID | None = None
     weight: float | None = Field(None, gt=0, le=10)
+    # goal-order: the goal's place on every page, 1 = first.
+    position: int | None = Field(None, ge=1)
 
 
 class GoalProblem(BaseModel):
@@ -179,6 +183,8 @@ def field_problems(attrs: dict[str, Any], *, on: date | None = None) -> list[dic
         w = attrs["weight"]
         if not _number(w) or not 0 < w <= 10:
             out.append(("weight_out_of_range", "weight"))
+    if not position_ok(attrs.get("position")):
+        out.append(("bad_position", "position"))
     return [{"code": c, "message": MESSAGES[c], "where": f"attrs.{k}"} for c, k in out]
 
 

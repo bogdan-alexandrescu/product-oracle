@@ -148,6 +148,8 @@ export interface RequestsContext {
   zone?: () => string;
   /** C1 lane 2: a brief's title by its id; null when it is gone. */
   intakeTitle?: (id: string) => string | null;
+  /** New PRD (4): a PRD in Trash's title by its id; null when it is not in Trash. */
+  trashedTitle?: (id: string) => string | null;
   /** H11 requests: Oracle's suggestions show (and are accepted) at Recommend and above only;
    * shown when not given. */
   suggestionsShown?: () => boolean;
@@ -732,6 +734,12 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
     return routeRequests(db, ctx, new Request(req.url, { method: "GET" }), p.slice(0, 3), q);
   }
 
+  // New PRD (4) Release it: requests still linked to a PRD in Trash lose that link (the API's release_from_trash).
+  if (p[1] === "requests" && p[2] === "release-from-trash" && p.length === 3 && m === "POST") {
+    if (!atLeast(ctx.role, "commenter")) return fail(403, "Requires the commenter role");
+    const b = await body<{ request_ids?: string[] }>();
+    return json(200, { released: releaseFromTrash(db, b.request_ids ?? [], (id) => ctx.trashedTitle?.(id) != null) });
+  }
   if (p[1] === "requests" && p[2]) {
     const row = db.requests.find((r) => r.id === p[2]);
     if (!row) return fail(404, "Request not found");
@@ -1111,13 +1119,19 @@ export function requestInboxRows(db: RequestsDb | undefined, ctx: Pick<RequestsC
 export function behindBriefRefusal(
   db: RequestsDb,
   ids: string[],
-  titles: { intake: (id: string) => string | null; document: (id: string) => string | null },
-): { status: number; detail: string } | null {
+  titles: { intake: (id: string) => string | null; document: (id: string) => string | null; trashed?: (id: string) => string | null },
+): { status: number; detail: string | { code: string; message: string } } | null {
   const rows = ids.map((id) => db.requests.find((r) => r.id === id));
   if (!rows.every((r) => r?.state === "qualified")) return { status: 422, detail: "Only qualified requests can be behind a PRD" };
   for (const r of rows as Row[]) {
     if (r.intake_id) return { status: 409, detail: `"${r.title}" is already behind the brief "${titles.intake(r.intake_id) ?? "another brief"}"` };
-    if (r.document_id) return { status: 409, detail: `"${r.title}" is already linked to the PRD "${titles.document(r.document_id) ?? "another PRD"}"` };
+    if (r.document_id) {
+      const live = titles.document(r.document_id);
+      const gone = live == null ? titles.trashed?.(r.document_id) : null;
+      // The code is what the app's Release it reads (service.LINKED_IN_TRASH).
+      if (gone != null) return { status: 409, detail: { code: "linked_in_trash", message: `"${r.title}" is still linked to the PRD "${gone}", which is in Trash. Release it to link it here.` } };
+      return { status: 409, detail: `"${r.title}" is already linked to the PRD "${live ?? "another PRD"}"` };
+    }
   }
   return null;
 }
@@ -1139,6 +1153,47 @@ export function releaseBrief(db: RequestsDb, intakeId: string) {
     r.lock_version += 1;
     r.updated_at = new Date().toISOString();
   }
+}
+
+/** What a PRD moved to Trash released: each request with the links it had. */
+export type ReleasedRequest = { request_id: string; document_id: string; intake_id: string | null };
+
+/** Moving PRDs to Trash releases the requests linked to them (the API's release_documents). */
+export function releaseDocuments(db: RequestsDb, documentIds: string[]): ReleasedRequest[] {
+  const out: ReleasedRequest[] = [];
+  for (const r of db.requests.filter((x) => x.document_id && documentIds.includes(x.document_id))) {
+    out.push({ request_id: r.id, document_id: r.document_id!, intake_id: r.intake_id ?? null });
+    r.document_id = null;
+    r.intake_id = null;
+    r.lock_version += 1;
+    r.updated_at = new Date().toISOString();
+  }
+  return out;
+}
+
+/** Restoring them links back each request still free (the API's relink_documents). */
+export function relinkDocuments(db: RequestsDb, released: ReleasedRequest[], liveIntake: (id: string) => boolean) {
+  for (const was of released) {
+    const r = db.requests.find((x) => x.id === was.request_id);
+    if (!r || r.document_id || r.intake_id) continue;
+    r.document_id = was.document_id;
+    r.intake_id = was.intake_id && liveIntake(was.intake_id) ? was.intake_id : null;
+    r.lock_version += 1;
+    r.updated_at = new Date().toISOString();
+  }
+}
+
+/** Release it: these requests' links to a PRD in Trash are cleared (the API's release_from_trash). */
+export function releaseFromTrash(db: RequestsDb, ids: string[], trashed: (documentId: string) => boolean): string[] {
+  const out: string[] = [];
+  for (const r of db.requests.filter((x) => ids.includes(x.id) && x.document_id && trashed(x.document_id))) {
+    r.document_id = null;
+    r.intake_id = null;
+    r.lock_version += 1;
+    r.updated_at = new Date().toISOString();
+    out.push(r.id);
+  }
+  return out;
 }
 
 /** The PRD made for a brief links the requests behind it; one already linked keeps its PRD. */

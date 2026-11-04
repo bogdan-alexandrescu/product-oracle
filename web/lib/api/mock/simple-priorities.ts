@@ -11,7 +11,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { PLAN_PRD_SLUG, planOut, planSlices } from "./simple-plan";
-import { closed, companyToday, roadmapOut, type SimpleDb } from "./simple-roadmap";
+import { closed, companyToday, goalRank, roadmapOut, type SimpleDb } from "./simple-roadmap";
 import { flowFor } from "./simple-visuals";
 
 type Row = Schemas["SimplePriorityRow"];
@@ -326,7 +326,7 @@ export function prioritiesOut(
       code: i.key,
       short_code: "",
       title: i.title,
-      goal: i.goal ? { key: i.goal.key, title: i.goal.title } : null,
+      goal: i.goal ? { key: i.goal.key, title: i.goal.title, position: i.goal.position ?? null } : null,
       milestone: mine ? (i.milestone?.name ?? null) : null,
       horizon: mine ? i.horizon : null,
       goal_value: e.value,
@@ -375,7 +375,7 @@ export function prioritiesOut(
   const drafts: Schemas["SimplePriorityDraft"][] = live
     .filter((i) => i.draft)
     .map((i) => ({
-      item_id: i.id, code: i.key, title: i.title, goal: i.goal ? { key: i.goal.key, title: i.goal.title } : null, roadmap: i.roadmap, applies: decides(i.id),
+      item_id: i.id, code: i.key, title: i.title, goal: i.goal ? { key: i.goal.key, title: i.goal.title, position: i.goal.position ?? null } : null, roadmap: i.roadmap, applies: decides(i.id),
       merge_into: ranked
         .filter((x) => seen.has(x.id))
         .filter((x) => x.roadmap.id === i.roadmap.id)
@@ -387,13 +387,14 @@ export function prioritiesOut(
   for (const r of rows) {
     const key = r.goal?.key ?? "none";
     let b = buckets.find((x) => x.key === key);
-    if (!b) buckets.push((b = { key, title: r.goal?.title ?? "No goal", weeks: 0, share: 0, codes: [], no_goal: !r.goal }));
+    if (!b) buckets.push((b = { key, title: r.goal?.title ?? "No goal", weeks: 0, share: 0, codes: [], no_goal: !r.goal, position: r.goal?.position ?? null }));
     if (r.horizon === "now" && r.item_id) {
       b.weeks = round(b.weeks + (r.effort ?? 0));
       b.codes.push(r.code);
     }
   }
-  buckets.sort((a, b) => Number(a.no_goal) - Number(b.no_goal));
+  // goal-order: goals in the one goal order, No goal last.
+  buckets.sort((a, b) => Number(a.no_goal) - Number(b.no_goal) || goalRank(a.key) - goalRank(b.key));
   const total = round(buckets.reduce((s, b) => s + b.weeks, 0));
   for (const b of buckets) b.share = total ? round(b.weeks / total) : 0;
   // plan-charts: with a plan, its PRD's items are in it (Goal buckets lists the rest outside it).

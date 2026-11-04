@@ -23,7 +23,7 @@ function subscribe(l: () => void) {
   };
 }
 
-const PHONE = "(max-width: 600px)";
+export const PHONE = "(max-width: 600px)";
 
 function subscribePhone(l: () => void) {
   const mq = window.matchMedia(PHONE);

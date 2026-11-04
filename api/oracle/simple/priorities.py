@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth.deps import TenantDB
 from oracle.authz import has_role
+from oracle.baseline.goal_order import goal_position, sort_goals
 from oracle.baseline.models import Entity
 from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion
@@ -154,10 +155,12 @@ def _items(read_: service.Read) -> dict[str, service.Entry]:
 
 def _goal(f: RankedFeature, e: service.Entry | None) -> SimplePriorityGoal | None:
     if e is not None and e.goal is not None:
-        return SimplePriorityGoal(key=e.goal.key, title=e.goal.title)
+        return SimplePriorityGoal(
+            key=e.goal.key, title=e.goal.title, position=goal_position(e.goal.attrs)
+        )
     if f.explanation.goals:
         g = f.explanation.goals[0]
-        return SimplePriorityGoal(key=g.goal, title=g.title)
+        return SimplePriorityGoal(key=g.goal, title=g.title, position=g.position)
     return None
 
 
@@ -258,7 +261,11 @@ def _drafts(read_: service.Read, principal: Any) -> list[SimplePriorityDraft]:
                 item_id=e.row.id,
                 code=e.row.item_key,
                 title=e.row.title,
-                goal=SimplePriorityGoal(key=e.goal.key, title=e.goal.title) if e.goal else None,
+                goal=SimplePriorityGoal(
+                    key=e.goal.key, title=e.goal.title, position=goal_position(e.goal.attrs)
+                )
+                if e.goal
+                else None,
                 roadmap=service._ref(e.roadmap),  # type: ignore[arg-type]
                 applies=service.can_decide(principal, e, read_.deciders),
                 merge_into=[
@@ -423,10 +430,13 @@ async def _short_codes(db: AsyncSession, names: bool = True) -> dict[str, str]:
 
 
 def _buckets(
-    rows: list[SimplePriorityRow], inside: set[uuid.UUID] | None = None
+    rows: list[SimplePriorityRow],
+    inside: set[uuid.UUID] | None = None,
+    order: dict[str, int] | None = None,
 ) -> tuple[list[SimpleGoalBucket], float]:
     """Engineer-weeks per goal this quarter: the plan's items in its span (``inside``), else
-    the Now horizon's."""
+    the Now horizon's. Goals come in the one goal order (``order``: goal key -> place),
+    "No goal" last."""
     goals: dict[str, SimpleGoalBucket] = {}
     none: SimpleGoalBucket | None = None
     for r in rows:
@@ -438,13 +448,20 @@ def _buckets(
         else:
             if r.goal.key not in goals:
                 goals[r.goal.key] = SimpleGoalBucket(
-                    key=r.goal.key, title=r.goal.title, weeks=0, share=0, codes=[]
+                    key=r.goal.key,
+                    title=r.goal.title,
+                    weeks=0,
+                    share=0,
+                    codes=[],
+                    position=r.goal.position,
                 )
             b = goals[r.goal.key]
         if (r.item_id in inside) if inside is not None else r.horizon == "now":
             b.weeks += r.effort or 0
             b.codes.append(r.code)
-    out = [goals[k] for k in sorted(goals)] + ([none] if none is not None else [])
+    place = order or {}
+    ranked = sorted(goals, key=lambda k: (place.get(k, len(place)), k))
+    out = [goals[k] for k in ranked] + ([none] if none is not None else [])
     total = round(sum(b.weeks for b in out), 3)
     for b in out:
         b.weeks = round(b.weeks, 3)
@@ -611,7 +628,9 @@ async def build(
         r.short_code = short.get(f.key, f.key)
     _after(rows, deps)
     this_quarter, inside = await plan_quarter(db, read_)
-    buckets, total = _buckets(rows, inside)
+    goal_rows = await db.scalars(select(Entity).where(Entity.type == "goal"))
+    order = {g.key: i for i, g in enumerate(sort_goals(goal_rows))}
+    buckets, total = _buckets(rows, inside, order)
     _, plan_out = await plan_in_play(db, read_)
     if plan_out is not None:
         for r, pid in zip(rows, prd_of, strict=True):

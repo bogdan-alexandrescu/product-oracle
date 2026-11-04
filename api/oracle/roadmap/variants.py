@@ -20,7 +20,8 @@ it never changes the text. The registry below is the source of truth: the API se
 - Board and Team group each horizon's items by goal (owner decision 2026-10-26): under
   a sub-heading per confirmed goal, the one each item's feature reaches through
   confirmed ``supports`` edges at render time (:attr:`ItemView.group`; an item reaching
-  two goals sits under the first by title, once), ordered by title, then "No goal"
+  two goals sits under the first in the one goal order, once), in the one goal order
+  (oracle.baseline.goal_order: position, then creation, then title), then "No goal"
   (:data:`NO_GOAL_GROUP`) for the items reaching none. Board leaves goal-less items out
   as above, so its "No goal" group holds items only when the tenant has no confirmed
   goal. Each row's Goal column and card's "Goal:" line name the group's goal
@@ -196,16 +197,18 @@ class ItemView:
     # best, or none.
     goals: list[str] = field(default_factory=list)
     no_goal: bool = False
-    # The goal it is grouped under (Board, Team): the first by title of the confirmed
-    # goals its feature reaches, or None ("No goal").
+    # The goal it is grouped under (Board, Team): the first, in the one goal order
+    # (oracle.baseline.goal_order), of the confirmed goals its feature reaches, or None
+    # ("No goal"); and that goal's place in the order (0 = first), which orders the groups.
     group: str | None = None
+    group_rank: int | None = None
 
 
 def render_key(items: list[ItemView]) -> tuple:
     """What of the items a rendering reads from the baseline at render time (each one's
     group, goal and flag): part of a cached render's key, so a goal renamed or
     unconfirmed after the roadmap was written changes the next render."""
-    return tuple((i.key, i.group, tuple(i.goals), i.no_goal) for i in items)
+    return tuple((i.key, i.group, i.group_rank, tuple(i.goals), i.no_goal) for i in items)
 
 
 def goal_names(item: ItemView, variant: Variant) -> list[str]:
@@ -218,12 +221,19 @@ def goal_names(item: ItemView, variant: Variant) -> list[str]:
 
 
 def goal_groups(items: list[ItemView]) -> list[tuple[str, list[ItemView]]]:
-    """``items`` grouped by goal (their order kept within a group): the goals by title,
-    then :data:`NO_GOAL_GROUP`; an item is named once."""
+    """``items`` grouped by goal (their order kept within a group): the goals in the one
+    goal order (:attr:`ItemView.group_rank`; by title when it is unknown), then
+    :data:`NO_GOAL_GROUP`; an item is named once."""
     by: dict[str | None, list[ItemView]] = {}
+    rank: dict[str, int] = {}
     for item in items:
         by.setdefault(item.group, []).append(item)
-    titles = sorted((t for t in by if t is not None), key=lambda t: (t.casefold(), t))
+        if item.group is not None and item.group_rank is not None:
+            rank.setdefault(item.group, item.group_rank)
+    titles = sorted(
+        (t for t in by if t is not None),
+        key=lambda t: (t not in rank, rank.get(t, 0), t.casefold(), t),
+    )
     out: list[tuple[str, list[ItemView]]] = [(t, by[t]) for t in titles]
     if None in by:
         out.append((NO_GOAL_GROUP, by[None]))

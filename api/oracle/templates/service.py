@@ -581,15 +581,16 @@ def recommend_prd(a: PrdAnswers) -> tuple[str, str]:
             "The output comes from a model: this template specifies behaviour, "
             "evals, fallbacks and cost.",
         )
-    if a.readers == "leadership":
+    readers = set(a.readers or [])
+    if "leadership" in readers:
         return (
             "narrative-memo",
             "Leadership or the board reads it: a narrative memo argues the "
             "case in prose and is read in one sitting.",
         )
-    if a.decision is None and a.size == "small_change" and a.readers in (None, "founder"):
+    if a.decision is None and a.size == "small_change" and readers <= {"founder"}:
         return "one-pager", "A small change for the founder: a one-pager is enough to decide."
-    if a.readers == "engineers_or_agents":
+    if "engineers_or_agents" in readers:
         return (
             "oracle-default",
             "Engineers or coding agents build from it: the goal-traced PRD "

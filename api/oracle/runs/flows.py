@@ -163,6 +163,17 @@ NAMED_CODES = (
 )
 
 
+# codes-and-chips: a proposal's reason is read on its own, on Baseline › Proposals, so it
+# names every code it cites each time (NAMED_CODES lets later mentions in a section go
+# bare). Every step that may propose carries it, and so does the propose_change tool.
+PROPOSAL_REASON_CODES = (
+    "A proposal's reason is read on its own: name every code it cites, each time, with "
+    "its name beside it (F-08 Example feature, never F-08; G-B Growth goal, never G-B "
+    "goal). Requirement numbers of a source document (FR-06, FR-08/FR-09) go with "
+    "the title of the document they come from."
+)
+
+
 def named_codes_apply(segment: "SegmentDef", ctx: "PromptContext") -> bool:
     """True for the steps that write PRD sections (a PRD run's drafts and checkpoint notes)
     or proposals (#306)."""
@@ -1798,6 +1809,8 @@ def step_prompt(
     ]
     if named_codes_apply(segment, ctx):
         lines.append(NAMED_CODES)
+    if "write:proposals" in segment.scopes:
+        lines.append(PROPOSAL_REASON_CODES)
     if last:
         lines.append(
             "Write these files as artifacts: " + ", ".join(segment.outputs_for(ctx.kind)) + "."

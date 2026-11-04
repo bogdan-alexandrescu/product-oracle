@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle.baseline.goal_order import sort_goals
 from oracle.baseline.models import Edge, Entity
 
 # src is downstream of dst.
@@ -130,10 +131,7 @@ class Graph:
 
     def confirmed_goals(self, start: uuid.UUID) -> list[Entity]:
         goals = [self.entities[s.entity_id] for s in self.upstream(start)]
-        return sorted(
-            (g for g in goals if g.type == "goal" and g.status == "confirmed"),
-            key=lambda g: g.key,
-        )
+        return sort_goals(g for g in goals if g.type == "goal" and g.status == "confirmed")
 
     def related(self, start: uuid.UUID) -> list[tuple[Edge, Entity, str]]:
         """Direct neighbours that are not on the chain: (edge, entity, "in" | "out")."""

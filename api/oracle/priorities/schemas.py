@@ -12,6 +12,8 @@ ReasonCheckStatus = Literal["contradiction", "no_contradiction", "skipped", "fai
 class GoalTerm(BaseModel):
     goal: str
     title: str
+    # goal-order: the goal's place (its attrs.position, 1 = first); none when unset.
+    position: int | None = None
     weight: float
     weight_assumed: bool
     contribution: int

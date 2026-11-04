@@ -14,22 +14,22 @@ test("Home: goals show current over target, distance to go, confidence and trend
   await expect(goals.getByText("2 confirmed")).toBeVisible();
   await expect(goals.getByTestId("goals-proposed")).toHaveText("Cut early churn proposed");
 
-  const g1 = page.getByTestId("home-goal-G1");
-  await expect(g1).toContainText("Raise activation");
-  await expect(g1.getByTestId("goal-figure")).toHaveText("38%/ 45%");
+  const activation = page.getByTestId("home-goal-G3");
+  await expect(activation).toContainText("Raise activation");
+  await expect(activation.getByTestId("goal-figure")).toHaveText("38%/ 45%");
   // I3: distance to go in the goal's own unit, never a percentage of target.
-  await expect(g1.getByTestId("goal-to-go")).toHaveText("7 pts to go");
+  await expect(activation.getByTestId("goal-to-go")).toHaveText("7 pts to go");
   // qa-plan-4: no evidence yet, so no score, as on the Baseline page.
-  await expect(g1.getByTestId("goal-confidence")).toHaveText("No confidence yet: add evidence");
+  await expect(activation.getByTestId("goal-confidence")).toHaveText("No confidence yet: add evidence");
   // The trend comes from the goal's recorded revisions, with the target dashed.
-  await expect(g1.getByTestId("goal-trend").locator("line[data-target='45']")).toHaveCount(1);
-  await expect(g1.getByTestId("goal-change")).toHaveText("+7 pts in 6 months");
+  await expect(activation.getByTestId("goal-trend").locator("line[data-target='45']")).toHaveCount(1);
+  await expect(activation.getByTestId("goal-change")).toHaveText("+7 pts in 6 months");
 
   await expect(page.getByTestId("home-goal-G2").getByTestId("goal-to-go")).toHaveText("2.6 pts to go");
-  const g3 = page.getByTestId("home-goal-G3");
-  await expect(g3).toHaveAttribute("data-proposed", "true");
+  const churn = page.getByTestId("home-goal-G1");
+  await expect(churn).toHaveAttribute("data-proposed", "true");
   // B5: early churn holds its target as text and has no current value yet.
-  await expect(g3.getByTestId("goal-to-go")).toHaveText("No current value yet");
+  await expect(churn.getByTestId("goal-to-go")).toHaveText("No current value yet");
 });
 
 test("Home: needs you lists the inbox and the questions asked of me, one action each", async ({ page }) => {
@@ -79,7 +79,7 @@ test("Home: in flight rows select into the inspector", async ({ page }) => {
 
   const inspector = page.getByTestId("home-inspector");
   // Goal tags load for the selected row only, in the inspector (no trace call per row).
-  await expect(inspector.getByTestId("row-goals")).toHaveText("Raise activationGrow paid conversion");
+  await expect(inspector.getByTestId("row-goals")).toHaveText("Grow paid conversionRaise activation");
   await expect(inspector).toContainText("PRD · selected");
   await expect(inspector.getByRole("heading", { name: "Checkout redesign PRD" })).toBeVisible();
   await expect(inspector.getByTestId("stat-sections")).toContainText("Approved");

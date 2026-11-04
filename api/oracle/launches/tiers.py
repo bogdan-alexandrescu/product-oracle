@@ -28,6 +28,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle.baseline.goal_order import sort_goals
 from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document
 from oracle.launches.models import Launch
@@ -162,14 +163,16 @@ async def item_goals(
 
 async def item_goal_links(
     db: AsyncSession, rows: list[RoadmapItem]
-) -> tuple[dict[str, tuple[str, str | None]] | None, dict[str, str | None]]:
+) -> tuple[dict[str, tuple[str, str | None]] | None, dict[str, str | None], dict[str, int | None]]:
     """:func:`item_goals`, and each item's goal group (O5 owner decision 2026-10-26): the
-    title of the first, by title, of the confirmed goals its feature reaches through
-    confirmed ``supports`` edges (the edges :func:`best_goal` counts), or ``None`` (no
-    feature, no goal reached, or no confirmed goal in the tenant). One read for both."""
+    title of the first, in the one goal order (oracle.baseline.goal_order), of the
+    confirmed goals its feature reaches through confirmed ``supports`` edges (the edges
+    :func:`best_goal` counts), or ``None`` (no feature, no goal reached, or no confirmed
+    goal in the tenant); and that goal's place in the goal order (0 = first), which orders
+    the groups. One read for all three."""
     goals = await confirmed_goals(db)
     if not goals:
-        return None, {r.item_key: None for r in rows}
+        return None, {r.item_key: None for r in rows}, {r.item_key: None for r in rows}
     features: dict[str, Entity] = {}
     if rows:
         by_id = {
@@ -201,22 +204,25 @@ async def item_goal_links(
             )
         ):
             edges.setdefault(edge.src_id, []).append(edge)
+    rank = {g.id: n for n, g in enumerate(sort_goals(goals.values()))}
     best: dict[str, tuple[str, str | None]] = {}
     groups: dict[str, str | None] = {}
+    ranks: dict[str, int | None] = {}
     for r in rows:
         feature = features.get(r.item_key)
         mine = edges.get(feature.id, []) if feature is not None else []
         best[r.item_key] = best_goal(goals, mine) if feature is not None else ("none", None)
-        titles = sorted(
+        reached = sorted(
             {
-                goals[e.dst_id].title
+                e.dst_id
                 for e in mine
                 if _number((e.attrs or {}).get("contribution"), DEFAULT_CONTRIBUTION) > 0
             },
-            key=lambda t: (t.casefold(), t),
+            key=rank.__getitem__,
         )
-        groups[r.item_key] = titles[0] if titles else None
-    return best, groups
+        groups[r.item_key] = goals[reached[0]].title if reached else None
+        ranks[r.item_key] = rank[reached[0]] if reached else None
+    return best, groups, ranks
 
 
 async def _goal(db: AsyncSession, feature: Entity | None) -> tuple[str, str | None]:

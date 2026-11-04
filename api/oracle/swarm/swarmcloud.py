@@ -251,8 +251,8 @@ def _parse_time(value: Any) -> datetime | None:
 
 def _agent_progress(task: dict[str, Any]) -> dict[str, Any]:
     """#258: a task's agent for the run page: its role (the step's metadata), when it
-    started and its last heartbeat (the task's own times, else its lease's) and its cost
-    so far. Anything missing or unreadable is None."""
+    started and its last heartbeat (the task's own times, else its lease's), its cost so
+    far and the runtime's last event on it. Anything missing or unreadable is None."""
     lease = task.get("lease") if isinstance(task.get("lease"), dict) else {}
     role = (task.get("metadata") or {}).get("agent_role")
     cost = task.get("cost_usd_total")
@@ -267,6 +267,7 @@ def _agent_progress(task: dict[str, Any]) -> dict[str, Any]:
         or _parse_time(task.get("last_heartbeat_at"))
         or _parse_time(lease.get("heartbeat_at")),
         "cost_usd": cost_usd,
+        "event_at": _parse_time(task.get("last_event_at")) or _parse_time(task.get("updated_at")),
     }
 
 
@@ -1224,7 +1225,11 @@ class SwarmCloudRuntime:
                             skipped[name.rsplit("/", 1)[-1]] = _refused_why(exc)
                         continue
                     if content is not None:
-                        files[name.rsplit("/", 1)[-1]] = content.decode("utf-8", "replace")
+                        base = name.rsplit("/", 1)[-1]
+                        files[base] = content.decode("utf-8", "replace")
+                        # A later step serves what an earlier one's copy was refused for.
+                        if skipped is not None:
+                            skipped.pop(base, None)
         return files
 
     async def read_artifacts(

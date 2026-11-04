@@ -230,3 +230,37 @@ async def test_the_render_key_follows_the_derived_grouping():
     c = variants.ItemView(key="x", title="X", outcome=None, horizon="now", position=0)
     c.group, c.goals = "Activation", ["Activation"]
     assert variants.render_key([a]) == variants.render_key([c])
+
+
+async def test_goal_groups_follow_the_goal_order(client, ctx):
+    """protects=goal-order: Board's and Team's goal groups come in the one goal order (a
+    goal's position first), "No goal" last, and an item reaching two goals sits under the
+    first in that order; fails_when=groups come by title; no_claim=Engineering."""
+    await seed_roadmap(ctx, items=[*ITEMS, AUDIT], served=())
+    await add_goal_links(
+        ctx,
+        {"csv-parser": [("Activation", 2)], "bulk-import": [("Retention", 2), ("Activation", 1)]},
+    )
+    async with tenant_session(ctx.tenant_id) as s:
+        for title, position in (("Retention", 1), ("Activation", 2)):
+            await s.execute(
+                update(Entity).where(Entity.type == "goal", Entity.title == title)
+                .values(attrs={"position": position})
+            )  # fmt: skip
+        await s.commit()
+    out = await export(client, ctx, "team")
+    now = out.index("h2 Now")
+    assert out[now : out.index("h2 Next")] == [
+        "h2 Now",
+        "h3 Retention",
+        "h4 Bulk import",
+        "h3 Activation",
+        "h4 CSV parser",
+        f"h3 {variants.NO_GOAL_GROUP}",
+        "h4 Audit log",
+    ], out
+    board = await export(client, ctx, "board")
+    now = board.index("h2 Now")
+    assert board[now + 1] == "h3 Retention", board
+    assert board[now + 2].startswith("Bulk import"), board
+    assert board[now + 3] == "h3 Activation", board

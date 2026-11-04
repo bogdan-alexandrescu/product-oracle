@@ -64,7 +64,7 @@ const EDIT_ATTRS: Partial<Record<EntityOut["type"], { key: string; label: string
 };
 
 /** A goal's typed fields (B5): the goal form edits them; current and its day follow the measurements. */
-const GOAL_TYPED = new Set(["metric", "unit", "comparison", "target", "start", "current", "current_as_of", "horizon", "due", "owner", "weight"]);
+const GOAL_TYPED = new Set(["metric", "unit", "comparison", "target", "start", "current", "current_as_of", "horizon", "due", "owner", "weight", "position"]);
 
 /** #396 (#505): attribute keys a person reads in words; the rest read as they are, underscores as spaces. */
 const ATTR_LABEL: Record<string, string> = {

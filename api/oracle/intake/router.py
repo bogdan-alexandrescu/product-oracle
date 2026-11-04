@@ -88,7 +88,8 @@ views.register()
 
 
 def _http(exc: service.IntakeError) -> HTTPException:
-    return HTTPException(exc.status, str(exc))
+    detail = {"code": exc.code, "message": str(exc)} if exc.code else str(exc)
+    return HTTPException(exc.status, detail)
 
 
 async def _intake(db: TenantDB, intake_id: uuid.UUID):
@@ -479,8 +480,9 @@ async def _proposal(db: TenantDB, proposal_id: uuid.UUID, principal: Principal) 
 async def accept_intake_proposal(
     proposal_id: uuid.UUID, principal: Approver, db: TenantDB
 ) -> IntakeProposalOut:
-    """Accept: a research proposal becomes a draft run; a PRD patch becomes feedback on
-    the PRD's latest version."""
+    """Accept: a research proposal's run is estimated and started (the intake's one
+    unstarted research draft is reused); a PRD patch becomes feedback on the PRD's
+    latest version."""
     proposal = await _proposal(db, proposal_id, principal)
     try:
         await answers.accept(db, principal, proposal)
@@ -488,6 +490,10 @@ async def accept_intake_proposal(
         raise _http(e) from e
     await db.commit()
     await db.refresh(proposal)
+    run_id = (proposal.result or {}).get("run_id")
+    if proposal.kind == "research_run" and run_id:
+        await answers.start_research(db, principal, proposal.id, uuid.UUID(run_id))
+        await db.refresh(proposal)
     return IntakeProposalOut.model_validate(proposal)
 
 

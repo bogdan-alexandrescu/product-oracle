@@ -109,7 +109,7 @@ test.describe("desktop", () => {
 
   test("qa4-plan-24: a goal with no confidence says so in words, with no empty ring", async ({ page }) => {
     await openPlan(page);
-    const g1 = page.getByTestId("plan-goals").getByTestId("home-goal-G1");
+    const g1 = page.getByTestId("plan-goals").getByTestId("home-goal-G3");
     await expect(g1).toContainText("Raise activation");
     await expect(g1.getByTestId("goal-confidence")).toHaveText("No confidence yet: add evidence");
     await expect(g1.getByRole("img", { name: /confidence/i })).toHaveCount(0);

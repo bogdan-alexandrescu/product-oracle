@@ -61,6 +61,7 @@ from oracle.baseline.schemas import (
     NodeStatus,
     OriginIn,
     ProposalAccept,
+    ProposalAlso,
     ProposalCreate,
     ProposalDecision,
     ProposalOut,
@@ -134,6 +135,17 @@ async def _proposals_out(db, rows: list[Proposal]) -> list[ProposalOut]:
     sentences = await describe.summaries(db, rows)
     who = await describe.proposers(db, rows, runs)
     overlaps = await service.overlaps(db, rows)
+    dup_of, also = await service.duplicates(db, rows)
+    extra = [d for ds in also.values() for d in ds]
+    extra_runs = await service.proposal_runs(db, (d.run_id for d in extra))
+    extra_who = await describe.proposers(db, extra, {**runs, **extra_runs})
+
+    def also_out(p: Proposal, d: Proposal) -> ProposalAlso:
+        role = d.payload.get("role")
+        by = str(role).replace("_", " ").capitalize() if role else extra_who[d.id].label
+        same = service.agrees(p.payload, d.payload)
+        return ProposalAlso(id=d.id, by=by, fields=d.payload.get("fields") or {}, same=same)
+
     return [
         ProposalOut(
             **{c: getattr(p, c) for c in _PROPOSAL_COLUMNS},
@@ -141,6 +153,10 @@ async def _proposals_out(db, rows: list[Proposal]) -> list[ProposalOut]:
             summary=sentences[p.id],
             proposer=who[p.id],
             overlaps=overlaps[p.id],
+            duplicate_of=dup_of[p.id],
+            also_proposed=[also_out(p, d) for d in also[p.id]],
+            outcome=p.payload.get("outcome"),
+            closed_as_done=p.payload.get("closed_as_done") or [],
         )
         for p in rows
     ]
@@ -842,6 +858,7 @@ async def create_proposal(body: ProposalCreate, principal: Commenter, db: Tenant
             fields=body.fields,
             entity_id=body.entity_id,
             edge_id=body.edge_id,
+            role=body.role,
         )
     except service.BaselineError as exc:
         raise _fail(exc) from exc

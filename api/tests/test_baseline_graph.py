@@ -8,6 +8,7 @@ from sqlalchemy import select
 from oracle import company_time
 from oracle.auth.models import User
 from oracle.baseline.models import Entity, Proposal
+from oracle.docs.models import Document, DocumentVersion
 from oracle.main import app
 from oracle.models import AuditEvent
 from oracle.runs.models import Run
@@ -681,3 +682,37 @@ async def test_intake_proposal_hides_person(client, ctx):
     resp = await client.post(f"{B}/proposals", json=body, headers=ctx.as_("answerer@example.com"))
     assert resp.status_code == 422, resp.text
     assert await _listed(client, ctx) == []
+
+
+async def test_proposal_run_names_its_source_document(client, ctx):
+    """protects: codes-and-chips (a reason's source requirement numbers, FR-06, read with
+    the title of the document they come from): ProposalRun.source_title.
+    fails_when: the run summary carries no source title, or the wrong document's.
+    no_claim: how the web words the reason (web/e2e/codes-and-chips.spec.ts)."""
+    async with tenant_session(ctx.tenant_id) as s:
+        source = Document(slug="example-trip-brief", title="Example trip planner brief", kind="prd")
+        written = Document(slug="example-trip-prd", title="Example trip planner PRD", kind="prd")
+        s.add_all([source, written])
+        await s.flush()
+        version = DocumentVersion(
+            document_id=source.id, number=1, markdown="# Brief", content_hash="0" * 64
+        )
+        s.add(version)
+        await s.flush()
+        owner = ctx.users["owner"].id
+        knobs = {"source_version_id": str(version.id)}
+        reads = Run(flow="prd_to_roadmap", status="running", created_by=owner,
+                    document_id=written.id, knobs=knobs)  # fmt: skip
+        writes = Run(flow="baseline_to_prd", status="running", created_by=owner,
+                     document_id=written.id)  # fmt: skip
+        bare = Run(flow="baseline_to_prd", status="running", created_by=owner)
+        s.add_all([reads, writes, bare])
+        await s.commit()
+        ids = reads.id, writes.id, bare.id
+    for key, run_id in zip(("reads", "writes", "bare"), ids, strict=True):
+        await _propose(client, ctx, key, run_id)
+    listed = {p["payload"]["fields"]["key"]: p["run"] for p in await _listed(client, ctx)}
+    # The source version's document, else the run's own document, else none.
+    assert listed["reads"]["source_title"] == "Example trip planner brief"
+    assert listed["writes"]["source_title"] == "Example trip planner PRD"
+    assert listed["bare"]["source_title"] is None

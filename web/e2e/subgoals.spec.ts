@@ -101,18 +101,18 @@ test("add a subgoal, set its target, link a feature, see the parent roll up, pic
 
   // Plan: the parent's card rolls up from its subgoal and lists it.
   await page.goto("/plan");
-  const card = page.getByTestId("plan-goals").getByTestId("home-goal-G3");
+  const card = page.getByTestId("plan-goals").getByTestId("home-goal-G1");
   await expect(card.getByTestId("goal-rollup")).toHaveText("60% · from subgoals");
-  await expect(card.getByTestId("home-goal-G3.1")).toContainText(SUB);
-  await expect(card.getByTestId("home-goal-G3.1")).toContainText("60%");
-  await expect(card.getByTestId("home-goal-G3.1").getByTestId("code-tag")).toHaveCount(0);
-  await expect(page.getByTestId("plan-goals").getByTestId("home-goal-G1").getByTestId("goal-subgoals")).toHaveCount(0);
+  await expect(card.getByTestId("home-goal-G1.1")).toContainText(SUB);
+  await expect(card.getByTestId("home-goal-G1.1")).toContainText("60%");
+  await expect(card.getByTestId("home-goal-G1.1").getByTestId("code-tag")).toHaveCount(0);
+  await expect(page.getByTestId("plan-goals").getByTestId("home-goal-G3").getByTestId("goal-subgoals")).toHaveCount(0);
 
   // New PRD: the subgoal sits under its goal, folds, and can be picked.
   await page.goto("/documents/new?kind=prd");
   const goals = page.getByRole("group", { name: "Which goals does it serve?" });
-  await expect(goals.getByTestId("goal-pick-G3.1")).toContainText(SUB);
-  await expect(goals.getByTestId("goal-pick-G3.1").getByTestId("code-tag")).toHaveCount(0);
+  await expect(goals.getByTestId("goal-pick-G1.1")).toContainText(SUB);
+  await expect(goals.getByTestId("goal-pick-G1.1").getByTestId("code-tag")).toHaveCount(0);
   await goals.getByRole("button", { name: "Hide subgoals of Cut early churn" }).click();
   await expect(goals.getByTestId("goal-pick-G3.1")).toHaveCount(0);
   await goals.getByRole("button", { name: "Show subgoals of Cut early churn" }).click();
@@ -319,9 +319,9 @@ for (const scheme of ["light", "dark"] as const) {
     await expect(row).toHaveCount(0);
 
     await page.goto("/plan");
-    const card = page.getByTestId("plan-goals").getByTestId("home-goal-G3");
-    await card.getByTestId("home-goal-G3.1").scrollIntoViewIfNeeded();
-    await expect(card.getByTestId("home-goal-G3.1")).toBeInViewport();
+    const card = page.getByTestId("plan-goals").getByTestId("home-goal-G1");
+    await card.getByTestId("home-goal-G1.1").scrollIntoViewIfNeeded();
+    await expect(card.getByTestId("home-goal-G1.1")).toBeInViewport();
     expect(await contrast(card.getByTestId("goal-rollup"))).toBeGreaterThanOrEqual(4.5);
   });
 }

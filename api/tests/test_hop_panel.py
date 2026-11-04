@@ -277,3 +277,38 @@ async def test_a_screen_subject_is_labelled_by_its_page(client):
         )
         assert resp.status_code == 201, resp.text
         assert resp.json()["subject_label"] == label and resp.json()["title"] == label
+
+
+# protects=chat-citations: General chat ("/") reads the baseline compactly, as PRD drafting
+# gets it: the confirmed goals and every feature (not rejected) with its status and the
+# goals it serves; fails_when=asked for focus areas with their features, General has goals
+# only and maps from meetings; no_claim=the reply's wording.
+async def test_general_context_has_baseline_features_with_status_and_goals(client):
+    from oracle.baseline.models import Edge
+
+    ctx, _doc = await company_data(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        goal = await s.scalar(select(Entity).where(Entity.key == "activation"))
+        guided = Entity(
+            type="feature", key="guided-setup", title="Guided setup", status="confirmed",
+            origin="user",
+        )  # fmt: skip
+        alerts = Entity(type="feature", key="alerts", title="Usage alerts", status="proposed",
+                        origin="user")  # fmt: skip
+        gone = Entity(type="feature", key="gone", title="Dropped idea", status="rejected",
+                      origin="user")  # fmt: skip
+        s.add_all([guided, alerts, gone])
+        await s.flush()
+        s.add(Edge(src_id=guided.id, dst_id=goal.id, type="supports", status="confirmed",
+                   origin="user"))  # fmt: skip
+        await s.commit()
+    built = await screen_context(client, ctx, "/")
+    text = data_of(built)
+    assert "The page: General" in text
+    assert "Raise activation" in text
+    assert "Feature: Guided setup: status confirmed; serves Raise activation" in text
+    assert "Feature: Usage alerts: status proposed; serves no goal yet" in text
+    assert "Dropped idea" not in text
+    assert SOURCE_LINE not in text
+    titles = {e["title"] for e in built.entries.values()}
+    assert {"Feature: Guided setup", "Feature: Usage alerts"} <= titles

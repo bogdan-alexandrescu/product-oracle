@@ -251,39 +251,43 @@ function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadm
       </button>
     ) : null;
   };
+  const counterCard = (id: string, g: (typeof cards)[number][1]) => (
+    <li key={id} data-testid="goal-counter" className="rounded-xl border border-line bg-surface px-3 py-2">
+      <p className="truncate text-[15px] font-semibold" title={g.title}>
+        {g.title}
+      </p>
+      {/* fix4 qa-simple-roadmap-49: the metric wraps to a second line, its full words on hover past that. */}
+      <p className="line-clamp-2 text-sm break-words text-text2" title={g.metric ?? undefined} data-testid="goal-counter-metric">
+        {g.metric ?? "No metric yet"}
+      </p>
+      <p className="mt-0.5 text-sm">
+        <b className="tnum">{g.items}</b> {g.items === 1 ? "item" : "items"}
+        {g.broken > 0 && (
+          <span className="text-crit">
+            {" "}
+            · <b className="tnum">{g.broken}</b> broken
+          </span>
+        )}
+      </p>
+      {open(id, g.title)}
+    </li>
+  );
+  const emptyCard = (g: (typeof empty)[number]) => (
+    <li key={g.goal.id} data-testid="goal-counter-empty" className="rounded-xl border border-dashed border-line-strong bg-surface px-3 py-2">
+      <p className="truncate text-[15px] font-semibold" title={g.goal.title}>
+        {g.goal.title}
+      </p>
+      <p className="truncate text-sm text-text2">{g.empty ? "No items yet" : "No items in these filters"}</p>
+      {open(g.goal.id, g.goal.title)}
+    </li>
+  );
   return (
     <ul className="grid grid-cols-2 gap-2 min-[900px]:grid-cols-4" data-testid="goal-counters">
       {/* qa4-simple-roadmap-10: a card for every goal with a lane (the grid wraps past four). */}
-      {cards.map(([id, g]) => (
-        <li key={id} data-testid="goal-counter" className="rounded-xl border border-line bg-surface px-3 py-2">
-          <p className="truncate text-[15px] font-semibold" title={g.title}>
-            {g.title}
-          </p>
-          {/* fix4 qa-simple-roadmap-49: the metric wraps to a second line, its full words on hover past that. */}
-          <p className="line-clamp-2 text-sm break-words text-text2" title={g.metric ?? undefined} data-testid="goal-counter-metric">
-            {g.metric ?? "No metric yet"}
-          </p>
-          <p className="mt-0.5 text-sm">
-            <b className="tnum">{g.items}</b> {g.items === 1 ? "item" : "items"}
-            {g.broken > 0 && (
-              <span className="text-crit">
-                {" "}
-                · <b className="tnum">{g.broken}</b> broken
-              </span>
-            )}
-          </p>
-          {open(id, g.title)}
-        </li>
-      ))}
-      {empty.map((g) => (
-        <li key={g.goal.id} data-testid="goal-counter-empty" className="rounded-xl border border-dashed border-line-strong bg-surface px-3 py-2">
-          <p className="truncate text-[15px] font-semibold" title={g.goal.title}>
-            {g.goal.title}
-          </p>
-          <p className="truncate text-sm text-text2">{g.empty ? "No items yet" : "No items in these filters"}</p>
-          {open(g.goal.id, g.goal.title)}
-        </li>
-      ))}
+      {/* goal-order: every card in the one goal order, goals with no items among the others. */}
+      {[...cards.map(([id, g]) => ({ id, title: g.title, card: g, empty: null })), ...empty.map((g) => ({ id: g.goal.id, title: g.goal.title, card: null, empty: g }))]
+        .sort((a, b) => rank(a.id, a.title) - rank(b.id, b.title) || a.title.localeCompare(b.title))
+        .map((t) => (t.card ? counterCard(t.id, t.card) : emptyCard(t.empty!)))}
       {filteredOut && (
         <li data-testid="goal-counter-empty" className="rounded-xl border border-dashed border-line-strong bg-surface px-3 py-2">
           <p className="truncate text-[15px] font-semibold" title={only?.title}>

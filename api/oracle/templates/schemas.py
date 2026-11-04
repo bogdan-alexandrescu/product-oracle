@@ -1,8 +1,8 @@
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from oracle.docs.schemas import UpdatePeriod
 
@@ -209,6 +209,9 @@ class ThemePreviewIn(ThemeValidateIn):
 # --- new-draft picker ---------------------------------------------------------------
 
 
+Reader = Literal["founder", "product_eng", "leadership", "engineers_or_agents"]
+
+
 class PrdAnswers(BaseModel):
     """At most four questions (docs/research/prd-formats.md, template picker)."""
 
@@ -219,8 +222,15 @@ class PrdAnswers(BaseModel):
         | None
     ) = None
     size: Literal["small_change", "new_feature", "new_product"] | None = None
-    readers: Literal["founder", "product_eng", "leadership", "engineers_or_agents"] | None = None
+    # Who reads and approves it: any of them (New PRD 2). A brief saved with one value
+    # before reads back as a one-item list.
+    readers: list[Reader] | None = Field(default=None, max_length=4)
     model_driven: bool | None = None
+
+    @field_validator("readers", mode="before")
+    @classmethod
+    def _one_reader_is_a_list(cls, v: Any) -> Any:
+        return [v] if isinstance(v, str) else v
 
 
 class RoadmapAnswers(BaseModel):

@@ -79,7 +79,7 @@ test("baseline: add depends-on, blocks and part-of links, and confirm a proposed
   await again.getByLabel("Relation").selectOption({ label: "Blocks" });
   await again.getByLabel("Entry").selectOption({ label: "Dark mode" });
   await again.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(d.getByText("That link already exists")).toBeVisible();
+  await expect(d.getByText("This link already exists")).toBeVisible();
 });
 
 test("baseline: cite a source item as evidence, then remove evidence with a reason", async ({ page }) => {

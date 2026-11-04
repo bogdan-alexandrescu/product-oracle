@@ -113,7 +113,11 @@ async def test_thin_answer_gets_one_follow_up_and_the_reply_records_both(client,
     q = asked[0]
     follow_up(fake)
     first = await turn(client, ctx, iv["id"], question_id=q["id"], body=THIN)
-    assert first["recorded"] is None and first["next_question_id"] is None
+    # brief-answers: the answer is recorded at once (it closes its question and counts);
+    # the member stays on the question for the reply.
+    assert first["recorded"]["answer"]["body"] == THIN
+    assert first["recorded"]["question"]["status"] == "answered"
+    assert first["next_question_id"] is None
     oracle = [m for m in first["messages"] if m["role"] == "oracle"]
     assert [(m["kind"], m["body"]) for m in oracle] == [
         ("follow_up", "Which segment comes first if you pick one?")
@@ -124,7 +128,7 @@ async def test_thin_answer_gets_one_follow_up_and_the_reply_records_both(client,
     assert kind == "interview_team_turn"
     assert payload["gap"]["stop_condition"] and payload["gap"]["statement"]
     assert payload["conversation"] == [{"role": "interviewee", "body": THIN}]
-    assert await answers_of(ctx, q["id"]) == []
+    assert len(await answers_of(ctx, q["id"])) == 1
 
     # A second thin reply records anyway, without another call.
     calls = len(fake.calls)
@@ -347,6 +351,9 @@ async def test_a_turn_right_after_the_claim_is_released_never_races_its_writes(
     assert first["recorded"]["answer"]["body"] == FULL
     again = await second[0]
     assert not isinstance(again, Exception), repr(again)
-    assert again.status_code in (409, 429), again.text
+    # brief-answers: the same answer sent again reads as saved, once.
+    assert again.status_code in (200, 409, 429), again.text
+    if again.status_code == 200:
+        assert again.json()["recorded"]["answer"]["id"] == first["recorded"]["answer"]["id"]
     assert len(await answers_of(ctx, q)) == 1
     assert sum(1 for kind, _ in fake.calls if kind == "interview_team_turn") == 1

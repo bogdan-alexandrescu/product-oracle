@@ -283,6 +283,13 @@ async def delete_root(
     from oracle.roadmap import alerts
 
     closed = await alerts.close_for_trash(db, {d.id for d in resolved.documents}, at)
+    # New PRD (4): the requests linked to these PRDs are released; a restore links back
+    # each one still free.
+    from oracle.requests import service as requests_service
+
+    released = await requests_service.release_documents(
+        db, principal, {d.id for d in resolved.documents}
+    )
     entry = TrashEntry(
         id=uuid.uuid4(),
         root_type=root_type,
@@ -293,6 +300,8 @@ async def delete_root(
             "built_from": [describe(d) for d in sources],
             # Track alerts it closed: a restore reopens them.
             "closed_alerts": closed,
+            # Requests it released: a restore links back the ones still free.
+            "released_requests": released,
         },
         items=[describe(r) for r in rows if r is not root],
         deleted_by=principal.id,
@@ -325,6 +334,18 @@ async def delete_root(
     )
     await db.flush()
     return entry
+
+
+async def trashed_documents(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, Document]:
+    """Those of these documents that are in Trash (a request's conflict names its PRD)."""
+    if not ids:
+        return {}
+    rows = await db.scalars(
+        select(Document)
+        .where(Document.id.in_(ids), Document.deleted_at.is_not(None))
+        .execution_options(**ALL)
+    )
+    return {d.id: d for d in rows}
 
 
 def _models() -> tuple[type, ...]:
@@ -415,6 +436,11 @@ async def restore_entry(
     from oracle.roadmap import alerts
 
     await alerts.reopen_after_trash(db, entry.root.get("closed_alerts") or [])
+    from oracle.requests import service as requests_service
+
+    await requests_service.relink_documents(
+        db, principal, entry.root.get("released_requests") or []
+    )
     not_restored = await _not_restored(db, entry)
     await audit.record(
         db,
@@ -500,3 +526,23 @@ async def list_entries(db: AsyncSession) -> list[TrashEntry]:
     entries = list(await db.scalars(stmt))
     hidden = await _hidden_runs(db, entries)
     return [e for e in entries if e.root_id not in hidden]
+
+
+async def highest_decision_number(db: AsyncSession) -> int | None:
+    """The highest decision number, a trashed PRD's open questions' too (the filter hides
+    them; a new decision's number must still be new)."""
+    from sqlalchemy import func
+
+    from oracle.decisions.models import Decision
+
+    return await db.scalar(select(func.max(Decision.number)).execution_options(**ALL))
+
+
+async def only_in_trash(db: AsyncSession, kind: str) -> bool:
+    """Every document of this kind is in Trash (and there is at least one): a review of
+    them reviews what is in Trash (Home's "Next review meeting")."""
+    kinds = await db.scalars(
+        select(Document.deleted_at).where(Document.kind == kind).execution_options(**ALL)
+    )
+    at = list(kinds)
+    return bool(at) and all(d is not None for d in at)

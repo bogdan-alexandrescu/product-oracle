@@ -375,7 +375,8 @@ async def test_research_this_proposes_a_run_and_only_a_person_creates_it(client,
     ).json()
     assert [p["id"] for p in listed] == [proposal["id"]]
 
-    # A commenter cannot accept it; an approver accepts and gets a draft run only.
+    # A commenter cannot accept it; an approver's Accept starts the research run
+    # (brief-answers: never a draft nobody starts).
     url = f"/v1/intake-proposals/{proposal['id']}/accept"
     assert (await client.post(url, headers=ctx.as_("commenter"))).status_code == 403
     resp = await client.post(url, headers=ctx.as_("approver"))
@@ -384,8 +385,8 @@ async def test_research_this_proposes_a_run_and_only_a_person_creates_it(client,
     assert accepted["status"] == "accepted"
     run_id = accepted["result"]["run_id"]
     run = (await client.get(f"/v1/runs/{run_id}", headers=ctx.as_("viewer"))).json()
-    assert run["status"] == "draft"
-    assert runtime.submitted == []
+    assert run["status"] != "draft" and run["estimate_usd"] is not None
+    assert run["status"] == "awaiting_approval" or runtime.submitted
     async with tenant_session(ctx.tenant_id) as s:
         row = await s.get(Run, uuid.UUID(run_id))
         assert row.knobs["intake_id"] == intake_id

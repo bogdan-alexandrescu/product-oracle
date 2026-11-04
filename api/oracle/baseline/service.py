@@ -17,6 +17,7 @@ blocker still gates publishing takes the B4 role on every path
 The caller commits.
 """
 
+import re
 import uuid
 from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
@@ -30,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, changes
 from oracle.auth.deps import Principal
 from oracle.baseline import goals, scoring
+from oracle.baseline.goal_order import goal_sort_key
 from oracle.baseline.models import (
     EDGE_TYPES,
     ENTITY_TYPES,
@@ -404,13 +406,18 @@ async def propose(
     fields: dict[str, Any],
     entity: Entity | None = None,
     edge: Edge | None = None,
+    role: str | None = None,
 ) -> Proposal:
-    """A proposal, or the identical open one already there (so repeats are idempotent)."""
+    """A proposal, or the identical open one already there (so repeats are idempotent).
+    A run's proposal of a change it already proposed is marked as that one's duplicate."""
     if kind == "entity" and op in ("create", "update"):
         _check_fields_managed_attrs(writer, entity, fields)
     payload = _jsonable(
         {"op": op, "kind": kind, "fields": fields, "reason": writer.reason, "origin": writer.origin}
     )
+    if role:
+        # The run's role that made it ("writer", "critic"): "Also proposed by Critic".
+        payload["role"] = role
     if writer.manages:
         # Its acceptance may write these keys too (:func:`intake_made`).
         payload["manages"] = list(writer.manages)
@@ -419,9 +426,15 @@ async def propose(
         Proposal.entity_id == entity.id if entity else Proposal.entity_id.is_(None),
         Proposal.edge_id == edge.id if edge else Proposal.edge_id.is_(None),
     )
-    for existing in (await db.scalars(stmt)).all():
+    siblings = (await db.scalars(stmt.order_by(Proposal.created_at))).all()
+    for existing in siblings:
         if existing.payload == payload:
             return existing
+    if writer.run_id is not None:
+        for existing in siblings:
+            if existing.run_id == writer.run_id and same_change(existing.payload, payload):
+                payload["duplicate_of"] = existing.payload.get("duplicate_of") or str(existing.id)
+                break
     proposal = Proposal(
         entity_id=entity.id if entity else None,
         edge_id=edge.id if edge else None,
@@ -433,6 +446,171 @@ async def propose(
     db.add(proposal)
     await db.flush()
     return proposal
+
+
+_TITLE_LEAD = re.compile(r"^(add|new|a|an|the)\s+")
+
+
+def _title_words(title: Any) -> list[str]:
+    """A new item's title as words for comparing: no case, no leading "Add", no plural."""
+    words = _TITLE_LEAD.sub("", str(title or "").strip().lower())
+    return re.findall(r"[a-z0-9]+", re.sub(r"s\b", "", words))
+
+
+def near_titles(a: Any, b: Any) -> bool:
+    """Near-identical titles: "Saved carts" and "Add saved cart", "Saved addresses" and
+    "Saved address" (the same words, the last with up to two letters more). A word or a
+    number more is another item: "Search" and "Search v2", "Sharing" and "Sharing UI"."""
+    x, y = sorted((_title_words(a), _title_words(b)), key=lambda w: len("".join(w)))
+    if not x or len(x) != len(y) or x[:-1] != y[:-1] or not y[-1].startswith(x[-1]):
+        return False
+    more = y[-1][len(x[-1]) :]
+    return not more or (len("".join(x)) >= 5 and len(more) <= 2 and more.isalpha())
+
+
+def same_change(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """Whether two proposals (on the same target) propose the same change, whatever the
+    values: the same fields, the same link, a new item of the same type and key or a
+    near-identical title, or the same removal."""
+    from oracle.baseline.describe import _changes
+
+    if (a.get("op"), a.get("kind")) != (b.get("op"), b.get("kind")):
+        return False
+    fa, fb = a.get("fields") or {}, b.get("fields") or {}
+    if a.get("op") == "update":
+        keys = {k for k, _ in _changes(fa)}
+        return bool(keys) and keys == {k for k, _ in _changes(fb)}
+    if a.get("op") == "delete":
+        return True
+    if a.get("kind") == "edge":
+        return all(str(fa.get(k)) == str(fb.get(k)) for k in ("src_id", "dst_id", "type"))
+    return fa.get("type") == fb.get("type") and (
+        fa.get("key") == fb.get("key") or near_titles(fa.get("title"), fb.get("title"))
+    )
+
+
+def agrees(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """Two marked duplicates that set every field alike (an update's values differ when
+    they disagree: one sets Planned, the other Proposed)."""
+    from oracle.baseline.describe import _changes, _same
+
+    if a.get("op") != "update":
+        return True
+    theirs = dict(_changes(b.get("fields") or {}))
+    return all(_same(v, theirs.get(k)) for k, v in _changes(a.get("fields") or {}))
+
+
+async def duplicates(
+    db: AsyncSession, proposals: list[Proposal]
+) -> tuple[dict[uuid.UUID, uuid.UUID | None], dict[uuid.UUID, list[Proposal]]]:
+    """({id: the open proposal it duplicates}, {id: its open duplicates, oldest first}),
+    for the open proposals among these."""
+    dup_of: dict[uuid.UUID, uuid.UUID | None] = {p.id: None for p in proposals}
+    also: dict[uuid.UUID, list[Proposal]] = {p.id: [] for p in proposals}
+    open_ = [p for p in proposals if p.status == "open"]
+    roots = {str(r) for p in open_ if (r := _uuid_or_none(p.payload.get("duplicate_of")))}
+    keys = roots | {str(p.id) for p in open_}
+    if not keys:
+        return dup_of, also
+    rows = await db.scalars(
+        select(Proposal)
+        .where(Proposal.status == "open", Proposal.payload["duplicate_of"].astext.in_(keys))
+        .order_by(Proposal.created_at)
+    )
+    groups: dict[str, list[Proposal]] = {}
+    for d in rows.all():
+        groups.setdefault(d.payload["duplicate_of"], []).append(d)
+    live = set(
+        (await db.scalars(select(Proposal.id).where(
+            Proposal.id.in_([uuid.UUID(r) for r in groups]), Proposal.status == "open"
+        ))).all()
+    )  # fmt: skip
+    for root, group in groups.items():
+        # A group whose first proposal closed alone stays one card, on its oldest.
+        lead = uuid.UUID(root) if uuid.UUID(root) in live else group[0].id
+        for d in group:
+            if d.id == lead:
+                continue
+            if lead in also:
+                also[lead].append(d)
+            if d.id in dup_of:
+                dup_of[d.id] = lead
+    return dup_of, also
+
+
+ALREADY_DONE_NOTE = "Already done"
+NOT_CHOSEN_NOTE = "Another choice was accepted"
+
+
+async def _no_op(db: AsyncSession, p: Proposal) -> bool:
+    """Whether an open proposal would change nothing now."""
+    from oracle.baseline.describe import _changes, _real
+
+    payload, fields = p.payload, p.payload.get("fields") or {}
+    if payload.get("op") == "update":
+        target = await db.get(Entity, p.entity_id) if p.entity_id else None
+        if p.edge_id:
+            target = await db.get(Edge, p.edge_id)
+        return target is not None and not _real(_changes(fields), target)
+    if payload.get("op") != "create":
+        return False
+    if payload.get("kind") == "edge":
+        src, dst = _uuid_or_none(fields.get("src_id")), _uuid_or_none(fields.get("dst_id"))
+        return bool(src and dst) and await find_edge(db, src, dst, fields.get("type")) is not None
+    return await find_entity(db, fields.get("type"), fields.get("key")) is not None
+
+
+async def close_siblings(db: AsyncSession, accepted: Proposal, principal: Principal) -> list[str]:
+    """After an accept: the open proposals it made no-ops close as already done, at once;
+    a disagreeing duplicate of it closes as not chosen. Those that would undo it stay open
+    (their overlaps say so). Returns the ids closed as already done."""
+    from oracle.baseline.describe import summaries
+
+    root = accepted.payload.get("duplicate_of") or str(accepted.id)
+    near = [Proposal.payload["duplicate_of"].astext == root, Proposal.id == uuid.UUID(root)]
+    if accepted.payload.get("op") == "create":
+        # Only a new item of its type (a link between the same two items) can be made a no-op.
+        made, fields = accepted.payload.get("fields") or {}, Proposal.payload["fields"]
+        same_item = (
+            [fields[k].astext == str(made.get(k)) for k in ("src_id", "dst_id", "type")]
+            if accepted.payload.get("kind") == "edge"
+            else [fields["type"].astext == str(made.get("type"))]
+        )
+        near.append(and_(
+            Proposal.entity_id.is_(None), Proposal.edge_id.is_(None),
+            Proposal.payload["op"].astext == "create",
+            Proposal.payload["kind"].astext == accepted.payload.get("kind"),
+            *same_item,
+        ))  # fmt: skip
+    if accepted.entity_id:
+        near.append(Proposal.entity_id == accepted.entity_id)
+    if accepted.edge_id:
+        near.append(Proposal.edge_id == accepted.edge_id)
+    rows = (
+        await db.scalars(
+            select(Proposal)
+            .where(Proposal.status == "open", Proposal.id != accepted.id, or_(*near))
+            .order_by(Proposal.created_at)
+        )
+    ).all()
+    closing: list[tuple[Proposal, str]] = []
+    for p in rows:
+        grouped = (p.payload.get("duplicate_of") or str(p.id)) == root
+        if grouped and not agrees(accepted.payload, p.payload):
+            closing.append((p, "not_chosen"))
+        elif (grouped and same_change(accepted.payload, p.payload)) or await _no_op(db, p):
+            closing.append((p, "already_done"))
+    sentences = await summaries(db, [p for p, _ in closing])
+    for p, outcome in closing:
+        note = ALREADY_DONE_NOTE if outcome == "already_done" else NOT_CHOSEN_NOTE
+        p.status = "accepted" if outcome == "already_done" else "rejected"
+        p.decided_by, p.decided_at = principal.id, _now()
+        p.payload = {**p.payload, "summary": sentences[p.id], "outcome": outcome, "note": note}
+        await audit.record(
+            db, principal, f"baseline.proposal.{p.status}", "proposal", p.id,
+            {"note": note, "after": str(accepted.id)},
+        )  # fmt: skip
+    return [str(p.id) for p, outcome in closing if outcome == "already_done"]
 
 
 SUPERSEDED_NOTE = "Superseded: the same run later applied this change directly"
@@ -556,16 +734,35 @@ async def list_proposals(
 async def proposal_runs(
     db: AsyncSession, run_ids: Iterable[uuid.UUID | None]
 ) -> dict[uuid.UUID, ProposalRun]:
-    """{run id: ProposalRun} for the runs that made these proposals, in one query."""
+    """{run id: ProposalRun} for the runs that made these proposals, with their sources."""
+    from oracle.docs.models import Document
+    from oracle.docs.service import version_sources
     from oracle.runs.flows import FLOWS
     from oracle.runs.models import Run
 
     ids = {i for i in run_ids if i is not None}
     if not ids:
         return {}
-    rows = await db.execute(
-        select(Run.id, Run.flow, Run.status, Run.created_at).where(Run.id.in_(ids))
-    )
+    runs = (await db.scalars(select(Run).where(Run.id.in_(ids)))).all()
+
+    def source_id(run: Run) -> uuid.UUID | None:
+        raw = (run.knobs or {}).get("source_version_id")
+        return uuid.UUID(raw) if raw else None
+
+    sources = await version_sources(db, [source_id(r) for r in runs])
+    doc_ids = {r.document_id for r in runs if r.document_id is not None}
+    titles: dict[uuid.UUID, str] = {}
+    if doc_ids:
+        rows = await db.execute(select(Document.id, Document.title).where(Document.id.in_(doc_ids)))
+        titles = {doc_id: title for doc_id, title in rows.all()}
+
+    def source_title(run: Run) -> str | None:
+        sid = source_id(run)
+        found = sources.get(sid) if sid is not None else None
+        if found is not None:
+            return found.title
+        return titles.get(run.document_id) if run.document_id is not None else None
+
     return {
         r.id: ProposalRun(
             id=r.id,
@@ -573,8 +770,9 @@ async def proposal_runs(
             flow_title=FLOWS[r.flow].title if r.flow in FLOWS else r.flow,
             status=r.status,
             created_at=r.created_at,
+            source_title=source_title(r),
         )
-        for r in rows
+        for r in runs
     }
 
 
@@ -742,7 +940,13 @@ async def decide_proposal(
                     await delete_entity(db, writer, target)
         else:
             if p["op"] == "create":
-                await create_edge(db, writer, **_edge_create_args(fields))
+                args = _edge_create_args(fields)
+                if await find_edge(db, args["src_id"], args["dst_id"], args["type_"]):
+                    # Made since it was proposed: nothing to do, and no error.
+                    proposal.payload = {**proposal.payload, "outcome": "already_done",
+                                        "note": "This link already exists"}  # fmt: skip
+                else:
+                    await create_edge(db, writer, **args)
             else:
                 target = await get_edge(db, proposal.edge_id or fields.get("id"))
                 if p["op"] == "update":
@@ -769,6 +973,10 @@ async def decide_proposal(
         from oracle.baseline import goal_interview
 
         await goal_interview.on_proposal_accepted(db, proposal, principal)
+        await db.flush()
+        closed = await close_siblings(db, proposal, principal)
+        if closed:
+            proposal.payload = {**proposal.payload, "closed_as_done": closed}
     await db.flush()
     return proposal
 
@@ -831,6 +1039,7 @@ async def submit_proposal(
     fields: dict[str, Any],
     entity_id: uuid.UUID | None,
     edge_id: uuid.UUID | None,
+    role: str | None = None,
 ) -> Proposal:
     """A proposal made explicitly (POST /proposals), checked against the graph."""
     entity = edge = None
@@ -859,7 +1068,9 @@ async def submit_proposal(
             merge_attrs(entity.attrs if entity else {}, attrs),
             dict(entity.attrs or {}) if entity else None,
         )
-    return await propose(db, writer, op=op, kind=kind, fields=fields, entity=entity, edge=edge)
+    return await propose(
+        db, writer, op=op, kind=kind, fields=fields, entity=entity, edge=edge, role=role
+    )
 
 
 def _change_subject(entity: Entity, before: dict[str, Any] | None) -> str | None:
@@ -1295,7 +1506,9 @@ async def list_entities(
         stmt = stmt.where(Entity.type == type_)
     if status:
         stmt = stmt.where(Entity.status == status)
-    return list((await db.scalars(stmt)).all())
+    rows = list((await db.scalars(stmt)).all())
+    # goal-order: goals in the one goal order, other types by key.
+    return sorted(rows, key=lambda e: (e.type, goal_sort_key(e) if e.type == "goal" else ()))
 
 
 async def list_edges(
@@ -1353,7 +1566,7 @@ async def create_edge(
     _check_edge_attrs(type_, attrs)
     _check_status(status)
     if await find_edge(db, src_id, dst_id, type_) is not None:
-        raise ConflictError(f"a {type_} edge between these entities already exists")
+        raise ConflictError("This link already exists")
     if writer.must_propose(None):
         fields = {"src_id": src_id, "dst_id": dst_id, "type": type_, "attrs": attrs,
                   "status": status}  # fmt: skip

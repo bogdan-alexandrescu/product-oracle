@@ -148,6 +148,11 @@ export interface RunsContext {
    */
   slowAgents?: boolean;
   /**
+   * run-progress "quiet-agents": as "slow-agents", but the first tick reads agents that send no
+   * heartbeat and whose cost SwarmCloud has not reported, while the run wrote 12 proposals.
+   */
+  quietAgents?: boolean;
+  /**
    * H11 Order priorities, as oracle.autonomy for the runs: its level, its limits, and the
    * "Oracle did" row Oracle leaves when it saves a run's order itself (_tell_order_saved).
    * Absent: Oracle never saves an order at a stop that is on.
@@ -465,6 +470,13 @@ function docTitle(ctx: RunsContext, r: { id: string; document_id?: string | null
   return ctx.briefTitle?.(r.id) ?? null;
 }
 
+/** A proposal's run (the API's ProposalRun), with the title of the document its source codes come from. */
+export function proposalRun(ctx: Pick<RunsContext, "documents">, r: RunOut): Schemas["ProposalRun"] {
+  // codes-and-chips: the source version's document, else the run's own document, else none.
+  const own = r.document_id ? (ctx.documents.find((d) => d.id === r.document_id)?.title ?? null) : null;
+  return { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at, source_title: r.source?.title ?? own };
+}
+
 function summary(r: RunOut): Schemas["RunSummary"] {
   return {
     id: r.id,
@@ -589,6 +601,8 @@ function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string
     error: null,
     agents: [],
     checked_at: null,
+    cost_reported: false,
+    proposals_written: 0,
   }));
 }
 
@@ -963,6 +977,8 @@ function refresh(r: RunOut) {
   r.draft_rejected = refused(r, false);
   r.sent_back = refused(r, true);
   for (const s of r.segments) s.sent_back = sentBack(r, s);
+  // As the API: a segment with a cost counted has one reported.
+  for (const s of r.segments) s.cost_reported = s.cost_reported || s.cost_usd > 0 || s.agents.some((a) => !!a.cost_usd);
   r.spent_usd = round2(r.segments.reduce((sum, s) => sum + s.cost_usd, 0));
   r.waiting_on = r.checkpoints.find((c) => c.status === "pending")?.kind ?? null;
   // As the API: waiting on its checkpoint, a decision recorded there and not delivered yet.
@@ -998,7 +1014,7 @@ function submit(ctx: RunsContext, r: RunOut, s: SegmentOut, note: string | null 
   s.workflow_id = `mock-wf-${ctx.uuid().slice(0, 8)}`;
   s.started_at ??= ctx.now();
   s.finished_at = null;
-  Object.assign(s, { agents: [], checked_at: null });
+  Object.assign(s, { agents: [], checked_at: null, proposals_written: 0, cost_reported: s.cost_usd > 0 });
   s.attempts.push({ attempt: s.attempts.length + 1, workflow_id: s.workflow_id, submitted_at: ctx.now(), cost_usd: 0, note, state: "running" });
   r.status = "running";
 }
@@ -1531,12 +1547,15 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
   else next(ctx, r, s);
 }
 
-/** Tests: a count of runs every check reports it could not read. */
+/** Runs a check counts as at work: an ended run it could not read is still named. */
+const TICK_ACTIVE = new Set<string>(["running", "awaiting_checkpoint", "awaiting_approval", "paused_overrun"]);
+
+/** Tests: a count of runs every check reports it could not read, or "running": every running run. */
 export const MOCK_TICK_ERRORS_KEY = "po-mock-tick-errors";
 /** Tests (artifact-skip-refused): a file name SwarmCloud refuses to send (422) from every running step. */
 export const MOCK_TICK_REFUSED_KEY = "po-mock-tick-refused";
 
-function tick(ctx: RunsContext): Schemas["TickOut"] {
+function tick(ctx: RunsContext, ticker = false): Schemas["TickOut"] {
   const out = {
     runs_checked: 0,
     segments_finished: 0,
@@ -1544,6 +1563,8 @@ function tick(ctx: RunsContext): Schemas["TickOut"] {
     runs_paused: 0,
     errors: [] as string[],
     member_follow_ups: 0,
+    active_runs: 0,
+    unchecked: [] as Schemas["TickUnchecked"][],
   };
   // Decisions recorded and not delivered yet: SwarmCloud takes them now, and the run goes on
   // (its next segment runs from the next tick).
@@ -1562,12 +1583,26 @@ function tick(ctx: RunsContext): Schemas["TickOut"] {
     delivered.add(r.id);
     out.runs_checked += 1;
   }
+  // Tests: runs the check could not read (the API lists each with its error, and rolls back their pass).
+  // Only the ticker's own check (POST /v1/internal/tick), never the ticks that seed the mock's runs.
+  const failing = !ticker || typeof localStorage === "undefined" ? null : localStorage.getItem(MOCK_TICK_ERRORS_KEY);
+  // As the API: ended runs Oracle still watches (a cancel winding down), named with why.
+  // "running": every running run, the one a test started included.
+  const unread = !failing
+    ? []
+    : failing === "running"
+      ? ctx.db.runs.filter((r) => r.status === "running" && r.flow !== DRAFT_ITEMS_FLOW)
+      : [...ctx.db.runs.filter((r) => !TICK_ACTIVE.has(r.status)), ...ctx.db.runs.filter((r) => TICK_ACTIVE.has(r.status))].slice(0, Number(failing));
+  const unreadIds = new Set(unread.map((r) => r.id));
   for (const r of ctx.db.runs) {
     if (r.status !== "running" || delivered.has(r.id)) continue;
     // E1: a draft's items run is finished by the draft roadmap's own tick (./draft-roadmap.ts).
     if (r.flow === DRAFT_ITEMS_FLOW) continue;
     out.runs_checked += 1;
-    if (ctx.slowAgents && agentsWorking(ctx, r)) continue;
+    // A run that could not be checked is named, not counted as active.
+    if (unreadIds.has(r.id)) continue;
+    out.active_runs += 1;
+    if ((ctx.slowAgents || ctx.quietAgents) && agentsWorking(ctx, r)) continue;
     if (r.waiting_for) {
       // F4 lane B, as the API re-checks each tick: the version's roadmap items are ready
       // now, so the Engineering dates step starts (a workflow of its own).
@@ -1588,7 +1623,8 @@ function tick(ctx: RunsContext): Schemas["TickOut"] {
       );
       const note =
         `SwarmCloud refused to send ${refused} (${why}), the file this step's results are imported from, so they ` +
-        "were not imported. Oracle asks again each minute; if SwarmCloud keeps refusing it, cancel the run and start it again.";
+        "were not imported. Oracle asks again each minute; if SwarmCloud keeps refusing it, ask whoever runs SwarmCloud why " +
+        "it refuses this file: it goes by the file's name, so running the step again will not help.";
       if (!r.notes.includes(note)) r.notes.push(note);
       continue;
     }
@@ -1599,9 +1635,13 @@ function tick(ctx: RunsContext): Schemas["TickOut"] {
     else out.runs_advanced += 1;
     startedInCheck(ctx, r);
   }
-  // Tests: runs the check could not read (the API lists each with its error).
-  const failing = typeof localStorage === "undefined" ? null : localStorage.getItem(MOCK_TICK_ERRORS_KEY);
-  if (failing) for (let i = 0; i < Number(failing); i++) out.errors.push(`run ${i + 1}: SwarmCloud did not answer`);
+  for (const r of unread) {
+    // As the API: SwarmCloud's 503, in words (the error keeps what SwarmCloud said).
+    out.errors.push(`run ${r.id}: SwarmCloud refused GET /v1/workflows/${r.id}: HTTP 503 unavailable`);
+    const reason = "SwarmCloud had a problem on its side; the next check tries again";
+    out.unchecked.push({ run_id: r.id, title: [r.document_title, r.flow_title].filter(Boolean).join(" · "), reason });
+    if (r.status !== "running" || r.flow === DRAFT_ITEMS_FLOW) out.runs_checked += 1;
+  }
   return out;
 }
 
@@ -1609,7 +1649,7 @@ function tick(ctx: RunsContext): Schemas["TickOut"] {
 function startedInCheck(ctx: RunsContext, r: RunOut) {
   const s = r.segments.find((x) => x.status === "running");
   if (!s || s.checked_at) return;
-  if (ctx.slowAgents) agentsWorking(ctx, r);
+  if (ctx.slowAgents || ctx.quietAgents) agentsWorking(ctx, r);
   else s.checked_at = ctx.now();
 }
 
@@ -1619,8 +1659,17 @@ function agentsWorking(ctx: RunsContext, r: RunOut): boolean {
   if (!s || s.checked_at) return false;
   const each = round2(((s.estimate_usd ?? 0) / 3) / Math.max(s.roles.length, 1));
   const now = ctx.now();
-  s.agents = s.roles.map((role) => ({ role, state: "running", started_at: s.started_at, heartbeat_at: now, cost_usd: each }));
+  if (ctx.quietAgents) {
+    // run-progress: no heartbeat and no cost reported, but 12 proposals written 30s ago.
+    const wrote = new Date(new Date(now).getTime() - 30_000).toISOString();
+    const started = new Date(new Date(now).getTime() - 5 * 60_000).toISOString();
+    s.agents = s.roles.map((role) => ({ role, state: "running", started_at: started, heartbeat_at: null, cost_usd: null, event_at: null, last_work_at: wrote, last_work: "proposals" }));
+    Object.assign(s, { checked_at: now, proposals_written: 12, cost_reported: false });
+    return true;
+  }
+  s.agents = s.roles.map((role) => ({ role, state: "running", started_at: s.started_at, heartbeat_at: now, cost_usd: each, event_at: null, last_work_at: now, last_work: "heartbeat" }));
   s.checked_at = now;
+  s.cost_reported = true;
   const a = s.attempts[s.attempts.length - 1];
   a.cost_usd = round2(each * s.roles.length);
   s.cost_usd = round2(s.attempts.reduce((sum, x) => sum + x.cost_usd, 0));
@@ -1638,7 +1687,7 @@ function finishRunning(ctx: RunsContext, r: RunOut): "none" | "paused" | "advanc
   s.cost_usd = round2(s.attempts.reduce((sum, x) => sum + x.cost_usd, 0));
   s.status = "succeeded";
   s.finished_at = ctx.now();
-  Object.assign(s, { agents: [], checked_at: null });
+  Object.assign(s, { agents: [], checked_at: null, proposals_written: 0, cost_reported: s.cost_usd > 0 });
   refresh(r);
   if (r.overrun_ceiling_usd != null && r.spent_usd > r.overrun_ceiling_usd) {
     r.status = "paused_overrun";
@@ -1862,7 +1911,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
 
   if (p[1] === "flows" && m === "GET") return json(200, flowCatalog());
   if (p[1] === "inbox" && m === "GET") return json(200, inbox(ctx));
-  if (p[1] === "internal" && p[2] === "tick" && m === "POST") return json(200, tick(ctx));
+  if (p[1] === "internal" && p[2] === "tick" && m === "POST") return json(200, tick(ctx, true));
   // C6: the document's approved PRD scope, by id or slug (a new PRD's run names it by slug).
   if (p[1] === "documents" && p.length === 4 && p[3] === "scope" && m === "GET") {
     const doc = ctx.documents.find((d) => d.id === p[2] || d.slug === p[2]);
@@ -2946,7 +2995,7 @@ export function seedNoDocumentRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
 export function fromRunCheckpoint(ctx: RunsContext, runId: string): { run: Schemas["ProposalRun"]; checkpoint: Schemas["FromRunCheckpoint"] | null; actions: Schemas["ReviewAction"][] } | null {
   const r = ctx.db.runs.find((x) => x.id === runId);
   if (!r) return null;
-  const run = { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at };
+  const run = proposalRun(ctx, r);
   const cp = r.checkpoints.filter((c) => c.kind === "baseline_confirm").pop();
   if (!cp) return { run, checkpoint: null, actions: [] };
   const role = ctx.member?.role ?? ctx.userRole ?? null;

@@ -36,6 +36,7 @@ export const MESSAGES: Record<string, string> = {
   bad_horizon: "The horizon is short, medium or long",
   owner_not_member: "The owner must be a member of this Oracle",
   weight_out_of_range: "The weight is a number above 0 and at most 10",
+  bad_position: "The position is a whole number, 1 or more (1 = first)",
 };
 
 const set = (a: Attrs, k: string) => a[k] != null;
@@ -67,6 +68,7 @@ export function goalProblems(a: Attrs, isMember: (id: string) => boolean, on = t
   if (set(a, "horizon") && !HORIZONS.includes(a.horizon as string)) out.push(["bad_horizon", "horizon"]);
   if (set(a, "owner") && !(typeof a.owner === "string" && UUID_RE.test(a.owner) && isMember(a.owner))) out.push(["owner_not_member", "owner"]);
   if (set(a, "weight") && !(isNumber(a.weight) && a.weight > 0 && a.weight <= 10)) out.push(["weight_out_of_range", "weight"]);
+  if (set(a, "position") && !(Number.isInteger(a.position) && (a.position as number) >= 1)) out.push(["bad_position", "position"]);
   return out.map(([code, k]) => ({ code, message: MESSAGES[code], where: `attrs.${k}` }));
 }
 

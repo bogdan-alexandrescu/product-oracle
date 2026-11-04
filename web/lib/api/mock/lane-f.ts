@@ -5,6 +5,7 @@
  * UI to be exercised; the API stays the reference.
  */
 import type { Schemas } from "@/lib/api/client";
+import { goalPosition, sortGoals } from "@/lib/goal-order";
 import { plainText } from "@/lib/markdown";
 import { LONG_WORDS_SCENARIO } from "./baseline";
 import { presenterNotes, resolveBrief } from "./brief";
@@ -1623,6 +1624,7 @@ type RoadmapAnswers = Schemas["RoadmapAnswers"];
 
 export function recommendPrd(a: PrdAnswers): [string, string] {
   if (a.decision === "start_or_not") {
+    if (a.model_driven) return ["one-pager", "You want a go / no-go first; a one-pager settles that. Add behaviour and evals when it becomes an AI feature PRD."];
     return ["one-pager", "You want a go / no-go first: a one-pager agrees the problem, audience and success measure fast."];
   }
   if (a.decision === "technical_design") {
@@ -1641,13 +1643,14 @@ export function recommendPrd(a: PrdAnswers): [string, string] {
   if (a.model_driven) {
     return ["ai-feature", "The output comes from a model: this template specifies behaviour, evals, fallbacks and cost."];
   }
-  if (a.readers === "leadership") {
+  const readers = a.readers ?? [];
+  if (readers.includes("leadership")) {
     return ["narrative-memo", "Leadership or the board reads it: a narrative memo argues the case in prose and is read in one sitting."];
   }
-  if (a.decision == null && a.size === "small_change" && (a.readers == null || a.readers === "founder")) {
+  if (a.decision == null && a.size === "small_change" && readers.every((r) => r === "founder")) {
     return ["one-pager", "A small change for the founder: a one-pager is enough to decide."];
   }
-  if (a.readers === "engineers_or_agents") {
+  if (readers.includes("engineers_or_agents")) {
     return ["oracle-default", "Engineers or coding agents build from it: the goal-traced PRD has numbered requirements with Given / When / Then criteria."];
   }
   return ["oracle-default", "A cross-functional build: the goal-traced PRD agrees the problem, then the prioritized solution, then launch."];
@@ -1991,8 +1994,16 @@ const KEY_RE = /^[a-z0-9][a-z0-9-]{1,62}$/;
 
 /** Each goal term titled as the baseline titles the goal now, as the API reads it. */
 function goalTitles(db: Db, r: Schemas["PriorityRanking"], scenario?: string | null): Schemas["PriorityRanking"] {
-  const titles = new Map((db.baseline.entities).filter((e) => e.type === "goal").map((e) => [e.key, e.title]));
-  for (const f of r.features) for (const g of f.explanation.goals) g.title = titles.get(g.goal) ?? g.title;
+  const goals = db.baseline.entities.filter((e) => e.type === "goal");
+  const titles = new Map(goals.map((e) => [e.key, e.title]));
+  // goal-order: each feature's goals carry their position and come in the one goal order.
+  const rank = new Map(sortGoals(goals).map((e, i) => [e.key, i]));
+  const at = new Map(goals.map((e) => [e.key, goalPosition({ attrs: e.attrs })]));
+  const place = (key: string) => rank.get(key) ?? Number.MAX_SAFE_INTEGER;
+  for (const f of r.features) {
+    for (const g of f.explanation.goals) Object.assign(g, { title: titles.get(g.goal) ?? g.title, position: at.get(g.goal) ?? null });
+    f.explanation.goals.sort((a, b) => place(a.goal) - place(b.goal) || a.goal.localeCompare(b.goal));
+  }
   if (scenario === LONG_WORDS_SCENARIO) for (const f of r.features) f.title = LONG_WORDS[f.key] ?? f.title;
   return r;
 }

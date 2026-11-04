@@ -6,6 +6,7 @@
  * confirmed goal or rest on weak evidence.
  */
 import type { Schemas } from "@/lib/api/client";
+import { goalPosition, sortGoals } from "@/lib/goal-order";
 
 import { DEPOSITS_IDS } from "./blockers";
 import { describe, proposer } from "./describe";
@@ -20,7 +21,10 @@ type EdgeRow = Omit<Schemas["EdgeOut"], "evidence_count">;
 type EvidenceRow = Schemas["EvidenceOut"] & { added_by?: string | null };
 type ConflictRow = Schemas["ConflictOut"];
 /** Stored as the API stores it: the sentence and who made it are written when it is read (B4). */
-type ProposalRow = Omit<Schemas["ProposalOut"], "summary" | "proposer" | "run" | "overlaps">;
+type ProposalRow = Omit<
+  Schemas["ProposalOut"],
+  "summary" | "proposer" | "run" | "overlaps" | "duplicate_of" | "also_proposed" | "outcome" | "closed_as_done"
+>;
 type Attrs = Record<string, unknown>;
 
 export interface BaselineState {
@@ -519,7 +523,7 @@ export function seedBaseline(uuid: () => string): BaselineState {
       created_at,
     });
   proposal(guided, { attrs: { effort: "L" } }, "The setup review estimated more work than planned.", "2026-10-16T08:10:00Z");
-  proposal(dark, { attrs: { status: "planned" } }, "Mentioned as next up in the planning call.", "2026-10-16T08:12:00Z");
+  proposal(dark, { attrs: { status: "planned" } }, "Mentioned as next up in the planning call, under FR-06.", "2026-10-16T08:12:00Z");
   // And one from a commenter: no run. A fixed id, so the ids seeded after it stay put.
   s.proposals.push({
     id: COMMENTER_PROPOSAL,
@@ -578,7 +582,7 @@ export function traceReport(s: BaselineState, low = LOW_CONFIDENCE): Schemas["Tr
     .filter((e) => (e.type === "feature" || e.type === "goal") && e.status !== "rejected")
     .sort((a, b) => a.key.localeCompare(b.key));
   const features = live.filter((e) => e.type === "feature");
-  const goals = live.filter((e) => e.type === "goal");
+  const goals = sortGoals(live.filter((e) => e.type === "goal"));
   const byId = new Map(live.map((e) => [e.id, e]));
   const featureIds = new Set(features.map((f) => f.id));
 
@@ -626,6 +630,7 @@ export function traceReport(s: BaselineState, low = LOW_CONFIDENCE): Schemas["Tr
       key: g.key,
       title: g.title,
       status: g.status,
+      position: goalPosition({ attrs: g.attrs }),
       weight: num(g.attrs?.weight),
       confidence: num(g.confidence),
       features: fs,
@@ -874,7 +879,7 @@ function createEdge(s: BaselineState, input: Schemas["EdgeCreate"], userId: stri
     throw new MockError(422, "a supports edge needs attrs.contribution, an integer 0-3");
   }
   if (s.edges.some((e) => e.src_id === input.src_id && e.dst_id === input.dst_id && e.type === input.type)) {
-    throw new MockError(409, "That link already exists");
+    throw new MockError(409, "This link already exists");
   }
   const at = now();
   const e: EdgeRow = {
@@ -1009,6 +1014,110 @@ function overlapsOf(s: BaselineState, p: ProposalRow): Schemas["ProposalOverlap"
 }
 
 /** `fields` without the skipped keys. */
+type Pay = { op?: string; kind?: string; fields?: Changes & { src_id?: string; dst_id?: string; type?: string; key?: string }; role?: string; duplicate_of?: string };
+
+/** As service._title_words: the title's words, no case, no leading "Add", no plural. */
+const titleWords = (t: unknown) =>
+  String(t ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^(add|new|a|an|the)\s+/, "")
+    .replace(/s\b/g, "")
+    .match(/[a-z0-9]+/g) ?? [];
+
+/** As service.near_titles: the same words, the last with up to two letters more; never a word or number more. */
+export function nearTitles(a: unknown, b: unknown): boolean {
+  const [x, y] = [titleWords(a), titleWords(b)].sort((m, n) => m.join("").length - n.join("").length);
+  if (x.length === 0 || x.length !== y.length || x.slice(0, -1).join(" ") !== y.slice(0, -1).join(" ")) return false;
+  const [xl, yl] = [x[x.length - 1], y[y.length - 1]];
+  if (!yl.startsWith(xl)) return false;
+  const more = yl.slice(xl.length);
+  return more === "" || (x.join("").length >= 5 && more.length <= 2 && /^[a-z]+$/.test(more));
+}
+
+/** As service.same_change: the same fields, the same link, or a new item of the same type and key or title. */
+export function sameChange(a: Pay, b: Pay): boolean {
+  if (a.op !== b.op || a.kind !== b.kind) return false;
+  const fa = a.fields ?? {};
+  const fb = b.fields ?? {};
+  if (a.op === "update") {
+    const keys = flatChanges(fa).map(([k]) => k).sort();
+    return keys.length > 0 && same(keys, flatChanges(fb).map(([k]) => k).sort());
+  }
+  if (a.op === "delete") return true;
+  if (a.kind === "edge") return fa.src_id === fb.src_id && fa.dst_id === fb.dst_id && fa.type === fb.type;
+  return fa.type === fb.type && (fa.key === fb.key || nearTitles(fa.title, fb.title));
+}
+
+/** As service.agrees: an update that sets every field alike. */
+export function agrees(a: Pay, b: Pay): boolean {
+  if (a.op !== "update") return true;
+  const theirs = Object.fromEntries(flatChanges(b.fields));
+  return flatChanges(a.fields).every(([k, v]) => same(v, theirs[k]));
+}
+
+/** As service.propose: a run's open proposal of a change it already proposed is marked its duplicate. */
+export function markDuplicate(s: BaselineState, p: ProposalRow) {
+  if (!p.run_id) return;
+  const first = s.proposals.find(
+    (o) =>
+      o.id !== p.id &&
+      o.status === "open" &&
+      o.run_id === p.run_id &&
+      o.entity_id === p.entity_id &&
+      o.edge_id === p.edge_id &&
+      sameChange(o.payload as Pay, p.payload as Pay),
+  );
+  if (first) p.payload = { ...p.payload, duplicate_of: (first.payload as Pay).duplicate_of ?? first.id };
+}
+
+/** As service._no_op: an open proposal that would change nothing now. */
+function noOp(s: BaselineState, p: ProposalRow): boolean {
+  const pay = p.payload as Pay;
+  const f = pay.fields ?? {};
+  if (pay.op === "update") {
+    const target = s.entities.find((e) => e.id === p.entity_id);
+    return !!target && Object.keys(entityDiff(target, f)).length === 0;
+  }
+  if (pay.op !== "create") return false;
+  if (pay.kind === "edge") return s.edges.some((e) => e.src_id === f.src_id && e.dst_id === f.dst_id && e.type === f.type);
+  return s.entities.some((e) => e.type === f.type && e.key === f.key);
+}
+
+/** As service.close_siblings' query: a new item of the same type, or a link between the same two items. */
+const sameItem = (a: Pay, b: Pay) =>
+  (a.kind === "edge" ? (["src_id", "dst_id", "type"] as const) : (["type"] as const)).every((k) => a.fields?.[k] === b.fields?.[k]);
+
+/** As service.close_siblings: after an accept, no-ops close as already done, a disagreeing duplicate as not chosen. */
+function closeSiblings(s: BaselineState, accepted: ProposalRow, userId: string): string[] {
+  const pay = accepted.payload as Pay;
+  const root = pay.duplicate_of ?? accepted.id;
+  const done: string[] = [];
+  for (const p of s.proposals) {
+    if (p.id === accepted.id || p.status !== "open") continue;
+    const other = p.payload as Pay;
+    const grouped = (other.duplicate_of ?? p.id) === root;
+    const near =
+      grouped ||
+      (accepted.entity_id && p.entity_id === accepted.entity_id) ||
+      (pay.op === "create" && !p.entity_id && !p.edge_id && other.op === "create" && other.kind === pay.kind && sameItem(pay, other));
+    if (!near) continue;
+    let outcome: "already_done" | "not_chosen" | null = null;
+    if (grouped && !agrees(pay, other)) outcome = "not_chosen";
+    else if ((grouped && sameChange(pay, other)) || noOp(s, p)) outcome = "already_done";
+    if (!outcome) continue;
+    p.payload = {
+      ...p.payload,
+      summary: describe(p, s.entities, s.edges),
+      outcome,
+      note: outcome === "already_done" ? "Already done" : "Another choice was accepted",
+    };
+    Object.assign(p, { status: outcome === "already_done" ? "accepted" : "rejected", decided_by: userId, decided_at: now() });
+    if (outcome === "already_done") done.push(p.id);
+  }
+  return done;
+}
+
 function without(fields: Changes, keys: string[]): Changes {
   const out = Object.fromEntries(Object.entries(fields).filter(([k]) => k !== "attrs" && !keys.includes(k))) as Changes;
   const attrs = Object.entries(fields.attrs ?? {}).filter(([k]) => !keys.includes(`attrs.${k}`));
@@ -1067,6 +1176,8 @@ export async function routeBaseline(
       goal_check: e.type === "goal" ? goalCheck(e.attrs, e.status, isMember) : null,
       parent_id: e.parent_id ?? null,
       progress: e.type === "goal" ? progressOf(s, e) : null,
+      // goal-order: a goal's place on every page (its attrs.position, 1 = first).
+      position: e.type === "goal" ? goalPosition({ attrs: e.attrs }) : null,
     }) as Schemas["EntityOut"];
   /** 422 with every problem, as the API refuses a person's bad goal fields. */
   const refuse = (errors: GoalProblem[]) => json(422, { detail: `goal fields rejected: ${errors.length} problem(s)`, errors });
@@ -1094,6 +1205,28 @@ export async function routeBaseline(
       summary: p.status !== "open" && typeof stored === "string" ? stored : describe(p, s.entities, s.edges),
       proposer: proposer(p, { run, memberEmail: caller.memberEmail }),
       overlaps: overlapsOf(s, p),
+      ...duplicatesOf(p),
+      outcome: ((p.payload as { outcome?: string }).outcome ?? null) as Schemas["ProposalOut"]["outcome"],
+      closed_as_done: ((p.payload as { closed_as_done?: string[] }).closed_as_done ?? []),
+    };
+  };
+  /** As service.duplicates: the open proposal whose card shows this one, and those its card shows. */
+  const duplicatesOf = (p: ProposalRow): Pick<Schemas["ProposalOut"], "duplicate_of" | "also_proposed"> => {
+    if (p.status !== "open") return { duplicate_of: null, also_proposed: [] };
+    // The card a group shows on: its first, or its oldest open one when the first closed alone.
+    const group = (root: string) => s.proposals.filter((d) => d.status === "open" && (d.payload as Pay).duplicate_of === root);
+    const lead = (root: string) => (s.proposals.some((r) => r.id === root && r.status === "open") ? root : group(root)[0]?.id);
+    const root = (p.payload as Pay).duplicate_of;
+    const mine = root && lead(root) === p.id ? group(root) : group(p.id);
+    const also = mine.filter((d) => d.id !== p.id);
+    return {
+      duplicate_of: root && lead(root) !== p.id ? lead(root) : null,
+      also_proposed: also.map((d) => {
+        const role = (d.payload as Pay).role;
+        const run = d.run_id ? (caller.runOf?.(d.run_id) ?? null) : null;
+        const by = role ? role.replaceAll("_", " ").replace(/^./, (c) => c.toUpperCase()) : proposer(d, { run, memberEmail: caller.memberEmail }).label;
+        return { id: d.id, by, fields: (d.payload as Pay).fields ?? {}, same: agrees(p.payload as Pay, d.payload as Pay) };
+      }),
     };
   };
 
@@ -1131,10 +1264,9 @@ export async function routeBaseline(
     if (head === "entities" && !id && m === "GET") {
       const type = q.get("type");
       const status = q.get("status");
-      return json(
-        200,
-        s.entities.filter((e) => shown(e) && (!type || e.type === type) && (!status || e.status === status)).map(entityOut),
-      );
+      const rows = s.entities.filter((e) => shown(e) && (!type || e.type === type) && (!status || e.status === status));
+      // goal-order: goals in the one goal order, as the API lists them.
+      return json(200, (type === "goal" ? sortGoals(rows) : rows).map(entityOut));
     }
 
     if (head === "entities" && !id && m === "POST") {
@@ -1301,10 +1433,19 @@ export async function routeBaseline(
       const p = s.proposals.find((x) => x.id === id);
       if (!p) return fail(404, "Proposal not found");
       if (p.status !== "open") return fail(409, `Proposal is already ${p.status}`);
-      if (action === "accept") {
+      if (action === "accept" && (p.payload as Pay).op === "create") {
+        // A new link or item: a link made since is already done, no error (as the API).
+        const f = (p.payload as Pay).fields ?? {};
+        p.payload = { ...p.payload, summary: describe(p, s.entities, s.edges) };
+        if ((p.payload as Pay).kind === "edge") {
+          if (s.edges.some((e) => e.src_id === f.src_id && e.dst_id === f.dst_id && e.type === f.type))
+            p.payload = { ...p.payload, outcome: "already_done", note: "This link already exists" };
+          else createEdge(s, f as unknown as Schemas["EdgeCreate"], caller.userId);
+        } else createEntity(s, f as unknown as Schemas["EntityCreate"], caller.userId);
+      } else if (action === "accept") {
         const payload = p.payload as { op: string; kind: string; fields?: Changes };
         if (payload.kind !== "entity" || payload.op !== "update") {
-          return fail(501, "Only entity updates can be accepted in mock mode");
+          return fail(501, "Only entity updates and new items can be accepted in mock mode");
         }
         const target = p.entity_id ? findEntity(p.entity_id) : undefined;
         if (!target) return fail(404, "Entity not found");
@@ -1327,6 +1468,10 @@ export async function routeBaseline(
         decided_by: caller.userId,
         decided_at: now(),
       });
+      if (action === "accept") {
+        const closed = closeSiblings(s, p, caller.userId);
+        if (closed.length) p.payload = { ...p.payload, closed_as_done: closed };
+      }
       return json(200, proposalOut(p));
     }
 
@@ -1463,6 +1608,58 @@ export function addNoisyProposals(s: BaselineState, uuid: () => string) {
   );
   const paid = goal("g.paid-conversion");
   propose(paid, { title: paid.title, attrs: { target: paid.attrs.target } }, "2026-10-16T08:22:00Z");
+}
+
+/**
+ * The "proposal-duplicates" scenario: the Baseline to PRD run's writer and critic propose the
+ * same changes twice (Dark mode's delivery status both ways, Saved addresses under two
+ * titles, the Saved carts → Team invites link that already exists), and four proposals on
+ * Raise activation that one accept settles.
+ */
+export function addDuplicateProposals(s: BaselineState, uuid: () => string) {
+  const by = (key: string) => s.entities.find((e) => e.key === key)!;
+  const push = (target: EntityRow | null, payload: Record<string, unknown>, created_at: string, run = true) => {
+    const p: ProposalRow = {
+      id: uuid(),
+      entity_id: target?.id ?? null,
+      edge_id: null,
+      payload: { origin: "agent", ...payload },
+      run_id: run ? AGENT_RUN : null,
+      actor: run ? `run:${AGENT_RUN}` : null,
+      status: "open",
+      decided_by: null,
+      decided_at: null,
+      created_at,
+    };
+    s.proposals.push(p);
+    markDuplicate(s, p);
+  };
+  const update = (fields: Attrs, reason: string, role?: string) => ({ op: "update", kind: "entity", fields, reason, ...(role ? { role } : {}) });
+  push(by("f.dark-mode"), update({ attrs: { status: "proposed" } }, "Not committed to yet.", "critic"), "2026-10-16T08:40:00Z");
+  const feature = (key: string, title: string, role: string) => ({ op: "create", kind: "entity", fields: { type: "feature", key, title }, reason: "Asked for in the planning call.", role });
+  push(null, feature("f.saved-addresses", "Saved addresses", "writer"), "2026-10-16T08:41:00Z");
+  push(null, feature("f.saved-address", "Add saved address", "critic"), "2026-10-16T08:42:00Z");
+  const link = { src_id: by("f.saved-carts").id, dst_id: by("f.team-invites").id, type: "depends_on" };
+  push(null, { op: "create", kind: "edge", fields: link, reason: "Shared carts need invites.", role: "writer" }, "2026-10-16T08:43:00Z");
+  push(null, { op: "create", kind: "edge", fields: link, reason: "Invites come first.", role: "critic" }, "2026-10-16T08:44:00Z");
+  const goal = by("g.activation");
+  push(goal, update({ attrs: { target: 50 } }, "Raise the bar after the October read.", "writer"), "2026-10-16T08:45:00Z");
+  push(goal, update({ attrs: { target: 50 } }, "Half of new accounts set up in a week."), "2026-10-16T08:46:00Z", false);
+  push(goal, update({ title: goal.title }, "Keep the name."), "2026-10-16T08:47:00Z", false);
+  push(goal, update({ attrs: { target: 55 } }, "Stretch target."), "2026-10-16T08:48:00Z", false);
+  push(null, { ...feature("f.search", "Search", "writer"), reason: "A search box." }, "2026-10-16T08:49:00Z");
+  push(null, { ...feature("f.search-v2", "Search v2", "critic"), reason: "A second search with filters." }, "2026-10-16T08:50:00Z");
+  // Team invites' milestone, set by a proposal accepted days ago, that an older one would undo.
+  const invites = by("f.team-invites");
+  const was = invites.attrs?.milestone ?? null;
+  invites.attrs = { ...invites.attrs, milestone: "M3" };
+  push(invites, update({ attrs: { milestone: "M1" } }, "Invites in M1."), "2026-10-16T08:51:00Z", false);
+  s.proposals.push({
+    id: uuid(), entity_id: invites.id, edge_id: null,
+    payload: { op: "update", kind: "entity", fields: { attrs: { milestone: "M3" } }, reason: "Invites move to M3.", origin: "user" },
+    run_id: null, actor: null, status: "accepted", decided_by: null, decided_at: "2026-10-18T09:00:00Z", created_at: "2026-10-17T09:00:00Z",
+  });
+  (s.fieldChanges ??= []).push({ entity_id: invites.id, field: "attrs.milestone", before: was, after: "M3", at: "2026-10-18T09:00:00Z" });
 }
 
 /**

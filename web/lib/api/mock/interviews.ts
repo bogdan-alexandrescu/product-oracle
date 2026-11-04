@@ -485,6 +485,8 @@ export interface TeamContext extends InterviewsContext {
   nextQuestion: (intakeId: string, after: string) => string | null;
   /** Records the answer through POST /v1/questions/{id}/answers. */
   recordAnswer: (questionId: string, body: string) => Promise<Response>;
+  /** The member's own answer standing on an answered question (brief-answers), else null. */
+  saved: (questionId: string) => { answer: { id: string; body?: string | null }; question: unknown; gap: unknown } | null;
 }
 
 /** Team interviews with a turn still out, until when (ms): the API's turn claim. */
@@ -495,8 +497,10 @@ const RECORDED = "Answer recorded.";
 
 /**
  * POST /v1/intakes/{id}/interview (the member's team interview, created on first call) and
- * POST /v1/interviews/{id}/turns: a follow-up when the answer has fewer than 12 words, once per
- * question; then the member's messages, joined with a blank line, are recorded as their answer.
+ * POST /v1/interviews/{id}/turns: the answer is recorded at once (brief-answers: it closes its
+ * question and counts); a follow-up when it has fewer than 12 words, once per question, and
+ * the reply adds to the same answer (the member's messages joined with a blank line). The same
+ * answer sent again reads as saved, once.
  */
 export async function routeTeamInterviews(db: InterviewsDb, ctx: TeamContext, req: Request, p: string[]): Promise<Response | null> {
   if (req.method !== "POST" || p.length !== 4) return null;
@@ -526,7 +530,7 @@ export async function routeTeamInterviews(db: InterviewsDb, ctx: TeamContext, re
   const qid = input.question_id ?? "";
   const question = ctx.question(qid);
   if (!question || (question.intake_id ?? null) !== r.intake_id) return fail(404, "Question not found");
-  if (!["asked", "delegated", "deferred", "researching", "draft"].includes(question.status)) return fail(409, "This question is answered; it is not asked again");
+  if (!["asked", "delegated", "deferred", "researching", "draft", "answered"].includes(question.status)) return fail(409, "This question is answered; it is not asked again");
   if (question.asked_to && question.asked_to !== ctx.userId) return fail(403, "This question was asked of someone else");
   // As the API (turns.claim_turn): one turn per interview at a time, another is 429. A turn
   // answered late (the test's slow knob on this path) holds the interview while it is out.
@@ -540,6 +544,15 @@ export async function routeTeamInterviews(db: InterviewsDb, ctx: TeamContext, re
   const round = mineOf.slice(mineOf.map((m) => m.kind).lastIndexOf("closing") + 1);
   const said = round.filter((m) => m.role === "interviewee" && m.kind === "answer").map((m) => m.body);
   const text = (input.body ?? "").trim();
+  const followedUp = round.some((m) => m.kind === "follow_up");
+  const saved = ctx.saved(qid);
+  const asResult = (s: NonNullable<typeof saved>) => ({
+    answer: s.answer, question: s.question, gap: s.gap, proposals: [], baseline_proposal_ids: [], change_event_id: null, next_actions: [],
+  });
+  if (question.status === "answered" && (!saved || !followedUp)) {
+    if (saved && text && saved.answer.body === text) return json(200, { messages: [], recorded: asResult(saved), next_question_id: null });
+    return fail(409, "This question is answered; it is not asked again");
+  }
   if (!text && !(input.skip_follow_up && said.length)) return fail(422, "An answer needs a body");
   const added: InterviewMessage[] = [];
   const add = (role: InterviewMessage["role"], kind: InterviewMessage["kind"], body: string) => {
@@ -547,13 +560,24 @@ export async function routeTeamInterviews(db: InterviewsDb, ctx: TeamContext, re
     r.messages.push(m);
     added.push(m);
   };
-  if (text) {
+  if (text && said.length && said[said.length - 1] === text && !followedUp) {
+    // A send that broke after its text was kept is sent again: the text is kept once.
+  } else if (text) {
     said.push(text);
     add("interviewee", "answer", text);
   } else add("interviewee", "skip", "Skip, record my answer");
-  if (!round.some((m) => m.kind === "follow_up") && !input.skip_follow_up && words(text) < THIN_WORDS) {
-    add("oracle", "follow_up", MOCK_TEAM_FOLLOW_UP);
-    return json(200, { messages: added, recorded: null, next_question_id: null });
+  // brief-answers: the test's knob loses this turn's reply on the way back once (as the web's
+  // proxy cut a slow turn off): the answer is saved, the browser gets a bare 500.
+  const sent = (payload: unknown) => {
+    if (localStorage.getItem("po-mock-lost") !== "turns") return json(200, payload);
+    localStorage.removeItem("po-mock-lost");
+    return new Response("Internal Server Error", { status: 500, headers: { "content-type": "text/plain" } });
+  };
+  if (followedUp && saved) {
+    // The reply to Oracle's follow-up adds to the answer recorded with it.
+    saved.answer.body = said.join("\n\n");
+    add("oracle", "closing", RECORDED);
+    return sent({ messages: added, recorded: asResult(saved), next_question_id: ctx.nextQuestion(r.intake_id ?? "", qid) });
   }
   const res = await ctx.recordAnswer(qid, said.join("\n\n"));
   if (!res.ok) {
@@ -561,6 +585,10 @@ export async function routeTeamInterviews(db: InterviewsDb, ctx: TeamContext, re
     return res;
   }
   const recorded = await res.json();
+  if (!followedUp && !input.skip_follow_up && words(text) < THIN_WORDS) {
+    add("oracle", "follow_up", MOCK_TEAM_FOLLOW_UP);
+    return sent({ messages: added, recorded, next_question_id: null });
+  }
   add("oracle", "closing", RECORDED);
-  return json(200, { messages: added, recorded, next_question_id: ctx.nextQuestion(r.intake_id ?? "", qid) });
+  return sent({ messages: added, recorded, next_question_id: ctx.nextQuestion(r.intake_id ?? "", qid) });
 }

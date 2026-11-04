@@ -15,6 +15,7 @@ from oracle import confidence
 from oracle.auth.deps import Principal
 from oracle.baseline import evidence as baseline_evidence
 from oracle.baseline import scoring
+from oracle.baseline.goal_order import goal_position, sort_goals
 from oracle.baseline.models import Edge, Entity, Evidence
 from oracle.baseline.schemas import (
     TraceFeature,
@@ -43,7 +44,7 @@ async def report(db: AsyncSession, principal: Principal | None = None) -> TraceR
         )
     ).all()
     features = [e for e in entities if e.type == "feature"]
-    goals = [e for e in entities if e.type == "goal"]
+    goals = sort_goals(e for e in entities if e.type == "goal")
     by_id = {e.id: e for e in entities}
 
     supports = (
@@ -115,6 +116,7 @@ async def report(db: AsyncSession, principal: Principal | None = None) -> TraceR
             key=g.key,
             title=g.title,
             status=g.status,
+            position=goal_position(g.attrs),
             weight=_num((g.attrs or {}).get("weight")),
             confidence=shown(g),
             features=sorted(goal_features[g.id], key=lambda x: -x.contribution),

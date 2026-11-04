@@ -309,7 +309,7 @@ test("Home: Make measurable on a No target goal card opens its interview", async
   await churnRow(page).getByRole("button", { name: "Confirm" }).click();
   await expect(churnRow(page)).toContainText("Confirmed");
   await page.goto("/home");
-  const g3 = page.getByTestId("home-goal-G3");
+  const g3 = page.getByTestId("home-goal-G1");
   // qa-plan-14: its target "below 8%" is shown, so it says what is missing: the current value.
   await expect(g3.getByTestId("goal-to-go")).toHaveText("No current value yet");
   await g3.getByTestId("goal-make-measurable").click();

@@ -16,7 +16,7 @@ import type { Schemas } from "@/lib/api/client";
 import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { newCompany, stableUuid } from "./ids";
-import { canEditRoadmap, closed, GOALS, goalId, knowTalkGoals, lookalikes, matchesOf, TALK_GOALS, type GoalSuggestionRow, type SimpleDb } from "./simple-roadmap";
+import { canEditRoadmap, closed, GOALS, goalId, goalPositionOf, goalRank, knowTalkGoals, lookalikes, matchesOf, TALK_GOALS, type GoalSuggestionRow, type SimpleDb } from "./simple-roadmap";
 
 type Role = Schemas["Me"]["role"];
 
@@ -240,11 +240,12 @@ export async function routeGoalSuggestions(
     if (q.get("goal_id") && !only) return json(404, { detail: "No such goal" });
     const status = q.get("status") ?? "open";
     // A new company has no confirmed goal yet: none to suggest under.
-    const goals = newCompany() ? [] : goalKeys(ctx).filter((g) => !only || g === only);
+    // goal-order: the goals in the one goal order (else as before), as the API lists them.
+    const goals = (newCompany() ? [] : goalKeys(ctx).filter((g) => !only || g === only)).sort((a, b) => goalRank(a) - goalRank(b));
     return json(200, {
       goals: goals.map((g) => {
         const d = goalDecider(db, g, ctx);
-        return { goal: { id: idOf(ctx, g), key: g, title: titleOf(ctx, g) }, pending: !!db.goal_jobs![g], empty: g in GOALS && isEmpty(db, g), decider_name: d.id ? (ctx.names[d.id] ?? null) : null, can_decide: d.mine };
+        return { goal: { id: idOf(ctx, g), key: g, title: titleOf(ctx, g), position: goalPositionOf(g) }, pending: !!db.goal_jobs![g], empty: g in GOALS && isEmpty(db, g), decider_name: d.id ? (ctx.names[d.id] ?? null) : null, can_decide: d.mine };
       }),
       suggestions: rows.filter((s) => goals.includes(s.goal) && s.status === status && (ctx.role === "owner" || !s.checks?.length)).map((s) => out(db, s, ctx)),
     });
