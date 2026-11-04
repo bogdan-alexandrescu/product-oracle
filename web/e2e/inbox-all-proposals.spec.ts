@@ -48,6 +48,10 @@ async function askRename(page: Page, phone: boolean) {
   const card = ask.getByTestId("chat-card").filter({ hasText: "Rename Welcome video" });
   await tap(card.getByRole("button", { name: "Propose" }));
   await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to");
+  // The Ask panel stays open from page to page: close it, as a person would.
+  if (phone) await page.keyboard.press("Escape");
+  else await tap(page.getByTestId("simple-ask"));
+  await expect(ask).toBeHidden();
 }
 
 /** The owner reviews Usage alerts and cuts the Welcome video, on another roadmap. */
@@ -120,7 +124,7 @@ for (const phone of [false, true]) {
       const meeting = meetingRow(page);
       await expect(ask).toHaveCount(1);
       await expect(meeting).toHaveCount(1);
-      await expect(ask).toContainText(/Rename Welcome video/);
+      await expect(ask).toContainText(/Renamed Welcome video to “Welcome tour” · asked through Ask Oracle by [A-Z][a-z]+ [A-Z][a-z]+/);
       await expect(ask).toContainText(WHEN);
       await expect(meeting).toContainText(/Cut Welcome video · asked for by the meeting Review: Usage alerts PRD/);
       await expect(meeting).toContainText(WHEN);
@@ -135,7 +139,8 @@ for (const phone of [false, true]) {
       await tap(ask.getByRole("button", { name: "Accept" }));
       await expect(page.getByText("Accepted: it is in your working draft")).toBeVisible();
       await expect(askRow(page)).toHaveCount(0);
-      await expect(meetingRow(page)).toHaveCount(1);
+      // The meeting's cut still waits, the item now by its new name.
+      await expect(page.getByRole("row").filter({ hasText: "asked for by the meeting" }).filter({ hasText: "Welcome tour" })).toHaveCount(1);
       await expect.poll(() => waiting(page).catch(() => 0)).toBe(before - 1);
 
       // Accept applied it: the item reads by its new name on its roadmap.
