@@ -18,6 +18,7 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { FeaturePanel } from "../roadmap/_panel";
 import { ArchiveDialog, BTN, count, dayOf, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
+import { TaskRow, useBucketTasks } from "./task-edit";
 import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan } from "./plan-buckets";
 
 type Out = Schemas["SimplePrioritiesOut"];
@@ -279,7 +280,7 @@ export function Priorities() {
         <Ranked data={data} phone={phone} compare={compare} mayChange={mayChange} changed={changed} moved={moved} />
       )}
       {data && !blank && tab === "value-effort" && <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} moved={moved} />}
-      {data && !blank && tab === "buckets" && <Buckets data={data} suggestions={suggestions} />}
+      {data && !blank && tab === "buckets" && <Buckets data={data} suggestions={suggestions} reload={() => q.reload()} />}
       </div>
     </div>
   );
@@ -1789,25 +1790,68 @@ function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }
 
 // --------------------------------------------------------------------------- goal buckets
 
-function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestionsApi }) {
+function Buckets({ data, suggestions, reload }: { data: Out; suggestions: GoalSuggestionsApi; reload: () => Promise<void> }) {
+  // plan-charts: with a dated plan, where each goal's work lands milestone by milestone.
+  if (data.plan?.milestones.length && data.plan.span) return <PlanBuckets data={data} plan={data.plan} suggestions={suggestions} reload={reload} />;
+  return <UndatedBuckets data={data} suggestions={suggestions} reload={reload} />;
+}
+
+const sameGoal = (a: string, b: string) => goalLabel(a).name.toLowerCase() === goalLabel(b).name.toLowerCase();
+
+/**
+ * No dated plan: a card per goal with its share of the quarter's engineer-weeks, and its tasks
+ * you can change as in the dated view: drag one to another goal by its grip (pointer, touch or
+ * keys), add one in place, edit or cut one, each with Undo.
+ */
+function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions: GoalSuggestionsApi; reload: () => Promise<void> }) {
   const { can } = useMe();
   const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
-  // plan-charts: with a dated plan, where each goal's work lands milestone by milestone.
-  if (data.plan?.milestones.length && data.plan.span) return <PlanBuckets data={data} plan={data.plan} suggestions={suggestions} />;
-  // An empty "No goal" bucket warns about nothing: it is left out.
-  const buckets: Bucket[] = data.buckets.filter((b) => !(b.no_goal && b.weeks === 0 && b.codes.length === 0));
-  const percent = sharePercents(buckets.map((b) => b.weeks));
+  const bucketsQ = useGoalBuckets();
+  const gb = bucketsQ.data;
+  const [note, setNote] = useState<Note | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const reloadAll = async () => {
+    await Promise.all([bucketsQ.reload(), reload()]);
+  };
+  const writes = useBucketWrites(reloadAll, setNote, setError);
+  const rights = useBucketRights(gb);
+  const drag = useBucketDrag({ gb, writes });
+  const tasks = useBucketTasks({ rows: data.rows, plan: null, may: rights.task, reload: reloadAll, setNote, setError });
+  const phone = usePhone();
+  const [opened, setOpened] = useState<{ code: string; name: string } | null>(null);
   // Each feature by its code and its name, as the Ranked list shows them.
   const rowOf = new Map(data.rows.map((r) => [r.code, r]));
+  // Each bucket's goal in the goal buckets (by its name): a drop target, and where a task is added.
+  const goalOf = (b: Bucket) => (b.no_goal ? undefined : gb?.goals.find((g) => sameGoal(g.title, b.title)));
+  // A feature's goal links place it (moved by its grip): under the first goal it serves, when that goal has a bucket here.
+  const home = new Map<string, string>();
+  for (const b of data.buckets) for (const c of b.codes) home.set(c, b.key);
+  const placedIn = (r: Row): string | undefined => {
+    const first = featureOf(gb, r.code, r.title)?.goal_ids[0];
+    const to = first ? data.buckets.find((b) => goalOf(b)?.id === first) : undefined;
+    return to?.key ?? home.get(r.code);
+  };
+  const moved = data.rows.filter((r) => home.has(r.code) && placedIn(r) !== home.get(r.code));
+  const nowWeeks = (r: Row) => (r.horizon === "now" ? (r.effort ?? 0) : 0);
+  const all: Bucket[] = data.buckets.map((b) => {
+    const weeks = b.weeks - moved.filter((r) => home.get(r.code) === b.key).reduce((n, r) => n + nowWeeks(r), 0) + moved.filter((r) => placedIn(r) === b.key).reduce((n, r) => n + nowWeeks(r), 0);
+    const codes = [...b.codes.filter((c) => !moved.some((r) => r.code === c)), ...moved.filter((r) => placedIn(r) === b.key).map((r) => r.code)];
+    return { ...b, weeks, codes };
+  });
+  const total = all.reduce((n, b) => n + b.weeks, 0);
+  // An empty "No goal" bucket warns about nothing: it is left out.
+  const buckets: Bucket[] = all.filter((b) => !(b.no_goal && b.weeks === 0 && b.codes.length === 0)).map((b) => (moved.length ? { ...b, share: total ? b.weeks / total : 0 } : b));
+  const percent = sharePercents(buckets.map((b) => b.weeks));
   // qa4-simple-plan-2: milestones or key dates on the roadmap (the Line's) are not a dated plan; never say there are no dates.
   const dated = (data.lines ?? []).some((l) => l.kind === "milestone" || l.kind === "key_date");
+  const weeksOf = (r: Row) => (r.effort == null ? "" : `${fmt(r.effort)} wk`);
   return (
-    <section aria-label="Goal buckets">
+    <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
       <p className="mb-3 text-text2" data-testid="buckets-intro">
         {dated
           ? "Grouped by goal for this quarter; the milestones and key dates are on the Ranked list's Line."
           : "No dated plan yet, so the work is not placed by milestone."}{" "}
-        Engineer-weeks per confirmed goal this quarter: {fmt(data.weeks_total)} wk in all.
+        Engineer-weeks per confirmed goal this quarter: {fmt(moved.length ? total : data.weeks_total)} wk in all.
       </p>
       <figure className="hidden sm:block" data-testid="bucket-bar">
         <figcaption className="mb-1 text-[length:var(--simple-small)] text-text2">Share of engineer-weeks by goal</figcaption>
@@ -1828,42 +1872,107 @@ function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestion
           )}
         </div>
       </figure>
-      <ul className="mt-3 grid gap-[var(--simple-gap)] sm:grid-cols-2">
-        {buckets.map((b, k) => (
-          <li key={b.key} data-testid="goal-bucket" data-key={b.key} className={`rounded-[var(--simple-card-radius)] border bg-surface p-3 ${b.no_goal ? "border-warn" : "border-line"}`}>
-            <div className="flex items-baseline justify-between gap-2">
-              <h3 className="font-semibold">{b.title}</h3>
-              <span className="tabular-nums">
-                {fmt(b.weeks)} wk · <span data-testid="bucket-share">{percent[k]}%</span>
-              </span>
-            </div>
-            <div className="mt-2 h-3 overflow-hidden rounded-full bg-surface2">
-              <div className={`h-full ${b.no_goal ? "bg-warn" : "bg-accent"}`} style={{ width: `${b.share * 100}%` }} />
-            </div>
-            {b.no_goal && <p className="mt-1 text-[length:var(--simple-small)] text-warn">⚠ Serves no confirmed goal</p>}
-            {b.codes.length ? (
-              <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[length:var(--simple-small)] text-text2" data-testid="bucket-features">
-                {b.codes.map((c) => {
-                  const r = rowOf.get(c);
-                  return (
-                    <li key={c} className="flex items-center gap-1.5">
-                      {r && <CodeChip r={r} />}
-                      <span>{r?.title ?? c}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className="mt-1 text-[length:var(--simple-small)] text-text2">Nothing this quarter</p>
-            )}
-            {!b.no_goal && (
-              <div className="mt-3 border-t border-line pt-3">
-                <SuggestionsButton goal={{ id: "", key: b.key, title: b.title }} api={suggestions} onOpen={setGoalPanel} label={can("create_goal_suggestion") ? "See or make suggestions" : "See suggestions"} />
+      {note && <UndoNote onUndo={note.undo ? () => void writes.undo(note.undo!) : note.changes?.length ? () => void tasks.undo(note.changes!) : undefined}>{note.text}</UndoNote>}
+      {error && (
+        <p role="alert" className="mt-3 text-[15px] text-warn">
+          {error}
+        </p>
+      )}
+      <p id="bucket-move-help" className="sr-only">
+        Press Enter or Space to pick the feature up, the arrow keys to choose a goal, Enter to drop it there and Escape to cancel.
+      </p>
+      <p aria-live="assertive" className="sr-only" data-testid="bucket-live">
+        {drag.said}
+      </p>
+      <ul className="mt-3 grid items-start gap-[var(--simple-gap)] sm:grid-cols-2">
+        {buckets.map((b, k) => {
+          const rec = goalOf(b);
+          const over = !!rec && drag.over === rec.id;
+          const drafts = data.drafts.filter((d) => (b.no_goal ? !d.goal : !!d.goal && sameGoal(d.goal.title, b.title)));
+          const add = rec ? tasks.add({ id: rec.id, title: b.title }) : null;
+          return (
+            <li
+              key={b.key}
+              data-testid="goal-bucket"
+              data-key={b.key}
+              data-goal-id={rec?.id}
+              data-drop={over ? "" : undefined}
+              className={`relative rounded-[var(--simple-card-radius)] border bg-surface p-3 ${over ? "border-2 border-accent bg-accent-soft" : b.no_goal ? "border-warn" : "border-line"}`}
+            >
+              <div className="flex items-baseline justify-between gap-2">
+                <h3 className="font-semibold">{b.title}</h3>
+                <span className="tabular-nums">
+                  {fmt(b.weeks)} wk · <span data-testid="bucket-share">{percent[k]}%</span>
+                </span>
               </div>
-            )}
-          </li>
-        ))}
+              <div className="mt-2 h-3 overflow-hidden rounded-full bg-surface2">
+                <div className={`h-full ${b.no_goal ? "bg-warn" : "bg-accent"}`} style={{ width: `${b.share * 100}%` }} />
+              </div>
+              {b.no_goal && <p className="mt-1 text-[length:var(--simple-small)] text-warn">⚠ Serves no confirmed goal</p>}
+              {b.codes.length || drafts.length || add ? (
+                <ul className="mt-1" data-testid="bucket-features">
+                  {b.codes.length === 0 && drafts.length === 0 && <li className="py-[5px] text-[length:var(--simple-small)] text-text2">Nothing this quarter</li>}
+                  {b.codes.map((c) => {
+                    const r = rowOf.get(c);
+                    const name = r?.title ?? c;
+                    const t = r ? tasks.taskOf(r.code, r.title) : undefined;
+                    const form = t ? tasks.form(t, b.title) : null;
+                    if (form)
+                      return (
+                        <li key={c} data-testid="plan-feature" data-code={c} className="border-b border-line">
+                          {form}
+                        </li>
+                      );
+                    const f = { code: c, name, slices: [], weeks: r?.effort ?? null };
+                    const movable = rights.move && !!r && !!featureOf(gb, r.code, r.title);
+                    return (
+                      <TaskRow
+                        key={c}
+                        code={r?.short_code || c}
+                        name={name}
+                        milestone={r?.milestone ?? null}
+                        weeks={r ? weeksOf(r) : ""}
+                        grip={movable ? { onPointerDown: (e) => drag.grip(f, e), onKeyDown: (e) => drag.grip(f, e) } : undefined}
+                        lifted={drag.lifted === c}
+                        onOpen={() => setOpened({ code: c, name })}
+                        actions={tasks.actions(t)}
+                      />
+                    );
+                  })}
+                  {drafts.map((d) => {
+                    const t = { itemId: d.item_id, code: d.code, name: d.title };
+                    const form = tasks.form(t, b.title);
+                    return form ? (
+                      <li key={d.item_id} data-testid="plan-feature" data-code={d.code} className="border-b border-line">
+                        {form}
+                      </li>
+                    ) : (
+                      <TaskRow key={d.item_id} code={d.code} name={d.title} milestone={tasks.milestoneName(t)} weeks="" draft onOpen={() => setOpened({ code: d.code, name: d.title })} actions={tasks.actions(t)} />
+                    );
+                  })}
+                  {add}
+                </ul>
+              ) : (
+                <p className="mt-1 text-[length:var(--simple-small)] text-text2">Nothing this quarter</p>
+              )}
+              {over && (
+                <p data-testid="drop-note" className="mt-2 rounded-lg border border-dashed border-accent px-3 py-2 text-[15px] text-accent-ink">
+                  Drop here: {b.title} becomes the goal it moves most
+                </p>
+              )}
+              {!b.no_goal && (
+                <div className="mt-3 border-t border-line pt-3">
+                  <SuggestionsButton goal={{ id: "", key: b.key, title: b.title }} api={suggestions} onOpen={setGoalPanel} label={can("create_goal_suggestion") ? "See or make suggestions" : "See suggestions"} />
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ul>
+      {drag.edge}
+      {drag.ghost}
+      {tasks.dialog}
+      {opened && <FeaturePanel key={opened.code} feature={opened} phone={phone} canChange={can("create_simple_change")} onClose={() => setOpened(null)} />}
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
     </section>
   );
@@ -1895,7 +2004,7 @@ function suggestionGoal(api: GoalSuggestionsApi, goal: string): Schemas["SimpleG
 }
 
 /** plan-charts (the owner's pick B): the plan's header, then a card per goal listing each feature with its milestone chips. */
-function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schemas["SimplePlanOut"]; suggestions: GoalSuggestionsApi }) {
+function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; plan: Schemas["SimplePlanOut"]; suggestions: GoalSuggestionsApi; reload: () => Promise<void> }) {
   const { can } = useMe();
   const bucketsQ = useGoalBuckets();
   const gb = bucketsQ.data;
@@ -1911,6 +2020,46 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
   const [error, setError] = useState<string | null>(null);
   const writes = useBucketWrites(bucketsQ.reload, setNote, setError);
   const rights = useBucketRights(gb);
+  // Tasks in place: add, edit and cut a goal's features on the roadmap, each with Undo.
+  const tasks = useBucketTasks({
+    rows: data.rows,
+    plan: read,
+    may: rights.task,
+    reload: async () => {
+      await Promise.all([bucketsQ.reload(), reload()]);
+    },
+    setNote,
+    setError,
+  });
+  const taskRows = (goal: string | null, rec: Schemas["GoalBucketGoal"] | undefined) => ({
+    task: {
+      name: (f: { code: string; name: string }) => tasks.taskOf(f.code, f.name)?.name ?? f.name,
+      cut: (f: { code: string; name: string }) => tasks.isCut(f.code, f.name),
+      actions: (f: { code: string; name: string }) => tasks.actions(tasks.taskOf(f.code, f.name)),
+      form: (f: { code: string; name: string }) => {
+        const t = tasks.taskOf(f.code, f.name);
+        return t ? tasks.form(t, goal ?? "No goal") : null;
+      },
+    },
+    tail: (
+      <>
+        {data.drafts
+          .filter((d) => (goal == null ? !d.goal : !!d.goal && sameGoal(d.goal.title, goal)))
+          .map((d) => {
+            const t = { itemId: d.item_id, code: d.code, name: d.title };
+            const form = tasks.form(t, goal ?? "No goal");
+            return form ? (
+              <li key={d.item_id} data-testid="plan-feature" data-code={d.code} className="border-b border-line">
+                {form}
+              </li>
+            ) : (
+              <TaskRow key={d.item_id} code={d.code} name={d.title} milestone={tasks.milestoneName(t)} weeks="" draft onOpen={() => setOpened({ code: d.code, name: d.title })} actions={tasks.actions(t)} />
+            );
+          })}
+        {rec && tasks.add({ id: rec.id, title: rec.title })}
+      </>
+    ),
+  });
   const year = data.today.slice(0, 4);
   const goalOf = (title: string) => gb?.goals.find((g) => g.title === title);
   const nextOrder = Math.max(0, ...(gb?.goals ?? []).map((g) => g.order)) + 1;
@@ -1938,7 +2087,7 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
     <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
       <PlanBucketsHead plan={plan} codeOf={codeOf} />
       <div ref={noteSlot} className="scroll-mt-4" />
-      {note && <UndoNote onUndo={note.undo ? () => void writes.undo(note.undo!) : undefined}>{note.text}</UndoNote>}
+      {note && <UndoNote onUndo={note.undo ? () => void writes.undo(note.undo!) : note.changes?.length ? () => void tasks.undo(note.changes!) : undefined}>{note.text}</UndoNote>}
       {error && (
         <p role="alert" className="mt-3 text-[15px] text-warn">
           {error}
@@ -2007,7 +2156,7 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
                   )}
                 </>
               )}
-              <FeatureRows plan={plan} goal={g} gb={gb} grips={rights.move} lifted={drag.lifted} onGrip={drag.grip} onOpen={setOpened} />
+              <FeatureRows plan={plan} goal={g} gb={gb} grips={rights.move} lifted={drag.lifted} onGrip={drag.grip} onOpen={setOpened} {...taskRows(g, rec)} />
               {over && (
                 <p data-testid="drop-note" className="mt-2 rounded-lg border border-dashed border-accent px-3 py-2 text-[15px] text-accent-ink">
                   Drop here: {g} becomes the goal it moves most
@@ -2075,7 +2224,7 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
               </span>
             </div>
             <p className="mt-1 text-[15px] text-warn">⚠ Serves no goal in the plan</p>
-            <FeatureRows plan={plan} goal={null} gb={gb} grips={rights.move} lifted={drag.lifted} onGrip={drag.grip} onOpen={setOpened} />
+            <FeatureRows plan={plan} goal={null} gb={gb} grips={rights.move} lifted={drag.lifted} onGrip={drag.grip} onOpen={setOpened} {...taskRows(null, undefined)} />
           </li>
         )}
         {outside.length > 0 && (
@@ -2102,6 +2251,7 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
       </ul>
       {drag.edge}
       {drag.ghost}
+      {tasks.dialog}
       {opened && <FeaturePanel key={opened.code} feature={{ ...opened, prd: plan.prd }} phone={phone} canChange={can("create_simple_change")} onClose={() => setOpened(null)} />}
       {archivedGoal && gb && (
         <ArchiveDialog

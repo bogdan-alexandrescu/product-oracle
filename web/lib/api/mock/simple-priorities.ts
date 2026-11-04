@@ -416,6 +416,6 @@ export function prioritiesOut(
 /** priorities.plan_in_play: the plan PRD's plan as the API's priorities carry it (no version, no re-read). */
 function planOf(db: SimpleDb, read: Schemas["SimpleRoadmapOut"], role: Role): Schemas["SimplePlanOut"] | null {
   const prd = read.items.find((i) => i.prd?.slug === PLAN_PRD_SLUG)?.prd;
-  if (!db.plan || !prd) return null;
+  if (!db.plan || !prd || db.plan_undated) return null;
   return { ...planOut(db.plan, { id: prd.id, slug: prd.slug, title: prd.title }, role), version: null, can_read_again: false, read_at: null };
 }

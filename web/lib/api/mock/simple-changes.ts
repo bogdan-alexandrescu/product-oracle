@@ -515,6 +515,16 @@ function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false): voi
   // walkc-roadmap-tasks: a task is stored under its item, open, as RoadmapItemTask is.
   else if (c.op === "add_item_task") targets[id] = { status: "todo", owner_id: null, due_date: null, ...values, kind: "item_task", item_id: c.target.item_id, at: c.at };
   else targets[id] = { ...(targets[id] ?? {}), ...values };
+  // An item's own milestone (set_milestone, and its undo) is what the roadmap reads of it.
+  if (c.op === "set_milestone") {
+    const key = keyOf(db, c.target.item_id);
+    const s = key ? db.items.find((x) => x.key === key) : undefined;
+    const m = values.milestone as { name: string; date?: string | null } | null | undefined;
+    if (s) {
+      const w = simpleWindows(companyToday())[s.horizon][0];
+      s.milestone = m ? { name: m.name, day: m.date ? Math.round((Date.parse(`${m.date}T00:00:00Z`) - Date.parse(`${w}T00:00:00Z`)) / DAY) : 0 } : undefined;
+    }
+  }
 }
 
 /** The new [start, end] of every item a fix moves (changes._fix_plan). */
@@ -1019,7 +1029,9 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
     let goal: string | undefined;
     let quarter: { start: string; end: string } | null = null;
     if (where?.kind === "goal") {
-      goal = Object.keys(GOALS).find((k) => goalId(k) === value || k === value);
+      // The goal buckets' goals (./goal-buckets.ts) are the same goals, by their name.
+      const bucket = db.goal_buckets?.goals.find((g) => g.id === value)?.title;
+      goal = Object.keys(GOALS).find((k) => goalId(k) === value || k === value || (!!bucket && GOALS[k] === bucket));
       if (!goal) return json(422, { detail: "target.where.value: a goal's id" });
     } else if (where?.kind === "horizon") {
       if (!["now", "next", "later"].includes(value)) return json(422, { detail: "target.where.value: now, next or later" });
@@ -1038,6 +1050,13 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
     target.item_id = crypto.randomUUID();
     const after: Values = { title, horizon, goal_ids: goal ? [goalId(goal)] : [], ...(quarter ? { quarter } : {}) };
     if (typeof a.outcome === "string" && a.outcome.trim()) after.outcome = a.outcome.trim();
+    // An item added with its milestone (additions._plan: after.milestone {name, date}).
+    const m = a.milestone as { name?: unknown; date?: unknown } | null | undefined;
+    if (m && typeof m === "object") {
+      const name = String(m.name ?? "").trim();
+      if (!name || name.length > 200) return json(422, { detail: "after.milestone.name: 1 to 200 characters" });
+      after.milestone = { name, date: typeof m.date === "string" ? m.date : null, date_source: typeof m.date === "string" ? "typed" : null };
+    }
     return { target, before: {}, after, roadmap, applies: canEditRoadmap(db, roadmap, ctx) };
   }
   const key = keyOf(db, target.item_id);
@@ -1142,6 +1161,7 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
       key, title: String(a.title), horizon: a.horizon as SeedItem["horizon"], roadmap, goal: goalKey,
       track: db.items.find((x) => x.roadmap === roadmap && x.track)?.track, draft: true, outcome: typeof a.outcome === "string" ? a.outcome : null,
       drafting_until: mockNowMs() + DRAFTING_MS, quarter: (a.quarter as { start: string; end: string } | undefined) ?? undefined,
+      ...(a.milestone ? { milestone: { name: String((a.milestone as Values).name), day: 0 } } : {}),
       looks_like: lookalikes(db, String(a.title), roadmap),
     });
     return;

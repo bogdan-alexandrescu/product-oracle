@@ -1210,6 +1210,25 @@ function seedGoalBucketsHardScenario(): Db {
   return db;
 }
 
+/**
+ * Goal buckets you can fully edit (the owner, Nov 4), "goal-buckets-undated": "simple-plan" whose
+ * roadmap has no approved version yet, so Priorities reads no dated plan and falls back to the
+ * goal cards; each plan item names its plan goal on the roadmap. Invented data.
+ */
+export const GOAL_BUCKETS_UNDATED_SCENARIO = "goal-buckets-undated";
+
+function seedGoalBucketsUndatedScenario(): Db {
+  const db = seedSimplePlanScenario(true);
+  const rm = db.simple_roadmap!;
+  rm.plan_undated = true;
+  const goalOf = new Map(planSlices().map((x) => [x.feature_code.toLowerCase(), x.goal]));
+  for (const s of rm.items) {
+    const goal = s.section ? goalOf.get(s.section) : undefined;
+    if (goal && !s.goal) s.goal = goal.toLowerCase();
+  }
+  return db;
+}
+
 /** mk-milestones "roadmap-milestones-hard": 26 more alert features for Grow retention's roadmap
  * work, so its goal card reads 30 items (invented, every one about the team's alert work). */
 const ROADMAP_MILESTONES_HARD_ITEMS: [string, string][] = [
@@ -3365,6 +3384,8 @@ function load(): Db {
                 ? seedRoadmapMilestonesHardScenario
               : scenario === GOAL_BUCKETS_HARD_SCENARIO
                 ? seedGoalBucketsHardScenario
+              : scenario === GOAL_BUCKETS_UNDATED_SCENARIO
+                ? seedGoalBucketsUndatedScenario
               : scenario === "simple-plan"
                 ? () => seedSimplePlanScenario()
               : scenario === "roadmap-keydates"

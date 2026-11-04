@@ -204,6 +204,8 @@ export function FeatureRows({
   lifted,
   onGrip,
   onOpen,
+  task,
+  tail,
 }: {
   plan: Plan;
   goal: string | null;
@@ -213,13 +215,27 @@ export function FeatureRows({
   onGrip: (f: Feature, e: React.PointerEvent | React.KeyboardEvent) => void;
   /** The feature's name opens its item panel (the grip only moves it). */
   onOpen?: (f: Feature) => void;
+  /** Tasks in place: a feature's shown name (renamed on the roadmap), whether it is cut, its pencil and ⋯, and its form while edited. */
+  task?: { name: (f: Feature) => string; cut: (f: Feature) => boolean; actions: (f: Feature) => ReactNode; form: (f: Feature) => ReactNode | null };
+  /** Rows after the plan's: tasks added since, and "+ Add a task". */
+  tail?: ReactNode;
 }) {
-  const features = planFeatures(plan, goal);
-  if (!features.length) return <p className="mt-2 text-[15px] text-text2">Nothing in the plan yet</p>;
+  const features = planFeatures(plan, goal)
+    .filter((f) => !task?.cut(f))
+    .map((f) => (task ? { ...f, name: task.name(f) } : f));
+  if (!features.length && !tail) return <p className="mt-2 text-[15px] text-text2">Nothing in the plan yet</p>;
   const titleOf = (id: string) => gb?.goals.find((g) => g.id === id)?.title;
   return (
     <ul className="mt-2">
+      {!features.length && <li className="py-[5px] text-[15px] text-text2">Nothing in the plan yet</li>}
       {features.map((f) => {
+        const form = task?.form(f);
+        if (form)
+          return (
+            <li key={f.code} data-testid="plan-feature" data-code={f.code} className="border-b border-line">
+              {form}
+            </li>
+          );
         const links = featureOf(gb, f.code, f.name)?.goal_ids ?? [];
         const others = links.slice(1).map(titleOf).filter((x): x is string => !!x);
         const milestones = [...new Set(f.slices.map((s) => s.milestone))];
@@ -283,9 +299,11 @@ export function FeatureRows({
             <span data-testid="plan-feature-total" className="min-w-[56px] flex-none text-right text-[15px] tabular-nums text-text2">
               {f.weeks == null ? "PM-owned" : `${wk(f.weeks)} wk`}
             </span>
+            {task?.actions(f)}
           </li>
         );
       })}
+      {tail}
     </ul>
   );
 }
@@ -439,7 +457,8 @@ export function GoalMenu({ title, onEdit, onArchive, archive }: { title: string;
   );
 }
 
-export type Note = { text: ReactNode; undo?: Undo };
+/** A task change (./task-edit) names the changes Undo takes back, in the order they were made. */
+export type Note = { text: ReactNode; undo?: Undo; changes?: string[] };
 
 /** The writes, each answering with the note to show and what Undo puts back. */
 export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note | null) => void, setError: (e: string | null) => void) {
@@ -490,5 +509,7 @@ export function useBucketRights(gb: Buckets | undefined) {
     edit: (g: Goal | undefined) => !!g && g.can_edit && can("update_bucket_goal"),
     archive: !!gb && can("archive_bucket_goal"),
     move: !!gb && can("move_bucket_feature"),
+    // Tasks: the change engine applies or proposes, by the roadmap's own rule.
+    task: can("create_simple_change"),
   };
 }
