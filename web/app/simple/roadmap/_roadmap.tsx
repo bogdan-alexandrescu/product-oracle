@@ -18,6 +18,7 @@ import { useQuery } from "@/lib/use-query";
 import { QuickAdd } from "./_add";
 import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, MARK_WORDS, PM_LANE, type Horizon, type LegendEntry } from "./_board";
 import { useKeyBurst } from "./_burst";
+import { FitRoadmap } from "@/components/simple/FitDate";
 import { changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
 import { boardPicture, chartPicture, exportView, type Brand } from "./_export";
 import { KeyDatesEditor } from "./_keydates";
@@ -1318,6 +1319,17 @@ export function SimpleRoadmap() {
         {!phone && actions}
         {keyDates && <KeyDatesEditor key={data.roadmap?.id ?? "all"} data={data} act={act} mayChange={canChange} phone={phone} onClose={() => setKeyDates(false)} />}
       </header>
+      {/* Bring a date in (FD1 a): the goal's target and its date on today's plan, its milestones; each item opens its card. */}
+      <FitRoadmap
+        roadmapId={data.roadmap?.id ?? null}
+        itemOf={(title) => data.items.find((x) => x.title === title.replace(/ \((first slice|no longer holds [^)]*|to [^)]*)\)$/, ""))?.id ?? null}
+        onItem={(id) => {
+          const it = byId.get(id);
+          if (!it) return;
+          setPop(null);
+          setCard({ id: it.id, ...anchorOf(it.id) });
+        }}
+      />
       <p role="status" aria-live="polite" className="sr-only" data-testid="key-pending">
         {said}
       </p>

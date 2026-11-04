@@ -25,6 +25,7 @@ import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
+import { routeFitDate } from "./fit-date";
 import { generalReply } from "./general-chat";
 import { afterAccept, goalInterviewReply, proposeVersion, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
 import { goalCheck } from "./goals";
@@ -6116,6 +6117,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       p,
     );
     if (onePagerRes) return onePagerRes;
+    // Bring a date in (oracle.simple.fit_date_router), under the fit-date scenarios.
+    const fitRes = await routeFitDate(localStorage.getItem(MOCK_SCENARIO_KEY), me.role, r, p);
+    if (fitRes) return fitRes;
     // The plan-model lane: a PRD's plan (GET .../plan, owners' POST .../plan/read-again).
     const planRes = routeSimplePlan(
       db.simple_roadmap!.plan,
