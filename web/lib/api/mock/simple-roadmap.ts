@@ -31,6 +31,9 @@ type Role = Schemas["Me"]["role"];
 interface SeedItem {
   /** build-feature-panel: Oracle's links a person removed before the mock's story (the panel shows them struck, with Restore). */
   unlinked?: { key: string; by: string }[];
+  /** build-feature-panel review 2: the goal a person set in the panel (set_goal; "" for no
+   * goal), over `goal`; unset: Oracle's. */
+  own_goal?: string;
   key: string;
   title: string;
   horizon: Horizon;
@@ -47,7 +50,9 @@ interface SeedItem {
   /** item-chat-understands (RoadmapItem.shipped): its own "already shipped" mark, apart from a status its tracker gives it. */
   shipped?: { note: string; on: string } | null;
   draft?: boolean;
-  milestone?: { name: string; day: number };
+  /** build-feature-panel review 2: `engine` is what the date engine stored besides the name and
+   * day (its date_source, basis_ids...), never shown; a null name reads "Milestone". */
+  milestone?: { name: string | null; day: number; engine?: Record<string, unknown> };
   /** The track milestone record naming the item (its name), whatever its own text says. */
   record?: string;
   /** The roadmap item's validation gates (days from the window's start); one naming a
@@ -280,6 +285,13 @@ const METRICS: Record<string, string> = { "grow-retention": "Teams active after 
 /** roadmap-gantt ("simple-plan-two"): a goal named like a plan goal ("Growth"), for the plan's items only. */
 const PLAN_GOALS: Record<string, string> = { growth: "Growth" };
 export const goalId = (key: string): string => stableUuid(`simple-goal/${key}`);
+/** build-feature-panel review 2: the item's goal (key): the one set in its panel, else Oracle's. */
+export const goalOfSeed = (s: { goal?: string; own_goal?: string }): string | undefined => (s.own_goal !== undefined ? s.own_goal || undefined : s.goal);
+/** The item's goal_ids as the API stores them (its own goal's, once set in the panel). */
+export function goalIdsOf(s: { goal?: string; goals?: string[]; own_goal?: string }): string[] {
+  if (s.own_goal !== undefined) return s.own_goal ? [goalId(s.own_goal)] : [];
+  return [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])].map(goalId);
+}
 export const roadmapId = (slug: string): string => stableUuid(`simple-doc/${slug}`);
 // A new company has no roadmap yet (qa-shell-8: oracle.simple.service reads none).
 export const ROADMAP_SLUGS = (): string[] => (newCompany() ? [] : Object.keys(ROADMAPS));
@@ -317,7 +329,7 @@ const TRACKS: Record<string, string> = { alerts: "Usage alerts track", onboardin
 const SEED: SeedItem[] = [
   { key: "alert-rules", title: "Alert rules engine", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 40, source: "typed", status: "in_progress", gates: [{ phase: "discover", day: 6 }, { phase: "build", day: 28 }], why: "Admins asked for it most this quarter.", section: "bets" },
   { key: "alert-digest", title: "Weekly alert digest", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 30, end: 70, source: "accepted", depends: ["alert-rules"], milestone: { name: "Beta", day: 60 }, section: "f-06", heading: "F-06 Weekly digest of fired alerts" },
-  { key: "alert-mobile", title: "Mobile alert push", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", end: 80, source: "engineering", depends: ["alert-rules"], status: "in_progress" },
+  { key: "alert-mobile", title: "Mobile alert push", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", end: 80, source: "engineering", depends: ["alert-rules"], status: "in_progress", milestone: { name: null, day: 85, engine: { date_source: "estimate:eng-push", basis_ids: ["3f0c9a52-7d1e-4b8a-9c61-2e5d8f4a7b10"], refused_date: null, refused: false } } },
   { key: "alert-export", title: "Alert history export", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", end: 50, source: "tracker", unlinked: [{ key: "alert-digest", by: "Leo Brandt" }] },
   { key: "alert-sso", title: "Alert routing by team", horizon: "next", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "low", depends: ["alert-export"] },
   { key: "setup-checklist", title: "Setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "high", start: 10, end: 45, source: "typed", status: "in_progress", gates: [{ phase: "Beta", day: 40 }] },
@@ -598,7 +610,7 @@ function recordOf(s: { record?: string; track?: string }): { record_id?: string;
 function phases(start: string, end: string, s: SeedItem, w: [string, string]): Schemas["SimplePhase"][] {
   const named = new Map<string, string>();
   for (const e of [...(s.milestone ? [{ phase: s.milestone.name, day: s.milestone.day }] : []), ...(s.gates ?? [])]) {
-    const word = e.phase.trim().toLowerCase();
+    const word = (e.phase ?? "").trim().toLowerCase();
     if (PHASES.some(([k]) => k === word)) named.set(word, addDays(w[0], e.day));
   }
   const total = span(start, end);
@@ -946,7 +958,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       code: prdCode(s.section),
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
       prd: ownPrd(s),
-      goal: s.goal ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, title: GOALS[s.goal] ?? PLAN_GOALS[s.goal], metric: METRICS[s.goal] ?? null, position: goalPositionOf(s.goal) } : null,
+      goal: goalOfSeed(s) ? { id: stableUuid(`simple-goal/${goalOfSeed(s)}`), key: goalOfSeed(s)!, title: GOALS[goalOfSeed(s)!] ?? PLAN_GOALS[goalOfSeed(s)!], metric: METRICS[goalOfSeed(s)!] ?? null, position: goalPositionOf(goalOfSeed(s)!) } : null,
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,
       status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),
@@ -983,7 +995,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       merged_into: s.merged_into ? { id: db.ids[s.merged_into], code: s.merged_into, title: db.items.find((x) => x.key === s.merged_into)?.title ?? s.merged_into } : null,
       drafting: !!s.drafting_until,
       flow: s.draft ? (s.flow ?? null) : (flowFor(db.visuals, "feature", db.ids[s.key]) ?? betFlow(db, s)),
-      goal_ids: [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])].map(goalId),
+      goal_ids: goalIdsOf(s),
       // S8: the decided decisions that changed the item (./simple-meetings.ts records them).
       decided_in: [...(db.decided_in?.[db.ids[s.key]] ?? [])],
       // walkc-roadmap-tasks: the work under the item (service._tasks).

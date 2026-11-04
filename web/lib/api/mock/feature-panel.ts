@@ -7,6 +7,9 @@
  * - `links`: each item it depends on, who added the link (null: Oracle found it), and Oracle's
  *   links a person removed (`removed`, `removed_by`), shown struck through with Restore.
  *
+ * - `goal_set` (review 2): the goal and measure a person set (set_goal) over Oracle's, Oracle's
+ *   goal as the item showed it and who set it; null once `restore_goal` puts Oracle's back.
+ *
  * Only written changes count: applied or accepted, and not undone.
  */
 import type { Schemas } from "@/lib/api/client";
@@ -64,6 +67,21 @@ export function overrideOf(changes: Change[], item: string): (Schemas["SimpleOve
   return kept;
 }
 
+/** The item's goal set by a person now (api: panel.goal_sets), and the own goal Restore takes off. */
+export function goalSetOf(changes: Change[], item: string): Schemas["SimpleGoalSet"] | null {
+  let kept: Schemas["SimpleGoalSet"] | null = null;
+  for (const c of written(changes)) {
+    if (c.target.item_id !== item || (c.op !== "set_goal" && c.op !== "restore_goal")) continue;
+    if (c.op === "restore_goal") {
+      kept = null;
+      continue;
+    }
+    kept ??= { oracle: (c.target.oracle as Schemas["SimpleGoalPick"] | null) ?? null };
+    Object.assign(kept, { by: c.by_name, at: c.at, measure: (c.target.measure as string | null) ?? null });
+  }
+  return kept;
+}
+
 /** Each item's `override` and `links` (api: panel.item_panel). `unlinked` are Oracle's links
  * removed before the mock's story starts (a seed's own record of that change). */
 export function withPanel(items: Item[], changes: Change[], keyOf: (id: string) => string | undefined, idOf: (key: string) => string | undefined, unlinked: (key: string) => { key: string; by: string }[] = () => []): void {
@@ -93,6 +111,7 @@ export function withPanel(items: Item[], changes: Change[], keyOf: (id: string) 
       if (id && !i.depends_on.includes(id)) links.push({ item_id: id, by: null, removed: true, removed_by: by });
     }
     i.links = links;
+    i.goal_set = goalSetOf(changes, i.id);
   }
 }
 

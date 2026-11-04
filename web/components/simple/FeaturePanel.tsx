@@ -180,6 +180,8 @@ function Owner({ c }: { c: Ctx }) {
       )}
       onSave={async (d) => {
         if (d === (item.owner?.id ?? "")) return null;
+        // Its track's owner already: nothing to change.
+        if (!d && item.owner?.source !== "item") return null;
         const name = list.find((p) => p.user_id === d)?.name;
         await act(name ? `Made ${name} the owner of '${item.title}'` : `Gave '${item.title}' back to its track's owner`, { op: "set_owner", target: { item_id: item.id }, before: { owner_id: item.owner?.source === "item" ? item.owner.id : null }, after: { owner_id: d || null } });
         return null;
@@ -192,14 +194,15 @@ function Owner({ c }: { c: Ctx }) {
 function MilestoneField({ c }: { c: Ctx }) {
   const { item, act, edit } = c;
   const m = item.milestone;
-  const own = m?.source === "item" && m.name ? { name: m.name, date: m.date ?? null, date_source: m.date ? "typed" : null } : null;
+  // The milestone as the item reads it: set_milestone matches its name and date only.
+  const own = m?.source === "item" && (m.name || m.date) ? { name: m.name ?? null, date: m.date ?? null } : null;
   const near = todayIn(displayZone());
   return (
     <Editor<{ name: string; date: string }>
       label="Milestone"
       testId="fp-milestone"
       edit={edit}
-      shown={m?.name ? `${m.name}${m.date ? ` · ${day(m.date)}` : ""}` : <span className="text-text2">None</span>}
+      shown={m?.name || m?.date ? `${m.name ?? "Milestone"}${m.date ? ` · ${day(m.date)}` : ""}` : <span className="text-text2">None</span>}
       start={() => ({ name: m?.name ?? "", date: m?.date ? day(m.date) : "" })}
       fields={(d, set) => (
         <div className="grid gap-1.5">
@@ -215,6 +218,72 @@ function MilestoneField({ c }: { c: Ctx }) {
         return null;
       }}
     />
+  );
+}
+
+/** The goal it serves and how that is measured (review 2): fields with Save and Cancel, through
+ * set_goal; a goal set over Oracle's says so on one line with Restore (restore_goal). */
+function GoalFields({ c }: { c: Ctx }) {
+  const { item, items, act, edit } = c;
+  const gs = item.goal_set;
+  const measure = gs?.measure ?? item.goal?.metric ?? null;
+  // Every goal the roadmap's features serve, and Oracle's for this one.
+  const goals = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const i of items.values()) if (i.goal) out.set(i.goal.id, i.goal.title);
+    if (item.goal) out.set(item.goal.id, item.goal.title);
+    if (gs?.oracle) out.set(gs.oracle.id, gs.oracle.title);
+    return [...out].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [items, item.goal, gs]);
+  const save = async (goal: string, m: string) => {
+    const typed = m.trim() || null;
+    if (goal === (item.goal?.id ?? "") && typed === (gs?.measure ?? null)) return null;
+    if (goal === (item.goal?.id ?? "") && typed === (item.goal?.metric ?? null) && !gs) return null;
+    const title = goals.find(([id]) => id === goal)?.[1];
+    await act(title ? `Set the goal of '${item.title}' to ${title}` : `Took the goal off '${item.title}'`, { op: "set_goal", target: { item_id: item.id }, before: { goal_ids: item.goal_ids }, after: { goal_ids: goal ? [goal] : [], measure: typed } });
+    return null;
+  };
+  return (
+    <dl>
+      <Row label="Serves">
+        <Editor<string>
+          label="Goal"
+          testId="fp-goal"
+          edit={edit}
+          shown={item.goal ? item.goal.title : <span className="text-text2">No goal yet</span>}
+          start={() => item.goal?.id ?? ""}
+          fields={(d, set) => (
+            <select autoFocus aria-label="Goal" value={d} onChange={(e) => set(e.target.value)} className={FIELD}>
+              <option value="">No goal</option>
+              {goals.map(([id, title]) => (
+                <option key={id} value={id}>
+                  {title}
+                </option>
+              ))}
+            </select>
+          )}
+          onSave={(d) => save(d, gs?.measure ?? "")}
+        />
+        {gs ? (
+          <span className="block text-sm text-text2" data-testid="fp-goal-override">
+            Oracle suggested {gs.oracle?.title ?? "no goal"}; set to {item.goal?.title ?? "no goal"} by {gs.by ?? "a person"}
+            {edit && (
+              <>
+                {" · "}
+                <button type="button" onClick={() => void act(`Put Oracle's goal back on '${item.title}'`, { op: "restore_goal", target: { item_id: item.id }, before: { goal_ids: item.goal_ids }, after: {} })} className="font-medium text-accent-ink underline">
+                  Restore
+                </button>
+              </>
+            )}
+          </span>
+        ) : (
+          item.goal && <span className="block text-sm text-text2">Oracle linked it from the PRD</span>
+        )}
+      </Row>
+      <Row label="Measure">
+        <Field label="Measure" value={measure ?? ""} shown={measure ?? <span className="text-text2">Not set yet</span>} edit={edit} onSave={(v) => save(item.goal?.id ?? "", v)} testId="fp-measure" />
+      </Row>
+    </dl>
   );
 }
 
@@ -540,13 +609,7 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
         <Dates c={c} late={late} lateMilestone={lateMilestone} added={addedItem} />
       </Section>
       <Section title="Goal" id="goal">
-        <dl>
-          <Row label="Serves">
-            {item.goal ? item.goal.title : <span className="text-text2">No goal yet</span>}
-            {item.goal && <span className="block text-sm text-text2">Oracle linked it from the PRD</span>}
-          </Row>
-          {item.goal?.metric && <Row label="Measure">{item.goal.metric}</Row>}
-        </dl>
+        <GoalFields c={c} />
       </Section>
       <Section title="Links" id="links">
         <Links c={c} late={late} onAdded={(o) => setAdded(o.id)} />

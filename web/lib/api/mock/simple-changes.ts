@@ -37,6 +37,8 @@ import {
   draftChanges,
   GOALS,
   goalId,
+  goalIdsOf,
+  goalOfSeed,
   itemDeciderId,
   lookalikes,
   shiftPlan,
@@ -59,7 +61,7 @@ import {
   type SimpleDb,
 } from "./simple-roadmap";
 import { routeGoalSuggestions } from "./simple-suggestions";
-import { linkPlan, overrideOf } from "./feature-panel";
+import { goalSetOf, linkPlan, overrideOf } from "./feature-panel";
 
 type Change = Schemas["SimpleChangeOut"];
 type Session = Schemas["SimpleSessionOut"];
@@ -98,6 +100,9 @@ const FIELDS: Record<string, string[]> = {
   remove_link: ["depends_on"],
   restore_link: ["depends_on"],
   restore_dates: ["start_date", "end_date"],
+  // build-feature-panel review 2: an item's own goal, and Oracle's put back (./feature-panel.ts).
+  set_goal: ["goal_ids"],
+  restore_goal: ["goal_ids"],
 };
 const FIXES = ["shift_dependents", "move_dependency"];
 /** fix5-cut-dependents: the item and everything waiting on it, cut as one change (changes.py CUT_ALL). */
@@ -273,6 +278,9 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "outcome") out[f] = s.outcome ?? null;
     else if (f === "draft") out[f] = !!s.draft;
     else if (f === "depends_on") out[f] = [...(s.depends ?? [])];
+    else if (f === "goal_ids") out[f] = goalIdsOf(s);
+    // The mock's own: the goal set in the panel ("" none), null when Oracle's (an undo puts it back).
+    else if (f === "own_goal") out[f] = s.own_goal ?? null;
     else if (f === "risk") out[f] = (s.risks ?? []).find((r) => r.flag === target.flag && (r.subject ?? null) === (target.subject ?? null)) ?? null;
   }
   return out;
@@ -291,6 +299,10 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   if ("draft" in values) s.draft = !!values.draft;
   if ("depends_on" in values) s.depends = [...(values.depends_on as string[])];
   if ("outcome" in values) s.outcome = (values.outcome as string | null) ?? null;
+  if ("own_goal" in values) {
+    if (values.own_goal == null) delete s.own_goal;
+    else s.own_goal = String(values.own_goal);
+  }
   if ("risk" in values) {
     const kept = (s.risks ?? []).filter((r) => !(r.flag === target.flag && (r.subject ?? null) === (target.subject ?? null)));
     const risk = values.risk as { flag: never; note: string; subject?: string | null } | null;
@@ -502,7 +514,10 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
         ? { decider_id: itemDeciderId(db, keyOf(db, target.item_id)!, ctx.roles) }
         : spec.adds ? {} : Object.fromEntries(Object.keys(body.before).map((k) => [k, stored[k] ?? null]));
   const seen = ranking ? Object.fromEntries(Object.keys(before).map((k) => [k, body.before[k] ?? null])) : body.before;
-  if (!spec.adds && !same(before, seen)) return conflict(db, ctx, before, [id], "Changed since you saw it");
+  // build-feature-panel review 2: a milestone is matched by its name and date as the item reads them (changes._seen_milestone).
+  const matches = body.op === "set_milestone" ? seenMilestone(before.milestone) === seenMilestone(seen.milestone) : same(before, seen);
+  if ((body.op === "set_owner" || body.op === "set_decider") && same(before, after)) return json(422, { detail: "No change: it is so already" });
+  if (!spec.adds && !matches) return conflict(db, ctx, before, [id], "Changed since you saw it");
   if (body.op === "override_priority" && after.override === null && !before.override) return json(409, { detail: "It is at Oracle's rank already" });
   const change: Change = {
     id: crypto.randomUUID(), session_id: session?.id ?? null, document_id: target.item_id ? stableUuid(`simple-doc/${seed(db, keyOf(db, target.item_id)!).roadmap}`) : null,
@@ -527,7 +542,16 @@ function ownOwnerId(db: SimpleDb, itemId: string): string | null {
 /** The item's own milestone as the API stores it (changes.py set_milestone's before): null when it has only its track's. */
 function ownMilestone(db: SimpleDb, itemId: string): Values | null {
   const m = roadmapOut(db, "owner", new URLSearchParams())!.items.find((i) => i.id === itemId)?.milestone;
-  return m?.source === "item" && m.name ? { name: m.name, date: m.date ?? null, date_source: m.date ? "typed" : null } : null;
+  if (m?.source !== "item" || !(m.name || m.date)) return null;
+  // What the date engine stored besides (never shown, never compared).
+  const engine = db.items.find((x) => db.ids[x.key] === itemId)?.milestone?.engine;
+  return { date_source: m.date ? "typed" : null, ...(engine ?? {}), name: m.name ?? null, date: m.date ?? null };
+}
+
+/** A milestone as the item reads it: its name and day (changes._seen_milestone). */
+function seenMilestone(m: unknown): string {
+  const v = (m ?? {}) as Values;
+  return v.name || v.date ? JSON.stringify([v.name || null, v.date || null]) : "none";
 }
 
 function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false): void {
@@ -757,6 +781,25 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       if (!kept || !kept.end_date) return json(422, { detail: "No dates of Oracle's to restore" });
       after = { ...kept.restore };
       stored = ["start_date", "end_date", "date_source"];
+    } else if (body.op === "set_goal" || body.op === "restore_goal") {
+      const own = goalSetOf(db.changes ?? [], String(target.item_id));
+      const it = seed(seen, key);
+      if (body.op === "restore_goal") {
+        if (!own) return json(422, { detail: "No goal of Oracle's to restore" });
+        after = { goal_ids: goalIdsOf({ ...it, own_goal: undefined }), own_goal: null };
+      } else {
+        const ids = Array.isArray(a.goal_ids) ? (a.goal_ids as string[]) : null;
+        if (!ids || ids.length > 1) return json(422, { detail: "after.goal_ids: one goal, or none" });
+        const goal = ids.length ? Object.keys(GOALS).find((k) => goalId(k) === ids[0]) : "";
+        if (goal === undefined) return json(422, { detail: "after.goal_ids: a goal of this company" });
+        const measure = String(a.measure ?? "").split(/\s+/).filter(Boolean).join(" ") || null;
+        const now = goalOfSeed(it);
+        if ((goal || undefined) === now && measure === (own?.measure ?? null)) return json(422, { detail: "No change: it is so already" });
+        target.measure = measure;
+        if (!own) target.oracle = now ? { id: goalId(now), title: GOALS[now] } : null;
+        after = { goal_ids: goal ? [goalId(goal)] : [], own_goal: goal };
+      }
+      stored = ["goal_ids", "own_goal"];
     } else if (body.op === "accept_date_suggestion") {
       const s = db.suggestions.find((x) => x.id === target.suggestion_id && x.item_id === target.item_id);
       if (!s) return json(404, { detail: "No such date suggestion on this item" });
