@@ -314,7 +314,8 @@ async def build(db: AsyncSession, can_edit: bool) -> GoalMapOut:
                 status=gate_status(m, days, today),
                 areas=list(m.gate_area_ids or []),
                 depends=list(m.gate_after_ids or []),
-                month=f"{m.target_date:%b}" if m.target_date else "",
+                # Undated (a proposal, say): this month, until it gets a date.
+                month=f"{m.target_date or today:%b}",
                 due=_short(m.target_date),
                 days=days,
                 confirmed=m.gate_confirmed_by,
