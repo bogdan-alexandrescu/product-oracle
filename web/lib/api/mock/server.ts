@@ -7199,8 +7199,8 @@ async function withWaitingItems(db: Db, req: Request, res: Response): Promise<Re
     if (!r.ok) throw new Error(path);
     return r.json();
   };
-  const me = (await get("/v1/me").catch(() => undefined)) as { id?: string } | undefined;
-  return json(200, { ...out, items: await waitingItems(get, me?.id ?? "", out.questions) });
+  const me = (await get("/v1/me").catch(() => undefined)) as { user_id?: string } | undefined;
+  return json(200, { ...out, items: await waitingItems(get, me?.user_id ?? "", out.questions) });
 }
 
 export async function mockFetch(req: Request): Promise<Response> {

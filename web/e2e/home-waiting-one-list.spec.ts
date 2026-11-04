@@ -126,7 +126,7 @@ for (const phone of [false, true]) {
       const proposed = page.getByTestId("home-goal-proposed").filter({ hasText: "Cut early churn" });
       await expect(proposed.getByRole("button", { name: "Not this" })).toBeVisible();
       await proposed.getByRole("button", { name: "Confirm" }).click();
-      await expect(page.getByTestId("home-goals-proposed")).toHaveCount(0);
+      await expect(page.getByTestId("home-goals-proposed-list")).toHaveCount(0);
       await expect(page.getByTestId("home-goals")).toContainText("Cut early churn");
     });
   });

@@ -87,7 +87,7 @@ export function PlanByMonth({
           const width = Math.max(1.5, pct(r.end) - left);
           // qa-simple-prd-p3-15: the one-pager names what the items are.
           const n = `${r.items} ${legend ? "roadmap " : ""}${r.items === 1 ? "item" : "items"}`;
-          const label = named && prd ? `${prd.title} · ${r.milestone ? rowName(r) : "no milestone"} · ${n}` : `${rowName(r)} · ${n}`;
+          const label = named && prd ? `${prd.title} · ${r.milestone ? rowName(r) : "no milestone"} · ${n}` : named ? `${r.milestone ? rowName(r) : "Not in a milestone"} · ${n}` : `${rowName(r)} · ${n}`;
           const when = r.date ? calendarDay(r.date, { month: "short", day: "numeric" }) : null;
           return (
             <li key={`${r.name}|${r.date ?? ""}`}>

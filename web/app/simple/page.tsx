@@ -695,8 +695,8 @@ export default function SimpleHome() {
         </Block>
         {/* qa4-simple-home-6: a goal still proposed is not on Home: said, so Detailed's extra goal is no surprise. */}
         {proposedGoals.length > 0 && (
-          <div data-testid="home-goals-proposed" className="simple-small mt-2">
-            <p>
+          <div data-testid="home-goals-proposed-list" className="simple-small mt-2">
+            <p data-testid="home-goals-proposed">
               {proposedGoals.length === 1 ? "1 proposed goal is not shown here until it is confirmed." : `${proposedGoals.length} proposed goals are not shown here until they are confirmed.`}
               {!can("confirm_entity") && " The goal's owner confirms it."}
             </p>
