@@ -3150,6 +3150,9 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
         known_from=known_from,
         horizons=await _run_horizons(db, run),
         schedule_bases=[b.as_json() for b in bases],
+        company_queue=await roadmap_company.run_queue(db, version.document_id)
+        if run.flow == "prd_to_roadmap"
+        else [],
         slug=document.slug if document else str(version.document_id),
         title=document.title if document else "",
         version=version.number,
@@ -4709,7 +4712,11 @@ async def _plan_table_problems(
         items = files.get(plan_tables.ITEMS_FILE, items)
     source = await db.get(DocumentVersion, source_id) if source_id else None
     bases = await schedule.verified_bases(db, source.document_id if source else None)
-    plan = plan_tables.engineering_plan(items, [b.as_json() for b in bases])
+    # one-roadmap-many-prds: the other PRDs' items on the company roadmap are in the tables too.
+    others = await roadmap_company.run_queue(db, source.document_id if source else None)
+    plan = plan_tables.engineering_plan(
+        items, [b.as_json() for b in bases], others=[r for r in others if not r["ours"]]
+    )
     return plan_tables.check(markdown, plan, await company_time.company_today(db))
 
 

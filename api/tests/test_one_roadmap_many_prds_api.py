@@ -323,3 +323,33 @@ async def test_replaced_prd_is_read_only_and_stops_feeding(client):
     r = await client.post("/v1/runs", headers=ctx.as_("owner"),
                           json={"flow": "prd_to_roadmap", "source": "trust-plan"})  # fmt: skip
     assert r.status_code in (409, 422), r.text
+
+
+def test_plan_tables_cover_every_item_on_the_company_roadmap():
+    from oracle.runs import plan_tables
+
+    others = [{"key": "read-replicas", "title": "Read replicas", "end": "2026-12-18"}]
+    plan = plan_tables.engineering_plan(SAFETY_ITEMS, [], others=others)
+    assert [r.key for r in plan.items] == ["report-button", "block-list", "read-replicas"]
+    rr = plan.items[-1]
+    assert (rr.end, rr.basis) == (date(2026, 12, 18), "team queue")
+    assert "| read-replicas | Read replicas |  | Dec 18, 2026 | team queue | planned |" in (
+        plan_tables.table_lines(plan)
+    )
+    # A draft that leaves the other PRD's item out of its Plan table is refused.
+    only_ours = plan_tables.markdown(plan_tables.engineering_plan(SAFETY_ITEMS, []))
+    codes = {p.code for p in plan_tables.check(only_ours, plan, TODAY)}
+    assert "missing_plan_item" in codes
+    assert not plan_tables.check(plan_tables.markdown(plan), plan, TODAY)
+
+
+async def test_a_prd_run_reads_the_shared_queue(client):
+    from oracle.roadmap import company
+
+    ctx, ids = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        rows = await company.run_queue(s, ids["safety"])
+    assert {r["key"]: r["ours"] for r in rows} == {"report-button": True, "read-replicas": False}
+    lines = company.queue_lines(rows)
+    assert any(line.startswith("* Report button (User Safety): Nov") for line in lines)
+    assert any(line.startswith("- Read replicas (Scale): Nov") for line in lines)

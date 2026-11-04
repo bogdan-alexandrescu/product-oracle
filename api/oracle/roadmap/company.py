@@ -304,6 +304,54 @@ async def queue(db: AsyncSession) -> tuple[dict[str, Any], list[Queued]]:
     return cap, out
 
 
+def _day(d: date) -> str:
+    return f"{d:%b} {d.day}, {d.year}"
+
+
+async def run_queue(db: AsyncSession, prd_id: uuid.UUID | None) -> list[dict[str, Any]]:
+    """What a PRD's roadmap run reads of the shared queue: every item on the company
+    roadmap with its place in one team's queue ({key, title, prd, start, end, ours}); the
+    other PRDs' items go into the draft's plan tables as they are (Dates from: team queue)."""
+    company_doc = await active(db)
+    if company_doc is None:
+        return []
+    _, rows = await queue(db)
+    return [
+        {
+            "key": q.item.item_key,
+            "title": q.item.title,
+            "prd": (q.prd or {}).get("title", ""),
+            "start": q.start.isoformat(),
+            "end": q.end.isoformat(),
+            "ours": q.item.prd_document_id == prd_id,
+        }
+        for q in rows
+    ]
+
+
+def queue_lines(rows: list[dict[str, Any]]) -> list[str]:
+    """The shared queue in the run's prompt, dates month first."""
+    if not rows:
+        return []
+    out = [
+        "",
+        "The company roadmap is one roadmap that every PRD feeds, planned as one team's "
+        "queue (team size x focus, milestone order, then the company goal order, then "
+        "priority). Each item's place in that queue (yours are marked *):",
+    ]
+    for r in rows:
+        mark = "*" if r["ours"] else "-"
+        out.append(
+            f"{mark} {r['title']} ({r['prd']}): "
+            f"{_day(date.fromisoformat(r['start']))} to {_day(date.fromisoformat(r['end']))}"
+        )
+    out.append(
+        "Add or change only this PRD's items; every other PRD's item stays as it is, and "
+        "the plan tables list it as below."
+    )
+    return out
+
+
 # --- a replaced PRD ------------------------------------------------------------------
 
 

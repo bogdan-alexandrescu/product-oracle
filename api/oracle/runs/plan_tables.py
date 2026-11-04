@@ -101,12 +101,36 @@ def _text(value: Any) -> str:
     return str(value).strip() if value is not None else ""
 
 
-def engineering_plan(items_text: str | None, bases: Iterable[dict[str, Any]]) -> EngineeringPlan:
+def engineering_plan(
+    items_text: str | None,
+    bases: Iterable[dict[str, Any]],
+    others: Iterable[dict[str, Any]] = (),
+) -> EngineeringPlan:
     """The run's engineering dates for each item of the items file and its milestones. An
-    unreadable or missing items file: no items."""
+    unreadable or missing items file: no items. ``others`` (one-roadmap-many-prds): the
+    company roadmap's items of other PRDs ({key, title, end}), listed after them as they are
+    in the shared queue (Dates from: team queue), so the tables cover every item."""
     plan = EngineeringPlan()
     if not items_text:
         return plan
+    plan = _engineering_plan(items_text, bases)
+    own = {r.key for r in plan.items}
+    for o in others:
+        if o["key"] not in own:
+            end = as_date(o.get("end"))
+            plan.items.append(
+                Row(
+                    key=o["key"],
+                    title=o["title"],
+                    end=end,
+                    basis=BASIS_WORDS["capacity"] if end else NO_DATE,
+                )
+            )
+    return plan
+
+
+def _engineering_plan(items_text: str, bases: Iterable[dict[str, Any]]) -> EngineeringPlan:
+    plan = EngineeringPlan()
     try:
         data = load_items_yaml(items_text)
     except ItemsYamlError:
@@ -196,8 +220,9 @@ def prompt_lines(plan: EngineeringPlan, *, critic: bool) -> list[str]:
         "Plan tables (approving this version applies them to Simple's plan): put a "
         "'## Plan {#plan}' section with the items table and a '## Milestones {#plan-milestones}' "
         "section with the milestones table under Full version, before Sources and data "
-        "points. Copy the rows below as they are: every item of roadmap_items.yaml and no "
-        "other, each date exactly the engineering date, month first (Nov 30, 2026), and an "
+        "points. Copy the rows below as they are: every item of roadmap_items.yaml and the "
+        "company roadmap's other items listed, and no other, each date exactly the "
+        "engineering date, month first (Nov 30, 2026), and an "
         "empty cell where it is empty below (the engineering dates give no start: Simple "
         "estimates it). Dates from says what the end rests on: estimate, team queue or "
         "commitment. You may word Counts when (how the milestone counts) where it is empty. "
