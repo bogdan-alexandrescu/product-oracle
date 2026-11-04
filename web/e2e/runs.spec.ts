@@ -334,15 +334,20 @@ test("a rejected draft: the stop names the problem, and Send back to writer send
   await login(page);
   const id = await seedRejectedDraft(page, true);
   // The production case: a roadmap whose note answers had no feedback ids.
-  await page.evaluate((id) => {
+  const cpId = await page.evaluate((id) => {
     const key = "po-mock-db-v2";
     const db = JSON.parse(localStorage.getItem(key)!);
     const run = db.runs.runs.find((r: { id: string }) => r.id === id);
     const summary = "Oracle refused prd.md: 8 resolutions name no feedback item.";
     run.segments[3].draft_import.summary = summary;
-    run.checkpoints.find((c: { kind: string }) => c.kind === "prd_review").payload.import.summary = summary;
+    const cp = run.checkpoints.find((c: { kind: string }) => c.kind === "prd_review");
+    cp.payload.import.summary = summary;
     localStorage.setItem(key, JSON.stringify(db));
+    // The send-back answers late, so the page shows it is being sent.
+    localStorage.setItem("po-mock-slow", `POST /v1/runs/${id}/checkpoints/${cp.id}/decide`);
+    return cp.id as string;
   }, id);
+  expect(cpId).toBeTruthy();
   await page.goto(`/runs/${id}`);
   const prd = page.getByTestId("segment-prd_draft");
   const review = prd.getByTestId("checkpoint-prd_review");
@@ -353,8 +358,14 @@ test("a rejected draft: the stop names the problem, and Send back to writer send
   // No note is needed: the import's problems are what goes to the writer.
   await expect(review.getByLabel("Note for the agents")).toHaveValue("");
   await prd.getByRole("button", { name: "Send back to writer" }).click();
+  // While it is sent, the button says so and the page says what comes next.
+  await expect(prd.getByRole("button", { name: "Sending back…" })).toBeDisabled();
+  await expect(prd.getByTestId("draft-sending-back")).toHaveText(
+    "Sending the problems to the writer; the next attempt starts when they are sent.",
+  );
   // The next attempt starts, and the run page says so.
   await expect(prd.getByTestId("segment-attempt")).toHaveText("attempt 2");
+  await expect(prd.getByTestId("draft-sending-back")).toHaveCount(0);
   await expect(status(page)).toHaveText("Running");
   await expect(prd.getByRole("button", { name: "Send back to writer" })).toHaveCount(0);
   await expect(prd.getByTestId("checkpoint-waiting")).toHaveCount(0);
