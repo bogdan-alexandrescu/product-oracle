@@ -141,27 +141,45 @@ _ABSENT = re.compile(
     re.I,
 )
 # Words that name no subject: "the two must-include engines are not described anywhere".
-_VAGUE = extract.terms(
-    "one two three all anywhere include included includes brief briefs source sources "
-    "document documents prd described describe description details defined yet still "
-    "there is are was were"
+_VAGUE = frozenset(
+    "one two three all anywhere include included includes brief source document prd "
+    "described describe description detail defined yet still there is are".split()
 )
+
+
+def _names(text: str) -> set[str]:
+    """Content words of a text, plural endings dropped but not stemmed further, so
+    "engines" names "engine" and "engineering" does not."""
+    out = set()
+    for w in extract._WORD.findall(text.lower().replace("-", " ")):
+        w = w.strip("'").removesuffix("'s")
+        if w in extract.STOPWORDS or len(w) < 3:
+            continue
+        if w.endswith("ies") and len(w) > 4:
+            w = w[:-3] + "y"
+        elif w.endswith("s") and not w.endswith(("ss", "us", "is")):
+            w = w[:-1]
+        out.add(w)
+    return out
 
 
 def described(statement: str, features: list[dict[str, Any]], headings: list[str]) -> bool:
     """Whether a gap calls something not described or missing that a feature the read
-    holds (with a description or evidence) or a source section it holds describes."""
+    holds (with a description or evidence) or a source section it holds describes: every
+    content word of what it calls missing is in that feature's name or that heading. A gap
+    that asks for more ("refund rules for the pricing engine", "success metrics for the
+    new version") stays open."""
     if not _ABSENT.search(statement):
         return False
-    subject = extract.terms(_ABSENT.sub(" ", statement).replace("-", " ")) - _VAGUE
+    subject = _names(_ABSENT.sub(" ", statement)) - _VAGUE
     if not subject:
         return False
     names = [
-        f"{f.get('title') or ''} {str(f.get('key') or '').replace('-', ' ')}"
+        f"{f.get('title') or ''} {f.get('key') or ''}"
         for f in features
         if f.get("description") or f.get("evidence")
     ]
-    return any(subject & extract.terms(name) for name in [*names, *headings])
+    return any(subject <= _names(name) for name in [*names, *headings])
 
 
 def same_meaning(a: str, b: str) -> bool:
