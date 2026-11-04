@@ -803,7 +803,9 @@ def _found_in(
             named = {k for _, k in blk.links}
         if owner:
             about.add(owner)
-        if not _claim(rendered.text[block_start:a], hit.days, ref, role):
+        if plain and ref in hit.days:
+            continue  # the document's own day, in its title
+        if not _claim(rendered.text[block_start:a]):
             continue
         out.append(
             Found(
@@ -872,9 +874,9 @@ def _quoted(before: str) -> bool:
     return before.count('"') % 2 == 1 or before.rfind("\u201c") > before.rfind("\u201d")
 
 
-def _claim(before: str, days: tuple[date, ...], ref: date, role: str) -> bool:
+def _claim(before: str) -> bool:
     """Whether a date (``before``: its block's text up to it) claims a schedule."""
-    if ref in days or _OWN_DAY.search(before[-30:]):
+    if _OWN_DAY.search(before[-30:]):
         return False  # the document's own day, today
     if _DECISION.search(before[-60:]):
         return False  # when a decision is needed, not when work lands
