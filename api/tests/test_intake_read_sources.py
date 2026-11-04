@@ -1,0 +1,221 @@
+"""A brief's read reads every uploaded source and the baseline features it is about before
+it says something is not described (walk 2, problem 17).
+
+A PRD brief said "the two must-include engines are not described anywhere" although an
+old PRD describing both had been uploaded as a source and both engines were baseline
+features. The read (oracle.intake.job.payload, what the built-in job and the SwarmCloud
+read both get) now holds every uploaded document, whole or by its relevant sections, the
+baseline features the brief names with their descriptions and evidence, and Oracle's
+check drops a gap that calls one of them missing.
+
+Invented example data only.
+"""
+
+import json
+
+import pytest
+from sqlalchemy import select
+
+from oracle.intake import job as intake_job
+from oracle.jobs import worker
+from oracle.jobs.models import LlmJob
+from oracle.llm import gateway
+from oracle.llm.transports import LlmRequest, TransportResult
+from oracle.runs import flows
+from oracle.tenancy import tenant_session
+from oracle.v2.models import KnowledgeGap, ProductIntake
+from tests.baseline_helpers import cite, confirm, entity, make_item
+from tests.claude_account_helpers import add_account, window
+from tests.intake_helpers import company, create_intake, summary
+
+BRIEF = (
+    "Plan the next version of the quote builder for example.com shops. It must include "
+    "the pricing engine and the routing engine."
+)
+FILLER = " ".join(
+    f"Section {n} of the old plan covers onboarding screens, colours and copy for new shops."
+    for n in range(40)
+)
+OLD_PRD = (
+    "# Quote builder v1\n\n## Overview\n\n" + FILLER + "\n\n## Pricing engine\n\n"
+    "The pricing engine computes each quote from the shop's rate card and applies volume "
+    "discounts per line.\n\n## Routing engine\n\nThe routing engine assigns each quote to "
+    "the nearest depot by postcode and hands it over to the courier."
+)
+GLOSSARY = "Depot: a warehouse that ships orders. Courier: the carrier that delivers them."
+MISSING = "The two must-include engines are not described anywhere."
+REAL_GAP = "Who signs off the launch date with the depots?"
+
+
+class FakeClaude:
+    def __init__(self, answer):
+        self.answer = answer
+        self.requests: list[LlmRequest] = []
+
+    async def complete(self, token: str, request: LlmRequest) -> TransportResult:
+        self.requests.append(request)
+        payload = json.loads(request.messages[0]["content"])
+        return TransportResult(
+            text=json.dumps(self.answer(payload)),
+            model=request.model,
+            usage={"input_tokens": 900, "output_tokens": 200, "total_cost_usd": 0.02},
+        )
+
+
+@pytest.fixture
+def fake():
+    holder = {}
+
+    def install(answer):
+        claude = FakeClaude(answer)
+        holder["previous"] = gateway.set_transports(gateway.Transports(plan=claude, api_key=claude))
+        return claude
+
+    yield install
+    if "previous" in holder:
+        gateway.set_transports(holder["previous"])
+
+
+@pytest.fixture(autouse=True)
+def _intake_read_on_the_job(monkeypatch):
+    from oracle.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "intake_read_runtime", "job")
+
+
+async def _setup(client):
+    ctx = await company()
+    await add_account(ctx.tenant_id, "personal", windows={"five_hour": window(0.2)})
+    prd = await make_item(
+        ctx, "commenter", kind="upload", item_kind="file", content=OLD_PRD,
+        title="Quote builder v1 PRD.md", url=None,
+    )  # fmt: skip
+    glossary = await make_item(
+        ctx, "commenter", kind="upload", item_kind="file", content=GLOSSARY,
+        title="Glossary.md", url=None,
+    )  # fmt: skip
+    pricing = await entity(
+        client, ctx, type="feature", key="pricing-engine", title="Pricing engine",
+        body="Computes a quote from the rate card with volume discounts.",
+    )  # fmt: skip
+    routing = await entity(
+        client, ctx, type="feature", key="routing-engine", title="Routing engine",
+        body="Assigns a quote to the nearest depot.",
+    )  # fmt: skip
+    for ent in (pricing, routing):
+        await confirm(client, ctx, ent)
+    await cite(client, ctx, pricing, excerpt="Rate cards are kept per shop.")
+    return ctx, prd, glossary
+
+
+def _source(payload, item_title):
+    return next(s for s in payload["untrusted_data"]["sources"] if s["title"] == item_title)
+
+
+async def _read(client, fake, answer):
+    ctx, prd, glossary = await _setup(client)
+    claude = fake(answer)
+    out = await create_intake(
+        client, ctx, title="Quote builder v2", brief=BRIEF, ai_extraction=True
+    )
+    tick = await worker.run_pending(ctx.tenant_id)
+    assert tick.succeeded == 1, tick.errors
+    [request] = claude.requests
+    return ctx, out["intake"]["id"], json.loads(request.messages[0]["content"]), prd
+
+
+def _quiet(payload):
+    return {"items": [], "gaps": [], "category": "feature"}
+
+
+async def test_every_uploaded_document_is_read_with_its_relevant_sections(client, fake):
+    _, _, payload, _ = await _read(client, fake, _quiet)
+    prd = _source(payload, "Quote builder v1 PRD.md")
+    # The engines are described past the first 1,500 characters: the read holds them.
+    assert "computes each quote from the shop's rate card" in prd["excerpt"]
+    assert "assigns each quote to the nearest depot" in prd["excerpt"]
+    assert prd["kind"] == "upload" and prd["ref"].startswith("src:")
+    assert {"Pricing engine", "Routing engine"} <= set(prd["sections"])
+    # An uploaded document shares no words with the brief: it is read all the same.
+    glossary = _source(payload, "Glossary.md")
+    assert glossary["excerpt"] == GLOSSARY and glossary["whole"] is True
+
+
+async def test_the_baseline_features_the_brief_names_are_read_with_their_evidence(client, fake):
+    _, _, payload, _ = await _read(client, fake, _quiet)
+    features = {f["key"]: f for f in payload["untrusted_data"]["features"]}
+    assert set(features) == {"pricing-engine", "routing-engine"}
+    pricing = features["pricing-engine"]
+    assert pricing["ref"] == "feat:pricing-engine" and pricing["title"] == "Pricing engine"
+    assert pricing["description"] == "Computes a quote from the rate card with volume discounts."
+    assert pricing["status"] == "confirmed"
+    assert [e["excerpt"] for e in pricing["evidence"]] == ["Rate cards are kept per shop."]
+    # Feature text is people's data: never outside untrusted_data.
+    outside = json.dumps({k: v for k, v in payload.items() if k != "untrusted_data"})
+    assert "rate card" not in outside
+
+
+def _calls_them_missing(payload):
+    src = _source(payload, "Quote builder v1 PRD.md")["ref"]
+    return {
+        "items": [
+            {"field": "scope", "text": "The next version keeps both engines.",
+             "evidence_refs": [src, "feat:pricing-engine", "feat:routing-engine"]},
+        ],
+        "gaps": [
+            {"category": "constraints", "importance": "critical", "statement": MISSING,
+             "evidence_refs": []},
+            {"category": "effort_cost", "importance": "high",
+             "statement": "The routing engine is missing from the sources.", "evidence_refs": []},
+            {"category": "ownership", "importance": "high", "statement": REAL_GAP,
+             "evidence_refs": []},
+        ],
+        "category": "feature",
+    }  # fmt: skip
+
+
+async def test_the_read_cites_them_and_never_calls_them_missing(client, fake):
+    ctx, intake_id, _, prd = await _read(client, fake, _calls_them_missing)
+    after = await summary(client, ctx, intake_id, who="commenter")
+    statements = [g["statement"] for g in after["gaps"]]
+    assert MISSING not in statements
+    assert "The routing engine is missing from the sources." not in statements
+    assert REAL_GAP in statements  # a real open question still stands
+    [kept] = [i for i in after["extracted"] if i["text"] == "The next version keeps both engines."]
+    assert [e["source_item_id"] for e in kept["evidence"]] == [str(prd)]
+    async with tenant_session(ctx.tenant_id) as s:
+        job = await s.scalar(select(LlmJob))
+        assert job.output["dropped_described"] == 2
+        assert job.output["dropped_refs"] == 0  # feature refs are citations, not unknown refs
+        gaps = (await s.scalars(select(KnowledgeGap))).all()
+        assert MISSING not in {g.statement for g in gaps}
+        intake = await s.get(ProductIntake, job.intake_id)
+        [stored] = [i for i in intake.analysis["items"] if i["text"].startswith("The next")]
+        assert stored["feature_keys"] == ["pricing-engine", "routing-engine"]
+
+
+def test_described_check_reads_features_and_sections():
+    features = [{"key": "pricing-engine", "title": "Pricing engine", "description": "x"}]
+    sections = ["Pricing engine", "Routing engine"]
+    assert intake_job.described(MISSING, features, sections)
+    assert intake_job.described("There is no description of the routing engine.", [], sections)
+    assert not intake_job.described(REAL_GAP, features, sections)
+    assert not intake_job.described("The refund flow is not described.", features, sections)
+    assert not intake_job.described("How fast must the pricing engine answer?", features, [])
+
+
+def test_the_tasks_say_read_everything_before_calling_it_missing():
+    task = flows.INTAKE_ANALYSIS_TASK
+    assert "features" in task and "not described" in task
+    ctx = flows.PromptContext(
+        run_id="r-1", document="Quote builder v2", snapshot_as_of=None, low_confidence=0.4,
+        intake_id="i-1",
+    )  # fmt: skip
+    flow = flows.FLOWS["baseline_to_prd"]
+    draft = next(s for s in flow.segments if s.name == "prd_draft")
+    writer = flows.step_prompt(flow, draft, "writer", last=False, ctx=ctx)
+    critic = flows.step_prompt(flow, draft, "critic", last=True, ctx=ctx)
+    for prompt in (writer, critic):
+        assert "every source the brief was pinned to" in prompt
+        assert "baseline features" in prompt
+    assert "not described" in critic and "Critic" in critic
