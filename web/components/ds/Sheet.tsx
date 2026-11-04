@@ -200,7 +200,8 @@ export function Sheet({
               <span className="h-1 w-10 rounded-full bg-line-strong" />
             </div>
             <div className="flex min-h-11 flex-none items-center gap-2 border-b border-line pr-1 pl-4">
-              <h2 className="min-w-0 flex-1 truncate font-display text-lg font-bold tracking-heading">{title}</h2>
+              {/* A long title wraps onto a second line in bold, never cut (pc1-a-phone-390). */}
+              <h2 className="min-w-0 flex-1 py-2 font-display text-lg leading-snug font-bold tracking-heading break-words">{title}</h2>
               {tools}
               <button
                 type="button"

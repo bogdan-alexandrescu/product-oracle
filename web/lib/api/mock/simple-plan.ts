@@ -217,6 +217,12 @@ export interface PlanDb {
   undated?: boolean;
   /** prd-timeline review ("simple-plan-goalless"): F-21 in M2 names no goal. */
   goalless?: boolean;
+  /**
+   * GB2 ("goal-buckets-hard"): one more feature, F-22, in M3 naming no goal of its own (the
+   * scenario's goal buckets give it one): with it, 15 of the plan's features fall only in M2
+   * and M3, enough for one goal bucket to hold all 15 across two milestones.
+   */
+  big_goal?: boolean;
   /** fidelity prd ("simple-plan-partly-dated", frame D3): only M1 has dates. */
   partly_dated?: boolean;
   /**
@@ -300,6 +306,15 @@ export function planOut(plan: PlanDb | undefined, prd: Schemas["SimpleDocRef"], 
       code: "F-21", feature_code: "F-21", name: "Docs refresh", milestone: m.code, milestone_name: m.name,
       milestone_start: m.start, milestone_end: m.end, start_date: at.start, end_date: at.end, estimated: true,
       effort_weeks: 1, goal: null, pm_owned: false, kind: "Behind the scenes", what: "Brings the help pages up to date", flow_steps: [],
+    });
+  }
+  if (plan.big_goal) {
+    const m = MILESTONES.find((x) => x.code === "M3")!;
+    const at = placed(m, 2, 5);
+    slices.push({
+      code: "F-22", feature_code: "F-22", name: "Partner directory listing", milestone: m.code, milestone_name: m.name,
+      milestone_start: m.start, milestone_end: m.end, start_date: at.start, end_date: at.end, estimated: true,
+      effort_weeks: 2, goal: null, pm_owned: false, kind: "New for people", what: "Lists partner integrations a team can turn on", flow_steps: [],
     });
   }
   const weeks = new Map<string, number>();

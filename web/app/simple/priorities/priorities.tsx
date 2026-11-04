@@ -66,6 +66,9 @@ const SUBTITLE: Record<Tab, string> = {
   buckets: "Where the engineer-weeks go, goal by goal.",
 };
 
+/** The calendar quarter a date falls in, as people say it: "Q4 2026". */
+const quarterOf = (date: string): string => `Q${Math.floor((Number(date.slice(5, 7)) - 1) / 3) + 1} ${date.slice(0, 4)}`;
+
 type Sent = { ok: true; change: Schemas["SimpleChangeOut"] } | { ok: false; status: number; message: string; pushback: boolean };
 
 /** POST /v1/simple/changes; a refusal comes back with its words (409 Oracle's pushback included). */
@@ -198,8 +201,9 @@ export function Priorities() {
         <div>
           <h1 className="text-[length:var(--simple-h1)] font-semibold leading-[var(--simple-h1-leading)]">Priorities</h1>
           <p className="text-text2" data-testid="prio-subtitle">
-            {tab === "buckets" && data?.plan?.span && data.plan.milestones.length ? "Goal by goal, the features in the plan and what else is on this quarter." : SUBTITLE[tab]}
-            {data ? ` ${data.plan?.span ? `This plan, ${planSpan(data.plan.span)}` : data.quarter.label}.` : ""}
+            {SUBTITLE[tab]}
+            {/* mk-goalbuckets: Goal buckets names the plan's quarter ("Q4 2026"); its card gives the plan's dates. */}
+            {data ? ` ${tab === "buckets" && data.plan?.span ? quarterOf(data.plan.span.start) : data.plan?.span ? `This plan, ${planSpan(data.plan.span)}` : data.quarter.label}.` : ""}
             {data && tab === "ranked" && splitAtLine(data) ? ` ${data.plan?.span ? "The plan's dates" : "Each feature's end date"} decide${data.plan?.span ? "" : "s"} what makes the line, so what makes it is listed first, each part by rank.` : ""}
           </p>
         </div>
@@ -1903,6 +1907,7 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
   const [editing, setEditing] = useState<string | null>(null);
   const [archiving, setArchiving] = useState<string | null>(null);
   const [note, setNote] = useState<Note | null>(null);
+  const noteSlot = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const writes = useBucketWrites(bucketsQ.reload, setNote, setError);
   const rights = useBucketRights(gb);
@@ -1932,6 +1937,7 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
   return (
     <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
       <PlanBucketsHead plan={plan} codeOf={codeOf} />
+      <div ref={noteSlot} className="scroll-mt-4" />
       {note && <UndoNote onUndo={note.undo ? () => void writes.undo(note.undo!) : undefined}>{note.text}</UndoNote>}
       {error && (
         <p role="alert" className="mt-3 text-[15px] text-warn">
@@ -2104,7 +2110,11 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
           gb={gb}
           onClose={() => setArchiving(null)}
           onArchive={async (to) => {
-            if (await writes.archive(archivedGoal, to, archiveWords(plan, gb, archivedGoal, to))) setArchiving(null);
+            if (!(await writes.archive(archivedGoal, to, archiveWords(plan, gb, archivedGoal, to)))) return;
+            setArchiving(null);
+            // gb2-a-result: the archived bucket is gone, so the page scrolls back to the note's own
+            // place above the buckets, where it covers no goal's title.
+            if ((noteSlot.current?.getBoundingClientRect().top ?? 0) < 0) noteSlot.current?.scrollIntoView({ block: "start" });
           }}
         />
       )}
