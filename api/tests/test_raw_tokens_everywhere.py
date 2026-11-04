@@ -38,6 +38,27 @@ def test_markdown_footnotes_number_known_citations_and_drop_unknown_ones():
     assert markdown_footnotes("Only [c:f-aice] here.", labels.get) == "Only here."
 
 
+def test_markdown_footnotes_keep_clear_of_the_documents_own_footnotes():
+    labels = {"capacity": "Capacity plan"}
+    out = markdown_footnotes(
+        "Own note[^1] and [^2]; capacity is low [c:capacity].\n\n[^1]: First\n[^2]: Second\n",
+        labels.get,
+    )
+    assert out == (
+        "Own note[^1] and [^2]; capacity is low[^3].\n\n[^1]: First\n[^2]: Second\n\n"
+        "[^3]: Capacity plan\n"
+    )
+
+
+def test_markdown_footnotes_leave_fenced_code_as_written():
+    labels = {"capacity": "Capacity plan"}
+    md = "Low [c:capacity].\n\n```\nraw [c:capacity] [l:2]\n```\n\n~~~md\n[s:x]\n~~~\nAfter [c:capacity].\n"
+    assert markdown_footnotes(md, labels.get) == (
+        "Low[^1].\n\n```\nraw [c:capacity] [l:2]\n```\n\n~~~md\n[s:x]\n~~~\nAfter[^1].\n\n"
+        "[^1]: Capacity plan\n"
+    )
+
+
 @dataclass
 class _V:
     number: int = 2
