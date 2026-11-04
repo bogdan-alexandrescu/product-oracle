@@ -135,6 +135,9 @@ const FEATURES: Feature[] = [
 ];
 
 /** A plan feature's plain name (its slices in more than one milestone are named "..., part i of n"). */
+/** The plan's goals in the PRD's order (the mock's goal buckets seed from them). */
+export const planGoalNames = (): string[] => GOALS.map((g) => g.name);
+
 export const planFeatureName = (code: string): string | undefined => FEATURES.find(([c]) => c === code)?.[1];
 
 const inHoliday = (day: string) => HOLIDAYS.some((h) => day >= h.start && day <= h.end);

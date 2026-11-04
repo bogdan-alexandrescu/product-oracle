@@ -15,7 +15,10 @@ import { useMe } from "@/lib/me";
 import { useSetParams } from "@/lib/use-set-params";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { CodeTag, featureCount, goalLabel, PlanBucketsHead, PlanFeatureList, planGoals, planSpan } from "./plan-buckets";
+import { FeaturePanel } from "../roadmap/_panel";
+import { ArchiveDialog, BTN, count, dayOf, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type Note } from "./goal-buckets";
+import { useBucketDrag } from "./goal-drag";
+import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan } from "./plan-buckets";
 
 type Out = Schemas["SimplePrioritiesOut"];
 type Row = Schemas["SimplePriorityRow"];
@@ -1888,11 +1891,26 @@ function suggestionGoal(api: GoalSuggestionsApi, goal: string): Schemas["SimpleG
 }
 
 /** plan-charts (the owner's pick B): the plan's header, then a card per goal listing each feature with its milestone chips. */
-function PlanBuckets({ data, plan, suggestions }: { data: Out; plan: Schemas["SimplePlanOut"]; suggestions: GoalSuggestionsApi }) {
+function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schemas["SimplePlanOut"]; suggestions: GoalSuggestionsApi }) {
   const { can } = useMe();
+  const bucketsQ = useGoalBuckets();
+  const gb = bucketsQ.data;
+  // mk-goalbuckets: each feature under the first goal its links name, the goals in the owner's order.
+  const plan = placedPlan(read, gb);
   const goals = planGoals(plan);
   const noGoal = plan.slices.some((x) => !x.goal);
   const [panel, setPanel] = useState<{ goal: GoalBrief; start?: GoalPanelStart } | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [archiving, setArchiving] = useState<string | null>(null);
+  const [note, setNote] = useState<Note | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const writes = useBucketWrites(bucketsQ.reload, setNote, setError);
+  const rights = useBucketRights(gb);
+  const year = data.today.slice(0, 4);
+  const goalOf = (title: string) => gb?.goals.find((g) => g.title === title);
+  const nextOrder = Math.max(0, ...(gb?.goals ?? []).map((g) => g.order)) + 1;
+  // GB3 a: a feature carried by its grip, by pointer or by keyboard.
+  const drag = useBucketDrag({ gb, writes });
   // Who may suggest (commenters and up) gets B's two buttons; anyone else, the suggestions to read.
   const suggests = can("create_goal_suggestion");
   // A goal's code: its own ("G-A1 Account Safety"), else the code of the goal it names.
@@ -1907,24 +1925,89 @@ function PlanBuckets({ data, plan, suggestions }: { data: Out; plan: Schemas["Si
   const outside = data.buckets
     .map((b) => ({ b, rows: b.codes.map((c) => rowOf.get(c)).filter((r): r is Row => !!r && !r.in_plan) }))
     .filter((x) => x.rows.length > 0);
+  const archivedGoal = gb?.goals.find((g) => g.id === archiving);
+  // A feature's name opens the Simple item panel, as the roadmap does.
+  const phone = usePhone();
+  const [opened, setOpened] = useState<{ code: string; name: string } | null>(null);
   return (
-    <section aria-label="Goal buckets">
+    <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
       <PlanBucketsHead plan={plan} codeOf={codeOf} />
+      {note && <UndoNote onUndo={note.undo ? () => void writes.undo(note.undo!) : undefined}>{note.text}</UndoNote>}
+      {error && (
+        <p role="alert" className="mt-3 text-[15px] text-warn">
+          {error}
+        </p>
+      )}
+      <p id="bucket-move-help" className="sr-only">
+        Press Enter or Space to pick the feature up, the arrow keys to choose a goal, Enter to drop it there and Escape to cancel.
+      </p>
+      <p aria-live="assertive" className="sr-only" data-testid="bucket-live">
+        {drag.said}
+      </p>
       <ul className="mt-4 grid items-start gap-4 sm:grid-cols-2">
         {goals.map((g) => {
           const state = suggestionGoal(suggestions, g);
           const code = codeOf(g);
+          const rec = goalOf(g);
+          const over = !!rec && drag.over === rec.id;
+          const incomplete = !!rec && (!rec.measure || !rec.target || !rec.due);
+          const n = planFeatures(plan, g).length;
           return (
-            <li key={g} data-testid="plan-goal" data-goal={g} className="rounded-[var(--simple-card-radius)] border border-line bg-surface p-4">
-              <div className="flex flex-wrap items-baseline gap-x-2">
-                <h3 className="text-[21px] font-[650] leading-7">{goalLabel(g).name}</h3>
-                {code && <CodeTag code={code} />}
-                <span data-testid="plan-goal-count" className="ml-auto text-[15px] text-text2">
-                  {featureCount(plan, g)}
-                </span>
-              </div>
-              <PlanFeatureList plan={plan} goal={g} />
-              {state && suggests && (
+            <li
+              key={g}
+              data-testid="plan-goal"
+              data-goal={g}
+              data-goal-id={rec?.id}
+              data-drop={over ? "" : undefined}
+              className={`relative rounded-[var(--simple-card-radius)] border bg-surface p-4 ${over ? "border-2 border-accent bg-accent-soft" : incomplete ? "border-warn" : "border-line"}`}
+            >
+              {rec && editing === rec.id ? (
+                <GoalForm
+                  start={{ title: rec.title, measure: rec.measure ?? "", target: rec.target ?? "", due: dayOf(rec.due, year) }}
+                  order={rec.order}
+                  title="Edit goal"
+                  year={year}
+                  onCancel={() => setEditing(null)}
+                  onSave={async (f) => {
+                    if (await writes.edit(rec, f, year)) setEditing(null);
+                  }}
+                />
+              ) : (
+                <>
+                  <div className="flex items-start gap-2">
+                    {rec && <OrderBadge n={rec.order} />}
+                    <h3 className="min-w-0 flex-1 text-[21px] font-[650] leading-7">{goalLabel(g).name}</h3>
+                    {code && <CodeTag code={code} />}
+                    <span data-testid="plan-goal-count" className="mt-1 flex-none text-[15px] text-text2">
+                      {count(n)}
+                    </span>
+                    {rights.edit(rec) && (
+                      <button type="button" aria-label={`Edit ${g}`} title="Edit goal" className={ICON_BTN} onClick={() => setEditing(rec!.id)} disabled={!!editing}>
+                        ✎
+                      </button>
+                    )}
+                    {rights.edit(rec) && rights.archive && <GoalMenu title={g} archive onEdit={() => setEditing(rec!.id)} onArchive={() => setArchiving(rec!.id)} />}
+                  </div>
+                  {rec && (
+                    <p data-testid="goal-measure" className={`mt-0.5 text-[15px] leading-5 text-text2 ${rec ? "pl-8" : ""}`}>
+                      {incomplete ? (
+                        <span className="text-warn">⚠ Needs {[!rec.measure && "a measure", !rec.target && "a target", !rec.due && "a date"].filter(Boolean).join(", ")}</span>
+                      ) : (
+                        <>
+                          {rec.measure}: <b className="font-[650] text-text">{rec.target}</b> by {dayOf(rec.due, year)}
+                        </>
+                      )}
+                    </p>
+                  )}
+                </>
+              )}
+              <FeatureRows plan={plan} goal={g} gb={gb} grips={rights.move} lifted={drag.lifted} onGrip={drag.grip} onOpen={setOpened} />
+              {over && (
+                <p data-testid="drop-note" className="mt-2 rounded-lg border border-dashed border-accent px-3 py-2 text-[15px] text-accent-ink">
+                  Drop here: {g} becomes the goal it moves most
+                </p>
+              )}
+              {state && suggests && editing !== rec?.id && (
                 <div className="mt-3 flex flex-wrap gap-2 border-t border-line pt-3">
                   <button
                     type="button"
@@ -1942,13 +2025,13 @@ function PlanBuckets({ data, plan, suggestions }: { data: Out; plan: Schemas["Si
                       setPanel({ goal: state.goal, start: "oracle" });
                       void suggestions.suggest(state.goal);
                     }}
-                    className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-accent-soft px-3 text-[14px] font-[650] text-accent-ink hover:bg-accent-mid disabled:cursor-default"
+                    className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-accent-soft px-3 text-[14px] font-[650] text-accent-ink hover:bg-accent-mid disabled:cursor-default disabled:opacity-70"
                   >
                     {state.pending ? "✦ Oracle is suggesting…" : "✦ Ask Oracle to suggest"}
                   </button>
                 </div>
               )}
-              {state && !suggests && (
+              {state && !suggests && editing !== rec?.id && (
                 <div className="mt-3 border-t border-line pt-3">
                   <SuggestionsButton goal={state.goal} api={suggestions} onOpen={(goal) => setPanel({ goal })} label="See suggestions" />
                 </div>
@@ -1956,6 +2039,27 @@ function PlanBuckets({ data, plan, suggestions }: { data: Out; plan: Schemas["Si
             </li>
           );
         })}
+        {rights.add &&
+          (editing === "new" ? (
+            <li data-testid="add-goal" className="rounded-[var(--simple-card-radius)] border-2 border-accent bg-surface p-4">
+              <GoalForm
+                start={{ title: "", measure: "", target: "", due: "" }}
+                order={nextOrder}
+                title="New goal"
+                year={year}
+                onCancel={() => setEditing(null)}
+                onSave={async (f) => {
+                  if (await writes.add(f, nextOrder)) setEditing(null);
+                }}
+              />
+            </li>
+          ) : (
+            <li data-testid="add-goal" className="flex min-h-[120px] items-center justify-center rounded-[var(--simple-card-radius)] border border-dashed border-line-strong bg-surface p-4">
+              <button type="button" className={BTN} onClick={() => setEditing("new")} disabled={!!editing}>
+                + Add goal
+              </button>
+            </li>
+          ))}
         {noGoal && (
           <li data-testid="plan-goal" data-goal="" className="rounded-[var(--simple-card-radius)] border border-warn bg-surface p-4">
             <div className="flex flex-wrap items-baseline gap-x-2">
@@ -1965,7 +2069,7 @@ function PlanBuckets({ data, plan, suggestions }: { data: Out; plan: Schemas["Si
               </span>
             </div>
             <p className="mt-1 text-[15px] text-warn">⚠ Serves no goal in the plan</p>
-            <PlanFeatureList plan={plan} goal={null} />
+            <FeatureRows plan={plan} goal={null} gb={gb} grips={rights.move} lifted={drag.lifted} onGrip={drag.grip} onOpen={setOpened} />
           </li>
         )}
         {outside.length > 0 && (
@@ -1990,7 +2094,37 @@ function PlanBuckets({ data, plan, suggestions }: { data: Out; plan: Schemas["Si
           </li>
         )}
       </ul>
+      {drag.edge}
+      {drag.ghost}
+      {opened && <FeaturePanel key={opened.code} feature={{ ...opened, prd: plan.prd }} phone={phone} canChange={can("create_simple_change")} onClose={() => setOpened(null)} />}
+      {archivedGoal && gb && (
+        <ArchiveDialog
+          goal={archivedGoal}
+          plan={plan}
+          gb={gb}
+          onClose={() => setArchiving(null)}
+          onArchive={async (to) => {
+            if (await writes.archive(archivedGoal, to, archiveWords(plan, gb, archivedGoal, to))) setArchiving(null);
+          }}
+        />
+      )}
       {panel && <GoalPanel key={`${panel.goal.key}:${panel.start ?? ""}`} goal={panel.goal} start={panel.start} api={suggestions} onClose={() => setPanel(null)} />}
     </section>
   );
+}
+
+const ICON_BTN = "inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-transparent text-[16px] text-text hover:border-line-strong hover:bg-surface2 disabled:opacity-40";
+
+/** GB2 a's note: "Archived Grow shop partners. 1 feature moved to Faster first ride, 1 to the other goal it serves." */
+function archiveWords(plan: Schemas["SimplePlanOut"], gb: Schemas["GoalBucketsOut"], goal: Schemas["GoalBucketGoal"], to: string | null): string {
+  const list = planFeatures(plan, goal.title);
+  const own = list.filter((f) => (featureOf(gb, f.code, f.name)?.goal_ids ?? []).some((g) => g !== goal.id)).length;
+  const rest = list.length - own;
+  const toTitle = gb.goals.find((g) => g.id === to)?.title;
+  const feats = (n: number) => `${n} ${n === 1 ? "feature" : "features"}`;
+  const ownWords = own ? `${own} to the other goal ${own === 1 ? "it serves" : "each serves"}` : "";
+  if (!list.length) return `Archived ${goal.title}. It held no features.`;
+  if (!rest) return `Archived ${goal.title}. ${feats(own)} moved to the other goal ${own === 1 ? "it serves" : "each serves"}.`;
+  const restWords = toTitle ? `${feats(rest)} moved to ${toTitle}` : `${feats(rest)} ${rest === 1 ? "is" : "are"} under No goal now`;
+  return `Archived ${goal.title}. ${restWords}${ownWords ? `, ${ownWords}` : ""}.`;
 }

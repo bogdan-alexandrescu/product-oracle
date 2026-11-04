@@ -42575,6 +42575,328 @@
         "x-min-role": "owner"
       }
     },
+    "/v1/simple/goal-buckets": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "List Goal Buckets",
+        "description": "The goals in order and each feature's goal links.",
+        "operationId": "list_goal_buckets",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalBucketsOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/goal-buckets/goals": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Create Bucket Goal",
+        "description": "A new goal, after the others.",
+        "operationId": "create_bucket_goal",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoalIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalBucketWrite"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/goal-buckets/goals/{goal_id}": {
+      "patch": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Update Bucket Goal",
+        "description": "Edit a goal's name, measure, target and date (its order stays Baseline's).",
+        "operationId": "update_bucket_goal",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoalIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalBucketWrite"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/goal-buckets/goals/{goal_id}/archive": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Archive Bucket Goal",
+        "description": "Archive a goal and move its features' links in one step.",
+        "operationId": "archive_bucket_goal",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalBucketWrite"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/goal-buckets/features/{feature_id}/move": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Move Bucket Feature",
+        "description": "The feature's first goal link becomes the goal it was dropped on.",
+        "operationId": "move_bucket_feature",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "feature_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Feature Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalBucketWrite"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/goal-buckets/undo": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Undo Goal Buckets",
+        "description": "Puts back every goal and link a write changed.",
+        "operationId": "undo_goal_buckets",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoalBucketsUndo"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalBucketsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "approver"
+      }
+    },
     "/v1/simple/sessions": {
       "post": {
         "tags": [
@@ -52735,6 +53057,24 @@
           "version"
         ],
         "title": "ApproveOut"
+      },
+      "ArchiveIn": {
+        "properties": {
+          "to_goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Goal Id"
+          }
+        },
+        "type": "object",
+        "title": "ArchiveIn"
       },
       "ArtifactDependencyOut": {
         "properties": {
@@ -74562,6 +74902,28 @@
         "title": "FeatureSetProblem",
         "description": "One problem of feature_set.yaml or of the stored scope (oracle.runs.feature_set). A\nblocking one refuses Approve until it is fixed (call c3)."
       },
+      "FeatureSnap": {
+        "properties": {
+          "feature_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Feature Id"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/GoalLinkSnap"
+            },
+            "type": "array",
+            "title": "Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature_id",
+          "links"
+        ],
+        "title": "FeatureSnap"
+      },
       "FeatureTrace": {
         "properties": {
           "title": {
@@ -76808,6 +77170,196 @@
         ],
         "title": "GithubRepoPage"
       },
+      "GoalBucketFeature": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "goal_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Goal Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title"
+        ],
+        "title": "GoalBucketFeature"
+      },
+      "GoalBucketGoal": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "order": {
+            "type": "integer",
+            "title": "Order"
+          },
+          "measure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
+          },
+          "can_edit": {
+            "type": "boolean",
+            "title": "Can Edit",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "order"
+        ],
+        "title": "GoalBucketGoal"
+      },
+      "GoalBucketWrite": {
+        "properties": {
+          "goal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalBucketGoal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "undo": {
+            "$ref": "#/components/schemas/GoalBucketsUndo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "undo"
+        ],
+        "title": "GoalBucketWrite"
+      },
+      "GoalBucketsOut": {
+        "properties": {
+          "can_edit": {
+            "type": "boolean",
+            "title": "Can Edit"
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/GoalBucketGoal"
+            },
+            "type": "array",
+            "title": "Goals"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/GoalBucketFeature"
+            },
+            "type": "array",
+            "title": "Features"
+          }
+        },
+        "type": "object",
+        "required": [
+          "can_edit",
+          "goals",
+          "features"
+        ],
+        "title": "GoalBucketsOut"
+      },
+      "GoalBucketsUndo": {
+        "properties": {
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/GoalSnap"
+            },
+            "type": "array",
+            "title": "Goals"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/FeatureSnap"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "added_goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Added Goal Id"
+          },
+          "sig": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sig"
+          }
+        },
+        "type": "object",
+        "title": "GoalBucketsUndo",
+        "description": "What a write changed, as it was before: Undo puts exactly this back."
+      },
       "GoalCalibration": {
         "properties": {
           "n": {
@@ -76909,6 +77461,41 @@
         ],
         "title": "GoalCheck"
       },
+      "GoalIn": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "measure": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Measure"
+          },
+          "target": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Target"
+          },
+          "due": {
+            "type": "string",
+            "format": "date",
+            "title": "Due"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "measure",
+          "target",
+          "due"
+        ],
+        "title": "GoalIn"
+      },
       "GoalInterviewOut": {
         "properties": {
           "discussion_id": {
@@ -76977,6 +77564,89 @@
           "matched_on"
         ],
         "title": "GoalLink"
+      },
+      "GoalLinkSnap": {
+        "properties": {
+          "goal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Goal Id"
+          },
+          "contribution": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contribution"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "attrs": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attrs"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "goal_id"
+        ],
+        "title": "GoalLinkSnap"
       },
       "GoalMeasurePushback": {
         "properties": {
@@ -77057,6 +77727,36 @@
         "type": "object",
         "title": "GoalProgress",
         "description": "#345: a goal's progress, 0 to 1: its own measurement (\"own\") when it has one, else\nthe weighted progress of its subgoals (\"subgoals\"); null source without either."
+      },
+      "GoalSnap": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "attrs": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Attrs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "attrs"
+        ],
+        "title": "GoalSnap"
       },
       "GoalTerm": {
         "properties": {
@@ -90347,6 +91047,32 @@
         ],
         "title": "MoveChange",
         "description": "Move an item to another horizon (to the end of it)."
+      },
+      "MoveIn": {
+        "properties": {
+          "from_goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Goal Id"
+          },
+          "to_goal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "To Goal Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "to_goal_id"
+        ],
+        "title": "MoveIn"
       },
       "MyAccountOut": {
         "properties": {
