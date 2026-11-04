@@ -39,10 +39,19 @@ const card = (page: Page) => page.getByTestId("ms-card");
 const toast = (page: Page) => page.getByTestId("ms-toast");
 
 async function pointAtAxis(page: Page, at = 0.7) {
+  // The axis runs the whole chart; point at the part in sight (its scroller's box, past the names).
   const axis = page.getByTestId("ms-axis").first();
   const box = (await axis.boundingBox())!;
-  await page.mouse.move(box.x + box.width * at, box.y + box.height / 2);
-  return { x: box.x + box.width * at, y: box.y + box.height / 2 };
+  const seen = await axis.evaluate((el) => {
+    let sc = el.parentElement;
+    while (sc && !/auto|scroll/.test(getComputedStyle(sc).overflowX)) sc = sc.parentElement;
+    const r = (sc ?? document.body).getBoundingClientRect();
+    return { left: r.left, right: r.right };
+  });
+  const from = Math.max(box.x, seen.left);
+  const x = from + (Math.min(box.x + box.width, seen.right) - from) * at;
+  await page.mouse.move(x, box.y + box.height / 2);
+  return { x, y: box.y + box.height / 2 };
 }
 
 test.describe("milestones on the Timeline", () => {
@@ -194,9 +203,9 @@ test.describe("on a phone", () => {
     await open(page);
     await page.getByTestId("format-gantt").click();
     const axis = page.getByTestId("ms-axis").first();
-    await axis.scrollIntoViewIfNeeded();
+    await axis.evaluate((el) => window.scrollBy(0, el.getBoundingClientRect().top - 300));
     const box = (await axis.boundingBox())!;
-    await page.touchscreen.tap(box.x + Math.min(box.width - 10, 300), box.y + box.height / 2);
+    await page.touchscreen.tap(Math.max(box.x, 0) + 200, box.y + box.height / 2);
     await expect(card(page).getByRole("heading", { name: "New milestone" })).toBeVisible();
     const sheet = (await card(page).boundingBox())!;
     expect(sheet.x).toBe(0);

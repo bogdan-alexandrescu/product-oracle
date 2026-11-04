@@ -172,7 +172,7 @@ function Diamond({ x, y, code, size = 12, hollow = false, dashed = false, title,
       aria-label={hit ? title : undefined}
       role={hit ? "button" : undefined}
       className={`absolute z-[25] ${hit ? "cursor-grab touch-none" : ""}`}
-      style={{ left: x - size / 2 - (hit ? 4 : 0), top: y - size / 2 - (hit ? 4 : 0), width: size + (hit ? 8 : 0), height: size + (hit ? 8 : 0), padding: hit ? 4 : 0 }}
+      style={{ left: x - size / 2 - (hit ? 4 : 0), top: y - size / 2 - (hit ? 4 : 0), width: size + (hit ? 8 : 0), height: size + (hit ? 8 : 0), padding: hit ? 4 : 0, pointerEvents: hit ? undefined : "none" }}
       onPointerDown={onPointerDown}
       onClick={onClick}
     >
@@ -193,7 +193,7 @@ function Chip({ children, style, className = "", mx, testid, onClick }: { childr
       data-t0={mx != null ? style?.top : undefined}
       onClick={onClick}
       className={`absolute z-[14] overflow-hidden text-ellipsis rounded-full px-2 text-xs leading-5 font-semibold whitespace-nowrap ${onClick ? "cursor-pointer" : ""} ${className}`}
-      style={style}
+      style={{ ...style, pointerEvents: onClick ? undefined : "none" }}
     >
       {children}
     </span>
