@@ -21,6 +21,7 @@ Invented example data only.
 import uuid
 
 import pytest
+import yaml
 
 from oracle.intake import discovery, drafting
 from oracle.runs import flows
@@ -313,3 +314,49 @@ async def test_the_writer_is_told_unknowns_are_work(client, runtime):
     assert flows.UNKNOWN_IS_WORK_DRAFT in draft.task
     items = next(s for s in flows.FLOWS["prd_draft_items"].segments if s.name == "roadmap_items")
     assert "early discovery item" in items.task
+
+
+ITEMS = [
+    {"id": "find-limits", "title": "Find out the platform's policy and API limits",
+     "outcome": "We know the limits before the sync work", "horizon": "now"},
+    {"id": "sync", "title": "Address sync", "outcome": "Addresses stay current",
+     "horizon": "now", "depends_on": ["find-limits"]},
+]  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    "blocker", ["find-limits", "find-out-the-platform-s-policy-and-api-limits", "answer"]
+)
+def test_the_items_check_refuses_a_discovery_item_as_a_blocker(blocker):
+    a = str(uuid.uuid4())
+    key = a if blocker == "answer" else blocker
+    items = [ITEMS[0], {**ITEMS[1], "blockers": [key]}]
+    problems = discovery.items_problems(items, _work(a))
+    assert [(code, item) for code, _m, item in problems] == [("discovery_as_blocker", "sync")]
+
+
+def test_the_items_check_takes_a_discovery_item_depended_on():
+    a = str(uuid.uuid4())
+    items = [ITEMS[0], {**ITEMS[1], "blockers": ["vendor-contract"]}]
+    assert discovery.items_problems(items, _work(a)) == []
+
+
+async def test_a_roadmap_item_blocked_on_the_discovery_is_refused(client, runtime):
+    ctx = await company()
+    intake_id, _gap, _question, given = await _brief_with_work(client, ctx)
+    answer_id = given["answer"]["id"]
+    resp = await client.post(
+        "/v1/documents/saved-addresses/versions",
+        content=_draft(answer_id, PLANNED).encode(),
+        headers={**ctx.as_("approver"), "Content-Type": "text/markdown"},
+    )
+    assert resp.status_code in (200, 201), resp.text
+    version_id = resp.json()["id"]
+    items = [ITEMS[0], {**ITEMS[1], "blockers": ["find-limits"]}]
+    text = yaml.safe_dump({"version": 1, "items": items})
+    async with tenant_session(ctx.tenant_id) as s:
+        run = Run(knobs={"source_version_id": version_id})
+        check, *_ = await runs_service._checked(s, run, text)
+    assert [p["code"] for p in check.problems if p["code"].startswith("discovery")] == [
+        "discovery_as_blocker"
+    ]
