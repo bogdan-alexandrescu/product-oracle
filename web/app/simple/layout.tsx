@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 
+import { FeaturePanelMock } from "@/components/simple/FeaturePanelMock"; // MOCK-HOOK
 import { HomeSkeleton } from "@/app/simple/_home/skeleton";
 import { SimplePageSkeleton, useSimpleShown } from "@/components/simple/SimpleShell";
 import { useMe } from "@/lib/me";
@@ -27,7 +28,13 @@ function Gate({ children }: { children: ReactNode }) {
   const shown = useSimpleShown();
   const { me, capsReady, simpleMode } = useMe();
   const home = usePathname() === SIMPLE_HOME;
-  if (shown) return children;
+  if (shown)
+    return (
+      <>
+        {children}
+        <FeaturePanelMock /> {/* MOCK-HOOK */}
+      </>
+    );
   if (me && capsReady && !simpleMode) return null;
   // qa-shell-20: every other Simple page shows its frame too, never a blank page.
   return home ? <HomeSkeleton /> : <SimplePageSkeleton />;

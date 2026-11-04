@@ -278,9 +278,16 @@ export const readableRoadmap = (asked: string | null, role: Role): string | unde
 export const closed = (s: SeedItem): boolean => s.status === "cut" || !!s.merged_into;
 const TRACKS: Record<string, string> = { alerts: "Usage alerts track", onboarding: "Guided setup track", welcome: "Welcome media track" };
 
+// MOCK-HOOK: the feature panel mock-ups (FP1..FP3) show the page after a change made in the panel (?phase=done&what=date|link).
+function fpDigestAfter(): Partial<SeedItem> { // MOCK-HOOK
+  const q = typeof location === "undefined" ? null : new URLSearchParams(location.search); // MOCK-HOOK
+  if (!q || q.get("phase") !== "done") return {}; // MOCK-HOOK
+  return q.get("what") === "link" ? { depends: ["alert-rules", "alert-mobile"], start: 81, end: 121, source: "typed" } : { end: 57, source: "typed" }; // MOCK-HOOK
+} // MOCK-HOOK
+
 const SEED: SeedItem[] = [
   { key: "alert-rules", title: "Alert rules engine", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 40, source: "typed", status: "in_progress", gates: [{ phase: "discover", day: 6 }, { phase: "build", day: 28 }], why: "Admins asked for it most this quarter.", section: "bets" },
-  { key: "alert-digest", title: "Weekly alert digest", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 30, end: 70, source: "accepted", depends: ["alert-rules"], milestone: { name: "Beta", day: 60 }, section: "f-06", heading: "F-06 Weekly digest of fired alerts" },
+  { key: "alert-digest", title: "Weekly alert digest", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 30, end: 70, source: "accepted", depends: ["alert-rules"], milestone: { name: "Beta", day: 60 }, section: "f-06", heading: "F-06 Weekly digest of fired alerts", ...fpDigestAfter() }, // MOCK-HOOK fpDigestAfter
   { key: "alert-mobile", title: "Mobile alert push", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", end: 80, source: "engineering", depends: ["alert-rules"], status: "in_progress" },
   { key: "alert-export", title: "Alert history export", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", end: 50, source: "tracker" },
   { key: "alert-sso", title: "Alert routing by team", horizon: "next", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "low", depends: ["alert-export"] },
