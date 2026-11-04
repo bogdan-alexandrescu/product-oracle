@@ -373,6 +373,8 @@ test.describe("one feature panel, as the frames draw it (review 2)", () => {
     await expect(panel.getByText("Engineering estimates the digest ends Dec 10.", { exact: false })).toBeVisible();
     await expect(panel.getByText("Can we have it before the Beta on Nov 30?")).toBeVisible();
     await expect(panel.getByText("so it could end Nov 27.", { exact: false })).toBeVisible();
+    await expect(panel.getByTestId("fp-delivery").locator("..")).toContainText("Engineering estimate");
+    await expect(dep(panel, "needed", "Alert routing by team")).toBeVisible();
   });
 });
 

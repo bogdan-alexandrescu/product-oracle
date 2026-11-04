@@ -926,6 +926,11 @@ function seedFeaturePanelFramesScenario(): Db {
   avery.email = "maya.ortiz@example.com";
   avery.name = "Maya Ortiz";
   db.simple_roadmap!.people = Object.fromEntries(db.members.map((m) => [m.id, m.name ?? m.email]));
+  // As drawn: Delivery is an engineering estimate, and Alert routing by team needs the digest.
+  const items = db.simple_roadmap!.items;
+  items.find((x) => x.key === "alert-digest")!.source = "engineering";
+  const routing = items.find((x) => x.key === "alert-sso")!;
+  routing.depends = [...(routing.depends ?? []), "alert-digest"];
   db.simple_chat = seedSimpleChat(db.members);
   const owner = db.members.find((m) => m.role === "owner")!;
   seedFramesTalk(db.simple_chat, owner.id, db.simple_roadmap!.ids["alert-digest"], { id: avery.id, name: "Maya Ortiz" });
