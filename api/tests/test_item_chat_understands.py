@@ -125,3 +125,44 @@ async def test_unread_line_asks_with_choices(client):
     assert m["kind"] == "question" and chat.SAY_AGAIN not in m["body"]
     labels = [ch["label"] for ch in m["choices"]]
     assert "Add this as a task?" in labels and 3 <= len(labels) <= 4
+
+
+async def test_off_topic_answer_with_it_or_this_is_dropped(client):
+    """Review: an answer that only carries "it" or "this" is not about the item; a nameless
+    answer counts only when a sentence's subject is the item and it speaks of the item's
+    plan, or it names one of the item's own facts."""
+    w = await world()
+    for said in ("Got it! Why did the chicken cross the road? To get to the other side.",
+                 "It is 3 PM in Tokyo.", "This is a fun one: knock knock."):  # fmt: skip
+        m = await reads(client, w, "owner", "tell me a joke",
+                        {"actions": [], "clarify": None, "answer": said, "source": "roadmap"},
+                        page(w))  # fmt: skip
+        assert m["kind"] != "answer" and said not in m["body"], said
+    said = "It ends on M1 Launch prep, so it has no new dates."
+    m = await reads(client, w, "owner", "anything new on dates?",
+                    {"actions": [], "clarify": None, "answer": said, "source": "roadmap"},
+                    page(w))  # fmt: skip
+    assert m["kind"] == "answer" and m["body"] == said
+
+
+async def test_question_or_not_is_no_shipped_mark(client):
+    """Review: "Is this already live?" is a question and "this isn't already live" says the
+    opposite: neither gets a "Mark as already shipped" card."""
+    w = await world()
+    for line in ("Is this already live?", "is it already done?", "this isn't already live",
+                 "it is not already shipped"):  # fmt: skip
+        m = await say(client, w, "owner", line, page(w))
+        assert "mark_shipped" not in {c["op"] for c in m.get("cards") or []}, line
+        assert "Mark as already shipped" not in m["body"], line
+
+
+async def test_commenter_choices_leave_out_mark_shipped(client):
+    """Review: only an owner applies "Mark as already shipped", so a commenter's choices
+    leave it out (and still offer two or three others)."""
+    w = await world()
+    m = await reads(client, w, "commenter", "folks have been using a version of this for a while",
+                    {"actions": [], "clarify": None, "answer": None}, page(w))  # fmt: skip
+    assert m["kind"] == "question", m["body"]
+    labels = [ch["label"] for ch in m["choices"]]
+    assert "Mark it as already shipped?" not in labels
+    assert "Add this as a task?" in labels and labels[-1] == "Neither" and len(labels) >= 3
