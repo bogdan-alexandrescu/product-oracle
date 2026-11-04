@@ -342,3 +342,5 @@ async def test_smaller_goal_reaches_the_date(client):
     live = await client.post(f"{URL}/live", json={"milestone": "M2", "picks": after["pick"]},
                              headers=h)  # fmt: skip
     assert live.json()["over_days"] <= 0
+    listed = (await client.get("/v1/simple/fit-date", headers=h)).json()
+    assert next(g for g in listed if g["milestone"] == "M2")["today"] == after["today"]
