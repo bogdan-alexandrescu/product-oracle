@@ -11,6 +11,7 @@ import { startInterview, startInterviews, vagueGoals } from "@/lib/api/goal-inte
 import { GOALS_OBSERVE, useGoalsLevel } from "@/lib/goals-autonomy";
 import { api, unwrap, type ConflictOut, type EntityOut, type ProposalOut } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
+import { CurrentStateView, ReadyBand, StateTabs, useFeatureStates } from "@/components/current-state/CurrentState";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { AddItemSheet, type AddKind } from "./_components/AddItem";
@@ -124,8 +125,18 @@ function InterviewFromUrl({ onGoal, onVague }: { onGoal: (id: string) => void; o
   return null;
 }
 
+/** ?view=current: Detailed's Current state tab, on Desired state's own URL. */
+function StateViewFromUrl({ onView }: { onView: (v: "desired" | "current") => void }) {
+  const v = useSearchParams().get("view") === "current" ? "current" : "desired";
+  useEffect(() => onView(v), [v, onView]);
+  return null;
+}
+
 export default function BaselinePage() {
   const { me, can, capsReady, capsError } = useMe();
+  const [stateView, setStateView] = useState<"desired" | "current">("desired");
+  const states = useFeatureStates();
+  const stateChanged = () => void states.reload();
   // #370: approvers change the baseline, commenters propose; a viewer only reads it.
   const canWrite = can("confirm_entity");
   const canComment = can("create_proposal");
@@ -461,14 +472,25 @@ export default function BaselinePage() {
   if (!capsReady && !capsError)
     return (
       <Page>
-        <PageHeader title="Baseline" />
+        <PageHeader title="Desired state" />
         <Loading />
+      </Page>
+    );
+
+  if (stateView === "current")
+    return (
+      <Page>
+        <Suspense fallback={null}>
+          <StateViewFromUrl onView={setStateView} />
+        </Suspense>
+        <CurrentStateView q={states} onChanged={stateChanged} />
       </Page>
     );
 
   return (
     <Page>
       <Suspense fallback={null}>
+        <StateViewFromUrl onView={setStateView} />
         <OpenFromUrl onOpen={openItem} onBlocker={openBlocker} />
         <TabFromUrl onTab={setTab} onFrom={setFrom} onRun={setRunId} />
         {canInterview && <InterviewFromUrl onGoal={makeMeasurable} onVague={() => void interviewVague()} />}
@@ -479,9 +501,9 @@ export default function BaselinePage() {
         <AddItemSheet kind={adding} graph={graph.data} tags={tags} onClose={() => setAdding(null)} onAdded={added} />
       )}
       <PageHeader
-        title="Baseline"
+        title="Desired state"
         info={
-          <InfoTip label="Baseline" align="start" side="bottom">
+          <InfoTip label="Desired state" align="start" side="bottom">
             Goals, products and features the product is built on, each linked to its evidence.
           </InfoTip>
         }
@@ -523,6 +545,9 @@ export default function BaselinePage() {
         }
       />
 
+      <p className="-mt-2 mb-3 max-w-[760px] text-[14px] text-text2">What the product should become: goals, areas of focus, milestones and the planned features.</p>
+      <StateTabs view="desired" desired={states.data?.desired ?? null} running={states.data?.running ?? null} />
+      {states.data && <ReadyBand data={states.data} onChanged={stateChanged} />}
       <Split
         inspector={
           blockerId ? (

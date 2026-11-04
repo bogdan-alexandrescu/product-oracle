@@ -161,6 +161,8 @@ import {
   type PricingDb,
 } from "./pricing";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
+import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./currentstate";
+import { prioritiesOut } from "./simple-priorities";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
@@ -279,6 +281,7 @@ export interface Db {
   roadmap?: RoadmapDb;
   /** Simple S2 (#723): the company-wide roadmap's items and date suggestions (./simple-roadmap.ts). */
   simple_roadmap?: SimpleDb;
+  current_state?: CurrentStateDb;
   /** Simple S5 (#723): one PRD's one-pager, its working draft and line changes (./simple-one-pager.ts). */
   simple_one_pager?: OnePagerDb;
   /** Every other mock PRD's own one-pager (the same invented page), by document id. */
@@ -6082,6 +6085,14 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.simple_roadmap.prd_milestones = prdMilestonesOf(db);
   const simpleRoles = Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role]));
   const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
+  // Current state: every Simple feature's mark and proof; the approver role (confirm_entity) moves and answers.
+  if (p[1] === "feature-states") {
+    const rows = prioritiesOut(db.simple_roadmap, { id: me.id, role: me.role, owners: simpleOwners, names: {} }, () => [], () => false).rows;
+    db.current_state ??= seedCurrentState(rows, Date.now());
+    const mayMove = me.role === "approver" || me.role === "owner";
+    const res = await routeCurrentState(db.current_state, rows, mayMove, req, p, Date.now());
+    if (res) return res;
+  }
   const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
   const simpleRoute = async (r: Request): Promise<Response | null> => {
     // goal-order: Simple's goals follow the baseline's one goal order.
