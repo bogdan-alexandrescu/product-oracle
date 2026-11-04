@@ -174,7 +174,7 @@ import { planAnswer, routeSimpleChat, seedFramesTalk, seedReaderItems, seedSimpl
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
-import { appliedVersionOf, approvedPrdToDraft, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { appliedVersionOf, approvedPrdToDraft, betLineItemIds, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -6480,6 +6480,8 @@ async function route(db: Db, req: Request): Promise<Response> {
           ? planMilestones().map((m) => `${m.code} ${m.name}`)
           : undefined,
         overflowPages: localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-overflow" ? 2 : undefined,
+        // build-feature-panel: each bet's own roadmap item (./simple-roadmap.ts betLineItemIds).
+        betItemIds: db.simple_roadmap ? betLineItemIds(db.simple_roadmap, onePagerDb) : undefined,
       },
       r,
       p,

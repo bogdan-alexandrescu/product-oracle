@@ -12,7 +12,7 @@
  * the other pages through FeaturePanelHost).
  */
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
@@ -58,6 +58,9 @@ export function readDay(text: string, near: string): string | null {
 
 type Ctx = { item: Item; items: Map<string, Item>; act: Act; edit: boolean };
 
+/** review 7: a field's button says Save to one who decides the item, else Propose (its can_decide). */
+const SaveWord = createContext("Save");
+
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-2 py-1">
@@ -77,9 +80,10 @@ function Section({ title, id, children }: { title: string; id: string; children:
 }
 
 /** A value changed in place (FP2 A): the value reads as text; a click makes it a field with Save and Cancel under it. */
-function Field({ label, value, shown, edit, note, multiline, onSave, testId }: { label: string; value: string; shown?: ReactNode; edit: boolean; note?: ReactNode; multiline?: boolean; onSave: (v: string) => Promise<string | null> | string | null; testId?: string }) {
+function Field({ label, value, shown, edit, note, multiline, number, onSave, testId }: { label: string; value: string; shown?: ReactNode; edit: boolean; note?: ReactNode; multiline?: boolean; number?: boolean; onSave: (v: string) => Promise<string | null> | string | null; testId?: string }) {
   const [draft, setDraft] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const saveWord = useContext(SaveWord);
   if (!edit) return <span data-testid={testId}>{shown ?? value}</span>;
   if (draft === null)
     return (
@@ -98,7 +102,7 @@ function Field({ label, value, shown, edit, note, multiline, onSave, testId }: {
       {multiline ? (
         <textarea autoFocus aria-label={label} rows={3} value={draft} onChange={(e) => setDraft(e.target.value)} className={`${cls} py-1`} />
       ) : (
-        <input autoFocus aria-label={label} value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void save()} className={`${cls} h-9`} />
+        <input autoFocus aria-label={label} type={number ? "number" : "text"} min={number ? 0.5 : undefined} step={number ? 0.5 : undefined} value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void save()} className={`${cls} h-9`} />
       )}
       {note && <p className="mt-1 text-sm text-text2">{note}</p>}
       {error && (
@@ -108,7 +112,7 @@ function Field({ label, value, shown, edit, note, multiline, onSave, testId }: {
       )}
       <div className="mt-1.5 flex gap-2">
         <Button variant="solid" onClick={() => void save()}>
-          Save
+          {saveWord}
         </Button>
         <Button variant="ghost" onClick={() => setDraft(null)}>
           Cancel
@@ -122,6 +126,7 @@ function Field({ label, value, shown, edit, note, multiline, onSave, testId }: {
 function Editor<T>({ label, shown, edit, start, fields, onSave, testId, after }: { label: string; shown: ReactNode; edit: boolean; start: () => T; fields: (d: T, set: (d: T) => void) => ReactNode; onSave: (d: T) => Promise<string | null> | string | null; testId: string; after?: (open: (() => void) | null) => ReactNode }) {
   const [draft, setDraft] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const saveWord = useContext(SaveWord);
   const open = () => (setDraft(start()), setError(null));
   if (!edit)
     return (
@@ -154,7 +159,7 @@ function Editor<T>({ label, shown, edit, start, fields, onSave, testId, after }:
       )}
       <div className="mt-1.5 flex gap-2">
         <Button variant="solid" onClick={() => void save()}>
-          Save
+          {saveWord}
         </Button>
         <Button variant="ghost" onClick={() => setDraft(null)}>
           Cancel
@@ -165,6 +170,68 @@ function Editor<T>({ label, shown, edit, start, fields, onSave, testId, after }:
 }
 
 const FIELD = "w-full rounded-md border-2 border-accent bg-surface px-2 text-[15px] h-9";
+
+/** review 7: the feature's name, renamed in place (edit_title: 1 to 200 characters, as the API takes it). */
+function Title({ c }: { c: Ctx }) {
+  const { item, act, edit } = c;
+  return (
+    <Field
+      label="Name"
+      value={item.title}
+      edit={edit}
+      testId="fp-title"
+      onSave={async (v) => {
+        const title = v.split(/\s+/).filter(Boolean).join(" ");
+        if (!title) return "Type a name";
+        if (title.length > 200) return "Keep the name to 200 characters";
+        if (title === item.title) return null;
+        await act(`Renamed ${item.title} to ${title}`, { op: "edit_title", target: { item_id: item.id }, before: { title: item.title }, after: { title } }, { words: () => `Renamed ${item.title} to ${title}` });
+        return null;
+      }}
+    />
+  );
+}
+
+const weeks = (n: number) => `${n.toLocaleString("en-US")} engineer-week${n === 1 ? "" : "s"}`;
+const lineWords = (r: { rank: number; above_line: boolean }) => `ranked ${r.rank}, ${r.above_line ? "above" : "below"} the line`;
+const scoreOf = (n: number | null | undefined) => (n == null ? null : (Math.round(n * 10) / 10).toLocaleString("en-US"));
+
+/** review 7: the feature's effort in engineer-weeks (estimate_feature), with its score and where
+ * it ranks against the line, read from Priorities' ranking; a feature not ranked has none yet. */
+function Effort({ c }: { c: Ctx }) {
+  const { item, act, edit } = c;
+  const ranking = useQuery("simple-priorities:feature-panel", () => unwrap(api.GET("/v1/simple/priorities", {})));
+  const row = ranking.data?.rows.find((r) => r.item_id === item.id);
+  if (!ranking.data) return <span className="text-text2">{ranking.error ?? "Loading…"}</span>;
+  if (!row) return <span className="text-text2" data-testid="fp-effort">Not in the ranking yet</span>;
+  const score = scoreOf(row.score);
+  return (
+    <>
+      <Field
+        label="Effort in engineer-weeks"
+        value={row.effort != null ? String(row.effort) : ""}
+        shown={row.effort != null ? weeks(row.effort) : <span className="text-text2">Not estimated yet</span>}
+        edit={edit}
+        number
+        testId="fp-effort"
+        onSave={async (v) => {
+          const n = Math.round(Number(v) * 10) / 10;
+          if (!v.trim() || !Number.isFinite(n) || n <= 0) return "Type the weeks as a number above 0";
+          if (n === row.effort) return null;
+          const words = async () => {
+            const now = (await unwrap(api.GET("/v1/simple/priorities", {}))).rows.find((r) => r.item_id === item.id);
+            return now ? `${item.title}: effort ${weeks(n)}, score ${scoreOf(now.score) ?? "not worked out"}, ${lineWords(now).replace(",", "")}` : `${item.title}: effort ${weeks(n)}`;
+          };
+          await act(`Set the effort of ${item.title} to ${weeks(n)}`, { op: "estimate_feature", target: { item_id: item.id }, before: { goal_value: row.value_estimated ? (row.goal_value ?? null) : null, effort: row.effort ?? null }, after: { effort: n } }, { words });
+          return null;
+        }}
+      />
+      <span className="block text-sm text-text2" data-testid="fp-effort-score">
+        {score != null ? `Score ${score}` : "No score yet"} · {lineWords(row)}
+      </span>
+    </>
+  );
+}
 
 /** The owner, any active member of the company; "Its track's owner" clears the item's own. */
 function Owner({ c }: { c: Ctx }) {
@@ -601,7 +668,7 @@ function Links({ c, late, onAdded }: { c: Ctx; late: Item[]; onAdded: (i: Item) 
     return `${from.title} now depends on ${to.title}${moved ? `, and starts after it: ${span(now.start.date, now.end.date)}` : ""}.`;
   };
   const link = (op: "add_link" | "remove_link" | "restore_link", from: Item, to: Item, what: string) =>
-    act(what, { op, target: { item_id: from.id, subject: to.id }, before: { depends_on: depKeys(from, items) }, after: {} }, op === "add_link" ? { words: () => added(from, to) } : undefined);
+    act(what, { op, target: { item_id: from.id, subject: to.id }, before: { depends_on: depKeys(from, items) }, after: {} }, op === "add_link" ? { words: () => added(from, to) } : op === "remove_link" ? { words: () => `Removed the link: ${from.title} no longer depends on ${to.title}` } : undefined);
   return (
     <div>
       <DepList
@@ -647,8 +714,9 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
   const head = (
     <div>
       <div className="flex items-start gap-2">
+        {/* review 7: the name is changed in place, as every other field. */}
         <h2 className="min-w-0 flex-1 text-lg leading-6 font-semibold break-words" title={item.title}>
-          {item.title}
+          <Title c={c} />
         </h2>
         <button type="button" aria-label="Close" onClick={onClose} className="h-8 w-8 flex-none rounded text-text2 hover:bg-surface2">
           ×
@@ -698,6 +766,9 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
           <Row label="Owner">
             <Owner c={c} />
           </Row>
+          <Row label="Effort">
+            <Effort c={c} />
+          </Row>
           <Row label="Confidence">{item.confidence ? confidenceWord(item.confidence) : "Not rated"}</Row>
           {/* build-feature-panel review 3: the Notes row the picked frames draw (edit_note). */}
           <Row label="Notes">
@@ -717,7 +788,7 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
   const base = "fixed z-[60] flex flex-col overflow-hidden border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip outline-none";
   if (phone)
     return (
-      <>
+      <SaveWord.Provider value={item.can_decide ? "Save" : "Propose"}>
         {backdrop}
         <aside ref={ref} tabIndex={-1} role="dialog" aria-label={item.title} data-testid={testId} data-sheet="full" className={`${base} inset-0`}>
           <div className="flex-none border-b border-line px-4 pt-3.5 pb-2.5">
@@ -740,10 +811,10 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
             </div>
           )}
         </aside>
-      </>
+      </SaveWord.Provider>
     );
   return (
-    <>
+    <SaveWord.Provider value={item.can_decide ? "Save" : "Propose"}>
       {backdrop}
       <aside ref={ref} tabIndex={-1} role="dialog" aria-label={item.title} data-testid={testId} data-sheet="panel" className={`${base} top-4 right-4 bottom-4 w-[880px] max-w-[calc(100vw-32px)] rounded-xl border`}>
         <div className="flex-none border-b border-line px-4 pt-3.5 pb-2.5">{head}</div>
@@ -754,6 +825,6 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
           {talkCol}
         </div>
       </aside>
-    </>
+    </SaveWord.Provider>
   );
 }

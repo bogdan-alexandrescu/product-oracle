@@ -376,13 +376,33 @@ const SEED: SeedItem[] = [
   { key: "alert-mobile", title: "Mobile alert push", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", end: 80, source: "engineering", depends: ["alert-rules"], status: "in_progress", milestone: { name: null, day: 85, engine: { date_source: "estimate:eng-push", basis_ids: ["3f0c9a52-7d1e-4b8a-9c61-2e5d8f4a7b10"], refused_date: null, refused: false } } },
   { key: "alert-export", title: "Alert history export", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", end: 50, source: "tracker", unlinked: [{ key: "alert-digest", by: "Leo Brandt" }] },
   { key: "alert-sso", title: "Alert routing by team", horizon: "next", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "low", depends: ["alert-export"] },
-  { key: "setup-checklist", title: "Setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "high", start: 10, end: 45, source: "typed", status: "in_progress", gates: [{ phase: "Beta", day: 40 }] },
+  { key: "setup-checklist", title: "Setup checklist", section: "build", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "high", start: 10, end: 45, source: "typed", status: "in_progress", gates: [{ phase: "Beta", day: 40 }] },
   { key: "setup-import", title: "Sample data import", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium", start: 20, end: 60, source: "typed", status: "in_progress", depends: ["setup-checklist"], gates: [{ phase: "beta", day: 75 }], risks: [{ flag: "dependency_order", note: "The checklist's last step is not needed" }] },
   { key: "setup-tour", title: "In-app tour", horizon: "later", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", status: "cut", start: 30, end: 75, source: "typed" },
   { key: "setup-video", title: "Welcome video", horizon: "later", roadmap: "onboarding-roadmap", track: "onboarding", depends: ["setup-tour"] },
   { key: "setup-ideas", title: "Team invite nudges", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", draft: true },
   { key: "price-tiers", title: "New plan tiers", horizon: "next", roadmap: "pricing-roadmap", confidence: "medium" },
 ];
+
+/**
+ * walkb-roadmap review, build-feature-panel: an item's own bet on its PRD's one-pager
+ * (service._bet_flows, shared by betFlow and the one-pager's item_id): the one bet naming the
+ * item's code, else the one bet whose source keys include its section, else the one bet its
+ * title names ("the one" meaning exactly one match, else none at that step). Null with no
+ * section (not built from a PRD section) or no match.
+ */
+export function ownBetLineId(op: Pick<OnePagerDb, "blocks">, s: { section?: string; title: string }): string | null {
+  if (!s.section) return null;
+  const bets = op.blocks.find((b) => b.key === "bets")?.lines ?? [];
+  const words = (t: string) => ` ${t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
+  const code = prdCode(s.section);
+  const one = <T,>(xs: T[]): T | undefined => (xs.length === 1 ? xs[0] : undefined);
+  const line =
+    one(bets.filter((l) => !!code && words(l.text).includes(words(code)))) ??
+    one(bets.filter((l) => l.keys.includes(s.section!))) ??
+    one(bets.filter((l) => !!s.title.trim() && words(l.text).includes(words(s.title))));
+  return line?.id ?? null;
+}
 
 /**
  * walkb-roadmap review: the flow drawn on the PRD's one-pager for the bet an item was built
@@ -392,17 +412,26 @@ const SEED: SeedItem[] = [
 function betFlow(db: SimpleDb, s: SeedItem): Schemas["SimpleFlow"] | null {
   const op = db.onePager;
   if (!op || !s.section || ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-") !== op.doc.slug) return null;
-  const bets = op.blocks.find((b) => b.key === "bets")?.lines ?? [];
-  const words = (t: string) => ` ${t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
-  const code = prdCode(s.section);
-  // roadmap-keydates: its own bet: the one naming its code, else the one bet from its section
-  // alone, else the one bet its title names (a short title two bets mention names neither).
-  const one = <T,>(xs: T[]): T | undefined => (xs.length === 1 ? xs[0] : undefined);
-  const line =
-    one(bets.filter((l) => !!code && words(l.text).includes(words(code)))) ??
-    one(bets.filter((l) => l.keys.includes(s.section!))) ??
-    one(bets.filter((l) => !!s.title.trim() && words(l.text).includes(words(s.title))));
-  return line ? flowFor(db.visuals, "one_pager_line", betSubject(op.flowKey ? `${op.flowKey}/${line.id}` : line.id)) : null;
+  const lineId = ownBetLineId(op, s);
+  return lineId ? flowFor(db.visuals, "one_pager_line", betSubject(op.flowKey ? `${op.flowKey}/${lineId}` : lineId)) : null;
+}
+
+/**
+ * build-feature-panel: api/oracle/simple/schemas.OnePagerLine.item_id (service._bet_flows): each
+ * bet on the PRD's one-pager, keyed to the roadmap item whose own bet it is (ownBetLineId). An
+ * item not cut, not a draft and built from a PRD section claims its own bet; the first item in
+ * roadmap order to claim a given bet keeps it. Bet line id -> item id.
+ */
+export function betLineItemIds(db: SimpleDb, op: OnePagerDb): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const s of db.items) {
+    if (s.status === "cut" || s.draft || !s.section) continue;
+    if (ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-") !== op.doc.slug) continue;
+    const id = db.ids[s.key];
+    const lineId = id ? ownBetLineId(op, s) : null;
+    if (lineId && !(lineId in out)) out[lineId] = id;
+  }
+  return out;
 }
 
 const DAY = 86_400_000;

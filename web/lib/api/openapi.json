@@ -93886,6 +93886,18 @@
               }
             ]
           },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
           "decisions": {
             "items": {
               "$ref": "#/components/schemas/SimpleOpenDecision"

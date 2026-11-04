@@ -951,7 +951,12 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
           <li key={d.item_id} data-testid="prio-draft" data-code={d.code} data-shown={show === d.item_id ? "true" : undefined} className={`rounded-[var(--simple-card-radius)] border border-dashed bg-surface p-3 ${show === d.item_id ? "border-accent ring-2 ring-accent" : "border-line-strong"}`}>
             <div className="flex flex-wrap items-center gap-3">
               <span className="rounded-full bg-na-bg px-2 text-[length:var(--simple-small)] text-na">Draft</span>
-              <span className="flex-1 font-medium">{d.title}</span>
+              {/* build-feature-panel review 7: a draft's name opens the one feature panel too. */}
+              <span className="flex-1 font-medium">
+                <button type="button" data-feature={d.item_id} className="text-left hover:underline">
+                  {d.title}
+                </button>
+              </span>
               <span className="text-[length:var(--simple-small)] text-text2">{d.goal?.title ?? "No goal"}</span>
               {mayChange && (
                 <span className="flex gap-2">

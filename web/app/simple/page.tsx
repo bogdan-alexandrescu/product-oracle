@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { copyOf, setupOpen } from "@/app/home/_setup";
 import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRows, Top } from "@/app/simple/_home/cards";
@@ -99,6 +99,15 @@ function ProblemWords({ words, other }: { words: string; other?: { id: string; t
       </button>
       {words.slice(at + other.title.length)}
     </>
+  );
+}
+
+/** build-feature-panel review 7: a feature's name in a sentence, opening its one panel. */
+function FeatureName({ id, title }: { id: string; title: string }) {
+  return (
+    <button type="button" data-feature={id} className="text-left underline decoration-dotted underline-offset-2 hover:text-accent-ink">
+      {title}
+    </button>
   );
 }
 
@@ -1040,6 +1049,7 @@ export default function SimpleHome() {
                                 moves={b.flag.fixes.includes("shift_dependents") ? shiftMoves(b, roadmap.data?.items ?? []) : []}
                                 proposed={mine.find((c) => FIX_OPS.has(c.op) && c.target.item_id === b.item.id && (c.target.subject ?? null) === (b.flag.subject ?? null))}
                                 movedWith={movedWith(b)?.item.title}
+                                movedWithId={movedWith(b)?.item.id}
                                 coveredBy={(() => {
                                   const c = coveredBy(b);
                                   return c ? { title: itemTitle(c.target.item_id), waitingFor: c.routed_to.map((id) => nameOf(id, "the decider")).join(", ") || "the decider" } : undefined;
@@ -1339,6 +1349,7 @@ function BrokenRow({
   moves,
   proposed,
   movedWith,
+  movedWithId,
   coveredBy,
   other,
   nameOf,
@@ -1352,6 +1363,7 @@ function BrokenRow({
   proposed?: Change;
   /** qa4-simple-home-5: the item above whose "Move the dependents" moves this one too (its control is there). */
   movedWith?: string;
+  movedWithId?: string;
   /** qa4-simple-home-18: my waiting proposal on another item that moves this one too. */
   coveredBy?: { title: string; waitingFor: string };
   /** The other feature the link names (its subject), when the roadmap has it. */
@@ -1393,12 +1405,20 @@ function BrokenRow({
       )}
       {showFixes && !coveredBy && movedWith && (
         <span data-testid="home-broken-moved-with" className="simple-small">
-          {applies ? FIX_WORDS.shift_dependents : `Propose: ${FIX_WORDS.shift_dependents.toLowerCase()}`} on {movedWith} above moves this one too.
+          {applies ? FIX_WORDS.shift_dependents : `Propose: ${FIX_WORDS.shift_dependents.toLowerCase()}`} on {movedWithId ? <FeatureName id={movedWithId} title={movedWith} /> : movedWith} above moves this one too.
         </span>
       )}
       {showFixes && shifts && b.dependency && moves.length > 0 && (
         <span id={moveId} data-testid="home-broken-moves" className="simple-small">
-          Moving the dependents starts {joinAnd(moves.map((m) => m.title))} after {b.dependency.title} ends.
+          {/* build-feature-panel review 7: each name it moves, and the one it waits on, opens the one feature panel. */}
+          Moving the dependents starts{" "}
+          {moves.map((m, i) => (
+            <Fragment key={m.id}>
+              {i > 0 && (i === moves.length - 1 ? " and " : ", ")}
+              <FeatureName id={m.id} title={m.title} />
+            </Fragment>
+          ))}{" "}
+          after <FeatureName id={b.dependency.id} title={b.dependency.title} /> ends.
         </span>
       )}
       {showFixes && (

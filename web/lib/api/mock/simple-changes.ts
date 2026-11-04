@@ -497,6 +497,20 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   const ranking = body.op === "override_priority" || body.op === "estimate_feature";
   const after = ranking ? priorityAfter(body.op, body.after ?? {}) : { ...body.after };
   if (typeof after === "string") return json(422, { detail: after });
+  // changes.py set_owner: null allowed, else an existing active member.
+  if (body.op === "set_owner" && after.owner_id != null && !ctx.roles?.[String(after.owner_id)]) {
+    return json(422, { detail: "after.owner_id: a member of this company" });
+  }
+  // changes.py set_milestone: the name's words collapsed to single spaces, 1 to 200 characters;
+  // a date that is not a valid YYYY-MM-DD refused.
+  if (body.op === "set_milestone" && after.milestone != null) {
+    const m = after.milestone as Values;
+    const name = String(m.name ?? "").split(/\s+/).filter(Boolean).join(" ");
+    if (!name || name.length > 200) return json(422, { detail: "after.milestone.name: 1 to 200 characters" });
+    const date = m.date == null ? null : String(m.date);
+    if (date != null && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return json(422, { detail: "after.milestone.date: a day as YYYY-MM-DD" });
+    after.milestone = { ...m, name, date };
+  }
   // walkc-roadmap-tasks: a task's owner is a person (targets.py stores owner_id); the chat's
   // "for <name>" names them.
   if (body.op === "add_item_task" && !after.owner_id && typeof after.owner_name === "string") {
@@ -833,10 +847,16 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       after = { draft: false };
     }
     else if (body.op === "edit_title") {
-      const title = String(a.title ?? "").trim();
-      if (!title) return json(422, { detail: "after.title: 1 to 200 characters" });
+      // changes.py edit_title: the title's words, collapsed to single spaces, 1 to 200 characters.
+      const title = String(a.title ?? "").split(/\s+/).filter(Boolean).join(" ");
+      if (!title || title.length > 200) return json(422, { detail: "after.title: 1 to 200 characters" });
       after = { title };
-    } else if (body.op === "edit_outcome") after = { outcome: a.outcome ?? null };
+    } else if (body.op === "edit_outcome") {
+      // changes.py edit_outcome: trimmed, at most 1000 characters.
+      const outcome = a.outcome == null ? null : String(a.outcome).trim();
+      if (outcome != null && outcome.length > 1000) return json(422, { detail: "after.outcome: at most 1000 characters" });
+      after = { outcome: outcome || null };
+    }
     else if (body.op === "edit_note") {
       const note = a.note == null ? "" : String(a.note).trim();
       if (note.length > 500) return json(422, { detail: "after.note: at most 500 characters" });

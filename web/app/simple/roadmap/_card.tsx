@@ -397,7 +397,28 @@ const OP_WORDS: Record<string, string> = {
   keep_both: "Keep both",
   confirm_item: "Confirm the draft",
   cut_with_dependents: "Cut it and its dependents",
+  // build-feature-panel review 7: the panel's own changes, in plain words.
+  edit_note: "Change the notes",
+  set_owner: "Change the owner",
+  set_milestone: "Set the milestone",
+  set_goal: "Set the goal",
+  restore_goal: "Put Oracle's goal back",
+  restore_dates: "Put Oracle's dates back",
+  add_link: "Add a link",
+  remove_link: "Remove a link",
+  restore_link: "Put a link back",
+  estimate_feature: "Change the effort",
 };
+
+/** build-feature-panel review 7: what a proposal asks, naming its item ("change the outcome of Weekly alert digest"). */
+export function proposalWords(op: string, title: string): string {
+  if (op === "edit_title") return `rename ${title}`;
+  if (op === "add_link") return `add a link to ${title}`;
+  if (op === "remove_link") return `remove a link from ${title}`;
+  if (op.startsWith("restore_")) return `${opWords(op).toLowerCase().replace("oracle's", "Oracle's")} on ${title}`;
+  const w = opWords(op);
+  return `${w.charAt(0).toLowerCase()}${w.slice(1).replace(/ it$/, "")} of ${title}`;
+}
 
 /** S7: a draft's likely duplicates, "Looks like <code> <title>", with Merge and Keep both
  * (merge_item, keep_both through the change engine: editors apply, others propose). */
@@ -911,7 +932,7 @@ export function FloatingCard({
                     )}
                     <span className="min-w-0 flex-1">
                       {opWords(c.op)} ·{" "}
-                      <span className="text-text2">{c.by_name}</span>
+                      <span className="text-text2">proposed by {c.by_name}</span>
                       {c.from_meeting && <span className="block text-sm text-text2" data-testid="proposal-from-meeting">Asked for by the meeting {c.from_meeting.title}</span>}
                     </span>
                     {c.can_decide && (

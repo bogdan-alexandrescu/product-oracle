@@ -30713,6 +30713,8 @@ export interface components {
             /** Flow Subject */
             flow_subject?: string | null;
             flow?: components["schemas"]["OnePagerFlow"] | null;
+            /** Item Id */
+            item_id?: string | null;
             /**
              * Decisions
              * @default []

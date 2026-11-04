@@ -666,9 +666,9 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                                   Draw the flow
                                 </button>
                               )}
-                              {b.key === "bets" && !presenting && (
-                                // build-feature-panel review 2: a bet is a feature: its one panel (FeaturePanelHost finds the item by this PRD and the bet's words).
-                                <button type="button" className="simple-noprint ml-2 text-sm text-text2 underline max-md:min-h-11" aria-label={`Open the feature ${words.get(l.id)}`} data-feature={`prd:${v.document.slug}:${l.text}`}>
+                              {b.key === "bets" && !presenting && l.item_id && (
+                                // build-feature-panel review 7: a bet is a feature: the roadmap item built from it (the API's item_id) opens its one panel; a bet no item came from offers none.
+                                <button type="button" className="simple-noprint ml-2 text-sm text-text2 underline max-md:min-h-11" aria-label={`Open the feature ${words.get(l.id)}`} data-feature={l.item_id}>
                                   Open the feature
                                 </button>
                               )}

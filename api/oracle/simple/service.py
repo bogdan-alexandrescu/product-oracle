@@ -760,23 +760,36 @@ async def _bet_flows(db: AsyncSession, principal: Any, shown: list[Any], items: 
         if (e.prd.id in drawn or None in drawn) and e.prd.id not in bets:
             bets[e.prd.id] = await one_pager.bet_flows(db, e.prd)
 
-    def words(text: str) -> str:
-        return " " + " ".join(re.sub(r"[^\w]+", " ", text.casefold()).split()) + " "
-
-    def one(found: list[Any]) -> list[Any]:
-        return found if len(found) == 1 else []
-
     for e in wanting:
         of = bets.get(e.prd.id)
         if not of:
             continue
         code = e.code or _prd_code(e.row.prd_section_key)
-        coded = one([f for t, _, f in of if code and code.strip() and words(code) in words(t)])
-        sourced = one([f for _, keys, f in of if e.row.prd_section_key in keys])
-        title = e.row.title.strip()
-        titled = one([f for t, _, f in of if title and words(title) in words(t)])
-        found = coded or sourced or titled
-        by_id[e.row.id].flow = found[0] if found else None
+        at = own_bet(code, e.row.prd_section_key, e.row.title, [(t, keys) for t, keys, _ in of])
+        by_id[e.row.id].flow = of[at][2] if at is not None else None
+
+
+def own_bet(
+    code: str | None, section_key: str | None, title: str, bets: list[tuple[str, list[str]]]
+) -> int | None:
+    """Which of a PRD's bets (their words and source keys) an item was built from: the one
+    naming the item's code, else the one drawn from the item's section alone, else the one
+    its title names (roadmap-keydates: a short title two bets mention names neither)."""
+
+    def words(text: str) -> str:
+        return " " + " ".join(re.sub(r"[^\w]+", " ", text.casefold()).split()) + " "
+
+    def one(found: list[int]) -> list[int]:
+        return found if len(found) == 1 else []
+
+    named = (title or "").strip()
+    coded = one(
+        [i for i, (t, _) in enumerate(bets) if code and code.strip() and words(code) in words(t)]
+    )
+    sourced = one([i for i, (_, keys) in enumerate(bets) if section_key and section_key in keys])
+    titled = one([i for i, (t, _) in enumerate(bets) if named and words(named) in words(t)])
+    found = coded or sourced or titled
+    return found[0] if found else None
 
 
 def prd_section_label(section_key: str, heading: str | None, name: str = "") -> str:

@@ -1260,6 +1260,9 @@ class OnePagerLine(BaseModel):
     # S10: a bet's ("What we will build") visual subject and its newest drawing.
     flow_subject: uuid.UUID | None = None
     flow: "OnePagerFlow | None" = None
+    # build-feature-panel review 7: a bet's roadmap item, the one built from it
+    # (service.own_bet); null for a bet no item came from and for every other line.
+    item_id: uuid.UUID | None = None
     # S8: the decisions that changed this line (newest first; the Decisions page).
     decisions: list[SimpleOpenDecision] = []
     # Reads clearly (2026-10-30, oracle.simple.one_pager_checks): an outcome's measure (what
