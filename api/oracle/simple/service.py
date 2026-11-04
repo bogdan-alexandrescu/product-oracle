@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.baseline.goal_order import goal_position, goal_sort_key
 from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document, DocumentVersion
 from oracle.members.names import display_name
@@ -530,11 +531,11 @@ def _milestone(
 
 
 async def _goals(db: AsyncSession, features: set[uuid.UUID]) -> dict[uuid.UUID, Entity]:
-    """Feature id -> the first confirmed goal it supports (goal key order)."""
+    """Feature id -> the first confirmed goal it supports (the one goal order)."""
     out: dict[uuid.UUID, Entity] = {}
     if not features:
         return out
-    for edge_src, goal in (
+    found = (
         await db.execute(
             select(Edge.src_id, Entity)
             .join(Entity, Entity.id == Edge.dst_id)
@@ -545,9 +546,9 @@ async def _goals(db: AsyncSession, features: set[uuid.UUID]) -> dict[uuid.UUID, 
                 Entity.type == "goal",
                 Entity.status == "confirmed",
             )
-            .order_by(Entity.key)
         )
-    ).all():
+    ).all()
+    for edge_src, goal in sorted(found, key=lambda row: goal_sort_key(row[1])):
         out.setdefault(edge_src, goal)
     return out
 
@@ -846,7 +847,13 @@ def item_out(
         horizon=row.horizon,  # type: ignore[arg-type]
         roadmap=_ref(e.roadmap),  # type: ignore[arg-type]
         prd=_ref(e.prd),
-        goal=SimpleGoalRef(id=e.goal.id, key=e.goal.key, title=e.goal.title, metric=_metric(e.goal))
+        goal=SimpleGoalRef(
+            id=e.goal.id,
+            key=e.goal.key,
+            title=e.goal.title,
+            metric=_metric(e.goal),
+            position=goal_position(e.goal.attrs),
+        )
         if e.goal
         else None,
         track=SimpleTrackRef(id=e.track.id, title=e.track.title) if e.track else None,
@@ -995,19 +1002,19 @@ def _matches(e: Entry, value: str | None, *refs: Any) -> bool:
     return any(r is not None and value in (str(r), getattr(r, "slug", None)) for r in refs)
 
 
-def _group_of(e: Entry, group: str) -> tuple[str, str, str]:
-    """(key, title, sort key) of the item's group."""
+def _group_of(e: Entry, group: str) -> tuple[str, str, tuple]:
+    """(key, title, sort key) of the item's group; goals in the one goal order."""
     if group == "goal":
         if e.goal is not None:
-            return str(e.goal.id), e.goal.title, f"0{e.goal.key}"
-        return NONE, "No goal", "1"
+            return str(e.goal.id), e.goal.title, (0, goal_sort_key(e.goal))
+        return NONE, "No goal", (1,)
     if group == "track":
         if e.track is not None:
-            return str(e.track.id), e.track.title, f"0{e.track.title.casefold()}{e.track.id}"
-        return NONE, "No track", "1"
+            return str(e.track.id), e.track.title, (0, f"{e.track.title.casefold()}{e.track.id}")
+        return NONE, "No track", (1,)
     if e.prd is not None:
-        return str(e.prd.id), e.prd.title, f"0{e.prd.title.casefold()}{e.prd.id}"
-    return NONE, "No PRD", "1"
+        return str(e.prd.id), e.prd.title, (0, f"{e.prd.title.casefold()}{e.prd.id}")
+    return NONE, "No PRD", (1,)
 
 
 async def build(
@@ -1048,7 +1055,7 @@ async def build(
         and (start is None or e.resolved.end.date >= start)
         and (end is None or e.resolved.start.date <= end)
     ]
-    groups: dict[str, tuple[str, str, list[uuid.UUID]]] = {}
+    groups: dict[str, tuple[tuple, str, list[uuid.UUID]]] = {}
     for e in shown:
         key, title, sort = _group_of(e, group)
         groups.setdefault(key, (sort, title, []))[2].append(e.row.id)

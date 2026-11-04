@@ -74,6 +74,8 @@ class SimpleGoalRef(BaseModel):
     title: str
     # S4: the goal's metric (its ``attrs.metric``), the goal counters' line.
     metric: str | None = None
+    # goal-order: the goal's place (its attrs.position, 1 = first); none when unset.
+    position: int | None = None
 
 
 class SimpleTrackRef(BaseModel):
@@ -835,6 +837,8 @@ class SimpleQuarter(BaseModel):
 class SimplePriorityGoal(BaseModel):
     key: str
     title: str
+    # goal-order: the goal's place (its attrs.position, 1 = first); none when unset.
+    position: int | None = None
 
 
 class SimplePriorityAfter(BaseModel):
@@ -1064,6 +1068,8 @@ class SimpleGoalBucket(BaseModel):
     share: float
     codes: list[str]
     no_goal: bool = False
+    # goal-order: the goal's place (its attrs.position, 1 = first); none when unset.
+    position: int | None = None
 
 
 class SimpleLine(BaseModel):
@@ -1357,6 +1363,8 @@ class SimpleGoalBrief(BaseModel):
     id: str
     key: str
     title: str
+    # goal-order: the goal's place (its attrs.position, 1 = first); none when unset.
+    position: int | None = None
 
 
 class SimpleEvidence(BaseModel):
@@ -1919,6 +1927,9 @@ class SimpleUpcomingMeeting(BaseModel):
     pre_read_ready: bool = False
     # Owners and the ritual's owner start a ritual's review (the caller may).
     can_start: bool = False
+    # What the ritual reviews when all of it is in Trash ("roadmap": a roadmap refresh while
+    # every roadmap is in Trash); Home says so and links the ritual's settings.
+    reviews_in_trash: Literal["roadmap"] | None = None
 
 
 class SimpleMeetingsOut(BaseModel):

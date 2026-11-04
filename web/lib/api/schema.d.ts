@@ -7996,8 +7996,9 @@ export interface paths {
         put?: never;
         /**
          * Accept Intake Proposal
-         * @description Accept: a research proposal becomes a draft run; a PRD patch becomes feedback on
-         *     the PRD's latest version.
+         * @description Accept: a research proposal's run is estimated and started (the intake's one
+         *     unstarted research draft is reused); a PRD patch becomes feedback on the PRD's
+         *     latest version.
          */
         post: operations["accept_intake_proposal"];
         delete?: never;
@@ -11198,6 +11199,27 @@ export interface paths {
          */
         put: operations["set_request_triage_daily"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/release-from-trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Release Requests From Trash
+         * @description Release it (New PRD 4): each of these requests still linked to a PRD in Trash loses
+         *     that link and its brief, so a new brief may take it. A live PRD's link stays.
+         */
+        post: operations["release_requests_from_trash"];
         delete?: never;
         options?: never;
         head?: never;
@@ -20476,7 +20498,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline" | "pricing" | "meeting";
+            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline" | "pricing" | "meeting" | "prd";
             /**
              * Reversibility
              * @enum {string}
@@ -20771,7 +20793,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline" | "pricing" | "meeting";
+            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline" | "pricing" | "meeting" | "prd";
             /**
              * Reversibility
              * @enum {string}
@@ -22531,6 +22553,8 @@ export interface components {
             /** Parent Id */
             parent_id?: string | null;
             progress?: components["schemas"]["GoalProgress"] | null;
+            /** Position */
+            position?: number | null;
             /**
              * Evidence
              * @default []
@@ -22613,6 +22637,8 @@ export interface components {
             /** Parent Id */
             parent_id?: string | null;
             progress?: components["schemas"]["GoalProgress"] | null;
+            /** Position */
+            position?: number | null;
         };
         /** EntityPatch */
         EntityPatch: {
@@ -24347,6 +24373,8 @@ export interface components {
             goal: string;
             /** Title */
             title: string;
+            /** Position */
+            position?: number | null;
             /** Weight */
             weight: number;
             /** Weight Assumed */
@@ -31383,7 +31411,7 @@ export interface components {
             /** Size */
             size?: ("small_change" | "new_feature" | "new_product") | null;
             /** Readers */
-            readers?: ("founder" | "product_eng" | "leadership" | "engineers_or_agents") | null;
+            readers?: ("founder" | "product_eng" | "leadership" | "engineers_or_agents")[] | null;
             /** Model Driven */
             model_driven?: boolean | null;
         };
@@ -31932,6 +31960,25 @@ export interface components {
             skip_fields: string[];
         };
         /**
+         * ProposalAlso
+         * @description Another of the run's open proposals of the same change, shown on this one's card.
+         */
+        ProposalAlso: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** By */
+            by: string;
+            /** Fields */
+            fields: {
+                [key: string]: unknown;
+            };
+            /** Same */
+            same: boolean;
+        };
+        /**
          * ProposalCreate
          * @description Suggest a change for an approver to accept: commenters and agents use this.
          */
@@ -31961,6 +32008,8 @@ export interface components {
             run_id?: string | null;
             /** Reason */
             reason?: string | null;
+            /** Role */
+            role?: string | null;
         };
         /** ProposalDecision */
         ProposalDecision: {
@@ -32009,6 +32058,20 @@ export interface components {
              * @default []
              */
             overlaps: components["schemas"]["ProposalOverlap"][];
+            /** Duplicate Of */
+            duplicate_of?: string | null;
+            /**
+             * Also Proposed
+             * @default []
+             */
+            also_proposed: components["schemas"]["ProposalAlso"][];
+            /** Outcome */
+            outcome?: ("already_done" | "not_chosen") | null;
+            /**
+             * Closed As Done
+             * @default []
+             */
+            closed_as_done: string[];
         };
         /**
          * ProposalOverlap
@@ -32074,6 +32137,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Source Title */
+            source_title?: string | null;
         };
         /**
          * ProposedAssessment
@@ -33332,6 +33397,22 @@ export interface components {
             label: string;
             /** Credential */
             credential: string;
+        };
+        /**
+         * ReleaseFromTrashIn
+         * @description Release it (New PRD 4): the requests a new brief would take.
+         */
+        ReleaseFromTrashIn: {
+            /** Request Ids */
+            request_ids: string[];
+        };
+        /**
+         * ReleaseFromTrashOut
+         * @description The requests whose link to a PRD in Trash was cleared.
+         */
+        ReleaseFromTrashOut: {
+            /** Released */
+            released: string[];
         };
         /** RemovedOut */
         RemovedOut: {
@@ -37319,6 +37400,12 @@ export interface components {
             heartbeat_at?: string | null;
             /** Cost Usd */
             cost_usd?: number | null;
+            /** Event At */
+            event_at?: string | null;
+            /** Last Work At */
+            last_work_at?: string | null;
+            /** Last Work */
+            last_work?: ("heartbeat" | "event" | "proposals") | null;
         };
         /** SegmentAttempt */
         SegmentAttempt: {
@@ -37435,6 +37522,16 @@ export interface components {
             agents: components["schemas"]["SegmentAgent"][];
             /** Checked At */
             checked_at?: string | null;
+            /**
+             * Cost Reported
+             * @default false
+             */
+            cost_reported: boolean;
+            /**
+             * Proposals Written
+             * @default 0
+             */
+            proposals_written: number;
             queue_wait?: components["schemas"]["QueueWait"] | null;
         };
         /** SettingIn */
@@ -38613,6 +38710,8 @@ export interface components {
             key: string;
             /** Title */
             title: string;
+            /** Position */
+            position?: number | null;
         };
         /** SimpleGoalBucket */
         SimpleGoalBucket: {
@@ -38631,6 +38730,8 @@ export interface components {
              * @default false
              */
             no_goal: boolean;
+            /** Position */
+            position?: number | null;
         };
         /**
          * SimpleGoalMilestone
@@ -38736,6 +38837,8 @@ export interface components {
             title: string;
             /** Metric */
             metric?: string | null;
+            /** Position */
+            position?: number | null;
         };
         /** SimpleGoalSuggestion */
         SimpleGoalSuggestion: {
@@ -39815,6 +39918,8 @@ export interface components {
             key: string;
             /** Title */
             title: string;
+            /** Position */
+            position?: number | null;
         };
         /** SimplePriorityMerge */
         SimplePriorityMerge: {
@@ -40644,6 +40749,8 @@ export interface components {
              * @default false
              */
             can_start: boolean;
+            /** Reviews In Trash */
+            reviews_in_trash?: "roadmap" | null;
         };
         /** SimpleVisualCommentIn */
         SimpleVisualCommentIn: {
@@ -41500,6 +41607,8 @@ export interface components {
             key: string;
             /** Title */
             title: string;
+            /** Position */
+            position?: number | null;
             /**
              * Items
              * @default 0
@@ -41517,6 +41626,8 @@ export interface components {
             key: string;
             /** Title */
             title: string;
+            /** Position */
+            position?: number | null;
         };
         /** StackStrategy */
         StackStrategy: {
@@ -43157,6 +43268,16 @@ export interface components {
             runs_paused: number;
             /** Errors */
             errors: string[];
+            /**
+             * Active Runs
+             * @default 0
+             */
+            active_runs: number;
+            /**
+             * Unchecked
+             * @default []
+             */
+            unchecked: components["schemas"]["TickUnchecked"][];
             claude_accounts?: components["schemas"]["ClaudeSweepSummary"] | null;
             llm_jobs?: components["schemas"]["LlmJobsTick"] | null;
             /**
@@ -43164,6 +43285,21 @@ export interface components {
              * @default 0
              */
             member_follow_ups: number;
+        };
+        /**
+         * TickUnchecked
+         * @description run-progress: a run a tick could not check, and why, in words.
+         */
+        TickUnchecked: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Title */
+            title: string;
+            /** Reason */
+            reason: string;
         };
         /** TierSuggestion */
         TierSuggestion: {
@@ -43374,6 +43510,8 @@ export interface components {
             locked: boolean;
             /** Confidence */
             confidence?: number | null;
+            /** Position */
+            position?: number | null;
         };
         /** TraceEvidenceRef */
         TraceEvidenceRef: {
@@ -43455,6 +43593,8 @@ export interface components {
              * @enum {string}
              */
             status: "proposed" | "confirmed" | "rejected";
+            /** Position */
+            position?: number | null;
             /** Weight */
             weight?: number | null;
             /** Confidence */
@@ -45480,6 +45620,11 @@ export interface components {
              * @default null
              */
             weight: number | null;
+            /**
+             * Position
+             * @default null
+             */
+            position: number | null;
         };
         /** WebhookActor */
         WebhookActor: {
@@ -56786,7 +56931,7 @@ export interface operations {
                 approver?: string | null;
                 /** @description true: only those whose review has come; false: none of them */
                 due?: boolean | null;
-                /** @description one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, comma-separated */
+                /** @description one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, prd, comma-separated */
                 origin?: string | null;
                 /** @description the chosen option's key */
                 chosen?: string | null;
@@ -67907,6 +68052,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TriageStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    release_requests_from_trash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseFromTrashIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseFromTrashOut"];
                 };
             };
             /** @description Validation Error */

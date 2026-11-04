@@ -18173,10 +18173,10 @@
                   "type": "null"
                 }
               ],
-              "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, comma-separated",
+              "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, prd, comma-separated",
               "title": "Origin"
             },
-            "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, comma-separated"
+            "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, prd, comma-separated"
           },
           {
             "name": "chosen",
@@ -28102,7 +28102,7 @@
           "intake"
         ],
         "summary": "Accept Intake Proposal",
-        "description": "Accept: a research proposal becomes a draft run; a PRD patch becomes feedback on\nthe PRD's latest version.",
+        "description": "Accept: a research proposal's run is estimated and started (the intake's one\nunstarted research draft is reused); a PRD patch becomes feedback on the PRD's\nlatest version.",
         "operationId": "accept_intake_proposal",
         "security": [
           {
@@ -38923,6 +38923,57 @@
           }
         ],
         "x-min-role": "approver"
+      }
+    },
+    "/v1/requests/release-from-trash": {
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Release Requests From Trash",
+        "description": "Release it (New PRD 4): each of these requests still linked to a PRD in Trash loses\nthat link and its brief, so a new brief may take it. A live PRD's link stays.",
+        "operationId": "release_requests_from_trash",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseFromTrashIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseFromTrashOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "commenter"
       }
     },
     "/v1/requests/{request_id}": {
@@ -66319,7 +66370,8 @@
               "checkpoint",
               "request_decline",
               "pricing",
-              "meeting"
+              "meeting",
+              "prd"
             ],
             "title": "Origin"
           },
@@ -67221,7 +67273,8 @@
               "checkpoint",
               "request_decline",
               "pricing",
-              "meeting"
+              "meeting",
+              "prd"
             ],
             "title": "Origin"
           },
@@ -72087,6 +72140,17 @@
               }
             ]
           },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
           "evidence": {
             "items": {
               "$ref": "#/components/schemas/EvidenceOut"
@@ -72296,6 +72360,17 @@
                 "type": "null"
               }
             ]
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
           }
         },
         "type": "object",
@@ -77093,6 +77168,17 @@
           "title": {
             "type": "string",
             "title": "Title"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
           },
           "weight": {
             "type": "number",
@@ -95923,13 +96009,17 @@
           "readers": {
             "anyOf": [
               {
-                "type": "string",
-                "enum": [
-                  "founder",
-                  "product_eng",
-                  "leadership",
-                  "engineers_or_agents"
-                ]
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "founder",
+                    "product_eng",
+                    "leadership",
+                    "engineers_or_agents"
+                  ]
+                },
+                "type": "array",
+                "maxItems": 4
               },
               {
                 "type": "null"
@@ -97483,6 +97573,37 @@
         "type": "object",
         "title": "ProposalAccept"
       },
+      "ProposalAlso": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "by": {
+            "type": "string",
+            "title": "By"
+          },
+          "fields": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Fields"
+          },
+          "same": {
+            "type": "boolean",
+            "title": "Same"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "by",
+          "fields",
+          "same"
+        ],
+        "title": "ProposalAlso",
+        "description": "Another of the run's open proposals of the same change, shown on this one's card."
+      },
       "ProposalCreate": {
         "properties": {
           "op": {
@@ -97554,6 +97675,18 @@
               }
             ],
             "title": "Reason"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
           }
         },
         "type": "object",
@@ -97702,6 +97835,50 @@
             "type": "array",
             "title": "Overlaps",
             "default": []
+          },
+          "duplicate_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duplicate Of"
+          },
+          "also_proposed": {
+            "items": {
+              "$ref": "#/components/schemas/ProposalAlso"
+            },
+            "type": "array",
+            "title": "Also Proposed",
+            "default": []
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "already_done",
+                  "not_chosen"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "closed_as_done": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Closed As Done",
+            "default": []
           }
         },
         "type": "object",
@@ -97834,6 +98011,17 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "source_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Title"
           }
         },
         "type": "object",
@@ -101343,6 +101531,44 @@
           "credential"
         ],
         "title": "RegisterIn"
+      },
+      "ReleaseFromTrashIn": {
+        "properties": {
+          "request_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Request Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_ids"
+        ],
+        "title": "ReleaseFromTrashIn",
+        "description": "Release it (New PRD 4): the requests a new brief would take."
+      },
+      "ReleaseFromTrashOut": {
+        "properties": {
+          "released": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Released"
+          }
+        },
+        "type": "object",
+        "required": [
+          "released"
+        ],
+        "title": "ReleaseFromTrashOut",
+        "description": "The requests whose link to a PRD in Trash was cleared."
       },
       "RemovedOut": {
         "properties": {
@@ -112710,6 +112936,46 @@
               }
             ],
             "title": "Cost Usd"
+          },
+          "event_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event At"
+          },
+          "last_work_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Work At"
+          },
+          "last_work": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "heartbeat",
+                  "event",
+                  "proposals"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Work"
           }
         },
         "type": "object",
@@ -113139,6 +113405,16 @@
               }
             ],
             "title": "Checked At"
+          },
+          "cost_reported": {
+            "type": "boolean",
+            "title": "Cost Reported",
+            "default": false
+          },
+          "proposals_written": {
+            "type": "integer",
+            "title": "Proposals Written",
+            "default": 0
           },
           "queue_wait": {
             "anyOf": [
@@ -116092,6 +116368,17 @@
           "title": {
             "type": "string",
             "title": "Title"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
           }
         },
         "type": "object",
@@ -116131,6 +116418,17 @@
             "type": "boolean",
             "title": "No Goal",
             "default": false
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
           }
         },
         "type": "object",
@@ -116406,6 +116704,17 @@
               }
             ],
             "title": "Metric"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
           }
         },
         "type": "object",
@@ -119057,6 +119366,17 @@
           "title": {
             "type": "string",
             "title": "Title"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
           }
         },
         "type": "object",
@@ -121113,6 +121433,18 @@
             "type": "boolean",
             "title": "Can Start",
             "default": false
+          },
+          "reviews_in_trash": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "roadmap"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviews In Trash"
           }
         },
         "type": "object",
@@ -123628,6 +123960,17 @@
             "type": "string",
             "title": "Title"
           },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
           "items": {
             "type": "integer",
             "title": "Items",
@@ -123656,6 +123999,17 @@
           "title": {
             "type": "string",
             "title": "Title"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
           }
         },
         "type": "object",
@@ -128347,6 +128701,19 @@
             "type": "array",
             "title": "Errors"
           },
+          "active_runs": {
+            "type": "integer",
+            "title": "Active Runs",
+            "default": 0
+          },
+          "unchecked": {
+            "items": {
+              "$ref": "#/components/schemas/TickUnchecked"
+            },
+            "type": "array",
+            "title": "Unchecked",
+            "default": []
+          },
           "claude_accounts": {
             "anyOf": [
               {
@@ -128382,6 +128749,31 @@
           "errors"
         ],
         "title": "TickOut"
+      },
+      "TickUnchecked": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "title",
+          "reason"
+        ],
+        "title": "TickUnchecked",
+        "description": "run-progress: a run a tick could not check, and why, in words."
       },
       "TierSuggestion": {
         "properties": {
@@ -128938,6 +129330,17 @@
               }
             ],
             "title": "Confidence"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
           }
         },
         "type": "object",
@@ -129156,6 +129559,17 @@
               "rejected"
             ],
             "title": "Status"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
           },
           "weight": {
             "anyOf": [
@@ -134873,6 +135287,19 @@
             ],
             "default": null,
             "title": "Weight"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Position"
           }
         },
         "title": "GoalAttrs",
