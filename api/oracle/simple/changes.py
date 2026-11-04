@@ -38,6 +38,9 @@ Ops and the fields they write (``before`` must name the key fields):
 - ``edit_title``: title. ``edit_outcome``: outcome.
 - ``set_milestone`` (S9): the item's own milestone, ``{"milestone": {name, date,
   date_source: "typed"}}`` (date optional), or null to clear it.
+  Its ``before`` is compared by name and date only: the read shows no date_source.
+- ``set_goals``: the goals an item serves, ``{"goal_ids": [...]}`` (the one it moves most
+  first), each a live goal; the goal buckets carry a task added there to another goal.
 - ``set_owner`` / ``set_decider`` (chat-actions): the item's own owner_id / decider_id, a
   member of the company (null: back to its track's owner / its roadmap's decider).
 - ``accept_risk``: the risk accepted on one flag (``target.flag``, ``target.subject``),
@@ -115,6 +118,7 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "confirm_item": ("draft",),
     "keep_both": ("kept_both",),
     "set_milestone": ("milestone",),
+    "set_goals": ("goal_ids",),
     "set_owner": ("owner_id",),
     "set_decider": ("decider_id",),
 }
@@ -328,6 +332,16 @@ def write(row: RoadmapItem, values: dict[str, Any], target: dict[str, Any]) -> N
             row.accepted_risks = kept + ([v] if v is not None else [])
         else:
             setattr(row, f, drafts._typed(f, v))
+
+
+def _seen(op: str, fields: tuple[str, ...], values: dict[str, Any]) -> dict[str, Any]:
+    """``values`` as the stale check compares them: an item's milestone by its name and
+    date (the read shows no date_source, so a caller never sends it)."""
+    out = _normal(fields, values)
+    if op == "set_milestone" and isinstance(out["milestone"], dict):
+        m = out["milestone"]
+        out["milestone"] = {"name": m.get("name"), "date": _iso(_day(m.get("date"), "date"))}
+    return out
 
 
 def _normal(fields: tuple[str, ...], values: dict[str, Any]) -> dict[str, Any]:
@@ -634,7 +648,7 @@ async def _plan(
     current = read(row, fields, target)
     # A suggestion accepted after the item got dates is "outdated" (S2-minor).
     lead = "outdated" if op == "accept_date_suggestion" else "Changed since you saw it"
-    if _normal(fields, body.before) != current:
+    if _seen(op, fields, body.before) != _seen(op, fields, current):
         raise await _conflict(db, current, {str(row.id)}, lead)
     a = body.after
     after: dict[str, Any]
@@ -716,6 +730,23 @@ async def _plan(
             day = _day(m.get("date"), "after.milestone.date")
             after = {"milestone": {"name": name, "date": _iso(day),
                                    "date_source": "typed" if day else None}}  # fmt: skip
+    elif op == "set_goals":
+        from oracle.baseline.models import Entity
+
+        raw = a.get("goal_ids")
+        if not isinstance(raw, list) or not raw:
+            raise ChangeError(422, "after.goal_ids: one goal or more")
+        ids = list(dict.fromkeys(_uuid(g, "after.goal_ids") for g in raw))
+        live = set(
+            await db.scalars(
+                select(Entity.id).where(
+                    Entity.id.in_(ids), Entity.type == "goal", Entity.status != "rejected"
+                )
+            )
+        )
+        if len(live) != len(ids):
+            raise ChangeError(422, "after.goal_ids: goals of this company")
+        after = {"goal_ids": [str(g) for g in ids]}
     elif op in ("set_owner", "set_decider"):
         field = FIELDS[op][0]
         raw = a.get(field)
