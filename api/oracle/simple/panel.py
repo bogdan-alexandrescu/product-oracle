@@ -25,6 +25,7 @@ from oracle.simple.models import SimpleChange
 
 DATE_OPS = ("move_dates", "restore_dates", "accept_date_suggestion", "shift_dependents",
             "move_dependency")  # fmt: skip
+RESTORED = ("start_date", "end_date", "date_source")
 LINK_OPS = ("add_link", "remove_link", "restore_link")
 
 
@@ -77,13 +78,16 @@ def overrides(rows: list, rows_by: dict[uuid.UUID, str], item: str) -> dict[str,
             kept = None
             continue
         if kept is None:
-            if before.get("date_source") in (None, "typed") or not before.get("end_date"):
-                continue
-            kept = {
-                "start_date": before.get("start_date"),
-                "end_date": before.get("end_date"),
-                "source": before.get("date_source"),
-            }
+            # Oracle's dates as the item showed them (a move_dates keeps them), else the
+            # row's own when they were not a person's.
+            oracle = (c.target or {}).get("oracle") if c.op == "move_dates" else None
+            if oracle is None:
+                if before.get("date_source") in (None, "typed") or not before.get("end_date"):
+                    continue
+                oracle = {"start_date": before.get("start_date"),
+                          "end_date": before.get("end_date"),
+                          "source": before.get("date_source")}  # fmt: skip
+            kept = {**oracle, "restore": {f: before.get(f) for f in RESTORED}}
         kept |= {"by": rows_by.get(c.by), "at": c.at}
     return kept
 

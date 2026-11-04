@@ -686,6 +686,12 @@ async def _plan(
             raise ChangeError(422, "after: start_date and end_date, the end not before the start")
         after = {"start_date": _iso(start), "end_date": _iso(end), "date_source": "typed"}
         stored = (*DATES, "date_source")
+        r = entry.resolved
+        if r.source != "typed" and not r.end.estimated:
+            # build-feature-panel: Oracle's dates as the item showed them, kept for the
+            # panel's "Oracle suggested ...; set to ... by ..." line (oracle.simple.panel).
+            target["oracle"] = {"start_date": _iso(r.start.date), "end_date": _iso(r.end.date),
+                                "source": r.source}  # fmt: skip
     elif op == "accept_date_suggestion":
         sid = _uuid(target.get("suggestion_id"), "suggestion_id")
         target["suggestion_id"] = str(sid)
@@ -728,8 +734,7 @@ async def _plan(
         kept = await panel.override_of(db, row)
         if kept is None or not kept.get("end_date"):
             raise ChangeError(422, "No dates of Oracle's to restore")
-        after = {"start_date": kept["start_date"], "end_date": kept["end_date"],
-                 "date_source": kept["source"]}  # fmt: skip
+        after = dict(kept["restore"])
         stored = (*DATES, "date_source")
     elif op == "change_horizon":
         if a.get("horizon") not in HORIZONS:
