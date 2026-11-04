@@ -1575,6 +1575,8 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
         "milestones": [n for n, _ in _talk().milestones(c).values()],
         "today": c.today.isoformat(),
         "ops": [{"op": o.op, "describe": o.describe, "args": o.args} for o in OPS.values()],
+        # ask-oracle-actions: every action of the API the person's role reaches (``calls``).
+        "api": _api().offer(c.principal.role),
     }
 
 
@@ -1792,8 +1794,9 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
     c = Ctx(s, principal, rules)
     c.page = read.page
     await c.load()
-    answer = await ask(READER_JOB, await _payload(c, read))
-    reply = _talk().restate(c, interpret(c, answer, read.ask_box, read.line))
+    payload = await _payload(c, read)
+    answer = await ask(READER_JOB, payload)
+    reply = await _with_calls(c, ask, payload, answer, read)
     if read.meeting_id is not None and reply.no_change and read.line.rstrip().endswith("?"):
         # As the mock's question branch: only a line the reader saw nothing to change in;
         # a change it could not build keeps its own reply.
@@ -1815,6 +1818,31 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
     await _attach(s, principal, msg, read.meeting_id, reply)
     await s.flush()
     return {"kind": reply.kind, "cards": len(reply.cards), "choices": len(reply.choices)}
+
+
+async def _with_calls(c: Ctx, ask: Any, payload: dict, answer: Any, read: SimpleChatRead) -> Reply:
+    """ask-oracle-actions: the reader's ``calls`` of the API's actions beside its ops. Reads
+    run at once as the person and a second call words their results (an answer); writes
+    are cards; a call the person's role does not reach is a plain refusal, never a card."""
+    calls = answer.get("calls") if isinstance(answer, dict) else None
+    if not calls:
+        return _talk().restate(c, interpret(c, answer, read.ask_box, read.line))
+    if c.meeting is not None and not has_role(c.principal.role, "commenter"):
+        return Reply("note", VIEWER_NOTE)
+    results, cards, refused = await _api().calls(c, answer)
+    if results:
+        worded = await ask(READER_JOB, {**payload, "results": results})
+        said = worded.get("answer") if isinstance(worded, dict) else None
+        if not isinstance(said, str) or not said.strip():
+            return Reply("note", " ".join([COULD_NOT_READ, *refused]))
+        return Reply("answer", " ".join([plain(said.strip())[:1500], *refused]))
+    first = (_talk().restate(c, interpret(c, {**answer, "calls": None}, False, read.line))
+             if answer.get("actions") else None)  # fmt: skip
+    cards = [*(first.cards if first is not None and first.kind == "cards" else []), *cards]
+    if not cards:
+        return Reply("note", " ".join(refused) or f"I could not tell what to change. {SAY_AGAIN}")
+    said = [f"I can't do: {' '.join(refused)}"] if refused else []
+    return Reply("cards", " ".join([*said, _count(len(cards))]), cards)
 
 
 async def _keep_question(
@@ -2006,6 +2034,12 @@ def _actions() -> Any:
     return chat_actions
 
 
+def _api() -> Any:
+    from oracle.simple import ask_actions
+
+    return ask_actions
+
+
 def _card_bar(principal: Any, card: SimpleChatCard, rules: Any) -> str | None:
     if card.op in _actions().DIRECT_OPS:
         return _actions().bar(principal, card, rules)
@@ -2023,6 +2057,8 @@ def _undo_bar(principal: Any, card: SimpleChatCard, rules: Any, read_: service.R
     The rule its Apply takes (the meeting's change mode, the viewer's bar); an engine card
     also needs the caller to decide its item, unless they applied it themselves."""
     bar = _card_bar(principal, card, rules)
+    if bar is None and card.op == _api().OP and not (card.after or {}).get("undo"):
+        return _api().CANNOT_UNDO
     if bar is not None or card.op in _actions().DIRECT_OPS or card.decided_by == _me(principal):
         return bar
     if not _decides(principal, card, read_):

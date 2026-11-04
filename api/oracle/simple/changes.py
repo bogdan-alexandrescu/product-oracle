@@ -40,6 +40,8 @@ Ops and the fields they write (``before`` must name the key fields):
   date_source: "typed"}}`` (date optional), or null to clear it.
 - ``set_owner`` / ``set_decider`` (chat-actions): the item's own owner_id / decider_id, a
   member of the company (null: back to its track's owner / its roadmap's decider).
+- ``set_depends_on`` (ask-oracle-actions): the item's own depends_on, the keys of items of
+  its roadmap (a dependency added or removed in the feature talk), into the working draft.
 - ``accept_risk``: the risk accepted on one flag (``target.flag``, ``target.subject``),
   ``{"risk": {"note"}}``; ``before`` ``{"risk": null}`` when none is.
 - ``shift_dependents``: the flagged item (``target.item_id``) starts the day after its
@@ -117,6 +119,7 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "set_milestone": ("milestone",),
     "set_owner": ("owner_id",),
     "set_decider": ("decider_id",),
+    "set_depends_on": ("depends_on",),
 }
 FIXES = ("shift_dependents", "move_dependency")
 # fix5-cut-dependents: the item and every item that waits on it, cut as one change.
@@ -730,6 +733,16 @@ async def _plan(
             ):
                 raise ChangeError(422, f"after.{field}: a member of this company")
         after = {field: str(person) if person else None}
+    elif op == "set_depends_on":
+        keys = a.get("depends_on")
+        if not isinstance(keys, list) or not all(isinstance(k, str) for k in keys):
+            raise ChangeError(422, "after.depends_on: a list of item keys")
+        mine = {e.row.item_key for e in by_id.values()
+                if e.row.roadmap_version_id == row.roadmap_version_id} - {row.item_key}  # fmt: skip
+        unknown = [k for k in keys if k not in mine]
+        if unknown:
+            raise ChangeError(422, "after.depends_on: items of the same roadmap")
+        after = {"depends_on": list(dict.fromkeys(keys))}
     elif op == "edit_outcome":
         outcome = a.get("outcome")
         outcome = str(outcome).strip() if outcome is not None else None

@@ -569,6 +569,8 @@ ChangeOp = Literal[
     # build-milestones-on-roadmap: a proposed date/counts_when on a PRD's own goal
     # milestone, on the PRD document, routed to its owner (oracle.simple.goal_milestones).
     "edit_goal_milestone",
+    # ask-oracle-actions: an item's own depends_on (into the working draft).
+    "set_depends_on",
 ]
 # chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
 # the change engine (oracle.simple.chat_actions).
@@ -581,6 +583,8 @@ ChatActionOp = Literal[
     "suggest_feature",
     # item-chat-understands: an item already shipped (oracle.simple.shipped).
     "mark_shipped",
+    # ask-oracle-actions: any action of the API's catalogue (oracle.simple.ask_actions).
+    "api_action",
 ]
 ChangeStatus = Literal["applied", "proposed", "accepted", "declined", "undone"]
 SessionKind = Literal["editing", "meeting"]

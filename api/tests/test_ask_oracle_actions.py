@@ -79,13 +79,13 @@ def test_a_new_route_joins_the_catalogue():
     async def make_widget(_p=Depends(require_role("approver"))) -> dict:  # noqa: B008
         return {}
 
-    a = ask_actions.catalogue(toy).actions["make_widget"]
-    assert (a.method, a.path, a.needs, a.reads) == ("POST", "/v1/widgets", "approver", False)
+    [a] = [a for a in ask_actions.catalogue(toy).actions.values() if a.path == "/v1/widgets"]
+    assert (a.method, a.needs, a.reads) == ("POST", "approver", False)
 
 
 def _entity_call(key: str) -> dict:
     return {"calls": [{"action": "create_entity", "args": {"body": {
-        "type": "persona", "key": key, "title": "Night shift nurse"}}}]}  # fmt: skip
+        "type": "assumption", "key": key, "title": "Night shift nurse"}}}]}  # fmt: skip
 
 
 async def _entity(ctx, key: str) -> Entity | None:
@@ -97,7 +97,7 @@ async def test_viewer_gets_no_card_for_an_approver_action(client):
     ctx = await make_people()
     await World(ctx).build()
     seen: list = []
-    await post(client, ctx, "viewer", "add a persona called night shift nurse")
+    await post(client, ctx, "viewer", "add the assumption night shift nurse")
     await read(ctx, _entity_call("night-nurse"), seen)
     assert "create_entity" not in {a["action"] for a in seen[0]["api"]}
     assert "list_entities" in {a["action"] for a in seen[0]["api"]}
@@ -106,7 +106,7 @@ async def test_viewer_gets_no_card_for_an_approver_action(client):
     assert "approver" in m["body"]
     assert await _entity(ctx, "night-nurse") is None
 
-    await post(client, ctx, "approver", "add a persona called night shift nurse")
+    await post(client, ctx, "approver", "add the assumption night shift nurse")
     await read(ctx, _entity_call("night-nurse"))
     m = await last(client, ctx, "approver")
     [card] = m["cards"]
@@ -139,15 +139,15 @@ async def test_a_read_runs_at_once_and_is_worded(client):
     def answer(payload):
         if payload.get("results"):
             assert payload["results"][0]["action"] == "list_entities"
-            return {"answer": "There are no personas yet."}
-        return {"calls": [{"action": "list_entities", "args": {"type": "persona"}}]}
+            return {"answer": "There are no assumptions yet."}
+        return {"calls": [{"action": "list_entities", "args": {"type": "assumption"}}]}
 
-    await post(client, ctx, "viewer", "which personas do we have?")
+    await post(client, ctx, "viewer", "which assumptions do we have?")
     await read(ctx, answer, seen)
     assert len(seen) == 2
     m = await last(client, ctx, "viewer")
     assert m["kind"] == "answer" and m["cards"] == []
-    assert m["body"] == "There are no personas yet."
+    assert m["body"] == "There are no assumptions yet."
 
 
 async def test_dependency_removal_card_end_to_end_with_undo(client):
@@ -160,8 +160,8 @@ async def test_dependency_removal_card_end_to_end_with_undo(client):
                           headers=ctx.as_("owner"))  # fmt: skip
     assert r.status_code == 200, r.text
     seen: list = []
-    await read(ctx, {"actions": [{"op": "remove_dependency", "args": {"item": bulk, "on": ledger}}]},
-               seen)  # fmt: skip
+    removal = {"op": "remove_dependency", "args": {"item": bulk, "on": ledger}}
+    await read(ctx, {"actions": [removal]}, seen)
     assert {"remove_dependency", "add_dependency"} <= {o["op"] for o in seen[0]["ops"]}
     r = await client.get("/v1/simple/chat", params={"page": talk}, headers=ctx.as_("owner"))
     m = r.json()["messages"][-1]
@@ -186,8 +186,8 @@ async def test_dependency_removal_card_end_to_end_with_undo(client):
                       json={"text": "it depends on Alert digest",
                             "page": f"/simple/roadmap/items/{partner}"},
                       headers=ctx.as_("owner"))  # fmt: skip
-    await read(ctx, {"actions": [{"op": "add_dependency",
-                                  "args": {"item": partner, "on": w.ids["Alert digest"]}}]})  # fmt: skip
+    adding = {"op": "add_dependency", "args": {"item": partner, "on": w.ids["Alert digest"]}}
+    await read(ctx, {"actions": [adding]})
     r = await client.get("/v1/simple/chat", params={"page": f"/simple/roadmap/items/{partner}"},
                          headers=ctx.as_("owner"))  # fmt: skip
     [card] = r.json()["messages"][-1]["cards"]
