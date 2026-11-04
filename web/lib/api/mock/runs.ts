@@ -16,7 +16,7 @@ import { fileItems } from "./checkpoint-review";
 import { agentQuestionsOut, seedAgentQuestions, type StoredAgentQuestion } from "./agent-questions";
 import { readableRefusal } from "./refusal";
 import { mockNowMs } from "./clock";
-import { answerCode, applySuggestion, latestScope, problemRef, REF_MARK, prepareScope, recheck as recheckScope, routeScopes, SCOPE_EDIT_FIELDS, scopeEdits, scopeSendBack, type StoredScope } from "./scope";
+import { answerCode, applySuggestion, titled, latestScope, problemRef, REF_MARK, prepareScope, recheck as recheckScope, routeScopes, SCOPE_EDIT_FIELDS, scopeEdits, scopeSendBack, type StoredScope } from "./scope";
 
 type RunOut = Schemas["RunOut"];
 type SegmentOut = Schemas["SegmentOut"];
@@ -699,7 +699,11 @@ function blockingOf(cp: CheckpointOut, live?: GateReason[]): { reasons: GateReas
   const fileLevel = (p: (typeof problems)[number]) => !p.feature || (cp.kind === "feature_set" && FEATURE_SET_FILE_PROBLEMS.includes(p.code));
   const reasons = problems
     .filter((p) => !fileLevel(p))
-    .map((p): GateReason => ({ item: p.feature!, item_title: null, code: p.code, ref: problemRef(p), severity: "blocking", label: p.message }));
+    .map((p): GateReason => {
+      // As oracle.runs.gate._problems: a C6 problem's feature by its title (C8's check has none).
+      const titles = (check as FeatureSetCheck | null)?.titles;
+      return { item: p.feature!, item_title: titles?.[p.feature!] ?? null, code: p.code, ref: problemRef(p), severity: "blocking", label: titled(p.message, titles) };
+    });
   return { reasons, files: problems.filter(fileLevel).length };
 }
 
@@ -1114,6 +1118,7 @@ function checkOf(spec: FeatureSetSpec, problems: FeatureSetCheck["problems"] = [
     excluded: spec.excluded.length,
     problems,
     flags,
+    titles: Object.fromEntries(spec.features.map((f) => [f.key, f.title])),
   };
 }
 

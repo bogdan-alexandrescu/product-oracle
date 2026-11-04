@@ -90,12 +90,22 @@ def _roadmap_items(cp: Checkpoint) -> tuple[list[dict[str, Any]], int]:
     return list(check.get("reasons") or []), int(check.get("file_problems") or 0)
 
 
+_KEY = re.compile(r"(?<![\w-])[a-z0-9]+(?:[-_][a-z0-9]+)+(?![\w-])")
+
+
 def _titled(message: str | None, titles: dict[str, str]) -> str | None:
-    """A problem's message with each feature's key read as its title."""
+    """A C6 problem's message as people read it: each feature's key as its title (a key
+    with none in words), as the review screen words it."""
     if not message or not titles:
         return message
-    keys = "|".join(re.escape(k) for k in sorted(titles, key=len, reverse=True))
-    return re.sub(rf"(?<![\w-])(?:{keys})(?![\w-])", lambda m: titles[m.group(0)], message)
+    text = _KEY.sub(lambda m: titles.get(m.group(0)) or _words(m.group(0)), message)
+    return text[:1].upper() + text[1:]
+
+
+def _words(key: str) -> str:
+    """A key in words ("address-sharing" is "Address sharing"), as the web's keyWords."""
+    words = re.sub(r"[-_]+", " ", key).strip()
+    return words[:1].upper() + words[1:]
 
 
 def _problems(check: Any, file_codes: Iterable[str] = ()) -> tuple[list[dict[str, Any]], int]:

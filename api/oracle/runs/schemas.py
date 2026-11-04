@@ -492,6 +492,8 @@ class FeatureSetCheck(BaseModel):
     excluded: int
     problems: list[FeatureSetProblem]
     flags: dict[str, list[str]] = {}
+    # Each feature's title by its key (included and left out).
+    titles: dict[str, str] = {}
 
 
 class ScopeGoal(BaseModel):

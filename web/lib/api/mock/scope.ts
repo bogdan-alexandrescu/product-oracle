@@ -116,11 +116,21 @@ function draftOf(db: RunsDb, cpId: string): DraftRow {
 
 /** As oracle.runs.gate.REF_MARK and problem_ref: a C6 or C8 problem's own name among its feature's (the mock's hash, not the API's). */
 export const REF_MARK = "~";
-export function problemRef(p: { code: string; requirement?: string | null; message?: string | null }): string {
-  const about = `${p.requirement ?? ""}\n${p.message ?? ""}`;
+export function problemRef(p: { code: string; feature?: string | null; requirement?: string | null; message?: string | null }): string {
+  const about = [p.code, p.feature ?? "", p.requirement ?? "", p.message ?? ""].join("\n");
   let h = 0x811c9dc5;
   for (let i = 0; i < about.length; i++) h = Math.imul(h ^ about.charCodeAt(i), 0x01000193) >>> 0;
   return `${p.code}${REF_MARK}${h.toString(16).padStart(8, "0")}`;
+}
+const keyWords = (key: string) => {
+  const words = key.replace(/[-_]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+/** As oracle.runs.gate._titled: a problem's message with each feature's key as its title (a key with none in plain words). */
+export function titled(message: string, titles: Record<string, string> | undefined): string {
+  if (!message || !titles || !Object.keys(titles).length) return message;
+  const text = message.replace(/(?<![\w-])[a-z0-9]+(?:[-_][a-z0-9]+)+(?![\w-])/g, (k) => titles[k] || keyWords(k));
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 /** As oracle.runs.gate.answer_code: the code a waiver's answer names. */
 export const answerCode = (a: string) => a.split(REF_MARK)[0];
@@ -140,6 +150,7 @@ function reasonsOf(scope: StoredScope, actions: Action[]): Record<string, Schema
     const answered = mine(p.feature).some((a) => answers(a, p.code, blocking ? "waive" : "accept", problemRef(p)));
     (out[p.feature] ??= []).push({
       code: p.code,
+      ref: problemRef(p),
       severity: blocking ? "blocking" : "to_confirm",
       label: p.message || p.code,
       requirement: p.requirement ?? null,
@@ -152,6 +163,7 @@ function reasonsOf(scope: StoredScope, actions: Action[]): Record<string, Schema
     for (const flag of f.flags ?? []) {
       (out[f.key] ??= []).push({
         code: flag,
+        ref: flag,
         severity: "to_confirm",
         label: FLAG_LABELS[flag] ?? flag.replace(/_/g, " "),
         requirement: null,
@@ -209,6 +221,7 @@ export function recheck(db: RunsDb, scope: StoredScope) {
     excluded: scope.features.length - included.length,
     problems,
     flags,
+    titles: Object.fromEntries(scope.features.filter((f) => f.title && f.title !== f.key).map((f) => [f.key, f.title])),
   };
   const { run, cp } = checkpointOf(db, scope);
   const seg = run?.segments.find((s) => s.seq === scope.segment_seq);

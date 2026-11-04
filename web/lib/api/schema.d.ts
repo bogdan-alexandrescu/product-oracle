@@ -23658,6 +23658,13 @@ export interface components {
             flags: {
                 [key: string]: string[];
             };
+            /**
+             * Titles
+             * @default {}
+             */
+            titles: {
+                [key: string]: string;
+            };
         };
         /**
          * FeatureSetProblem
