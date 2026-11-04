@@ -24416,6 +24416,8 @@ export interface components {
             features?: components["schemas"]["FeatureSnap"][];
             /** Added Goal Id */
             added_goal_id?: string | null;
+            /** Sig */
+            sig?: string | null;
         };
         /** GoalCalibration */
         GoalCalibration: {
@@ -24515,6 +24517,18 @@ export interface components {
             goal_id: string;
             /** Contribution */
             contribution?: number | null;
+            /** Id */
+            id?: string | null;
+            /** Attrs */
+            attrs?: {
+                [key: string]: unknown;
+            } | null;
+            /** Status */
+            status?: string | null;
+            /** Origin */
+            origin?: string | null;
+            /** Created At */
+            created_at?: string | null;
         };
         /** GoalMeasurePushback */
         GoalMeasurePushback: {

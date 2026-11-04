@@ -56,8 +56,18 @@ function out(db: GoalBucketsDb, edits: boolean): Schemas["GoalBucketsOut"] {
 
 const goalOut = (g: Goal): Schemas["GoalBucketGoal"] => ({ id: g.id, title: g.title, order: g.order, measure: g.measure, target: g.target, due: g.due, can_edit: true });
 const goalSnap = (g: Goal) => ({ id: g.id, title: g.title, status: g.archived ? "rejected" : "confirmed", attrs: { metric: g.measure, target_text: g.target, due: g.due, position: g.order } });
-// The mock keeps links in order: the snapshot's contribution is 3 for the first, then 2.
-const featureSnap = (f: Feature) => ({ feature_id: f.id, links: f.goal_ids.map((goal_id, i) => ({ goal_id, contribution: i ? 2 : 3 })) });
+// The mock keeps links in order, and Undo puts that order back; each link is snapshotted whole, as the API does.
+const featureSnap = (f: Feature) => ({
+  feature_id: f.id,
+  links: f.goal_ids.map((goal_id, i) => ({ goal_id, contribution: i ? 2 : 3, id: `${f.id}:${goal_id}`, attrs: { contribution: i ? 2 : 3 }, status: "confirmed", origin: "user", created_at: "2026-01-05T00:00:00Z" })),
+});
+// The API signs each undo and refuses one it did not give; the mock signs with a plain hash of the rest.
+const sigOf = (u: Omit<Undo, "sig">) => {
+  let h = 2166136261;
+  for (const c of JSON.stringify({ goals: u.goals ?? [], features: u.features ?? [], added_goal_id: u.added_goal_id ?? null })) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
+  return `mock-${h.toString(16)}`;
+};
+const signed = (u: Omit<Undo, "sig">): Undo => ({ ...u, sig: sigOf(u) });
 
 type GoalIn = { title?: string; measure?: string; target?: string; due?: string };
 const complete = (b: GoalIn) => !!(b.title?.trim() && b.measure?.trim() && b.target?.trim() && b.due && /^\d{4}-\d{2}-\d{2}$/.test(b.due));
@@ -77,14 +87,14 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
     const order = Math.max(0, ...db.goals.map((g) => g.order)) + 1;
     const g: Goal = { id: crypto.randomUUID(), title: b.title!.trim(), order, measure: b.measure!.trim(), target: b.target!.trim(), due: b.due!, archived: false };
     db.goals.push(g);
-    return json(201, { goal: goalOut(g), undo: { goals: [], features: [], added_goal_id: g.id } });
+    return json(201, { goal: goalOut(g), undo: signed({ goals: [], features: [], added_goal_id: g.id }) });
   }
   if (p[3] === "goals" && p[4] && !p[5] && m === "PATCH") {
     const g = db.goals.find((x) => x.id === p[4] && !x.archived);
     if (!g) return json(404, { detail: "No such goal" });
     const b = body as GoalIn;
     if (!complete(b)) return json(422, { detail: "A goal needs a measure, a target and a date" });
-    const undo = { goals: [goalSnap(g)], features: [], added_goal_id: null };
+    const undo = signed({ goals: [goalSnap(g)], features: [], added_goal_id: null });
     Object.assign(g, { title: b.title!.trim(), measure: b.measure!.trim(), target: b.target!.trim(), due: b.due! });
     return json(200, { goal: goalOut(g), undo });
   }
@@ -94,7 +104,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
     const to = (body.to_goal_id as string | null | undefined) ?? null;
     if (to && !db.goals.some((x) => x.id === to && !x.archived && x.id !== g.id)) return json(422, { detail: "Pick another goal" });
     const held = db.features.filter((f) => f.goal_ids.includes(g.id));
-    const undo = { goals: [goalSnap(g)], features: held.map(featureSnap), added_goal_id: null };
+    const undo = signed({ goals: [goalSnap(g)], features: held.map(featureSnap), added_goal_id: null });
     for (const f of held) {
       const rest = f.goal_ids.filter((x) => x !== g.id);
       f.goal_ids = f.goal_ids[0] === g.id && !rest.length && to ? [to] : rest;
@@ -107,12 +117,13 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
     const to = body.to_goal_id as string;
     if (!f) return json(404, { detail: "No such feature" });
     if (!db.goals.some((x) => x.id === to)) return json(404, { detail: "No such goal" });
-    const undo = { goals: [], features: [featureSnap(f)], added_goal_id: null };
+    const undo = signed({ goals: [], features: [featureSnap(f)], added_goal_id: null });
     f.goal_ids = [to, ...f.goal_ids.filter((x) => x !== to && x !== body.from_goal_id)];
     return json(200, { goal: null, undo });
   }
   if (p[3] === "undo" && m === "POST") {
     const u = body as unknown as Undo;
+    if (!u.sig || u.sig !== sigOf(u)) return json(400, { detail: "This Undo is not one Oracle gave" });
     for (const s of u.goals ?? []) {
       const g = db.goals.find((x) => x.id === s.id);
       if (!g) continue;
@@ -121,7 +132,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
     }
     for (const s of u.features ?? []) {
       const f = db.features.find((x) => x.id === s.feature_id);
-      if (f) f.goal_ids = [...s.links].sort((a, b) => (b.contribution ?? 0) - (a.contribution ?? 0)).map((l) => l.goal_id);
+      if (f) f.goal_ids = s.links.map((l) => l.goal_id);
     }
     if (u.added_goal_id) {
       const g = db.goals.find((x) => x.id === u.added_goal_id);

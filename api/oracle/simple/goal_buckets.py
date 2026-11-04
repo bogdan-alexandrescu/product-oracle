@@ -10,12 +10,16 @@ links, the same records Baseline edits.
   keep it (now first), the rest go to ``to_goal_id`` or are left with no goal.
 - ``POST .../features/{id}/move``: the feature's first goal link becomes ``to_goal_id``;
   its link to ``from_goal_id`` is dropped.
-- ``POST .../undo``: puts back the goals and links a write's ``undo`` names.
+- ``POST .../undo``: puts back the goals and links a write's ``undo`` names, each link
+  whole (its id, attrs, status, origin and created_at). The ``undo`` is signed: one the
+  API did not give is refused.
 """
 
+import hashlib
+import hmac
 import re
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, status
@@ -27,6 +31,7 @@ from oracle.auth.deps import TenantDB
 from oracle.authz import has_role
 from oracle.baseline.goal_order import goal_position, sort_goals
 from oracle.baseline.models import Edge, Entity
+from oracle.config import get_settings
 from oracle.simple.router import Approver, Reader
 
 router = APIRouter(prefix="/v1/simple/goal-buckets", tags=["simple"])
@@ -69,6 +74,12 @@ class GoalIn(BaseModel):
 class GoalLinkSnap(BaseModel):
     goal_id: uuid.UUID
     contribution: int | None = None
+    # The link as it was, for Undo (a write's wanted links leave these out).
+    id: uuid.UUID | None = None
+    attrs: dict[str, Any] | None = None
+    status: str | None = None
+    origin: str | None = None
+    created_at: datetime | None = None
 
 
 class FeatureSnap(BaseModel):
@@ -90,6 +101,8 @@ class GoalBucketsUndo(BaseModel):
     features: list[FeatureSnap] = Field(default_factory=list)
     # A goal the write added: Undo archives it again.
     added_goal_id: uuid.UUID | None = None
+    # The API's signature over the rest: Undo takes only an undo a write gave.
+    sig: str | None = None
 
 
 class GoalBucketWrite(BaseModel):
@@ -159,7 +172,15 @@ async def _snap(db: AsyncSession, feature_ids: list[uuid.UUID]) -> list[FeatureS
         FeatureSnap(
             feature_id=f,
             links=[
-                GoalLinkSnap(goal_id=e.dst_id, contribution=(e.attrs or {}).get("contribution"))
+                GoalLinkSnap(
+                    goal_id=e.dst_id,
+                    contribution=(e.attrs or {}).get("contribution"),
+                    id=e.id,
+                    attrs=dict(e.attrs or {}),
+                    status=e.status,
+                    origin=e.origin,
+                    created_at=e.created_at,
+                )
                 for e in edges
                 if e.src_id == f
             ],
@@ -185,6 +206,45 @@ async def _set_links(db: AsyncSession, feature_id: uuid.UUID, links: list[GoalLi
     await db.flush()
 
 
+async def _restore_links(db: AsyncSession, snap: FeatureSnap) -> None:
+    """The feature's supports links become exactly the snapshot's, each whole: a link the
+    write added is dropped, one it changed gets its old attrs, status and origin, and one
+    it dropped comes back with its old id and created_at."""
+    rows = await db.scalars(
+        select(Edge).where(Edge.src_id == snap.feature_id, Edge.type == "supports")
+    )
+    have = {e.id: e for e in rows}
+    keep = {lk.id for lk in snap.links}
+    wanted_goals = {lk.goal_id for lk in snap.links}
+    for e in have.values():
+        live_extra = e.status != "rejected" and e.id not in keep
+        if live_extra or (e.id not in keep and e.dst_id in wanted_goals):
+            await db.delete(e)
+    await db.flush()
+    for lk in snap.links:
+        attrs = dict(lk.attrs or {})
+        if lk.id in have:
+            e = have[lk.id]
+            e.attrs, e.status, e.origin = attrs, lk.status or e.status, lk.origin or e.origin
+        else:
+            db.add(Edge(id=lk.id, src_id=snap.feature_id, dst_id=lk.goal_id, type="supports",
+                        status=lk.status or "confirmed", origin=lk.origin or "user",
+                        attrs=attrs, created_at=lk.created_at))  # fmt: skip
+    await db.flush()
+
+
+def _sig(tenant_id: uuid.UUID, undo: GoalBucketsUndo) -> str:
+    body = undo.model_dump_json(exclude={"sig"})
+    key = get_settings().secret_key.encode()
+    msg = f"goal-buckets-undo:{tenant_id}:{body}".encode()
+    return hmac.new(key, msg, hashlib.sha256).hexdigest()
+
+
+def _signed(tenant_id: uuid.UUID, undo: GoalBucketsUndo) -> GoalBucketsUndo:
+    undo.sig = _sig(tenant_id, undo)
+    return undo
+
+
 async def _entity(db: AsyncSession, id_: uuid.UUID, type_: str) -> Entity:
     e = await db.get(Entity, id_)
     if e is None or e.type != type_:
@@ -200,8 +260,11 @@ def _slug(title: str) -> str:
 def _fields(g: Entity, body: GoalIn) -> None:
     g.title = body.title
     attrs = dict(g.attrs or {})
-    attrs.update({"metric": body.measure, "target_text": body.target, "due": body.due.isoformat()})
-    attrs.pop("target", None)
+    attrs.update({"metric": body.measure, "due": body.due.isoformat()})
+    if body.target != _target(attrs):
+        # A new target is kept as typed; one left as it was keeps Baseline's number and unit.
+        attrs["target_text"] = body.target
+        attrs.pop("target", None)
     g.attrs = attrs
 
 
@@ -245,7 +308,8 @@ async def create_bucket_goal(body: GoalIn, principal: Approver, db: TenantDB) ->
     await db.flush()
     out = _goal_out(g, last + 1, True)
     await db.commit()
-    return GoalBucketWrite(goal=out, undo=GoalBucketsUndo(added_goal_id=g.id))
+    undo = _signed(principal.tenant_id, GoalBucketsUndo(added_goal_id=g.id))
+    return GoalBucketWrite(goal=out, undo=undo)
 
 
 @router.patch("/goals/{goal_id}", response_model=GoalBucketWrite, name="update_bucket_goal")
@@ -260,7 +324,7 @@ async def update_bucket_goal(
     order = next((i + 1 for i, x in enumerate(await _goals(db)) if x.id == g.id), 1)
     out = _goal_out(g, order, True)
     await db.commit()
-    return GoalBucketWrite(goal=out, undo=undo)
+    return GoalBucketWrite(goal=out, undo=_signed(principal.tenant_id, undo))
 
 
 @router.post("/goals/{goal_id}/archive", response_model=GoalBucketWrite, name="archive_bucket_goal")
@@ -286,7 +350,7 @@ async def archive_bucket_goal(
         await _set_links(db, snap.feature_id, rest)
     g.status = "rejected"
     await db.commit()
-    return GoalBucketWrite(undo=undo)
+    return GoalBucketWrite(undo=_signed(principal.tenant_id, undo))
 
 
 @router.post(
@@ -306,7 +370,8 @@ async def move_bucket_feature(
         db, feature_id, [GoalLinkSnap(goal_id=body.to_goal_id, contribution=TOP), *links]
     )
     await db.commit()
-    return GoalBucketWrite(undo=GoalBucketsUndo(features=[before]))
+    undo = GoalBucketsUndo(features=[before])
+    return GoalBucketWrite(undo=_signed(principal.tenant_id, undo))
 
 
 @router.post("/undo", response_model=GoalBucketsOut, name="undo_goal_buckets")
@@ -314,12 +379,14 @@ async def undo_goal_buckets(
     body: GoalBucketsUndo, principal: Approver, db: TenantDB
 ) -> GoalBucketsOut:
     """Puts back every goal and link a write changed."""
+    if not body.sig or not hmac.compare_digest(body.sig, _sig(principal.tenant_id, body)):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "This Undo is not one Oracle gave")
     for snap in body.goals:
         g = await _entity(db, snap.id, "goal")
         g.title, g.status, g.attrs = snap.title, snap.status, snap.attrs
     for f in body.features:
         await _entity(db, f.feature_id, "feature")
-        await _set_links(db, f.feature_id, f.links)
+        await _restore_links(db, f)
     if body.added_goal_id is not None:
         (await _entity(db, body.added_goal_id, "goal")).status = "rejected"
     await db.commit()
