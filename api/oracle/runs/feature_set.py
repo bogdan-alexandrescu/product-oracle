@@ -1158,6 +1158,7 @@ def scope_out(scope: PrdScope, items: list[PrdScopeItem]) -> PrdScopeOut:
             excluded=check.get("excluded", 0),
             problems=check.get("problems") or [],
             flags=check.get("flags") or {},
+            titles=check.get("titles") or {},
         ),
         features=features,
         approved_by=scope.approved_by,
