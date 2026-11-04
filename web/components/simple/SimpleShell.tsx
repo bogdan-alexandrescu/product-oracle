@@ -67,10 +67,15 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
     Promise.all([loadInbox(), unwrap(api.GET("/v1/simple/decisions/waiting")), loadMyQuestions().catch(() => [])])
       .then(([inbox, waiting, questions]) => {
         if (!alive) return;
+        // inbox-meeting-proposals fix: a proposal on a PRD question or a one-pager line is not the roadmap's.
+        const roadmap = inbox.simple_proposals.filter((x) => !["decide_question", "name_decider", "edit_line"].includes(x.op)).length + inbox.simple_approvals.length;
+        const all = waitingCount(inbox, questions);
         setCounts({
           Decisions: waiting.count,
-          Roadmap: inbox.simple_proposals.length + inbox.simple_approvals.length,
-          Inbox: waitingCount(inbox, questions),
+          Roadmap: roadmap,
+          Inbox: all,
+          // What waits in the Inbox beyond what the tabs count (More sums it).
+          "Inbox beyond the tabs": Math.max(0, all - roadmap),
         });
       })
       .catch(() => undefined);
@@ -220,13 +225,15 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
   const moreActive = moreDests.some((d) => isActive(pathname, d));
   // qa-simple-home-29: the phone shows the rail's counts too; More sums the counts in its sheet.
   const countOf = (d: Dest) => counts?.[d.label] ?? 0;
-  // inbox-meeting-proposals owner: the Inbox's count repeats what the tabs count (Roadmap's proposals), so More's sum leaves it out.
+  // inbox-meeting-proposals owner: the Inbox's count repeats what the tabs count (Roadmap's proposals), so More's sum takes
+  // only the rest of it (fix: Oracle's dates, a goal's suggestions, a one-pager wording, a question's proposal light More).
   const summed = moreDests.filter((d) => d.label !== "Inbox");
-  const moreCount = summed.reduce((sum, d) => sum + countOf(d), 0);
+  const inboxRest = moreDests.some((d) => d.label === "Inbox") ? (counts?.["Inbox beyond the tabs"] ?? 0) : 0;
+  const moreCount = summed.reduce((sum, d) => sum + countOf(d), 0) + inboxRest;
   // qa4-simple-home-22: a count that needs nothing from you (Meetings with none live) is grey on the phone as on the rail; More is
   // yellow only when something in it waits on you.
   const quietOf = (d: Dest) => d.label === "Meetings" && !counts?.["Meetings live"];
-  const moreQuiet = summed.every((d) => countOf(d) === 0 || quietOf(d));
+  const moreQuiet = inboxRest === 0 && summed.every((d) => countOf(d) === 0 || quietOf(d));
   const tabBadge = (id: string, n: number, words: string, quiet = false) =>
     n > 0 && (
       <span id={id} data-testid={id} aria-label={words} title={words} className={`simple-count simple-count-tab tnum${quiet ? " simple-count-quiet" : ""}`}>

@@ -164,7 +164,8 @@ import { routeSimpleChanges, seedFeatureAskProposal, seedSimpleProposal, simpleI
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { goalSuggestionInboxRows, seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
-import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { questionInboxRows } from "./simple-questions";
+import { onePagerInboxRows, planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
@@ -6457,6 +6458,14 @@ async function route(db: Db, req: Request): Promise<Response> {
       roles: Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role])),
       names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
     });
+    // inbox-meeting-proposals fix: proposals on a PRD question or a one-pager line, as the API's one list.
+    const questionRows = db.simple_meetings?.questions
+      ? questionInboxRows({ me: { id: me.id, role: me.role }, members: db.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, name: displayName(x.email, x.name), role: x.role, email: x.email })) }, db.simple_meetings.questions, seenBefore)
+      : { proposals: [], decisions: [] };
+    const onePagerRows = onePagerInboxRows([...(db.simple_one_pager ? [db.simple_one_pager] : []), ...Object.values(db.simple_one_pagers ?? {})], { id: me.id, role: me.role }, seenBefore);
+    const newest = (a: Schemas["InboxSimpleChange"], b: Schemas["InboxSimpleChange"]) => ((b.decided_at ?? b.at) > (a.decided_at ?? a.at) ? 1 : -1);
+    simpleRows.simple_proposals = [...simpleRows.simple_proposals, ...questionRows.proposals, ...onePagerRows.proposals];
+    simpleRows.simple_decisions = [...simpleRows.simple_decisions, ...questionRows.decisions, ...onePagerRows.decisions].sort(newest);
     Object.assign(inbox, simpleRows);
     // inbox-meeting-proposals fix: Oracle's open date suggestions and goals' open suggestions I may decide.
     const simpleCtx = {

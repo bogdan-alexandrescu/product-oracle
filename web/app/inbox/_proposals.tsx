@@ -31,18 +31,29 @@ function FeatureName({ name, itemId, documentId }: { name: string; itemId?: stri
   );
 }
 
+/** A PRD question's proposal (an answer, or who decides it): decided on Decisions. */
+const onQuestion = (p: Pick<Proposal, "op">) => p.op === "decide_question" || p.op === "name_decider";
+
 /**
- * Where a proposal is decided: its roadmap's Needs a decision when it has one; else where its
- * op is decided (Requests for a feature ask, Priorities for a priority or an estimate).
+ * Where a proposal is decided: a PRD question's on Decisions, at that question; a one-pager
+ * wording's on its one-pager, at that line; else its roadmap's Needs a decision when it has
+ * one; else where its op is decided (Requests for a feature ask, Priorities for a priority or
+ * an estimate).
  */
-export function proposalHref(p: Pick<Proposal, "op" | "document_id" | "item_id">): string {
+export function proposalHref(p: Pick<Proposal, "op" | "document_id" | "item_id" | "question_id" | "line_id">): string {
+  if (onQuestion(p) && p.document_id) return `/simple/decisions?prd=${p.document_id}${p.question_id ? `&question=${p.question_id}` : ""}`;
+  if (p.op === "edit_line" && p.document_id) return `/simple/one-pagers/${p.document_id}${p.line_id ? `?line=${encodeURIComponent(p.line_id)}` : ""}`;
   if (p.document_id) return `/simple/roadmap?roadmap=${p.document_id}&review=proposals`;
   if (p.op === "add_feature_ask") return "/requests";
   return p.item_id ? `/simple/priorities?show=${p.item_id}` : "/simple/priorities";
 }
 
 /** Where a proposal is decided, in words, for Open's label. */
-const proposalWhere = (p: Proposal): string => (p.document_id ? "on its roadmap" : p.op === "add_feature_ask" ? "in Requests" : "in Priorities");
+const proposalWhere = (p: Proposal): string =>
+  onQuestion(p) ? "in Decisions" : p.op === "edit_line" ? "on its one-pager" : p.document_id ? "on its roadmap" : p.op === "add_feature_ask" ? "in Requests" : "in Priorities";
+
+/** What the row is on: its item, else its question (code and title) or one-pager line. */
+const proposalName = (p: Proposal): string => p.item_title ?? (p.subject ? (p.op === "edit_line" ? `“${p.subject}”` : p.subject) : onQuestion(p) ? "A question" : p.op === "edit_line" ? "A one-pager line" : "An item");
 
 const upper = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
@@ -64,7 +75,7 @@ function askedBy(p: Proposal): string {
 export function proposalRows(proposals: Proposal[], busy: string | null, act: Act, seenBefore: string | null | undefined): StatedNeed[] {
   return proposals
     .map((p) => {
-      const name = p.item_title ?? "An item";
+      const name = proposalName(p);
       const path = { params: { path: { change_id: p.id } }, body: {} };
       return {
         key: `proposal-${p.id}`,

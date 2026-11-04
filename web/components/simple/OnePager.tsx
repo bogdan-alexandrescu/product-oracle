@@ -266,6 +266,17 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   useLayoutEffect(() => placeNotes(margin.current));
   const phone = usePhone();
   const meId = useMe().me?.user_id ?? null;
+  // inbox-meeting-proposals fix: ?line= (the Inbox's Open on a proposed wording) shows the
+  // lines and lands on that one, once the page is read.
+  const pageRead = !!q.data;
+  const landed = useRef(false);
+  useEffect(() => {
+    const line = new URLSearchParams(window.location.search).get("line");
+    if (!pageRead || landed.current || !line || sessionId) return;
+    landed.current = true;
+    setLinesShown(true);
+    requestAnimationFrame(() => document.querySelector(`[data-line="${CSS.escape(line)}"]`)?.scrollIntoView({ block: "center" }));
+  }, [pageRead, sessionId]);
 
   if (q.loading && !q.data) return <div className="px-6 py-8"><Loading /></div>;
   if (q.error || !q.data) {
