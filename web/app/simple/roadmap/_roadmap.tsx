@@ -16,6 +16,7 @@ import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 import { QuickAdd } from "./_add";
+import { MsCard, MsKey, MsLayer, MsProvider, MsToast, useMilestones, type MsLane, type MsRow } from "./_milestones";
 import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, MARK_WORDS, PM_LANE, type Horizon, type LegendEntry } from "./_board";
 import { useKeyBurst } from "./_burst";
 import { changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
@@ -57,8 +58,9 @@ import {
   setRoadmapToday,
   yearSpan,
   drawnKeyDates,
+  type Scale as ChartScale,
 } from "./_lib";
-import { Chart, PHASES } from "./_timeline";
+import { Chart, PHASES, type Layout } from "./_timeline";
 import { ConflictPanel, ZoomTimeline } from "./_zoom";
 
 /** #34: the Roadmap's toasts sit in the bottom-right corner on a desktop, clear of the chart. */
@@ -839,6 +841,8 @@ export function SimpleRoadmap() {
   const byId = useMemo(() => new Map((data?.items ?? []).map((i) => [i.id, i])), [data]);
   const titleOf = useCallback((id: string | null) => (id ? byId.get(id)?.title : undefined), [byId]);
   const canChange = can("create_simple_change");
+  // build-milestones-on-roadmap: the milestones per goal, added on the time axis.
+  const ms = useMilestones({ data, phone, canChange, reload: roadmap.reload });
   // The items as last loaded, for a burst sent after the render that started it.
   const latest = useRef(byId);
   useEffect(() => {
@@ -1279,6 +1283,7 @@ export function SimpleRoadmap() {
 
   return (
     // A phone's page ends clear of the tab bar (#36: its filters lead the chart, not the foot).
+    <MsProvider value={ms!}>
     <div className="simple-mode space-y-3 px-4 py-4 max-[600px]:pb-[calc(var(--phone-tab-bar)+16px)] min-[641px]:px-6" data-testid="simple-roadmap" data-phone={phone ? "true" : "false"}>
       <header className={`relative flex flex-wrap items-center ${phone ? "gap-2" : "gap-3"}`}>
         {/* A phone's header bar names the page (D3): the H1 is for screen readers there. */}
@@ -1349,6 +1354,7 @@ export function SimpleRoadmap() {
       {/* #36: on a phone, Roadmap/Goal/Track and Group by read before the chart, not after
        * the legend and goal cards at the page's foot. */}
       {!blank && filters}
+      {!blank && <MsKey />}
       {blank && (
         <p className="text-[15px] text-text2" data-testid="roadmap-empty">
           {hasGoals ? (
@@ -1387,6 +1393,7 @@ export function SimpleRoadmap() {
             open={card?.id ?? null}
             onOpen={(item) => {
               setPop(null);
+              if (ms?.pick(item.id)) return;
               setCard({ id: item.id, ...anchorOf(item.id) });
             }}
             onMove={onHorizon}
@@ -1415,6 +1422,7 @@ export function SimpleRoadmap() {
             openKey={cardItem?.key ?? null}
             onOpen={(k) => {
               const it = k ? data.items.find((x) => x.key === k) : undefined;
+              if (it && ms?.pick(it.id)) return;
               setPop(null);
               setCard(it ? { id: it.id, left: 0, top: 0 } : null);
             }}
@@ -1467,6 +1475,7 @@ export function SimpleRoadmap() {
             onOffscreen={setOffscreen}
             pulled={pulledIn}
             onOpen={(item) => {
+              if (ms?.pick(item.id)) return;
               setPop(null);
               setCard({ id: item.id, ...anchorOf(item.id) });
             }}
@@ -1478,6 +1487,7 @@ export function SimpleRoadmap() {
               setCard(null);
               setPop({ id: item.id, ...anchorOf(item.id) });
             }}
+            overlay={(l, sc) => <GanttMilestones l={l} sc={sc} data={laned ?? data} phone={phone} />}
           />
           </>
         )}
@@ -1594,5 +1604,25 @@ export function SimpleRoadmap() {
       )}
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} start={goalStart} onClose={() => setGoalPanel(null)} />}
     </div>
+      <MsCard />
+      <MsToast />
+    </MsProvider>
   );
+}
+
+/** build-milestones-on-roadmap: the milestone layer over the Gantt, in the chart's pixels. */
+function GanttMilestones({ l, sc, data, phone }: { l: Layout; sc: ChartScale; data: Roadmap; phone: boolean }) {
+  const byId = new Map(data.items.map((i) => [i.id, i]));
+  const rows: MsRow[] = [];
+  const lanes: MsLane[] = [];
+  for (const g of data.groups) {
+    const ys = g.item_ids.map((id) => l.y.get(id)).filter((y): y is number => y != null);
+    if (ys.length) lanes.push({ key: g.key, title: g.title, y0: Math.min(...ys) - l.rowH, y1: Math.max(...ys) + l.rowH });
+    for (const id of g.item_ids) {
+      const i = byId.get(id);
+      const y = l.y.get(id);
+      if (i && y != null) rows.push({ id: i.id, title: i.title, lane: g.key, y, h: l.rowH, start: i.start.date, end: i.end.date });
+    }
+  }
+  return <MsLayer view="gantt" x={(d) => sc.x(d) + sc.px / 2} top={l.top} axisY={l.top - 2} height={l.height} width={sc.width} rows={rows} lanes={lanes} phone={phone} />;
 }
