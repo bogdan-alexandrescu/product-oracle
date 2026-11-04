@@ -8,7 +8,7 @@
 // segments, checkpoints, waiting_on, created_by), re-read every 5 s while one moves, as the run page does.
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 export type Proposal = "a" | "b" | "c";
 type State = "running" | "scheduled" | "waiting" | "failed" | "done";
@@ -40,9 +40,15 @@ const ROADMAP_STEPS = ["Read the PRDs", "Place the features", "Check what depend
 export const REBUILD_PRD = "checkout-redesign";
 export const REBUILD_ROADMAP = "product-roadmap";
 
-function readParams() {
-  if (typeof window === "undefined") return null;
-  const p = new URLSearchParams(window.location.search);
+const noSubscribe = () => () => {};
+/** The page's query string, read after hydration (the server renders no sign). */
+function useSearch() {
+  return useSyncExternalStore(noSubscribe, () => window.location.search, () => null);
+}
+
+function readParams(search: string | null) {
+  if (search == null) return null;
+  const p = new URLSearchParams(search);
   const rb = p.get("rb");
   if (rb !== "a" && rb !== "b" && rb !== "c") return null;
   const st = p.get("rbstate");
@@ -103,12 +109,10 @@ function makeRuns(state: State, hard: string | null, tick: number, polls: number
 
 /** The rebuild runs the URL asks for, re-read every 5 s (the run page's POLL_MS) while one moves. */
 export function useRebuilds() {
-  const [p, setP] = useState<ReturnType<typeof readParams>>(null);
+  const search = useSearch();
+  const p = useMemo(() => readParams(search), [search]);
   const [polls, setPolls] = useState(0);
   const [opened, setOpened] = useState(false);
-  useEffect(() => {
-    setP(readParams());
-  }, []);
   const moving = p && (p.state === "running" || p.state === "waiting");
   useEffect(() => {
     if (!moving) return;
@@ -301,19 +305,18 @@ function RunCard({ r, onOpen }: { r: Run; onOpen?: () => void }) {
 
 /** A: the live chip beside the version, opening its popover. */
 function Chip({ runs, compact, onOpen, summary }: { runs: Run[]; compact?: boolean; onOpen: () => void; summary?: string }) {
-  const [open, setOpen] = useState(false);
+  const search = useSearch();
+  const [toggled, setToggled] = useState<boolean | null>(null);
+  const open = toggled ?? new URLSearchParams(search ?? "").get("rbopen") === "1";
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) setToggled(false);
     };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, [open]);
-  useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("rbopen") === "1") setOpen(true);
-  }, []);
   const r = runs[0];
   const more = runs.length - 1;
   const text = summary ?? (compact ? shortLine(r) : line(r));
@@ -323,7 +326,7 @@ function Chip({ runs, compact, onOpen, summary }: { runs: Run[]; compact?: boole
         type="button"
         data-testid="rb-chip"
         aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setToggled(!open)}
         className={`relative z-[1] inline-flex min-h-6 max-w-full items-center gap-1.5 rounded-xl px-[9px] py-0.5 text-left text-[13px] leading-[18px] font-semibold ${TONE[r.state]} ${r.justMoved ? "ring-2 ring-accent/40" : ""}`}
       >
         <Dot state={r.state} />

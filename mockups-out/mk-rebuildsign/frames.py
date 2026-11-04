@@ -49,7 +49,7 @@ def plan():
             out.append(dict(name=name, proposal=p.upper(), page=page, state=state, viewport=vp, theme=theme, url=PAGES[page][0] + q, caption=cap))
 
         for page in PAGES:
-            add(page)
+            add(page, note="a list row carries the quiet marker; the banner is on the page itself" if p == "b" and page == "list" else "")
         for st in ("scheduled", "waiting", "failed", "done"):
             add("one-pager", st)
         add("roadmap", "waiting")
@@ -90,13 +90,28 @@ def inline(page, name):
         css.append(re.sub(r"url\(([^)]+\.(?:woff2?|ttf|otf)[^)]*)\)", font, text))
     css = "\n".join(css)
     html = re.sub(r"<script\b[^>]*>.*?</script>", "", html, flags=re.S)
-    html = re.sub(r"<link\b[^>]*(?:stylesheet|preload|modulepreload)[^>]*>", "", html)
+    html = re.sub(r"<link\b[^>]*(?:stylesheet|preload|modulepreload|icon)[^>]*>", "", html)
     hook = (
         "<script>/* theme hook: ?theme=light|dark */try{var t=new URLSearchParams(location.search).get('theme');"
         "if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>"
     )
     html = html.replace("</head>", f"<style>{css}</style>{hook}</head>", 1)
     (FRAMES / f"{name}.html").write_text(html)
+
+
+def write_index(frames):
+    """index.html: every frame by proposal, its caption, linked to its static HTML."""
+    rows = []
+    for p in "ABC":
+        rows.append(f"<h2>Proposal {p}</h2><ul>")
+        for f in (x for x in frames if x["proposal"] == p):
+            rows.append(f'<li><a href="frames/{f["name"]}.html?theme={f["theme"]}">{f["name"]}</a> · {f["viewport"]} · {f["theme"]}: {f["caption"]}</li>')
+        rows.append("</ul>")
+    (HERE / "index.html").write_text(
+        "<!doctype html><meta charset=utf-8><title>Rebuild sign mock-ups</title>"
+        "<style>body{font:15px/1.5 system-ui;max-width:72rem;margin:2rem auto;padding:0 1rem}</style>"
+        "<h1>MOCK-UPS ONLY: rebuild sign for PRDs and roadmaps</h1>" + "".join(rows) + "\n"
+    )
 
 
 def set_device(viewport, theme):
@@ -143,6 +158,7 @@ def main():
         meta[f["name"]] = {k: f[k] for k in ("name", "proposal", "page", "state", "viewport", "theme", "url", "caption")}
         print(f["name"], width, len(errors), flush=True)
     meta_path.write_text(json.dumps(list(meta.values()), indent=2) + "\n")
+    write_index(list(meta.values()))
     (HERE / "capture-report.json").write_text(json.dumps(report, indent=2) + "\n")
     page.evaluate("localStorage.removeItem('oracle-theme')")
     page.close()
