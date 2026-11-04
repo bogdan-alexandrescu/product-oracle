@@ -141,3 +141,16 @@ async def test_a_notification_title_carries_no_raw_tokens(db):
     assert n == 1
     row = await db.scalar(select(Notification).where(Notification.user_id == u.id))
     assert row.title == "Capacity is low"
+
+
+def test_slides_deck_and_one_pager_pdf_carry_no_raw_tokens():
+    """The PPTX, the deck, a share link and the one-pager's PDF read a body through
+    strip_citations: no "[l:n]", "[s:id]" or spaced "[c:a b]" survives it."""
+    from oracle.docs.parser import strip_citations
+    from oracle.export.pptx import parse_blocks
+    from oracle.simple.one_pager_checks import resolved
+
+    text = "Capacity is low [c:capacity plan] and [l:2]; see [s:convdef]. Kept [c:c1]."
+    assert strip_citations(text) == "Capacity is low and; see. Kept."
+    assert not RAW.search(str(parse_blocks(text)))
+    assert not RAW.search(resolved(text))
