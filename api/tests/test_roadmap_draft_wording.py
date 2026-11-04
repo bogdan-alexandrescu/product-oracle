@@ -14,6 +14,8 @@
 Invented example data only.
 """
 
+import html
+
 from oracle.docs import draft_checks, named_codes
 from oracle.docs.parser import parse_draft
 from oracle.roadmap import draft_words, variants
@@ -42,6 +44,8 @@ Each end date comes from that item's own engineering estimate.
 
 Depends on: F-03, F-07. Held back per D-12.
 """
+
+HEAD = "---\ndocument: example-roadmap\nkind: roadmap\n---\n"
 
 CLEAN = """---
 document: example-roadmap
@@ -112,7 +116,9 @@ def test_queue_dates_said_to_come_from_the_items_own_estimate_are_flagged():
         "The end dates come from each item's own estimate.",
         "Its end date is taken from the item's own engineering estimate.",
     ):
-        warnings = draft_words.check(parse_draft(f"# R {{#r}}\n\n## T {{#t}}\n\n{text}\n").sections)
+        warnings = draft_words.check(
+            parse_draft(f"{HEAD}# R {{#r}}\n\n## T {{#t}}\n\n{text}\n").sections
+        )
         assert [w.code for w in warnings] == ["queue_said_as_estimate"], text
         assert "place in the team's queue" in warnings[0].message
         assert "own effort" in warnings[0].message
@@ -124,11 +130,15 @@ def test_the_writer_never_marks_a_date_unverified_itself():
         "Nov 30 [unverified]",
         "Unverified date: Nov 30",
     ):
-        warnings = draft_words.check(parse_draft(f"# R {{#r}}\n\n## T {{#t}}\n\n{text}\n").sections)
+        warnings = draft_words.check(
+            parse_draft(f"{HEAD}# R {{#r}}\n\n## T {{#t}}\n\n{text}\n").sections
+        )
         assert [w.code for w in warnings] == ["unverified_written"], text
         assert "accepted engineering estimate" in warnings[0].message
     # The Sources and data points section is not read.
-    sources = "# R {#r}\n\n## Sources and data points {#sources}\n\nDate unverified in the PRD.\n"
+    sources = (
+        HEAD + "# R {#r}\n\n## Sources and data points {#sources}\n\nDate unverified in the PRD.\n"
+    )
     assert draft_words.check(parse_draft(sources).sections) == []
 
 
@@ -211,3 +221,43 @@ def test_the_items_and_dates_prompts_read_a_dependency_at_its_slice():
     assert "slice the estimate names" in _roadmap_prompt("roadmap_items")
     assert "kind capacity" in flows.ENG_DATES_TASK
     assert "team's queue" in flows.ENG_DATES_TASK
+
+
+# --- The export reads the date's basis kind --------------------------------------------
+
+
+async def test_an_export_says_a_capacity_date_is_the_items_place_in_the_queue(client):
+    """protects=the Engineering rendering of an item dated by a capacity basis says its
+    end date is its place in the team's queue, with its own effort; fails_when=the card
+    reads the bare date as if the item took that long."""
+    from datetime import UTC, date, datetime
+
+    from sqlalchemy import select
+
+    from oracle.docs.models import Document
+    from oracle.roadmap.models import RoadmapItem, ScheduleBasis
+    from oracle.tenancy import tenant_session
+    from tests.baseline_helpers import make_ctx
+    from tests.test_export_audience import EXPORT, _text, seed_roadmap
+
+    ctx = await make_ctx("Example Labs")
+    await seed_roadmap(ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        prd = await s.scalar(select(Document).where(Document.slug == "example-labs-prd"))
+        item = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "csv-parser"))
+        item.prd_document_id = prd.id
+        item.milestone = {"name": "Pilot", "date": "2027-02-12", "date_source": "cap-team"}
+        s.add(
+            ScheduleBasis(kind="capacity", reference="cap-team", supports_date=date(2027, 2, 12),
+                          prd_document_id=prd.id, item_key="csv-parser", status="verified",
+                          verified_at=datetime(2026, 10, 16, tzinfo=UTC))
+        )  # fmt: skip
+        await s.commit()
+    resp = await client.get(
+        EXPORT, params={"format": "html", "audience": "engineering"}, headers=ctx.as_("viewer")
+    )
+    assert resp.status_code == 200, resp.text
+    assert (
+        "Milestone: Pilot, ends Feb 12, 2027: its place in the team's queue; its own effort: 2"
+        in html.unescape(_text(resp.text))
+    )
