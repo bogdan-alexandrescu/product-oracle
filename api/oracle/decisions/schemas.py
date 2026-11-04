@@ -26,6 +26,9 @@ Origin = Literal[
     "request_decline",
     "pricing",
     "meeting",
+    # A PRD's open question read in as a decision (oracle.simple.questions): it waits in
+    # the Inbox like any other, and Home opens it there.
+    "prd",
 ]
 SubjectKind = Literal[
     "document",
