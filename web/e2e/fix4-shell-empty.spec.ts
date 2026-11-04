@@ -52,7 +52,7 @@ test("qa-shell-9, 10, 30: the owner of a new company walks every empty page and 
   await expect(page.getByRole("button", { name: "Start a run…" })).toBeVisible();
 
   // Baseline: no 0/0 counts, and each empty table says how to fill it.
-  await open(page, "nav-baseline", "Baseline");
+  await open(page, "nav-baseline", "Desired state");
   await expect(page.getByTestId("kpi-goals")).toContainText("No goals yet");
   await expect(page.getByTestId("kpi-traced")).toContainText("No features yet");
   await expect(page.locator('dl[aria-label="Counts"]')).not.toContainText("0/0");
@@ -95,7 +95,7 @@ test("qa-shell-9: a viewer's empty pages offer nothing they cannot do", async ({
   await expect(page.getByTestId("runs-empty")).toContainText("No runs yet. Runs show here once an approver starts one.");
   await expect(page.getByRole("button", { name: "Start a run…" })).toHaveCount(0);
 
-  await open(page, "nav-baseline", "Baseline");
+  await open(page, "nav-baseline", "Desired state");
   await expect(page.getByTestId("kpi-goals")).toContainText("No goals yet");
   await expect(page.getByTestId("table-empty").filter({ visible: true })).toHaveText("No goals yet. They appear here once someone adds one.");
   await expect(page.getByTestId("features-empty")).toHaveText("No features yet. They appear here once someone adds one.");
