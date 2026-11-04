@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
+from oracle import company_time
 from oracle.docs.schemas import ImportProblem
 from oracle.roadmap.schedule import _names, as_date
 from oracle.runs.roadmap import ItemsYamlError, load_items_yaml
@@ -82,7 +83,7 @@ class EngineeringPlan:
 
 def day(d: date | None) -> str:
     """Month first, as a person reads it: ``Nov 30, 2026``."""
-    return f"{d:%b} {d.day}, {d.year}" if d else ""
+    return f"{company_time.calendar_day(d)}, {d.year}" if d else ""
 
 
 def _covers(basis: dict[str, Any], key: str) -> bool:

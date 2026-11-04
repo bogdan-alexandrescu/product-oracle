@@ -202,6 +202,8 @@ PER_ITEM: dict[str, Role | None] = {
     "create_discussion_change": None,
     "create_discussion_message": None,
     "create_goal_suggestion": "commenter",
+    # Goal milestones are changed by who changes the roadmap (drafts.can_edit; can_change).
+    "create_goal_milestone": "owner",
     "create_intake": "approver",
     "create_interview_link": "approver",
     "create_request": "owner",
@@ -216,6 +218,7 @@ PER_ITEM: dict[str, Role | None] = {
     "decline_simple_change": "owner",
     "delete_checkpoint_action": "owner",
     "delete_discussion_message": None,
+    "delete_goal_milestone": "owner",
     "delete_scope_item": "approver",
     "discard_simple_chat_card": None,
     "dismiss_date_suggestion": "owner",
@@ -258,6 +261,7 @@ PER_ITEM: dict[str, Role | None] = {
     "open_oracle_action": "owner",
     # H10: an answer told in Oracle is its asker's alone to mark opened.
     "open_request_reply": None,
+    "patch_goal_milestone": "owner",
     "patch_interview": "approver",
     "patch_scope_item": "approver",
     "post_simple_chat": "viewer",
@@ -277,6 +281,7 @@ PER_ITEM: dict[str, Role | None] = {
     "request_simple_visual": "owner",
     "research_discussion_message": "approver",
     "resolve_discussion_change": "approver",
+    "restore_goal_milestone": "owner",
     "resume_simple_draft": None,
     "retry_discussion_reply": "approver",
     "retry_draft_import": "owner",

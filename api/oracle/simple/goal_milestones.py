@@ -338,7 +338,8 @@ async def _propose_prd_change(
     }  # fmt: skip
     c = SimpleChange(
         document_id=row.origin_prd_id, op="edit_goal_milestone",
-        target={"milestone_id": str(row.id), "roadmap_id": str(row.roadmap_id)},
+        target={"milestone_id": str(row.id), "roadmap_id": str(row.roadmap_id),
+                "name": row.name},
         before=before, after=after, status="proposed", by=_me(principal),
         at=company_time.now(), routed_to=routed,
     )  # fmt: skip
