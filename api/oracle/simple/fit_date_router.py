@@ -413,12 +413,21 @@ def _scale(goal: FitBaselineGoalOut | None) -> float:
     return max(0.1, min(1.0, (goal.target - base) / (goal.plan_target - base)))
 
 
-async def _roadmap(db, document: Document) -> tuple[SimpleDocRef | None, int | None]:
+async def _roadmap_id(db, document: Document):
+    """The roadmap the PRD's re-plan reads and writes, by prd_roadmap._roadmap's rule
+    (one-roadmap-many-prds): the company roadmap while there is one, else its track's."""
+    from oracle.roadmap import company
     from oracle.roadmap.models import ProductTrack
 
-    rid = await db.scalar(
+    if (one := await company.active(db)) is not None:
+        return one.id
+    return await db.scalar(
         select(ProductTrack.roadmap_document_id).where(ProductTrack.prd_document_id == document.id)
     )
+
+
+async def _roadmap(db, document: Document) -> tuple[SimpleDocRef | None, int | None]:
+    rid = await _roadmap_id(db, document)
     rm = await db.get(Document, rid) if rid else None
     if rm is None:
         return None, None
@@ -483,14 +492,12 @@ async def _foreign_edits(db, document: Document) -> str | None:
     """Who has changes of their own in the roadmap's working draft, by name: approving the
     re-plan publishes that draft, so it must hold only this PRD's own writes. None when it
     holds nothing else (or there is no working draft)."""
-    from oracle.roadmap.models import ProductTrack, RoadmapItem
+    from oracle.roadmap.models import RoadmapItem
     from oracle.simple import drafts, prd_roadmap
     from oracle.simple.changes import _names
     from oracle.simple.models import SimpleDraft
 
-    rid = await db.scalar(
-        select(ProductTrack.roadmap_document_id).where(ProductTrack.prd_document_id == document.id)
-    )
+    rid = await _roadmap_id(db, document)
     d = rid and await db.scalar(
         select(SimpleDraft).where(SimpleDraft.document_id == rid, SimpleDraft.status == "working")
     )
@@ -742,13 +749,10 @@ async def _roadmap_follows(
     with its decider. Returns the version and whether it is live; (None, False) when nothing
     on the roadmap moved or its draft is in review already."""
     from oracle.roadmap import views
-    from oracle.roadmap.models import ProductTrack
     from oracle.simple import drafts, prd_roadmap
     from oracle.simple.priorities import prd_code
 
-    rid = await db.scalar(
-        select(ProductTrack.roadmap_document_id).where(ProductTrack.prd_document_id == document.id)
-    )
+    rid = await _roadmap_id(db, document)
     if rid is None:
         return None, False
     ends = fd.schedule(d.plan).items

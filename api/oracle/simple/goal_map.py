@@ -31,6 +31,7 @@ from oracle import company_time
 from oracle.auth.models import User
 from oracle.baseline.models import Entity, GoalMeasurement
 from oracle.docs.models import Document
+from oracle.roadmap import company
 from oracle.roadmap.models import RoadmapItem, TrackMilestone
 from oracle.simple.goal_milestones import _next_code
 from oracle.simple.models import FocusArea, MilestoneFeature
@@ -275,7 +276,8 @@ async def _goals(db: AsyncSession) -> list[Entity]:
 
 async def _on_map(db: AsyncSession) -> list[TrackMilestone]:
     """The goal milestones of Simple Roadmap, ordered by what each comes after (then by
-    when they were added)."""
+    when they were added). Only the roadmaps that feed Simple (one-roadmap-many-prds: the
+    company roadmap alone while there is one)."""
     rows = (
         await db.scalars(
             select(TrackMilestone)
@@ -288,6 +290,8 @@ async def _on_map(db: AsyncSession) -> list[TrackMilestone]:
             .order_by(TrackMilestone.created_at, TrackMilestone.id)
         )
     ).all()
+    feeding = set(await company.feeding_ids(db, list({m.roadmap_id for m in rows})))
+    rows = [m for m in rows if m.roadmap_id in feeding]
     by = {m.id: m for m in rows}
     depth: dict[uuid.UUID, int] = {}
 
@@ -509,6 +513,7 @@ async def propose(db: AsyncSession, body: ProposeIn, by: uuid.UUID | None) -> No
         (after.roadmap_id if after else None)
         or next((m.roadmap_id for m in rows if m.goal_id == goal.id), None)
         or next((m.roadmap_id for m in rows), None)
+        or getattr(await company.active(db), "id", None)
         or await db.scalar(
             select(Document.id)
             .where(Document.kind == "roadmap")
