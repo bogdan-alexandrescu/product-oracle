@@ -614,6 +614,13 @@ class SimpleTaskWaiting(SimpleItemTask):
     late: bool = False
 
 
+class SimpleChangeMeeting(BaseModel):
+    """meeting-changes-only-its-agenda: the meeting a change was made in."""
+
+    id: uuid.UUID
+    title: str
+
+
 class SimpleChangeOut(BaseModel):
     id: uuid.UUID
     session_id: uuid.UUID | None
@@ -643,6 +650,12 @@ class SimpleChangeOut(BaseModel):
     # The walk (H2): the change in plain words, as Home's "Since your last visit" says it:
     # "Ana changed the estimate of F-08 Billing page · undone" (oracle.simple.change_words).
     words: str | None = None
+    # meeting-changes-only-its-agenda: the meeting it was made in, and whether it is on an
+    # item that meeting does not review (so a proposal for the item's owner, never applied
+    # by the meeting): "Asked for by the meeting Payments review".
+    # null: not made in a meeting.
+    from_meeting: SimpleChangeMeeting | None = None
+    off_agenda: bool | None = None
 
 
 class SimpleItemFlags(BaseModel):
@@ -685,6 +698,8 @@ class InboxSimpleChange(BaseModel):
     reason: str | None
     decision_reason: str | None
     state: Literal["new", "open", "done"]
+    # meeting-changes-only-its-agenda: the meeting that asked for it.
+    from_meeting: SimpleChangeMeeting | None = None
 
 
 DraftStatus = Literal["working", "submitted", "approved", "discarded"]
@@ -1524,6 +1539,9 @@ class ChatCardOut(BaseModel):
     # it cuts (changes.cut_route), and whether that is outside the meeting.
     asks_with_dependents: list[str] = []
     asks_with_dependents_outside: bool = False
+    # meeting-changes-only-its-agenda: in a meeting, the card's item is not on its agenda:
+    # "Delivery integrity is on another roadmap: sent to its owner to decide".
+    elsewhere: str | None = None
 
 
 class ChatChoiceOut(BaseModel):
@@ -1970,6 +1988,9 @@ class SimpleMeetingIn(BaseModel):
     # row's due time: a start the ritual has moved past is 409, never next week's review.
     ritual_id: uuid.UUID | None = None
     due_at: dt.datetime | None = None
+    # meeting-changes-only-its-agenda: the roadmap it reviews (slug or id), when the PRD's
+    # items are on several; else the one they are on.
+    roadmap: str | None = Field(default=None, max_length=200)
     attendee_ids: list[uuid.UUID] = Field(default_factory=list, max_length=50)
     change_mode: ChangeMode = "everyone"
     change_people: list[uuid.UUID] = Field(default_factory=list, max_length=2)

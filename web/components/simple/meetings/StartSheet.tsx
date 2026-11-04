@@ -27,6 +27,8 @@ const moment = (at: string, zone: string) =>
 
 /** The design system's form controls (qa-simple-prd-46, qa-simple-decide): a box or dot in the
  * accent (CHECK) and Simple's select (SimpleSelect), never the browser's bare ones. */
+type Reviewed = { id: string; prds: string[] };
+
 const CHOICE = "flex min-h-8 cursor-pointer items-center gap-2.5 has-[:disabled]:cursor-not-allowed has-[:disabled]:text-text2";
 
 /**
@@ -45,6 +47,7 @@ export function StartSheet({
   origin = "one_pager",
   prefer,
   from,
+  roadmap,
 }: {
   open: boolean;
   onClose: () => void;
@@ -59,6 +62,9 @@ export function StartSheet({
   prefer?: string;
   /** What it was opened from, in words ("Your working draft · 3 changes"), said above the PRD. */
   from?: string;
+  /** meeting-changes-only-its-agenda: the roadmap page's roadmap and the PRDs with items on it:
+   * a review of one of those PRDs started there reviews that roadmap. */
+  roadmap?: Reviewed;
 }) {
   // qa-simple-decide-16: the focus moves into the sheet and stays there until it closes (Escape closes it).
   const ref = useRef<HTMLDivElement>(null);
@@ -85,14 +91,14 @@ export function StartSheet({
             Close
           </button>
         </div>
-        <Body prd={prd} occurrence={occurrence} ritual={ritual} origin={origin} prefer={prefer} from={from} onClose={onClose} />
+        <Body prd={prd} occurrence={occurrence} ritual={ritual} origin={origin} prefer={prefer} from={from} roadmap={roadmap} onClose={onClose} />
       </div>
     </div>,
     document.body,
   );
 }
 
-function Body({ prd, occurrence, ritual, origin, prefer, from, onClose }: { prd?: string; occurrence?: string; ritual?: Schemas["SimpleUpcomingMeeting"]; origin: Origin; prefer?: string; from?: string; onClose: () => void }) {
+function Body({ prd, occurrence, ritual, origin, prefer, from, roadmap, onClose }: { prd?: string; occurrence?: string; ritual?: Schemas["SimpleUpcomingMeeting"]; origin: Origin; prefer?: string; from?: string; roadmap?: Reviewed; onClose: () => void }) {
   const q = useQuery(`simple-meeting-options|${prd ?? ""}|${occurrence ?? ""}`, () =>
     unwrap(api.GET("/v1/simple/meetings/options", { params: { query: { prd: prd || undefined, occurrence: occurrence || undefined } } })),
   );
@@ -107,10 +113,10 @@ function Body({ prd, occurrence, ritual, origin, prefer, from, onClose }: { prd?
           : "The review's details didn't load. Close this and try again."}
       </ErrorNote>
     );
-  return <Form key={q.data.prds.map((p) => p.document.slug).join()} options={q.data} fixed={!!prd} occurrence={occurrence} ritual={ritual} origin={origin} prefer={prefer} from={from} live={live.data?.live ?? []} onClose={onClose} />;
+  return <Form key={q.data.prds.map((p) => p.document.slug).join()} options={q.data} fixed={!!prd} occurrence={occurrence} ritual={ritual} origin={origin} prefer={prefer} from={from} roadmap={roadmap} live={live.data?.live ?? []} onClose={onClose} />;
 }
 
-function Form({ options, fixed, occurrence, ritual, origin, prefer, from, live, onClose }: { options: Options; fixed: boolean; occurrence?: string; ritual?: Schemas["SimpleUpcomingMeeting"]; origin: Origin; prefer?: string; from?: string; live: Schemas["SimpleMeetingBrief"][]; onClose: () => void }) {
+function Form({ options, fixed, occurrence, ritual, origin, prefer, from, roadmap, live, onClose }: { options: Options; fixed: boolean; occurrence?: string; ritual?: Schemas["SimpleUpcomingMeeting"]; origin: Origin; prefer?: string; from?: string; roadmap?: Reviewed; live: Schemas["SimpleMeetingBrief"][]; onClose: () => void }) {
   const router = useRouter();
   const zone = useCompanyZone();
   // The sheet opens on a PRD the person may start (the asked-for one first), never on one that turns them away.
@@ -155,6 +161,8 @@ function Form({ options, fixed, occurrence, ritual, origin, prefer, from, live, 
           prd: chosen.document.slug, origin: occurrence || ritual ? "ritual" : origin, occurrence_id: occurrence ?? null,
           ritual_id: !occurrence && ritual ? ritual.ritual_id : null,
           due_at: !occurrence && ritual ? ritual.due_at : null,
+          // meeting-changes-only-its-agenda: the roadmap it was started from, when the PRD is on it.
+          roadmap: roadmap?.prds.includes(chosen.document.slug) ? roadmap.id : null,
           attendee_ids: people, change_mode: mode, change_people: mode === "named" ? named : [], length_min: length,
         },
       }));

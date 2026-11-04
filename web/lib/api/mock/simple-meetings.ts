@@ -45,14 +45,14 @@
 import type { Schemas } from "@/lib/api/client";
 import { agendaOut, decidedOutsideRows, questionsCounts, questionsOfMeeting, questionsOut, routeQuestionChanges, seedQuestions, waitingOut, type QuestionsDb } from "./simple-questions";
 import { plainFlow } from "./simple-visuals";
-import { seedSimpleProposal } from "./simple-changes";
+import { proposeOffAgenda, seedSimpleProposal } from "./simple-changes";
 import { mockNowMs } from "./clock";
 import { companyDateInWords } from "./connections";
 import { stableUuid } from "./ids";
 import { nextOccurrence, type RitualsDb } from "./rituals";
 import { publishOnePager, type OnePagerDb } from "./simple-one-pager";
 import { APPROVED_KEY, draftAct, draftRoadmapOut } from "./meeting-draft";
-import { goalRank, roadmapOut, tasksWaiting, type SimpleDb } from "./simple-roadmap";
+import { goalRank, homeRoadmapOf, roadmapId, roadmapOut, tasksWaiting, type SimpleDb } from "./simple-roadmap";
 import type { ChatMeetings, MeetingAgenda, MeetingNote } from "./simple-chat";
 
 export const MOCK_MEETINGS_KEY = "po-mock-simple-meetings";
@@ -133,6 +133,8 @@ interface Meeting {
   /** Chat actions (./simple-chat.ts): the notes and open questions typed in its chat, and its agenda's next and skipped items. */
   notes?: MeetingNote[];
   agenda_state?: MeetingAgenda;
+  /** meeting-changes-only-its-agenda (agenda.roadmap_id): the roadmap it reviews; none: every roadmap its PRD's items are on. */
+  roadmap_id?: string | null;
 }
 
 interface Decision {
@@ -399,6 +401,34 @@ function prdItems(ctx: MeetingsCtx, p: Prd) {
   return items(ctx).filter((i) => i.prd && (i.prd.slug === p.slug || p.ids.includes(i.prd.id)));
 }
 
+/** meeting-changes-only-its-agenda (meetings._reviewed_roadmap): the roadmap a new meeting
+ * reviews: the one named, else the one its PRD's items are on, else its track's roadmap. */
+function reviewedRoadmap(ctx: MeetingsCtx, p: Prd, named: string | null | undefined): string | null | Response {
+  const on = [...new Set(prdItems(ctx, p).map((i) => i.roadmap.id))];
+  if (named) {
+    const id = on.find((r) => r === named || roadmapId(named) === r);
+    return id ?? json(422, { detail: `No roadmap with items of ${p.title} is named ${named}` });
+  }
+  if (on.length <= 1) return on[0] ?? null;
+  const home = homeRoadmapOf(p.slug);
+  return home && on.includes(roadmapId(home)) ? roadmapId(home) : null;
+}
+
+/** meeting-changes-only-its-agenda (agenda.Agenda): the roadmaps a meeting reviews: its own, else every one its PRD's items are on. */
+function reviewedRoadmaps(ctx: MeetingsCtx, m: Meeting): string[] | undefined {
+  if (m.roadmap_id) return [m.roadmap_id];
+  const p = prds(ctx).find((x) => x.slug === m.prd);
+  return p ? [...new Set(prdItems(ctx, p).map((i) => i.roadmap.id))] : undefined;
+}
+
+/** meeting-changes-only-its-agenda (agenda.Agenda.covers): whether an item is on what the meeting reviews. */
+function onAgenda(ctx: MeetingsCtx, m: Meeting, itemId: unknown): boolean {
+  const reviewed = reviewedRoadmaps(ctx, m);
+  const item = items(ctx).find((i) => i.id === itemId);
+  if (!reviewed || !item) return true;
+  return reviewed.includes(item.roadmap.id);
+}
+
 function attendees(ctx: MeetingsCtx, m: Meeting, p: Prd): Schemas["SimpleAttendee"][] {
   return m.attendee_ids.map((i) => {
     const roles: Schemas["SimpleAttendee"]["roles"] = [];
@@ -441,6 +471,8 @@ function bare(ctx: MeetingsCtx, c: Change): Change {
   return {
     id, session_id, document_id, draft_ids, op, target, before, after, status, by, by_name, at, decided_by, decided_at, reason, decision_reason, routed_to, undoes_id, undone,
     can_decide: status === "proposed" && (ctx.me.role === "owner" || routed_to.includes(ctx.me.id)), can_undo: false,
+    // meeting-changes-only-its-agenda (SimpleChangeOut.from_meeting): the meeting that asked for it.
+    from_meeting: c.from_meeting ?? null, off_agenda: c.off_agenda ?? null,
   };
 }
 
@@ -782,6 +814,29 @@ export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request
   if (isCreate && !mayChange(m, ctx.me.id)) return json(403, { detail: "The presenter has not let you change things in this meeting" });
   const rest = { ...b };
   delete rest.session_id;
+  // meeting-changes-only-its-agenda: an item the meeting does not review is only proposed to its
+  // owner (changes.create), and the meeting does not decide such a proposal (changes.off_agenda_bar).
+  const stored = verb ? (ctx.roadmap.changes ?? []).find((x) => x.id === p[3]) : undefined;
+  if (verb && stored?.target.item_id && !onAgenda(ctx, m, stored.target.item_id)) {
+    const title = items(ctx).find((i) => i.id === stored.target.item_id)?.title ?? "This item";
+    return json(409, { detail: `${title} is on another roadmap: its owner decides this from their Inbox` });
+  }
+  // A new item (add_item) has no row until accepted: the roadmap it goes on.
+  const goesOn = stored && !stored.target.item_id ? (stored.target as Record<string, unknown>).roadmap_id : undefined;
+  const reviewed = reviewedRoadmaps(ctx, m);
+  if (verb && typeof goesOn === "string" && reviewed && !reviewed.includes(goesOn)) {
+    return json(409, { detail: `${String(stored?.after?.title ?? "This item")} is for another roadmap: its owner decides this from their Inbox` });
+  }
+  if (isCreate && b.target && (b.target as Record<string, unknown>).item_id && !onAgenda(ctx, m, (b.target as Record<string, unknown>).item_id)) {
+    const who = { id: ctx.me.id, role: ctx.me.role, owners: owners(ctx), names: Object.fromEntries(ctx.members.map((x) => [x.id, x.name])), roles: Object.fromEntries(ctx.members.map((x) => [x.id, x.role])) };
+    const out = proposeOffAgenda(ctx.roadmap, who, rest as Schemas["SimpleChangeIn"], { id: m.id, title: m.title }, m.session_id);
+    if (out instanceof Response) return out;
+    m.last_change_at = iso(mockNowMs());
+    const [words, subjects] = describe(ctx, out.change, true);
+    const prd = prds(ctx).find((x) => x.slug === m.prd)!;
+    record(db, ctx, m, `Proposed: ${words}`, [...subjects, { kind: "document", id: prd.id }], [out.change.id], [String(out.change.target.item_id)]);
+    return json(201, out);
+  }
   const inner = new Request(req.url, { method: "POST", headers: req.headers, body: JSON.stringify(rest) });
   const res = await run(inner);
   if (!res || !res.ok) return res;
@@ -796,6 +851,12 @@ export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request
   record(db, ctx, m, title, [...subjects, { kind: "document", id: prd.id }], [c.id], c.target.item_id ? [String(c.target.item_id)] : []);
   const line = ctx.onePager.changes.find((x) => x.id === c.id);
   if (line) Object.assign(line, { in_meeting: true, meeting_title: m.title });
+  if (isCreate && c.target.item_id) {
+    // meeting-changes-only-its-agenda (SimpleChangeOut.from_meeting): a change made in it names it.
+    const kept = (ctx.roadmap.changes ?? []).find((x) => x.id === c.id);
+    if (kept) Object.assign(kept, { from_meeting: { id: m.id, title: m.title }, off_agenda: false });
+    return json(res.status, { ...out, change: { ...c, from_meeting: { id: m.id, title: m.title }, off_agenda: false } });
+  }
   return res;
 }
 
@@ -830,7 +891,7 @@ export function chatMeetings(open: () => { db: MeetingsDb; ctx: MeetingsCtx }): 
       if (m) endIdle(open().ctx, meetings(), m);
       return m
         ? { title: m.title, presenter_id: m.presenter_id, attendee_ids: m.attendee_ids, change_mode: m.change_mode, change_people: m.change_people, ended: m.status === "ended",
-            prd: m.prd, ended_at: m.ended_at, ended_by: m.ended_by, ended_by_itself: !!m.ended_by_itself }
+            prd: m.prd, ended_at: m.ended_at, ended_by: m.ended_by, ended_by_itself: !!m.ended_by_itself, roadmaps: reviewedRoadmaps(open().ctx, m) }
         : null;
     },
     setMode(id, mode, people) {
@@ -1072,7 +1133,10 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     const first = occ && db.meetings.find((x) => x.occurrence_id === occ.id);
     if (first) return json(409, { detail: { message: "This scheduled review has its meeting already", meeting_id: first.id } });
     const title = (b.title ?? "").trim() || (occ ? `${occ.ritual_title}: ${prd.title}` : `Review: ${prd.title}`);
+    const reviewed = reviewedRoadmap(ctx, prd, b.roadmap);
+    if (reviewed instanceof Response) return reviewed;
     const m: Meeting = {
+      roadmap_id: reviewed,
       id: crypto.randomUUID(), title: title.slice(0, 200), prd: prd.slug, origin: occ ? "ritual" : (b.origin ?? "one_pager"), occurrence_id: occ?.id ?? null,
       session_id: crypto.randomUUID(), presenter_id: ctx.me.id, attendee_ids: att, absent_ids: [], joined_ids: [ctx.me.id], change_mode: mode, change_people: people,
       length_min: length, status: "live", started_at: now, ended_at: null, ended_by: null, minutes: null, minutes_state: null, delivery: null, sent_at: null, approved: null,

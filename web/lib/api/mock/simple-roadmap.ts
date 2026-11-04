@@ -567,6 +567,17 @@ function afterDependencies(all: Map<string, { s: SeedItem; r: { start: Dated; en
   [...all.keys()].forEach(visit);
 }
 
+/** meeting-changes-only-its-agenda: the roadmap a PRD's own track is on (the one whose PRD it is). */
+export const homeRoadmapOf = (prdSlug: string): string | undefined =>
+  ROADMAP_SLUGS().find((r) => ROADMAPS[r].prd.toLowerCase().replace(/ /g, "-") === prdSlug);
+
+/** meeting-changes-only-its-agenda ("meeting-agenda"): an item of another roadmap's PRD, as a
+ * test roadmap built from the same PRD (Welcome video, on the onboarding roadmap, of Usage alerts). */
+export function itemOfOtherPrd(db: SimpleDb, key: string, roadmap: string): void {
+  const s = db.items.find((x) => x.key === key);
+  if (s) s.prd_doc = itemPrd({ ...s, roadmap });
+}
+
 /** The PRD a seeded item was built from (its roadmap's). */
 function itemPrd(s: SeedItem): Schemas["SimpleDocRef"] {
   const prd = ROADMAPS[s.roadmap].prd;

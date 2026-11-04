@@ -85,6 +85,7 @@ from oracle.simple.models import RoadmapDateSuggestion, SimpleChange, SimpleDraf
 from oracle.simple.schemas import (
     InboxSimpleChange,
     SimpleChangeIn,
+    SimpleChangeMeeting,
     SimpleChangeOut,
     SimpleChangeResult,
     SimpleItemFlags,
@@ -904,17 +905,22 @@ async def _flags(
 # --------------------------------------------------------------------------- the routes
 
 
-async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> SimpleChangeResult:
-    from oracle.simple import additions, key_dates, one_pager, questions, targets
+async def create(
+    db: AsyncSession, principal: Any, body: SimpleChangeIn, meeting_id: uuid.UUID | None = None
+) -> SimpleChangeResult:
+    """``meeting_id``: the meeting the change is made in when its session is not given (its
+    session closed): it still changes only what the meeting reviews (oracle.simple.agenda)."""
+    from oracle.simple import additions, agenda, key_dates, one_pager, questions, targets
 
+    ag = await agenda.for_session(db, body.session_id) or await agenda.for_meeting(db, meeting_id)
+    if body.op in targets.OPS:
+        return await targets.create(db, principal, body, ag)
+    if body.op in additions.OPS:
+        return await additions.create(db, principal, body, ag)
     if body.op in questions.OPS:
         return await questions.create(db, principal, body)
     if body.op in key_dates.OPS:
         return await key_dates.create(db, principal, body)
-    if body.op in additions.OPS:
-        return await additions.create(db, principal, body)
-    if body.op in targets.OPS:
-        return await targets.create(db, principal, body)
     if body.op in one_pager.OPS:
         return await one_pager.create(db, principal, body)
     me, now = _me(principal), company_time.now()
@@ -953,7 +959,10 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
     if entry is None:
         raise ChangeError(404, "No such roadmap item")
     cut = [entry, *dependents(entry, read_.by_id())] if body.op == CUT_ALL else None
-    applies = (
+    # meeting-changes-only-its-agenda: an item the meeting does not review is never changed
+    # through it: the change is a proposal for the item's own decider, made in the meeting.
+    off = ag is not None and not all(ag.covers(e.row) for e in cut or [entry])
+    applies = not off and (
         decides_all(principal, cut, read_.deciders)
         if cut is not None
         else service.can_decide(principal, entry, read_.deciders)
@@ -967,13 +976,13 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
             if cut is not None
             else await routed_to(db, entry, read_)
         )
-        if session is not None and session.kind == "meeting":
+        if session is not None and session.kind == "meeting" and not off:
             from oracle.simple import meetings
 
             rules = await meetings.rules_for_session(db, session.id)
             route, _ = await meeting_route(db, rules, cut or [entry], read_.deciders, route)
     c = SimpleChange(
-        session_id=session.id if session else None,
+        session_id=session.id if session else (ag.session_id if off and ag else None),
         document_id=entry.roadmap.id,
         op=body.op,
         target=target,
@@ -1022,6 +1031,7 @@ async def decide(
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
+    await off_agenda_bar(db, c, session_id)
     if c.op in questions.OPS:
         return await questions.decide(db, principal, c, action, reason, session_id)
     if c.op in key_dates.OPS:
@@ -1065,6 +1075,32 @@ async def decide(
                        data={"op": c.op, "target": c.target, "reason": reason})  # fmt: skip
     await db.commit()
     return SimpleChangeResult(change=await one_out(db, principal, c), flags=flags)
+
+
+async def off_agenda_bar(db: AsyncSession, c: SimpleChange, session_id: uuid.UUID | None) -> None:
+    """meeting-changes-only-its-agenda: a meeting does not decide a proposal on an item it
+    does not review (409): its owner does, from their Inbox or the item's panel."""
+    from oracle.simple import agenda
+
+    ag = await agenda.for_session(db, session_id)
+    if ag is None:
+        return
+    try:
+        row = await db.get(RoadmapItem, uuid.UUID(str(c.target.get("item_id"))))
+    except ValueError:
+        row = None
+    if row is not None and not ag.covers(row):
+        raise ChangeError(409, f"{row.title} is on another roadmap: its owner decides this "
+                               "from their Inbox")  # fmt: skip
+    # A new item (add_item) has no row until it is accepted: the roadmap it goes on.
+    try:
+        rm = uuid.UUID(str(c.target.get("roadmap_id")))
+    except ValueError:
+        rm = None
+    if row is None and rm is not None and rm not in ag.roadmap_ids:
+        title = (c.after or {}).get("title") or "This item"
+        raise ChangeError(409, f"{title} is for another roadmap: its owner decides this "
+                               "from their Inbox")  # fmt: skip
 
 
 async def withdraw(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> SimpleChangeResult:
@@ -1175,6 +1211,17 @@ class _View:
         self.now = company_time.now()
         # prd-questions: the questions its changes are on, by id.
         self.questions: dict[str, Any] = {}
+        # meeting-changes-only-its-agenda: each meeting session's agenda, by session id.
+        self.agendas: dict[uuid.UUID, Any] = {}
+
+    def meeting(self, c: SimpleChange) -> tuple[SimpleChangeMeeting | None, bool | None]:
+        """(the meeting it was made in, whether its item is off that meeting's agenda)."""
+        ag = self.agendas.get(c.session_id) if c.session_id else None
+        if ag is None:
+            return None, None
+        e = self.entry(c) if c.target.get("item_id") else None
+        off = (not ag.covers(e.row)) if e is not None else not ag.covers_document(c.document_id)
+        return SimpleChangeMeeting(id=ag.meeting_id, title=ag.title), off
 
     def route(self, c: SimpleChange) -> list[uuid.UUID]:
         s = self.sessions.get(c.session_id) if c.session_id else None
@@ -1240,6 +1287,7 @@ class _View:
 
 
 def _out(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> SimpleChangeOut:
+    asked = v.meeting(c)
     return SimpleChangeOut(
         id=c.id, session_id=c.session_id, document_id=c.document_id, op=c.op,  # type: ignore[arg-type]
         draft_ids=list(c.draft_ids or []),
@@ -1248,7 +1296,7 @@ def _out(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> SimpleChange
         decided_at=c.decided_at, reason=c.reason, decision_reason=c.decision_reason,
         routed_to=v.route(c), undoes_id=c.undoes_id, undone=c.id in v.undone,
         can_decide=c.status == "proposed" and v.may_decide(c), can_undo=v.can_undo(c),
-        words=_words(c, v, names),
+        words=_words(c, v, names), from_meeting=asked[0], off_agenda=asked[1],
     )  # fmt: skip
 
 
@@ -1295,7 +1343,18 @@ async def _view(db: AsyncSession, principal: Any, changes: list[SimpleChange]) -
     company = await _company_owners(db) if any(c.status == "proposed" for c in changes) else []
     v = _View(principal, read_, await _reviewers(db), sessions, undone, people, company)
     v.questions = await _questions(db, changes)
+    v.agendas = await _agendas(db, sids)
     return v
+
+
+async def _agendas(db: AsyncSession, session_ids: set) -> dict[uuid.UUID, Any]:
+    """meeting-changes-only-its-agenda: the agenda of each meeting session, by session."""
+    from oracle.simple import agenda
+
+    out = {}
+    for sid, m in (await agenda.meetings_of(db, session_ids)).items():
+        out[sid] = await agenda.of(db, m)
+    return out
 
 
 async def _questions(db: AsyncSession, changes: list[SimpleChange]) -> dict[str, Any]:
@@ -1399,10 +1458,15 @@ async def inbox_rows(
         for r in await db.scalars(select(RoadmapItem).where(RoadmapItem.id.in_(item_ids)))
     }
     names = await _names(db, {c.by for c in waiting + decided})
+    from oracle.simple import agenda
+
+    asked = await agenda.meetings_of(db, {c.session_id for c in waiting + decided})
 
     def row(c: SimpleChange, at: datetime | None, state: str | None = None) -> InboxSimpleChange:
         iid = uuid.UUID(str(c.target["item_id"])) if c.target.get("item_id") else None
+        m = asked.get(c.session_id) if c.session_id else None
         return InboxSimpleChange(
+            from_meeting=SimpleChangeMeeting(id=m.id, title=m.title) if m else None,
             id=c.id, op=c.op, status=c.status, item_id=iid,  # type: ignore[arg-type]
             item_title=titles.get(iid) if iid else None, document_id=c.document_id, by=c.by,
             by_name=names.get(c.by, "someone"), at=c.at, decided_by=c.decided_by,

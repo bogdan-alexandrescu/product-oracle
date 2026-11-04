@@ -663,12 +663,20 @@ async def _record(db: AsyncSession, principal: Any, c: SimpleChange, **data: Any
                        data={"op": c.op, "target": c.target, **data})  # fmt: skip
 
 
-async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> SimpleChangeResult:
+async def create(
+    db: AsyncSession, principal: Any, body: SimpleChangeIn, agenda: Any = None
+) -> SimpleChangeResult:
+    """``agenda``: the meeting's it is made in (oracle.simple.agenda): a task on an item
+    the meeting does not review is a proposal for the item's decider."""
     me, now = changes._me(principal), company_time.now()
     entry, applies, routed = await _who(db, principal, body.target.get("item_id"), body.op)
+    off = agenda is not None and entry is not None and not agenda.covers(entry.row)
+    if off:
+        applies, routed = False, await changes.routed_to(db, entry, await service.load(db))
     session = await changes._session_for_change(db, me, body.session_id, applies, now)
     target, before, after = await _plan(db, body.op, body, entry)
-    c = SimpleChange(session_id=session.id if session else None,
+    sid = session.id if session else (agenda.session_id if off else None)
+    c = SimpleChange(session_id=sid,
                      document_id=entry.roadmap.id if entry is not None else None, op=body.op,
                      target=target, before=before, after=after,
                      status="applied" if applies else "proposed", by=me, at=now,

@@ -312,7 +312,13 @@ export function ChatCard({
           ))}
         </div>
       )}
-      {open && card.may === "propose" && (card.asks ?? []).length > 0 && (
+      {card.elsewhere && (
+        // meeting-changes-only-its-agenda: an item the meeting does not review is only sent to its owner.
+        <p className="simple-small text-warn" data-testid="chat-card-elsewhere">
+          {card.elsewhere}
+        </p>
+      )}
+      {open && !card.elsewhere && card.may === "propose" && (card.asks ?? []).length > 0 && (
         // walkc-meeting: who Propose asks, said before Propose; in a meeting its deciders,
         // and when nobody in it may decide, that it goes outside the meeting.
         <p className={`simple-small ${card.asks_outside ? "text-warn" : "text-text2"}`} data-testid="chat-card-asks">

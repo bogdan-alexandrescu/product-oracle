@@ -21,7 +21,7 @@ import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, stableUuid } from "./ids";
 import { changePhrase } from "./simple-change-words";
-import { CUT_ALL, cutDependents, cutRoute, markMeetingProposal, meetingRoute, proposalRoute, routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
+import { CUT_ALL, cutDependents, cutRoute, markMeetingProposal, meetingRoute, proposalRoute, proposeOffAgenda, routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
 import { GOALS, goalId, itemDeciderId, itemOwnerId, knowTalkGoals, lookalikes, prdCode, roadmapOut, simpleWindows, storedDates, type SimpleDb } from "./simple-roadmap";
 import { fileSuggestion, unfileSuggestion } from "./simple-suggestions";
 
@@ -173,6 +173,8 @@ interface Meeting {
   ended_at?: string | null;
   ended_by?: string | null;
   ended_by_itself?: boolean;
+  /** meeting-changes-only-its-agenda (agenda.Agenda): the roadmaps (ids) it reviews; a card on an item elsewhere is only sent to its owner. */
+  roadmaps?: string[];
 }
 
 /** The meeting's live notes and open questions (SimpleMeetingOut.notes). */
@@ -186,7 +188,7 @@ export type MeetingAgenda = Schemas["SimpleAgenda"];
  * decisions an Ask line records on a page's document (the Decisions page).
  */
 export interface ChatMeetings {
-  find(id: string): Pick<Meeting, "title" | "presenter_id" | "attendee_ids" | "change_mode" | "change_people" | "ended" | "prd" | "ended_at" | "ended_by" | "ended_by_itself"> | null;
+  find(id: string): Pick<Meeting, "title" | "presenter_id" | "attendee_ids" | "change_mode" | "change_people" | "ended" | "prd" | "ended_at" | "ended_by" | "ended_by_itself" | "roadmaps"> | null;
   setMode(id: string, mode: Mode, people: string[]): void;
   note(id: string, n: MeetingNote): void;
   unnote(id: string, cardId: string): void;
@@ -1503,7 +1505,11 @@ function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
     const route = cutRoute(db, ctx, cut);
     ({ ids: asksAll, here: hereAll } = m ? meetingRoute(db, m.attendee_ids, ctx, cut, route) : { ids: route, here: true });
   }
+  // meeting-changes-only-its-agenda (chat.cards_out): an item on a roadmap the meeting does not review.
+  const off = m?.roadmaps && c.item_id && c.op !== "add_item" ? itemsFor(db, ctx, null, true).find((i) => i.id === c.item_id) : undefined;
+  const elsewhere = off && !m!.roadmaps!.includes(off.roadmap.id) ? `${off.title} is on another roadmap: sent to its owner to decide` : null;
   const asksOut = {
+    elsewhere,
     asks: asks.map((i) => ctx.names[i] ?? "someone"),
     asks_outside: !here,
     asks_with_dependents: asksAll.map((i) => ctx.names[i] ?? "someone"),
@@ -1658,6 +1664,16 @@ async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx,
   if (c.op === "set_owner" || c.op === "set_decider") {
     const id = String(c.after.owner_id ?? c.after.decider_id ?? "");
     if (id && ctx.names[id]) (db.people ??= {})[id] = ctx.names[id];
+  }
+  // meeting-changes-only-its-agenda (changes.create): in a meeting, an item on a roadmap it does
+  // not review is never changed: a proposal for the item's owner, naming the meeting.
+  const asked = meetingOf(chat, c);
+  const off = asked?.roadmaps && c.item_id && !withDependents ? itemsFor(db, ctx, null, true).find((i) => i.id === c.item_id) : undefined;
+  if (asked && off && !asked.roadmaps!.includes(off.roadmap.id)) {
+    const out = proposeOffAgenda(db, ctx, { op: use.op, target: use.target, before: use.before, after: use.after } as Schemas["SimpleChangeIn"], { id: asked.id, title: asked.title }, asked.id);
+    if (out instanceof Response) return out;
+    Object.assign(c, { status: "proposed", change_id: out.change.id, decided_by_name: ctx.names[ctx.id] ?? "someone", decided_by: ctx.id, decided_at: now() });
+    return { card: cardOut(db, chat, c, ctx), result: out };
   }
   const res = await engine(db, ctx, "POST", "/v1/simple/changes", { op: use.op, target: use.target, before: use.before, after: use.after });
   if (!res.ok) {

@@ -75,6 +75,8 @@ export type ChatCard = {
   /** walkc-meeting: who Propose asks (or a proposed card went to), by name; asks_outside: nobody in the meeting may decide. */
   asks?: string[];
   asks_outside?: boolean;
+  /** meeting-changes-only-its-agenda: its item is on a roadmap the meeting does not review ("Welcome video is on another roadmap: sent to its owner to decide"). */
+  elsewhere?: string | null;
   /** walkc-meeting review: who "Propose: cut it and its dependents" asks, by every item it cuts. */
   asks_with_dependents?: string[];
   asks_with_dependents_outside?: boolean;
