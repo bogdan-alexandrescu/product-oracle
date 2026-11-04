@@ -27,10 +27,10 @@ Many PRDs (one per area of focus) feed it; links between features stay within it
 import math
 import uuid
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -130,12 +130,16 @@ async def _latest_version(db: AsyncSession, document_id: uuid.UUID) -> DocumentV
     )
 
 
-async def _items_version(db: AsyncSession, document_id: uuid.UUID) -> DocumentVersion | None:
-    """The company roadmap's latest version with items (the draft a run writes onto)."""
+async def _items_version(
+    db: AsyncSession, document_id: uuid.UUID, as_of: datetime | None = None
+) -> DocumentVersion | None:
+    """The company roadmap's latest version with items (the draft a run writes onto); with
+    ``as_of``, the latest made by then."""
     return await db.scalar(
         select(DocumentVersion)
         .where(
             DocumentVersion.document_id == document_id,
+            DocumentVersion.created_at <= as_of if as_of is not None else true(),
             DocumentVersion.id.in_(
                 select(RoadmapItem.roadmap_version_id).where(
                     RoadmapItem.roadmap_document_id == document_id
@@ -231,13 +235,16 @@ async def capacity(db: AsyncSession) -> dict[str, Any]:
     return {**DEFAULT_CAPACITY, **(value if isinstance(value, dict) else {})}
 
 
-async def queue(db: AsyncSession) -> tuple[dict[str, Any], list[Queued]]:
-    """(capacity, every item on the company roadmap planned as one team's queue)."""
+async def queue(
+    db: AsyncSession, as_of: datetime | None = None
+) -> tuple[dict[str, Any], list[Queued]]:
+    """(capacity, every item on the company roadmap planned as one team's queue); with
+    ``as_of``, the roadmap as it was then."""
     cap = await capacity(db)
     company = await active(db)
     if company is None:
         return cap, []
-    version = await _items_version(db, company.id)
+    version = await _items_version(db, company.id, as_of)
     if version is None:
         return cap, []
     replaced = await replaced_prd_ids(db)
@@ -322,14 +329,18 @@ def _day(d: date) -> str:
     return f"{d:%b} {d.day}, {d.year}"
 
 
-async def run_queue(db: AsyncSession, prd_id: uuid.UUID | None) -> list[dict[str, Any]]:
+async def run_queue(
+    db: AsyncSession, prd_id: uuid.UUID | None, as_of: datetime | None = None
+) -> list[dict[str, Any]]:
     """What a PRD's roadmap run reads of the shared queue: every item on the company
     roadmap with its place in one team's queue ({key, title, prd, start, end, ours}); the
-    other PRDs' items go into the draft's plan tables as they are (Dates from: team queue)."""
+    other PRDs' items go into the draft's plan tables as they are (Dates from: team queue).
+    ``as_of`` (the run's start): the roadmap as it was then, so the prompt and the check of a
+    run read the same queue though another PRD's draft lands mid-run."""
     company_doc = await active(db)
     if company_doc is None:
         return []
-    cap, rows = await queue(db)
+    cap, rows = await queue(db, as_of)
     today = (await company_time.company_today(db)).isoformat()
     return [
         {
