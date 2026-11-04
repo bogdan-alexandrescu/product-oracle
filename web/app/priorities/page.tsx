@@ -1179,7 +1179,7 @@ function Priorities() {
         return (
           <button
             type="button"
-            aria-expanded={on}
+            aria-expanded={on && panel.open}
             aria-controls={inspectorId}
             onClick={(e: MouseEvent) => {
               e.stopPropagation();

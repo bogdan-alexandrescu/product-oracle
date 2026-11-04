@@ -20,8 +20,6 @@ type SplitPanel = {
   pickable: boolean;
   /** A table that picks rows says so while it is shown. */
   register: () => () => void;
-  /** A row was picked: the panel opens again. */
-  reopen: () => void;
   /** The panel's own control: it closes and focus goes back to the selected row. */
   close: () => void;
 };
@@ -34,7 +32,7 @@ export const useSplitPanel = () => useContext(SplitPanelContext);
 
 const PHONE = "(max-width: 600px)";
 // Esc that belongs to something open in the page (a menu, a dialog, a list of choices).
-const OWN_ESC = '[role="dialog"], [role="menu"], [role="listbox"], [role="combobox"], [aria-expanded="true"]';
+const OWN_ESC = '[role="dialog"], [role="menu"], [role="listbox"], [role="combobox"]';
 
 /** The Split's grid (Layout.tsx's Split hands over here). */
 export function ClosableSplit({
@@ -63,7 +61,6 @@ export function ClosableSplit({
     setTables((n) => n + 1);
     return () => setTables((n) => n - 1);
   }, []);
-  const reopen = useCallback(() => setOpen(true), [setOpen]);
   const close = useCallback(() => {
     setOpen(false);
     requestAnimationFrame(() => {
@@ -74,7 +71,12 @@ export function ClosableSplit({
       row?.focus();
     });
   }, [setOpen]);
-  const value = useMemo(() => ({ pickable, register, reopen, close }), [pickable, register, reopen, close]);
+  const value = useMemo(() => ({ pickable, register, close }), [pickable, register, close]);
+
+  // Picking a row of the table (a click anywhere on it, or Enter or Space) opens the panel again.
+  const reopen = (t: EventTarget | null) => {
+    if (closed && t instanceof Element && t.closest("tr[data-row][aria-selected]")) setOpen(true);
+  };
 
   return (
     <SplitPanelContext.Provider value={value}>
@@ -92,7 +94,12 @@ export function ClosableSplit({
       >
         {/* Closed, the panel is hidden on a desktop only: a phone shows it below the table as before. */}
         <div className={`grid items-start gap-4 max-[600px]:gap-3 ${closed ? "grid-cols-1" : cols}`}>
-          <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3" data-split-table>
+          <div
+            className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3"
+            data-split-table
+            onClickCapture={(e) => reopen(e.target)}
+            onKeyDownCapture={(e) => (e.key === "Enter" || e.key === " ") && reopen(e.target)}
+          >
             {children}
           </div>
           <div className={`min-w-0 ${sticky} ${closed ? "min-[601px]:hidden" : ""}`}>

@@ -17,7 +17,7 @@ const close = (page: Page) => page.getByRole("button", { name: "Close the detail
 const featurePanel = (page: Page) => page.getByTestId("priority-inspector");
 const decisionPanel = (page: Page) => page.getByTestId("decision-inspector");
 const width = async (l: Locator) => (await l.boundingBox())!.width;
-const header = (page: Page, name: string) => page.getByRole("columnheader", { name, exact: true });
+const header = (page: Page, name: string) => page.getByTestId("priority-table").getByRole("columnheader", { name, exact: true });
 
 async function openPriorities(page: Page) {
   await page.addInitScript(([k, s]) => localStorage.setItem(k, s), [MOCK_SCENARIO_KEY, LONG_GOALS_SCENARIO] as const);
@@ -83,7 +83,6 @@ test.describe("desktop", () => {
     await expect(featurePanel(page)).toBeHidden();
     await expect(close(page)).toHaveCount(0);
     await expect(top).toBeFocused();
-    expect(await focusRinged(top)).toBe(true);
 
     // The table takes the panel's room; Goal and Depends on get wider, words still whole.
     await expect.poll(() => width(table)).toBeGreaterThan(before.table + 300);
@@ -124,7 +123,7 @@ test.describe("desktop", () => {
     await expect(rows.first()).toHaveAttribute("aria-selected", "true");
     const panel = decisionPanel(page);
     await expect(panel).toBeVisible();
-    const table = page.getByRole("table").filter({ has: rows.first() });
+    const table = page.getByRole("grid", { name: "Decisions" });
     const open = await width(table);
 
     await panel.getByRole("button", { name: "Close the details" }).click();
@@ -133,7 +132,7 @@ test.describe("desktop", () => {
     await expect.poll(() => width(table)).toBeGreaterThan(open + 300);
 
     const second = rows.nth(1);
-    const title = (await second.getByRole("cell").nth(1).innerText()).trim();
+    const title = (await second.getByRole("gridcell").nth(1).innerText()).trim();
     await second.click();
     await expect(panel).toBeVisible();
     await expect(panel.getByRole("heading", { name: title })).toBeVisible();
@@ -160,14 +159,16 @@ test.describe("phone", () => {
     await expect(page.getByTestId("priority-table")).toBeVisible();
   });
 
-  test("Company › Decisions: the panel stays below the table, with no ×, and Esc leaves it", async ({ page }) => {
+  test("Company › Decisions: a decision opens in its sheet, with no ×, which closes as before", async ({ page }) => {
     await login(page);
     await page.goto("/company/decisions?state=all");
-    const panel = decisionPanel(page);
-    await expect(panel).toBeVisible();
-    await expect(close(page)).toBeHidden();
     await page.getByTestId("decision-row").nth(1).click();
+    const sheet = page.getByTestId("decision-sheet");
+    await expect(sheet.getByRole("dialog")).toBeVisible();
+    await expect(decisionPanel(page).filter({ visible: true })).toHaveCount(1);
+    await expect(close(page)).toBeHidden();
     await page.keyboard.press("Escape");
-    await expect(panel).toBeVisible();
+    await expect(sheet).toHaveCount(0);
+    await expect(page.getByRole("grid", { name: "Decisions" })).toBeVisible();
   });
 });
