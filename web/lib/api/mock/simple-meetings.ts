@@ -89,7 +89,8 @@ export interface MeetingsCtx {
   /** home-deleted-roadmap: no document of this kind is left, live or in Trash, and one was purged. */
   deletedForGood?: (kind: string) => boolean;
   /** qa4-simple-prd-1: every PRD document (as the API's start options list each readable PRD by its own title). */
-  documents?: () => { id: string; slug: string; title: string }[];
+  /** simple-replaced-prds: `replaced`, a PRD marked replaced (never offered or filtered by in Simple). */
+  documents?: () => { id: string; slug: string; title: string; replaced?: boolean }[];
   /** build-rundecide RD1 a: the runs' decided stops on the PRDs shown (./simple-runs.ts), for the Runs card. */
   runs?: (prd: string | null) => Schemas["SimpleRunGroup"][];
   /** runplan-r2: a meeting decision is a row of the decision log too (Company > Decisions), as the API's one decisions row. */
@@ -185,6 +186,8 @@ interface Prd {
   ids: string[];
   decider: string | null;
   reviewers: string[];
+  /** simple-replaced-prds: marked replaced; never offered or filtered by in Simple. */
+  replaced?: boolean;
 }
 
 const iso = (t: number) => new Date(t).toISOString();
@@ -214,7 +217,7 @@ function prds(ctx: MeetingsCtx): Prd[] {
     { slug: "usage-alerts", title: titled("usage-alerts", "Usage alerts"), id: stableUuid("simple-prd/alerts-roadmap"), ids: [stableUuid("simple-prd/alerts-roadmap")], decider: null, reviewers: [] },
   ];
   // qa4-simple-prd-1: the API starts a review of any PRD the reader reads, not only these two.
-  const more = docs.filter((d) => !known.some((k) => k.slug === d.slug || k.ids.includes(d.id))).map((d) => ({ slug: d.slug, title: d.title, id: d.id, ids: [d.id], decider: null, reviewers: [] }));
+  const more = docs.filter((d) => !known.some((k) => k.slug === d.slug || k.ids.includes(d.id))).map((d) => ({ slug: d.slug, title: d.title, id: d.id, ids: [d.id], decider: null, reviewers: [], replaced: d.replaced }));
   return [...known, ...more];
 }
 
@@ -1067,7 +1070,7 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
     // A decided question taken outside meetings is listed here with its code and answer (open ones wait above).
     other: [...(meetingQ ? [] : decidedOutsideRows(ctx, qd, qs)), ...others.map((d) => row(ctx, d))],
     // qa4-simple-decide-37 (as decisions_page: both from the PRDs the reader reads): every PRD whose questions are shown.
-    prds: [...new Map([...ps.map((x) => [x.slug, x.title] as const), ...questionsOut(ctx, qd, null).map((x) => [x.prd.slug, x.prd.title] as const)])]
+    prds: [...new Map([...ps.filter((x) => !x.replaced).map((x) => [x.slug, x.title] as const), ...questionsOut(ctx, qd, null).map((x) => [x.prd.slug, x.prd.title] as const)])]
       .sort((a, b) => a[1].localeCompare(b[1])).map(([id, title]) => ({ id, title })),
     // goal-order (as decisions_page): the Goal filter lists the goals in the one goal order.
     goals: [...goals.values()].sort((a, b) => goalRank(a.key) - goalRank(b.key) || a.key.localeCompare(b.key)).map((g) => ({ id: g.key, title: g.title })),
@@ -1147,7 +1150,8 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
   if (p[3] === "options" && method === "GET") {
     const prdQ = q.get("prd");
     // As the API's, every PRD by its title.
-    const list = (prdQ ? ps.filter((x) => x.slug === prdQ || x.id === prdQ) : [...ps]).sort((a, b) => a.title.localeCompare(b.title));
+    // simple-replaced-prds (as meetings.options): a replaced PRD is never offered.
+    const list = (prdQ ? ps.filter((x) => x.slug === prdQ || x.id === prdQ) : ps.filter((x) => !x.replaced)).sort((a, b) => a.title.localeCompare(b.title));
     if (prdQ && !list.length) return json(404, { detail: "No such PRD" });
     const occQ = q.get("occurrence");
     const occ = occQ ? upcoming(ctx, db, occQ)[0] : null;

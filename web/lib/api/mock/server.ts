@@ -3959,6 +3959,11 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
   const m = req.method;
   const company = () => db.documents.find((d) => d.company_roadmap && d.kind === "roadmap");
   const ref = (d: DocumentRow) => ({ id: d.id, slug: d.slug, title: d.title });
+  // simple-replaced-prds: GET /v1/simple/one-pagers, as GET /v1/documents?kind=prd without a PRD
+  // marked replaced (Simple shows the PRDs that replaced it; Detailed keeps it as history); newest first.
+  if (p[1] === "simple" && p[2] === "one-pagers" && !p[3] && m === "GET") {
+    return json(200, db.documents.filter((d) => d.kind === "prd" && !(d.replaced_by ?? []).length && canSee(me.role, d.visibility)).map((d) => documentSummary(db, d)).sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)));
+  }
   if (p[1] === "roadmaps" && p[2] === "company" && !p[3]) {
     if (m === "GET") {
       const found = company();
@@ -6500,7 +6505,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       roadmap: db.simple_roadmap,
       onePager: db.simple_one_pager,
       rituals: ensureRituals(db, me),
-      documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title })),
+      documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title, replaced: !!d.replaced_by?.length })),
       // home-honest-loading: every document of a kind in Trash (trash.only_in_trash).
       onlyInTrash: (kind) =>
         !db.documents.some((d) => d.kind === kind) && (db.trash?.entries ?? []).some((e) => (e.documents as { kind?: string }[]).some((d) => d.kind === kind)),
@@ -6555,7 +6560,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         roadmap: roadmapDb,
         onePager: onePagerDb,
         rituals: ensureRituals(db, me),
-        documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title })),
+        documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title, replaced: !!d.replaced_by?.length })),
       });
       return { db: ensureMeetings(db, ctx), ctx };
     });
