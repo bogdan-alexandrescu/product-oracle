@@ -42713,7 +42713,8 @@
             "APIKeyCookie": []
           }
         ],
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/roadmap/milestones/{milestone_id}": {
@@ -42776,7 +42777,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       },
       "delete": {
         "tags": [
@@ -42820,7 +42822,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/roadmap/milestones/{milestone_id}/restore": {
@@ -42873,7 +42876,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/prds/{prd}/plan": {
