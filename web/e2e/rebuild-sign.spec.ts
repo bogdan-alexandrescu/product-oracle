@@ -14,13 +14,16 @@ type State = "scheduled" | "running" | "waiting" | "failed" | "done";
 type Seed = { slug: string; state: State; step?: number; minutes?: number; startAt?: string; error?: string };
 
 /** Puts runs in the mock's store (a run the API lists), each cloned from a seeded run. */
-async function seedRuns(page: Page, seeds: Seed[]): Promise<{ ids: string[]; latest: Record<string, number> }> {
-  return page.evaluate((seeds) => {
+async function seedRuns(page: Page, seeds: Seed[], clear: string[] = []): Promise<{ ids: string[]; latest: Record<string, number> }> {
+  return page.evaluate(([seeds, clear]) => {
     const key = "po-mock-db-v2";
     const db = JSON.parse(localStorage.getItem(key)!);
     type Seg = Record<string, unknown> & { seq: number; status: string; checkpoint: string | null; checkpoint_on: boolean };
-    const base = db.runs.runs.find((r: { flow: string; document_slug: string }) => r.flow === "baseline_to_prd");
+    const base = JSON.parse(JSON.stringify(db.runs.runs.find((r: { flow: string }) => r.flow === "baseline_to_prd")));
     const at = "2026-10-22T18:20:00Z";
+    // A clean scene: no other run on the documents seeded (the default seed has one on some).
+    const slugs = new Set([...seeds.map((s) => s.slug), ...clear]);
+    db.runs.runs = db.runs.runs.filter((r: { document_slug: string | null }) => !slugs.has(r.document_slug ?? ""));
     const ids: string[] = [];
     const latest: Record<string, number> = {};
     for (const s of seeds) {
@@ -73,7 +76,7 @@ async function seedRuns(page: Page, seeds: Seed[]): Promise<{ ids: string[]; lat
     }
     localStorage.setItem(key, JSON.stringify(db));
     return { ids, latest };
-  }, seeds);
+  }, [seeds, clear] as const);
 }
 
 /** Moves a seeded running run to its next step, as the run does between two reads. */
@@ -107,7 +110,8 @@ test("a running rebuild: the chip beside the version says its step and time left
   await expect(pop).toContainText("Started by");
   await expect(pop.getByTestId("rb-steps").locator("li")).not.toHaveCount(0);
   await expect(pop).toContainText("Next stop:");
-  await expect(pop).toContainText(`Until v${v} is approved, everyone keeps seeing v`);
+  // The mock's PRD has no approved version yet: nobody reads the draft until it is.
+  await expect(pop).toContainText(`It makes a new draft, v${v}. Nobody reads it until it is approved.`);
   await expect(pop.getByRole("link", { name: "Open run" })).toHaveAttribute("href", `/runs/${ids[0]}`);
   await page.keyboard.press("Escape");
   await expect(pop).toBeHidden();
@@ -128,9 +132,9 @@ test("a scheduled rebuild says when it starts", async ({ page }) => {
 
 test("a rebuild at a stop says who it waits on and their action", async ({ page }) => {
   await start(page);
-  await seedRuns(page, [{ slug: "checkout-redesign", state: "waiting", step: 4 }]);
+  await seedRuns(page, [{ slug: "checkout-redesign", state: "waiting", step: 3 }]);
   await page.goto("/simple/one-pagers/checkout-redesign");
-  await expect(chip(page)).toHaveText(/^Waiting on .+ · step 4 of \d+$/);
+  await expect(chip(page)).toHaveText(/^Waiting on .+ · step 3 of \d+$/);
   await chip(page).click();
   const pop = page.getByTestId("rb-popover");
   await expect(pop).toContainText(/Waiting on .+ to [a-z]/);
@@ -178,14 +182,15 @@ test("the One-pagers list, the Detailed PRD page and Home carry the chip", async
   const { latest } = await seedRuns(page, [{ slug: "checkout-redesign", state: "running", step: 2, minutes: 40 }]);
   const v = latest["checkout-redesign"] + 1;
   await page.goto("/simple/one-pagers");
-  await expect(chip(page)).toHaveText(new RegExp(`^Rebuilding v${v} · 2/\\d+$`));
+  const row = page.getByRole("listitem").filter({ hasText: "Checkout redesign PRD" });
+  await expect(row.getByTestId("rb-chip")).toHaveText(new RegExp(`^Rebuilding v${v} · 2/\\d+$`));
   await page.goto("/documents/checkout-redesign");
   await expect(chip(page)).toHaveText(new RegExp(`^Rebuilding v${v} · step 2 of`));
   await page.goto("/simple");
   const home = page.getByTestId("rb-home");
   await expect(home.getByRole("heading", { name: "Being rebuilt" })).toBeVisible();
   await expect(home.getByRole("link", { name: "Checkout redesign PRD" })).toHaveAttribute("href", "/simple/one-pagers/checkout-redesign");
-  await expect(home.getByTestId("rb-chip")).toContainText(`Rebuilding v${v}`);
+  await expect(home.getByRole("listitem").filter({ hasText: "Checkout redesign PRD" }).getByTestId("rb-chip")).toContainText(`Rebuilding v${v}`);
 });
 
 test("the Simple Roadmap: PRDs that feed it rebuilding, then its own run", async ({ page }) => {
@@ -198,8 +203,8 @@ test("the Simple Roadmap: PRDs that feed it rebuilding, then its own run", async
   });
   await seedRuns(page, [
     { slug: prds[0], state: "running", step: 2, minutes: 30 },
-    { slug: prds[1], state: "waiting", step: 4 },
-  ]);
+    { slug: prds[1], state: "waiting", step: 3 },
+  ], ["product-roadmap"]);
   await page.reload();
   await expect(chip(page)).toHaveText(/^2 of \d+ PRDs rebuilding · the roadmap updates after them$/);
   await chip(page).click();
@@ -214,7 +219,7 @@ test.describe("on a phone", () => {
 
   test("the chip fits and its popover sits inside the screen", async ({ page }) => {
     await start(page);
-    await seedRuns(page, [{ slug: "checkout-redesign", state: "waiting", step: 4 }]);
+    await seedRuns(page, [{ slug: "checkout-redesign", state: "waiting", step: 3 }]);
     await page.goto("/simple/one-pagers/checkout-redesign");
     await expect(chip(page)).toBeVisible();
     await chip(page).click();

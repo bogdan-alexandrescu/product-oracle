@@ -88,10 +88,14 @@ export function useRebuilds() {
 
 type Rb = NonNullable<ReturnType<typeof useRebuilds>>;
 
+/** The run the chip names first: one that moves, then one set to start, then the rest. */
+const ORDER: Record<State, number> = { running: 0, waiting: 1, scheduled: 2, failed: 3, done: 4 };
+const byState = (a: Rebuild, b: Rebuild) => ORDER[a.state] - ORDER[b.state];
+
 /** A document's runs: its own and, for the company roadmap, the PRDs that feed it. */
 function runsFor(rb: Rb, slug: string) {
-  const own = rb.rebuilds.filter((r) => r.document_slug === slug);
-  const feeds = rb.company_roadmap?.slug === slug ? rb.rebuilds.filter((r) => r.document_kind === "prd") : [];
+  const own = rb.rebuilds.filter((r) => r.document_slug === slug).sort(byState);
+  const feeds = rb.company_roadmap?.slug === slug ? rb.rebuilds.filter((r) => r.document_kind === "prd").sort(byState) : [];
   return { own, feeds };
 }
 
