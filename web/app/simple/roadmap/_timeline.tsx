@@ -55,7 +55,7 @@ export interface Layout {
   y: Map<string, number>;
   /** The goal lanes (desktop): a broken item's callout line, under its pill's row (qa-simple-roadmap-4). */
   under?: Map<string, number>;
-  /** A phone's item row taller than rowH: its name wraps whole onto a third line or more. */
+  /** An item row taller than rowH: its name wraps whole, its pill under it if need be. */
   nameH?: Map<string, number>;
 }
 
@@ -114,22 +114,22 @@ export function layout(
   // qa4-simple-roadmap-16: each row's height (one rowH, unless `wrap` makes it taller) and top.
   const room = labelW - 24;
   const lines = (s: string, size: number, weight: number, w: number) => Math.max(1, Math.ceil((textWidth(s, size, weight) * 1.08) / w));
-  // A phone's item name wraps whole, 14 px a line, with its Current-state pill (`tails`: its width
-  // by item id) beside it when both fit on one line, else on a line of its own under it; a row
-  // that needs more than its rowH grows, so no name or pill is ever cut.
+  // An item's name wraps whole (a phone: 14 px a line; else 18), with its Current-state pill
+  // (`tails`: its width by item id) beside it when both fit on one line, else on a line of its
+  // own under it; a row that needs more than its rowH grows, so no name or pill is ever cut.
   const nameH = new Map<string, number>();
-  if (compact)
-    for (const r of rows) {
-      if (r.kind !== "item") continue;
-      const it = r.item;
-      // The name's group: the row less its padding, or its 60% when other chips share the row.
-      const w = (labelW - 16) * (r.place != null || it.draft || it.estimate_pending ? 0.6 : 1);
-      const tail = tails?.get(it.id) ?? 0;
-      const n = wordLines(it.title, 12.5, 400, w);
-      const beside = !tail || (n === 1 && textWidth(it.title, 12.5, 400) + tail <= w);
-      const h = 4 + n * 14 + (beside ? 0 : 20);
-      if (h > rowH) nameH.set(it.id, h);
-    }
+  const [size, lineH, padX, padY, gapY] = compact ? [12.5, 14, 16, 2, 2] : [15, 18, 24, 6, 4];
+  for (const r of rows) {
+    if (r.kind !== "item") continue;
+    const it = r.item;
+    // The name's group: the row less its padding, or its 60% when other chips share the row.
+    const w = (labelW - padX) * (r.place != null || it.draft || it.estimate_pending ? 0.6 : 1);
+    const tail = tails?.get(it.id) ?? 0;
+    const n = wordLines(it.title, size, 400, w);
+    const beside = !tail || (n === 1 && textWidth(it.title, size, 400) + tail <= w);
+    const h = padY + n * lineH + (beside ? 0 : 18 + gapY);
+    if (h > rowH) nameH.set(it.id, h);
+  }
   const hs = rows.map((r) => {
     const base = r.kind === "item" ? (nameH.get(r.item.id) ?? rowH) : rowH;
     if (!wrap) return base;
@@ -483,15 +483,15 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
   const top = headerHeight(Math.max(0, ...marks.map((m) => m.row + 1)));
   // qa4-simple-roadmap-16: a phone's waterfall wraps its goals' names and gives each warning a band under its bar.
   const wrapRows = compact && format === "waterfall";
-  // A phone's names wrap beside the Current-state pill after them: the pill's width, by item.
+  // The names wrap beside the Current-state pill after them: the pill's width, by item.
   const states = useContext(FeatureMarks);
   const tails = useMemo(() => {
-    if (!compact || !states) return null;
+    if (!states) return null;
     const m = new Map<string, number>();
     for (const i of data.items) {
       const f = states.get(`item:${i.id}`);
       // The pill's word in its 12 px capitals, its padding and the gap before it.
-      if (f) m.set(i.id, Math.ceil(textWidth(pillWord(f.mark, true).toUpperCase(), 12, 600) * 1.05) + 16 + 4);
+      if (f) m.set(i.id, Math.ceil(textWidth(pillWord(f.mark, compact).toUpperCase(), 12, 600) * 1.05) + 16 + (compact ? 4 : 8));
     }
     return m;
   }, [compact, states, data.items]);
@@ -789,14 +789,14 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                 </span>
               )}
               {/* The Current-state pill follows the name, as chips do, so every name starts at one x.
-                  On a phone the two wrap as a group (the name takes 60% of the row at least): the
-                  pill beside a short name, under a long one, so neither is cut (layout's nameH). */}
-              <span className={compact ? "flex min-w-[60%] flex-1 flex-wrap items-center gap-x-1 gap-y-0.5" : "contents"}>
+                  The two wrap as a group (the name takes 60% of the row at least): the pill beside a
+                  short name, under a long one, so neither is cut (layout's nameH). */}
+              <span className={`flex min-w-[60%] flex-1 flex-wrap items-center ${compact ? "gap-x-1 gap-y-0.5" : "gap-x-2 gap-y-1"}`}>
                 <span
                   data-testid="label-title"
                   title={r.item.title}
-                  // fix4 qa-simple-roadmap-6: a phone's name wraps whole instead of being cut mid-word.
-                  className={`${compact ? "min-w-0 max-w-full text-[12.5px] leading-[14px] break-words" : "min-w-[45%] flex-1 truncate"} ${closedItem(r.item) ? "text-text2 line-through" : ""}`}
+                  // fix4 qa-simple-roadmap-6: a name wraps whole instead of being cut mid-word.
+                  className={`min-w-0 max-w-full break-words ${compact ? "text-[12.5px] leading-[14px]" : "leading-[18px]"} ${closedItem(r.item) ? "text-text2 line-through" : ""}`}
                 >
                   {r.item.title}
                 </span>
