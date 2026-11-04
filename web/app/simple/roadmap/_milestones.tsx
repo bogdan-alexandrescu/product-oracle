@@ -450,7 +450,7 @@ export function MsLayer(props: MsLayerProps) {
       const mine = !live && !!m.pending?.can_decide;
       out.push(
         <Chip key={`ppc-${m.id}`} testid="ms-asked" mx={to} className="border border-warn bg-warn-bg text-warn" onClick={mine ? () => ms.setAsking(ms.asking === m.id ? null : m.id) : undefined} style={{ left: to + 6, top: lane.y0 + 4 }}>
-          {live ? `Moving ${words(m)} to ${day(asked!)}` : mine ? `Asked of you: move ${words(m)} to ${day(asked!)} · Approve or decline` : `Asked the PRD: move ${words(m)} to ${day(asked!)} · waits for ${m.prd_owner ?? "its owner"}`}
+          {live ? `Moving ${words(m)} to ${day(asked!)}` : `Asked the PRD: move ${words(m)} to ${day(asked!)} · waits for ${m.prd_owner ?? "its owner"}`}
         </Chip>,
       );
       if (mine && ms.asking === m.id)
