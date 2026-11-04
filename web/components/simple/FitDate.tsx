@@ -206,8 +206,8 @@ function Diff({ a, d }: { a: Answer; d: Draft }) {
       </div>
       {d.needs_estimate.length > 0 && (
         <p className="simple-small" data-testid="fit-needs-estimate">
-          {d.needs_estimate.map((e) => e.item).join(" and ")} {d.needs_estimate.length === 1 ? "needs" : "need"} a new estimate:{" "}
-          {d.needs_estimate.map((e) => e.owner).filter(Boolean).join(" and ")} {d.needs_estimate.length === 1 ? "is" : "are"} asked, and the date reads estimate pending until then.
+          {d.needs_estimate.map((e) => e.item).join(" and ")} {d.needs_estimate.length === 1 ? "needs" : "need"} a new estimate
+          {d.needs_estimate.some((e) => e.owner) && ` from ${d.needs_estimate.map((e) => e.owner).filter(Boolean).join(" and ")}`}; its date here reads estimate pending until then.
         </p>
       )}
       <p className="simple-small">
