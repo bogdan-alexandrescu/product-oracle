@@ -13,21 +13,27 @@ Invented example data only.
 
 import json
 import re
+import uuid
 
 import pytest
 from sqlalchemy import select
 
+from oracle.docs import draft_checks
 from oracle.intake import job as intake_job
 from oracle.jobs import worker
 from oracle.jobs.models import LlmJob
 from oracle.llm import gateway
 from oracle.llm.transports import LlmRequest, TransportResult
 from oracle.runs import flows
+from oracle.runs import service as runs_service
+from oracle.runs.models import Run
 from oracle.tenancy import tenant_session
 from oracle.v2.models import KnowledgeGap, ProductIntake
 from tests.baseline_helpers import cite, confirm, entity, make_item
 from tests.claude_account_helpers import add_account, window
 from tests.intake_helpers import company, create_intake, summary
+from tests.test_intake_draft_gate import _create_run, runtime  # noqa: F401 (fixture)
+from tests.test_llm_jobs import DRAFT_V1
 
 BRIEF = (
     "Plan the next version of the quote builder for example.com shops. It must include "
@@ -259,3 +265,52 @@ def test_the_intake_spec_names_the_current_prompt():
     current = prompting.current("intake_analysis")[0]
     named = set(re.findall(r"intake_analysis\.v\d+", spec.read_text()))
     assert named == {current}
+
+
+DESCRIBED = "described_called_missing"
+
+
+def _prd(problem: str) -> str:
+    draft = DRAFT_V1.replace("document: onboarding-revamp", "document: saved-addresses")
+    return draft.replace("Half of new teams never invite a teammate.", problem)
+
+
+async def _imported(client, ctx, intake_id: str, markdown: str) -> dict:
+    """The intake's PRD run imports a draft (the step's import, as a segment's file)."""
+    run_id = (await _create_run(client, ctx, intake_id)).json()["id"]
+    approver = ctx.as_("approver")
+    assert (await client.post(f"/v1/runs/{run_id}/estimate", headers=approver)).status_code == 200
+    assert (await client.post(f"/v1/runs/{run_id}/start", headers=approver)).status_code == 200
+    async with tenant_session(ctx.tenant_id) as s:
+        run = await s.get(Run, uuid.UUID(run_id))
+        out = await runs_service._import_draft(s, run, "prd", markdown)
+    assert "error" not in out, out
+    return out
+
+
+async def test_a_prd_draft_that_calls_a_described_feature_missing_goes_back(
+    client,
+    fake,
+    runtime,  # noqa: F811
+):
+    ctx, intake_id, _, _ = await _read(client, fake, _quiet)
+    out = await _imported(
+        client, ctx, intake_id,
+        _prd("Shops wait for quotes. The routing engine is not described anywhere."),
+    )  # fmt: skip
+    assert DESCRIBED in out["warnings"]
+    [said] = [m for m in out["code_names"] if "routing engine" in m]
+    assert "Problem" in said and "cite" in said
+    assert DESCRIBED in draft_checks.SENT_BACK
+
+
+async def test_a_prd_draft_that_asks_for_more_than_a_feature_is_kept(
+    client,
+    fake,
+    runtime,  # noqa: F811
+):
+    ctx, intake_id, _, _ = await _read(client, fake, _quiet)
+    out = await _imported(
+        client, ctx, intake_id, _prd("Refund rules for the pricing engine are not described.")
+    )
+    assert DESCRIBED not in out["warnings"]
