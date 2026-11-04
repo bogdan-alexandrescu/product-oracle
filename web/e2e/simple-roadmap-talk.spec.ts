@@ -49,10 +49,9 @@ async function openTalk(page: Page, key: string, phone: boolean): Promise<{ card
     await tap(card.getByRole("tab", { name: "Talk to Oracle" }));
     await expect(card.getByRole("tab", { name: "Talk to Oracle" })).toHaveAttribute("aria-selected", "true");
   } else {
-    await tap(card.getByRole("button", { name: "Talk to Oracle" }));
-    await expect(card).toHaveAttribute("data-talk", "true");
-    // Widened: the details stay on the left, the talk on the right.
-    await expect(card.getByTestId("card-dates")).toBeVisible();
+    // build-feature-panel: the talk is always open beside the details (FP1 B).
+    await expect(card.getByTestId("fp-details")).toBeVisible();
+    await expect(card.getByTestId("item-talk")).toBeVisible();
     expect((await card.boundingBox())!.width).toBeGreaterThan(800);
   }
   const talk = card.getByTestId("item-talk");

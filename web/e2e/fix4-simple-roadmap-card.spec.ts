@@ -36,8 +36,8 @@ async function openCard(page: Page, key: string): Promise<Locator> {
 }
 
 async function openTalk(card: Locator): Promise<Locator> {
-  await card.getByRole("button", { name: "Talk to Oracle" }).click();
-  await expect(card).toHaveAttribute("data-talk", "true");
+  // build-feature-panel: the talk is always open beside the details (FP1 B).
+  await expect(card.getByTestId("item-talk")).toBeVisible();
   return card.getByTestId("item-talk");
 }
 
