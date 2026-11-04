@@ -46347,6 +46347,284 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/feature-states": {
+      "get": {
+        "tags": [
+          "currentstate"
+        ],
+        "summary": "List Feature States",
+        "description": "Every confirmed feature with its mark and proof, and the counts.",
+        "operationId": "list_feature_states",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureStatesOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/feature-states/{feature_id}/check": {
+      "post": {
+        "tags": [
+          "currentstate"
+        ],
+        "summary": "Check Feature State",
+        "description": "Check again: read the feature's proof now.",
+        "operationId": "check_feature_state",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "feature_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Feature Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureStateOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such confirmed feature"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/feature-states/{feature_id}/answer": {
+      "post": {
+        "tags": [
+          "currentstate"
+        ],
+        "summary": "Answer Feature State",
+        "description": "The owner's answer to \"does it still run?\": still_runs counts as fresh proof,\nchanged keeps it in Current state, no_longer_runs puts it back in Desired state.",
+        "operationId": "answer_feature_state",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "feature_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Feature Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeatureAnswerIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureStateOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such confirmed feature"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/feature-states/{feature_id}/move": {
+      "post": {
+        "tags": [
+          "currentstate"
+        ],
+        "summary": "Move Feature State",
+        "description": "Move a ready feature to Current state, or Not yet (off the ready band until its\nproof is read again).",
+        "operationId": "move_feature_state",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "feature_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Feature Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeatureMoveIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureStateOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such confirmed feature"
+          },
+          "409": {
+            "description": "Not ready to move: some proof is missing"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/feature-states/{feature_id}/shipped": {
+      "post": {
+        "tags": [
+          "currentstate"
+        ],
+        "summary": "Mark Feature Shipped",
+        "description": "Mark as already shipped: it exists, with no proof read yet.",
+        "operationId": "mark_feature_shipped",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "feature_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Feature Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureStateOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such confirmed feature"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/strategy/stack": {
       "get": {
         "tags": [
@@ -74337,6 +74615,143 @@
         ],
         "title": "FeasibilityScopeIn"
       },
+      "FeatureAnswerIn": {
+        "properties": {
+          "answer": {
+            "type": "string",
+            "enum": [
+              "still_runs",
+              "changed",
+              "no_longer_runs"
+            ],
+            "title": "Answer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "answer"
+        ],
+        "title": "FeatureAnswerIn"
+      },
+      "FeatureMoveIn": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "move",
+              "not_yet"
+            ],
+            "title": "Decision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision"
+        ],
+        "title": "FeatureMoveIn"
+      },
+      "FeatureProofOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "code_map",
+              "pull_requests",
+              "tasks",
+              "measured"
+            ],
+            "title": "Kind"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "still_true": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Still True"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "ok"
+        ],
+        "title": "FeatureProofOut"
+      },
       "FeatureRef": {
         "properties": {
           "id": {
@@ -74449,6 +74864,243 @@
         ],
         "title": "FeatureSetProblem",
         "description": "One problem of feature_set.yaml or of the stored scope (oracle.runs.feature_set). A\nblocking one refuses Approve until it is fixed (call c3)."
+      },
+      "FeatureStateOut": {
+        "properties": {
+          "feature_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Feature Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "area": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal"
+          },
+          "milestone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone"
+          },
+          "mark": {
+            "type": "string",
+            "enum": [
+              "new",
+              "in_progress",
+              "exists",
+              "exists_old"
+            ],
+            "title": "Mark"
+          },
+          "shipped_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shipped At"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "proof_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proof Days"
+          },
+          "no_proof_yet": {
+            "type": "boolean",
+            "title": "No Proof Yet"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          },
+          "checking": {
+            "type": "boolean",
+            "title": "Checking"
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "still_runs",
+                  "changed",
+                  "no_longer_runs"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
+          },
+          "answered_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answered At"
+          },
+          "moved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moved At"
+          },
+          "move_how": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "owner_confirmed",
+                  "marked_shipped"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Move How"
+          },
+          "proofs": {
+            "items": {
+              "$ref": "#/components/schemas/FeatureProofOut"
+            },
+            "type": "array",
+            "title": "Proofs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature_id",
+          "code",
+          "title",
+          "mark",
+          "no_proof_yet",
+          "ready",
+          "checking",
+          "proofs"
+        ],
+        "title": "FeatureStateOut"
+      },
+      "FeatureStatesOut": {
+        "properties": {
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/FeatureStateOut"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "running": {
+            "type": "integer",
+            "title": "Running"
+          },
+          "old_proof": {
+            "type": "integer",
+            "title": "Old Proof"
+          },
+          "in_progress": {
+            "type": "integer",
+            "title": "In Progress"
+          },
+          "new": {
+            "type": "integer",
+            "title": "New"
+          },
+          "desired": {
+            "type": "integer",
+            "title": "Desired"
+          },
+          "ready": {
+            "type": "integer",
+            "title": "Ready"
+          },
+          "can_move": {
+            "type": "boolean",
+            "title": "Can Move"
+          },
+          "can_answer": {
+            "type": "boolean",
+            "title": "Can Answer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "features",
+          "running",
+          "old_proof",
+          "in_progress",
+          "new",
+          "desired",
+          "ready",
+          "can_move",
+          "can_answer"
+        ],
+        "title": "FeatureStatesOut"
       },
       "FeatureTrace": {
         "properties": {

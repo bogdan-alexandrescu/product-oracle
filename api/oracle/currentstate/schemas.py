@@ -65,9 +65,9 @@ class FeatureStatesOut(BaseModel):
     can_answer: bool
 
 
-class AnswerIn(BaseModel):
+class FeatureAnswerIn(BaseModel):
     answer: Answer
 
 
-class MoveIn(BaseModel):
+class FeatureMoveIn(BaseModel):
     decision: Literal["move", "not_yet"]

@@ -13546,6 +13546,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/feature-states": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Feature States
+         * @description Every confirmed feature with its mark and proof, and the counts.
+         */
+        get: operations["list_feature_states"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feature-states/{feature_id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Feature State
+         * @description Check again: read the feature's proof now.
+         */
+        post: operations["check_feature_state"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feature-states/{feature_id}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer Feature State
+         * @description The owner's answer to "does it still run?": still_runs counts as fresh proof,
+         *     changed keeps it in Current state, no_longer_runs puts it back in Desired state.
+         */
+        post: operations["answer_feature_state"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feature-states/{feature_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move Feature State
+         * @description Move a ready feature to Current state, or Not yet (off the ready band until its
+         *     proof is read again).
+         */
+        post: operations["move_feature_state"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feature-states/{feature_id}/shipped": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Feature Shipped
+         * @description Mark as already shipped: it exists, with no proof read yet.
+         */
+        post: operations["mark_feature_shipped"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/strategy/stack": {
         parameters: {
             query?: never;
@@ -23294,6 +23396,46 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /** FeatureAnswerIn */
+        FeatureAnswerIn: {
+            /**
+             * Answer
+             * @enum {string}
+             */
+            answer: "still_runs" | "changed" | "no_longer_runs";
+        };
+        /** FeatureMoveIn */
+        FeatureMoveIn: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "move" | "not_yet";
+        };
+        /** FeatureProofOut */
+        FeatureProofOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "code_map" | "pull_requests" | "tasks" | "measured";
+            /** Count */
+            count?: number | null;
+            /** Total */
+            total?: number | null;
+            /** Value */
+            value?: string | null;
+            /** Period */
+            period?: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Still True */
+            still_true?: boolean | null;
+            /** Checked At */
+            checked_at?: string | null;
+            /** Note */
+            note?: string | null;
+        };
         /** FeatureRef */
         FeatureRef: {
             /**
@@ -23348,6 +23490,72 @@ export interface components {
             requirement?: string | null;
             /** Message */
             message: string;
+        };
+        /** FeatureStateOut */
+        FeatureStateOut: {
+            /**
+             * Feature Id
+             * Format: uuid
+             */
+            feature_id: string;
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+            /** Area */
+            area?: string | null;
+            /** Goal */
+            goal?: string | null;
+            /** Milestone */
+            milestone?: string | null;
+            /**
+             * Mark
+             * @enum {string}
+             */
+            mark: "new" | "in_progress" | "exists" | "exists_old";
+            /** Shipped At */
+            shipped_at?: string | null;
+            /** Checked At */
+            checked_at?: string | null;
+            /** Proof Days */
+            proof_days?: number | null;
+            /** No Proof Yet */
+            no_proof_yet: boolean;
+            /** Ready */
+            ready: boolean;
+            /** Checking */
+            checking: boolean;
+            /** Answer */
+            answer?: ("still_runs" | "changed" | "no_longer_runs") | null;
+            /** Answered At */
+            answered_at?: string | null;
+            /** Moved At */
+            moved_at?: string | null;
+            /** Move How */
+            move_how?: ("owner_confirmed" | "marked_shipped") | null;
+            /** Proofs */
+            proofs: components["schemas"]["FeatureProofOut"][];
+        };
+        /** FeatureStatesOut */
+        FeatureStatesOut: {
+            /** Features */
+            features: components["schemas"]["FeatureStateOut"][];
+            /** Running */
+            running: number;
+            /** Old Proof */
+            old_proof: number;
+            /** In Progress */
+            in_progress: number;
+            /** New */
+            new: number;
+            /** Desired */
+            desired: number;
+            /** Ready */
+            ready: number;
+            /** Can Move */
+            can_move: boolean;
+            /** Can Answer */
+            can_answer: boolean;
         };
         /**
          * FeatureTrace
@@ -71986,6 +72194,193 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SimpleVisualOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_feature_states: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureStatesOut"];
+                };
+            };
+        };
+    };
+    check_feature_state: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feature_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureStateOut"];
+                };
+            };
+            /** @description No such confirmed feature */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    answer_feature_state: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feature_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeatureAnswerIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureStateOut"];
+                };
+            };
+            /** @description No such confirmed feature */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_feature_state: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feature_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeatureMoveIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureStateOut"];
+                };
+            };
+            /** @description No such confirmed feature */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not ready to move: some proof is missing */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_feature_shipped: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feature_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureStateOut"];
+                };
+            };
+            /** @description No such confirmed feature */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

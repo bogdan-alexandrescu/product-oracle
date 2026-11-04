@@ -15,7 +15,12 @@ from oracle import company_time
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import has_role, require_role, require_role_now
 from oracle.currentstate import service
-from oracle.currentstate.schemas import AnswerIn, FeatureStateOut, FeatureStatesOut, MoveIn
+from oracle.currentstate.schemas import (
+    FeatureAnswerIn,
+    FeatureMoveIn,
+    FeatureStateOut,
+    FeatureStatesOut,
+)
 
 router = APIRouter(prefix="/v1", tags=["currentstate"])
 
@@ -67,7 +72,7 @@ async def check_feature_state(
     "/feature-states/{feature_id}/answer", response_model=FeatureStateOut, responses=NOT_FOUND
 )
 async def answer_feature_state(
-    feature_id: uuid.UUID, body: AnswerIn, principal: Confirmer, db: TenantDB
+    feature_id: uuid.UUID, body: FeatureAnswerIn, principal: Confirmer, db: TenantDB
 ) -> FeatureStateOut:
     """The owner's answer to "does it still run?": still_runs counts as fresh proof,
     changed keeps it in Current state, no_longer_runs puts it back in Desired state."""
@@ -84,7 +89,7 @@ async def answer_feature_state(
     responses={**NOT_FOUND, 409: {"description": "Not ready to move: some proof is missing"}},
 )
 async def move_feature_state(
-    feature_id: uuid.UUID, body: MoveIn, principal: Confirmer, db: TenantDB
+    feature_id: uuid.UUID, body: FeatureMoveIn, principal: Confirmer, db: TenantDB
 ) -> FeatureStateOut:
     """Move a ready feature to Current state, or Not yet (off the ready band until its
     proof is read again)."""
