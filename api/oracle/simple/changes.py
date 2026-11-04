@@ -35,7 +35,8 @@ Ops and the fields they write (``before`` must name the key fields):
   draft is a ``cut`` with the reason "Merged into <code>".
 - ``change_horizon``: horizon, and the item's own dates (if any) shifted by as many days as
   the new window starts after the old one's. ``reorder``: position. ``cut`` / ``restore``: cut.
-- ``edit_title``: title. ``edit_outcome``: outcome.
+- ``edit_title``: title. ``edit_outcome``: outcome. ``edit_note`` (build-feature-panel
+  review 3): note, at most 500 characters.
 - ``set_milestone`` (S9): the item's own milestone, ``{"milestone": {name, date,
   date_source: "typed"}}`` (date optional), or null to clear it.
 - ``set_goal`` / ``restore_goal`` (build-feature-panel review 2): the item's own goal
@@ -117,6 +118,7 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "restore": ("cut",),
     "edit_title": ("title",),
     "edit_outcome": ("outcome",),
+    "edit_note": ("note",),
     "accept_risk": ("risk",),
     "confirm_item": ("draft",),
     "keep_both": ("kept_both",),
@@ -713,7 +715,7 @@ async def _plan(
             # build-feature-panel: Oracle's dates as the item showed them, kept for the
             # panel's "Oracle suggested ...; set to ... by ..." line (oracle.simple.panel).
             target["oracle"] = {"start_date": _iso(r.start.date), "end_date": _iso(r.end.date),
-                                "source": r.source}  # fmt: skip
+                                "source": r.source, "start_source": r.start.source}  # fmt: skip
     elif op == "accept_date_suggestion":
         sid = _uuid(target.get("suggestion_id"), "suggestion_id")
         target["suggestion_id"] = str(sid)
@@ -850,6 +852,12 @@ async def _plan(
         if outcome is not None and len(outcome) > OUTCOME_MAX:
             raise ChangeError(422, f"after.outcome: at most {OUTCOME_MAX} characters")
         after = {"outcome": outcome or None}
+    elif op == "edit_note":
+        note = a.get("note")
+        note = str(note).strip() if note is not None else None
+        if note is not None and len(note) > NOTE_MAX:
+            raise ChangeError(422, f"after.note: at most {NOTE_MAX} characters")
+        after = {"note": note or None}
     else:  # accept_risk
         if target.get("flag") not in FLAG_KINDS:
             raise ChangeError(422, "target.flag: a constraint flag's kind")

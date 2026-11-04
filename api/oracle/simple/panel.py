@@ -91,7 +91,8 @@ def overrides(rows: list, rows_by: dict[uuid.UUID, str], item: str) -> dict[str,
                     continue
                 oracle = {"start_date": before.get("start_date"),
                           "end_date": before.get("end_date"),
-                          "source": before.get("date_source")}  # fmt: skip
+                          "source": before.get("date_source"),
+                          "start_source": before.get("date_source")}  # fmt: skip
             kept = {**oracle, "restore": {f: before.get(f) for f in RESTORED}}
         kept |= {"by": rows_by.get(c.by), "at": c.at}
     return kept

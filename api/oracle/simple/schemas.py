@@ -76,6 +76,12 @@ class SimpleGoalRef(BaseModel):
     metric: str | None = None
     # goal-order: the goal's place (its attrs.position, 1 = first); none when unset.
     position: int | None = None
+    # build-feature-panel review 3: the panel's Reading row, from the goal's attrs: its
+    # latest reading, its target, their unit and the day the target is due.
+    current: float | None = None
+    target: float | None = None
+    unit: str | None = None
+    due: dt.date | None = None
 
 
 class SimpleTrackRef(BaseModel):
@@ -276,6 +282,9 @@ class SimpleOverride(BaseModel):
     start_date: dt.date | None = None
     end_date: dt.date | None = None
     source: str | None = None
+    # build-feature-panel review 3: the start's own source as the item showed it (Start's
+    # note keeps it while only the delivery moved).
+    start_source: str | None = None
     by: str | None = None
     at: dt.datetime | None = None
 
@@ -330,6 +339,8 @@ class SimpleRoadmapItem(BaseModel):
     # ("engineering estimate", "founder commitment", "set by <person>"); null when the
     # dates are not the version's (none applied, or a person changed them since).
     date_basis: str | None = None
+    # build-feature-panel review 3: the item's notes (edit_note); null when none.
+    note: str | None = None
     suggestion: DateSuggestionOut | None = None
     milestone: SimpleItemMilestone | None = None
     phases: list[SimplePhase]
@@ -512,6 +523,8 @@ ChangeOp = Literal[
     "restore",
     "edit_title",
     "edit_outcome",
+    # build-feature-panel review 3: the item's notes (the panel's Notes row).
+    "edit_note",
     "accept_date_suggestion",
     "accept_risk",
     "shift_dependents",

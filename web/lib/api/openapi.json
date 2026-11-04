@@ -59629,6 +59629,7 @@
                   "restore",
                   "edit_title",
                   "edit_outcome",
+                  "edit_note",
                   "accept_date_suggestion",
                   "accept_risk",
                   "shift_dependents",
@@ -60015,6 +60016,7 @@
               "restore",
               "edit_title",
               "edit_outcome",
+              "edit_note",
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
@@ -81067,6 +81069,7 @@
               "restore",
               "edit_title",
               "edit_outcome",
+              "edit_note",
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
@@ -114598,6 +114601,7 @@
               "restore",
               "edit_title",
               "edit_outcome",
+              "edit_note",
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
@@ -114722,6 +114726,7 @@
               "restore",
               "edit_title",
               "edit_outcome",
+              "edit_note",
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
@@ -116500,6 +116505,51 @@
               }
             ],
             "title": "Position"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
           }
         },
         "type": "object",
@@ -118448,6 +118498,17 @@
             ],
             "title": "Source"
           },
+          "start_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Source"
+          },
           "by": {
             "anyOf": [
               {
@@ -120279,6 +120340,17 @@
               }
             ],
             "title": "Date Basis"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
           },
           "suggestion": {
             "anyOf": [

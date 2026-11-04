@@ -873,6 +873,7 @@ def item_out(
             title=e.goal.title,
             metric=_metric(e.goal),
             position=goal_position(e.goal.attrs),
+            **_reading(e.goal),
         )
         if e.goal
         else None,
@@ -885,6 +886,7 @@ def item_out(
         source=r.source,
         estimated=r.estimated,
         date_basis=approved_roadmap.date_basis(row),
+        note=row.note,
         suggestion=suggestion_out(e.suggestion, row, may, e.suggestion_span)
         if e.suggestion is not None
         else None,
@@ -1018,6 +1020,24 @@ def _milestone_out(m: TrackMilestone, keyed: dict, ids: set, view: Any) -> Simpl
         out.start_date, out.end_date = pm.start_date, pm.end_date or m.target_date
         out.effort_weeks, out.done_when, out.targets = pm.effort_weeks, pm.done_when, pm.targets
         out.date = out.date or pm.end_date
+    return out
+
+
+def _reading(goal: Entity) -> dict[str, Any]:
+    """build-feature-panel review 3: the goal's latest reading, target, unit and due day
+    (its attrs), for the panel's Reading row; what is not a number or a day is left out."""
+    attrs = goal.attrs or {}
+    out: dict[str, Any] = {}
+    for key in ("current", "target"):
+        v = attrs.get(key)
+        if isinstance(v, int | float) and not isinstance(v, bool):
+            out[key] = v
+    if isinstance(attrs.get("unit"), str) and attrs["unit"]:
+        out["unit"] = attrs["unit"]
+    try:
+        out["due"] = date.fromisoformat(str(attrs["due"])) if attrs.get("due") else None
+    except ValueError:
+        pass
     return out
 
 

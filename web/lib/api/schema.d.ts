@@ -18028,7 +18028,7 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             /** Op */
-            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped");
+            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped");
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -18142,7 +18142,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -25972,7 +25972,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal";
             /**
              * Status
              * @enum {string}
@@ -37989,7 +37989,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -38025,7 +38025,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -38773,6 +38773,14 @@ export interface components {
             metric?: string | null;
             /** Position */
             position?: number | null;
+            /** Current */
+            current?: number | null;
+            /** Target */
+            target?: number | null;
+            /** Unit */
+            unit?: string | null;
+            /** Due */
+            due?: string | null;
         };
         /**
          * SimpleGoalSet
@@ -39548,6 +39556,8 @@ export interface components {
             end_date?: string | null;
             /** Source */
             source?: string | null;
+            /** Start Source */
+            start_source?: string | null;
             /** By */
             by?: string | null;
             /** At */
@@ -40286,6 +40296,8 @@ export interface components {
             estimated: boolean;
             /** Date Basis */
             date_basis?: string | null;
+            /** Note */
+            note?: string | null;
             suggestion?: components["schemas"]["DateSuggestionOut"] | null;
             milestone?: components["schemas"]["SimpleItemMilestone"] | null;
             /** Phases */

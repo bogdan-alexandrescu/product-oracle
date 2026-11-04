@@ -651,6 +651,7 @@ PROPOSAL_WORDS = {
     "restore": "restore",
     "edit_title": "rename",
     "edit_outcome": "new outcome for",
+    "edit_note": "new notes for",
     "accept_risk": "accept a risk on",
     "shift_dependents": "move the dependents of",
     "move_dependency": "move the dependency of",
