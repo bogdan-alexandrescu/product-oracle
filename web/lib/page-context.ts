@@ -102,6 +102,7 @@ export const PAGE_CONTEXT: Record<string, PageContext> = {
   // Simple: the API reads the company's plan first on every Simple page
   "/simple": shown("The plan and the page's shown text"),
   "/simple/decisions": shown("The plan and the decisions as listed"),
+  "/simple/goals": shown("The plan and the goal map as shown"),
   "/simple/meetings": shown("The plan and the meetings as listed"),
   "/simple/meetings/[id]": shown("The plan and the meeting as shown"),
   "/simple/meetings/[id]/chat": shown("The plan and the meeting's chat as shown"),
