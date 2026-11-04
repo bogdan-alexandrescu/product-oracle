@@ -548,3 +548,75 @@ async def test_a_runs_prompt_and_check_date_the_queue_from_the_runs_own_day(clie
         (r["start"], r["end"]) for r in prompt_rows
     ]
     assert not problems, [p.message for p in problems]
+
+
+GAMMA_ITEMS = """\
+version: 1
+prd: {document: user-safety, version: 1}
+items:
+  - id: report-button
+    title: Report button
+    outcome: People report harm in one tap
+    horizon: later
+    milestone: {name: Gamma}
+"""
+
+
+async def test_an_item_moved_to_a_new_milestone_takes_the_place_it_will_have(client):
+    from oracle.roadmap import company
+
+    ctx, ids = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        report = await s.scalar(select(RoadmapItem).where(
+            RoadmapItem.roadmap_version_id == ids["v1"],
+            RoadmapItem.item_key == "report-button"))  # fmt: skip
+        report.milestone = {"name": "Alpha"}
+        rm = await s.get(Document, ids["company"])
+        v1 = await s.get(DocumentVersion, ids["v1"])
+        scale, cv = await s.get(Document, ids["scale"]), await s.get(DocumentVersion, ids["cv"])
+        s.add(_item(rm, v1, scale, cv, "sharding", "Sharding", 2, horizon="next",
+                    milestone={"name": "Beta"}))  # fmt: skip
+        await s.commit()
+        rows = await company.run_queue(s, ids["safety"])
+    queued = company.with_run_items(rows, GAMMA_ITEMS)
+    # The report button leaves Alpha (Now) for Gamma, which only it names, in Later: Gamma's
+    # place is the report button's own in Later, after Beta (Next), not Alpha's.
+    assert [r["key"] for r in queued] == ["sharding", "report-button", "read-replicas"]
+
+
+DROP_ITEMS = """\
+version: 1
+prd: {document: user-safety, version: 1}
+items:
+  - id: block-list
+    title: Block list
+    outcome: People block whoever they choose
+    horizon: later
+"""
+
+
+async def test_a_milestone_keeps_no_place_only_a_dropped_item_gave_it(client):
+    from oracle.roadmap import company
+
+    ctx, ids = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        report = await s.scalar(select(RoadmapItem).where(
+            RoadmapItem.roadmap_version_id == ids["v1"],
+            RoadmapItem.item_key == "report-button"))  # fmt: skip
+        report.milestone = {"name": "Beta"}
+        replicas = await s.scalar(select(RoadmapItem).where(
+            RoadmapItem.roadmap_version_id == ids["v1"],
+            RoadmapItem.item_key == "read-replicas"))  # fmt: skip
+        replicas.horizon, replicas.milestone = "next", {"name": "Alpha"}
+        rm = await s.get(Document, ids["company"])
+        v1 = await s.get(DocumentVersion, ids["v1"])
+        scale, cv = await s.get(Document, ids["scale"]), await s.get(DocumentVersion, ids["cv"])
+        s.add(_item(rm, v1, scale, cv, "sharding", "Sharding", 2, horizon="later",
+                    milestone={"name": "Beta"}))  # fmt: skip
+        await s.commit()
+        rows = await company.run_queue(s, ids["safety"])
+    assert [r["key"] for r in rows] == ["report-button", "sharding", "read-replicas"]
+    queued = company.with_run_items(rows, DROP_ITEMS)
+    # The run drops the report button, which put Beta in Now: Beta is where sharding puts it
+    # (Later), after Alpha (Next).
+    assert [r["key"] for r in queued] == ["read-replicas", "sharding", "block-list"]
