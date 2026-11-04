@@ -94,10 +94,10 @@ for (const [label, viewport] of [
       const byGoal = page.getByRole("table", { name: "By goal" }).getByRole("row");
       await inOrder(byGoal, expected("Grow paid conversion", "Raise activation"));
 
-      // Detailed > Baseline > Flagged: the Goal coverage table.
+      // Detailed > Baseline > Flagged: the Goal coverage grid.
       await page.goto("/baseline");
       await page.getByRole("tab", { name: /Flagged/ }).click();
-      await inOrder(page.getByRole("table", { name: "Goal coverage" }).getByRole("row"), NAMES);
+      await inOrder(page.getByRole("grid", { name: "Goal coverage" }).getByRole("row"), NAMES);
     });
 
     test("the Position field refuses a number below 1", async ({ page }) => {
