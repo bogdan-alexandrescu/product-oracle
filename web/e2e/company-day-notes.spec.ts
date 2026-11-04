@@ -19,7 +19,7 @@ async function setZone(page: Page, zone: string) {
 
 async function openProposals(page: Page) {
   await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
   await page.getByRole("tab", { name: /Proposals/ }).click();
   await expect(page.getByTestId("proposal")).toHaveCount(3);
 }

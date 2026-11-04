@@ -17,7 +17,7 @@ async function openConflicts(page: Page) {
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "conflict-3way"));
   await login(page);
   await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
   await page.getByRole("tab", { name: /Conflicts/ }).click();
 }
 
@@ -49,7 +49,7 @@ async function openStatusOverlap(page: Page) {
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "proposal-overlap-status"));
   await login(page);
   await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
   await page.getByRole("tab", { name: /Proposals/ }).click();
 }
 

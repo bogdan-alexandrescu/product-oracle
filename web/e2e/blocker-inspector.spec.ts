@@ -15,7 +15,7 @@ async function openBlockers(page: Page, role?: "approver" | "commenter" | "viewe
   if (role) await page.addInitScript((r) => localStorage.setItem("po-mock-role", r), role);
   await login(page);
   await page.goto("/baseline?tab=blockers");
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
 }
 
 async function openBlocker(page: Page, statement: string) {

@@ -89,7 +89,7 @@ test("commenters and viewers see no Build baseline button", async ({ page }) => 
   for (const who of ["commenter@example.com", "viewer@example.com"]) {
     await login(page, who);
     await page.goto("/baseline?build=1");
-    await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
     await expect(page.getByTestId("kpi-goals")).toBeVisible();
     await expect(page.getByRole("button", { name: "Build baseline" })).toHaveCount(0);
     await expect(sheet(page)).toHaveCount(0);

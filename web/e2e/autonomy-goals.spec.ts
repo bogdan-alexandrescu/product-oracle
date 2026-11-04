@@ -38,7 +38,7 @@ async function setShapeGoals(page: Page, level: "Observe" | "Draft", why: string
 
 async function openBaseline(page: Page) {
   await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
   await expect(churnRow(page)).toBeVisible();
 }
 
