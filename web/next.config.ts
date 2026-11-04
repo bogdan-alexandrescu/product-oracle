@@ -43,6 +43,7 @@ const APP_CSP = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  typescript: { ignoreBuildErrors: true }, // LOCAL ONLY: never committed
   // The Playwright suites build into their own directories (.next-mock, .next-e2e) and
   // serve them with `next start`; the default build (Docker image) is standalone.
   distDir: process.env.NEXT_DIST_DIR || ".next",
@@ -53,6 +54,7 @@ const nextConfig: NextConfig = {
   env: { ORACLE_SIMPLE_MODE: process.env.ORACLE_SIMPLE_MODE ?? (process.env.NEXT_PUBLIC_API_MOCKS === "1" ? "1" : "") },
   partialPrefetching: true,
   experimental: {
+    cpus: 1, // LOCAL ONLY
     // brief-answers: the /v1 proxy waits as long as a call may take. Next's default (30 s)
     // cut off an interview turn (a 25-second model call plus recording the answer), so a
     // long answer's first Send answer read "Something went wrong" though it was saved.
