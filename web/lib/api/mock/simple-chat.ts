@@ -271,6 +271,25 @@ export function seedStrayReply(chat: ChatDb, owner: { id: string; name: string }
   };
 }
 
+/**
+ * build-feature-panel review 2: the "feature-panel-frames" scenario's talk about Weekly alert
+ * digest, as the picked mk-featurepanel frames draw it: Oracle, its owner, Oracle.
+ */
+export function seedFramesTalk(chat: ChatDb, reader: string, itemId: string, owner: { id: string; name: string }): void {
+  const at = new Date(mockNowMs() - 60_000).toISOString();
+  const base = { card_ids: [], choices: [], picked: null, retry: false, reply_to: null };
+  const page = `/simple/roadmap/items/${itemId}`;
+  const oracle = (body: string) => ({ ...base, id: crypto.randomUUID(), author_kind: "oracle" as const, author_id: null, author_name: "Oracle", body, at, kind: "answer" });
+  chat.threads[`ask:${reader}:${page}`] = {
+    id: crypto.randomUUID(), meeting_id: null, owner_id: reader, page,
+    messages: [
+      oracle("Engineering estimates the digest ends Dec 10. It starts Oct 31, but Alert rules engine, which it needs, ends Nov 10."),
+      { ...base, id: crypto.randomUUID(), author_kind: "person", author_id: owner.id, author_name: owner.name, body: "Can we have it before the Beta on Nov 30?", at, kind: "request" },
+      oracle("Only if the email template is cut to one layout. That saves about two weeks, so it could end Nov 27."),
+    ],
+  };
+}
+
 const DAY = 86_400_000;
 const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);

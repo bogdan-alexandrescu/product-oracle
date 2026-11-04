@@ -169,7 +169,7 @@ import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimple
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
-import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
+import { planAnswer, routeSimpleChat, seedFramesTalk, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { appliedVersionOf, approvedPrdToDraft, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
@@ -567,6 +567,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * approver owning the alerts track) deciding Grow retention's suggestions (suggest review);
  * "simple-home-deciders" as "simple-deciders" plus a commenter's proposal waiting on the
  * pricing roadmap's decider (#723 S1 Home review).
+ * "feature-panel-frames" as "simple-deciders" with Maya Ortiz owning the alerts track and a talk
+ * about Weekly alert digest, as the picked mk-featurepanel frames draw it (build-feature-panel review 2).
  * "simple-home-move" as "simple-home" plus a "Move the dependents" proposal Home's Accept confirms.
  * "simple-home-same-name" as "simple-home" plus a second goal named Grow retention and a proposal to change an owner.
  * "simple-500" as the default company with 500 invented items on Simple's roadmap (S4, dod-perf:
@@ -910,6 +912,23 @@ function seedSimpleDecidersScenario(): Db {
     viewer: join("vic.moss@example.com", "Vic Moss", "viewer", 3),
   });
   db.simple_roadmap.people = Object.fromEntries(db.members.map((m) => [m.id, m.name ?? m.email]));
+  return db;
+}
+
+/**
+ * build-feature-panel review 2 "feature-panel-frames" scenario: "simple-deciders" with the
+ * alerts track owned by Maya Ortiz (an invented approver), so Weekly alert digest reads as
+ * the picked mk-featurepanel frames draw it: its owner, and a talk with messages.
+ */
+function seedFeaturePanelFramesScenario(): Db {
+  const db = seedSimpleDecidersScenario();
+  const avery = db.members.find((m) => m.email === "avery.lane@example.com")!;
+  avery.email = "maya.ortiz@example.com";
+  avery.name = "Maya Ortiz";
+  db.simple_roadmap!.people = Object.fromEntries(db.members.map((m) => [m.id, m.name ?? m.email]));
+  db.simple_chat = seedSimpleChat(db.members);
+  const owner = db.members.find((m) => m.role === "owner")!;
+  seedFramesTalk(db.simple_chat, owner.id, db.simple_roadmap!.ids["alert-digest"], { id: avery.id, name: "Maya Ortiz" });
   return db;
 }
 
@@ -3150,6 +3169,8 @@ function load(): Db {
                 ? seedManyPeople
               : scenario === "simple-deciders"
                 ? seedSimpleDecidersScenario
+              : scenario === "feature-panel-frames"
+                ? seedFeaturePanelFramesScenario
               : scenario === "simple-home"
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-move"

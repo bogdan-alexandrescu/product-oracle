@@ -14,21 +14,21 @@ import { expect, test, type Locator, type Page } from "./test";
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 
-async function go(page: Page, path: string, opts: { email?: string; theme?: "light" | "dark" } = {}) {
-  const { theme = "light" } = opts;
+async function go(page: Page, path: string, opts: { email?: string; theme?: "light" | "dark"; scenario?: string } = {}) {
+  const { theme = "light", scenario = "" } = opts;
   await page.context().addInitScript(
-    ([key, themeKey, t]) => {
-      localStorage.setItem(key, "");
+    ([key, themeKey, t, sc]) => {
+      localStorage.setItem(key, sc);
       localStorage.setItem(themeKey, t);
     },
-    [MOCK_SCENARIO_KEY, THEME_KEY, theme] as const,
+    [MOCK_SCENARIO_KEY, THEME_KEY, theme, scenario] as const,
   );
   await page.emulateMedia({ colorScheme: theme });
   await login(page, opts.email);
   await page.goto(path);
 }
 
-async function openOnRoadmap(page: Page, key: string, opts: { email?: string } = {}): Promise<Locator> {
+async function openOnRoadmap(page: Page, key: string, opts: { email?: string; scenario?: string } = {}): Promise<Locator> {
   await go(page, "/simple/roadmap", opts);
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await openRoadmapItem(page, key);
@@ -355,6 +355,24 @@ test.describe("one feature panel, Decisions and one-pagers (review 2)", () => {
     const panel = page.getByRole("dialog", { name: "Setup checklist" });
     await expect(panel.getByTestId("fp-details")).toBeVisible();
     await expect(panel.getByTestId("fp-list-depends")).toBeVisible();
+  });
+});
+
+/*
+ * build-feature-panel review 2: the "feature-panel-frames" scenario seeds Weekly alert digest
+ * as the picked frames draw it: Maya Ortiz owns its track, and its talk holds three lines.
+ */
+test.describe("one feature panel, as the frames draw it (review 2)", () => {
+  test.use(DESKTOP);
+
+  test("the header names its owner and the talk about this feature shows its messages", async ({ page }) => {
+    const panel = await openOnRoadmap(page, "alert-digest", { scenario: "feature-panel-frames" });
+    await expect(panel.getByText("Owner Maya Ortiz", { exact: true })).toBeVisible();
+    await expect(panel.getByTestId("fp-owner")).toHaveText("Maya Ortiz");
+    await expect(panel.getByText("Talk about this feature", { exact: true })).toBeVisible();
+    await expect(panel.getByText("Engineering estimates the digest ends Dec 10.", { exact: false })).toBeVisible();
+    await expect(panel.getByText("Can we have it before the Beta on Nov 30?")).toBeVisible();
+    await expect(panel.getByText("so it could end Nov 27.", { exact: false })).toBeVisible();
   });
 });
 
