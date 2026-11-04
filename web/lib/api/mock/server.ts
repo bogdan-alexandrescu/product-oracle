@@ -4019,9 +4019,15 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
       by.push(other);
     }
     doc.replaced_by = by.map((d) => d.id);
+    if (db.simple_roadmap) db.simple_roadmap.replaced_prds = replacedPrds(db);
     return json(200, documentOut(db, doc));
   }
   return null;
+}
+
+/** simple-replaced-prds (company.replaced_prd_ids): the ids and slugs of the PRDs marked replaced. */
+function replacedPrds(db: Db): string[] {
+  return db.documents.filter((d) => d.kind === "prd" && d.replaced_by?.length).flatMap((d) => [d.id, d.slug]);
 }
 
 function findDocument(db: Db, ref: string) {
@@ -6403,6 +6409,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.simple_visuals ??= seedVisuals();
   db.simple_one_pager.visuals = db.simple_visuals;
   db.simple_roadmap ??= seedSimpleRoadmap();
+  // simple-replaced-prds: the PRDs marked replaced, whose items no longer feed Simple (service.load).
+  db.simple_roadmap.replaced_prds = replacedPrds(db);
   const roadmapItems = db.simple_roadmap;
   const visualsRes = await routeSimpleVisuals(
     db.simple_visuals,
@@ -6498,7 +6506,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (simpleRes) return simpleRes;
     const companyGoals = db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title }));
     // simple-replaced-prds: the PRDs marked replaced (their drafts are left out, as drafts.listing).
-    const replaced = db.documents.filter((d) => d.kind === "prd" && d.replaced_by?.length).flatMap((d) => [d.id, d.slug]);
+    const replaced = replacedPrds(db);
     return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, replaced }, r, p, q);
   };
   // Simple S8: review meetings, the Decisions page, and changes made through a meeting.
