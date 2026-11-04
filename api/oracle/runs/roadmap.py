@@ -48,9 +48,9 @@ checkpoint's file on each call (D9) and a roadmap import re-checks its run's fil
 file checked before with the same inputs is neither parsed again nor sent to the parse pool.
 A check that timed out or could not read the file is not kept. Every other reader of a
 run's file (the plan tables, oracle.runs.plan_tables; the shared queue with the run's items
-in it, oracle.roadmap.company.with_run_items) reads it through :func:`parsed_items`, which
-keeps the last parses by the text's hash (``_parses``): one step's check, prompt and plan
-table check parse the file once.
+in it, oracle.roadmap.company.with_run_items) reads it through :func:`parsed_items`, whose
+parse is kept in the same cache by the text's hash: one step's check, prompt and plan table
+check parse the file once, and clearing the cache forgets both.
 """
 
 import copy
@@ -80,8 +80,6 @@ MAX_STORED_BYTES = 1_000_000
 PARSE_SECONDS = safe_yaml.PARSE_SECONDS
 # The checks kept (_Checks): at most this many, least recently used dropped first.
 CHECKS_KEPT = 256
-# The parses kept (parsed_items): at most this many, least recently used dropped first.
-PARSES_KEPT = 32
 
 # A cross-document link to a document version's section, as the roadmap draft writes it
 # (oracle.runs.flows.prd_link): /documents/<slug>/v/<n>#<section>.
@@ -368,24 +366,23 @@ class _Checks:
 
 
 _checks = _Checks(CHECKS_KEPT)
-# The last parses of roadmap_items.yaml (parsed_items), by the text's hash.
-_parses = _Checks(PARSES_KEPT)
 
 
 def parsed_items(text: str) -> Any:
     """:func:`load_items_yaml` once per text: a text parsed before (by a check, a prompt's or
     a draft's plan tables, the shared queue) is returned as it was parsed, or refused as it
-    was, each caller getting its own copy. A file that could not be read is not kept (it may
-    read next time)."""
-    key = _Checks.key(text, {})
-    kept = _parses.get(key)
+    was, each caller getting its own copy. Kept in :data:`_checks`, the one cache, under the
+    text's hash and an input no check takes; a file that could not be read is not kept (it
+    may read next time)."""
+    key = _Checks.key(text, {"parsed": True})
+    kept = _checks.get(key)
     if kept is None:
         try:
             kept = ("parsed", load_items_yaml(text))
         except ItemsYamlError as exc:
             kept = ("refused", exc.code, str(exc))
         if kept[0] == "parsed" or kept[1] != "unreadable_yaml":
-            _parses.put(key, kept)
+            _checks.put(key, kept)
     if kept[0] == "refused":
         raise ItemsYamlError(kept[1], kept[2])
     return kept[1]
