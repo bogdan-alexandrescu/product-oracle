@@ -890,11 +890,15 @@ function clauses(text: string, skipped: string[] = []): Clause[] {
 /** ask-length-limit: the most a chat message holds (the API's ChatIn). */
 const CHAT_TEXT_MAX = 4000;
 
+/** Tests set this localStorage key to a number to make the server's chat limit stricter than the browser's. */
+export const MOCK_CHAT_TEXT_MAX_KEY = "po-mock-chat-text-max";
+const chatTextMax = () => Number(localStorage.getItem(MOCK_CHAT_TEXT_MAX_KEY)) || CHAT_TEXT_MAX;
+
 /** ask-length-limit: ChatIn's 422 for an empty or too long text, shaped as FastAPI's. */
 const textRefused = (text: string) => ({
   detail: [
     text
-      ? { type: "string_too_long", loc: ["body", "text"], msg: `String should have at most ${CHAT_TEXT_MAX} characters`, input: text, ctx: { max_length: CHAT_TEXT_MAX } }
+      ? { type: "string_too_long", loc: ["body", "text"], msg: `String should have at most ${chatTextMax()} characters`, input: text, ctx: { max_length: chatTextMax() } }
       : { type: "string_too_short", loc: ["body", "text"], msg: "String should have at least 1 character", input: text, ctx: { min_length: 1 } },
   ],
 });
@@ -1894,7 +1898,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
   if (p[2] === "chat" && p[3] === "messages" && !p[4] && m === "POST") {
     const b = await body();
     const text = String(b.text ?? "").trim();
-    if (!text || text.length > CHAT_TEXT_MAX) return json(422, textRefused(text));
+    if (!text || text.length > chatTextMax()) return json(422, textRefused(text));
     // ask-fresh: continue the caller's own chat `chat_id`; `new_chat` starts a new one about the page.
     const own = typeof b.chat_id === "string" ? ownChat(chat, ctx, b.chat_id) : null;
     if (typeof b.chat_id === "string" && !own) return json(404, { detail: "No such chat" });
@@ -1939,7 +1943,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     }
     if (p[5] === "messages" && m === "POST") {
       const text = String((await body()).text ?? "").trim();
-      if (!text || text.length > CHAT_TEXT_MAX) return json(422, textRefused(text));
+      if (!text || text.length > chatTextMax()) return json(422, textRefused(text));
       const understood = say(db, chat, key, meeting, ctx, text);
       return json(200, { ...threadOut(db, chat, chat.threads[key], ctx, meeting), understood });
     }

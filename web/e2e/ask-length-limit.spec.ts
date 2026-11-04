@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_CHAT_TEXT_MAX_KEY } from "../lib/api/mock/simple-chat";
 import { login } from "./helpers";
 
 /*
@@ -64,18 +65,10 @@ for (const size of SIZES) {
 
     test("a length refusal from the server reads as the length message, with the server's limit", async ({ page }) => {
       // The server's own check (here one stricter than the browser's) says the same words, never "Something went wrong".
-      await page.route("**/v1/simple/chat/messages", (route) =>
-        route.request().method() === "POST"
-          ? route.fulfill({
-              status: 422,
-              contentType: "application/json",
-              body: JSON.stringify({ detail: [{ type: "string_too_long", loc: ["body", "text"], msg: "String should have at most 3000 characters", input: "", ctx: { max_length: 3000 } }] }),
-            })
-          : route.fallback(),
-      );
+      await page.evaluate((key) => localStorage.setItem(key, "3000"), MOCK_CHAT_TEXT_MAX_KEY);
       const panel = await openAsk(page, size.name === "phone");
       const box = panel.getByRole("textbox", { name: "Message Oracle" });
-      const text = words(2500).trim();
+      const text = words(3500).trim();
       await box.fill(text);
       await panel.getByRole("button", { name: "Send" }).click();
       await expect(panel.getByRole("alert")).toHaveText(`This message is ${text.length.toLocaleString("en-US")} characters; Oracle takes up to 3,000. Shorten it and send again.`);
