@@ -279,6 +279,23 @@ def test_a_dependency_on_a_later_slice_than_the_estimate_names_is_a_problem():
     assert _slice_problems("feed-parser") == []
 
 
+def test_a_later_slice_reads_in_plain_words_on_the_items_review():
+    from oracle.runs import reasons
+    from oracle.runs.roadmap import check_items
+
+    check = check_items(SLICED_ITEMS.replace("DEP", "feed-pause-resume"))
+    (reason,) = [
+        r for r in reasons.reasons_for(check.items, check.problems, None)
+        if r["code"] == "later_slice"
+    ]  # fmt: skip
+    assert reason["label"] == "Waits on a later slice"
+    assert reason["text"] == (
+        "Its estimate names Feed parser; it waits on Feed pause and resume, a later slice "
+        "of the same feature."
+    )
+    assert reason["data"] == {"dependency": "feed-pause-resume", "slice": "feed-parser"}
+
+
 # --- The export reads the date's basis kind --------------------------------------------
 
 
