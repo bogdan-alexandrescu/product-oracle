@@ -34,7 +34,7 @@ function findOnPage(title: string): HTMLElement | null {
 function useRect(title: string | null, tick: unknown): DOMRect | null {
   const [r, setR] = useState<DOMRect | null>(null);
   useEffect(() => {
-    if (!title) return setR(null);
+    if (!title) return;
     const read = () => setR(findOnPage(title)?.getBoundingClientRect() ?? null);
     const t = setInterval(read, 400);
     read();
@@ -44,7 +44,7 @@ function useRect(title: string | null, tick: unknown): DOMRect | null {
       removeEventListener("scroll", read, true);
     };
   }, [title, tick]);
-  return r;
+  return title ? r : null;
 }
 
 export function FeaturePanelMock() {
