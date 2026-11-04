@@ -146,6 +146,9 @@ interface SimpleDb {
   /** approved-roadmap-to-simple: roadmaps Simple knows besides ROADMAPS (slug -> its title,
    * PRD, track key and track title), known while their items are the roadmap's. */
   extra_roadmaps?: Record<string, { title: string; prd: string; track: string; track_title: string }>;
+  /** one-roadmap-many-prds (api/oracle/roadmap/company.feeding_ids): the company roadmap's slug;
+   * while set, its items alone feed Simple and older per-PRD roadmaps' items are history. */
+  company_roadmap?: string;
   /** approved-roadmap-to-simple (./approved-roadmap.ts): what each roadmap's last applied version said. */
   applied?: Record<string, AppliedRecord>;
 }
@@ -760,7 +763,7 @@ export function canEditRoadmap(db: SimpleDb, roadmap: string, me: { id: string; 
 
 function visibleItems(db: SimpleDb, role: Role): SeedItem[] {
   const restricted = role === "commenter" || role === "viewer";
-  return db.items.filter((s) => !restricted || ROADMAPS[s.roadmap].visibility === "company");
+  return db.items.filter((s) => (!db.company_roadmap || s.roadmap === db.company_roadmap) && (!restricted || ROADMAPS[s.roadmap].visibility === "company"));
 }
 
 /** plan-model (suggestions._planned): the item's dated slices in its PRD's plan; none when the plan does not place it. */

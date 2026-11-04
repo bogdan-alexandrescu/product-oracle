@@ -5,7 +5,7 @@
  * The "one-roadmap" scenario (MOCK_SCENARIO_KEY): the default company plus the area PRDs User
  * Safety and Scale, whose items sit on the one Product roadmap; the older PRD Trust plan, replaced
  * by both (read-only, its items no longer on the roadmap); and Trust plan's own older roadmap,
- * kept as history. Invented data only.
+ * kept as history (its one item never on Simple). Invented data only.
  */
 import type { Schemas } from "@/lib/api/client";
 import { stableUuid } from "./ids";
@@ -34,11 +34,23 @@ const ITEMS: SeedItem[] = [
   { key: "queue-backpressure", title: "Queue backpressure", horizon: "now", roadmap: COMPANY_SLUG, prd_doc: SCALE, confidence: "low", start: 49, end: 70, source: "engineering" },
 ];
 
+/** An item only Trust plan's older roadmap holds: history, never on Simple. */
+export const OLD_ITEM = "Trusted seller badge";
+const OLD_ITEMS: SeedItem[] = [
+  { key: "trusted-badge", title: OLD_ITEM, horizon: "now", roadmap: OLD_ROADMAP[0], prd_doc: prdRef(...OLD_PRD), confidence: "high", start: 3, end: 20, source: "engineering" },
+];
+
 /** Puts the company roadmap's items on Simple, in place of the per-PRD roadmaps' (history now). */
 export function seedCompanyRoadmap(db: SimpleDb): SimpleDb {
-  db.extra_roadmaps = { [COMPANY_SLUG]: { title: COMPANY_TITLE, prd: SAFETY.title, track: "safety", track_title: "User Safety track" } };
-  db.items = ITEMS.map((s) => ({ ...s }));
-  db.ids = Object.fromEntries(ITEMS.map((s) => [s.key, stableUuid(`simple-item/${s.key}`)]));
+  db.extra_roadmaps = {
+    [COMPANY_SLUG]: { title: COMPANY_TITLE, prd: SAFETY.title, track: "safety", track_title: "User Safety track" },
+    [OLD_ROADMAP[0]]: { title: OLD_ROADMAP[1], prd: OLD_PRD[1], track: "trust", track_title: "Trust track" },
+  };
+  // The company roadmap alone feeds Simple (api/oracle/roadmap/company.feeding_ids).
+  db.company_roadmap = COMPANY_SLUG;
+  const all = [...ITEMS, ...OLD_ITEMS];
+  db.items = all.map((s) => ({ ...s }));
+  db.ids = Object.fromEntries(all.map((s) => [s.key, stableUuid(`simple-item/${s.key}`)]));
   db.own = {};
   db.suggestions = [];
   db.decisions = {};

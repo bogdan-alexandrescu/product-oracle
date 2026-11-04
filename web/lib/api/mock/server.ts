@@ -1233,7 +1233,9 @@ function seedOneRoadmapScenario(): Db {
     return row;
   };
   const areas = AREA_PRDS.map(([slug, title]) => doc(oneRoadmapPrd(slug, title).id, slug, title, "prd"));
-  doc(oneRoadmapPrd(...OLD_PRD).id, OLD_PRD[0], OLD_PRD[1], "prd", { replaced_by: areas.map((a) => a.id) });
+  const old = doc(oneRoadmapPrd(...OLD_PRD).id, OLD_PRD[0], OLD_PRD[1], "prd", { replaced_by: areas.map((a) => a.id), status: "draft" });
+  // Its draft v2, left open when it was replaced: read-only too (nothing writes it a v3).
+  db.versions.push(buildVersion(old, { number: 2, created_at: at, sections: [{ key: "summary", level: 2, heading: "Summary", body: `${OLD_PRD[1]}, a draft left open.` }], citations: [] }));
   doc(uuid(), OLD_ROADMAP[0], OLD_ROADMAP[1], "roadmap");
   doc(uuid(), COMPANY_SLUG, COMPANY_TITLE, "roadmap", { company_roadmap: true });
   db.simple_roadmap = seedCompanyRoadmap(seedSimpleRoadmap());

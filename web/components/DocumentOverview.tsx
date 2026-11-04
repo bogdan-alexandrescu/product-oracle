@@ -416,6 +416,8 @@ export function DocumentOverview({ doc }: { doc: string }) {
   const specsQ = useSpecs(d?.kind === "prd" ? doc : null);
   const specLatest = useSpecLatest(specsQ.data ?? []);
   const templateOnly = isTemplateOnly(d?.kind, d?.versions ?? []);
+  // one-roadmap-many-prds: a replaced PRD is read-only: nothing here writes it a new version.
+  const replaced = (d?.replaced_by?.length ?? 0) > 0;
   // G7 3.3: the panel is about this document (its latest version).
   useScreenSubject(d && versions[0] ? { kind: "document", subject: { document_id: d.id, version: versions[0].number } } : null, d?.title);
   // A missing document: the one not-found page, no crumb waiting on a title that never comes.
@@ -460,12 +462,12 @@ export function DocumentOverview({ doc }: { doc: string }) {
               action={
                 <>
                   {d.kind === "prd" && <LinkButton href={`/documents/${d.slug}/composition`}>Composition</LinkButton>}
-                  {d.kind === "prd" && !d.replaced_by?.length && <BuildRoadmapButton prd={d} />}
+                  {d.kind === "prd" && !replaced && <BuildRoadmapButton prd={d} />}
                   {/* one-roadmap-many-prds: approvers and owners pick the PRDs that replace it, or clear it. */}
                   {d.kind === "prd" && can("set_replaced_by") && <ReplacedByButton prd={d} onSaved={q.reload} />}
                   {d.kind === "pricing" && <PricingDecide slug={d.slug} />}
                   {statesQ.data && <ReviewSettingsButton doc={doc} sections={states} onSaved={statesQ.reload} />}
-                  {templateOnly && <DraftWithOracleButton slug={d.slug} />}
+                  {templateOnly && !replaced && <DraftWithOracleButton slug={d.slug} />}
                   {/* qa-docs-68: a roadmap's page already shows its latest version (the audience view). */}
                   {d.latest_version != null && d.kind !== "roadmap" && (
                     <LinkButton variant={templateOnly ? "secondary" : "primary"} href={versionHref(doc, d.kind, d.latest_version)}>
@@ -476,7 +478,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
               }
             />
             {/* one-roadmap-many-prds: a PRD replaced by area PRDs is read-only and names them at its top. */}
-            {(d.replaced_by?.length ?? 0) > 0 && (
+            {replaced && (
               <p data-testid="replaced-by" className="mb-3 text-sm text-text2">
                 Replaced by{" "}
                 {d.replaced_by!.map((r, i, all) => (
