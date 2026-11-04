@@ -229,6 +229,21 @@ test.describe("a PRD's own milestones", () => {
   });
 });
 
+test.describe("labels in sight", () => {
+  test.use(DESKTOP);
+
+  test("on the Gantt no milestone label covers another, one flipped left of its diamond included", async ({ page }) => {
+    await open(page, "simple-prd-milestones");
+    await page.getByTestId("format-gantt").click();
+    await expect(page.getByTestId("ms-prd-label").filter({ hasText: "M3 Push on phones" })).toBeVisible();
+    const boxes = await page.locator("[data-ms-label]").evaluateAll((els) =>
+      els.filter((e) => getComputedStyle(e).visibility !== "hidden").map((e) => ({ text: e.textContent, ...e.getBoundingClientRect().toJSON() })),
+    );
+    const hits = boxes.flatMap((a, i) => boxes.slice(i + 1).filter((b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom).map((b) => `${a.text} / ${b.text}`));
+    expect(hits).toEqual([]);
+  });
+});
+
 test.describe("on a phone", () => {
   test.use(PHONE);
 
