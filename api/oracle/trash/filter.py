@@ -6,8 +6,9 @@ Every ORM SELECT on a tenant session gets ``deleted_at IS NULL`` for
 included), and what hangs off a trashed one (every row pointing at a trashed document:
 its versions, feedback, discussions, notifications, campaigns, change sets, publications,
 draft roadmaps, plan rows, a roadmap's public texts and checks, spec requests, a spec
-request whose own tech brief is trashed; a run's checkpoints and segments; an intake's
-gaps and questions) is left out with it, as
+request whose own tech brief is trashed; a run's checkpoints and segments, and questions
+about them; an intake's gaps and questions; a PRD's open questions read in as decisions)
+is left out with it, as
 the tenant scope is added (oracle.tenancy). tests/test_trash.py walks the mapped models:
 a column pointing at documents is followed here or exempt there with its reason.
 Lists, direct reads (a 404), the Inbox, Home, Plan and the agents' MCP reads all go
@@ -153,6 +154,29 @@ def _spec_document_live(cls: Any) -> ColumnElement[bool]:
     return or_(spec.is_(None), spec.not_in(trashed))
 
 
+def _prd_question_live(cls: Any) -> ColumnElement[bool]:
+    """A decision that is not the open question of a PRD in Trash or purged from it
+    (``prd_question["document_id"]``, oracle.simple.questions): those leave the Inbox and
+    Home with their PRD."""
+    from oracle.docs.models import Document
+
+    docs = Document.__table__
+    prd = cls.prd_question.op("->>", return_type=Text)(literal_column("'document_id'"))
+    live = select(cast(docs.c.id, Text)).where(docs.c.deleted_at.is_(None))
+    return or_(prd.is_(None), prd.in_(live))
+
+
+def _question_checkpoint_live(cls: Any) -> ColumnElement[bool]:
+    """A teammate's question about a checkpoint item of a run that is not in Trash."""
+    from oracle.runs.models import Checkpoint, Run
+
+    cps, runs = Checkpoint.__table__, Run.__table__
+    trashed = select(cps.c.id).where(
+        cps.c.run_id.in_(select(runs.c.id).where(runs.c.deleted_at.is_not(None)))
+    )
+    return or_(cls.checkpoint_id.is_(None), cls.checkpoint_id.not_in(trashed))
+
+
 def _live_parents(parents: list[tuple[str, Any]]) -> Callable[[Any], ColumnElement[bool]]:
     """The clause for a class (or an alias of it): each parent link empty or not trashed."""
     return lambda cls: and_(
@@ -170,9 +194,10 @@ def criteria() -> dict[type, Callable[[Any], ColumnElement[bool]]]:
     """Mapped class -> a function of the class, or of an alias of it, giving the clause that
     keeps only its live rows. Built once; no bound values, so the statement cache works."""
     if not _CRITERIA:
+        from oracle.decisions.models import Decision
         from oracle.docs.models import Document
         from oracle.runs.models import Run
-        from oracle.v2.models import ArtifactRequest, ProductIntake
+        from oracle.v2.models import ArtifactRequest, ProductIntake, StakeholderQuestion
 
         for entity in (Document, ProductIntake, Run):
             _CRITERIA[entity] = lambda cls: cls.deleted_at.is_(None)
@@ -180,6 +205,11 @@ def criteria() -> dict[type, Callable[[Any], ColumnElement[bool]]]:
             _CRITERIA[entity] = _live_parents(parents)
         request = _CRITERIA[ArtifactRequest]
         _CRITERIA[ArtifactRequest] = lambda cls: and_(request(cls), _spec_document_live(cls))
+        asked = _CRITERIA[StakeholderQuestion]
+        _CRITERIA[StakeholderQuestion] = lambda cls: and_(
+            asked(cls), _question_checkpoint_live(cls)
+        )
+        _CRITERIA[Decision] = _prd_question_live
     return _CRITERIA
 
 

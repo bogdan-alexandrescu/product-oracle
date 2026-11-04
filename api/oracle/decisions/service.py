@@ -497,7 +497,10 @@ async def next_number(db: AsyncSession) -> int:
     await db.execute(
         text("SELECT pg_advisory_xact_lock(hashtext('decisions:' || :t))"), {"t": str(tenant_id)}
     )
-    latest = await db.scalar(select(func.max(Decision.number)))
+    # Every number, a trashed PRD's open questions' too (oracle.trash.filter hides them).
+    from oracle.trash.service import highest_decision_number
+
+    latest = await highest_decision_number(db)
     return (latest or 0) + 1
 
 
