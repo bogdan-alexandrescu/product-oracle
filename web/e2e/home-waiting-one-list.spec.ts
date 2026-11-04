@@ -131,3 +131,14 @@ for (const phone of [false, true]) {
     });
   });
 }
+
+// Card meeting-year: protects = a review meeting in another year says its day with the year
+// (the date tile alone read "Nov 22"); fails_when = the card's day has no year.
+test("A review meeting next year says its year on Home", async ({ page }) => {
+  await page.clock.setSystemTime(new Date("2026-12-30T17:00:00Z"));
+  await login(page);
+  await page.goto("/simple");
+  const next = page.getByTestId("home-meeting-next");
+  await expect(next).toBeVisible();
+  await expect(next).toContainText(/Jan \d{1,2}, 2027/);
+});
