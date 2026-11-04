@@ -112,3 +112,13 @@ test("only a same-origin path under /uploads/ is a stored image", () => {
     expect(storedImageSrc(bad), bad).toBeNull();
   }
 });
+
+test("a citation of two sources is two chips and other raw markers are no text", () => {
+  const blocks = parseBlocks("Ahead [c:r1, r2]; C confirms [l:2], R rebooks [s:rebook]. Seen [c:front desk notes].");
+  if (blocks[0].t !== "p") throw new Error("paragraph expected");
+  expect(blocks[0].c.filter((n) => n.t === "cite")).toEqual([
+    { t: "cite", key: "r1" },
+    { t: "cite", key: "r2" },
+  ]);
+  expect(blocksText(blocks)).toBe("Ahead ; C confirms, R rebooks. Seen.");
+});

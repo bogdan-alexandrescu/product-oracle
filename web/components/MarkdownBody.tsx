@@ -278,6 +278,8 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
       }
       case "cite": {
         const c = ctx.citations.get(n.key);
+        // A citation that points to nothing is dropped, not shown as "?" (raw-tokens-everywhere).
+        if (!c) return null;
         return <CitationChip key={k} citeKey={n.key} citation={c?.citation} number={c?.number} />;
       }
     }

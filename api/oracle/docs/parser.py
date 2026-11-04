@@ -38,6 +38,7 @@ from oracle.docs.schemas import (
     CitationSource,
     ImportProblem,
 )
+from oracle.raw_tokens import has_raw_tokens, strip_raw_tokens
 from oracle.review.schemas import NoteResolution, Resolution
 
 # Levels 1-3 start a section; deeper headings are part of the section body.
@@ -53,10 +54,10 @@ CITATION_STRIP_RE = re.compile(r"(?<![ \t])[ \t]*\[c:(?:[^\]\s\[]|\[(?!c:))++\]"
 
 
 def strip_citations(text: str) -> str:
-    """``text`` without its ``[c:id]`` markers. A nested ``[c:[c:x]a]`` leaves ``[c:a]``
-    after one pass, so strip until the text stops changing (at most 3 passes). Nesting
-    deeper than that is not real text: every "[c:" left is then dropped in one scan, so
-    nothing CITATION_RE reads survives."""
+    """``text`` without its ``[c:id]`` markers (nor any other raw token: oracle.raw_tokens).
+    A nested ``[c:[c:x]a]`` leaves ``[c:a]`` after one pass, so strip until the text stops
+    changing (at most 3 passes). Nesting deeper than that is not real text: every "[c:"
+    left is then dropped in one scan, so nothing CITATION_RE reads survives."""
     for _ in range(3):
         stripped = CITATION_STRIP_RE.sub("", text)
         if stripped == text:
@@ -64,7 +65,8 @@ def strip_citations(text: str) -> str:
         text = stripped
     if CITATION_RE.search(text):
         text = _drop_citation_openers(text)
-    return text
+    # raw-tokens-everywhere: nor any other raw marker ("[l:2]", "[s:id]", "[c:a b]").
+    return strip_raw_tokens(text) if has_raw_tokens(text) else text
 
 
 def _drop_citation_openers(text: str) -> str:
