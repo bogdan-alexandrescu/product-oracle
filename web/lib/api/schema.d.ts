@@ -18118,6 +18118,8 @@ export interface components {
              * @default false
              */
             asks_with_dependents_outside: boolean;
+            /** Elsewhere */
+            elsewhere?: string | null;
         };
         /** ChatChoiceOut */
         ChatChoiceOut: {
@@ -26009,6 +26011,7 @@ export interface components {
              * @enum {string}
              */
             state: "new" | "open" | "done";
+            from_meeting?: components["schemas"]["SimpleChangeMeeting"] | null;
         };
         /**
          * InboxSimpleMinutes
@@ -38005,6 +38008,19 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
+        /**
+         * SimpleChangeMeeting
+         * @description meeting-changes-only-its-agenda: the meeting a change was made in.
+         */
+        SimpleChangeMeeting: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
         /** SimpleChangeOut */
         SimpleChangeOut: {
             /**
@@ -38084,6 +38100,12 @@ export interface components {
             can_undo: boolean;
             /** Words */
             words?: string | null;
+            from_meeting?: components["schemas"]["SimpleChangeMeeting"] | null;
+            /**
+             * Off Agenda
+             * @default false
+             */
+            off_agenda: boolean;
         };
         /** SimpleChangeResult */
         SimpleChangeResult: {
@@ -39175,6 +39197,8 @@ export interface components {
             ritual_id?: string | null;
             /** Due At */
             due_at?: string | null;
+            /** Roadmap */
+            roadmap?: string | null;
             /** Attendee Ids */
             attendee_ids?: string[];
             /**

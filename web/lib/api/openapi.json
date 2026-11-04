@@ -59933,6 +59933,17 @@
             "type": "boolean",
             "title": "Asks With Dependents Outside",
             "default": false
+          },
+          "elsewhere": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elsewhere"
           }
         },
         "type": "object",
@@ -81201,6 +81212,16 @@
               "done"
             ],
             "title": "State"
+          },
+          "from_meeting": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleChangeMeeting"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -114648,6 +114669,26 @@
         ],
         "title": "SimpleChangeIn"
       },
+      "SimpleChangeMeeting": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SimpleChangeMeeting",
+        "description": "meeting-changes-only-its-agenda: the meeting a change was made in."
+      },
       "SimpleChangeOut": {
         "properties": {
           "id": {
@@ -114861,6 +114902,21 @@
               }
             ],
             "title": "Words"
+          },
+          "from_meeting": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleChangeMeeting"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "off_agenda": {
+            "type": "boolean",
+            "title": "Off Agenda",
+            "default": false
           }
         },
         "type": "object",
@@ -117499,6 +117555,18 @@
               }
             ],
             "title": "Due At"
+          },
+          "roadmap": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap"
           },
           "attendee_ids": {
             "items": {
