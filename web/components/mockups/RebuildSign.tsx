@@ -95,7 +95,7 @@ function makeRuns(state: State, hard: string | null, tick: number, polls: number
     return [prd, { ...roadmap, state: "scheduled", step: 1, scheduledFor: "after the PRD's new draft", justMoved: false }];
   }
   if (hard === "four") {
-    const carts: Run = { ...prd, id: "rebuild-carts", slug: "saved-carts", title: "Saved carts PRD", from: 2, to: 3, step: Math.min(prdStep + 2, 6), minutesLeft: Math.max(5, left - 22), justMoved: false };
+    const carts: Run = { ...prd, id: "rebuild-carts", slug: "saved-carts", title: "Saved carts PRD", from: 2, to: 3, step: Math.min(prdStep + 1, 6), minutesLeft: Math.max(5, left - 22), justMoved: false };
     return [prd, carts, { ...roadmap, state: "scheduled", step: 1, scheduledFor: "after the 2 PRDs", justMoved: false }];
   }
   return [prd, roadmap];
@@ -242,11 +242,11 @@ function Progress({ r }: { r: Run }) {
 
 /** What happens to the page while it runs, in one sentence. */
 function outcome(r: Run) {
-  if (r.state === "done") return `v${r.to} is a draft until it is approved. This page shows v${r.from} until then.`;
+  if (r.state === "done") return `v${r.to} is a draft until it is approved. Until then, everyone keeps seeing v${r.from}.`;
   if (r.state === "failed") return `${r.failed.reason} at "${r.steps[r.step - 1]}". Nothing changed: you still read v${r.from}.`;
   return r.kind === "roadmap"
-    ? `It makes a new draft, v${r.to}. You keep seeing the approved roadmap (v${r.from}) until v${r.to} is approved.`
-    : `It makes a new draft, v${r.to}. This page keeps showing v${r.from} until v${r.to} is approved.`;
+    ? `It makes a new draft, v${r.to}. Until v${r.to} is approved, everyone keeps seeing the approved roadmap (v${r.from}).`
+    : `It makes a new draft, v${r.to}. Until v${r.to} is approved, everyone keeps seeing v${r.from}.`;
 }
 
 function RunAction({ r, onOpen }: { r: Run; onOpen?: () => void }) {
@@ -445,7 +445,7 @@ function Note({ runs, onOpen }: { runs: Run[]; onOpen: () => void }) {
       ))}
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
         {!many && action(r)}
-        {(r.state === "running" || r.state === "waiting" || r.state === "scheduled") && !many && <span>This page keeps showing v{r.from} until v{r.to} is approved.</span>}
+        {(r.state === "running" || r.state === "waiting" || r.state === "scheduled") && !many && <span>Until v{r.to} is approved, everyone keeps seeing v{r.from}.</span>}
         {r.state !== "done" && r.state !== "failed" && <span className="text-text-faint">Updates by itself</span>}
       </p>
     </div>
