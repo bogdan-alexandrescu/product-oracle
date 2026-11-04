@@ -1428,3 +1428,9 @@ code .date-mark {
     }
   }
 }
+
+/* The focused row of a Split's table is ringed on all four sides (Esc on its panel brings focus back here). */
+[data-split-table] tr[data-row]:focus-visible { outline: none; }
+[data-split-table] tr[data-row]:focus-visible > td { box-shadow: inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent); }
+[data-split-table] tr[data-row]:focus-visible > td:first-child { box-shadow: inset 6px 0 0 var(--accent), inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent); }
+[data-split-table] tr[data-row]:focus-visible > td:last-child { box-shadow: inset -2px 0 0 var(--accent), inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent); }

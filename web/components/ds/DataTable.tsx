@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { usePickableTable } from "./panel-close";
 
 export type Column<T> = {
   key: string;
@@ -118,6 +119,8 @@ export function DataTable<T>({
 }) {
   const body = useRef<HTMLTableSectionElement>(null);
   const selectable = !!onSelect;
+  // In a Split, a table that picks rows lets the Split's panel close (picking a row opens it again).
+  usePickableTable(selectable);
   const list = rows ?? [];
   const selIndex = list.findIndex((r) => rowKey(r) === selected);
 

@@ -40,6 +40,7 @@ import { displayName } from "@/lib/names";
 import { useScreenSubject } from "@/lib/screen-subject";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { fitWords, textWidth, useFontsReady, useWidth, wordsOf } from "@/lib/words";
+import { usePanelClose } from "@/components/ds/panel-close";
 
 import {
   ChangesPanel,
@@ -202,9 +203,11 @@ const GOAL_MAX = 144;
 const CELL_PAD = 16;
 /** The Depends on column, and the room its 13 px text has. */
 const DEPS_WIDTH = 104;
-const DEPS_ROOM = DEPS_WIDTH - CELL_PAD;
+/** With the panel closed, Goal and Depends on take the room it gave back. */
+const DEPS_WIDE = 232;
+const GOAL_WIDE = 260;
 
-function goalWidth(features: RankedFeature[]): number {
+function goalWidth(features: RankedFeature[], max = GOAL_MAX): number {
   let need = 0;
   for (const f of features)
     for (const g of f.explanation.goals) {
@@ -212,9 +215,12 @@ function goalWidth(features: RankedFeature[]): number {
       const longest = Math.max(0, ...wordsOf(n.name).map((w) => textWidth(w, 500, 15) ?? 0));
       const beside = CELL_PAD + codeTagRoom(n.code) + longest;
       // A name that cannot sit beside its code even at GOAL_MAX goes under it.
-      need = Math.max(need, beside <= GOAL_MAX ? beside : CELL_PAD + longest);
+      need = Math.max(need, beside <= max ? beside : CELL_PAD + longest);
+      // The panel closed: room for the whole name beside its code, up to the wider max.
+      if (max > GOAL_MAX)
+        need = Math.max(need, Math.min(max, CELL_PAD + codeTagRoom(n.code) + (textWidth(n.name, 500, 15) ?? 0)));
     }
-  return Math.min(GOAL_MAX, Math.max(GOAL_MIN, Math.ceil(need) + 1));
+  return Math.min(max, Math.max(GOAL_MIN, Math.ceil(need) + 1));
 }
 
 /** A feature key as its name only (beside other names, the code adds nothing). */
@@ -997,6 +1003,12 @@ function Priorities() {
   const withChanges = order === "changes";
   // qa-plan-14: on a phone the selected feature opens in a bottom sheet, as on Impact.
   const phone = usePhone();
+  // On a desktop the panel closes by its × or Esc; the Goal and Depends on columns then take
+  // the room it gave back, their words still whole.
+  const panel = usePanelClose();
+  const wideCols = !phone && !panel.open;
+  const depsWidth = wideCols ? DEPS_WIDE : DEPS_WIDTH;
+  const depsRoom = depsWidth - CELL_PAD;
   const [sheet, setSheet] = useState(false);
   const pick = (key: string) => {
     setSelected(key);
@@ -1080,7 +1092,10 @@ function Priorities() {
 
   const fonts = useFontsReady();
   // Measured in the fonts the page has, and again in its own once they load (priorities-words).
-  const goalCol = useMemo(() => (fonts ? goalWidth(rows ?? []) : GOAL_MIN), [fonts, rows]);
+  const goalCol = useMemo(
+    () => (fonts ? goalWidth(rows ?? [], wideCols ? GOAL_WIDE : GOAL_MAX) : GOAL_MIN),
+    [fonts, rows, wideCols],
+  );
   // The Feature column takes the room left, so its text's room is read from its header; a
   // phone's card is a whole line wide (its header is for screen readers only).
   const [featureHead, featureHeadWidth] = useWidth();
@@ -1164,7 +1179,7 @@ function Priorities() {
         return (
           <button
             type="button"
-            aria-expanded={on}
+            aria-expanded={on && panel.open}
             aria-controls={inspectorId}
             onClick={(e: MouseEvent) => {
               e.stopPropagation();
@@ -1251,7 +1266,7 @@ function Priorities() {
     {
       key: "deps",
       header: "Depends on",
-      width: `${DEPS_WIDTH}px`,
+      width: `${depsWidth}px`,
       hideOnPhone: true,
       // qa4-plan-1: with the Oracle # column it gives way under 1000 px (the inspector shows
       // it), so the Feature column keeps room for whole words.
@@ -1271,10 +1286,10 @@ function Priorities() {
           <span data-testid="row-deps" className="block text-[13px] leading-[18px] text-text2" title={[text, note].filter(Boolean).join(". ") || undefined}>
             {/* Between words; a word wider than the column hyphenated, never cut bare
                 ("instrumentatio / n", priorities-words). */}
-            {(fonts ? fitWords(text, DEPS_ROOM, 400, 13) : text) || "—"}
+            {(fonts ? fitWords(text, depsRoom, 400, 13) : text) || "—"}
             {note && (
               <span data-testid="row-deps-outside" className="block text-[12px] leading-4 text-warn">
-                {fonts ? fitWords(note, DEPS_ROOM, 400, 12) : note}
+                {fonts ? fitWords(note, depsRoom, 400, 12) : note}
               </span>
             )}
           </span>
@@ -1440,7 +1455,7 @@ function Priorities() {
         )}
         {cmp && <NewFeaturesNote c={cmp} />}
 
-        <Split inspector={!phone && inspector}>
+        <Split inspector={!phone && inspector} panel={panel}>
           <Panel>
             <div className="flex min-h-14 flex-wrap items-center gap-2.5 border-b border-line px-4 py-2.5 max-[600px]:px-3">
               {/* On a phone the method switch and the formula's (i) share one line that never
