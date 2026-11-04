@@ -66,10 +66,18 @@ async function openItem(page: Page): Promise<Locator> {
   if (await filters.isVisible()) await tap(filters);
   await page.getByTestId("filter-roadmap").selectOption({ label: "Onboarding roadmap" });
   await expect(roadmap).toContainText("Onboarding roadmap");
-  if (await page.getByRole("dialog", { name: "Filters" }).isVisible()) await page.keyboard.press("Escape");
-  await tap(roadmap.getByRole("button", { name: /^Welcome video/ }).first());
+  // A phone's Filters sheet closes before the roadmap is tapped, and a tap the closing sheet
+  // swallowed is made again until the panel opens.
+  const sheet = page.getByRole("dialog", { name: "Filters" });
+  if (await sheet.isVisible()) {
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+  }
   const panel = page.getByRole("dialog").filter({ hasText: "Welcome video" }).last();
-  await expect(panel).toBeVisible();
+  await expect(async () => {
+    if (!(await panel.isVisible())) await tap(roadmap.getByRole("button", { name: /^Welcome video/ }).first());
+    await expect(panel).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 20_000 });
   return panel;
 }
 

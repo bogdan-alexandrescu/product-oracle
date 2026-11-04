@@ -160,7 +160,7 @@ import {
   type PricingContext,
   type PricingDb,
 } from "./pricing";
-import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
+import { routeSimpleChanges, seedFeatureAskProposal, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { goalSuggestionInboxRows, seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
@@ -940,12 +940,17 @@ function seedMeetingAgendaOwnerScenario(): Db {
 /**
  * inbox-meeting-proposals fix "inbox-reviewer" scenario: "meeting-agenda-owner" with
  * approver@example.com a required reviewer of the Alerts roadmap, so a draft of it sent for
- * review waits in that person's Inbox.
+ * review waits in that person's Inbox; and commenter@example.com's feature ask Bulk export,
+ * on no roadmap, waiting on the owners.
  */
 function seedInboxReviewerScenario(): Db {
   const db = seedMeetingAgendaOwnerScenario();
   const approver = db.members.find((m) => m.email === "approver@example.com")!;
   db.simple_roadmap!.reviewers = { "alerts-roadmap": [approver.id] };
+  // A teammate's feature ask on no roadmap waits on the owners (decided in Requests).
+  const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+  const owners = db.members.filter((m) => m.role === "owner").map((m) => m.id);
+  seedFeatureAskProposal(db.simple_roadmap!, { id: commenter.id, name: commenter.name ?? commenter.email, owners }, "Bulk export", "2026-10-26T15:00:00Z");
   return db;
 }
 

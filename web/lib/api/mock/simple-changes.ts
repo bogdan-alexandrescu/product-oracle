@@ -932,6 +932,18 @@ export function seedSimpleProposal(
 }
 
 /**
+ * inbox-meeting-proposals fix: a feature ask proposed by a teammate, on no roadmap (its
+ * document_id null), waiting on the company's owners; decided in Requests.
+ */
+export function seedFeatureAskProposal(db: SimpleDb, who: Pick<SimpleChangesCtx, "owners"> & { id: string; name: string }, title: string, at: string): void {
+  (db.changes ??= []).push({
+    id: stableUuid(`simple-proposal/ask/${title}`), session_id: null, document_id: null, draft_ids: [],
+    op: "add_feature_ask", target: { ask_id: stableUuid(`simple-ask/${title}`) }, before: {}, after: { title }, status: "proposed", by: who.id, by_name: who.name, at,
+    decided_by: null, decided_at: null, reason: null, decision_reason: null, routed_to: [...who.owners], undoes_id: null, undone: false, can_decide: false, can_undo: false,
+  });
+}
+
+/**
  * meeting-changes-only-its-agenda (changes.create): a change a meeting makes to an item it does
  * not review is never applied: a proposal for the item's own decider (never the meeting's),
  * naming the meeting that asked for it.
