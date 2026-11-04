@@ -66,6 +66,7 @@ import {
 } from "./_lib";
 import { Chart, PHASES, type Layout } from "./_timeline";
 import { ConflictPanel, ZoomTimeline } from "./_zoom";
+import { RebuildSign } from "@/components/RebuildSign";
 
 /** #34: the Roadmap's toasts sit in the bottom-right corner on a desktop, clear of the chart. */
 const toast = (ask: ToastAsk) => dsToast({ place: "corner", ...ask });
@@ -1377,6 +1378,8 @@ export function SimpleRoadmap() {
             </span>
           )
         )}
+        {/* The rebuild sign beside the roadmap's name: its run, or the PRDs that feed it. */}
+        <RebuildSign slug={data.roadmap?.slug ?? null} />
         <div className={phone ? "w-full" : ""} data-testid="format-switch">
           <SegmentedControl<Format>
             label="Format"

@@ -40,6 +40,7 @@ import { useScreenSubject } from "@/lib/screen-subject";
 import { NAMES_FAILED, useTemplateNames } from "@/lib/template-names";
 import { useQuery, type Query } from "@/lib/use-query";
 import { versionHref } from "@/lib/version-href";
+import { RebuildSign } from "@/components/RebuildSign";
 
 /** A template or theme beside the title, by its name: a small hairline pill. */
 const META = "inline-flex min-h-[26px] max-w-full items-center rounded-full border border-line-strong px-2.5 text-[13px] text-text2";
@@ -439,6 +440,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
               status={
                 <>
                   <DocStatusChip status={d.status} />
+                  <RebuildSign slug={d.slug} />
                   <RoleBadge />
                   {d.template && (
                     <span className={META} data-testid="doc-template" title={d.template_version ? `Template, its version ${d.template_version}` : "Template"}>

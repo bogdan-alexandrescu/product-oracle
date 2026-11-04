@@ -165,6 +165,7 @@ import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simpl
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
+import { rebuildsOut } from "./rebuilds";
 import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
@@ -6646,6 +6647,25 @@ async function route(db: Db, req: Request): Promise<Response> {
   const seenBefore = db.inbox_seen?.[me.id] ?? null;
   // E1: the ticker moves each PRD draft's derivation one step (queued -> running -> ready).
   if (p[1] === "internal" && p[2] === "tick" && m === "POST") tickDraftRoadmaps(draftCtx(db), draftDb(db));
+  // The rebuild sign (owner's pick A): the runs that will make a new version of a document.
+  if (p[1] === "rebuilds" && p.length === 2 && m === "GET") {
+    const nameOf = (id: string | null) => {
+      const mm = db.members.find((x) => x.id === id);
+      return mm ? displayName(mm.email, mm.name) : null;
+    };
+    const owner = db.members.find((x) => x.role === "owner" && x.status !== "disabled");
+    return json(
+      200,
+      rebuildsOut({
+        runs: db.runs?.runs ?? [],
+        documents: db.documents,
+        versions: (id) => db.versions.filter((v) => v.document_id === id).map((v) => ({ number: v.number, approved: !!v.approved_at })),
+        name: nameOf,
+        decider: owner ? displayName(owner.email, owner.name) : null,
+        now: new Date(mockNowMs()),
+      }),
+    );
+  }
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
   // C4: an intake's draft run that starts converts its brief (the API's drafting.on_start).
   if (runs?.ok && req.method === "POST" && p[1] === "runs" && p[3] === "start" && p.length === 4) {

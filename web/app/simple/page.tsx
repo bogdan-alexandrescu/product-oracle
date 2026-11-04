@@ -41,6 +41,7 @@ import {
 } from "@/lib/simple-home";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, waitingChanged } from "@/lib/waiting";
+import { RebuildHome } from "@/components/RebuildSign";
 
 type Change = Schemas["SimpleChangeOut"];
 type Decision = Schemas["DecisionOut"];
@@ -601,6 +602,8 @@ export default function SimpleHome() {
           </div>
         )}
       </header>
+      {/* The rebuild sign: what shared with me is being rebuilt. */}
+      <RebuildHome />
 
       {walking && (
         <Walk
