@@ -784,3 +784,48 @@ async def test_a_run_items_effort_priority_and_goal_are_the_ones_landing_stores(
     assert (by["report-button"]["start"], by["report-button"]["end"]) == (
         (TODAY + 2 * week).isoformat(), (TODAY + 5 * week).isoformat())  # fmt: skip
     assert await _landed(ctx, ids, REESTIMATE_ITEMS) == _planned(queued)
+
+
+SECTION_ITEMS = """\
+version: 1
+prd: {document: user-safety, version: 1}
+items:
+  - id: report-button
+    title: Report button
+    outcome: People report harm in one tap
+    horizon: now
+    milestone: {name: Beta}
+  - id: safety-reports
+    title: Safety reports
+    outcome: People see what happened to their report
+    horizon: now
+    milestone: {name: Beta}
+    prd_section: reporting
+"""
+
+
+async def test_a_run_items_goal_comes_from_the_feature_its_prd_section_links(client):
+    from oracle.docs.models import Section
+    from oracle.roadmap import company
+    from oracle.v2.models import DocumentSectionLink
+
+    ctx, ids = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        feature = await _goal(s, "fewer-harmful-posts", "Fewer harmful posts", 1, "reporting")
+        s.add(Section(version_id=ids["sv"], section_key="reporting", ordinal=1, level=2,
+                      heading="Reporting", content_hash=_hash("Reporting")))  # fmt: skip
+        s.add(DocumentSectionLink(document_id=ids["safety"], version_id=ids["sv"],
+                                  section_key="reporting", kind="implements",
+                                  entity_id=feature.id))  # fmt: skip
+        replicas = await s.scalar(select(RoadmapItem).where(
+            RoadmapItem.roadmap_version_id == ids["v1"],
+            RoadmapItem.item_key == "read-replicas"))  # fmt: skip
+        replicas.milestone = {"name": "Beta"}
+        await s.commit()
+        frozen = await company.frozen_queue(s, ids["safety"], prd_version=await s.get(
+            DocumentVersion, ids["sv"]))  # fmt: skip
+    plan = {k: v for k, v in frozen.items() if k != "rows"}
+    queued = company.with_run_items(frozen["rows"], SECTION_ITEMS, **plan)
+    # Its section links a feature that serves a company goal: it goes first in Beta.
+    assert [r["key"] for r in queued] == ["safety-reports", "report-button", "read-replicas"]
+    assert await _landed(ctx, ids, SECTION_ITEMS) == _planned(queued)
