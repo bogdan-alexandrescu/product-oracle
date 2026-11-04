@@ -53,8 +53,9 @@ def test_done_item_is_not_checked():
     assert flags["beta"] == []
     # A done item's own checks are skipped too: its order, its milestone, its blockers.
     vendor = constraints.Blocker("x", "Vendor", date(2026, 12, 5), True)
+    ms = ("Beta", date(2026, 12, 1))
     late = _node("gamma", date(2026, 11, 2), date(2027, 1, 30), depends_on=["beta"],
-                 status="done", milestone=("Beta", date(2026, 12, 1)), blockers=[vendor])  # fmt: skip
+                 status="done", milestone=ms, blockers=[vendor])  # fmt: skip
     flags = constraints.check([beta, late])
     assert flags["gamma"] == []
     # A cut item only a done item depends on leaves nothing to decide.
