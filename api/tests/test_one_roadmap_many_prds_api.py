@@ -8,6 +8,7 @@ that replace it and its items no longer feed the roadmap. Against Postgres. Inve
 """
 
 import hashlib
+import uuid
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
@@ -455,3 +456,71 @@ async def test_a_runs_queue_is_the_roadmap_as_it_was_when_the_run_started(client
         then_rows = await company.run_queue(s, ids["safety"], as_of=started)
     assert "sharding" in {r["key"] for r in now_rows}
     assert {r["key"] for r in then_rows} == {"report-button", "read-replicas"}
+
+
+MILESTONE_ITEMS = """\
+version: 1
+prd: {document: user-safety, version: 1}
+items:
+  - id: report-button
+    title: Report button for every post
+    outcome: People report harm in one tap
+    horizon: now
+  - id: block-list
+    title: Block list
+    outcome: People block whoever they choose
+    horizon: later
+    milestone: {name: Beta}
+"""
+
+
+async def test_a_run_item_that_names_a_milestone_takes_that_milestones_place(client):
+    from oracle.roadmap import company
+
+    ctx, ids = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        replicas = await s.scalar(select(RoadmapItem).where(
+            RoadmapItem.item_key == "read-replicas"))  # fmt: skip
+        replicas.milestone = {"name": "Beta"}
+        rm = await s.get(Document, ids["company"])
+        v1 = await s.get(DocumentVersion, ids["v1"])
+        scale, cv = await s.get(Document, ids["scale"]), await s.get(DocumentVersion, ids["cv"])
+        s.add(_item(rm, v1, scale, cv, "sharding", "Sharding", 2, horizon="later"))
+        await s.commit()
+        rows = await company.run_queue(s, ids["safety"])
+    queued = company.with_run_items(rows, MILESTONE_ITEMS)
+    # Block list is in Later, but it names Beta: it goes where Beta is in the queue (with
+    # read replicas, before every item without a milestone), not after Later's items.
+    assert [r["key"] for r in queued] == ["read-replicas", "block-list", "report-button",
+                                          "sharding"]  # fmt: skip
+    by = {r["key"]: r for r in queued}
+    week = timedelta(days=7)
+    assert by["block-list"]["start"] == (TODAY + week).isoformat()
+    assert by["block-list"]["end"] == (TODAY + 2 * week).isoformat()
+    assert by["sharding"]["end"] == (TODAY + 4 * week).isoformat()
+
+
+async def test_a_runs_prompt_and_check_date_the_queue_from_the_runs_own_day(client, monkeypatch):
+    from types import SimpleNamespace
+
+    from oracle.roadmap import company
+    from oracle.runs import plan_tables, service
+
+    ctx, ids = await world(client)
+    started = datetime.now(UTC)
+    run_day = company_time.day(started, company_time.DEFAULT_ZONE)
+    monkeypatch.setattr(company_time, "now", lambda: started)
+    async with tenant_session(ctx.tenant_id) as s:
+        prompt_rows = await company.run_queue(s, ids["safety"], as_of=started)
+    assert prompt_rows[0]["start"] == run_day.isoformat()
+    written = plan_tables.markdown(plan_tables.engineering_plan(None, [], others=prompt_rows))
+    # The check runs after the company's midnight: it still dates the queue from the run's day.
+    monkeypatch.setattr(company_time, "now", lambda: started + timedelta(days=1))
+    run = SimpleNamespace(id=uuid.uuid4(), created_at=started)
+    async with tenant_session(ctx.tenant_id) as s:
+        check_rows = await company.run_queue(s, ids["safety"], as_of=started)
+        problems = await service._plan_table_problems(s, run, written, ids["sv"])
+    assert [(r["start"], r["end"]) for r in check_rows] == [
+        (r["start"], r["end"]) for r in prompt_rows
+    ]
+    assert not problems, [p.message for p in problems]
