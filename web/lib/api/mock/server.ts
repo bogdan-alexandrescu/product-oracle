@@ -200,8 +200,10 @@ import {
  * latest_version, approved_version, source and an update's period are read off the versions;
  * visibility is "company" unless the row says otherwise (H8: updates are "approvers").
  */
-export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source" | "visibility" | "period"> & {
+export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source" | "visibility" | "period" | "company_roadmap"> & {
   visibility?: Schemas["DocumentSummary"]["visibility"];
+  /** one-roadmap-many-prds: the company's one roadmap (false when not set). */
+  company_roadmap?: boolean;
   /** one-roadmap-many-prds: the PRDs that replace this one (ids, in order); read-only while any. */
   replaced_by?: string[];
 };
@@ -3888,10 +3890,12 @@ function documentSummary(db: Db, d: DocumentRow): Schemas["DocumentSummary"] {
   const vs = docVersions(db, d);
   const latest = vs[vs.length - 1];
   const period = d.kind === "update" ? ((latest?.front_matter.period as UpdatePeriod | undefined) ?? null) : null;
-  const { replaced_by: _replaced, ...row } = d;
+  const row: Omit<DocumentRow, "replaced_by"> & { replaced_by?: string[] } = { ...d };
+  delete row.replaced_by;
   return {
     ...row,
     kind: d.kind ?? "prd",
+    company_roadmap: d.company_roadmap ?? false,
     visibility: d.visibility ?? "company",
     // O5: a roadmap without a default audience reads as "team"; other kinds have none.
     audience: d.kind === "roadmap" ? (d.audience ?? "team") : null,

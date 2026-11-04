@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role, require_role_now
 from oracle.docs import service as docs_service
-from oracle.docs.schemas import DocumentOut, DocumentRef
+from oracle.docs.schemas import DocumentOut, PrdRef
 from oracle.roadmap import company
 
 router = APIRouter(prefix="/v1", tags=["roadmaps"])
@@ -29,7 +29,7 @@ class CompanyRoadmapOut(BaseModel):
 class QueueItem(BaseModel):
     key: str
     title: str
-    prd: DocumentRef | None = None
+    prd: PrdRef | None = None
     milestone: str | None = None
     effort_weeks: float
     start: date
@@ -90,7 +90,7 @@ async def get_company_queue(principal: Reader, db: TenantDB, prd: str | None = N
         QueueItem(
             key=q.item.item_key,
             title=q.item.title,
-            prd=DocumentRef(**q.prd) if q.prd else None,
+            prd=PrdRef(**q.prd) if q.prd else None,
             milestone=(q.item.milestone or {}).get("name")
             if isinstance(q.item.milestone, dict)
             else None,

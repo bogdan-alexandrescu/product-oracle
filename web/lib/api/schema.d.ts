@@ -15491,7 +15491,7 @@ export interface components {
              * Format: date-time
              */
             generated_at: string;
-            roadmap: components["schemas"]["oracle__roadmap__schemas__DocumentRef"];
+            roadmap: components["schemas"]["DocumentRef"];
             /** Track Id */
             track_id: string | null;
             connector: components["schemas"]["TrackerConnectorOut"];
@@ -21904,12 +21904,28 @@ export interface components {
              * Replaced By
              * @default []
              */
-            replaced_by: components["schemas"]["oracle__docs__schemas__DocumentRef"][];
+            replaced_by: components["schemas"]["PrdRef"][];
             /**
              * Changes In Review
              * @default 0
              */
             changes_in_review: number;
+        };
+        /** DocumentRef */
+        DocumentRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version?: number | null;
+            /** Approved */
+            approved?: boolean | null;
         };
         /** DocumentSectionLinkOut */
         DocumentSectionLinkOut: {
@@ -25198,7 +25214,7 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
-            prd: components["schemas"]["oracle__roadmap__schemas__DocumentRef"];
+            prd: components["schemas"]["DocumentRef"];
         };
         /**
          * InboxDecision
@@ -27529,8 +27545,8 @@ export interface components {
         };
         /** ItemsImportOut */
         ItemsImportOut: {
-            roadmap: components["schemas"]["oracle__roadmap__schemas__DocumentRef"];
-            source: components["schemas"]["oracle__roadmap__schemas__DocumentRef"] | null;
+            roadmap: components["schemas"]["DocumentRef"];
+            source: components["schemas"]["DocumentRef"] | null;
             /** Track Id */
             track_id: string | null;
             /**
@@ -27580,7 +27596,7 @@ export interface components {
             kind: "prd_draft" | "roadmap";
             /** Label */
             label: string;
-            document: components["schemas"]["oracle__roadmap__schemas__DocumentRef"];
+            document: components["schemas"]["DocumentRef"];
         };
         /**
          * ItemsResolution
@@ -31438,7 +31454,7 @@ export interface components {
         };
         /** PrdAnchor */
         PrdAnchor: {
-            document: components["schemas"]["oracle__roadmap__schemas__DocumentRef"] | null;
+            document: components["schemas"]["DocumentRef"] | null;
             /** Section Key */
             section_key: string | null;
             /** Section Hash */
@@ -31479,6 +31495,18 @@ export interface components {
              * @default []
              */
             unresolved: string[];
+        };
+        /** PrdRef */
+        PrdRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
         };
         /**
          * PrdScopeOut
@@ -32895,7 +32923,7 @@ export interface components {
             key: string;
             /** Title */
             title: string;
-            prd?: components["schemas"]["oracle__docs__schemas__DocumentRef"] | null;
+            prd?: components["schemas"]["PrdRef"] | null;
             /** Milestone */
             milestone?: string | null;
             /** Effort Weeks */
@@ -35330,7 +35358,7 @@ export interface components {
         };
         /** RoadmapItemHistoryOut */
         RoadmapItemHistoryOut: {
-            prd: components["schemas"]["oracle__roadmap__schemas__DocumentRef"];
+            prd: components["schemas"]["DocumentRef"];
             /** Item Key */
             item_key: string;
             /** Entries */
@@ -35443,8 +35471,8 @@ export interface components {
         };
         /** RoadmapItemsOut */
         RoadmapItemsOut: {
-            roadmap: components["schemas"]["oracle__roadmap__schemas__DocumentRef"];
-            source: components["schemas"]["oracle__roadmap__schemas__DocumentRef"] | null;
+            roadmap: components["schemas"]["DocumentRef"];
+            source: components["schemas"]["DocumentRef"] | null;
             /** Track Id */
             track_id: string | null;
             /**
@@ -44033,14 +44061,14 @@ export interface components {
             status: "active" | "paused" | "closed";
             /** Owner Id */
             owner_id: string | null;
-            prd: components["schemas"]["oracle__roadmap__schemas__DocumentRef"];
+            prd: components["schemas"]["DocumentRef"];
             /** Started Version */
             started_version: number | null;
             /** Current Version */
             current_version: number | null;
             /** Latest Approved Version */
             latest_approved_version: number | null;
-            roadmap: components["schemas"]["oracle__roadmap__schemas__DocumentRef"] | null;
+            roadmap: components["schemas"]["DocumentRef"] | null;
             /** Lock Version */
             lock_version: number;
             /**
@@ -44100,14 +44128,14 @@ export interface components {
             status: "active" | "paused" | "closed";
             /** Owner Id */
             owner_id: string | null;
-            prd: components["schemas"]["oracle__roadmap__schemas__DocumentRef"];
+            prd: components["schemas"]["DocumentRef"];
             /** Started Version */
             started_version: number | null;
             /** Current Version */
             current_version: number | null;
             /** Latest Approved Version */
             latest_approved_version: number | null;
-            roadmap: components["schemas"]["oracle__roadmap__schemas__DocumentRef"] | null;
+            roadmap: components["schemas"]["DocumentRef"] | null;
             /** Lock Version */
             lock_version: number;
             /**
@@ -45544,18 +45572,6 @@ export interface components {
              */
             goal_id: string;
         };
-        /** DocumentRef */
-        oracle__docs__schemas__DocumentRef: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Slug */
-            slug: string;
-            /** Title */
-            title: string;
-        };
         /**
          * PredictionIn
          * @description A prediction a person writes: its typed figures must agree with each other.
@@ -45591,22 +45607,6 @@ export interface components {
              * Format: uuid
              */
             into_id: string;
-        };
-        /** DocumentRef */
-        oracle__roadmap__schemas__DocumentRef: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Slug */
-            slug: string;
-            /** Title */
-            title: string;
-            /** Version */
-            version?: number | null;
-            /** Approved */
-            approved?: boolean | null;
         };
         /** RefreshOut */
         oracle__simple__schemas__RefreshOut: {

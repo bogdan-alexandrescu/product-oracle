@@ -193,7 +193,7 @@ class VersionSummary(ORM):
     created_at: datetime
 
 
-class DocumentRef(BaseModel):
+class PrdRef(BaseModel):
     id: uuid.UUID
     slug: str
     title: str
@@ -203,7 +203,7 @@ class DocumentOut(DocumentSummary):
     versions: list[VersionSummary] = []
     # one-roadmap-many-prds: the PRDs that replace this one, in order (empty: not
     # replaced). A replaced PRD is read-only and its items no longer feed the roadmap.
-    replaced_by: list[DocumentRef] = []
+    replaced_by: list[PrdRef] = []
     # Simple S3b (#723): changes waiting in the document's working draft and its open
     # Simple proposals, as a count (the "changes in review" banner; no details).
     changes_in_review: int = 0

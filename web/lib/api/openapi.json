@@ -52154,7 +52154,7 @@
             "title": "Generated At"
           },
           "roadmap": {
-            "$ref": "#/components/schemas/oracle__roadmap__schemas__DocumentRef"
+            "$ref": "#/components/schemas/DocumentRef"
           },
           "track_id": {
             "anyOf": [
@@ -70279,7 +70279,7 @@
           },
           "replaced_by": {
             "items": {
-              "$ref": "#/components/schemas/oracle__docs__schemas__DocumentRef"
+              "$ref": "#/components/schemas/PrdRef"
             },
             "type": "array",
             "title": "Replaced By",
@@ -70301,6 +70301,52 @@
           "updated_at"
         ],
         "title": "DocumentOut"
+      },
+      "DocumentRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "approved": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "title"
+        ],
+        "title": "DocumentRef"
       },
       "DocumentSectionLinkOut": {
         "properties": {
@@ -79353,7 +79399,7 @@
             "title": "Created At"
           },
           "prd": {
-            "$ref": "#/components/schemas/oracle__roadmap__schemas__DocumentRef"
+            "$ref": "#/components/schemas/DocumentRef"
           }
         },
         "type": "object",
@@ -85274,12 +85320,12 @@
       "ItemsImportOut": {
         "properties": {
           "roadmap": {
-            "$ref": "#/components/schemas/oracle__roadmap__schemas__DocumentRef"
+            "$ref": "#/components/schemas/DocumentRef"
           },
           "source": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/oracle__roadmap__schemas__DocumentRef"
+                "$ref": "#/components/schemas/DocumentRef"
               },
               {
                 "type": "null"
@@ -85436,7 +85482,7 @@
             "title": "Label"
           },
           "document": {
-            "$ref": "#/components/schemas/oracle__roadmap__schemas__DocumentRef"
+            "$ref": "#/components/schemas/DocumentRef"
           }
         },
         "type": "object",
@@ -95993,7 +96039,7 @@
           "document": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/oracle__roadmap__schemas__DocumentRef"
+                "$ref": "#/components/schemas/DocumentRef"
               },
               {
                 "type": "null"
@@ -96157,6 +96203,30 @@
         "type": "object",
         "title": "PrdLinks",
         "description": "Cross-document links from a roadmap draft to its PRD version's sections."
+      },
+      "PrdRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "title"
+        ],
+        "title": "PrdRef"
       },
       "PrdScopeOut": {
         "properties": {
@@ -100019,7 +100089,7 @@
           "prd": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/oracle__docs__schemas__DocumentRef"
+                "$ref": "#/components/schemas/PrdRef"
               },
               {
                 "type": "null"
@@ -107186,7 +107256,7 @@
       "RoadmapItemHistoryOut": {
         "properties": {
           "prd": {
-            "$ref": "#/components/schemas/oracle__roadmap__schemas__DocumentRef"
+            "$ref": "#/components/schemas/DocumentRef"
           },
           "item_key": {
             "type": "string",
@@ -107464,12 +107534,12 @@
       "RoadmapItemsOut": {
         "properties": {
           "roadmap": {
-            "$ref": "#/components/schemas/oracle__roadmap__schemas__DocumentRef"
+            "$ref": "#/components/schemas/DocumentRef"
           },
           "source": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/oracle__roadmap__schemas__DocumentRef"
+                "$ref": "#/components/schemas/DocumentRef"
               },
               {
                 "type": "null"
@@ -130697,7 +130767,7 @@
             "title": "Owner Id"
           },
           "prd": {
-            "$ref": "#/components/schemas/oracle__roadmap__schemas__DocumentRef"
+            "$ref": "#/components/schemas/DocumentRef"
           },
           "started_version": {
             "anyOf": [
@@ -130735,7 +130805,7 @@
           "roadmap": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/oracle__roadmap__schemas__DocumentRef"
+                "$ref": "#/components/schemas/DocumentRef"
               },
               {
                 "type": "null"
@@ -130941,7 +131011,7 @@
             "title": "Owner Id"
           },
           "prd": {
-            "$ref": "#/components/schemas/oracle__roadmap__schemas__DocumentRef"
+            "$ref": "#/components/schemas/DocumentRef"
           },
           "started_version": {
             "anyOf": [
@@ -130979,7 +131049,7 @@
           "roadmap": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/oracle__roadmap__schemas__DocumentRef"
+                "$ref": "#/components/schemas/DocumentRef"
               },
               {
                 "type": "null"
@@ -134961,30 +135031,6 @@
         "title": "PredictionIn",
         "description": "A measurable version of the expected outcome: deciding creates its outcome record."
       },
-      "oracle__docs__schemas__DocumentRef": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id"
-          },
-          "slug": {
-            "type": "string",
-            "title": "Slug"
-          },
-          "title": {
-            "type": "string",
-            "title": "Title"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "slug",
-          "title"
-        ],
-        "title": "DocumentRef"
-      },
       "oracle__quality__schemas__PredictionIn": {
         "properties": {
           "metric": {
@@ -135123,52 +135169,6 @@
           "into_id"
         ],
         "title": "MergeIn"
-      },
-      "oracle__roadmap__schemas__DocumentRef": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id"
-          },
-          "slug": {
-            "type": "string",
-            "title": "Slug"
-          },
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "version": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Version"
-          },
-          "approved": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Approved"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "slug",
-          "title"
-        ],
-        "title": "DocumentRef"
       },
       "oracle__simple__schemas__RefreshOut": {
         "properties": {
