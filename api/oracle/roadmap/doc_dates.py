@@ -28,8 +28,9 @@ and other compatibility forms (``２０２６``) fold to ASCII (NFKC). The forms
   within 60 days before the version's, that day: a done thing's day and no schedule date
   (the plan tables' date columns keep the first reading).
 
-A Counts when, evidence or sources column (its whole header) or labelled sentence is not a
-schedule place.
+A Counts when, evidence or sources column (its whole header) or labelled sentence (up to
+its ``.`` or ``;``) is not a schedule place for a past or year-less day; a written future
+day there (``Dec 20, 2026``) is still a claim.
 
 Month and quarter phrases (``November 2026``, ``Q4``) are horizons, not dates.
 
@@ -856,13 +857,14 @@ def _found_in(
         if not _claim(rendered.text[block_start:a]):
             continue
         cell = next((c for c in blk.cells if c[0] <= a < c[1]), None) if blk else None
-        if cell and _NOT_SCHEDULE.fullmatch(cell[2]):
-            continue  # a Counts when, evidence or sources cell
+        past_day = hit.past is not None or all(day <= ref for day in hit.days)
+        if cell and past_day and _NOT_SCHEDULE.fullmatch(cell[2]):
+            continue  # a Counts when, evidence or sources cell (a written future day warns)
         lo, hi = cell[:2] if cell else (block_start, blk.end if blk else len(rendered.text))
         label_at = lo
         for m in _LABEL_END.finditer(rendered.text, lo, a):
             label_at = m.end()
-        if _NOT_SCHEDULE_LABEL.match(rendered.text[label_at:a].lstrip()):
+        if past_day and _NOT_SCHEDULE_LABEL.match(rendered.text[label_at:a].lstrip()):
             continue  # "Counts when: ...", "Evidence: ..." sentence
         plan_cell = cell is not None and _DATE_COLUMN.search(cell[2])
         s_lo, s_hi = _sentence(rendered.text, lo, hi, a, b)
@@ -916,8 +918,10 @@ _SENTENCE_END = re.compile(r"[.;!?](?:\s|$)")
 
 
 # date-past (production, Nov 4): where a date is no schedule date. A Counts when, evidence
-# or sources column (its whole header) or labelled sentence says how a thing counts or
-# what shows it; the plan tables' own date columns keep the usual reading. A year-less date
+# or sources column (its whole header) or labelled sentence (up to its '.' or ';') says how
+# a thing counts or what shows it, so a past or year-less day there is skipped; a written
+# future day ("ships Dec 20, 2026") still warns. The plan tables' own date columns (Date,
+# When, Planned date, Deadline, ETA, ...) keep the usual reading. A year-less date
 # reported as done ("closed on Oct 27") in a sentence with no plan words is a done thing's
 # day when its most recent past occurrence is recent (_RECENT before the version's day).
 _NOT_SCHEDULE = re.compile(
@@ -929,17 +933,17 @@ _NOT_SCHEDULE_LABEL = re.compile(
     r"(?:[*_]+\s*)?(?:counts? when|evidence|sources?|proofs?|measured (?:by|when))\s*[*_]*\s*:",
     re.IGNORECASE,
 )
-_LABEL_END = re.compile(r"[.!?](?:\s|$)")
+_LABEL_END = re.compile(r"[.;!?](?:\s|$)")
 _DATE_COLUMN = re.compile(
-    r"^[*_\s]*(?:(?:start|end|due|target|delivery|ship|launch|release)\s+)?"
-    r"(?:dates?|day|start|end|due|target|delivery|eta)[*_\s]*$",
+    r"^[*_\s]*(?:(?:start|end|due|target|delivery|ship|launch|release|planned)\s+)?"
+    r"(?:dates?|day|start|end|due|target|delivery|eta|when|deadline)[*_\s]*$",
     re.IGNORECASE,
 )
 _RECENT = timedelta(days=60)
-# Report words: a thing that happened. "done", "opened", "started", "was ... on" read as
-# plans as often ("M2: done on Dec 15", "was moved to Dec 15") and are left out.
+# Report words: a thing that happened. "done", "opened", "started", "fixed", "was ... on"
+# read as plans as often ("M2: done on Dec 15", "is fixed on Nov 1": set) and are left out.
 _PAST = re.compile(
-    r"(?:\b(?:closed|shipped|merged|released|launched|landed|completed|resolved|fixed|"
+    r"(?:\b(?:closed|shipped|merged|released|launched|landed|completed|resolved|"
     r"deployed|filed|went live|rolled out)\s+(?:on\s+)?|\bsince\s+)(?:the\s+)?\(?$",
     re.IGNORECASE,
 )
