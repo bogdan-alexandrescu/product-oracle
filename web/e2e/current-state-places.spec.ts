@@ -65,7 +65,8 @@ for (const size of ["desktop", "phone"] as const) {
       const title = reply.getByTestId("answer-title");
       await expect(title).toContainText("Weekly alert digest");
       await expect(title.getByTestId("cs-mark")).toHaveText("Exists");
-      await pillAfter(title.getByText("Weekly alert digest").first(), title.getByTestId("cs-mark"));
+      // The title reads the name first, its pill last (the name is the title's own text).
+      await expect(title).toHaveText(/^Weekly alert digest.*Exists$/);
 
       await tap(title.getByRole("button", { name: "What Exists means" }));
       const card = reply.getByTestId("cs-mark-card");
