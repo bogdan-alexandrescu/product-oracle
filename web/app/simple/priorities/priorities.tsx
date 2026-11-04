@@ -1636,9 +1636,9 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
         >
           {offered.map((l) => (
             // priorities-keydates: a PRD's milestone is a key date marked as the roadmap marks it ("From the PRD", in
-            // place of "Key date", so the chosen line fits a phone's box); it changes in the PRD, never here.
+            // place of "Key date"); it changes in the PRD, never here. prio-company: every line names its PRD.
             <option key={l.key} value={l.key} title={l.prd ? `A key date from the PRD; change it in the PRD, ${l.prd.title}` : undefined}>
-              {l.kind === "key_date" ? `${l.prd ? `From ${l.prd.title}` : "Key date"}: ${l.label}` : l.kind === "milestone" ? `${l.prd ? `Milestone of ${l.prd.title}` : "Milestone"}: ${l.label}` : l.label}
+              {`${l.kind === "key_date" ? `${l.prd ? "From the PRD" : "Key date"}: ` : l.kind === "milestone" ? "Milestone: " : ""}${l.label}${l.prd ? ` (${l.prd.title})` : ""}`}
             </option>
           ))}
           {current.kind === "date" && <option value="picked">{`Date: ${current.label.replace(/^By /, "")}`}</option>}

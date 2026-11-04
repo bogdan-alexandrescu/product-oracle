@@ -58,12 +58,12 @@ for (const [name, viewport] of [["desktop", { width: 1440, height: 900 }], ["pho
         expect(texts).not.toContain(`Milestone: ${M1}`);
 
         // Picked, it draws the line on its day, and the box reads it in full.
-        await select.selectOption({ label: `From the PRD: ${M1}` });
+        await select.selectOption({ label: `From the PRD: ${M1} (Guided setup)` });
         const heads = page.getByTestId("prio-part-head");
         await expect(heads).toHaveCount(2);
         await expect(heads.nth(0)).toHaveAttribute("aria-label", `Makes ${M1}`);
         await expect(heads.nth(1)).toHaveAttribute("aria-label", `Misses ${M1}`);
-        await expectShownInFull(page, `From the PRD: ${M1}`);
+        await expectShownInFull(page, `From the PRD: ${M1} (Guided setup)`);
       });
 
       test("a milestone named without its code on M1's day is listed once, as the PRD's M1", async ({ page }) => {
@@ -72,7 +72,7 @@ for (const [name, viewport] of [["desktop", { width: 1440, height: 900 }], ["pho
         const options = page.getByTestId("line-picker").getByLabel("Line", { exact: true }).locator("option");
         await expect(options.filter({ hasText: `From the PRD: ${M1}` })).toHaveCount(1);
         const texts = await options.allTextContents();
-        expect(texts.filter((t) => t.includes("Prove it")), texts.join("\n")).toEqual([`From the PRD: ${M1}`]);
+        expect(texts.filter((t) => t.includes("Prove it")), texts.join("\n")).toEqual([`From the PRD: ${M1} (Guided setup)`]);
       });
 
       test("a saved pick of the plan's M1 draws the same line, shown as From the PRD", async ({ page }) => {
@@ -81,7 +81,7 @@ for (const [name, viewport] of [["desktop", { width: 1440, height: 900 }], ["pho
         const heads = page.getByTestId("prio-part-head");
         await expect(heads).toHaveCount(2);
         await expect(heads.nth(0)).toHaveAttribute("aria-label", `Makes ${M1}`);
-        await expectShownInFull(page, `From the PRD: ${M1}`);
+        await expectShownInFull(page, `From the PRD: ${M1} (Guided setup)`);
       });
     });
   }
