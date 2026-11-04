@@ -84,3 +84,60 @@ async def test_a_waiver_of_one_problem_leaves_the_other_open(client, owner, runt
         "Notes are a nice to have",
         "Sharing ships in the same release",
     ]
+
+
+def test_two_same_text_problems_stay_two():
+    """A ref names the problem's kind and feature: the same words on two features, or of two
+    kinds, are two problems, each waived on its own."""
+    same = {"message": "depends on a left-out feature", "requirement": None}
+    refs = {
+        gate.problem_ref({**same, "code": "depends_on_excluded", "feature": "saved-addresses"}),
+        gate.problem_ref({**same, "code": "depends_on_excluded", "feature": "bulk-edit"}),
+        gate.problem_ref({**same, "code": "unknown_dependency", "feature": "saved-addresses"}),
+    }
+    assert len(refs) == 3
+
+
+def test_a_gate_row_names_its_feature_by_its_title():
+    check = {
+        "problems": [
+            {
+                "code": "depends_on_excluded",
+                "feature": "saved-addresses",
+                "message": "saved-addresses depends on address-sharing, which is excluded",
+            }
+        ],
+        "titles": {"saved-addresses": "Saved addresses", "address-sharing": "Address sharing"},
+    }
+    cp = Checkpoint(kind="feature_set", status="pending", payload={"feature_set_check": check})
+    shut = gate.approve_gate(cp, None, [])
+    assert shut is not None
+    [row] = shut.left
+    assert row.item_title == "Saved addresses"
+    assert row.label == "Saved addresses depends on Address sharing, which is excluded"
+
+
+async def test_the_review_screen_reasons_carry_the_gate_refs(client, owner, runtime):  # noqa: F811
+    """The review screen's reasons name each problem by the gate's ref, and a waiver of one
+    answers that one only there too."""
+    _, auth = owner
+    run = await at_feature_set(client, owner, runtime, TWO)
+    cp = pending(run)
+    refs = [x["ref"] for x in cp["gate"]["left"] if x["item"] == "saved-addresses"]
+    latest = (await client.get(f"/v1/runs/{run['id']}/scope", headers=auth)).json()
+    scope = (await client.get(f"/v1/prd-scopes/{latest['id']}", headers=auth)).json()
+    [feature] = [f for f in scope["features"] if f["key"] == "saved-addresses"]
+    blocking = [r for r in feature["reasons"] if r["code"] == "depends_on_excluded"]
+    assert [r["ref"] for r in blocking] == refs
+    body = {"item_key": "saved-addresses", "kind": "waive", "answers": [refs[0]],
+            "value": {"reason": "Sharing ships in the same release"}}  # fmt: skip
+    resp = await client.post(
+        f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/actions", json=body, headers=auth
+    )
+    assert resp.status_code in (200, 201), resp.text
+    scope = (await client.get(f"/v1/prd-scopes/{latest['id']}", headers=auth)).json()
+    [feature] = [f for f in scope["features"] if f["key"] == "saved-addresses"]
+    answered = {
+        r["ref"]: r["answered"] for r in feature["reasons"] if r["code"] == "depends_on_excluded"
+    }
+    assert answered == {refs[0]: True, refs[1]: False}
