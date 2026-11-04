@@ -35,8 +35,10 @@ from typing import Any
 from oracle import company_time
 from oracle.docs.schemas import ImportProblem
 from oracle.roadmap.schedule import _names, as_date
-from oracle.runs.roadmap import ItemsYamlError, load_items_yaml
 from oracle.simple import approved_roadmap
+
+# Month first, as a person reads it: "Nov 30, 2026".
+_day = company_time.calendar_day_with_year
 
 ITEMS_FILE = "roadmap_items.yaml"
 BASIS_WORDS = {"estimate": "estimate", "capacity": "team queue", "commitment": "commitment"}
@@ -83,11 +85,6 @@ class EngineeringPlan:
         return next((m for m in self.milestones if m.name.lower() == name.strip().lower()), None)
 
 
-def day(d: date | None) -> str:
-    """Month first, as a person reads it: ``Nov 30, 2026``."""
-    return f"{company_time.calendar_day(d)}, {d.year}" if d else ""
-
-
 def _covers(basis: dict[str, Any], key: str) -> bool:
     if basis.get("item_key"):
         return basis["item_key"] == key
@@ -105,20 +102,23 @@ def _text(value: Any) -> str:
 
 
 def engineering_plan(
-    items_text: str | None,
+    items: Iterable[dict[str, Any]] | None,
     bases: Iterable[dict[str, Any]],
     others: Iterable[dict[str, Any]] = (),
 ) -> EngineeringPlan:
-    """The run's engineering dates for each item of the items file and its milestones. An
-    unreadable or missing items file: no items. ``others`` (one-roadmap-many-prds): the
-    shared queue with this run's items in it (oracle.roadmap.company.with_run_items,
-    {key, title, end, ours}): the run's own item with no schedule basis of its own takes its
-    queue end (Dates from: team queue); the other PRDs' items are listed after them as they
-    are in the queue, so the tables cover every item."""
+    """The run's engineering dates for each item of the items file and its milestones.
+    ``items``: the file's items as its check read them (``ItemsCheck.items``, from
+    oracle.runs.roadmap.check_items_async, kept per text: the file is parsed once per step,
+    never here); an unreadable or missing items file: no items. ``others``
+    (one-roadmap-many-prds): the shared queue with this run's items in it
+    (oracle.roadmap.company.with_run_items, {key, title, end, ours}): the run's own item
+    with no schedule basis of its own takes its queue end (Dates from: team queue); the
+    other PRDs' items are listed after them as they are in the queue, so the tables cover
+    every item."""
     plan = EngineeringPlan()
-    if not items_text:
+    if not items:
         return plan
-    plan = _engineering_plan(items_text, bases)
+    plan = _engineering_plan(items, bases)
     own = {r.key: r for r in plan.items}
     for o in others:
         row = own.get(o["key"])
@@ -139,15 +139,12 @@ def engineering_plan(
     return plan
 
 
-def _engineering_plan(items_text: str, bases: Iterable[dict[str, Any]]) -> EngineeringPlan:
+def _engineering_plan(
+    entries: Iterable[dict[str, Any]], bases: Iterable[dict[str, Any]]
+) -> EngineeringPlan:
     plan = EngineeringPlan()
-    try:
-        data = load_items_yaml(items_text)
-    except ItemsYamlError:
-        return plan
-    entries = data.get("items") if isinstance(data, dict) else None
     bases = list(bases)
-    for raw in entries if isinstance(entries, list) else []:
+    for raw in entries:
         if not isinstance(raw, dict) or not _text(raw.get("id")):
             continue
         key = _text(raw["id"])
@@ -201,12 +198,12 @@ def table_lines(plan: EngineeringPlan) -> list[str]:
     word when the items name no validation gate."""
     lines = [ITEMS_HEADER, "|---|---|---|---|---|---|"]
     lines += [
-        f"| {r.key} | {_cell(r.title)} | {day(r.start)} | {day(r.end)} | {r.basis} | {PLANNED} |"
+        f"| {r.key} | {_cell(r.title)} | {_day(r.start)} | {_day(r.end)} | {r.basis} | {PLANNED} |"
         for r in plan.items
     ]
     lines += ["", MILESTONES_HEADER, "|---|---|---|---|"]
     lines += [
-        f"| {_cell(m.name)} | {day(m.date)} | {_cell(', '.join(m.gates))} | "
+        f"| {_cell(m.name)} | {_day(m.date)} | {_cell(', '.join(m.gates))} | "
         f"{_cell('; '.join(m.counts))} |"
         for m in plan.milestones
     ]
@@ -262,10 +259,10 @@ def _differs(what: str, said: date | None, eng: date | None) -> str | None:
     if said == eng:
         return None
     if eng is None:
-        return f"{what} is {day(said)} in the Plan tables, but no engineering date backs it: leave it empty"  # noqa: E501
+        return f"{what} is {_day(said)} in the Plan tables, but no engineering date backs it: leave it empty"  # noqa: E501
     if said is None:
-        return f"{what} is {day(eng)} in the engineering dates, but empty in the Plan tables"
-    return f"{what} is {day(eng)} in the engineering dates, not {day(said)}"
+        return f"{what} is {_day(eng)} in the engineering dates, but empty in the Plan tables"
+    return f"{what} is {_day(eng)} in the engineering dates, not {_day(said)}"
 
 
 def check(markdown: str, plan: EngineeringPlan, today: date) -> list[ImportProblem]:
