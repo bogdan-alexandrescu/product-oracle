@@ -565,7 +565,7 @@ async def test_review_nothing_is_dropped_without_a_word(client):
     await read(ctx, actions(*[act("move_dates", item=w.ids["Ledger v2"], shift="1 quarter")] * 6))
     m = await last(client, ctx, "owner")
     assert len(m["cards"]) == 5
-    assert "I read the first five changes; say the rest again." in m["body"]
+    assert "I did not use these changes yet; say them again: “Move Ledger v2" in m["body"]
 
 
 async def test_review_choice_labels_are_oracles_words(client):

@@ -18136,6 +18136,13 @@ export interface components {
              */
             general: boolean;
         };
+        /** ChatLinkOut */
+        ChatLinkOut: {
+            /** Label */
+            label: string;
+            /** Href */
+            href: string;
+        };
         /** ChatListOut */
         ChatListOut: {
             /** Items */
@@ -18184,6 +18191,8 @@ export interface components {
             retry: boolean;
             /** Source */
             source?: string | null;
+            /** Links */
+            links?: components["schemas"]["ChatLinkOut"][];
         };
         /** ChatModeIn */
         ChatModeIn: {

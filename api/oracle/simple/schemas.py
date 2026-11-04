@@ -1393,8 +1393,12 @@ CardStatus = Literal["open", "applied", "proposed", "declined", "discarded", "un
 ChangeMode = Literal["everyone", "presenter", "named"]
 
 
+# ask-length-limit: a long change request (a pasted list of changes) fits.
+CHAT_TEXT_MAX = 4000
+
+
 class ChatIn(BaseModel):
-    text: str = Field(min_length=1, max_length=1000)
+    text: str = Field(min_length=1, max_length=CHAT_TEXT_MAX)
     # The Simple page the person asks from (the Ask panel), for context.
     page: str | None = Field(default=None, max_length=300)
     # The Ask panel's one box: write nothing when Oracle's reader does not know the line
@@ -1478,6 +1482,11 @@ class ChatChoiceOut(BaseModel):
 ChatKind = Literal["request", "cards", "question", "answer", "note", "pending", "failed", "ask"]
 
 
+class ChatLinkOut(BaseModel):
+    label: str
+    href: str
+
+
 class ChatMessageOut(BaseModel):
     id: uuid.UUID
     author_kind: Literal["person", "oracle"]
@@ -1496,6 +1505,8 @@ class ChatMessageOut(BaseModel):
     retry: bool = False
     # roadmap-talk: where an item talk's answer comes from ("From the PRD · F-06 …").
     source: str | None = None
+    # ask-length-limit: where a part Oracle cannot change yet is changed (Priorities, Roadmap).
+    links: list[ChatLinkOut] = Field(default_factory=list)
 
 
 class ChatRulesOut(BaseModel):
