@@ -55,8 +55,18 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("fit-meter")).toContainText("Reaches Jan 29, 4 days to spare.");
     await expect(tick(page, "bulk")).toBeChecked();
     await expect(tick(page, "focus")).not.toBeChecked();
-    // Ranked by days saved: the first change saves the most.
-    await expect(page.getByTestId("fit-ranked").locator("ol > li").first()).toContainText("1. Reply to similar threads at once");
+    // Ranked strictly by days saved: the must-include change saves the most, so it is first, with
+    // its lock and no tick; the first change Oracle may tick is second.
+    const rows = page.getByTestId("fit-ranked").locator("ol > li");
+    await expect(rows.first()).toContainText("1. Reply drafts in the inbox");
+    await expect(rows.first()).toContainText("18 days sooner");
+    await expect(rows.first()).toContainText("Must-include");
+    await expect(rows.first().getByTestId("fit-change-lock")).toBeVisible();
+    await expect(tick(page, "drafts")).toBeDisabled();
+    await expect(tick(page, "drafts")).not.toBeChecked();
+    await expect(rows.nth(1)).toContainText("2. Reply to similar threads at once");
+    await expect(rows.last()).not.toContainText("Reply drafts in the inbox");
+    await expect(page.getByTestId("fit-change-bulk").getByTestId("fit-change-lock")).toHaveCount(0);
     await expect(page.getByTestId("fit-change-bulk")).toContainText("16 days sooner");
     await expect(page.getByTestId("fit-change-bulk")).toContainText("Goal at risk");
 
@@ -124,6 +134,28 @@ test.describe("desktop", () => {
     const done = page.getByTestId("fit-approved");
     await expect(done).toContainText("PRD version 4 is live: M2 lands Jan 25. Roadmap version 7 is in review with Noor Hale.");
     await expect(done).not.toContainText("are live");
+    // Home says the roadmap's version is in review, never that it was approved.
+    await page.getByRole("navigation").getByRole("link", { name: "Home" }).click();
+    const home = page.getByTestId("fit-home");
+    await expect(home).toContainText("You approved PRD version 4 on");
+    await expect(home).toContainText("Roadmap version 7 is in review with Noor Hale.");
+    await expect(home).not.toContainText("and roadmap version 7");
+  });
+
+  test("approving is refused while the roadmap's draft holds someone else's edits", async ({ page }) => {
+    await open(page, "fit-date-foreign-draft");
+    await page.getByRole("button", { name: "Bring this date in" }).click();
+    await page.getByRole("button", { name: "Draft 5 changes" }).click();
+    await page.getByRole("button", { name: "Approve both", exact: true }).click();
+    const panel = page.getByTestId("fit-panel");
+    await expect(panel).toContainText("Ines Moreau has unsaved changes in this roadmap's draft; ask them to submit or discard first.");
+    // Nothing was written: the panel stays on the draft and the roadmap keeps today's date.
+    await expect(panel).toContainText("Check the new drafts");
+    await expect(page.getByRole("button", { name: "Approve both", exact: true })).toBeEnabled();
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+    await expect(page.getByTestId("fit-approved")).toHaveCount(0);
+    await expect(page.getByTestId("fit-on-plan")).toHaveText("Mar 12");
   });
 
   test("hard case: no set reaches the target, so it says so with the best date", async ({ page }) => {
