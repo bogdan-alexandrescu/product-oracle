@@ -28,13 +28,13 @@ function Gate({ children }: { children: ReactNode }) {
   const shown = useSimpleShown();
   const { me, capsReady, simpleMode } = useMe();
   const home = usePathname() === SIMPLE_HOME;
-  if (shown)
-    return (
-      <>
-        {children}
-        <FeaturePanelMock /> {/* MOCK-HOOK */}
-      </>
-    );
+  if (shown) // MOCK-HOOK
+    return ( // MOCK-HOOK
+      <>{/* MOCK-HOOK */}
+        {children}{/* MOCK-HOOK */}
+        <FeaturePanelMock />{/* MOCK-HOOK */}
+      </> // MOCK-HOOK
+    ); // MOCK-HOOK
   if (me && capsReady && !simpleMode) return null;
   // qa-shell-20: every other Simple page shows its frame too, never a blank page.
   return home ? <HomeSkeleton /> : <SimplePageSkeleton />;

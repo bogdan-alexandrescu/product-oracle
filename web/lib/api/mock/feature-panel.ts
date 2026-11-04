@@ -28,9 +28,14 @@ export type FpFeature = {
   neededBy: FpDep[];
   /** A date that breaks a link, in words. */
   conflict?: { text: string; fixes: string[] };
+  /** The feature's own talk with Oracle (FP1 B shows it beside the details). */
+  talk: { who: string; text: string }[];
 };
 
 export const FP_ME = "Leo Brandt"; // MOCK-HOOK
+
+/** A clash's fixes, in the words of the roadmap's broken links banner (its buttons open the panel at the clash). */
+const FIXES = (moved: string, dependency = "Move the dependency") => [`Move the dependents: ${moved}`, dependency, "Accept as risk"];
 
 export const FP_DIGEST: FpFeature = {
   title: "Weekly alert digest",
@@ -48,18 +53,23 @@ export const FP_DIGEST: FpFeature = {
     { title: "Alert routing by team", dates: "Feb 21 – Aug 20, 2027", from: "person", by: "Maya Ortiz" },
     { title: "Alert history export", dates: "Jan 1 – Feb 20, 2027", from: "oracle", removed: true, by: "Leo Brandt" },
   ],
-  conflict: { text: "Starts Oct 31, before Alert rules engine ends Nov 10. Ends Dec 10, after its milestone Beta (Nov 30).", fixes: ["Start after it: Nov 11 – Dec 21", "Keep the dates, mark it at risk", "Remove the link"] },
+  conflict: { text: "Starts Oct 31, before Alert rules engine ends Nov 10. Ends Dec 10, after its milestone Beta (Nov 30).", fixes: FIXES("Nov 11 – Dec 21") },
+  talk: [
+    { who: "Oracle", text: "Engineering estimates the digest ends Dec 10. It starts Oct 31, but Alert rules engine, which it needs, ends Nov 10." },
+    { who: "Maya Ortiz", text: "Can we have it before the Beta on Nov 30?" },
+    { who: "Oracle", text: "Only if the email template is cut to one layout. That saves about two weeks, so it could end Nov 27." },
+  ],
 };
 
 /** The new delivery a person sets over Oracle's estimate, and what it fixes. */
 export const FP_NEW_END = "Nov 27";
-export const FP_AFTER_SET = { text: "Starts Oct 31, before Alert rules engine ends Nov 10.", fixes: ["Start after it: Nov 11 – Dec 8", "Keep the dates, mark it at risk", "Remove the link"] };
+export const FP_AFTER_SET = { text: "Starts Oct 31, before Alert rules engine ends Nov 10.", fixes: FIXES("Nov 11 – Dec 8") };
 
 /** The link added in the mock-ups' story, and the clash it brings. */
 export const FP_ADDED: FpDep = { title: "Mobile alert push", dates: "Nov 11 – Dec 20", from: "person", by: FP_ME, conflict: true };
 export const FP_ADDED_CONFLICT = {
   text: "Starts Oct 31, before Alert rules engine ends Nov 10 and before Mobile alert push ends Dec 20.",
-  fixes: ["Start after both: Dec 21 – Jan 30, 2027", "Keep the dates, mark it at risk", "Remove the new link"],
+  fixes: [...FIXES("Dec 21 – Jan 30, 2027", "Move the dependencies"), "Remove the new link"],
 };
 export const FP_SEARCH = [
   { title: "Mobile alert push", dates: "Nov 11 – Dec 20", roadmap: "Alerts roadmap", note: "" },
@@ -77,11 +87,11 @@ export const FP_BIG: FpFeature = {
   confidence: "Low",
   notes: "Needs the new team model first. Regions come from the billing address until admins set them.",
   start: { date: "Jan 18, 2027", from: "Set by Ana Silva" },
-  end: { date: "Mar 3, 2027", from: "Commitment to the board", suggested: "Apr 21, 2027" },
+  end: { date: "Mar 3, 2027", from: "Oracle suggested Apr 21, 2027; set to Mar 3, 2027 by Ana Silva, the date promised to the board", suggested: "Apr 21, 2027" },
   goal: { title: "Cut time to first response", measure: "Median minutes from alert to first reply", today: "38 min", target: "15 min", by: "Sep 30, 2027" },
   milestone: { name: "General release", date: "Mar 15, 2027" },
   dependsOn: [
-    { title: "Alert rules engine", dates: "Oct 5 – Nov 27", from: "oracle" },
+    { title: "Alert rules engine", dates: "Oct 1 – Nov 10", from: "oracle" },
     { title: "Team model with nested teams and shared owners", dates: "Nov 2 – Jan 15, 2027", from: "oracle" },
     { title: "Single sign-on for admins", dates: "Jan 4 – Mar 20, 2027", from: "person", by: "Ana Silva", conflict: true },
     { title: "On-call calendar import", dates: "Dec 7 – Jan 29, 2027", from: "oracle" },
@@ -91,14 +101,13 @@ export const FP_BIG: FpFeature = {
     { title: "Quiet hours per person", dates: "Dec 14 – Feb 12, 2027", from: "person", by: "Ana Silva" },
   ],
   neededBy: [
-    { title: "Alert routing by team", dates: "Feb 15 – Apr 9, 2027", from: "oracle" },
+    { title: "Alert reports per team", dates: "Apr 5 – May 28, 2027", from: "oracle" },
     { title: "Escalation rules", dates: "Mar 22 – May 14, 2027", from: "person", by: "Sam Okafor" },
   ],
-  conflict: { text: "Ends Mar 3, before Single sign-on for admins ends Mar 20.", fixes: ["End after it: Apr 21, 2027", "Keep the dates, mark it at risk", "Remove the link"] },
+  conflict: { text: "Ends Mar 3, before Single sign-on for admins ends Mar 20.", fixes: ["Move the dependents: end Apr 21, 2027", "Move the dependency", "Accept as risk"] },
+  talk: [
+    { who: "Oracle", text: "This is due Mar 3, 2027, the date promised to the board. Engineering estimates Apr 21, 2027." },
+    { who: "Ana Silva", text: "What makes it late?" },
+    { who: "Oracle", text: "Single sign-on for admins ends Mar 20, 2027, after this is due. Admins can't route alerts before they can sign in." },
+  ],
 };
-
-export const FP_TALK = [
-  { who: "Oracle", text: "Engineering estimates the digest ends Feb 12. The rules engine it needs ends Nov 27." },
-  { who: "Maya Ortiz", text: "Can we have it before the Beta on Jan 29?" },
-  { who: "Oracle", text: "Only if the email template is cut to one layout. That saves about three weeks." },
-];

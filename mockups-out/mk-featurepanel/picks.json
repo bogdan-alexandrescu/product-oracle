@@ -6,7 +6,7 @@
    "code": "FP1",
    "name": "The panel's form and layout",
    "question": "What shape does the one feature panel take, what does it show first, and how does it fit a phone?",
-   "common": "The same panel from every page; a click on a feature's name opens it. Its head shows title, status, owner, confidence and a flag when the dates clash; then Dates (start and delivery, each with where it comes from), Goal (the goal, its measure, today's reading and the target), Links (depends on and needed by), Milestone and Details (outcome, status, owner, confidence, notes). Simple's colours, type and buttons as built. Edits and links shown as in FP2 A and FP3 A.",
+   "common": "The same panel from every page; a click on a feature's name opens it. Its head shows title, status, owner, confidence and a flag when the dates clash; then Dates (start and delivery, each with where it comes from), Goal (the goal, its measure, today's reading and the target), Links (depends on and needed by), Milestone and Details (outcome, status, owner, confidence, notes). Simple's colours, type and buttons as built. A clash's fixes use the words of the roadmap's broken links banner (Move the dependents, Move the dependency, Accept as risk), and the banner's buttons open the panel at the clash. Edits and links shown as in FP2 A and FP3 A.",
    "proposals": [
     {
      "letter": "A",
@@ -15,7 +15,7 @@
      "what": "The panel slides in over the right of any page, 460 px wide and full height; the page stays lit and can still be scrolled and clicked beside it. Its head shows the title, status, owner, confidence and a clash flag; two tabs switch between Details and Talk to Oracle. Details reads top down: Dates, Goal, Links, Milestone, Details. On a phone it is a sheet from the bottom.",
      "why": "One shape on every page, narrow enough that the Timeline, a goal bucket or Home's card stays in view while you read and change the feature, and the chart stays reachable for picking items. Today's roadmap card and its talk already use the same parts.",
      "plus": "Same place and width everywhere; the page is never hidden; the talk is one tab away; the phone sheet is the same panel.",
-     "cost": "The talk and the details never show side by side; on a phone the sheet leaves only the top quarter of the page showing.",
+     "cost": "The talk and the details never show side by side; on a phone the sheet leaves only the top eighth of the page showing.",
      "frames": [
       {
        "file": "fp1-a-roadmap.html",
@@ -34,12 +34,24 @@
        "caption": "Changing the delivery date in the panel: the page behind does not move."
       },
       {
+       "file": "fp1-a-saved.html",
+       "caption": "Saved: the panel stays open with Oracle's Dec 10 and Leo Brandt's Nov 27, and beside it the row's bar already reads Oct 31 – Nov 27."
+      },
+      {
+       "file": "fp1-a-added.html",
+       "caption": "Mobile alert push added as a link: Links grows to two, the new clash box sits under them, and the chart stays in view."
+      },
+      {
        "file": "fp1-a-hard-1512.html",
-       "caption": "The hard case at 1512 for a reader: the long title wraps to two lines, the 8 links scroll inside the panel, and a note says who can change it."
+       "caption": "The hard case at 1512 for a reader: its row is on the Timeline behind; the long title wraps to three lines, the 8 links scroll inside the panel, and a note says who can change it."
       },
       {
        "file": "fp1-a-phone-390.html",
-       "caption": "Phone 390, from Home: a sheet over most of the screen, Details and Talk as tabs."
+       "caption": "Phone 390, from Home: a sheet over all but the top eighth of the screen, Details and Talk as tabs."
+      },
+      {
+       "file": "fp1-a-phone-390-dark.html",
+       "caption": "The same phone sheet in the dark theme."
       },
       {
        "file": "fp1-a-dark.html",
@@ -65,19 +77,35 @@
       },
       {
        "file": "fp1-b-home.html",
-       "caption": "Opened from Home: only a strip of Home shows at left."
+       "caption": "Opened from Home: about a third of Home shows at left, dimmed."
       },
       {
        "file": "fp1-b-mid.html",
-       "caption": "Changing the delivery date with the talk open beside it."
+       "caption": "Changing the delivery date with the talk open beside it: Oracle says one email layout could bring it to Nov 27."
+      },
+      {
+       "file": "fp1-b-saved.html",
+       "caption": "Saved: the delivery reads Nov 27, but the row's bar is under the panel and the rest of the Timeline is dimmed."
+      },
+      {
+       "file": "fp1-b-closed.html",
+       "caption": "Closing the panel shows the result: the bar ends Nov 27, the row is marked and a note offers Undo (the same page in every proposal; here it takes the extra close)."
+      },
+      {
+       "file": "fp1-b-added.html",
+       "caption": "Mobile alert push added as a link, with the clash box; the chart it was picked for stays dimmed."
       },
       {
        "file": "fp1-b-hard-1512.html",
-       "caption": "The hard case at 1512 for a reader: the title wraps; links scroll in the left column; the talk keeps its full column."
+       "caption": "The hard case at 1512 for a reader: the title wraps; links scroll in the left column; the talk beside it is this feature's own, about the board date."
       },
       {
        "file": "fp1-b-phone-390.html",
        "caption": "Phone 390: the whole screen, with Details and Talk tabs."
+      },
+      {
+       "file": "fp1-b-phone-390-dark.html",
+       "caption": "The same full screen in the dark theme."
       },
       {
        "file": "fp1-b-dark.html",
@@ -110,12 +138,28 @@
        "caption": "Changing the delivery date: the dates form in the left column."
       },
       {
+       "file": "fp1-c-saved.html",
+       "caption": "Saved: the delivery reads Nov 27, but the sheet hides the Timeline, so the moved bar can't be seen."
+      },
+      {
+       "file": "fp1-c-closed.html",
+       "caption": "Closing the sheet shows the result: the bar ends Nov 27, the row is marked and a note offers Undo (the same page in every proposal; here it takes the extra close)."
+      },
+      {
+       "file": "fp1-c-added.html",
+       "caption": "Mobile alert push added as a link: the clash box in the left column; the chart is hidden."
+      },
+      {
        "file": "fp1-c-hard-1512.html",
        "caption": "The hard case at 1512 for a reader: 8 links make the left column run past the fold while the right one ends early."
       },
       {
        "file": "fp1-c-phone-390.html",
        "caption": "Phone 390: the whole screen, with chips to jump to each part."
+      },
+      {
+       "file": "fp1-c-phone-390-dark.html",
+       "caption": "The same full screen in the dark theme."
       },
       {
        "file": "fp1-c-dark.html",
@@ -133,7 +177,7 @@
      "frames": [
       {
        "file": "fp1-d-roadmap.html",
-       "caption": "Opened from Roadmap's Timeline: the card sits right of the Weekly alert digest row."
+       "caption": "Opened from Roadmap's Timeline: the card sits right of the Weekly alert digest bar, clear of the bar but over the broken links banner's buttons."
       },
       {
        "file": "fp1-d-goals.html",
@@ -148,12 +192,24 @@
        "caption": "Changing the delivery date inside the small card."
       },
       {
+       "file": "fp1-d-saved.html",
+       "caption": "Saved: the bar beside the card now reads Oct 31 – Nov 27."
+      },
+      {
+       "file": "fp1-d-added.html",
+       "caption": "Mobile alert push added as a link: the card scrolls to Links and the clash box fills most of it."
+      },
+      {
        "file": "fp1-d-hard-1512.html",
-       "caption": "The hard case at 1512 for a reader: the long title and the reader's note fill the top; the 8 links are far below the fold."
+       "caption": "The hard case at 1512 for a reader: no room right of its bar, so the card opens left of it; the long title wraps to four lines and, with the reader's note, fills the top; the 8 links are far below the fold."
       },
       {
        "file": "fp1-d-phone-390.html",
        "caption": "Phone 390: a short sheet; pulling it up shows the rest."
+      },
+      {
+       "file": "fp1-d-phone-390-dark.html",
+       "caption": "The same short sheet in the dark theme."
       },
       {
        "file": "fp1-d-dark.html",
@@ -167,7 +223,7 @@
    "code": "FP2",
    "name": "How editing works",
    "question": "How does a person change a feature in the panel, and how is an override of Oracle's suggestion made, shown and undone?",
-   "common": "Every value can be changed in the panel, including Oracle's suggested date, goal and links. An override always names Oracle's value and who set the new one, and can be undone. Owners and approvers change; anyone else reads the same panel (checked through can() or the feature's own can-change field, never by role name). Shown in the side panel (FP1 A).",
+   "common": "Every value can be changed in the panel, including Oracle's suggested date, goal and links. An override always names Oracle's value and who set the new one, and can be undone. Owners and approvers change; anyone else reads the same panel (checked through can() or the feature's own can-change field, never by role name). An override set by a person reads the same way everywhere, the hard case included: \"Oracle suggested Apr 21, 2027; set to Mar 3, 2027 by Ana Silva\". Shown in the side panel (FP1 A).",
    "proposals": [
     {
      "letter": "A",
@@ -191,16 +247,24 @@
        "caption": "Saved: the delivery reads Nov 27 with \"Oracle suggested Dec 10; set to Nov 27 by Leo Brandt · Restore\"; the clash with the Beta milestone is gone, the one with Alert rules engine stays."
       },
       {
+       "file": "fp2-a-mid2.html",
+       "caption": "The cost: a second change is a second Save. The delivery is saved; now the start opens with its own Save and Cancel."
+      },
+      {
        "file": "fp2-a-done.html",
        "caption": "Back on the Timeline: the bar now ends Nov 27, the row is marked and a note offers Undo."
       },
       {
        "file": "fp2-a-read-1512.html",
-       "caption": "A reader at 1512: no fields, a note says who can change it, and Suggest a change."
+       "caption": "A reader at 1512: no fields, a note says who can change it, and Suggest a change. A reader changes nothing, so this view is the same in every proposal."
       },
       {
        "file": "fp2-a-mid-390.html",
        "caption": "Phone 390, the same edit in the sheet."
+      },
+      {
+       "file": "fp2-a-mid-390-dark.html",
+       "caption": "The same phone edit in the dark theme."
       },
       {
        "file": "fp2-a-set-dark.html",
@@ -222,7 +286,7 @@
       },
       {
        "file": "fp2-b-mid.html",
-       "caption": "Edit mode: every value is a field; the foot says 1 change: delivery, with Save changes."
+       "caption": "Edit mode, and its cost: for one date every value turns into a field, and the foot says 1 change: delivery, with Save changes for the whole panel."
       },
       {
        "file": "fp2-b-set.html",
@@ -234,11 +298,15 @@
       },
       {
        "file": "fp2-b-read-1512.html",
-       "caption": "A reader at 1512: no Edit button, the reader's note instead."
+       "caption": "A reader at 1512: no Edit button, the reader's note instead; the same reader view in every proposal."
       },
       {
        "file": "fp2-b-mid-390.html",
        "caption": "Phone 390: the form with its Save bar at the foot of the sheet."
+      },
+      {
+       "file": "fp2-b-mid-390-dark.html",
+       "caption": "The same phone form in the dark theme."
       },
       {
        "file": "fp2-b-set-dark.html",
@@ -272,11 +340,15 @@
       },
       {
        "file": "fp2-c-read-1512.html",
-       "caption": "A reader at 1512: no Change links."
+       "caption": "A reader at 1512: no Change links; the same reader view in every proposal."
       },
       {
        "file": "fp2-c-mid-390.html",
        "caption": "Phone 390: the Dates form with its Why field."
+      },
+      {
+       "file": "fp2-c-mid-390-dark.html",
+       "caption": "The same phone form in the dark theme."
       },
       {
        "file": "fp2-c-set-dark.html",
@@ -290,13 +362,13 @@
    "code": "FP3",
    "name": "Reading and changing links",
    "question": "How are a feature's links read and changed both ways, and how is a date clash they bring shown and fixed?",
-   "common": "Both directions show: what it depends on and what needs it, each with its dates and where the link came from. Links can be added or removed both ways; an Oracle link a person removes stays visible with Restore; a clash is said in words with fixes to pick (start after it, keep the dates and mark it at risk, remove the link). Shown in the side panel (FP1 A) with edits in place (FP2 A).",
+   "common": "Both directions show: what it depends on and what needs it, each with its dates and where the link came from. Links can be added or removed both ways; an Oracle link a person removes stays visible with Restore; a clash is said in words with fixes to pick, in the broken links banner's words (move the dependents, move the dependency, accept as risk). Shown in the side panel (FP1 A) with edits in place (FP2 A).",
    "proposals": [
     {
      "letter": "A",
      "name": "Two lists with search",
      "recommended": true,
-     "what": "Links has two lists, Depends on and Needed by, each with a count. Each row shows the other item's dates and where the link came from (Found by Oracle, or Added by a person) and an × to remove it; an Oracle link that was removed stays, struck through, with Restore. + Add opens a search across roadmaps that shows items already linked and items that would make a loop. When a new link breaks the dates, a box under the lists says how and offers fixes: start after it, keep the dates and mark it at risk, or remove the link.",
+     "what": "Links has two lists, Depends on and Needed by, each with a count. Each row shows the other item's dates and where the link came from (Found by Oracle, or Added by a person) and an × to remove it; an Oracle link that was removed stays, struck through, with Restore. + Add opens a search across roadmaps that shows items already linked and items that would make a loop. When a new link breaks the dates, a box under the lists says how and offers fixes in the broken links banner's words: move the dependents, move the dependency, accept as risk, or remove the new link.",
      "why": "Works the same on every page, chart or not, and at any size; the overridden Oracle link and the clash read as words with one-click fixes.",
      "plus": "Same on every page and phone; 8 links are just a longer list; loops are stopped in the search.",
      "cost": "You can't see the links on the chart while you pick; you must know the item's name.",
@@ -311,11 +383,11 @@
       },
       {
        "file": "fp3-a-added.html",
-       "caption": "Mobile alert push added: the clash box offers Start after both: Dec 21 – Jan 30, 2027."
+       "caption": "Mobile alert push added: the clash box offers Move the dependents: Dec 21 – Jan 30, 2027."
       },
       {
        "file": "fp3-a-done.html",
-       "caption": "Start after both picked: back on the Timeline the bar now runs Dec 21 – Jan 30, 2027."
+       "caption": "Move the dependents picked: back on the Timeline the bar now runs Dec 21 – Jan 30, 2027."
       },
       {
        "file": "fp3-a-hard-1512.html",
@@ -330,6 +402,10 @@
        "caption": "Phone 390, from Home: the search in the sheet."
       },
       {
+       "file": "fp3-a-mid-390-dark.html",
+       "caption": "The same phone search in the dark theme."
+      },
+      {
        "file": "fp3-a-added-dark.html",
        "caption": "Dark theme, the new link and its clash box."
       }
@@ -339,7 +415,7 @@
      "letter": "B",
      "name": "Pick on the chart",
      "recommended": false,
-     "what": "+ Add puts the page in picking mode: every item on the roadmap is outlined and a click links it; a typed name works too. The new link is drawn on the chart, red while the dates clash. Pages without a chart (Home, Goal buckets) fall back to typing the name.",
+     "what": "+ Add puts the page in picking mode: every item on the Timeline, its name and its bar, is outlined and a click links it; a typed name works too. The new link is drawn on the chart, red while the dates clash. Pages without a chart (Home, Goal buckets) fall back to typing the name.",
      "plus": "You see where the other item sits in time while you pick, and the link stays visible on the chart.",
      "cost": "Each page needs its own picking mode and line drawing; on pages with no chart and on phones it is only the search; the side panel covers part of the chart you pick from.",
      "frames": [
@@ -349,7 +425,7 @@
       },
       {
        "file": "fp3-b-mid.html",
-       "caption": "Picking: items on the Timeline are outlined; the panel says click the item it depends on."
+       "caption": "Picking: every item's name and bar on the Timeline is outlined; the panel says click the item it depends on."
       },
       {
        "file": "fp3-b-added.html",
@@ -357,19 +433,23 @@
       },
       {
        "file": "fp3-b-done.html",
-       "caption": "Start after both picked: the bar moves to Dec 21 – Jan 30, 2027 and the line stays."
+       "caption": "Move the dependents picked: the bar moves to Dec 21 – Jan 30, 2027 and the line stays."
       },
       {
        "file": "fp3-b-hard-1512.html",
-       "caption": "The hard case at 1512: the same lists; only the links to items on screen can be drawn."
+       "caption": "The hard case at 1512, picking: of its 8 links only Alert rules engine is on this Timeline, so one line is drawn to its bar; a tag by the bar and the panel say the other 7 are on other roadmaps and are not drawn."
       },
       {
        "file": "fp3-b-goals-mid.html",
-       "caption": "On Goal buckets there is no chart: the panel says to type the name."
+       "caption": "On Goal buckets there is no chart: the panel says to type the name, with nothing to stop."
       },
       {
        "file": "fp3-b-mid-390.html",
        "caption": "Phone 390: no picking, only typing."
+      },
+      {
+       "file": "fp3-b-mid-390-dark.html",
+       "caption": "The same phone typing in the dark theme."
       },
       {
        "file": "fp3-b-added-dark.html",
@@ -412,6 +492,10 @@
       {
        "file": "fp3-c-mid-390.html",
        "caption": "Phone 390: a narrow map."
+      },
+      {
+       "file": "fp3-c-mid-390-dark.html",
+       "caption": "The same narrow map in the dark theme."
       },
       {
        "file": "fp3-c-added-dark.html",

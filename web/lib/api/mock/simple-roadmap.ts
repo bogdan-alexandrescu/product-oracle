@@ -281,9 +281,15 @@ const TRACKS: Record<string, string> = { alerts: "Usage alerts track", onboardin
 // MOCK-HOOK: the feature panel mock-ups (FP1..FP3) show the page after a change made in the panel (?phase=done&what=date|link).
 function fpDigestAfter(): Partial<SeedItem> { // MOCK-HOOK
   const q = typeof location === "undefined" ? null : new URLSearchParams(location.search); // MOCK-HOOK
+  if (q?.get("saved") === "1") return { end: 57, source: "typed" }; // MOCK-HOOK: saved in the panel, which stays open
   if (!q || q.get("phase") !== "done") return {}; // MOCK-HOOK
   return q.get("what") === "link" ? { depends: ["alert-rules", "alert-mobile"], start: 81, end: 121, source: "typed" } : { end: 57, source: "typed" }; // MOCK-HOOK
 } // MOCK-HOOK
+// MOCK-HOOK: the hard case's feature (?feat=big) has its own row on the Timeline, Jan 18 – Mar 3, 2027.
+const fpBig = (): SeedItem[] => // MOCK-HOOK
+  typeof location !== "undefined" && new URLSearchParams(location.search).get("feat") === "big" // MOCK-HOOK
+    ? [{ key: "alert-team-route", title: "Let workspace admins route, mute and schedule alerts per team, region and on-call rotation across every connected tool", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", confidence: "low", start: 17, end: 61, source: "typed", depends: ["alert-rules"] }] // MOCK-HOOK
+    : []; // MOCK-HOOK
 
 const SEED: SeedItem[] = [
   { key: "alert-rules", title: "Alert rules engine", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 40, source: "typed", status: "in_progress", gates: [{ phase: "discover", day: 6 }, { phase: "build", day: 28 }], why: "Admins asked for it most this quarter.", section: "bets" },
@@ -297,6 +303,7 @@ const SEED: SeedItem[] = [
   { key: "setup-video", title: "Welcome video", horizon: "later", roadmap: "onboarding-roadmap", track: "onboarding", depends: ["setup-tour"] },
   { key: "setup-ideas", title: "Team invite nudges", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", draft: true },
   { key: "price-tiers", title: "New plan tiers", horizon: "next", roadmap: "pricing-roadmap", confidence: "medium" },
+  ...fpBig(), // MOCK-HOOK
 ];
 
 /**

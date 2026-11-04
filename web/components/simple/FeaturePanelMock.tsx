@@ -6,15 +6,18 @@ import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ds";
 import { usePhone } from "@/components/simple/FlowViews";
-import { FP_ADDED, FP_ADDED_CONFLICT, FP_AFTER_SET, FP_BIG, FP_DIGEST, FP_ME, FP_NEW_END, FP_QUERY, FP_SEARCH, FP_TALK, type FpDep, type FpFeature } from "@/lib/api/mock/feature-panel";
+import { FP_ADDED, FP_ADDED_CONFLICT, FP_AFTER_SET, FP_BIG, FP_DIGEST, FP_ME, FP_NEW_END, FP_QUERY, FP_SEARCH, type FpDep, type FpFeature } from "@/lib/api/mock/feature-panel";
 import { useMe } from "@/lib/me";
 
-type Phase = "rest" | "mid" | "set" | "deps" | "added" | "done";
+type Phase = "rest" | "mid" | "mid2" | "set" | "deps" | "added" | "done";
 type Opts = { fp1: string; fp2: string; fp3: string; phase: Phase; read: boolean; phone: boolean; f: FpFeature; big: boolean; setPhase: (p: Phase) => void };
 
 const NEW_END = FP_NEW_END;
-// The roadmap items a person may pick on the page (FP3 b).
-const PICKABLE = ["Alert rules engine", "Alert history export", "Mobile alert push", "Alert routing by team", "Setup checklist", "Sample data import"];
+// The Timeline row of the digest and of the hard case's feature (mock data keys).
+const DIGEST_KEY = "alert-digest";
+const BIG_KEY = "alert-team-route";
+// The hard case's links that have a bar on the Alerts Timeline (the others are on other roadmaps).
+const BAR_KEY: Record<string, string> = { "Alert rules engine": "alert-rules" };
 
 /** The element on the page that names `title` (the smallest visible one), or null. */
 function findOnPage(title: string): HTMLElement | null {
@@ -45,6 +48,26 @@ function useRect(title: string | null, tick: unknown): DOMRect | null {
     };
   }, [title, tick]);
   return title ? r : null;
+}
+
+/** The Timeline bar of the item `key` (its mock data key), or null on a page with no chart. */
+const barOf = (key: string) => document.querySelector<HTMLElement>(`[data-testid="timeline-row"][data-item="${key}"] [data-testid="timeline-bar"]`);
+
+/** The Timeline bar of the item `key`, or null on a page with no chart. */
+function useBarRect(key: string | null, tick: unknown): DOMRect | null {
+  const [r, setR] = useState<DOMRect | null>(null);
+  useEffect(() => {
+    if (!key) return;
+    const read = () => setR(barOf(key)?.getBoundingClientRect() ?? null);
+    const t = setInterval(read, 400);
+    read();
+    addEventListener("scroll", read, true);
+    return () => {
+      clearInterval(t);
+      removeEventListener("scroll", read, true);
+    };
+  }, [key, tick]);
+  return key ? r : null;
 }
 
 export function FeaturePanelMock() {
@@ -78,22 +101,23 @@ export function FeaturePanelMock() {
     return () => removeEventListener("click", onClick, true);
   }, [active]);
   const anchor = useRect(active ? f.title : null, open);
+  const bar = useBarRect(active ? (big ? BIG_KEY : DIGEST_KEY) : null, open);
   if (!active) return null;
   const o: Opts = { fp1, fp2, fp3, phase, read, phone, f, big, setPhase };
   const done = phase === "done" || (!open && urlPhase === "done");
   return (
     <div data-fp-mock="" data-testid="fp-mock">
       {done && <PageResult o={o} />}
-      {fp3 === "b" && phase === "deps" && open && <PickMarks />}
+      {fp3 === "b" && phase === "deps" && open && <PickMarks o={o} />}
       {fp3 === "b" && (phase === "added" || done) && <LinkLine from={FP_ADDED.title} to={FP_DIGEST.title} />}
-      {open && !done && <Panel o={o} anchor={anchor} onClose={() => setOpen(false)} />}
+      {open && !done && <Panel o={o} anchor={anchor} bar={bar} onClose={() => setOpen(false)} />}
     </div>
   );
 }
 
 /* ---------- FP1: the panel's form ---------- */
 
-function Panel({ o, anchor, onClose }: { o: Opts; anchor: DOMRect | null; onClose: () => void }) {
+function Panel({ o, anchor, bar, onClose }: { o: Opts; anchor: DOMRect | null; bar: DOMRect | null; onClose: () => void }) {
   const { fp1, phone } = o;
   const [tab, setTab] = useState<"details" | "talk">("details");
   useEffect(() => {
@@ -107,7 +131,7 @@ function Panel({ o, anchor, onClose }: { o: Opts; anchor: DOMRect | null; onClos
   }, [o.phase]);
   const head = <Head o={o} onClose={onClose} />;
   const body = <Body o={o} />;
-  const talk = <Talk />;
+  const talk = <Talk f={o.f} />;
   const dim = fp1 === "b" || fp1 === "c" || phone;
   const backdrop = dim && <div aria-hidden onClick={onClose} className="fixed inset-0 z-[55] bg-black/30" />;
   const base = "fixed z-[60] flex flex-col border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip";
@@ -172,12 +196,17 @@ function Panel({ o, anchor, onClose }: { o: Opts; anchor: DOMRect | null; onClos
     );
   }
   if (fp1 === "d") {
-    // Beside the feature it was opened from, as today's roadmap card is.
-    // Right of the feature when there is room, else left of it.
-    const left = anchor ? (anchor.right + 392 < innerWidth ? anchor.right + 12 : Math.max(8, anchor.left - 392)) : 360;
-    const top = anchor ? Math.max(12, Math.min(anchor.top - 8, innerHeight - 560)) : 120;
+    // Beside the feature it was opened from, as today's roadmap card is, never over its own bar:
+    // on the Timeline right of the bar's end, else left of its start, else under the row; elsewhere right of the item, else left of it.
+    let left = 360;
+    let top = 120;
+    const barTop = bar && Math.max(12, Math.min(bar.top - 8, innerHeight - 560));
+    if (bar && bar.right + 392 < innerWidth) [left, top] = [bar.right + 12, barTop!];
+    else if (bar && bar.left - 392 > 240) [left, top] = [bar.left - 392, barTop!];
+    else if (bar) [left, top] = [Math.max(8, Math.min(bar.left, innerWidth - 388)), Math.min(bar.bottom + 8, innerHeight - 320)];
+    else if (anchor) [left, top] = [anchor.right + 392 < innerWidth ? anchor.right + 12 : Math.max(8, anchor.left - 392), Math.max(12, Math.min(anchor.top - 8, innerHeight - 560))];
     return (
-      <aside role="dialog" aria-label={o.f.title} data-fp-panel="d" style={{ left, top }} className={`${base} max-h-[560px] w-[380px] rounded-xl border`}>
+      <aside role="dialog" aria-label={o.f.title} data-fp-panel="d" style={{ left, top, maxHeight: Math.min(560, innerHeight - top - 12) }} className={`${base} w-[380px] rounded-xl border`}>
         <div className="flex-none px-4 pt-3.5 pb-2">{head}</div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3">{body}</div>
         <Footer o={o} />
@@ -215,7 +244,7 @@ function Head({ o, onClose }: { o: Opts; onClose: () => void }) {
   return (
     <div>
       <div className="flex items-start gap-2">
-        <h2 className={`min-w-0 flex-1 text-lg leading-6 font-semibold ${o.big ? "line-clamp-3" : ""}`} title={f.title}>
+        <h2 className="min-w-0 flex-1 text-lg leading-6 font-semibold" title={f.title}>
           {f.title}
         </h2>
         {fp2 === "b" && !read && !allEdit && (
@@ -261,12 +290,12 @@ function Footer({ o }: { o: Opts }) {
   );
 }
 
-function Talk() {
+function Talk({ f }: { f: FpFeature }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <h3 className="flex-none px-4 pt-3 font-semibold">Talk about this feature</h3>
       <ul className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
-        {FP_TALK.map((m, i) => (
+        {f.talk.map((m, i) => (
           <li key={i} className={`max-w-[85%] rounded-xl px-3 py-2 text-[15px] ${m.who === "Oracle" ? "bg-surface2" : "ml-auto bg-accent-soft"}`}>
             <span className="block text-xs text-text2">{m.who}</span>
             {m.text}
@@ -301,7 +330,7 @@ function Section({ title, o, id, children, wide }: { title: string; o: Opts; id:
   );
 }
 
-const afterSet = (p: Phase) => p === "set";
+const afterSet = (p: Phase) => p === "set" || p === "mid2";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -392,6 +421,8 @@ function Dates({ o }: { o: Opts }) {
   const set = !o.big && afterSet(phase);
   const end = set ? NEW_END : f.end.date;
   const mid = phase === "mid" && !o.read;
+  // FP2 a, a second change: the delivery is saved; the start is a field with its own Save.
+  const mid2 = phase === "mid2" && fp2 === "a" && !o.read;
   const conflict = phase === "added" && !o.big ? null : o.big ? f.conflict : set ? FP_AFTER_SET : f.conflict;
   return (
     <div>
@@ -405,10 +436,24 @@ function Dates({ o }: { o: Opts }) {
       )}
       <dl>
         <Row label="Start">
-          <Value o={o} section="dates">
-            {f.start.date}
-          </Value>
-          <span className="block text-sm text-text2">{f.start.from}</span>
+          {mid2 ? (
+            <div data-testid="fp-mid2-edit">
+              <input readOnly autoFocus value="Nov 11" className="h-9 w-full rounded-md border-2 border-accent bg-surface px-2 text-[15px]" />
+              <div className="mt-1.5 flex gap-2">
+                <Button variant="solid">Save</Button>
+                <Button variant="ghost" onClick={() => o.setPhase("set")}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <Value o={o} section="dates">
+                {f.start.date}
+              </Value>
+              <span className="block text-sm text-text2">{f.start.from}</span>
+            </>
+          )}
         </Row>
         <Row label="Delivery">
           {mid && fp2 === "a" ? (
@@ -443,10 +488,7 @@ function Dates({ o }: { o: Opts }) {
               ) : set ? (
                 <span className="block text-sm text-text2">Set by {FP_ME}</span>
               ) : (
-                <span className="block text-sm text-text2">
-                  {f.end.from}
-                  {o.big && f.end.suggested && ` · Oracle suggests ${f.end.suggested}`}
-                </span>
+                <span className="block text-sm text-text2">{f.end.from}</span>
               )}
             </>
           )}
@@ -526,7 +568,7 @@ function Links({ o }: { o: Opts }) {
   return (
     <div>
       <DepList o={o} title="Depends on" deps={dependsOn} add="Add an item it depends on" />
-      {phase === "deps" && !o.read && (fp3 === "a" ? <Search /> : <PickHint />)}
+      {phase === "deps" && !o.read && (fp3 === "a" ? <Search /> : <PickHint o={o} />)}
       {added && <Clash text={FP_ADDED_CONFLICT.text} fixes={FP_ADDED_CONFLICT.fixes} read={o.read} />}
       <DepList o={o} title="Needed by" deps={f.neededBy} add="Add an item that needs it" />
     </div>
@@ -602,18 +644,34 @@ function Search() {
   );
 }
 
-function PickHint() {
-  const chart = typeof location !== "undefined" && location.pathname.startsWith("/simple/roadmap");
+function PickHint({ o }: { o: Opts }) {
+  const chart = !o.phone && typeof location !== "undefined" && location.pathname.startsWith("/simple/roadmap");
+  if (!chart)
+    return (
+      <div className="my-2 rounded-lg border-2 border-accent bg-accent-soft px-3 py-2 text-sm" data-testid="fp-pick">
+        <b className="font-medium">{o.phone ? "No picking on a phone: type the item's name." : "This page has no chart: type the item's name."}</b>
+        <input readOnly value={FP_QUERY} className="mt-1.5 h-9 w-full rounded-md border border-line-strong bg-surface px-2 text-[15px]" />
+      </div>
+    );
+  const off = o.big ? o.f.dependsOn.filter((d) => !onRoadmap(d.title)) : [];
   return (
     <div className="my-2 rounded-lg border-2 border-accent bg-accent-soft px-3 py-2 text-sm" data-testid="fp-pick">
-      <b className="font-medium">{chart ? "Click the item it depends on, on the roadmap." : "This page has no chart: type the item's name."}</b>
-      <input readOnly value={chart ? "" : FP_QUERY} placeholder="Or type its name" className="mt-1.5 h-9 w-full rounded-md border border-line-strong bg-surface px-2 text-[15px]" />
+      <b className="font-medium">Click the item it depends on, on the roadmap.</b>
+      {o.big && (
+        <p className="mt-1" data-testid="fp-pick-off">
+          {o.f.dependsOn.length - off.length} of its {o.f.dependsOn.length} links are drawn on the chart. {off.length} are on other roadmaps, so they are not drawn: {off.map((d) => d.title).join(", ")}.
+        </p>
+      )}
+      <input readOnly value="" placeholder="Or type its name" className="mt-1.5 h-9 w-full rounded-md border border-line-strong bg-surface px-2 text-[15px]" />
       <button type="button" className="mt-1 font-medium text-accent-ink underline">
         Stop picking
       </button>
     </div>
   );
 }
+
+/** Whether the item `title` has a bar on this roadmap's Timeline. */
+const onRoadmap = (title: string) => !!BAR_KEY[title];
 
 /** FP3 c: the links as a small map, what it needs on the left, what needs it on the right. */
 function LinkMap({ o, dependsOn }: { o: Opts; dependsOn: FpDep[] }) {
@@ -672,20 +730,54 @@ function LinkMap({ o, dependsOn }: { o: Opts; dependsOn: FpDep[] }) {
 
 /* ---------- On the page ---------- */
 
-/** FP3 b: while picking, every item on the chart is marked as one to click. */
-function PickMarks() {
+/** FP3 b: while picking, every item on the chart (its row and its bar) is marked as one to click. */
+function PickMarks({ o }: { o: Opts }) {
+  const own = o.big ? BIG_KEY : DIGEST_KEY;
   const [rects, setRects] = useState<DOMRect[]>([]);
+  const [links, setLinks] = useState<{ a: DOMRect; b: DOMRect; red: boolean }[]>([]);
+  const [offAt, setOffAt] = useState<DOMRect | null>(null);
   useLayoutEffect(() => {
-    const read = () => setRects(PICKABLE.filter((t) => t !== FP_DIGEST.title).flatMap((t) => findOnPage(t)?.getBoundingClientRect() ?? []));
+    const read = () => {
+      const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="timeline-row"]')).filter((e) => e.dataset.item !== own);
+      // A bar scrolled under the sticky names is outlined only where it shows.
+      const names = rows[0]?.querySelector("button[title]")?.getBoundingClientRect().right ?? 0;
+      const clip = (r: DOMRect) => (r.left >= names ? r : new DOMRect(names, r.top, r.right - names, r.height));
+      const marks = rows.flatMap((r) => [r.querySelector<HTMLElement>("button[title]")?.getBoundingClientRect(), r.querySelector<HTMLElement>('[data-testid="timeline-bar"]')?.getBoundingClientRect()].map((x, i) => (x && i ? clip(x) : x)));
+      setRects(marks.filter((r): r is DOMRect => !!r && r.width > 4 && r.bottom > 0 && r.top < innerHeight));
+      // The hard case: its links to items on this roadmap are drawn; the rest are counted by its bar.
+      const to = barOf(own)?.getBoundingClientRect() ?? null;
+      setOffAt(o.big ? to : null);
+      if (!o.big || !to) return setLinks([]);
+      setLinks(
+        o.f.dependsOn.flatMap((d) => {
+          const from = BAR_KEY[d.title] && barOf(BAR_KEY[d.title])?.getBoundingClientRect();
+          return from ? [{ a: from, b: to, red: !!d.conflict }] : [];
+        }),
+      );
+    };
     read();
     const t = setInterval(read, 400);
     return () => clearInterval(t);
-  }, []);
+  }, [o.big, o.f, own]);
+  const off = o.big ? o.f.dependsOn.length - links.length : 0;
   return (
     <>
       {rects.map((r, i) => (
         <div key={i} aria-hidden className="pointer-events-none fixed z-[58] rounded-md border-2 border-dashed border-accent bg-accent/10" style={{ left: r.left - 3, top: r.top - 3, width: r.width + 6, height: r.height + 6 }} />
       ))}
+      {links.length > 0 && (
+        <svg aria-hidden className="pointer-events-none fixed inset-0 z-[57] h-full w-full">
+          {links.map(({ a, b, red }, i) => {
+            const x1 = a.right, y1 = a.top + a.height / 2, x2 = b.left, y2 = b.top + b.height / 2, mx = (x1 + x2) / 2;
+            return <path key={i} d={`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`} fill="none" stroke={red ? "var(--crit)" : "var(--accent)"} strokeWidth="2" />;
+          })}
+        </svg>
+      )}
+      {offAt && off > 0 && (
+        <span className="pointer-events-none fixed z-[59] rounded-full border border-line-strong bg-surface px-2 py-px text-xs text-text2 shadow-tip" style={{ right: innerWidth - offAt.left + 6, top: offAt.top + offAt.height / 2 - 10 }} data-testid="fp-off-chart">
+          + {off} links to items on other roadmaps, not drawn
+        </span>
+      )}
     </>
   );
 }
