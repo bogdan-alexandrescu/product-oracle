@@ -26,7 +26,17 @@ from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import has_role, require_role
 from oracle.discussions import changes as discussion_changes
-from oracle.intake import answers, checks, engine, questions, service, sharing, summary, views
+from oracle.intake import (
+    answers,
+    carried,
+    checks,
+    engine,
+    questions,
+    service,
+    sharing,
+    summary,
+    views,
+)
 from oracle.intake import categories as cats
 from oracle.intake import evidence as ev
 from oracle.intake import read as intake_read
@@ -146,6 +156,27 @@ async def create_intake(body: IntakeCreate, principal: Commenter, db: TenantDB) 
     # Submitted after the response: SwarmCloud's calls would hold Continue for seconds.
     intake_read.submit_later(principal.tenant_id, intake)
     return await _summary(db, intake, principal, "create_intake")
+
+
+@router.get(
+    "/intakes/replaces/{document_id}/carried",
+    response_model=carried.Carried,
+    operation_id="get_replaced_prd_carried",
+)
+async def get_replaced_prd_carried(
+    document_id: uuid.UUID,
+    principal: Commenter,
+    db: TenantDB,
+    item_keys: Annotated[list[str], Query(max_length=100)] = [],  # noqa: B006
+) -> carried.Carried:
+    """What a new PRD replacing this approved PRD carries, as New PRD shows it before
+    Start: the PRD's items, its standing decided decisions (and those left out) and its
+    verified estimates and commitments for the items named in ``item_keys``."""
+    try:
+        got = await carried.inputs(db, document_id, item_keys)
+    except carried.CarriedError as e:
+        raise HTTPException(e.status, str(e)) from e
+    return got.carried
 
 
 @router.patch("/intakes/{item_id}", response_model=IntakeOut)

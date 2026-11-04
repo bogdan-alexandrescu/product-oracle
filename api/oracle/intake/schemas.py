@@ -10,6 +10,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, BaseModel, Field, field_validator, model_validator
 
+from oracle.intake.carried import Carried
 from oracle.runs.schemas import KnobsIn
 from oracle.templates.schemas import PrdAnswers
 from oracle.v2.schemas import (
@@ -55,6 +56,18 @@ def _line(value: str) -> str:
 OutOfScopeLine = Annotated[str, Field(min_length=1, max_length=300), AfterValidator(_line)]
 
 
+class ReplacesIn(BaseModel):
+    """The approved PRD a new PRD replaces, and the area of it the new PRD covers
+    (oracle.intake.carried): its decisions and verified estimates are the run's inputs."""
+
+    document_id: uuid.UUID
+    # A short name and a one-line scope: "User Safety", "caps, tripwires and ban prevention".
+    area_name: str = Field(min_length=1, max_length=60)
+    area_scope: str = Field(min_length=1, max_length=200)
+    # The old PRD's items in this area (its roadmap item keys).
+    item_keys: list[str] = Field(default=[], max_length=100)
+
+
 class IntakeCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     # A couple of sentences is enough (§5).
@@ -84,6 +97,8 @@ class IntakeCreate(BaseModel):
     # already behind a brief or linked to a PRD (else 409); the intake links them, and the
     # PRD its run makes links them too.
     request_ids: list[uuid.UUID] = Field(default=[], max_length=50)
+    # The approved PRD this one replaces (owner Nov 4): what it settled is carried.
+    replaces: ReplacesIn | None = None
 
     @field_validator("brief")
     @classmethod
@@ -205,6 +220,8 @@ class IntakeOut(ProductIntakeOut):
     prd_answers: PrdAnswers | None = None
     # Runs started from the intake (knobs.intake_id), newest first.
     run_ids: list[uuid.UUID] = []
+    # The approved PRD it replaces and what its run carries from it (oracle.intake.carried).
+    carried: Carried | None = None
 
 
 class PinnedVersion(BaseModel):

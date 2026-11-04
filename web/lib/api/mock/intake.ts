@@ -34,7 +34,7 @@ type Role = "viewer" | "commenter" | "approver" | "owner";
 type Gap = Schemas["KnowledgeGapOut"];
 type Question = Schemas["StakeholderQuestionOut"];
 /** C4: an intake row with the brief's fields (goals, out of scope, PRD template and theme, O1d answers). */
-type Intake = Schemas["ProductIntakeOut"] & Partial<BriefFields>;
+type Intake = Schemas["ProductIntakeOut"] & Partial<BriefFields> & { carried?: Schemas["Carried"] | null };
 interface BriefFields {
   goal_ids: string[];
   out_of_scope: string[];
@@ -78,6 +78,8 @@ export interface SubjectLookup {
 
 export interface IntakeContext {
   userId: string;
+  /** new-prd-from-replaced-prd: what a new PRD replacing an approved PRD carries (./replaced-prd.ts). */
+  carried?: (documentId: string, itemKeys: string[], area?: { name: string; scope: string }) => Schemas["Carried"] | { status: number; detail: string };
   role: Role;
   /** C4: the confirmed goals' titles by id (the brief's goals must be confirmed goals). */
   confirmedGoals?: () => Map<string, string>;
@@ -222,6 +224,7 @@ function intakeOut(i: Intake, db?: V2Db): Schemas["IntakeOut"] {
     theme: i.theme ?? null,
     prd_answers: i.prd_answers ?? null,
     run_ids: run ? [run.run_id] : [],
+    carried: i.carried ?? null,
   } as Schemas["IntakeOut"];
 }
 
@@ -689,8 +692,17 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     const requestIds = [...new Set(raw)];
     const refused = requestIds.length ? ctx.requests?.refusal(requestIds) : null;
     if (refused) return json(refused.status, { detail: refused.detail });
+    // new-prd-from-replaced-prd: the approved PRD it replaces (422 if not an approved PRD).
+    let carried: Schemas["Carried"] | null = null;
+    if (input.replaces) {
+      const r = input.replaces;
+      const got = ctx.carried?.(r.document_id, r.item_keys ?? [], { name: r.area_name.trim(), scope: r.area_scope.trim() });
+      if (!got) return fail(422, "A new PRD can only replace an approved PRD");
+      if ("status" in got) return fail(got.status, got.detail);
+      carried = got;
+    }
     const intake = addIntake(db, ctx.userId, input.title, input.brief, input.source_ids ?? []);
-    Object.assign(intake, fields);
+    Object.assign(intake, fields, { carried });
     if (requestIds.length) ctx.requests?.link(intake.id, requestIds);
     applyBriefFields(db, ctx, intake);
     if (db.blocker_briefs) {
@@ -706,6 +718,15 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     // At Observe and Draft a new brief asks no one; a person sends (H11 questions).
     if (questionsLevel(ctx) === "recommend" || questionsLevel(ctx) === "act") askBatch(db, ctx, intake, input.batch_size ?? 5);
     return json(201, summary(db, intake, ctx.userId, ctx));
+  }
+
+  // new-prd-from-replaced-prd: what a new PRD replacing this approved PRD carries.
+  if (p[1] === "intakes" && p[2] === "replaces" && p.length === 5 && p[4] === "carried" && m === "GET") {
+    if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");
+    const got = ctx.carried?.(p[3], q.getAll("item_keys"));
+    if (!got) return fail(404, "That PRD was not found");
+    if ("status" in got) return fail(got.status, got.detail);
+    return json(200, got);
   }
 
   if (p[1] === "intakes" && p[2] && p.length >= 3 && !(p.length === 3 && m === "GET")) {
