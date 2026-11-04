@@ -5,12 +5,11 @@ checks their role and their place in the discussion at the moment it writes. Aud
 holds ids and lengths, never message text.
 """
 
-import re
 import uuid
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import func, or_, select
@@ -134,26 +133,8 @@ class ExposureMismatch(Exception):
 # --- subjects -----------------------------------------------------------------------------
 
 
-class PageView(BaseModel):
-    """What the open page shows, as Ask Oracle's "This page" sends it (ask-page-context): the
-    page's own name, the filters in use and its main content as lines (a run review's
-    items with their horizon, milestone, confidence and why each needs the owner). Read
-    only in the person's own private panel chat (oracle.discussions.context)."""
-
-    model_config = ConfigDict(extra="forbid")
-    name: str | None = Field(default=None, max_length=200)
-    filters: list[Annotated[str, Field(max_length=200)]] = Field(
-        default_factory=list, max_length=20
-    )
-    lines: list[Annotated[str, Field(max_length=1000)]] = Field(
-        default_factory=list, max_length=300
-    )
-
-
 class _Subject(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    # ask-page-context: a panel chat's page, as it showed when the chat started.
-    view: PageView | None = None
 
 
 class DocumentSubject(_Subject):
@@ -224,21 +205,6 @@ SUBJECTS: dict[str, type[_Subject]] = {
     "priorities": PrioritiesSubject,
     "screen": ScreenSubject,
 }
-
-
-# AUD-9: a person's own pages (sources, settings, the Inbox, the account): a chat on one
-# holds the page's name only (the web's pageNameOnly).
-_NAME_ONLY = re.compile(r"^/(sources|settings|inbox|account)(/|$)")
-
-
-def name_only(path: str) -> bool:
-    return bool(_NAME_ONLY.match(path.split("?")[0]))
-
-
-def without_view(subject: dict[str, Any] | None) -> dict[str, Any]:
-    """The subject as it is sent back: the page's view (ask-page-context, up to 16,000
-    characters) stays stored for the reply's context only."""
-    return {k: v for k, v in (subject or {}).items() if k != "view"}
 
 
 def parse_subject(kind: str, raw: dict[str, Any]) -> dict[str, Any]:
@@ -474,9 +440,7 @@ class Labels:
             return "Priority order", "/priorities"
         from oracle.discussions.context import page_name
 
-        # ask-page-context: the page's own name, as its heading reads ("Runs" no more).
-        named = (s.get("view") or {}).get("name")
-        return (named or page_name(s["path"])), s["path"]
+        return page_name(s["path"]), s["path"]
 
 
 # --- people -------------------------------------------------------------------------------
@@ -711,7 +675,7 @@ async def discussion_out(db: AsyncSession, principal: "Principal", d: Discussion
     fields["me"] = DiscussionMe(**fields["me"], can_manage=access.can_manage(seat))
     out = DiscussionOut(
         **fields,
-        subject=without_view(d.subject),
+        subject=d.subject,
         participants=[
             DiscussionParticipantOut(
                 user_id=p.user_id,
@@ -1075,10 +1039,6 @@ async def start(
     found = await resolve_subject(db, principal, body.subject_kind, subject)
     author_only = found.finding_author is not None
     panel = body.origin == "panel"
-    if not panel:  # ask-page-context: what one person's page showed stays in their own chat
-        subject.pop("view", None)
-    if body.subject_kind == "screen" and name_only(subject["path"]):
-        subject.pop("view", None)  # AUD-9: a person's own page is its name only, from any client
     # G7 "Panel chats" (owner, 2026-10-21): only you, until shared.
     visibility = "private" if author_only or panel else body.visibility
     picked = list(dict.fromkeys(u for u in body.participants if u != me))
@@ -1271,9 +1231,7 @@ async def share(
     d, _first = await start(
         db, principal,
         DiscussionCreate(
-            subject_kind=chat.subject_kind,
-            subject=without_view(chat.subject),
-            title=body.title,
+            subject_kind=chat.subject_kind, subject=chat.subject, title=body.title,
             message=DiscussionMessageIn(body=body.first_message),
         ),
     )  # fmt: skip

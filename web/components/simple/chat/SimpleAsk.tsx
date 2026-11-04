@@ -11,7 +11,7 @@ import { askSay, askThread, linkAsk, recentChats, type ChatMessage, type ChatSum
 import { dayIn, formatInZone, todayIn, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { openStream } from "@/lib/stream";
-import { GENERAL, pageName, subjectWithView, useCurrentScreenSubject, type ScreenSubject } from "@/lib/screen-subject";
+import { GENERAL, pageName, useCurrentScreenSubject, type ScreenSubject } from "@/lib/screen-subject";
 import { errorMessage } from "@/lib/use-query";
 
 import { AnswerSources, AnswerText, Who, chatTime, type AnswerCite } from "./AskAnswer";
@@ -48,7 +48,7 @@ export function chatWhen(iso: string, zone: string, now: number = Date.now()): s
 
 /** Starts the person's private Oracle's Ask chat on the subject with the line; Oracle's reply streams in it. */
 async function startAsk(subject: ScreenSubject, text: string): Promise<string> {
-  const d = await unwrap(api.POST("/v1/discussions", { body: { subject_kind: subject.kind, subject: subjectWithView(subject), origin: "panel", visibility: "private" } }));
+  const d = await unwrap(api.POST("/v1/discussions", { body: { subject_kind: subject.kind, subject: subject.subject, origin: "panel", visibility: "private" } }));
   await postAsk(d.id, text);
   return d.id;
 }
