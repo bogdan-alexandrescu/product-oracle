@@ -221,8 +221,11 @@ export function useCurrentScreenSubject(): ScreenSubject {
   const pathname = usePathname();
   const held = ctx?.view && ctx.view.path === pathname ? ctx.view.value : null;
   const shown = ctx?.name && ctx.name.path === pathname ? ctx.name.value : null;
-  const view: ScreenSubject["view"] = held ?? (pageNameOnly(pathname) ? undefined : "shown");
   const own = ctx?.set && ctx.set.path === pathname ? ctx.set.value : null;
-  if (own) return { ...own, ...(view ? { view } : {}) };
-  return { kind: "screen", subject: { path: pathname }, label: screenLabel(pathname, shown), ...(view ? { view } : {}) };
+  // One object while nothing changes: callers keep it in their hooks' dependencies.
+  return useMemo(() => {
+    const view: ScreenSubject["view"] = held ?? (pageNameOnly(pathname) ? undefined : "shown");
+    const base: ScreenSubject = own ?? { kind: "screen", subject: { path: pathname }, label: screenLabel(pathname, shown) };
+    return view ? { ...base, view } : base;
+  }, [own, held, shown, pathname]);
 }
