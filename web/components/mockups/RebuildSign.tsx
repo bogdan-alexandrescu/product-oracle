@@ -57,8 +57,8 @@ function makeRuns(state: State, hard: string | null, tick: number, polls: number
   const base = {
     state,
     startedBy: "Avery Stone",
-    startedAt: "Oct 22, 11:20 AM",
-    scheduledFor: "Thu, Oct 29, 9:00 AM",
+    startedAt: "Oct 22, 11:20 AM PDT",
+    scheduledFor: "Thu, Oct 29, 9:00 AM PDT",
     failed: { reason: "Two sections came back empty" },
     justMoved: !!tick && state === "running",
   };
@@ -300,7 +300,7 @@ function RunCard({ r, onOpen }: { r: Run; onOpen?: () => void }) {
 }
 
 /** A: the live chip beside the version, opening its popover. */
-function Chip({ runs, compact, onOpen }: { runs: Run[]; compact?: boolean; onOpen: () => void }) {
+function Chip({ runs, compact, onOpen, summary }: { runs: Run[]; compact?: boolean; onOpen: () => void; summary?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
@@ -316,7 +316,7 @@ function Chip({ runs, compact, onOpen }: { runs: Run[]; compact?: boolean; onOpe
   }, []);
   const r = runs[0];
   const more = runs.length - 1;
-  const text = compact ? shortLine(r) : line(r);
+  const text = summary ?? (compact ? shortLine(r) : line(r));
   return (
     <span ref={ref} className="relative inline-flex max-w-full">
       <button
@@ -328,7 +328,8 @@ function Chip({ runs, compact, onOpen }: { runs: Run[]; compact?: boolean; onOpe
       >
         <Dot state={r.state} />
         <span className="min-w-0 break-words">{text}</span>
-        {more > 0 && <span className="rounded-lg bg-surface/70 px-1.5 text-[12px] whitespace-nowrap">+{more} {more === 1 ? "run" : "runs"}</span>}
+        {r.justMoved && !compact && <span className="rounded bg-surface/70 px-1 text-[11px] whitespace-nowrap">just now</span>}
+        {more > 0 && !summary && <span className="rounded-lg bg-surface/70 px-1.5 text-[12px] whitespace-nowrap">+{more} {more === 1 ? "run" : "runs"}</span>}
       </button>
       {open && (
         <div
@@ -372,7 +373,7 @@ function Banner({ runs, onOpen }: { runs: Run[]; onOpen: () => void }) {
                   : `${r.what === "roadmap" ? "Roadmap run" : "Regenerate"} on ${r.title} · ${stepsWord(r)}: ${r.steps[r.step - 1] === "Review stop" ? `Review stop` : r.steps[r.step - 1]}`}
               {r.justMoved && <span className="ml-2 rounded bg-accent-soft px-1 text-[11px] font-semibold text-accent-ink align-middle">just now</span>}
             </p>
-            {r.state === "running" && <span className="text-[13px] text-text2 whitespace-nowrap">about {r.minutesLeft} min left</span>}
+            {r.state === "running" && <span className="text-[13px] text-text2 whitespace-nowrap max-[600px]:basis-full">about {r.minutesLeft} min left</span>}
           </div>
           {r.state !== "scheduled" && <Progress r={r} />}
           {r.state === "waiting" && (
@@ -406,38 +407,45 @@ function Marker({ runs }: { runs: Run[] }) {
 /** C: the page-level note with its live step counter. */
 function Note({ runs, onOpen }: { runs: Run[]; onOpen: () => void }) {
   const r = runs[0];
+  const many = runs.length > 1;
+  // The marker by the title says "New version coming"; the note says how far along, never the same words.
+  const detail = (x: Run) => {
+    switch (x.state) {
+      case "running":
+        return `${stepsWord(x).replace("step", "Step")}: ${x.steps[x.step - 1].toLowerCase()} · about ${x.minutesLeft} min`;
+      case "scheduled":
+        return `Starts ${x.scheduledFor}`;
+      case "waiting":
+        return `${stepsWord(x).replace("step", "Step")}: waiting on ${x.stop.who} to ${x.stop.action}`;
+      case "failed":
+        return `${x.failed.reason} at step ${x.step}. You still read v${x.from}.`;
+      case "done":
+        return `v${x.to} is a draft until it is approved. You still read v${x.from}.`;
+    }
+  };
+  const action = (x: Run) =>
+    x.state === "done" ? (
+      <button type="button" className="font-semibold text-accent-ink hover:underline" onClick={onOpen}>
+        Review v{x.to}
+      </button>
+    ) : (
+      <Link href="/runs" className="font-semibold text-accent-ink hover:underline">
+        {x.state === "waiting" ? x.stop.button : "Open run"}
+      </Link>
+    );
   return (
-    <div role="status" aria-live="polite" data-testid="rb-note" className="flex flex-col gap-2 border-l-[3px] border-accent/60 py-1 pl-3 text-[14px] leading-[20px] text-text2">
+    <div role="status" aria-live="polite" data-testid="rb-note" className="flex flex-col gap-1.5 border-l-[3px] border-accent/60 py-1 pl-3 text-[14px] leading-[20px] text-text2">
       {runs.map((x) => (
-        <p key={x.id} className="break-words">
-          <b className="font-semibold text-text">
-            {x.state === "done" ? `v${x.to} ready` : x.state === "failed" ? "Rebuild stopped" : x.state === "scheduled" ? "New version scheduled" : "New version coming"}
-          </b>
-          {" · "}
-          {x.kind === "roadmap" && runs.some((y) => y.kind === "prd") && r.kind === "prd" ? "Roadmap run · " : ""}
-          {x.kind === "prd" && runs.some((y) => y.kind === "roadmap") && r.kind !== "prd" ? `${x.title} · ` : ""}
-          {x.state === "running" && <span className="tnum">{`${stepsWord(x)}, ${x.steps[x.step - 1].toLowerCase()} · about ${x.minutesLeft} min`}</span>}
-          {x.state === "scheduled" && (x.scheduledFor.startsWith("after") ? `starts ${x.scheduledFor}` : x.scheduledFor)}
-          {x.state === "waiting" && `${stepsWord(x)}, waiting on ${x.stop.who} to ${x.stop.action}`}
-          {x.state === "failed" && `${x.failed.reason.toLowerCase()} at step ${x.step}; you still read v${x.from}`}
-          {x.state === "done" && `a draft until approved; you still read v${x.from}`}
-          {x.justMoved && <span className="ml-1.5 rounded bg-accent-soft px-1 text-[11px] font-semibold text-accent-ink">just now</span>}
+        <p key={x.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 break-words">
+          {many && <b className="font-semibold text-text">{x.kind === "roadmap" ? `Roadmap run on ${x.title}` : x.title}:</b>}
+          <span className="tnum">{detail(x)}</span>
+          {x.justMoved && <span className="rounded bg-accent-soft px-1 text-[11px] font-semibold text-accent-ink">just now</span>}
+          {many && action(x)}
         </p>
       ))}
-      <p className="flex flex-wrap items-center gap-3 text-[13px]">
-        {r.state === "done" ? (
-          <button type="button" className="font-semibold text-accent-ink hover:underline" onClick={onOpen}>
-            Review v{r.to}
-          </button>
-        ) : r.state === "waiting" ? (
-          <Link href="/runs" className="font-semibold text-accent-ink hover:underline">
-            {r.stop.button}
-          </Link>
-        ) : (
-          <Link href="/runs" className="font-semibold text-accent-ink hover:underline">
-            Open run
-          </Link>
-        )}
+      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
+        {!many && action(r)}
+        {(r.state === "running" || r.state === "waiting" || r.state === "scheduled") && !many && <span>This page keeps showing v{r.from} until v{r.to} is approved.</span>}
         {r.state !== "done" && r.state !== "failed" && <span className="text-text-faint">Updates by itself</span>}
       </p>
     </div>
@@ -459,7 +467,9 @@ export function RebuildSign({ place, slug, kind = "prd", slot, version }: { plac
   const p = rb.proposal;
   const list = place === "list-row" || place === "home";
   if (slot === "inline") {
-    if (p === "a") return <Chip runs={runs} compact={list} onOpen={rb.open} />;
+    // The four-PRD roadmap: its chip says how many of its PRDs rebuild, then names it.
+    const summary = kind === "roadmap" && rb.hard === "four" && rb.state === "running" ? `2 of 4 PRDs rebuilding · Product roadmap v8 after` : undefined;
+    if (p === "a") return <Chip runs={runs} compact={list} onOpen={rb.open} summary={summary} />;
     if (p === "c") return <Marker runs={runs} />;
     if (p === "b" && list) return <Marker runs={runs} />;
     return null;
