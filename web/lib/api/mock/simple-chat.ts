@@ -106,6 +106,8 @@ interface StoredMessage {
   choice_drafts?: (Draft | null)[];
   /** roadmap-talk: where Oracle's answer comes from ("From the PRD · F-16 Adaptive pacing"). */
   source?: string | null;
+  /** ask-length-limit: where the parts Oracle cannot change yet are changed. */
+  links?: { label: string; href: string }[];
   /** Private: the reader's job for a pending (or failed) line. */
   reading?: { text: string; role: Role; meeting_id: string | null; attempts: number; ask: boolean; document_id?: string | null };
 }
@@ -350,7 +352,7 @@ const EXAMPLES = "Try “move Weekly alert digest to Q2”, “rename Setup chec
 
 type Draft = Omit<StoredCard, "id" | "message_id" | "thread" | "meeting_id" | "status" | "change_id" | "decided_by_name" | "decided_at" | "decision_id">;
 /** `understood: false`: a line the plan reader does not know (the Ask panel's one box sends it to Oracle's Ask); `missing`: no item has that name. */
-type Reply = { kind: StoredMessage["kind"]; body: string; cards: Draft[]; source?: string | null; understood?: boolean; missing?: boolean; hits?: Item[]; choices?: { label: string; draft: Draft | null }[] };
+type Reply = { kind: StoredMessage["kind"]; body: string; cards: Draft[]; source?: string | null; links?: { label: string; href: string }[]; understood?: boolean; missing?: boolean; hits?: Item[]; choices?: { label: string; draft: Draft | null }[] };
 
 /** An ambiguous item's question gains one choice per item (its card) and "Neither". */
 function withChoices(r: Reply, build: (i: Item) => Reply): Reply {
@@ -885,8 +887,27 @@ function clauses(text: string, skipped: string[] = []): Clause[] {
   return out;
 }
 
-/** qa-simple-decide-24: the parts of a line the reader could not read, said back (as chat.interpret's `skipped`). */
-const unread = (skipped: string[]) => skipped.slice(0, 3).map((p) => `I did not understand: “${p.slice(0, 120)}”.`);
+/** ask-length-limit: the most a chat message holds (the API's ChatIn). */
+const CHAT_TEXT_MAX = 4000;
+
+/** ask-length-limit: parts no chat change does yet, said as such with where they are changed (as chat.NOT_YET). */
+const NOT_YET: [RegExp, string, string, string][] = [
+  [/\bgate\b/i, "I can't change an item that is off the gate but still in Now from a chat yet", "Roadmap", "/simple/roadmap"],
+  [/\bcapacity\b|\bheadcount\b|\bengineer[- ]weeks?\b/i, "I can't change capacity from a chat yet", "Priorities", "/simple/priorities"],
+  [/\bdates?\b|\bdeadlines?\b/i, "I can't change dates from a chat yet", "Roadmap", "/simple/roadmap"],
+];
+
+/** qa-simple-decide-24: every part of a line the reader could not read, said back (as chat._unread): capacity, dates
+ * and the gate are not yet supported, with where to change them (into `links`, once each). */
+function unread(skipped: string[], links: { label: string; href: string }[] = []): string[] {
+  return skipped.map((raw) => {
+    const p = raw.split(/\s+/).filter(Boolean).join(" ").slice(0, 120);
+    const hit = NOT_YET.find(([re]) => re.test(p));
+    if (!hit) return `I did not understand: “${p}”.`;
+    if (!links.some((l) => l.href === hit[3])) links.push({ label: hit[2], href: hit[3] });
+    return `${hit[1]} (“${p}”); change it on ${hit[2]}.`;
+  });
+}
 
 const QUESTION = /^(why|how|what|who|when|where|which|should|is|are|does|do)\b/i;
 const SAY_AGAIN = "I could not tell what to change. Say it another way.";
@@ -939,11 +960,13 @@ function readLine(db: SimpleDb, ctx: ChatCtx, r: NonNullable<StoredMessage["read
     if ("card" in o) drafts.push(o.card);
     else refusals.push(o.refusal);
   }
-  if (!drafts.length) return { kind: "note", body: [refusals.length ? `I can't do that here: ${refusals.join(" ")}` : SAY_AGAIN, ...unread(skipped)].join(" "), cards: [] };
+  const links: { label: string; href: string }[] = [];
+  const said = unread(skipped, links);
+  if (!drafts.length) return { kind: "note", body: [refusals.length ? `I can't do that here: ${refusals.join(" ")}` : SAY_AGAIN, ...said].join(" "), cards: [], links };
   const n = drafts.length;
   // The valid cards stay; the line says which ones it cannot do and what it did not read.
   const cant = refusals.length ? [`${["One", "Two", "Three"][refusals.length - 1] ?? refusals.length} I can't do: ${refusals.join(" ")}`] : [];
-  return { kind: "cards", body: [...cant, ...unread(skipped), `I understood ${n === 1 ? "one change" : n === 2 ? "two changes" : `${n} changes`}:`].join(" "), cards: drafts };
+  return { kind: "cards", body: [...cant, ...said, `I understood ${n === 1 ? "one change" : n === 2 ? "two changes" : `${n} changes`}:`].join(" "), cards: drafts, links };
 }
 
 let readerWrote = false;
@@ -973,7 +996,7 @@ function resolvePending(db: SimpleDb, chat: ChatDb, key: string, ctx: ChatCtx, s
     const meeting = r.meeting_id ? (chat.meetings[r.meeting_id] ?? null) : null;
     const reply = readLine(db, { ...ctx, role: r.role }, r, itemsFor(db, ctx, meeting), meeting);
     Object.assign(msg, {
-      kind: reply.kind, body: reply.body, retry: false, at: now(),
+      kind: reply.kind, body: reply.body, retry: false, at: now(), links: reply.links ?? [],
       card_ids: storeCards(db, chat, reply.cards, msg.id, key, meeting),
       choices: (reply.choices ?? []).map((c, index) => ({ index, label: c.label })),
       choice_drafts: (reply.choices ?? []).map((c) => c.draft),
@@ -1430,7 +1453,7 @@ function threadOut(db: SimpleDb, chat: ChatDb, t: Thread | null, ctx: ChatCtx, m
       void _reading;
       // meet-chat-kind: as the API's thread(), a line that is not a chat kind reads as an answer.
       const kind = (KINDS.includes(msg.kind) ? msg.kind : "answer") as ChatKind;
-      return { source: null, ...msg, kind, cards: card_ids.map((id) => cardOut(db, chat, chat.cards[id], ctx)) };
+      return { source: null, links: [], ...msg, kind, cards: card_ids.map((id) => cardOut(db, chat, chat.cards[id], ctx)) };
     }),
     rules: meeting ? rulesOut(meeting, ctx) : null,
     ask_id: t?.ask_id ?? null,
@@ -1494,7 +1517,7 @@ function say(db: SimpleDb, chat: ChatDb, key: string, meeting: Meeting | null, c
     return true;
   }
   t.messages.push({
-    ...base, body: reply.body, kind: reply.kind, source: reply.source ?? null, card_ids: storeCards(db, chat, reply.cards, id, key, meeting),
+    ...base, body: reply.body, kind: reply.kind, source: reply.source ?? null, links: reply.links ?? [], card_ids: storeCards(db, chat, reply.cards, id, key, meeting),
     choices: (reply.choices ?? []).map((c, index) => ({ index, label: c.label })), choice_drafts: (reply.choices ?? []).map((c) => c.draft),
   });
   return true;
@@ -1848,7 +1871,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
   if (p[2] === "chat" && p[3] === "messages" && !p[4] && m === "POST") {
     const b = await body();
     const text = String(b.text ?? "").trim();
-    if (!text || text.length > 2000) return json(422, { detail: "text: 1 to 2000 characters" });
+    if (!text || text.length > CHAT_TEXT_MAX) return json(422, { detail: `text: 1 to ${CHAT_TEXT_MAX} characters` });
     // ask-fresh: continue the caller's own chat `chat_id`; `new_chat` starts a new one about the page.
     const own = typeof b.chat_id === "string" ? ownChat(chat, ctx, b.chat_id) : null;
     if (typeof b.chat_id === "string" && !own) return json(404, { detail: "No such chat" });
@@ -1893,7 +1916,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     }
     if (p[5] === "messages" && m === "POST") {
       const text = String((await body()).text ?? "").trim();
-      if (!text || text.length > 2000) return json(422, { detail: "text: 1 to 2000 characters" });
+      if (!text || text.length > CHAT_TEXT_MAX) return json(422, { detail: `text: 1 to ${CHAT_TEXT_MAX} characters` });
       const understood = say(db, chat, key, meeting, ctx, text);
       return json(200, { ...threadOut(db, chat, chat.threads[key], ctx, meeting), understood });
     }

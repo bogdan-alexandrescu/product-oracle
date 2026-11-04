@@ -106,7 +106,14 @@ export type ChatMessage = {
   retry: boolean;
   /** roadmap-talk: where Oracle's answer comes from ("From the PRD · F-06 Adaptive pacing"); null otherwise. */
   source?: string | null;
+  /** ask-length-limit: where the parts Oracle cannot change yet are changed (Priorities, Roadmap). */
+  links?: ChatLink[];
 };
+
+export type ChatLink = { label: string; href: string };
+/** ask-length-limit: the most a chat message holds (the API's ChatIn), and where its quiet count shows. */
+export const CHAT_TEXT_MAX = 4000;
+export const CHAT_COUNT_FROM = 3000;
 
 export type ChatChoice = { index: number; label: string };
 export type ApplyAll = { thread: ChatThread; applied: string[]; stopped: { card_id: string; summary: string; reason: string } | null };
