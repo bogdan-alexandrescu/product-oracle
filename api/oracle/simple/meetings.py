@@ -341,9 +341,11 @@ async def _prd(db: AsyncSession, principal: Any, ref: str) -> Document:
     from oracle.simple.changes import ChangeError
 
     try:
-        document = await one_pager._document(db, principal, ref)
+        # simple-replaced-prds: a replaced PRD is not reviewed in Simple (404 naming its
+        # replacements); its past meetings stay as history.
+        document = await one_pager._document(db, principal, ref, current=True)
     except ChangeError as e:
-        raise MeetingError(e.status, str(e)) from e
+        raise MeetingError(e.status, e.detail) from e
     if document.kind != "prd":
         raise MeetingError(422, "A review meeting reviews a PRD")
     return document
@@ -971,7 +973,7 @@ async def approve(db: AsyncSession, principal: Any, meeting_id: uuid.UUID):
     try:
         result = await drafts.approve_in_meeting(db, session, me, present)
     except drafts.DraftError as e:
-        raise MeetingError(e.status, str(e)) from e
+        raise MeetingError(e.status, e.detail) from e
     except ImportRejected as e:
         # walkc-meeting: never the raw "draft rejected: 38 problem(s)": each problem in
         # plain words, with what to do about it and where; its section by the headings of
@@ -1780,7 +1782,7 @@ async def redraft(db: AsyncSession, principal: Any, meeting_id: uuid.UUID) -> Si
                 principal=principal,
             )  # fmt: skip
     except jobs.JobError as e:
-        raise MeetingError(e.status, str(e)) from e
+        raise MeetingError(e.status, e.detail) from e
     m.minutes_job_id, m.minutes_state = job.id, "drafting"
     await db.flush()
     await audit.record(db, principal, "simple_meeting.redraft", "simple_meeting", m.id,

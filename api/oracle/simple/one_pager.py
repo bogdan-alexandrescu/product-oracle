@@ -588,7 +588,12 @@ def clean_answer(
 # --------------------------------------------------------------------------- reading
 
 
-async def _document(db: AsyncSession, principal: Any, doc: str) -> Document:
+async def _document(
+    db: AsyncSession, principal: Any, doc: str, *, current: bool = False
+) -> Document:
+    """The PRD ``doc`` (slug or id) the caller sees; with ``current``, 404 for a PRD marked
+    replaced, its detail naming the PRDs that replaced it (simple-replaced-prds: Simple shows
+    those; the replaced one is history, read in Detailed)."""
     cond = Document.slug == doc
     try:
         cond = cond | (Document.id == uuid.UUID(doc))
@@ -597,6 +602,11 @@ async def _document(db: AsyncSession, principal: Any, doc: str) -> Document:
     d = await db.scalar(select(Document).where(cond, Document.kind == "prd"))
     if d is None or not visibility.can_see(principal, d) or getattr(d, "deleted_at", None):
         raise ChangeError(404, "No such PRD")
+    if current and d.replaced_by:
+        from oracle.roadmap import company
+
+        by = [{**r, "id": str(r["id"])} for r in await company.refs(db, list(d.replaced_by))]
+        raise ChangeError(404, {"message": "This PRD was replaced", "replaced_by": by})
     return d
 
 
@@ -1219,12 +1229,14 @@ def patch_all(bodies: dict[str, str], old: str, new: str) -> dict[str, str] | No
 # --------------------------------------------------------------------------- the read
 
 
-async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True) -> OnePagerOut:
+async def read(
+    db: AsyncSession, principal: Any, doc: str, *, held: bool = True, current: bool = False
+) -> OnePagerOut:
     """The one-pager as ``principal`` reads it; ``held`` false (the PDF, which is shared): the
     last good version, never a build held for owners."""
     from oracle.simple import service
 
-    document = await _document(db, principal, doc)
+    document = await _document(db, principal, doc, current=current)
     # A viewer's read writes nothing (the page is built in memory until a writer reads it).
     writer = _me(principal) is not None and has_role(principal.role, "commenter")
     b = await built(db, document, persist=writer)
@@ -1530,7 +1542,7 @@ async def remind(db: AsyncSession, principal: Any, doc: str) -> OnePagerRemindOu
     with no submitted draft waiting, or when every waiting reviewer was reminded today."""
     from oracle.review.collab import notify
 
-    document = await _document(db, principal, doc)
+    document = await _document(db, principal, doc, current=True)
     w = await who(db, document)
     if not may_remind(principal, w):
         raise ChangeError(403, "Only the PRD's owners and its decider remind its reviewers")
@@ -2151,7 +2163,7 @@ async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str
     stem."""
     from oracle.branding import BRAND_CSS, accent_css, load_brand, render_brand_header
 
-    out = await read(db, principal, doc, held=False)
+    out = await read(db, principal, doc, held=False, current=True)
     brand = await load_brand(db)
     # prd-timeline: a PRD with a dated plan prints its timeline page, then a page per milestone.
     view = (await plan_model.views(db, {out.document.id})).get(out.document.id)

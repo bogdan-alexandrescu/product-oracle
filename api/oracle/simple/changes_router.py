@@ -328,7 +328,7 @@ async def get_simple_one_pager(doc: str, principal: Reader, db: TenantDB) -> One
     hashes; to those who see the PRD's working draft, its edited lines and the margin
     notes (changes, proposals). Lines change through POST /v1/simple/changes
     (``edit_line``)."""
-    return await _run(db, one_pager.read(db, principal, doc))
+    return await _run(db, one_pager.read(db, principal, doc, current=True))
 
 
 @router.post("/one-pagers/{doc}/remind", response_model=OnePagerRemindOut,
