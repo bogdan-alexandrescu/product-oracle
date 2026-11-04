@@ -394,38 +394,54 @@ async def lines(
 ) -> list[SimpleAppliedVersion]:
     """One line per shown roadmap whose shown items an approved version was applied to:
     it matches the version, or what differs (dates a person changed, items added or cut
-    since)."""
-    out: list[SimpleAppliedVersion] = []
-    for doc in roadmaps:
-        mine = [e for e in entries if e.roadmap.id == doc.id]
-        version_ids = {e.row.roadmap_version_id for e in mine if e.row.roadmap_version_id}
-        off = list(
-            await db.scalars(
-                select(RoadmapItem)
-                .where(
-                    RoadmapItem.roadmap_version_id.in_(version_ids),
-                    RoadmapItem.plan_state.is_not(None),
-                )
-                .order_by(RoadmapItem.position)
+    since). Two statements at most, whatever the number of roadmaps."""
+    by_doc: dict[uuid.UUID, list[Any]] = {}
+    for e in entries:
+        by_doc.setdefault(e.roadmap.id, []).append(e)
+    version_ids = {
+        e.row.roadmap_version_id for e in entries if e.row.roadmap_version_id is not None
+    }
+    off_of: dict[uuid.UUID, list[RoadmapItem]] = {}
+    if version_ids:
+        for r in await db.scalars(
+            select(RoadmapItem)
+            .where(
+                RoadmapItem.roadmap_version_id.in_(version_ids),
+                RoadmapItem.plan_state.is_not(None),
             )
-        ) if version_ids else []  # fmt: skip
+            .order_by(RoadmapItem.position)
+        ):
+            off_of.setdefault(r.roadmap_document_id, []).append(r)  # type: ignore[arg-type]
+    wanted: dict[uuid.UUID, int] = {}
+    for doc in roadmaps:
         numbers = [
-            int((e.row.applied or {}).get("version"))
-            for e in mine
-            if (e.row.applied or {}).get("version")
-        ] + [int(r.applied["version"]) for r in off if (r.applied or {}).get("version")]
-        if not numbers:
-            continue
-        n = max(numbers)
-        version = await db.scalar(
+            int(a["version"])
+            for a in [e.row.applied or {} for e in by_doc.get(doc.id, [])]
+            + [r.applied or {} for r in off_of.get(doc.id, [])]
+            if a.get("version")
+        ]
+        if numbers:
+            wanted[doc.id] = max(numbers)
+    if not wanted:
+        return []
+    approved = {
+        (v.document_id, v.number): v
+        for v in await db.scalars(
             select(DocumentVersion).where(
-                DocumentVersion.document_id == doc.id, DocumentVersion.number == n
+                DocumentVersion.document_id.in_(list(wanted)),
+                DocumentVersion.number.in_(set(wanted.values())),
             )
         )
-        if version is None or version.approved_at is None:
+    }
+    out: list[SimpleAppliedVersion] = []
+    for doc in roadmaps:
+        n = wanted.get(doc.id)
+        version = approved.get((doc.id, n)) if n is not None else None
+        if n is None or version is None or version.approved_at is None:
             continue
+        off = off_of.get(doc.id, [])
         differences: list[str] = []
-        for e in mine:
+        for e in by_doc.get(doc.id, []):
             a = e.row.applied or {}
             if a.get("version") != n:
                 differences.append(f"{e.row.title} was added after version {n}")
