@@ -33,9 +33,9 @@ async function signIn(page: Page, email: string) {
 
 async function snapshot(page: Page): Promise<string> {
   return page.evaluate(() => {
-    for (const s of document.querySelectorAll("select")) for (const o of s.options) o.selected ? o.setAttribute("selected", "") : o.removeAttribute("selected");
+    for (const s of document.querySelectorAll("select")) for (const o of s.options) o.toggleAttribute("selected", o.selected);
     for (const i of document.querySelectorAll("input")) {
-      if (i.type === "checkbox" || i.type === "radio") i.checked ? i.setAttribute("checked", "") : i.removeAttribute("checked");
+      if (i.type === "checkbox" || i.type === "radio") i.toggleAttribute("checked", i.checked);
       else i.setAttribute("value", i.value);
     }
     for (const t of document.querySelectorAll("textarea")) t.textContent = t.value;
