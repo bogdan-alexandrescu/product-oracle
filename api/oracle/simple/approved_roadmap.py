@@ -47,6 +47,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.authz import has_role
+from oracle.company_time import calendar_day
 from oracle.docs.models import Document, DocumentVersion
 from oracle.roadmap.models import ProductTrack, RoadmapItem, ScheduleBasis, TrackMilestone
 from oracle.simple.schemas import SimpleAppliedVersion, SimpleDocRef
@@ -375,7 +376,7 @@ async def _milestones(
 
 
 def _day(d: date) -> str:
-    return f"{d:%b} {d.day}"
+    return calendar_day(d)
 
 
 def _difference(title: str, now: tuple[date | None, date | None], was: tuple, n: int) -> str:
