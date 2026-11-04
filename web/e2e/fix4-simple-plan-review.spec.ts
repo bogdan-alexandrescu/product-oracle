@@ -76,6 +76,10 @@ test.describe("fix4-simple-plan review: Priorities", () => {
     }
     await expect(mark).toHaveAttribute("aria-label", /goal value 0,/);
     await mark.click();
+    // build-feature-panel review 5: a mark clicked opens the one feature panel; Escape closes it.
+    await expect(page.getByRole("dialog", { name: "Setup checklist" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.locator('[data-testid="side-row"][data-code="setup-checklist"]').getByTestId("side-numbers")).toHaveText(/^goal value 0 · confidence [\d.]+ · [\d.]+ wk · score 0$/);
   });
 

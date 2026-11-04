@@ -458,6 +458,57 @@ test.describe("one feature panel, as the frames say it (review 3)", () => {
   });
 });
 
+/*
+ * build-feature-panel review 5: the names the re-review found opening nothing. Priorities' Goal
+ * buckets with a dated plan ("simple-plan": Team invites, F-05, over M1 and M2), Value / effort's
+ * marks and Ranked side list, Home's broken link naming the feature it waits on (Weekly alert
+ * digest starts before Alert rules engine ends).
+ */
+test.describe("one feature panel, every name that can be picked (review 5)", () => {
+  test.use(DESKTOP);
+
+  test("Priorities' Goal buckets with a dated plan opens the panel from a plan feature's name", async ({ page }) => {
+    await go(page, "/simple/priorities", { scenario: "simple-plan" });
+    await page.getByRole("tab", { name: "Goal buckets" }).click();
+    const name = page.locator('[data-testid="plan-feature"][data-code="F-05"]').getByTestId("plan-feature-name").getByRole("button", { name: "Team invites" });
+    await expect(name).toBeVisible();
+    await name.click();
+    const panel = page.getByRole("dialog", { name: "Team invites" });
+    await expect(panel.getByTestId("fp-details")).toBeVisible();
+    await expect(panel.getByTestId("fp-start")).toBeVisible();
+  });
+
+  test("Value / effort opens the panel from a feature's title in the Ranked side list, and keeps it selected", async ({ page }) => {
+    await go(page, "/simple/priorities?tab=value-effort");
+    const row = page.locator('[data-testid="side-row"][data-code="alert-digest"]');
+    await row.getByTestId("prio-title").click();
+    const panel = page.getByRole("dialog", { name: "Weekly alert digest" });
+    await expect(panel.getByTestId("fp-details")).toBeVisible();
+    await expect(row).toHaveAttribute("data-selected", "true");
+  });
+
+  test("Value / effort opens the panel from a mark clicked, and keeps it selected", async ({ page }) => {
+    await go(page, "/simple/priorities?tab=value-effort");
+    const mark = page.locator('[data-testid="vxe-point"][data-code="alert-digest"]');
+    await mark.click();
+    const panel = page.getByRole("dialog", { name: "Weekly alert digest" });
+    await expect(panel.getByTestId("fp-details")).toBeVisible();
+    await expect(mark).toHaveAttribute("aria-pressed", "true");
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+    await expect(mark).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("Home's broken link opens the panel from the other feature it names", async ({ page }) => {
+    await go(page, "/simple");
+    const other = page.getByTestId("home-broken").getByRole("button", { name: "Alert rules engine", exact: true }).first();
+    await expect(other).toBeVisible();
+    await other.click();
+    const panel = page.getByRole("dialog", { name: "Alert rules engine" });
+    await expect(panel.getByTestId("fp-details")).toBeVisible();
+  });
+});
+
 test.describe("one feature panel, phone", () => {
   test.use(PHONE);
 

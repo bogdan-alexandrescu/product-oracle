@@ -294,9 +294,14 @@ for (const v of VIEWS) {
       await expect(sideRow(page, "price-tiers")).toHaveAttribute("data-selected", "true");
       await expect(sideRow(page, "price-tiers")).toBeInViewport();
       await expect(page.locator('[data-testid="side-row"][data-selected="true"]')).toHaveCount(1);
-      // Select a row: its mark lights up instead.
-      if (v.phone) await sideRow(page, "alert-digest").getByRole("button").tap();
-      else await sideRow(page, "alert-digest").getByRole("button").click();
+      // build-feature-panel review 5: the mark also opens the one feature panel; Escape closes it and keeps the selection.
+      await expect(page.getByRole("dialog", { name: "New plan tiers" })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await expect(sideRow(page, "price-tiers")).toHaveAttribute("data-selected", "true");
+      // Select a row (beside its title, which opens the panel): its mark lights up instead.
+      if (v.phone) await sideRow(page, "alert-digest").getByTestId("side-rank").tap();
+      else await sideRow(page, "alert-digest").getByTestId("side-rank").click();
       await expect(mark(page, "alert-digest")).toHaveAttribute("aria-pressed", "true");
       await expect(mark(page, "price-tiers")).toHaveAttribute("aria-pressed", "false");
       await expect(sideRow(page, "alert-digest")).toHaveAttribute("data-selected", "true");
@@ -317,6 +322,9 @@ for (const v of VIEWS) {
       // The keyboard: Enter on a focused mark selects it.
       await mark(page, "setup-video").focus();
       await page.keyboard.press("Enter");
+      await expect(page.getByRole("dialog", { name: "Welcome video" })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog")).toHaveCount(0);
       await expect(sideRow(page, "setup-video")).toHaveAttribute("data-selected", "true");
       await expect(sideRow(page, "setup-video")).toBeInViewport();
     });
