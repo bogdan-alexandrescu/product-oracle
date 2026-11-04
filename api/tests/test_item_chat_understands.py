@@ -31,7 +31,7 @@ from oracle.simple import chat, drafts, service
 from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import clock as clock  # noqa: F401
 from tests.test_simple_chat_join import act
-from tests.test_simple_roadmap_talk import CHAT, CARDS, apply, page, reads, say, world
+from tests.test_simple_roadmap_talk import CARDS, CHAT, apply, page, reads, say, world
 
 LINE = ("this is already happening now in our other app's review section. This is shipped "
         "and will continue to improve it")  # fmt: skip

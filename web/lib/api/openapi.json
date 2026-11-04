@@ -59564,7 +59564,8 @@
                   "open_question",
                   "agenda_next",
                   "agenda_skip",
-                  "suggest_feature"
+                  "suggest_feature",
+                  "mark_shipped"
                 ]
               }
             ],

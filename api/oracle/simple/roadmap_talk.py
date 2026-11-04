@@ -309,7 +309,11 @@ SHIFT = r"(a|an|one|two|three|four|\d+) (day|week|month|quarter)s?"
 
 
 def phrase(c: Any, t: str) -> tuple[str, dict[str, Any]] | None:
-    """The item talk's own fixed phrases ("move it two weeks later")."""
+    """The item talk's own fixed phrases ("move it two weeks later"; "this is already live")."""
+    from oracle.simple import shipped
+
+    if said := shipped.phrase(c, t):
+        return said
     if m := re.fullmatch(rf"(?:move|push|shift|slip) (.+?) (?:by )?{SHIFT} (later|earlier)\.?",
                          t, re.I):  # fmt: skip
         return "move_dates", {"item": m[1], "shift": f"{m[2]} {m[3]}s {m[4].lower()}".lower()}

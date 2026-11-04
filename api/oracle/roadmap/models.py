@@ -364,6 +364,9 @@ class RoadmapItem(TenantScoped, Base):
     merged_into: Mapped[str | None] = mapped_column(Text)
     kept_both: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,
                                             server_default=false())  # fmt: skip
+    # item-chat-understands: marked as already shipped from its talk ({"note", "on", "by"},
+    # the note saying where it runs); it reads done. Undo clears it.
+    shipped: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     updated_at: Mapped[datetime] = _updated_at()
 
 

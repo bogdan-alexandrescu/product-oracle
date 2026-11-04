@@ -494,6 +494,8 @@ ChatActionOp = Literal[
     "agenda_next",
     "agenda_skip",
     "suggest_feature",
+    # item-chat-understands: an item already shipped (oracle.simple.shipped).
+    "mark_shipped",
 ]
 ChangeStatus = Literal["applied", "proposed", "accepted", "declined", "undone"]
 SessionKind = Literal["editing", "meeting"]

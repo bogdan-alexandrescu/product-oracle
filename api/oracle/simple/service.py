@@ -503,6 +503,9 @@ def _status(row: RoadmapItem, recs: list[TrackerRecord], cut: set[str]) -> str:
         return "cut"
     if row.draft:
         return "draft"
+    if row.shipped:
+        # item-chat-understands: marked as already shipped from its talk.
+        return "done"
     states = {r.state for r in recs if r.state != "cancelled"}
     if states and states <= {"done"}:
         return "done"
