@@ -125,6 +125,8 @@ interface SimpleDb {
   /** S7 (./simple-suggestions.ts): Oracle's feature suggestions for goals, its suggest jobs
    * (goal key -> when the job is done, mock ms) and the goals suggested for automatically. */
   goal_suggestions?: GoalSuggestionRow[];
+  /** Goal buckets (./goal-buckets.ts): the goals and each feature's goal links. */
+  goal_buckets?: import("./goal-buckets").GoalBucketsDb;
   goal_jobs?: Record<string, { until: number; job_id: string; origin: "auto" | "on_demand" }>;
   auto_done?: string[];
   /** S7: the seeds a merge changed, as they were (change id -> seeds), for its undo. */
