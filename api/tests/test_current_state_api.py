@@ -295,3 +295,15 @@ async def test_nightly_reread_all(clock):
         tasks = next(p for p in tracked if p.kind == "tasks")
         assert (tasks.count, tasks.total, tasks.checked_at) == (2, 3, later)
         assert await service.nightly(s, later + timedelta(hours=2)) == 0
+
+
+async def test_the_tick_rereads_proof_once_a_night(client, clock):
+    """protects=the company's tick (``POST /v1/internal/tick``, as the scheduled ticker)
+    runs the nightly re-read; fails_when=the step is not wired; no_claim=the other steps."""
+    w = await world()
+    clock["now"] = NOW + timedelta(days=1)
+    r = await client.post("/v1/internal/tick", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        st = await service.state_of(s, w.ids["running"])
+        assert st is not None and st.checked_at == NOW + timedelta(days=1)
