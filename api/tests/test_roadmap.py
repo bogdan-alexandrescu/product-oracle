@@ -48,6 +48,25 @@ items:
     prd_section: s-5-2
 """
 
+# roadmap-plan-tables: the plan tables every roadmap draft carries (oracle.runs.plan_tables),
+# filled from ITEMS and the ENG-412 estimate approved_prd records.
+PLAN_TABLES = """\
+## Plan {#plan}
+
+| Key | Item | Start | End | Dates from | Status |
+|---|---|---|---|---|---|
+| payment-step | Payment step |  | Nov 30, 2026 | estimate | planned |
+| shipping-step | Shipping step |  |  | no date yet | planned |
+
+## Milestones {#milestones}
+
+| Milestone | Date | Gates | Counts when |
+|---|---|---|---|
+| Beta | Nov 30, 2026 | Payment step |  |
+| Shipping estimate up front |  | Shipping step |  |
+
+"""
+
 ROADMAP_MD = """\
 ---
 document: checkout-redesign-roadmap
@@ -95,10 +114,10 @@ and [an old section](/documents/checkout-redesign/v/1#gone).
 
 ## Later {#later}
 
-## Sources and data points {#sources}
+{PLAN_TABLES}## Sources and data points {#sources}
 
 - Beta date: ENG-412 estimate [c:c1]
-"""
+""".replace("{PLAN_TABLES}", PLAN_TABLES)
 
 
 @pytest.fixture
