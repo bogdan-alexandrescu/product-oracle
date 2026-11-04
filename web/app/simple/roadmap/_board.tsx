@@ -437,7 +437,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
   };
 
   return (
-    <div ref={root} data-testid="board" className={phone ? "space-y-3" : "grid grid-cols-3 gap-3"}>
+    <div ref={root} data-testid="board" className={`isolate ${phone ? "space-y-3" : "grid grid-cols-3 gap-3"}`}>
       {cols.map((c) => (
         <section
           key={c.key}

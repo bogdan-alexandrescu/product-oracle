@@ -249,14 +249,16 @@ export function ZoomTimeline(props: TimelineProps) {
         </div>
         <ConflictPanel {...props} onShow={onOpen} />
         <div className={side ? "flex items-start gap-3" : ""}>
-          <div className="min-w-0 flex-1">
+          {/* The chart's bars, date words and today line stack inside its own context (isolate),
+           * so they never paint over the item's panel, nor its talk widened over the chart. */}
+          <div className="isolate min-w-0 flex-1">
             {phone ? <QuarterList {...props} /> : <DayChart {...props} />}
           </div>
           {side && openItem && (
             <aside
               data-testid="item-panel"
               aria-label={openItem.title}
-              className="sticky top-3 max-h-[calc(100dvh-24px)] w-[400px] flex-none overflow-y-auto rounded-xl border border-line bg-surface shadow-tip"
+              className="sticky top-3 z-30 max-h-[calc(100dvh-24px)] w-[400px] flex-none overflow-y-auto rounded-xl border border-line bg-surface shadow-tip"
             >
               {props.card(
                 openItem,
@@ -972,7 +974,7 @@ function QuarterList(props: TimelineProps) {
   const qs = quarters(days[0], days[days.length - 1]);
   const tq = qs.find((q) => q.start <= data.today && data.today <= q.end);
   return (
-    <div data-testid="timeline-list" className="space-y-3">
+    <div data-testid="timeline-list" className="isolate space-y-3">
       {qs.map((q) => {
         const items = data.items
           .filter(
