@@ -115,6 +115,10 @@ export const DATE_BASES_SCENARIO = "date-bases";
 export const TWO_WAY_DATES_SCENARIO = "two-way-dates";
 /** date-warnings-honest review: "date-bases" with the unbacked GA date (Dec 15) written for a second item too. */
 export const SHARED_DATE_SCENARIO = "shared-date";
+/** date-warnings-honest review: "date-bases" whose summary also writes dates that are not schedule claims. */
+export const NOT_CLAIMS_SCENARIO = "not-claims";
+/** The summary line the "not-claims" scenario adds: its own day, a quoted source, a quarter's range. */
+export const NOT_CLAIMS_LINE = 'Updated 2026-11-03. The courier said "pickups start 2027-02-09". Work runs Q1 (2027-01-01 – 2027-03-31).';
 /** The GA date as the "two-way-dates" scenario writes it, and the reading ENG-413 backs. */
 export const TWO_WAY_GA = { written: "03/04/2027", backed: "2027-03-04" } as const;
 /** walkb-roadmap review 5e: a verified basis on the Simple roadmap's "alert-rules" item, as an engineering dates run records one for a roadmap built from a PRD. */
@@ -221,7 +225,7 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
   const withItems = scenario === ITEMS_SCENARIO;
   const withDiff = scenario === DIFF_SCENARIO;
   const twoWay = scenario === TWO_WAY_DATES_SCENARIO;
-  const noGaBasis = scenario === DATE_BASES_SCENARIO || scenario === SHARED_DATE_SCENARIO || scenario === VERSION_WARNINGS_SCENARIO || twoWay;
+  const noGaBasis = scenario === DATE_BASES_SCENARIO || scenario === SHARED_DATE_SCENARIO || scenario === NOT_CLAIMS_SCENARIO || scenario === VERSION_WARNINGS_SCENARIO || twoWay;
   const planStale = scenario === PLAN_STALE_SCENARIO;
   const simpleItemBasis = scenario === SIMPLE_ITEM_BASIS_SCENARIO;
   const key = withItems || withDiff || noGaBasis || planStale || simpleItemBasis ? `roadmap:${scenario}` : "roadmap";
@@ -1138,6 +1142,23 @@ const ITEM_ANCHOR = /^(?:now|next|later)-(.+)$/;
 /** walkb-roadmap, as doc_dates: not schedule dates (the "As of" line, Changes since last version). */
 const AS_OF = /\bas of\s*$/i;
 const HISTORY = /\b(?:history|changes|change[ -]?log|revisions?|what changed)\b/i;
+/** As doc_dates._OWN_DAY: the document's own day, today. */
+const OWN_DAY = /\b(?:today(?:\s+is)?|updated|last updated|dated|written|published|as at)\s*[:,]?\s*(?:on\s+)?\(?$/i;
+/** As doc_dates._quoted: inside quotation marks. */
+const quoted = (before: string) => before.split('"').length % 2 === 0 || before.lastIndexOf("\u201c") > before.lastIndexOf("\u201d");
+const RANGE = /^\s*(?:-|\u2013|\u2014|to|through|thru|until)\s*$/i;
+/** As doc_dates._quarter_ranges: the dates that only restate a quarter ("2027-01-01 – 2027-03-31", both ends). */
+function quarterRanges(text: string, hits: [number, string, string[]][]): Set<number> {
+  const skip = new Set<number>();
+  for (let i = 0; i + 1 < hits.length; i++) {
+    const [[a1, w1, d1], [a2, , d2]] = [hits[i], hits[i + 1]];
+    if (d1.length !== 1 || d2.length !== 1 || !RANGE.test(text.slice(a1 + w1.length, a2))) continue;
+    const [y, m, d] = d1[0].split("-").map(Number);
+    const end = new Date(Date.UTC(y, m + 2, 0)).toISOString().slice(0, 10);
+    if (d === 1 && [1, 4, 7, 10].includes(m) && d2[0] === end) skip.add(a1).add(a2);
+  }
+  return skip;
+}
 const DECISION = /\b(?:needed|decide[sd]?|decisions?|answers?|answered|reply|input|sign-?off)\b(?:(?!\bthen\b)[^.;!?,]){0,40}?\b(?:by|before|due|on)\s*$/i;
 /** The roadmap's own sections, which no item owns: an item's verified basis backs a date there. */
 const NOT_ITEMS = new Set(["title", "roadmap", "summary", "goals", "problems", "brief-items", "brief-roadmap", "not-doing", "top-risks", "decisions", "full", "layout", "now", "next", "later", "risks"]);
@@ -1174,11 +1195,15 @@ export function dateMarks(
       ["body", s.body_md.replace(/\]\([^)\s]*\)/g, "]()")],
     ];
     for (const [where, text] of places) {
-      for (const [at, written, days] of datesIn(text)) {
-        if (AS_OF.test(text.slice(Math.max(0, at - 12), at))) continue;
+      const hits = datesIn(text);
+      const restated = quarterRanges(text, hits);
+      for (const [at, written, days] of hits) {
+        if (AS_OF.test(text.slice(Math.max(0, at - 12), at)) || restated.has(at)) continue;
         // date-warnings-honest: a decision's due date and a quoted source's words are not schedule claims.
         const lineStart = text.lastIndexOf("\n", at) + 1;
         if (DECISION.test(text.slice(Math.max(lineStart, at - 60), at)) || text.slice(lineStart).startsWith(">")) continue;
+        // As the API's: the document's own day or today, and a date inside quotation marks.
+        if (OWN_DAY.test(text.slice(Math.max(lineStart, at - 30), at)) || quoted(text.slice(lineStart, at))) continue;
         const day = days[0];
         // date-warnings-honest: the items the date's line links, and a commitment its line names (as the API's).
         const raw = where === "body" ? (s.body_md.split("\n")[text.slice(0, at).split("\n").length - 1] ?? "") : s.heading;
