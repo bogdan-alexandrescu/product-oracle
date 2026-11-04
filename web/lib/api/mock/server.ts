@@ -3198,7 +3198,7 @@ function load(): Db {
                     db.simple_roadmap!.plan!.goalless = true;
                     return db;
                   }
-              : scenario === "simple-chat" || scenario === "simple-chat-stray" || scenario === "meet-chat-right-prd" || scenario === "roadmap-talk" || scenario === "roadmap-talk-own-decider"
+              : scenario === "simple-chat" || scenario === "simple-chat-stray" || scenario === "meet-chat-right-prd" || scenario === "roadmap-talk" || scenario === "roadmap-talk-own-decider" || scenario === "roadmap-talk-tracker-done"
                 ? () => {
                     const db = seedSimpleHomeScenario();
                     db.simple_chat = seedSimpleChat(db.members);
@@ -3206,6 +3206,8 @@ function load(): Db {
                     if (db.simple_roadmap) seedReaderItems(db.simple_roadmap);
                     // roadmap-talk: F-16 Adaptive pacing, F-17 Sign-up work, F-18 Reliability work and the M1–M3 milestones.
                     if (!["simple-chat", "simple-chat-stray", "meet-chat-right-prd"].includes(scenario) && db.simple_roadmap) seedTalkItems(db.simple_roadmap);
+                    // item-chat-understands review: Adaptive pacing reads Done because of its tracker, with no shipped mark of its own.
+                    if (scenario === "roadmap-talk-tracker-done" && db.simple_roadmap) db.simple_roadmap.items.find((x) => x.key === "adaptive-pacing")!.status = "done";
                     // meet-chat-right-prd: the meeting reviews Guided setup, its features on its draft roadmap.
                     if (scenario === "meet-chat-right-prd" && db.simple_roadmap) seedRightPrd(db.simple_roadmap, db.simple_chat);
                     // meet-chat-kind: the meeting chat already holds an earlier build's discussion reply.

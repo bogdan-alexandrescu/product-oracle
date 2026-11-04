@@ -1586,6 +1586,21 @@ def plain(text: str) -> str:
     return _ISO_DAY.sub(day, _TOKEN.sub("", text))
 
 
+# A sentence (or clause after ":" or ";") whose subject is the item: "It ends ...", "Got it:
+# this already runs ...". "it" or "this" elsewhere ("Got it! Why did ...") is not.
+_ABOUT_IT = re.compile(
+    r"(?:^|[.!?]\s+|[:;]\s*)(?:it|its|it's|this|this item|this feature|the item|the feature)\b",
+    re.I,
+)
+# ... and it speaks of the item's plan: its dates, state, owner, milestone, goal or tasks.
+_ITS_PLAN = re.compile(
+    r"\b(?:ship(?:s|ped)?|live|launch(?:es|ed)?|release[sd]?|runs?|running|built|done|planned|"
+    r"plan|dates?|starts?|started|ends?|ended|due|late|milestones?|goals?|tasks?|owners?|owns|"
+    r"owned|status|scope|prd|roadmap|slices?|risks?|blocked|depends|cut)\b",
+    re.I,
+)
+
+
 def _grounded(c: Ctx, said: str) -> bool:
     """Whether the reader's answer speaks of Oracle's data: it names an item (its title or
     key) or a person it was given; any other answer is not Oracle's to give."""
@@ -1600,6 +1615,11 @@ def _grounded(c: Ctx, said: str) -> bool:
                               e.prd.title if e.prd is not None else None) if x]  # fmt: skip
         if e.milestone is not None and e.milestone.name:
             names.append(e.milestone.name.split()[0])
+        if _ABOUT_IT.search(said.strip()) and _ITS_PLAN.search(said):
+            # item-chat-understands: the talk's context is the item, so an answer whose
+            # subject is "it" and that speaks of its plan is about this item, its name
+            # repeated or not (review: a stray "it" or "this" alone is not).
+            return True
     return any(len(n) >= 3 and n.lower() in t for n in names)
 
 
@@ -1655,12 +1675,23 @@ def _linked(reply: Reply, links: list[dict[str, str]]) -> Reply:
     return reply
 
 
-def interpret(c: Ctx, answer: Any, ask_box: bool = False) -> Reply:
+def _no_change(c: Ctx, line: str | None, nothing: bool = True) -> Reply:
+    """No change read: in an item's talk a short question with choices drawn from the line
+    (item-chat-understands), else "Say it another way"."""
+    viewer = not has_role(c.principal.role, "commenter")
+    asked = None if viewer else _shipped().choices(c, line)
+    reply = asked or Reply("note", f"I could not tell what to change. {SAY_AGAIN}")
+    reply.no_change = nothing
+    return reply
+
+
+def interpret(c: Ctx, answer: Any, ask_box: bool = False, line: str | None = None) -> Reply:
     """The reader's answer, validated: every action through ChatOp.build (an unknown op, a
     bad arg or an item the caller cannot read is a plain refusal, never a card); a clarify
-    question keeps only the choices that build; an answer is Oracle's data only."""
+    question keeps only the choices that build; an answer is Oracle's data only. ``line``:
+    the person's words, for the choices offered when no change is read."""
     if not isinstance(answer, dict):
-        return Reply("note", f"I could not tell what to change. {SAY_AGAIN}")
+        return _no_change(c, line, False)
     actions = answer.get("actions") or []
     clarify = answer.get("clarify")
     said = answer.get("answer")
@@ -1723,16 +1754,14 @@ def interpret(c: Ctx, answer: Any, ask_box: bool = False) -> Reply:
                     "args": ch.get("args") or {}}
                    for i, (ch, card) in zip(items, built, strict=True)]  # fmt: skip
         if not choices:
-            return Reply("note", f"I could not tell what to change. {SAY_AGAIN}")
+            return _no_change(c, line, False)
         question = plain(str(clarify.get("question") or "Which one?"))[:200]
         return Reply("question", question, choices=[*choices, NEITHER])
     if isinstance(said, str) and said.strip() and _grounded(c, said):
         return Reply("answer", plain(said.strip())[:1500])
     if ask_box:
         return Reply("ask", "Asking Oracle…")
-    reply = Reply("note", f"I could not tell what to change. {SAY_AGAIN}")
-    reply.no_change = True
-    return reply
+    return _no_change(c, line)
 
 
 async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
@@ -1755,7 +1784,7 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
     c.page = read.page
     await c.load()
     answer = await ask(READER_JOB, await _payload(c, read))
-    reply = _talk().restate(c, interpret(c, answer, read.ask_box))
+    reply = _talk().restate(c, interpret(c, answer, read.ask_box, read.line))
     if read.meeting_id is not None and reply.no_change and read.line.rstrip().endswith("?"):
         # As the mock's question branch: only a line the reader saw nothing to change in;
         # a change it could not build keeps its own reply.
@@ -1954,6 +1983,12 @@ def _talk() -> Any:
     from oracle.simple import roadmap_talk
 
     return roadmap_talk
+
+
+def _shipped() -> Any:
+    from oracle.simple import shipped
+
+    return shipped
 
 
 def _actions() -> Any:

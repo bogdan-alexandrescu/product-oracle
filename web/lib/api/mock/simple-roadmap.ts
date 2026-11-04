@@ -39,6 +39,8 @@ interface SeedItem {
   source?: Exclude<Dated["source"], "estimated">;
   depends?: string[];
   status?: Item["status"];
+  /** item-chat-understands (RoadmapItem.shipped): its own "already shipped" mark, apart from a status its tracker gives it. */
+  shipped?: { note: string; on: string } | null;
   draft?: boolean;
   milestone?: { name: string; day: number };
   /** The track milestone record naming the item (its name), whatever its own text says. */
