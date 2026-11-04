@@ -205,7 +205,7 @@ export interface Who {
 /** A working draft of one roadmap (oracle.simple.drafts): the items in `db.items` are the
  * draft's; `published` keeps the roadmap's published items for those who may not see it. */
 interface MockDraft {
-  out: Omit<Schemas["SimpleDraftOut"], "changes" | "can_submit" | "can_resume" | "can_approve" | "change_log" | "can_withdraw" | "from_prds" | "published">;
+  out: Omit<Schemas["SimpleDraftOut"], "changes" | "can_submit" | "can_resume" | "can_approve" | "can_publish" | "change_log" | "can_withdraw" | "from_prds" | "published">;
   roadmap: string;
   published: { items: SeedItem[]; own: SimpleDb["own"]; key_dates?: MockKeyDate[] };
   /** approved-prd-roadmap: what each approved PRD put in it (PRD slug -> item keys, key date ids). */
