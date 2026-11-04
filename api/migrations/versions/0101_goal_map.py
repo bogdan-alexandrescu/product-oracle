@@ -3,9 +3,9 @@
 ``focus_areas``: the areas of focus in the owner's order. ``milestone_features``: a
 roadmap item serving a track milestone, with expected and measured lift. On
 ``track_milestones`` (the records Simple Roadmap draws, never a second milestone table)
-the gate: ``gate_goal_id``, ``gate_threshold``, ``gate_reading``, ``gate_days`` (the last
-7 daily readings), ``gate_confirmed_by``, ``gate_confirmed_on``, ``gate_status``, ``gate_area_ids``,
-``gate_after_ids`` and ``gate_proposed``.
+``goal_id`` and ``waits_on_ids`` (the milestones lane's names for the goal and what it
+waits on) and the gate: ``gate_threshold``, ``gate_confirmed_by``, ``gate_confirmed_on``
+and ``gate_area_ids``. The reading, 7 days and status are read from the goal.
 
 Revision ID: 0101_goal_map
 Revises: 0100_source_lost_connection
@@ -79,35 +79,26 @@ def upgrade() -> None:
     )  # fmt: skip
     op.create_index(op.f(f"ix_{L}_tenant_id"), L, ["tenant_id"])
     op.create_index("ix_milestone_features_item_id", L, ["item_id"])
-    op.add_column(M, sa.Column("gate_goal_id", sa.Uuid(), nullable=True))
-    op.create_foreign_key(op.f(f"fk_{M}_gate_goal_id_entities"), M, "entities",
-                          ["gate_goal_id"], ["id"], ondelete="SET NULL")  # fmt: skip
-    op.create_index(op.f(f"ix_{M}_gate_goal_id"), M, ["gate_goal_id"])
+    op.add_column(M, sa.Column("goal_id", sa.Uuid(), nullable=True))
+    op.create_foreign_key(op.f(f"fk_{M}_goal_id_entities"), M, "entities",
+                          ["goal_id"], ["id"], ondelete="SET NULL")  # fmt: skip
+    op.create_index(op.f(f"ix_{M}_goal_id"), M, ["goal_id"])
     op.add_column(M, sa.Column("gate_threshold", sa.Numeric(20, 6), nullable=True))
-    op.add_column(M, sa.Column("gate_reading", sa.Numeric(20, 6), nullable=True))
-    op.add_column(
-        M, sa.Column("gate_days", postgresql.JSONB(), server_default="[]", nullable=False)
-    )
     op.add_column(M, sa.Column("gate_confirmed_by", sa.Text(), nullable=True))
     op.add_column(M, sa.Column("gate_confirmed_on", sa.Date(), nullable=True))
-    op.add_column(M, sa.Column("gate_status", sa.Text(), nullable=True))
-    for col in ("gate_area_ids", "gate_after_ids"):
+    for col in ("waits_on_ids", "gate_area_ids"):
         op.add_column(
             M, sa.Column(col, postgresql.ARRAY(sa.Uuid()), server_default="{}", nullable=False)
         )
-    op.add_column(
-        M, sa.Column("gate_proposed", sa.Boolean(), server_default="false", nullable=False)
-    )
 
 
 def downgrade() -> None:
     op.execute("SET LOCAL lock_timeout = '5s'")
-    for col in ("gate_proposed", "gate_after_ids", "gate_area_ids", "gate_status",
-                "gate_confirmed_on", "gate_confirmed_by", "gate_days", "gate_reading",
+    for col in ("gate_area_ids", "waits_on_ids", "gate_confirmed_on", "gate_confirmed_by",
                 "gate_threshold"):  # fmt: skip
         op.drop_column(M, col)
-    op.drop_index(op.f(f"ix_{M}_gate_goal_id"), table_name=M)
-    op.drop_constraint(op.f(f"fk_{M}_gate_goal_id_entities"), M, type_="foreignkey")
-    op.drop_column(M, "gate_goal_id")
+    op.drop_index(op.f(f"ix_{M}_goal_id"), table_name=M)
+    op.drop_constraint(op.f(f"fk_{M}_goal_id_entities"), M, type_="foreignkey")
+    op.drop_column(M, "goal_id")
     op.drop_table(L)
     op.drop_table(A)

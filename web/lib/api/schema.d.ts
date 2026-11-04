@@ -12378,6 +12378,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/goal-map/milestones/{milestone_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set Gate */
+        patch: operations["set_gate"];
+        trace?: never;
+    };
     "/v1/simple/goal-map/links": {
         parameters: {
             query?: never;
@@ -16146,6 +16163,22 @@ export interface components {
              * Format: uuid
              */
             milestone: string;
+            /**
+             * Area
+             * Format: uuid
+             */
+            area: string;
+            /**
+             * Expected
+             * @default
+             */
+            expected: string;
+            /**
+             * Confidence
+             * @default medium
+             * @enum {string}
+             */
+            confidence: "high" | "medium" | "low";
         };
         /**
          * AudienceOut
@@ -24237,6 +24270,16 @@ export interface components {
              */
             left: components["schemas"]["GateLeft"][];
         };
+        /** GateIn */
+        GateIn: {
+            /** Threshold */
+            threshold?: number | null;
+            /**
+             * Confirm
+             * @default false
+             */
+            confirm: boolean;
+        };
         /**
          * GateLeft
          * @description One blocking reason still open (D3): its item, code and chip label, and whether an
@@ -24357,6 +24400,8 @@ export interface components {
              * @enum {string}
              */
             lift: "helping" | "not_helping" | "not_measured";
+            /** Links */
+            links: components["schemas"]["GmLink"][];
         };
         /** GmGoal */
         GmGoal: {
@@ -24408,6 +24453,31 @@ export interface components {
             text: string;
             /** By */
             by: string;
+        };
+        /**
+         * GmLink
+         * @description What a feature is expected to do for one milestone, and what it did.
+         */
+        GmLink: {
+            /**
+             * Milestone
+             * Format: uuid
+             */
+            milestone: string;
+            /** Expected */
+            expected: string;
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "High" | "Medium" | "Low";
+            /** Measured */
+            measured: string | null;
+            /**
+             * Lift
+             * @enum {string}
+             */
+            lift: "helping" | "not_helping" | "not_measured";
         };
         /** GmMilestone */
         GmMilestone: {
@@ -70405,6 +70475,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ProposeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_gate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                milestone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GateIn"];
             };
         };
         responses: {

@@ -2,8 +2,8 @@
 
 - ``GET /v1/simple/goal-map``: viewer and up; ``can_edit`` says whether they may edit.
 - ``POST /areas``, ``PUT /areas/order``, ``PATCH /goals/{id}``, ``POST /milestones``
-  (propose one), ``POST /links`` (attach a feature): approver and up; each answers the
-  map as it now reads.
+  (propose one), ``PATCH /milestones/{id}`` (set its threshold, confirm it), ``POST /links``
+  (attach a feature to a cell): approver and up; each answers the map as it now reads.
 """
 
 import uuid
@@ -19,6 +19,7 @@ from oracle.simple.goal_map import (
     AreaIn,
     AreaOrderIn,
     AttachIn,
+    GateIn,
     GoalMapOut,
     GoalTargetIn,
     ProposeIn,
@@ -58,6 +59,11 @@ async def _run(db: TenantDB, principal: Principal, step) -> GoalMapOut:
     return await _done(db, principal)
 
 
+async def _who(db: TenantDB, principal: Principal) -> str:
+    user = await db.get(User, principal.user_id) if principal.user_id else None
+    return (user.name or user.email) if user else "An API token"
+
+
 @router.get("", response_model=GoalMapOut)
 async def get_goal_map(principal: Reader, db: TenantDB) -> GoalMapOut:
     return await goal_map.build(db, _can_edit(principal))
@@ -77,14 +83,22 @@ async def order_areas(body: AreaOrderIn, principal: Approver, db: TenantDB) -> G
 async def edit_goal(
     goal_id: uuid.UUID, body: GoalTargetIn, principal: Approver, db: TenantDB
 ) -> GoalMapOut:
-    user = await db.get(User, principal.user_id) if principal.user_id else None
-    who = (user.name or user.email) if user else "An API token"
+    who = await _who(db, principal)
     return await _run(db, principal, goal_map.edit_goal(db, goal_id, body.target, who))
 
 
 @router.post("/milestones", response_model=GoalMapOut)
 async def propose_milestone(body: ProposeIn, principal: Approver, db: TenantDB) -> GoalMapOut:
     return await _run(db, principal, goal_map.propose(db, body, principal.user_id))
+
+
+@router.patch("/milestones/{milestone_id}", response_model=GoalMapOut)
+async def set_gate(
+    milestone_id: uuid.UUID, body: GateIn, principal: Approver, db: TenantDB
+) -> GoalMapOut:
+    return await _run(
+        db, principal, goal_map.set_gate(db, milestone_id, body, await _who(db, principal))
+    )
 
 
 @router.post("/links", response_model=GoalMapOut)

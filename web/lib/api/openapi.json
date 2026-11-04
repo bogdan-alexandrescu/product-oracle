@@ -42764,6 +42764,68 @@
         "x-min-role": "approver"
       }
     },
+    "/v1/simple/goal-map/milestones/{milestone_id}": {
+      "patch": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Set Gate",
+        "operationId": "set_gate",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "milestone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Milestone Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GateIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalMapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/simple/goal-map/links": {
       "post": {
         "tags": [
@@ -53949,12 +54011,34 @@
             "type": "string",
             "format": "uuid",
             "title": "Milestone"
+          },
+          "area": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Area"
+          },
+          "expected": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Expected",
+            "default": ""
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Confidence",
+            "default": "medium"
           }
         },
         "type": "object",
         "required": [
           "feature",
-          "milestone"
+          "milestone",
+          "area"
         ],
         "title": "AttachIn"
       },
@@ -76825,6 +76909,28 @@
         "title": "Gate",
         "description": "The approve gate (D3 Approve blocked by problems): Approve is refused while a\nblocking reason is open (not waived) or the file has a problem of its own."
       },
+      "GateIn": {
+        "properties": {
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "confirm": {
+            "type": "boolean",
+            "title": "Confirm",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "GateIn"
+      },
       "GateLeft": {
         "properties": {
           "item": {
@@ -77141,6 +77247,13 @@
               "not_measured"
             ],
             "title": "Lift"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/GmLink"
+            },
+            "type": "array",
+            "title": "Links"
           }
         },
         "type": "object",
@@ -77154,7 +77267,8 @@
           "confidence",
           "released",
           "measured",
-          "lift"
+          "lift",
+          "links"
         ],
         "title": "GmFeature"
       },
@@ -77310,6 +77424,58 @@
           "by"
         ],
         "title": "GmHistory"
+      },
+      "GmLink": {
+        "properties": {
+          "milestone": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Milestone"
+          },
+          "expected": {
+            "type": "string",
+            "title": "Expected"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "High",
+              "Medium",
+              "Low"
+            ],
+            "title": "Confidence"
+          },
+          "measured": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured"
+          },
+          "lift": {
+            "type": "string",
+            "enum": [
+              "helping",
+              "not_helping",
+              "not_measured"
+            ],
+            "title": "Lift"
+          }
+        },
+        "type": "object",
+        "required": [
+          "milestone",
+          "expected",
+          "confidence",
+          "measured",
+          "lift"
+        ],
+        "title": "GmLink",
+        "description": "What a feature is expected to do for one milestone, and what it did."
       },
       "GmMilestone": {
         "properties": {
