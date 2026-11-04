@@ -261,8 +261,7 @@ def test_the_roadmap_draft_prompt_is_byte_for_byte_unchanged(case):
     if with_source:
         plan = plan_tables.engineering_plan(None, [])
         blocks = [
-            "\n" + "\n".join(plan_tables.prompt_lines(plan, critic=s[1] == "critic"))
-            for s in steps
+            "\n" + "\n".join(plan_tables.prompt_lines(plan, critic=s[1] == "critic")) for s in steps
         ]
         assert all(p.count(b) == 1 for p, b in zip(prompts, blocks, strict=True))
         prompts = [p.replace(b, "") for p, b in zip(prompts, blocks, strict=True)]
