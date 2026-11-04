@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "./test";
 
-import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_FAIL_ONCE_KEY, MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /**
@@ -55,7 +55,8 @@ async function everyPageShows(page: Page, want: string[]) {
   }
   // The lane headers lead with the same number.
   const lane = page.getByTestId("chart-group").filter({ hasText: want[0] }).first();
-  if (await lane.count()) await expect(lane.getByTestId("order-num")).toHaveText("1");
+  await expect(lane).toBeVisible();
+  await expect(lane.getByTestId("order-num").first()).toHaveText("1");
 
   await page.goto("/baseline");
   await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
@@ -127,6 +128,29 @@ for (const [label, viewport] of [
       await expect.poll(() => homeNames(page)).toEqual(thirdFirst(before));
 
       await everyPageShows(page, thirdFirst(before));
+    });
+
+    test("a save that fails partway leaves the order as it was", async ({ page }) => {
+      test.setTimeout(120_000);
+      await start(page);
+      const before = await homeNames(page);
+
+      await page.getByRole("button", { name: "Change order" }).click();
+      // The third goal is written first and succeeds; the first goal's write then fails.
+      const firstId = await page.getByTestId("goal-order-card").nth(0).getAttribute("data-goal-id");
+      await page.evaluate(([key, id]) => localStorage.setItem(key, `PATCH /v1/baseline/entities/${id}`), [MOCK_FAIL_ONCE_KEY, firstId] as const);
+      await page.getByRole("button", { name: `Move ${before[2]} left` }).click();
+      await page.getByRole("button", { name: `Move ${before[2]} left` }).click();
+      expect(await editNames(page)).toEqual(thirdFirst(before));
+      await page.getByTestId("goal-order-save").click();
+      // The save ends (the button is back) with no saved toast.
+      await expect(page.getByTestId("goal-order-save")).toBeEnabled();
+      await expect(page.getByText("Goal order saved. Every page shows the new order.")).toHaveCount(0);
+
+      await page.reload();
+      await expect(page.getByTestId("home-goal").first()).toBeVisible();
+      await expect.poll(() => homeNames(page)).toEqual(before);
+      expect(await numbered(page.getByTestId("home-goal"), "home-goal-link")).toEqual(asNumbered(before));
     });
 
     test("a viewer sees the numbered row with no Change order", async ({ page }) => {
