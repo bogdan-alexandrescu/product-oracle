@@ -12,15 +12,20 @@ the user message carries, outside ``untrusted_data``, only Oracle's own fixed va
 fields, category keys and labels, gap categories and statuses, limits). Everything a
 person or a source wrote travels inside ``untrusted_data``: the intake's title, the
 brief, every gap statement (any commenter can write one), the confirmed goals and the
-pinned source excerpts. A gap whose own words are a restricted finding (model text drawn
-from the author's sources) travels by its category and status only, so a later run that
-reads none of the author's sources (its output is shared) cannot restate it.
+pinned sources. Walk 2, problem 17: the read holds every uploaded document, whole or by
+its relevant sections, and the baseline features the brief names with their descriptions
+and evidence (``features``), so it never calls them missing. A gap whose own words are
+a restricted finding (model text drawn from the author's sources) travels by its
+category and status only, so a later run that reads none of the author's sources (its
+output is shared) cannot restate it.
 
 What comes back is checked before it is stored: known fields and categories only,
 bounded text, at most ``MAX_ITEMS`` items and ``MAX_GAPS`` gaps per run (and
 ``MAX_MODEL_ITEMS`` / ``MAX_MODEL_GAPS`` in all), evidence refs that resolve to items
 the job was given, no gap in a category already answered or covered by the baseline,
-and no gap that says what an existing gap of its category says. Every result is an
+no gap that says what an existing gap of its category says, and no gap that says something
+is not described or missing when a feature or a source section the job was given
+describes it (:func:`described`). Every result is an
 **AI inference**: items join the analysis, gaps join the registry as open, unknown gaps.
 When the job read any of the author's sources, every item and gap it writes is a
 finding that starts ``private`` (S6): only the author sees it until they share it, and
@@ -28,13 +33,14 @@ its shareable summary never repeats source text or figures. A converted or archi
 intake is left as it is.
 """
 
+import re
 import uuid
 from typing import Any, get_args
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle.baseline.models import Entity
+from oracle.baseline.models import Entity, Evidence
 from oracle.intake import categories as cats
 from oracle.intake import engine, extract, sharing
 from oracle.intake import evidence as ev
@@ -44,6 +50,17 @@ from oracle.v2.models import KnowledgeGap, ProductIntake
 
 MAX_SOURCES = 25
 MAX_TEXT = 500
+# Walk 2, problem 17: an uploaded document (an old PRD, a spec) is read whole up to
+# UPLOAD_CHARS, past that by its sections that speak to the brief and the features it
+# names; any other item by an excerpt of EXCERPT_CHARS. READ_CHARS bounds the whole read:
+# once it is spent, an upload is read by an excerpt too.
+UPLOAD_CHARS = 8000
+EXCERPT_CHARS = 1500
+READ_CHARS = 60000
+# The baseline features the brief names, each with its description and evidence.
+MAX_FEATURES = 12
+FEATURE_EVIDENCE = 3
+FEATURE_REF = "feat:"
 # Per run.
 MAX_ITEMS = 12
 MAX_GAPS = 8
@@ -71,6 +88,82 @@ def _refs(raw: Any, known: dict[str, uuid.UUID]) -> list[uuid.UUID]:
     return out
 
 
+_HEADING = re.compile(r"^ {0,3}#{1,6}[ \t]+(.+?)[ \t#]*$", re.M)
+
+
+def sections(text: str) -> list[tuple[str | None, str]]:
+    """(heading, body) of each markdown section of a text, the part before the first
+    heading under None."""
+    out: list[tuple[str | None, str]] = []
+    heading, pos = None, 0
+    for m in _HEADING.finditer(text):
+        out.append((heading, text[pos : m.start()]))
+        heading, pos = m.group(1).strip(), m.end()
+    out.append((heading, text[pos:]))
+    return [(h, b) for h, b in out if h or b.strip()]
+
+
+def read_of(text: str, wanted: set[str], limit: int) -> dict[str, Any]:
+    """What the read holds of one item: its whole text when it fits ``limit``, else the
+    sections sharing words with ``wanted`` (in their order), else its start. ``sections``
+    names the headings of the sections held that have a body."""
+    parts = sections(text)
+    if len(" ".join(text.split())) <= limit:
+        named = [h for h, b in parts if h and b.strip()]
+        return {"excerpt": ev.excerpt(text, limit) or "", "whole": True, "sections": named}
+    ranked = sorted(
+        ((len(wanted & extract.terms(f"{h or ''} {b}")), n) for n, (h, b) in enumerate(parts)),
+        key=lambda x: (-x[0], x[1]),
+    )
+    keep: dict[int, str] = {}
+    used = 0
+    for score, n in ranked:
+        if score == 0 or limit - used < 200:
+            break
+        h, b = parts[n]
+        piece = ev.excerpt(f"{h}: {b}" if h else b, limit - used) or ""
+        keep[n] = piece
+        used += len(piece) + 3
+    if not keep:
+        return {"excerpt": ev.excerpt(text, limit) or "", "whole": False, "sections": []}
+    return {
+        "excerpt": " … ".join(keep[n] for n in sorted(keep)),
+        "whole": False,
+        "sections": [parts[n][0] for n in sorted(keep) if parts[n][0] and parts[n][1].strip()],
+    }
+
+
+# A gap that says its subject is not described (walk 2, problem 17).
+_ABSENT = re.compile(
+    r"\b(not (?:described|defined|documented|specified|covered|explained|mentioned|detailed"
+    r"|stated)|missing|undefined|unspecified|undocumented|absent|nowhere|no (?:description"
+    r"|details?|definition|specs?|specification|mention))\b",
+    re.I,
+)
+# Words that name no subject: "the two must-include engines are not described anywhere".
+_VAGUE = extract.terms(
+    "one two three all anywhere include included includes brief briefs source sources "
+    "document documents prd described describe description details defined yet still "
+    "there is are was were"
+)
+
+
+def described(statement: str, features: list[dict[str, Any]], headings: list[str]) -> bool:
+    """Whether a gap calls something not described or missing that a feature the read
+    holds (with a description or evidence) or a source section it holds describes."""
+    if not _ABSENT.search(statement):
+        return False
+    subject = extract.terms(_ABSENT.sub(" ", statement).replace("-", " ")) - _VAGUE
+    if not subject:
+        return False
+    names = [
+        f"{f.get('title') or ''} {str(f.get('key') or '').replace('-', ' ')}"
+        for f in features
+        if f.get("description") or f.get("evidence")
+    ]
+    return any(subject & extract.terms(name) for name in [*names, *headings])
+
+
 def same_meaning(a: str, b: str) -> bool:
     """Whether two gap statements say the same thing (normalized content words)."""
     ta, tb = extract.terms(a), extract.terms(b)
@@ -93,9 +186,29 @@ async def payload(
     s: AsyncSession, intake: ProductIntake
 ) -> tuple[dict[str, Any], dict[str, uuid.UUID], list[ev.PinnedItem]]:
     items, _ = await ev.pinned_items(s, intake)
-    chosen = sorted(extract.relevant(items, intake.brief), key=lambda i: -i.confidence)
+    baseline = await engine.read_baseline(s, intake.brief)
+    named = baseline.features[:MAX_FEATURES]
+    wanted = extract.terms(" ".join([intake.brief, *(f.title for f in named)]))
+    # Every uploaded document is read, whatever words it shares with the brief; then the
+    # other items that speak to the brief or the features it names.
+    uploads = [i for i in items if i.row.source_kind == "upload"]
+    others = extract.relevant(
+        [i for i in items if i.row.source_kind != "upload"],
+        " ".join([intake.brief, *(f.title for f in named)]),
+    )
+    by_confidence = lambda i: -i.confidence  # noqa: E731
+    chosen = [*sorted(uploads, key=by_confidence), *sorted(others, key=by_confidence)]
     chosen = chosen[:MAX_SOURCES]
     refs = {f"src:{n}": i.id for n, i in enumerate(chosen, start=1)}
+    reads, spent = [], 0
+    for i in chosen:
+        upload = i.row.source_kind == "upload" and spent < READ_CHARS
+        got = read_of(
+            i.text, wanted, min(UPLOAD_CHARS, READ_CHARS - spent) if upload else EXCERPT_CHARS
+        )
+        spent += len(got["excerpt"])
+        reads.append(got)
+    features = await _features(s, named, {i.id: ref for ref, i in zip(refs, chosen, strict=True)})
     goals = (
         await s.scalars(
             select(Entity)
@@ -128,17 +241,65 @@ async def payload(
             ],
             "goals": [{"ref": f"goal:{g.key}", "title": g.title} for g in goals],
             "sources": [
-                {
-                    "ref": ref,
-                    "kind": i.row.source_kind,
-                    "title": i.title,
-                    "excerpt": ev.excerpt(i.text, 1500),
-                }
-                for ref, i in zip(refs, chosen, strict=True)
+                {"ref": ref, "kind": i.row.source_kind, "title": i.title, **got}
+                for ref, i, got in zip(refs, chosen, reads, strict=True)
             ],
+            "features": features,
         },
     }
     return body, refs, chosen
+
+
+async def _features(
+    s: AsyncSession, named: list[Entity], src_refs: dict[uuid.UUID, str]
+) -> list[dict[str, Any]]:
+    """The baseline features the brief names: title, description, status and up to
+    FEATURE_EVIDENCE pieces of evidence. Evidence from a source item is held only when the
+    item is one the read holds (cited by its src ref): another person's item never enters
+    the author's read."""
+    rows = (
+        (
+            await s.scalars(
+                select(Evidence)
+                .where(Evidence.entity_id.in_([f.id for f in named]))
+                .order_by(Evidence.confidence.desc().nulls_last(), Evidence.created_at)
+            )
+        ).all()
+        if named
+        else []
+    )
+    evidence: dict[uuid.UUID, list[dict[str, Any]]] = {}
+    for e in rows:
+        if e.source_item_id is not None and e.source_item_id not in src_refs:
+            continue
+        held = evidence.setdefault(e.entity_id, [])  # type: ignore[arg-type]
+        if len(held) < FEATURE_EVIDENCE and (e.excerpt or e.source_item_id):
+            row: dict[str, Any] = {"excerpt": ev.excerpt(e.excerpt, ev.EXCERPT_CHARS)}
+            if e.source_item_id is not None:
+                row["ref"] = src_refs[e.source_item_id]
+            held.append(row)
+    return [
+        {
+            "ref": f"{FEATURE_REF}{f.key}",
+            "id": str(f.id),
+            "key": f.key,
+            "title": f.title,
+            "status": f.status,
+            "description": ev.excerpt(f.body, EXCERPT_CHARS),
+            "evidence": evidence.get(f.id, []),
+        }
+        for f in named
+    ]
+
+
+def _feature_ids(raw: Any, features: dict[str, dict[str, Any]]) -> list[str]:
+    """The keys of the features a model answer cites by their feat: refs."""
+    out: list[str] = []
+    for ref in raw if isinstance(raw, list) else []:
+        f = features.get(str(ref))
+        if f is not None and f["key"] not in out:
+            out.append(f["key"])
+    return out
 
 
 async def run(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
@@ -155,7 +316,8 @@ async def run(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
     if intake.status in CLOSED_INTAKE:
         # Converted or archived while the model was thinking.
         return {"intake_id": str(intake.id), "skipped": f"the intake is {intake.status}"}
-    out = await apply_answer(s, intake, answer, known, chosen, {"llm_job_id": str(job.id)})
+    marker = {"llm_job_id": str(job.id)}
+    out = await apply_answer(s, intake, answer, known, chosen, marker, body)
     # INT2: the read this job is (the rollback, or the fallback for a SwarmCloud read).
     from oracle.intake import read
 
@@ -171,20 +333,26 @@ async def apply_answer(
     known: dict[str, uuid.UUID],
     chosen: list[ev.PinnedItem],
     marker: dict[str, Any],
+    body: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Store a model answer (the job's, or an intake_analysis run's analysis.yaml) as AI
     inferences and open gaps, checked as described above. ``known``/``chosen``: the refs
     and items of the payload the model was given; ``marker``: what produced the answer
     (``llm_job_id`` or ``run_id``), kept on ``analysis.extraction``. Returns the counts;
-    ``dropped_refs`` counts evidence refs outside the payload's."""
+    ``dropped_refs`` counts evidence refs outside the payload's (a feature's feat: ref is a
+    citation, kept on the item or gap); ``body``: that payload, whose features and source
+    sections a gap may not call missing (``dropped_described``)."""
     if not isinstance(answer, dict):
         answer = {}
     conf = {i.id: i.confidence for i in chosen}
-    dropped_refs = 0
+    read = (body or {}).get("untrusted_data") or {}
+    features = {f["ref"]: f for f in read.get("features") or []}
+    headings = [h for src in read.get("sources") or [] for h in src.get("sections") or []]
+    dropped_refs = dropped_described = 0
     for raw in [*(answer.get("items") or []), *(answer.get("gaps") or [])]:
         refs = raw.get("evidence_refs") if isinstance(raw, dict) else None
         if isinstance(refs, list):
-            dropped_refs += sum(1 for r in refs if str(r) not in known)
+            dropped_refs += sum(1 for r in refs if str(r) not in known and str(r) not in features)
     # The author's sources were read: what the model writes is a finding (S6).
     restricted = bool(chosen)
     analysis = dict(intake.analysis or {})
@@ -213,6 +381,7 @@ async def apply_answer(
             "knowledge_state": "ai_inference",
             "origin": "llm",
             "evidence_ids": [str(i) for i in evidence],
+            "feature_keys": _feature_ids(raw.get("evidence_refs"), features),
         }
         fid = str(uuid.uuid4())
         item["finding_id"] = fid
@@ -254,6 +423,11 @@ async def apply_answer(
         ):
             dropped += 1
             continue
+        if described(statement, list(features.values()), headings):
+            # Walk 2, problem 17: never "not described" when the read holds it.
+            dropped += 1
+            dropped_described += 1
+            continue
         statements[cat.key].append(statement)
         evidence = _refs(raw.get("evidence_refs"), known)
         importance = raw.get("importance") if raw.get("importance") in IMPORTANCE else None
@@ -271,7 +445,10 @@ async def apply_answer(
             status="unknown",
             related_modules=list(cat.modules),
             stop_condition=cat.stop,
-            entity_ids=[],
+            entity_ids=[
+                uuid.UUID(features[f"{FEATURE_REF}{k}"]["id"])
+                for k in _feature_ids(raw.get("evidence_refs"), features)
+            ],
             section_keys=[],
         )
         s.add(gap)
@@ -309,4 +486,5 @@ async def apply_answer(
         "sources_read": len(known),
         "private": restricted,
         "dropped_refs": dropped_refs,
+        "dropped_described": dropped_described,
     }

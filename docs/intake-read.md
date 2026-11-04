@@ -54,8 +54,16 @@ author, its snapshot is the intake's latest, and its token holds `read:intake-in
 clients get 403 "This is for Oracle's read of an intake"; an ended run's token 401. Each
 read is audited (`intake.evidence_query`, route `get_intake_analysis_input`, spec-INT2).
 
-What leaves Oracle: the brief and up to 25 excerpts of the author's pinned sources, which
-now also pass through the company's SwarmCloud tenant; its step logs and artifacts hold
+What it holds of the sources and the baseline (walk 2, problem 17): every uploaded
+document the author pinned, whatever words it shares with the brief, whole up to 8,000
+characters or by its sections that speak to the brief and the features it names (`whole`,
+`sections`); the other pinned items that speak to the brief, by a 1,500-character excerpt
+(60,000 characters in all); and the baseline features the brief names (`features`: `ref`
+`feat:<key>`, title, status, description and up to three pieces of evidence, evidence
+from a source item only when the read holds that item, cited by its `src:` ref).
+
+What leaves Oracle: the brief, the named features and up to 25 of the author's pinned
+sources, which now also pass through the company's SwarmCloud tenant; its step logs and artifacts hold
 `analysis.yaml`. The run token is revoked when the run ends.
 
 ## What it writes
@@ -63,7 +71,11 @@ now also pass through the company's SwarmCloud tenant; its step logs and artifac
 `analysis.yaml`: `version: 1`, `items` (`field`, `text`, `evidence_refs`), `gaps`
 (`category`, `statement`, `importance`, `evidence_refs`), `category`. The importer
 (`intake_analysis`) stores it through `oracle.intake.job.apply_answer`, with the job's
-caps, dedupe and S6 restriction; refs outside the payload are dropped and counted. A read
+caps, dedupe and S6 restriction; refs outside the payload are dropped and counted. A
+`feat:` ref is a citation: kept as the item's `feature_keys` and the gap's `entity_ids`. A
+gap that calls not described or missing what a feature (with a description or evidence)
+or a source section the read holds describes is dropped and counted (`dropped_described`,
+`oracle.intake.job.described`). A read
 that finishes after the intake closed imports nothing ("Skipped: the intake is …").
 
 ## What the author sees

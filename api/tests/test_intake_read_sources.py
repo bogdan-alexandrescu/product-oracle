@@ -219,3 +219,13 @@ def test_the_tasks_say_read_everything_before_calling_it_missing():
         assert "every source the brief was pinned to" in prompt
         assert "baseline features" in prompt
     assert "not described" in critic and "Critic" in critic
+
+
+def test_a_long_upload_is_read_by_the_sections_that_speak_to_the_brief():
+    wanted = {"prici", "engin", "routi"}
+    got = intake_job.read_of(OLD_PRD, wanted, 600)
+    assert got["whole"] is False
+    assert got["sections"] == ["Pricing engine", "Routing engine"]
+    assert "computes each quote" in got["excerpt"] and "nearest depot" in got["excerpt"]
+    assert "onboarding screens" not in got["excerpt"]
+    assert len(got["excerpt"]) <= 600

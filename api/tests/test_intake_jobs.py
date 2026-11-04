@@ -123,7 +123,7 @@ async def test_the_intake_queues_an_extraction_job_that_adds_inferences(client, 
     assert "validated" not in {g["status"] for g in after["gaps"]}
     async with tenant_session(ctx.tenant_id) as s:
         job = await s.scalar(select(LlmJob))
-        assert job.status == "succeeded" and job.input["prompt"] == "intake_analysis.v2"
+        assert job.status == "succeeded" and job.input["prompt"] == "intake_analysis.v3"
         assert job.output["items_added"] >= 1 and job.output["gaps_added"] == 2
 
 
@@ -233,7 +233,7 @@ async def test_injected_title_and_gap_statements_stay_data_and_pull_nothing_out(
     }
     assert all(set(g) == {"ref", "category", "status"} for g in payload["existing_gaps"])
     assert request.system == prompting.current("intake_analysis")[1]
-    assert "intake_analysis.v2" == prompting.current("intake_analysis")[0]
+    assert "intake_analysis.v3" == prompting.current("intake_analysis")[0]
 
     # What the model copied is the author's alone: nobody else sees a word of it.
     for who in ("viewer", "approver", "owner"):
