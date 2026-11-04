@@ -228,6 +228,57 @@ def test_the_items_and_dates_prompts_read_a_dependency_at_its_slice():
     assert "team's queue" in flows.ENG_DATES_TASK
 
 
+# Invented slices: Sensor feed split into a parser slice and a later pause-and-resume slice.
+SLICED_ITEMS = """\
+version: 1
+prd: {document: sensor-alerts, version: 1}
+items:
+  - id: feed-parser
+    title: Feed parser
+    outcome: Readings arrive within a minute
+    horizon: now
+    milestone: {name: Parser ready}
+    depends_on: []
+    feature: sensor-feed
+    confidence: high
+    prd_section: s-1
+  - id: feed-pause-resume
+    title: Feed pause and resume
+    outcome: Operators pause a noisy feed
+    horizon: now
+    milestone: {name: Pause ready}
+    depends_on: [feed-parser]
+    feature: sensor-feed
+    confidence: medium
+    prd_section: s-2
+  - id: alert-rules
+    title: Alert rules
+    outcome: Operators hear of a spike at once
+    horizon: now
+    milestone: {name: Alerts beta, date_source: "EST-ALERTS, after the feed-parser slice"}
+    depends_on: [DEP]
+    confidence: medium
+    prd_section: s-3
+"""
+
+
+def _slice_problems(dep: str) -> list[dict]:
+    from oracle.runs.roadmap import check_items
+
+    check = check_items(SLICED_ITEMS.replace("DEP", dep))
+    return [p for p in check.problems if p["code"] == "later_slice"]
+
+
+def test_a_dependency_on_a_later_slice_than_the_estimate_names_is_a_problem():
+    """protects=an item waits only for the slice its estimate names; fails_when=a writer
+    makes it wait on a later slice of the same feature and nothing says so."""
+    (problem,) = _slice_problems("feed-pause-resume")
+    assert problem["item"] == "alert-rules"
+    assert "feed-parser" in problem["message"] and "feed-pause-resume" in problem["message"]
+    # Waiting on the slice the estimate names is fine.
+    assert _slice_problems("feed-parser") == []
+
+
 # --- The export reads the date's basis kind --------------------------------------------
 
 
