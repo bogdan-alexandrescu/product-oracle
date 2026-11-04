@@ -20,8 +20,10 @@ version, dates month first.
 
 **The check** (:func:`check`, the import of a prd_to_roadmap draft and the critic's brief):
 a draft that lacks either table (``missing_plan_table``, ``missing_milestones_table``),
-lists an item the items file does not have (``unknown_plan_item``), or gives a date other
-than the engineering one (``plan_date_differs``) is refused: the writer must fix it.
+lists an item the items file does not have (``unknown_plan_item``), leaves out one it has
+(``missing_plan_item``), gives a date other than the engineering one
+(``plan_date_differs``) or other Dates from words (``plan_basis_differs``) is refused: the
+writer must fix it.
 """
 
 import datetime as dt
@@ -200,7 +202,7 @@ def prompt_lines(plan: EngineeringPlan, *, critic: bool) -> list[str]:
         "estimates it). Dates from says what the end rests on: estimate, team queue or "
         "commitment. You may word Counts when (how the milestone counts) where it is empty. "
         "Oracle refuses a draft that lacks either table, lists an item roadmap_items.yaml "
-        "does not have, or gives another date.",
+        "does not have, leaves one out, or gives another date or other Dates from words.",
         "",
         "--- plan tables ---",
         *table_lines(plan),
@@ -210,9 +212,9 @@ def prompt_lines(plan: EngineeringPlan, *, critic: bool) -> list[str]:
         lines += [
             "",
             "As the critic, check both tables against the rows above before the draft goes "
-            "on: a missing table, an item roadmap_items.yaml does not have or a date other "
-            "than the engineering date is a problem the writer must fix, not a warning; fix "
-            "it in roadmap.md.",
+            "on: a missing table, an item roadmap_items.yaml does not have, an item left out, "
+            "or a date or Dates from words other than the engineering ones is a problem the "
+            "writer must fix, not a warning; fix it in roadmap.md.",
         ]
     return lines
 
@@ -243,6 +245,7 @@ def check(markdown: str, plan: EngineeringPlan, today: date) -> list[ImportProbl
         out.append(_problem("missing_milestones_table", "The draft has no Milestones table "
                             "(Milestone, Date, Gates, Counts when): add it from the plan "
                             "tables in your brief"))  # fmt: skip
+    listed: set[str] = set()
     for p in got.items:
         eng = plan.item(p.key, p.title)
         if eng is None:
@@ -250,12 +253,24 @@ def check(markdown: str, plan: EngineeringPlan, today: date) -> list[ImportProbl
                                 f"in {ITEMS_FILE}: take it out or use the item's own key and "
                                 "title", item=p.key or p.title))  # fmt: skip
             continue
+        listed.add(eng.key)
         if p.state is not None:
             continue
+        said = (p.basis or "").strip()
+        if said.lower() != eng.basis.lower():
+            out.append(_problem("plan_basis_differs", f"{eng.title}'s end rests on {eng.basis} "
+                                f"in the engineering dates, not {said or 'nothing'}",
+                                item=eng.key))  # fmt: skip
         for what, said, want in (("start", p.start, eng.start), ("end", p.end, eng.end)):
             text = _differs(f"{eng.title}'s {what}", said, want)
             if text:
                 out.append(_problem("plan_date_differs", text, item=eng.key))
+    if got.has_items_table:
+        for r in plan.items:
+            if r.key not in listed:
+                out.append(_problem("missing_plan_item", f"{r.title} is in {ITEMS_FILE} but not "
+                                    "in the Plan table: add its row from the plan tables in "
+                                    "your brief", item=r.key))  # fmt: skip
     for m in got.milestones:
         eng_m = plan.milestone(m.name)
         text = _differs(f"Milestone {m.name}", m.date, eng_m.date if eng_m else None)
