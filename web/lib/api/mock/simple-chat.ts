@@ -1747,7 +1747,8 @@ async function walkOut(db: SimpleDb, chat: ChatDb, ctx: ChatCtx) {
   const byId = new Map(items.map((i) => [i.id, i]));
   const steps: unknown[] = [];
   for (const i of ctx.role === "viewer" ? [] : items) {
-    for (const f of i.flags.filter((x) => x.state === "red" && x.fixes.length > 0)) {
+    // roadmap-decide: a broken link, as chat.broken_links and web/lib/simple-home.ts isBrokenLink.
+    for (const f of i.flags.filter((x) => x.state === "red" && x.fixes.length > 0 && (x.kind === "dependency_order" || x.kind === "cut_with_dependents"))) {
       const dep = f.subject ? byId.get(f.subject) : undefined;
       const sd = (it: Item) => {
         const s = seenDates(it);

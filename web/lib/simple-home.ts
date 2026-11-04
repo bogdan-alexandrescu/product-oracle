@@ -110,15 +110,18 @@ export function goalTiles(goals: Entity[], roadmap: Roadmap | undefined, waiting
 }
 
 /**
- * The broken links on the roadmap: one row per red flag that has a one-click fix (a
- * dependency out of order, a blocker due late, an end past its milestone, a cut item others
- * depend on; a draft with no owner has no fix, so it is not one), on every item, whoever
+ * The broken links on the roadmap: one row per red dependency out of order or cut item others
+ * depend on (roadmap-decide: a blocker due late or an end past its milestone is a flag, not a
+ * link), on the working draft as the reader sees it, on every item, whoever
  * decides it (its fixes say Propose for the others). The one definition: "Walk me through
  * it" (GET /v1/simple/walk, oracle.simple.chat.broken_links, and its mock) walks the same.
  */
 export type BrokenLink = { item: Item; flag: Schemas["SimpleFlag"]; dependency: Item | undefined };
 
-export const isBrokenLink = (f: Schemas["SimpleFlag"]): boolean => f.state === "red" && f.fixes.length > 0;
+/** roadmap-decide: one definition everywhere (Home, the roadmap's strip and its Needs a decision,
+ * the side menu's Roadmap count): a red dependency out of order or a cut item others depend on. */
+export const LINK_KINDS: Schemas["SimpleFlag"]["kind"][] = ["dependency_order", "cut_with_dependents"];
+export const isBrokenLink = (f: Schemas["SimpleFlag"]): boolean => f.state === "red" && f.fixes.length > 0 && LINK_KINDS.includes(f.kind);
 
 export function brokenLinks(roadmap: Roadmap | undefined): BrokenLink[] {
   if (!roadmap) return [];
@@ -438,3 +441,24 @@ export function beforeAfter(c: Pick<Schemas["SimpleChangeOut"], "before" | "afte
 
 /** A proposal that adds a new flow or feature (S10's visuals): an added item, task or launch task. */
 export const NEW_FLOW_OPS = new Set(["add_item_task", "add_launch_task", "add_action_item", "add_item"]);
+
+/**
+ * roadmap-decide: what happens next to a working draft and who acts, in plain words, with the
+ * action the reader may take ("submit": Send for review; "approve": the decider's Approve).
+ * The roadmap's banner and Home say the same. `names` names the people it waits on.
+ */
+export function draftNext(
+  d: Pick<Schemas["SimpleDraftOut"], "status" | "can_submit" | "can_approve" | "base_version" | "published" | "waiting_on">,
+  names?: (id: string) => string,
+): { words: string; action: "submit" | "approve" | null } {
+  const v = `version ${(d.base_version ?? 0) + 1}`;
+  const publish = d.published ? `${v} replaces the approved roadmap` : `${v} is published`;
+  const who = d.waiting_on.length && names ? d.waiting_on.map(names).join(", ") : "its decider";
+  const verb = d.waiting_on.length > 1 && names ? "approve" : "approves";
+  if (d.status === "submitted") {
+    if (d.can_approve) return { words: `Sent for review: it waits for your approval. When you approve, ${publish}`, action: "approve" };
+    return { words: `Sent for review: it waits for ${who} to approve. Then ${publish}`, action: null };
+  }
+  if (d.can_submit) return { words: `Next: you send it for review. When ${who} ${verb}, ${publish}`, action: "submit" };
+  return { words: `Next: the roadmap's owner sends it for review. When ${who} ${verb}, ${publish}`, action: null };
+}

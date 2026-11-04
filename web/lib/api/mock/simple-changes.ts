@@ -26,6 +26,7 @@ import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { draftDecisionNotes } from "./decision-notes";
 import { stableUuid } from "./ids";
+import { decidesAsk } from "./simple-milestones";
 import { changeSentence } from "./simple-change-words";
 import { priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
 import {
@@ -93,6 +94,8 @@ const FIELDS: Record<string, string[]> = {
   accept_risk: ["risk"],
   // S6: a draft item confirmed (changes.py confirm_item).
   confirm_item: ["draft"],
+  // roadmap-decide: a dependent no longer depends on a cut item (changes.py remove_dependency).
+  remove_dependency: ["depends_on"],
 };
 const FIXES = ["shift_dependents", "move_dependency"];
 /** fix5-cut-dependents: the item and everything waiting on it, cut as one change (changes.py CUT_ALL). */
@@ -183,6 +186,11 @@ function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op"
     return ctx.role === "owner" || (c.routed_to ?? []).includes(ctx.id) || (!!rm && canEditRoadmap(db, rm, ctx));
   }
   if (c.op === "add_item" && !keyOf(db, c.target.item_id)) return canEditRoadmap(db, slugOf(c.target.roadmap_id) ?? "", ctx);
+  // roadmap-decide: a change asked of a PRD's milestone is its owner's (or a company owner's).
+  if (c.op === "edit_goal_milestone") {
+    const m = (db.goal_milestones ?? []).find((x) => x.id === c.target.milestone_id);
+    return !!m && decidesAsk(m, { role: ctx.role, name: ctx.names[ctx.id] });
+  }
   return decides(db, ctx, c.target.item_id);
 }
 
@@ -267,6 +275,7 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "title") out[f] = s.title;
     else if (f === "outcome") out[f] = s.outcome ?? null;
     else if (f === "draft") out[f] = !!s.draft;
+    else if (f === "depends_on") out[f] = [...(s.depends ?? [])];
     else if (f === "risk") out[f] = (s.risks ?? []).find((r) => r.flag === target.flag && (r.subject ?? null) === (target.subject ?? null)) ?? null;
   }
   return out;
@@ -283,6 +292,7 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   if ("cut" in values) s.status = values.cut ? "cut" : "planned";
   if ("title" in values) s.title = String(values.title);
   if ("draft" in values) s.draft = !!values.draft;
+  if ("depends_on" in values) s.depends = [...((values.depends_on as string[] | null) ?? [])];
   if ("outcome" in values) s.outcome = (values.outcome as string | null) ?? null;
   if ("risk" in values) {
     const kept = (s.risks ?? []).filter((r) => !(r.flag === target.flag && (r.subject ?? null) === (target.subject ?? null)));
@@ -397,7 +407,10 @@ function changeLog(db: SimpleDb, id: string): Schemas["SimpleDraftChange"][] {
     .sort((a, b) => (a.at < b.at ? -1 : 1))
     .map((c) => {
       const kind = (db.sessions ?? []).find((x) => x.id === c.session_id)?.kind ?? null;
-      const titles = c.op === CUT_ALL ? ((c.target.titles as string[] | undefined) ?? []) : [];
+      // roadmap-decide: every line names its item (a fix: then what else moved).
+      const named = (c.target.titles as string[] | undefined) ?? [];
+      const own = c.target.item_id ? keyOf(db, String(c.target.item_id)) : undefined;
+      const titles = named.length ? named : own ? [seed(db, own).title] : c.target.name ? [String(c.target.name)] : [];
       return { id: c.id, op: c.op, item_id: (c.target.item_id as string) ?? null, by: c.by, by_name: c.by_name, at: c.at, session_kind: kind, in_meeting: kind === "meeting", titles };
     });
 }
@@ -669,6 +682,9 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     }
     if (Object.keys(stale).length) return conflict(db, ctx, stale, Object.keys(stale), "Changed since you saw it");
     const moves = fixPlan(seen, body.op, String(target.item_id), dep);
+    // roadmap-decide: the draft's change list names the item, then what else moved.
+    const titleOf = (id: string) => seed(seen, keyOf(db, id)!).title;
+    target.titles = [titleOf(String(target.item_id)), ...Object.keys(moves).filter((id) => id !== target.item_id).map(titleOf)];
     before = Object.fromEntries(Object.keys(moves).map((id) => [id, read(seen, keyOf(db, id)!, ["start_date", "end_date", "date_source"], target)]));
     after = Object.fromEntries(Object.entries(moves).map(([id, [s, e]]) => [id, { start_date: s, end_date: e, date_source: "typed" }]));
   } else if (body.op === CUT_ALL) {
@@ -725,7 +741,13 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       after = { horizon: a.horizon };
     } else if (body.op === "reorder") after = { position: Number(a.position) };
     else if (body.op === "cut" || body.op === "restore") after = { cut: body.op === "cut" };
-    else if (body.op === "confirm_item") {
+    else if (body.op === "remove_dependency") {
+      const depKey = keyOf(db, String(target.subject ?? ""));
+      const own = seed(seen, key);
+      if (!depKey || !(own.depends ?? []).includes(depKey)) return json(422, { detail: "target.subject: an item the target depends on" });
+      target.titles = [own.title, seed(seen, depKey).title];
+      after = { depends_on: (own.depends ?? []).filter((k) => k !== depKey) };
+    } else if (body.op === "confirm_item") {
       if (!seed(seen, key).draft) return json(422, { detail: "Only a draft item is confirmed" });
       after = { draft: false };
     }
@@ -886,6 +908,11 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     c.draft_ids = drafts;
     session.last_change_at = now;
     applyS7(db, c);
+  } else if (c.op === "edit_goal_milestone") {
+    // roadmap-decide: accepting writes the PRD milestone's date and rule; either way it waits no more.
+    const m = (db.goal_milestones ?? []).find((x) => x.id === c.target.milestone_id);
+    if (m && p[4] === "accept") Object.assign(m, { date: (c.after.date as string | null) ?? m.date, counts_when: (c.after.counts_when as string | null) ?? m.counts_when });
+    if (m) m.pending = null;
   } else if (p[4] === "decline" && c.op === "add_item") reopenSuggestion(db, c);
   else if (p[4] === "accept") {
     const now_ = current(db, c, c.before);

@@ -9,10 +9,11 @@
 
 import { createContext, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
+import { Button } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { addDays, calendarDay } from "@/lib/dates";
 
-import { shortDay, type Item, type Roadmap } from "./_lib";
+import { decide as decideChange, shortDay, type Item, type Roadmap } from "./_lib";
 import { msEdge, msFill, msInk } from "./_timeline";
 
 export type GoalMilestone = Schemas["SimpleGoalMilestone"];
@@ -56,6 +57,11 @@ export interface MsCtl {
   move: (m: GoalMilestone, date: string) => Promise<void>;
   undo: () => Promise<void>;
   closeToast: () => void;
+  /** roadmap-decide: the PRD milestone whose ask is open for its owner's Approve / Decline. */
+  asking: string | null;
+  setAsking: (id: string | null) => void;
+  /** The PRD owner approves or declines a change the roadmap asked of the PRD. */
+  decide: (m: GoalMilestone, how: "accept" | "decline") => Promise<void>;
 }
 
 const Ctx = createContext<MsCtl | null>(null);
@@ -68,6 +74,7 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
   const [hover, setHover] = useState<string | null>(null);
   const [moving, setMoving] = useState<{ id: string; date: string } | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [asking, setAsking] = useState<string | null>(null);
   const lastLane = useRef<string | null>(null);
   if (!data) return null;
   const list = data.goal_milestones ?? [];
@@ -84,6 +91,20 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
   };
   const patch = (id: string, body: Schemas["SimpleGoalMilestonePatch"]) => unwrap(api.PATCH("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: id } }, body }));
   return {
+    asking,
+    setAsking,
+    decide: async (m, how) => {
+      const id = m.pending?.change_id;
+      if (!id) return;
+      setAsking(null);
+      try {
+        await decideChange(id, how);
+      } catch {
+        setToast({ words: `Oracle could not ${how === "accept" ? "approve" : "decline"} the change to ${words(m)}`, undo: null });
+        return;
+      }
+      await done({ words: how === "accept" ? `Approved: ${words(m)} moves to ${day(m.pending!.date ?? m.date!)} in the PRD` : `Declined: ${words(m)} stays on ${day(m.date!)}`, undo: null });
+    },
     list,
     draft,
     hover,
@@ -425,11 +446,24 @@ export function MsLayer(props: MsLayerProps) {
     if (to != null) {
       out.push(<Diamond key={`pp-${m.id}`} x={to} y={axisY} code={m.code} hollow dashed color="var(--warn)" title={`Asked: ${fullDay(asked!)}`} testid="ms-proposed" />);
       out.push(<div key={`ppv-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: to - 0.75, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: "1.5px dashed var(--warn)" }} />);
+      // roadmap-decide: the PRD's owner gets the ask as an action: the chip opens Approve / Decline in place.
+      const mine = !live && !!m.pending?.can_decide;
       out.push(
-        <Chip key={`ppc-${m.id}`} testid="ms-asked" mx={to} className="border border-warn bg-warn-bg text-warn" style={{ left: to + 6, top: lane.y0 + 54 }}>
-          {live ? `Moving ${words(m)} to ${day(asked!)}` : `Asked the PRD: move ${words(m)} to ${day(asked!)} · waits for ${m.prd_owner ?? "its owner"}`}
+        <Chip key={`ppc-${m.id}`} testid="ms-asked" mx={to} className="border border-warn bg-warn-bg text-warn" onClick={mine ? () => ms.setAsking(ms.asking === m.id ? null : m.id) : undefined} style={{ left: to + 6, top: lane.y0 + 4 }}>
+          {live ? `Moving ${words(m)} to ${day(asked!)}` : mine ? `Asked of you: move ${words(m)} to ${day(asked!)} · Approve or decline` : `Asked the PRD: move ${words(m)} to ${day(asked!)} · waits for ${m.prd_owner ?? "its owner"}`}
         </Chip>,
       );
+      if (mine && ms.asking === m.id)
+        out.push(
+          <span key={`ppd-${m.id}`} role="group" aria-label={`Decide the change to ${words(m)}`} data-testid="ms-asked-decide" className="absolute z-[17] flex gap-1.5 rounded-lg border border-line bg-surface p-1.5 shadow-tip" style={{ left: to + 6, top: lane.y0 + 28 }}>
+            <Button variant="solid" className="!h-7 !px-2 !text-xs" onClick={() => void ms.decide(m, "accept")}>
+              Approve
+            </Button>
+            <Button className="!h-7 !px-2 !text-xs" onClick={() => void ms.decide(m, "decline")}>
+              Decline
+            </Button>
+          </span>,
+        );
     }
   }
 

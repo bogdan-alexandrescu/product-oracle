@@ -12,6 +12,8 @@ import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { Loading } from "@/components/ui";
 import { getBranding, logoDataUrl } from "@/lib/api/branding";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { draftNext } from "@/lib/simple-home";
+import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 import { CARD_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { displayZone, plainClock } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
@@ -337,7 +339,7 @@ function prdWords(p: { prd: { title: string }; version?: number | null; items: n
 }
 
 /** The working-draft banner (D18 as amended: one shared draft per roadmap). */
-function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onReview, titleOf }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; onReview: (prdSlug: string) => void; titleOf: (id: string | null) => string | undefined }) {
+function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onReview, titleOf }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; onApprove: (d: Draft[]) => void; onReview: (prdSlug: string) => void; titleOf: (id: string | null) => string | undefined }) {
   const [open, setOpen] = useState(false);
   const working = drafts.filter((d) => d.status === "working" || d.status === "submitted");
   if (!working.length) {
@@ -357,12 +359,15 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onReview, title
   const fromPrds = working.flatMap((d) => d.from_prds ?? []);
   // walkb-roadmap review 5a: a roadmap built from a PRD and not approved yet has no approved roadmap to keep published.
   const published = working.every((d) => d.published);
+  // roadmap-decide: what happens next and who acts, with that person's button (Send for review, or the decider's Approve).
+  const next = draftNext({ ...working[0], published });
+  const approvable = working.filter((d) => d.status === "submitted" && d.can_approve);
   return (
     <section data-testid="draft-banner" className="rounded-xl border border-accent-mid bg-accent-soft px-4 py-2.5 text-accent-ink">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         {/* fix4 qa-simple-roadmap-19: on a phone the sentence takes its own line(s), the three buttons a row under it. */}
         <p className="min-w-0 flex-1 text-[15px] max-[640px]:basis-full" data-testid="draft-words">
-          <b>Your working draft</b> · <span data-testid="draft-count">{changes}</span> {changes === 1 ? "change" : "changes"} since {time(since)} · {published ? "the approved roadmap stays published until review passes" : "no approved version yet: it is published once review passes"}
+          <b>Your working draft</b> · <span data-testid="draft-count">{changes}</span> {changes === 1 ? "change" : "changes"} since {time(since)} · <span data-testid="draft-next">{next.words}</span>
         </p>
         <Button variant="ghost" disabled={!last} onClick={() => last && onUndo(last.id)}>
           Undo
@@ -373,6 +378,11 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onReview, title
         <Button variant="solid" disabled={!submittable.length} onClick={() => onSubmit(submittable)}>
           Send for review
         </Button>
+        {approvable.length > 0 && (
+          <Button variant="solid" data-testid="draft-approve" onClick={() => onApprove(approvable)}>
+            Approve
+          </Button>
+        )}
       </div>
       {fromPrds.length > 0 && (
         <ul className="mt-1.5 space-y-1 text-sm" data-testid="draft-from-prds">
@@ -533,13 +543,15 @@ function DecisionTray({
   const pulled = counts.pulled;
   const others = counts.proposals;
   const counters: [string, number][] = [
-    ["Broken links", brokenItems.length],
+    ["Broken links", counts.links],
     ["Dates to confirm", dateRows.length],
     ["Proposals", others.length],
     ["Pulled in", pulled.length],
   ];
   const kd = (c: Change) => (c.after.key_date ?? c.before.key_date) as { name?: string } | null | undefined;
-  const title = (c: Change) => (kd(c)?.name ? `Key date '${kd(c)!.name}'` : (byId.get(String(c.target.item_id))?.title ?? (typeof c.after.title === "string" ? c.after.title : "An item")));
+  // roadmap-decide: a change the roadmap asked of a PRD names its milestone and the date asked.
+  const asked = (c: Change) => (c.op === "edit_goal_milestone" ? `PRD milestone ‘${String(c.target.name ?? "")}’` : null);
+  const title = (c: Change) => asked(c) ?? (kd(c)?.name ? `Key date '${kd(c)!.name}'` : (byId.get(String(c.target.item_id))?.title ?? (typeof c.after.title === "string" ? c.after.title : "An item")));
   const row = (c: Change) => (
     <li key={c.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-proposal">
       <span className="min-w-0 flex-1 text-[15px]">
@@ -569,9 +581,9 @@ function DecisionTray({
           ×
         </button>
       </div>
-      {/* #37: what the button's count is, on screen: this view's own, not the side menu's badges. */}
+      {/* roadmap-decide: what the button's count is, said in words; the broken links are the same ones Home and the side menu count. */}
       <p className="mt-1 text-sm text-text2" data-testid="tray-scope">
-        {counts.total} on this roadmap view. The side menu&apos;s Decisions and Roadmap counts cover other things, so they can differ.
+        {counts.total} to decide in this roadmap&apos;s working draft: broken links, dates to confirm, proposals and items pulled in.
       </p>
       <ul className="mt-3 grid grid-cols-2 gap-2 min-[420px]:grid-cols-4" data-testid="tray-counters">
         {counters.map(([label, n]) => (
@@ -789,6 +801,9 @@ export function SimpleRoadmap() {
   );
   const reload = useCallback(async () => {
     await Promise.all([roadmap.reload(), proposals.reload(), drafts.reload()]);
+    // roadmap-decide: the side menu's Roadmap count reads the same working draft again.
+    invalidateWaiting();
+    waitingChanged();
   }, [roadmap, proposals, drafts]);
   // roadmap-talk: a chat card applied, proposed, rejected or undone (the item's talk, the Ask panel) reads the roadmap again.
   useEffect(() => {
@@ -915,7 +930,7 @@ export function SimpleRoadmap() {
   const titleOf = useCallback((id: string | null) => (id ? byId.get(id)?.title : undefined), [byId]);
   const canChange = can("create_simple_change");
   // build-milestones-on-roadmap: the milestones per goal, added on the time axis.
-  const ms = useMilestones({ data, phone, canChange, reload: roadmap.reload, openItem: (id) => setCard({ id, ...anchorOf(id) }) });
+  const ms = useMilestones({ data, phone, canChange, reload, openItem: (id) => setCard({ id, ...anchorOf(id) }) });
   // The items as last loaded, for a burst sent after the render that started it.
   const latest = useRef(byId);
   useEffect(() => {
@@ -1183,13 +1198,11 @@ export function SimpleRoadmap() {
     <div className={`flex flex-wrap items-center gap-2 ${phone ? "" : "ml-auto justify-end"}`} data-testid="roadmap-actions">
       {phone && canChange && addable.length > 0 && <QuickAdd phone options={addOptions} verb={addVerb} onAdd={onAdd} target={target?.title ?? null} roadmaps={askRoadmap ? addable.map((r) => r.roadmap) : []} />}
       {decides && !blank && (
-        // #37: this counts broken links, suggestions and proposals on THIS roadmap view,
-        // not the same things the side menu's Decisions (product decisions waiting on you,
-        // everywhere) or Roadmap (proposals and drafts in your inbox) badges count; the
-        // label and title say so rather than let the three numbers look like one metric.
+        // roadmap-decide: broken links (the same ones Home and the side menu count), dates to
+        // confirm, proposals and items pulled in, in this roadmap's working draft.
         <Button
           data-testid="needs-decision"
-          title="Broken dates, date suggestions and proposals on this roadmap view (not the same count as Decisions or Roadmap in the side menu)"
+          title="Broken links, dates to confirm, proposals and items pulled in, in this roadmap's working draft"
           onClick={() => setTray(true)}
           data-zero={waiting ? undefined : "true"}
           // fix4 qa-simple-roadmap-38: at 0 the button is muted (nothing waits), still opens the tray.
@@ -1351,6 +1364,14 @@ export function SimpleRoadmap() {
           if (!r.data) toast({ message: `${d.document.title} could not be sent for review` });
         }
         toast({ message: ds.every((d) => d.published) ? "Sent for review: the approved roadmap stays published until it passes" : "Sent for review: the roadmap is published once it passes" });
+        await reload();
+      }}
+      onApprove={async (ds) => {
+        for (const d of ds) {
+          const r = await api.POST("/v1/simple/drafts/{draft_id}/approve", { params: { path: { draft_id: d.id } } });
+          if (!r.data) toast({ message: `${d.document.title} could not be approved` });
+          else toast({ message: r.data.approved_at ? `Approved: ${d.document.title} is published` : `Approved: ${d.document.title} waits for ${r.data.waiting_on.length} more ${r.data.waiting_on.length === 1 ? "reviewer" : "reviewers"}` });
+        }
         await reload();
       }}
     />

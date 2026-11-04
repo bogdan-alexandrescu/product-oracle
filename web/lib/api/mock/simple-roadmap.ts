@@ -676,7 +676,8 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
     const risk = s.risks?.find((x) => x.flag === kind && (!x.subject || x.subject === subject));
     out.push({ kind, reason, fixes, state: risk ? "amber" : "red", subject, risk_note: risk?.note ?? null, moves: [] });
   };
-  for (const key of s.depends ?? []) {
+  // roadmap-decide, as constraints.check: a cut item (below the line) is not checked for its order.
+  for (const key of s.status === "cut" ? [] : (s.depends ?? [])) {
     const dep = all.get(key);
     if (!dep || closed(dep.s) || (dep.r.end.estimated && r.start.estimated)) continue;
     if (r.start.estimated) {
@@ -696,7 +697,7 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
     const live = [...all.values()].filter((x) => x.s.status !== "cut" && x.s.depends?.includes(s.key));
     if (live.length) {
       const more = live.length > 1 ? ` and ${live.length - 1} other${live.length > 2 ? "s" : ""}` : "";
-      flag("cut_with_dependents", `Cut, but ‘${short(live[0].s.title)}’${more} ${live.length > 1 ? "depend" : "depends"} on it`, ["accept_risk"]);
+      flag("cut_with_dependents", `Cut, but ‘${short(live[0].s.title)}’${more} ${live.length > 1 ? "depend" : "depends"} on it`, ["restore", "remove_dependency", "accept_risk"]);
     }
   }
   if (s.draft && !s.track && !closed(s)) flag("draft_without_owner", "Draft with no owner to confirm it", []);
@@ -1085,7 +1086,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       ),
     ],
     // build-milestones-on-roadmap: the shown roadmaps' milestones per goal (a PRD's among them).
-    goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)))),
+    goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)), me && { role: me.role, name: me.names?.[me.id] })),
     span: db.plan ? planSpan() : null,
     // A working draft belongs to one roadmap: a chosen roadmap's read carries its own only.
     changes_in_review: chosen ? (reader.hiddenBy[roadmapId(chosen)] ?? 0) : reader.hidden,

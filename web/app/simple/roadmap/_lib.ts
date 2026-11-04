@@ -184,16 +184,21 @@ const LINK_KINDS: Flag["kind"][] = ["dependency_order", "cut_with_dependents"];
 export const brokenLinks = (i: Item): Flag[] => broken(i).filter((f) => LINK_KINDS.includes(f.kind));
 
 /** fix4 qa-simple-roadmap-8: what "Needs a decision" counts, read by its toolbar button and its
- * panel's tiles alike (one number): broken links, dates to confirm, proposals, pulled in. */
-export function decisionCounts(items: Item[], proposals: Change[]): { broken: Item[]; dates: Item[]; proposals: Change[]; pulled: Change[]; total: number } {
+ * panel's tiles alike (one number): broken links, dates to confirm, proposals, pulled in.
+ * roadmap-decide: `links` counts every broken link of the working draft as the reader sees it,
+ * whoever decides it (its fixes say Propose for the others): the same number as the strip over
+ * the chart, Home's tile and the side menu (web/lib/simple-home.ts brokenLinks). */
+export function decisionCounts(items: Item[], proposals: Change[]): { broken: Item[]; links: number; dates: Item[]; proposals: Change[]; pulled: Change[]; total: number } {
   const mine = proposals.filter((c) => c.can_decide);
+  const linked = items.filter((i) => brokenLinks(i).length > 0);
   const out = {
-    broken: items.filter((i) => i.can_decide && brokenLinks(i).length > 0),
+    broken: linked,
+    links: linked.reduce((n, i) => n + brokenLinks(i).length, 0),
     dates: items.filter((i) => !!i.suggestion?.can_decide),
     proposals: mine.filter((c) => c.op !== "change_horizon"),
     pulled: mine.filter((c) => c.op === "change_horizon"),
   };
-  return { ...out, total: out.broken.length + out.dates.length + out.proposals.length + out.pulled.length };
+  return { ...out, total: out.links + out.dates.length + out.proposals.length + out.pulled.length };
 }
 
 /**

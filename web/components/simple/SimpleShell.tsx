@@ -14,6 +14,7 @@ import { setPanelOpen, usePanelOpen } from "@/components/hop/open-state";
 import { SIMPLE_HOME, switchTarget } from "@/lib/experience";
 import { useMe } from "@/lib/me";
 import { api, unwrap } from "@/lib/api/client";
+import { brokenLinks } from "@/lib/simple-home";
 import { loadInbox, onWaitingChanged } from "@/lib/waiting";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string };
@@ -62,12 +63,18 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
     if (!enabled) return;
     let alive = true;
     // prd-questions: Decisions counts the product decisions waiting for me (Oracle's run approvals never).
-    Promise.all([loadInbox(), unwrap(api.GET("/v1/simple/decisions/waiting"))])
-      .then(([inbox, waiting]) => {
+    // roadmap-decide: Roadmap adds the broken links of the working draft as I see it, the same
+    // ones the roadmap's strip, its Needs a decision and Home count (web/lib/simple-home.ts).
+    Promise.all([loadInbox(), unwrap(api.GET("/v1/simple/decisions/waiting")), unwrap(api.GET("/v1/simple/roadmap")).catch(() => undefined)])
+      .then(([inbox, waiting, roadmap]) => {
         if (!alive) return;
+        const links = brokenLinks(roadmap).length;
+        const asks = inbox.simple_proposals.length + inbox.simple_approvals.length;
         setCounts({
           Decisions: waiting.count,
-          Roadmap: inbox.simple_proposals.length + inbox.simple_approvals.length,
+          Roadmap: links + asks,
+          "Roadmap links": links,
+          "Roadmap asks": asks,
         });
       })
       .catch(() => undefined);
@@ -95,10 +102,15 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
 }
 
 /** What a rail count counts, said in words (its label and tooltip). */
-function countWords(label: string, n: number): string {
+function countWords(label: string, n: number, counts?: Record<string, number> | null): string {
   if (label === "Meetings") return `${n} ${n === 1 ? "review" : "reviews"} live or coming up`;
-  // qa4-simple-roadmap-9: Roadmap counts changes and drafts sent to you, not the page's "Needs a decision".
-  if (label === "Roadmap") return `${n} ${n === 1 ? "change or draft" : "changes or drafts"} waiting on you`;
+  // roadmap-decide: Roadmap counts the broken links (as the roadmap and Home count them) and the
+  // changes and drafts sent to you, and says so.
+  if (label === "Roadmap") {
+    const links = counts?.["Roadmap links"] ?? 0;
+    const asks = counts?.["Roadmap asks"] ?? n - links;
+    return `${links} broken ${links === 1 ? "link" : "links"}, ${asks} ${asks === 1 ? "change or draft" : "changes or drafts"} waiting on you`;
+  }
   return `${n} waiting on you`;
 }
 
@@ -262,7 +274,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
               <Icon name={d.icon} stroke={1.7} />
               <span className="min-w-0 flex-1 truncate">{d.label}</span>
               {n > 0 && (
-                <span id={`${d.testId}-count`} data-testid={`${d.testId}-count`} aria-label={countWords(d.label, n)} title={countWords(d.label, n)} className={`simple-count tnum ${d.label === "Meetings" && !counts?.["Meetings live"] ? "simple-count-quiet" : ""}`}>
+                <span id={`${d.testId}-count`} data-testid={`${d.testId}-count`} aria-label={countWords(d.label, n, counts)} title={countWords(d.label, n, counts)} className={`simple-count tnum ${d.label === "Meetings" && !counts?.["Meetings live"] ? "simple-count-quiet" : ""}`}>
                   {n}
                 </span>
               )}
@@ -332,7 +344,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
                     <Icon name={d.icon} stroke={1.7} />
                     {/* fix4 review: "One-pagers" fills a 390 px phone's fifth of the bar to the pixel; a hair tighter it is whole. */}
                     <span className="max-w-full truncate tracking-[-0.02em]">{d.label}</span>
-                    {tabBadge(`${id}-count`, n, countWords(d.label, n), quietOf(d))}
+                    {tabBadge(`${id}-count`, n, countWords(d.label, n, counts), quietOf(d))}
                   </Link>
                 );
               })}
@@ -372,7 +384,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
                         >
                           <Icon name={d.icon} />
                           {d.label}
-                          {tabBadge(id, n, countWords(d.label, n), quietOf(d))}
+                          {tabBadge(id, n, countWords(d.label, n, counts), quietOf(d))}
                         </Link>
                       </li>
                     );

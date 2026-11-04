@@ -26,6 +26,7 @@ import { useMe } from "@/lib/me";
 import {
   beforeAfter,
   brokenLinks,
+  draftNext,
   changeWords,
   goalTiles,
   greeting,
@@ -722,16 +723,13 @@ export default function SimpleHome() {
           )}
           {myDrafts.map((draft) => (
             <p key={draft.id} data-testid="home-draft" className="flex flex-wrap items-center justify-between gap-3">
+              {/* roadmap-decide: what happens next and who acts, as the roadmap's banner says it (draftNext). */}
               <span>
-                Your working draft of <strong>{draft.document.title}</strong> has {draft.changes} {draft.changes === 1 ? "change" : "changes"}. It publishes as v
-                {(draft.base_version ?? 0) + 1} when{" "}
-                {draft.waiting_on.length
-                  ? draft.waiting_on.map((id) => nameOf(id, "a reviewer")).join(", ")
-                  : "its decider"}{" "}
-                {draft.waiting_on.length > 1 ? "approve" : "approves"}.
+                Your working draft of <strong>{draft.document.title}</strong> has {draft.changes} {draft.changes === 1 ? "change" : "changes"}.{" "}
+                {draftNext(draft, (id) => nameOf(id, "a reviewer")).words}.
               </span>
               <Link href={`/simple/roadmap?draft=${draft.id}`} className="simple-button">
-                Open draft
+                {draftNext(draft).action === "approve" ? "Open draft to approve" : draftNext(draft).action === "submit" ? "Open draft to send for review" : "Open draft"}
               </Link>
             </p>
           ))}

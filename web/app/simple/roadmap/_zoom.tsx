@@ -27,6 +27,7 @@ import {
   broken,
   closedItem,
   daysBetween,
+  brokenLinks,
   liveBreaks,
   ms,
   planGoal,
@@ -297,13 +298,9 @@ export function ConflictPanel({
   onShow,
   phone,
 }: Common & { onShow: (key: string) => void }) {
-  const list = data.items.flatMap((i) =>
-    closedItem(i)
-      ? []
-      : broken(i)
-          .filter((f) => f.kind === "dependency_order")
-          .map((f) => ({ i, f })),
-  );
+  // roadmap-decide: every broken link of the working draft, a cut item others depend on
+  // included: the same ones Needs a decision, Home and the side menu count.
+  const list = data.items.flatMap((i) => brokenLinks(i).map((f) => ({ i, f })));
   const [shut, setShut] = useState(false);
   if (!list.length)
     return (
@@ -332,7 +329,7 @@ export function ConflictPanel({
         <ul className="divide-y divide-line border-t border-line">
           {list.map(({ i, f }) => (
             <li
-              key={i.id}
+              key={`${i.id}-${f.kind}-${f.subject}`}
               data-testid="conflict"
               data-item={i.key}
               className={`flex gap-3 px-3 py-2 ${phone ? "flex-col" : "flex-wrap items-center"}`}

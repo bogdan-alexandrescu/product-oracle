@@ -38,6 +38,8 @@ const FIX_WORDS: Record<Flag["fixes"][number], string> = {
   shift_dependents: "Move the dependents",
   move_dependency: "Move the dependency",
   accept_risk: "Accept as risk",
+  restore: "Bring it back",
+  remove_dependency: "Remove the dependency",
 };
 
 /** fix4 qa-simple-roadmap-18: a reader who may not decide the item (a commenter) only
@@ -65,6 +67,19 @@ export function FixButtons({
   const [note, setNote] = useState<string | null>(null);
   if (!canChange) return null;
   const dep = flag.subject ? items.get(flag.subject) : undefined;
+  // roadmap-decide: a cut item others depend on: bring it back, or a dependent drops it.
+  const live = item.needed_by.map((id) => items.get(id)).filter((n): n is Item => !!n && n.status !== "cut");
+  const restore = () =>
+    void act(`Brought back '${item.title}'`, { op: "restore", target: { item_id: item.id }, before: { cut: true }, after: { cut: false } });
+  const unlink = (n: Item) => {
+    const keys = n.depends_on.map((id) => items.get(id)?.key).filter((k): k is string => !!k);
+    void act(`Removed '${n.title}''s dependency on '${item.title}'`, {
+      op: "remove_dependency",
+      target: { item_id: n.id, subject: item.id },
+      before: { depends_on: keys },
+      after: { depends_on: keys.filter((k) => k !== item.key) },
+    });
+  };
   const fix = (kind: "shift_dependents" | "move_dependency") => {
     if (!dep) return;
     void act(
@@ -142,6 +157,16 @@ export function FixButtons({
           >
             {fixWords(f, item.can_decide)}
           </Button>
+        ) : f === "restore" ? (
+          <Button key={f} className={inline ? "!h-6 !px-2 !text-xs" : ""} onClick={restore}>
+            {fixWords(f, item.can_decide)}
+          </Button>
+        ) : f === "remove_dependency" ? (
+          live.map((n) => (
+            <Button key={`${f}-${n.id}`} className={inline ? "!h-6 !px-2 !text-xs" : ""} onClick={() => unlink(n)}>
+              {live.length > 1 ? `${fixWords(f, n.can_decide)} of ‘${n.title}’` : fixWords(f, n.can_decide)}
+            </Button>
+          ))
         ) : dep ? (
           <Button
             key={f}
@@ -405,6 +430,8 @@ const OP_WORDS: Record<string, string> = {
   keep_both: "Keep both",
   confirm_item: "Confirm the draft",
   cut_with_dependents: "Cut it and its dependents",
+  remove_dependency: "Remove the dependency",
+  edit_goal_milestone: "Move it to the date asked",
 };
 
 /** S7: a draft's likely duplicates, "Looks like <code> <title>", with Merge and Keep both
@@ -485,8 +512,10 @@ export const opWords = (op: string): string =>
  * ("Cut Alert rules engine and its dependents Weekly alert digest and Mobile alert push"). */
 export function changeRowWords(c: { op: string; titles?: string[] }, title?: string): string {
   const [first, ...rest] = c.titles ?? [];
-  // dod-actions-plan: a row names the item it changed, so Undo's next step reads from the list.
-  if (c.op !== "cut_with_dependents" || !first) return title ? `${opWords(c.op)}: ${title}` : opWords(c.op);
+  // dod-actions-plan: a row names the item it changed, so Undo's next step reads from the list;
+  // roadmap-decide: the change's own titles name it when the page does not show the item.
+  const named = title ?? first;
+  if (c.op !== "cut_with_dependents" || !first) return named ? `${opWords(c.op)}: ${named}` : opWords(c.op);
   const names = rest.length > 1 ? `${rest.slice(0, -1).join(", ")} and ${rest[rest.length - 1]}` : (rest[0] ?? "");
   return `Cut ${first} and its dependents${names ? ` ${names}` : ""}`;
 }
