@@ -4,6 +4,7 @@ import { LinkButton } from "./Button";
 import { Icon, type IconName } from "./Icon";
 import { PageInfo } from "./page-info";
 import { PageTabs, SectionTitle } from "./PageTabs";
+import { ClosableSplit, type PanelClose } from "./panel-close";
 
 /**
  * The page under the shell's top bar. Every screen uses it, so the title, status and
@@ -119,11 +120,13 @@ export function Split({
   inspector,
   wide = false,
   byRoom = false,
+  panel,
 }: {
   children: ReactNode;
   inspector?: ReactNode;
   wide?: boolean;
   byRoom?: boolean;
+  panel?: PanelClose;
 }) {
   // The children keep their place in the tree with or without an inspector: one that comes
   // in later (its data loaded) must not remount them, or a box being typed in loses focus.
@@ -140,12 +143,9 @@ export function Split({
     : `grid-cols-[minmax(0,1fr)_380px] max-[1100px]:grid-cols-1 ${wide ? "max-[1320px]:grid-cols-1" : ""}`;
   const sticky = byRoom ? "xl:@min-[920px]:sticky xl:@min-[920px]:top-4" : wide ? "min-[1321px]:sticky min-[1321px]:top-4" : "xl:sticky xl:top-4";
   return (
-    <div className={byRoom ? "@container min-w-0" : "min-w-0"}>
-      <div className={`grid items-start gap-4 max-[600px]:gap-3 ${cols}`}>
-        <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">{children}</div>
-        <div className={`min-w-0 ${sticky}`}>{inspector}</div>
-      </div>
-    </div>
+    <ClosableSplit inspector={inspector} cols={cols} sticky={sticky} byRoom={byRoom} panel={panel}>
+      {children}
+    </ClosableSplit>
   );
 }
 

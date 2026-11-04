@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { usePickableTable } from "./panel-close";
 
 export type Column<T> = {
   key: string;
@@ -118,6 +119,12 @@ export function DataTable<T>({
 }) {
   const body = useRef<HTMLTableSectionElement>(null);
   const selectable = !!onSelect;
+  // In a Split, picking a row (click, Enter or Space) opens its closed panel again.
+  const split = usePickableTable(selectable);
+  const pick = (key: string, row: T) => {
+    onSelect?.(key, row);
+    split?.reopen();
+  };
   const list = rows ?? [];
   const selIndex = list.findIndex((r) => rowKey(r) === selected);
 
@@ -140,7 +147,7 @@ export function DataTable<T>({
       if (e.target !== e.currentTarget) return;
       e.preventDefault();
       if (e.key === "Enter" && onActivate) onActivate(rowKey(list[i]!), list[i]!);
-      else onSelect?.(rowKey(list[i]!), list[i]!);
+      else pick(rowKey(list[i]!), list[i]!);
       return;
     } else return;
     e.preventDefault();
@@ -237,7 +244,7 @@ export function DataTable<T>({
                     {...rowProps?.(row)}
                     aria-selected={selectable ? on : undefined}
                     tabIndex={selectable ? (tabbable ? 0 : -1) : undefined}
-                    onClick={selectable ? () => onSelect?.(k, row) : undefined}
+                    onClick={selectable ? () => pick(k, row) : undefined}
                     onKeyDown={selectable ? (e) => onKey(e, i) : undefined}
                     className={`h-11 border-t border-line max-[600px]:flex max-[600px]:h-auto max-[600px]:min-h-12 max-[600px]:flex-wrap max-[600px]:items-center max-[600px]:gap-x-3 max-[600px]:gap-y-1 max-[600px]:px-3 max-[600px]:py-2.5 max-[600px]:after:order-3 max-[600px]:after:h-0 max-[600px]:after:basis-full max-[600px]:after:content-[''] ${selectable ? "cursor-pointer outline-offset-[-2px] hover:bg-surface2" : ""} ${
                       on ? "bg-accent-soft shadow-[inset_4px_0_0_var(--accent)] hover:bg-accent-soft" : ""

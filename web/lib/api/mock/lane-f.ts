@@ -178,6 +178,30 @@ const FEATURES: FeatureSeed[] = [
   },
 ];
 
+// po-mock-scenario=long-goals: more features, long goal names and many dependencies, so the
+// Goal and Depends on columns wrap beside the panel and widen when it closes. Invented.
+export const LONG_GOALS_SCENARIO = "long-goals";
+const PG1 = "Cut the time from sign-up to the first shared project in half";
+const PG2 = "Keep monthly churn of team plans under two percent";
+const PG3 = "Make checkout accessible for screen reader users";
+const longGoal = (key: string, title: string, goals: GoalLink[], depends_on: string[], effort: number, confidence: number): FeatureSeed => ({
+  key, title, status: "proposed", goals, depends_on, evidence: [],
+  attrs: { effort, reach: 1200, impact: 2, confidence, business_value: 5, time_criticality: 3, risk_reduction: 2, job_size: effort, moscow: "should" },
+});
+const LONG_GOAL_FEATURES: FeatureSeed[] = [
+  longGoal("F-9", "Guided first project with sample tasks", [{ goal: "g.long-first-project", title: PG1, weight: 3, contribution: 3 }, { goal: "g.activation", title: G1, weight: 3, contribution: 2 }], ["F-1", "F-3", "F-5", "F-10", "F-11", "F-12"], 2, 0.8),
+  longGoal("F-10", "Invite teammates from the project page", [{ goal: "g.long-first-project", title: PG1, weight: 3, contribution: 2 }], ["F-3"], 1, 0.7),
+  longGoal("F-11", "Team plan renewal reminders", [{ goal: "g.long-churn", title: PG2, weight: 2, contribution: 3 }, { goal: "g.paid-conversion", title: G2, weight: 2, contribution: 1 }], ["F-4", "F-7", "F-8"], 2, 0.6),
+  longGoal("F-12", "Keyboard and screen reader support at checkout", [{ goal: "g.long-accessible", title: PG3, weight: 2, contribution: 3 }, { goal: "g.activation", title: G1, weight: 3, contribution: 1 }], ["F-1", "F-2", "F-5"], 3, 0.7),
+  longGoal("F-13", "Usage report for workspace owners", [{ goal: "g.long-churn", title: PG2, weight: 2, contribution: 2 }], ["F-4", "F-7", "F-8", "F-11"], 2, 0.5),
+  longGoal("F-14", "Project templates for agencies", [{ goal: "g.long-first-project", title: PG1, weight: 3, contribution: 1 }, { goal: "g.long-churn", title: PG2, weight: 2, contribution: 1 }], ["F-3", "F-9", "F-10"], 3, 0.6),
+];
+export function longGoalFeatures(scenario: string | null | undefined) {
+  const at = FEATURES.findIndex((f) => f.key === "F-9");
+  if (scenario === LONG_GOALS_SCENARIO && at < 0) FEATURES.push(...LONG_GOAL_FEATURES);
+  // Any other scenario drops them again, so they never leak into a later one.
+  else if (scenario !== LONG_GOALS_SCENARIO && at >= 0) FEATURES.splice(at, LONG_GOAL_FEATURES.length);
+}
 const round = (n: number) => Math.round(n * 1000) / 1000;
 const num = (v: unknown): number | null => {
   if (typeof v === "number") return v;
@@ -2035,6 +2059,7 @@ export async function laneF(
   const q = new URL(req.url).searchParams;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
 
+  longGoalFeatures(scenario);
   if (area === "priorities") {
     if (p.length === 2 && m === "GET") {
       const method = q.get("method") ?? "goal_weighted";
