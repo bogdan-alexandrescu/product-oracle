@@ -11,6 +11,7 @@ import { Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { useCompanyZone, dayIn } from "@/lib/dates";
 import { useQuery } from "@/lib/use-query";
+import { RebuildSign } from "@/components/mockups/RebuildSign"; // MOCK-HOOK
 
 /** One-pagers (#723 S1): the PRDs I may read (the API lists only those), each opening its one-pager. */
 export default function OnePagers() {
@@ -59,6 +60,8 @@ export default function OnePagers() {
                   {d.title}
                 </Link>
                 <PrdStatus d={d} />
+                {/* MOCK-HOOK: rebuild sign in the row. */}
+                <span className="relative z-[1]"><RebuildSign place="list-row" slug={d.slug} slot="inline" /></span>
                 <span className="simple-small ml-auto">Updated {dmy(dayIn(d.updated_at, zone))}</span>
               </li>
             ))}

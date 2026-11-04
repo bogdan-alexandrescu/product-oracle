@@ -22,6 +22,7 @@ import { downloadedNote } from "@/lib/export-note";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { stripRawTokens } from "@/lib/raw-tokens";
+import { RebuildSign } from "@/components/mockups/RebuildSign"; // MOCK-HOOK
 
 type View = Schemas["OnePagerOut"];
 type Line = Schemas["OnePagerLine"];
@@ -541,6 +542,8 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
             onChanged?.();
           }}
         />
+        {/* MOCK-HOOK: rebuild sign (B banner / C note) under the header. */}
+        {!presenting && <RebuildSign place="one-pager" slug={v.document.slug} slot="block" />}
         {toast}
         {error && <ErrorNote>{error}</ErrorNote>}
         {planShown && updating && (
@@ -885,6 +888,8 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeet
         {!approved && run === "waiting" && <span data-testid="one-pager-status"><DocStatusChip status="in_review" dot /></span>}
         {!approved && run !== "waiting" && summary && <span data-testid="one-pager-status"><PrdStatus d={summary} /></span>}
         <span>{phone && plan ? `v${v.version}` : `Version ${v.version}`}{published ? ` · ${published}` : ""}</span>
+        {/* MOCK-HOOK: rebuild sign (A chip / C marker) beside the version. */}
+        <RebuildSign place="one-pager" slug={v.document.slug} slot="inline" />
         {sep}
         {v.owner ? <span>Owner <b className="font-[650] text-text">{v.owner.name}</b></span> : <span>No owner yet</span>}
         {!plan && v.decider && (

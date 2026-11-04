@@ -40,6 +40,7 @@ import { useScreenSubject } from "@/lib/screen-subject";
 import { NAMES_FAILED, useTemplateNames } from "@/lib/template-names";
 import { useQuery, type Query } from "@/lib/use-query";
 import { versionHref } from "@/lib/version-href";
+import { RebuildSign } from "@/components/mockups/RebuildSign"; // MOCK-HOOK
 
 /** A template or theme beside the title, by its name: a small hairline pill. */
 const META = "inline-flex min-h-[26px] max-w-full items-center rounded-full border border-line-strong px-2.5 text-[13px] text-text2";
@@ -439,6 +440,8 @@ export function DocumentOverview({ doc }: { doc: string }) {
               status={
                 <>
                   <DocStatusChip status={d.status} />
+                  {/* MOCK-HOOK: rebuild sign (A chip / C marker) beside the version. */}
+                  <RebuildSign place="prd-detailed" slug={d.slug} kind={d.kind === "roadmap" ? "roadmap" : "prd"} slot="inline" />
                   <RoleBadge />
                   {d.template && (
                     <span className={META} data-testid="doc-template" title={d.template_version ? `Template, its version ${d.template_version}` : "Template"}>
@@ -477,6 +480,8 @@ export function DocumentOverview({ doc }: { doc: string }) {
                 </>
               }
             />
+            {/* MOCK-HOOK: rebuild sign (B banner / C note) under the header. */}
+            <div className="mb-3 empty:hidden"><RebuildSign place="prd-detailed" slug={d.slug} kind={d.kind === "roadmap" ? "roadmap" : "prd"} slot="block" /></div>
             {/* one-roadmap-many-prds: a PRD replaced by area PRDs is read-only and names them at its top. */}
             {replaced && (
               <p data-testid="replaced-by" className="mb-3 text-sm text-text2">

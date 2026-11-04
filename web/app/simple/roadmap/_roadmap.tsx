@@ -66,6 +66,7 @@ import {
 } from "./_lib";
 import { Chart, PHASES, type Layout } from "./_timeline";
 import { ConflictPanel, ZoomTimeline } from "./_zoom";
+import { RebuildSign } from "@/components/mockups/RebuildSign"; // MOCK-HOOK
 
 /** #34: the Roadmap's toasts sit in the bottom-right corner on a desktop, clear of the chart. */
 const toast = (ask: ToastAsk) => dsToast({ place: "corner", ...ask });
@@ -1377,6 +1378,8 @@ export function SimpleRoadmap() {
             </span>
           )
         )}
+        {/* MOCK-HOOK: rebuild sign (A chip / C marker) beside the roadmap's name. */}
+        <RebuildSign place="roadmap" slug="product-roadmap" kind="roadmap" slot="inline" />
         <div className={phone ? "w-full" : ""} data-testid="format-switch">
           <SegmentedControl<Format>
             label="Format"
@@ -1399,6 +1402,8 @@ export function SimpleRoadmap() {
         {!phone && actions}
         {keyDates && <KeyDatesEditor key={data.roadmap?.id ?? "all"} data={data} act={act} mayChange={canChange} phone={phone} onClose={() => setKeyDates(false)} />}
       </header>
+      {/* MOCK-HOOK: rebuild sign (B banner / C note) under the header. */}
+      <RebuildSign place="roadmap" slug="product-roadmap" kind="roadmap" slot="block" />
       <p role="status" aria-live="polite" className="sr-only" data-testid="key-pending">
         {said}
       </p>
