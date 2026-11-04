@@ -7,7 +7,8 @@ import { expect, test, type Page } from "./test";
  * opens the Baseline goal the M2 gate counts toward (its target and due date, the target focused)
  * in a sheet over the panel (a bottom sheet on a phone). Saving the lower target reloads the answer,
  * which says the date now reaches Jan 8. A viewer sees no button; with no Baseline goal by the
- * goal's name the panel says so. Mock scenarios "fit-date-hard" and "fit-date-hard-no-goal"
+ * goal's name the panel says so. Only the goal's own unlocked work shrinks, never the must-include
+ * item. Mock scenarios "fit-date-hard" and "fit-date-hard-no-goal"
  * (invented data: Larkspur Help Desk's M2 Agent reply flow, the goal 40 replied threads per agent).
  */
 
@@ -40,6 +41,12 @@ async function lowerTheGoal(page: Page) {
   await expect(page.getByTestId("fit-meter")).toContainText("Reaches Jan 8");
   await expect(page.getByTestId("fit-hard")).toBeHidden();
   await expect(page.getByRole("button", { name: "Keep Jan 8 with a smaller goal" })).toBeHidden();
+  // Only the goal's own unlocked work shrinks: moving the bulk reply saves half its days now, while the
+  // must-include Reply drafts in the inbox keeps its full size (and so its days) and stays locked.
+  await expect(page.getByTestId("fit-change-bulk")).toContainText("8 days sooner");
+  await expect(page.getByTestId("fit-change-drafts")).toContainText("18 days sooner");
+  await expect(page.getByTestId("fit-change-drafts").getByRole("checkbox")).toBeDisabled();
+  await expect(page.getByTestId("fit-change-tone")).toContainText("8 days sooner");
 }
 
 test.describe("desktop", () => {
