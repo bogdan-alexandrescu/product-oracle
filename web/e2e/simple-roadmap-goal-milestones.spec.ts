@@ -74,6 +74,9 @@ test.describe("milestones on the Timeline", () => {
     await expect(card(page).getByTestId("ms-waits-chip")).toHaveCount(2);
     await expect(card(page).getByTestId("ms-waits-chip").filter({ hasText: "Alert routing by team" })).toContainText("after it");
     await card(page).getByLabel("It counts when").selectOption("Holds 7 days in a row on one live team");
+    // A tapped bar far off scrolls the chart to it; back to today shows the new milestone's day.
+    await page.getByRole("button", { name: "Back to today" }).click();
+    await expect(card(page)).toBeVisible();
     await shot(page, "ms1-a-mid");
     await card(page).getByTestId("ms-save").click();
     await expect(card(page)).toBeHidden();
