@@ -43,7 +43,7 @@ def test_the_production_counts_when_cell_is_not_flagged():
         "Gift wrap shipped on Oct 27.",
         "The checkout fix merged on Oct 30.",
         "Saved baskets have been live since Oct 2.",
-        "The pilot was rolled out to five shops on Oct 12.",
+        "The pilot rolled out on Oct 12.",
         "The courier contract closed Oct 20.",
     ],
 )
@@ -90,6 +90,72 @@ def test_a_future_milestone_date_without_a_basis_still_warns():
     assert flagged(body.replace("| Dec 15, 2026 |", "| closed on Oct 27 |"), ref=DAY) == [
         ("plan-milestones", "Oct 27")
     ]
+
+
+# A past reading counts only when it is recent (within about 60 days before the version's
+# day) and the sentence reports a thing that happened, with no plan words around it.
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Migration done on Dec 15.",
+        "M2: done on Dec 15",
+        "Done Dec 15",
+        "Target: shipped on Dec 15",
+        "Finished on Dec 15 at the latest.",
+        "Delivered on Dec 15 is the plan.",
+        "The launch was moved to go live on Dec 15.",
+        "Release was rescheduled on Dec 15.",
+        "Beta opened on Dec 1.",
+        "Shipped on 15 December.",
+        # Recent, but a plan or not clearly a report.
+        "Target: shipped on Oct 27.",
+        "Gift wrap shipped on Oct 27 at the latest.",
+        "Gift wrap merged on Oct 27 is the plan.",
+        "Gift wrap was moved to go live on Oct 27.",
+        "Gift wrap was rescheduled on Oct 27.",
+        "Gift wrap done on Oct 27.",
+        "Beta opened on Oct 27.",
+        "Work started on Oct 27.",
+        "Work began on Oct 27.",
+        # A report, but far back: the next Oct 2 is the reading.
+        "Gift wrap shipped on Aug 2.",
+    ],
+)
+def test_a_far_or_planned_past_reading_still_warns(line):
+    found = flagged(f"## Notes {{#notes}}\n\n{line}\n\n" + ITEMS, ref=DAY)
+    assert len(found) == 1 and found[0][0] == "notes", found
+
+
+@pytest.mark.parametrize(
+    "table",
+    [
+        "| Milestone | Notes |\n|---|---|\n| Holiday shop | done on Dec 15 |",
+        "| ETA |\n|---|\n| done on Dec 15 |",
+        "| When |\n|---|\n| done on Dec 15 |",
+        "| When |\n|---|\n| shipped on Dec 15 |",
+    ],
+)
+def test_a_far_past_reading_in_a_table_still_warns(table):
+    assert flagged(f"## Notes {{#notes}}\n\n{table}\n\n" + ITEMS, ref=DAY) == [("notes", "Dec 15")]
+
+
+@pytest.mark.parametrize("header", ["Proof due", "Sources & dates"])
+def test_only_a_whole_evidence_header_is_not_a_schedule_place(header):
+    table = f"| Item | {header} |\n|---|---|\n| [Gift notes](#now-gift-notes) | Dec 10 |"
+    assert flagged(f"## Notes {{#notes}}\n\n{table}\n\n" + ITEMS, ref=DAY) == [("notes", "Dec 10")]
+
+
+def test_a_label_skips_only_its_own_sentence():
+    line = "Evidence: be#1358 closed on Oct 27. Gift notes ship on Dec 10."
+    assert flagged(f"## Notes {{#notes}}\n\n{line}\n\n" + ITEMS, ref=DAY) == [("notes", "Dec 10")]
+    line = "Counts when: shop owners can reorder by Jan 9.\nGift notes ship on Dec 10."
+    assert flagged(f"## Notes {{#notes}}\n\n{line}\n\n" + ITEMS, ref=DAY) == [("notes", "Dec 10")]
+
+
+@pytest.mark.parametrize("header", ["Start date", "Target date", "Delivery date", "ETA"])
+def test_a_named_date_column_keeps_the_usual_reading(header):
+    table = f"| Milestone | {header} |\n|---|---|\n| Holiday shop | closed on Oct 27 |"
+    assert flagged(f"## Notes {{#notes}}\n\n{table}\n\n" + ITEMS, ref=DAY) == [("notes", "Oct 27")]
 
 
 # --------------------------------------------------------------------------- the approval
