@@ -687,6 +687,8 @@ async def create_schedule_basis(
         note=body.note,
     )
     await record_basis(db, principal, rights, row, prd)
+    if row.status == "verified":
+        await _refresh_dates(db, row)
     await db.commit()
     await db.refresh(row)
     return row
@@ -745,11 +747,20 @@ async def withdraw_schedule_basis(
             f"Only a verified basis is withdrawn; this one is {row.status}",
         )
     undated, stale = await schedule.withdraw(db, principal, row, body.reason)
+    await _refresh_dates(db, row)
     await db.commit()
     await db.refresh(row)
     return WithdrawOut(
         basis=ScheduleBasisOut.model_validate(row), undated_milestones=undated, stale_items=stale
     )
+
+
+async def _refresh_dates(db: AsyncSession, row: ScheduleBasis) -> None:
+    """date-warnings-honest: a basis verified or withdrawn re-runs the date check of the
+    roadmap versions resting on its PRD, so their warnings are never stale."""
+    from oracle.docs.service import refresh_date_warnings
+
+    await refresh_date_warnings(db, row.prd_document_id)
 
 
 async def _proposed(db: AsyncSession, basis_id: uuid.UUID, principal: Principal) -> ScheduleBasis:
@@ -803,6 +814,7 @@ async def verify_schedule_basis(
             "note": body.note,
         },
     )
+    await _refresh_dates(db, row)
     await db.commit()
     await db.refresh(row)
     return row

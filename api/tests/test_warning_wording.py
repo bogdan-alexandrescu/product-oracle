@@ -363,7 +363,13 @@ async def test_a_run_s_date_warning_and_the_approve_refusal_are_plain(client, ow
     assert '"Payment step"' in w["message"] and "Checkout redesign" in w["message"]
     # The ids agents need: the section key, the date and the PRD's slug.
     assert w["section_keys"] == ["now-payment-step"]
-    assert w["refs"] == {"date": "2026-12-15", "shown": "Dec 15, 2026", "prd": PRD}
+    assert w["refs"] == {
+        "date": "2026-12-15",
+        "shown": "Dec 15, 2026",
+        "day": "2026-12-15",
+        "item": "payment-step",
+        "prd": PRD,
+    }
     for other in version["warnings"]:
         _plain(other["message"])
 

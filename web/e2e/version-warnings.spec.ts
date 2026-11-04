@@ -39,7 +39,8 @@ test("the Warnings panel says what to do, and the date warning opens Plan › Da
   for (const w of [date, citation, leftOpen]) expect(await w.innerText()).not.toMatch(ROUTE_OR_ID);
 
   await date.getByRole("link", { name: "Open Plan › Dates" }).click();
-  await expect(page).toHaveURL(/\/plan\/dates$/);
+  // date-warnings-honest: filtered to the date that lacks a basis.
+  await expect(page).toHaveURL(/\/plan\/dates\?prd=[^&]+&dates=2026-12-15$/);
   await expect(page.getByTestId("plan-tabs").filter({ visible: true }).getByTestId("plan-tab-dates")).toHaveAttribute("aria-current", "page");
 });
 

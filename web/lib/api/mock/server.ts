@@ -142,7 +142,7 @@ import {
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
-import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, NOT_CLAIMS_LINE, NOT_CLAIMS_SCENARIO, SHARED_DATE_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, dateWarnings, versionWarnings, inboxTracks, planEntityTitle, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecPerson, type SpecsDb } from "./specs";
 import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { seedImpact } from "./impact";
@@ -3050,7 +3050,7 @@ function load(): Db {
             ? seedSimpleWaits
           : scenario === "scope-review" || scenario === "scope-review-kept" || scenario === "scope-review-questions"
             ? () => seedScopeReview(scenario === "scope-review-kept", scenario === "scope-review-questions")
-          : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO || scenario === TWO_WAY_DATES_SCENARIO
+          : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO || scenario === SHARED_DATE_SCENARIO || scenario === NOT_CLAIMS_SCENARIO || scenario === TWO_WAY_DATES_SCENARIO
             ? seedEngReview
           : scenario === "eng-check"
             ? seedEngCheck
@@ -3247,7 +3247,7 @@ function load(): Db {
   // "outcomes" tracks outcomes of its items, "alerts-approved" is the approved plan alone, and
   // the "track-alerts" scenarios watch its milestones (an accepted slip moves an approved item).
   const approvedPlan = [
-    "launches", "plan-decider", "strategy-plan", "outcomes", DATE_BASES_SCENARIO, ALERTS_APPROVED_SCENARIO,
+    "launches", "plan-decider", "strategy-plan", "outcomes", DATE_BASES_SCENARIO, SHARED_DATE_SCENARIO, NOT_CLAIMS_SCENARIO, ALERTS_APPROVED_SCENARIO,
     "track-alerts", "track-alerts-many", "track-alerts-actions", "track-alerts-history",
   ];
   if (approvedPlan.includes(scenario ?? "")) {
@@ -3263,6 +3263,22 @@ function load(): Db {
     const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
     for (const v of db.versions.filter((x) => x.document_id === roadmap?.id && x.number === 1))
       for (const x of v.sections) x.body_md = x.body_md.replace("GA by 2026-12-15", `GA by ${TWO_WAY_GA.written}`);
+  }
+  // "shared-date": the GA date (Dec 15, no basis) is written for the first Next item too.
+  if (scenario === SHARED_DATE_SCENARIO) {
+    const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
+    for (const v of db.versions.filter((x) => x.document_id === roadmap?.id && x.number === 1)) {
+      const nextItem = v.sections[v.sections.findIndex((x) => x.section_key === "next") + 1];
+      if (nextItem) nextItem.body_md = `GA by 2026-12-15. ${nextItem.body_md}`;
+    }
+  }
+  // "not-claims": the summary also writes dates that are not schedule claims.
+  if (scenario === NOT_CLAIMS_SCENARIO) {
+    const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
+    for (const v of db.versions.filter((x) => x.document_id === roadmap?.id && x.number === 1)) {
+      const summary = v.sections.find((x) => x.section_key === "summary");
+      if (summary) summary.body_md = `${NOT_CLAIMS_LINE}\n\n${summary.body_md}`;
+    }
   }
   // H9 Pricing input: a second owner, two pricing memos and made-up deals in the "pricing" scenario.
   if (scenario === "pricing") seedPricingScenario(db);
@@ -6469,7 +6485,13 @@ async function route(db: Db, req: Request): Promise<Response> {
         : doc.kind === "update"
           ? updateDateMarks(db.roadmap, v.sections)
           : [];
-    return json(200, { ...versionOut(db, v), date_marks: marks });
+    const out = versionOut(db, v);
+    if (doc.kind === "roadmap" && db.roadmap) {
+      // date-warnings-honest: the date warnings follow the bases as they stand, as the API's.
+      const prd = db.documents.find((d) => d.id === v.source?.document_id);
+      out.warnings = dateWarnings(out.warnings ?? [], marks, v.sections, prd ? { title: prd.title, slug: prd.slug } : null);
+    }
+    return json(200, { ...out, date_marks: marks });
   }
   if (sub === "markdown") {
     return new Response(versionMarkdown(doc, v), { headers: { "content-type": "text/markdown" } });
