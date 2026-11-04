@@ -201,9 +201,9 @@ PER_ITEM: dict[str, Role | None] = {
     "create_checkpoint_action": "owner",
     "create_discussion_change": None,
     "create_discussion_message": None,
-    "create_goal_suggestion": "commenter",
     # Goal milestones are changed by who changes the roadmap (drafts.can_edit; can_change).
     "create_goal_milestone": "owner",
+    "create_goal_suggestion": "commenter",
     "create_intake": "approver",
     "create_interview_link": "approver",
     "create_request": "owner",
