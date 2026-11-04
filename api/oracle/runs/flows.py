@@ -1885,6 +1885,14 @@ def step_prompt(
         lines += source_lines(ctx.source, paste=not ctx.mcp_attached)
     if ctx.draft is not None:
         lines += draft_lines(ctx.draft.kind, ctx.draft, ctx.source)
+    if flow.key == "prd_to_roadmap" and segment.name == "roadmap_draft" and ctx.source:
+        # roadmap-plan-tables: the tables approving the draft applies to Simple.
+        from oracle.runs import plan_tables
+
+        plan = plan_tables.engineering_plan(
+            ctx.prior_outputs.get(plan_tables.ITEMS_FILE), ctx.source.schedule_bases
+        )
+        lines += plan_tables.prompt_lines(plan, critic=role == "critic")
     if ctx.extra_lines:
         lines += ["", *ctx.extra_lines]
     if flow.key == "update_draft" and ctx.document:

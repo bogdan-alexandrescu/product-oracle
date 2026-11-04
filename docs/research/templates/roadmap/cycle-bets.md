@@ -124,6 +124,14 @@ layout:
 
 <!-- Unshaped problems worth shaping later, each tied to a goal. -->
 
+## Plan {#plan}
+
+<!-- The plan approving this version applies to Simple. A table with the columns Key, Item, Start, End, Dates from, Status: one row per item of the roadmap's items, dates month first. End is the engineering date; Start stays empty when the engineering dates give none. Dates from says what the end rests on: estimate, team queue, commitment, or no date yet. Status is planned, shipped or next PRD. -->
+
+## Milestones {#plan-milestones}
+
+<!-- A table with the columns Milestone, Date, Gates, Counts when: each milestone the items name, its engineering date (month first), the items it gates by title, and how it counts. -->
+
 ## Sources and data points {#sources}
 
 <!-- Generated: pitches, evidence and goal citations, with retrieval dates. Format background: Basecamp, Shape Up (https://basecamp.com/shapeup); Hill Charts (https://basecamp.com/hill-charts). -->

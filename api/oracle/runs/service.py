@@ -4686,6 +4686,25 @@ def _creator(principal_tenant: uuid.UUID, user: User | None, token: ApiToken | N
     raise LookupError("run creator not found")
 
 
+async def _plan_table_problems(
+    db: AsyncSession, run: Run, markdown: str, source_id: uuid.UUID | None
+) -> list[ImportProblem]:
+    """The draft's plan tables against the run's engineering dates (oracle.runs.plan_tables):
+    the items file the roadmap_items segment wrote and the source PRD's verified bases."""
+    from oracle.runs import plan_tables
+
+    items = None
+    for seg in await db.scalars(
+        select(RunSegment).where(RunSegment.run_id == run.id).order_by(RunSegment.seq)
+    ):
+        files = (seg.artifacts or {}).get("files") or {}
+        items = files.get(plan_tables.ITEMS_FILE, items)
+    source = await db.get(DocumentVersion, source_id) if source_id else None
+    bases = await schedule.verified_bases(db, source.document_id if source else None)
+    plan = plan_tables.engineering_plan(items, [b.as_json() for b in bases])
+    return plan_tables.check(markdown, plan, await company_time.company_today(db))
+
+
 async def _draft_source(db: AsyncSession, run: Run) -> uuid.UUID | None:
     """The provenance of the draft a run imports: the run's source version
     (prd_to_roadmap), else the document's latest version's (the feedback loop keeps the
@@ -4741,6 +4760,12 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
         if knobs.get("template") and knobs.get("template_version")
         else None
     )
+    if run.flow == "prd_to_roadmap" and kind == "roadmap":
+        # roadmap-plan-tables: a draft without the plan tables approving it applies to
+        # Simple, or with other items or dates than the run's, goes back to the writer.
+        problems = await _plan_table_problems(db, run, markdown, source_id)
+        if problems:
+            return rejection.refused(name, problems)
     async with tenant_session(tenant_id) as s:
         try:
             result = await docs_service.import_draft(

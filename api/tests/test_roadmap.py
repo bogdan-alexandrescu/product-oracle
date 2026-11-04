@@ -48,6 +48,33 @@ items:
     prd_section: s-5-2
 """
 
+# roadmap-plan-tables: the plan tables every roadmap draft carries (oracle.runs.plan_tables),
+# filled from ITEMS and the ENG-412 estimate approved_prd records.
+PLAN_TABLES = """\
+## Plan {#plan}
+
+| Key | Item | Start | End | Dates from | Status |
+|---|---|---|---|---|---|
+| payment-step | Payment step |  | Nov 30, 2026 | estimate | planned |
+| shipping-step | Shipping step |  |  | no date yet | planned |
+
+## Milestones {#plan-milestones}
+
+| Milestone | Date | Gates | Counts when |
+|---|---|---|---|
+| Beta | Nov 30, 2026 | Payment step |  |
+| Shipping estimate up front |  | Shipping step |  |
+
+"""
+
+
+def with_plan(md: str, items: str, bases: tuple = ()) -> str:
+    """``md`` (ROADMAP_MD) with the plan tables of another items file and bases."""
+    from oracle.runs import plan_tables
+
+    return md.replace(PLAN_TABLES, plan_tables.markdown(plan_tables.engineering_plan(items, bases)))
+
+
 ROADMAP_MD = """\
 ---
 document: checkout-redesign-roadmap
@@ -95,10 +122,10 @@ and [an old section](/documents/checkout-redesign/v/1#gone).
 
 ## Later {#later}
 
-## Sources and data points {#sources}
+{PLAN_TABLES}## Sources and data points {#sources}
 
 - Beta date: ENG-412 estimate [c:c1]
-"""
+""".replace("{PLAN_TABLES}", PLAN_TABLES)
 
 
 @pytest.fixture
@@ -1150,7 +1177,11 @@ async def test_a_new_document_takes_its_kind_from_the_draft_and_stays_importable
     _, auth = owner
     # No kind line: the roadmap template makes it a roadmap, and it takes new versions.
     # (No PRD to verify a date against: round 3, a date in the text would be refused.)
-    first = ROADMAP_MD.replace("kind: roadmap\n", "").replace("Beta by 2026-11-30.", "Beta first.")
+    first = (
+        ROADMAP_MD.replace("kind: roadmap\n", "")
+        .replace("Beta by 2026-11-30.", "Beta first.")
+        .replace(PLAN_TABLES, "")
+    )
     assert (await import_draft(client, auth, first, doc=ROADMAP)).status_code == 201
     doc = (await client.get(f"/v1/documents/{ROADMAP}", headers=auth)).json()
     assert doc["kind"] == "roadmap"
