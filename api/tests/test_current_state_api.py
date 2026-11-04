@@ -391,3 +391,43 @@ async def test_live_sources_make_a_feature_ready(client, clock):
     assert proofs["measured"]["value"] == "3,410 sent" and proofs["measured"]["period"] == "Nov"
     assert out["ready"] is True
     assert datetime.fromisoformat(out["checked_at"]) == NOW
+
+
+async def test_a_short_title_alone_is_no_proof(client, clock):
+    """protects=a one-word feature title ("Search") names no code map entry or pull request
+    that merely uses the word; a whole title of two or more words (or its slug) does;
+    fails_when="Fix search paging" or a code map's "search" module counts as proof for
+    Search; no_claim=item keys (the explicit link, test_live_sources_make_a_feature_ready)."""
+    w = await world()
+    content = {**MAP, "modules": [*MAP["modules"], {"id": "module:search", "path": "api/search",
+               "summary": "Search box for the admin page", "depends_on": []}]}  # fmt: skip
+    map_id = await shared_map(w.ctx.tenant_id, content)
+    async with tenant_session(w.ctx.tenant_id) as s:
+        code_map = await s.get(CodeMap, map_id)
+        assert code_map is not None
+        source = await s.get(Source, code_map.source_id)
+        assert source is not None
+        for n, title in ((1, "Fix search paging"), (2, "Saved search: keep the filters")):
+            await store.upsert_item(s, source, ItemUpsert(
+                external_id=f"example-org/app:pull:{n}", kind="pull_request", title=title,
+                url=None, author="sam",
+                content=f"# {title}\n\n- Merged: 2026-10-30T10:00:00Z\n"))  # fmt: skip
+        feature = await s.get(Entity, uuid.UUID(w.ids["fresh"]))
+        assert feature is not None
+        feature.key, feature.title = "search", "Search"
+        await s.commit()
+    r = await w.post(client, "fresh", "check")
+    assert r.status_code == 200, r.text
+    proofs = {p["kind"]: p for p in r.json()["proofs"]}
+    assert not proofs.get("code_map", {}).get("count")
+    assert not proofs.get("pull_requests", {}).get("count")
+
+    async with tenant_session(w.ctx.tenant_id) as s:
+        feature = await s.get(Entity, uuid.UUID(w.ids["fresh"]))
+        assert feature is not None
+        feature.key, feature.title = "saved-search", "Saved search"
+        await s.commit()
+    r = await w.post(client, "fresh", "check")
+    assert r.status_code == 200, r.text
+    proofs = {p["kind"]: p for p in r.json()["proofs"]}
+    assert proofs["pull_requests"]["count"] == 1
