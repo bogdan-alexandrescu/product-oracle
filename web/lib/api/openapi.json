@@ -42522,6 +42522,288 @@
         "x-min-role": "owner"
       }
     },
+    "/v1/simple/fit-date": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "List Fit Dates",
+        "description": "Each readable PRD's dated goal milestones with their target and their date on today's\nplan, the latest first.",
+        "operationId": "list_fit_dates",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FitGoalOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Fit Dates"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/prds/{prd}/fit-date": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Fit Date",
+        "description": "Oracle's ranked changes to bring the milestone in to its target.",
+        "operationId": "get_fit_date",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prd"
+            }
+          },
+          {
+            "name": "milestone",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Milestone"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FitAnswerOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/prds/{prd}/fit-date/live": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Fit Date Live",
+        "description": "The milestone's date with these changes picked: the capacity queue, no model call.",
+        "operationId": "fit_date_live",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prd"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FitPicksIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FitLiveOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/prds/{prd}/fit-date/draft": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Fit Date Draft",
+        "description": "The re-plan the picks write into the PRD's next version: nothing changes until it is\napproved.",
+        "operationId": "fit_date_draft",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prd"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FitPicksIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FitDraftOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/prds/{prd}/fit-date/approve": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Fit Date Approve",
+        "description": "Make the re-plan live: the PRD's next version, approved the way any version is (its\nroadmap follows); sliced or split items need a new estimate.",
+        "operationId": "fit_date_approve",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prd"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FitPicksIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FitApprovedOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/simple/sessions": {
       "post": {
         "tags": [
@@ -75417,6 +75699,726 @@
           "same_title"
         ],
         "title": "FirefliesSeriesOut"
+      },
+      "FitAnswerOut": {
+        "properties": {
+          "prd": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "prd_version": {
+            "type": "integer",
+            "title": "Prd Version"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal"
+          },
+          "goal_now": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Now"
+          },
+          "milestone": {
+            "type": "string",
+            "title": "Milestone"
+          },
+          "milestone_name": {
+            "type": "string",
+            "title": "Milestone Name"
+          },
+          "target": {
+            "type": "string",
+            "format": "date",
+            "title": "Target"
+          },
+          "today": {
+            "type": "string",
+            "format": "date",
+            "title": "Today"
+          },
+          "late_days": {
+            "type": "integer",
+            "title": "Late Days"
+          },
+          "team": {
+            "$ref": "#/components/schemas/FitTeam"
+          },
+          "lanes": {
+            "items": {
+              "$ref": "#/components/schemas/FitLane"
+            },
+            "type": "array",
+            "title": "Lanes"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/FitChangeOut"
+            },
+            "type": "array",
+            "title": "Changes"
+          },
+          "pick": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pick"
+          },
+          "pick_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Pick Date"
+          },
+          "best_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Best Date"
+          },
+          "reachable": {
+            "type": "boolean",
+            "title": "Reachable"
+          },
+          "locked": {
+            "items": {
+              "$ref": "#/components/schemas/FitLockedOut"
+            },
+            "type": "array",
+            "title": "Locked"
+          },
+          "run_seconds": {
+            "type": "integer",
+            "title": "Run Seconds"
+          },
+          "run_usd": {
+            "type": "number",
+            "title": "Run Usd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd",
+          "prd_version",
+          "milestone",
+          "milestone_name",
+          "target",
+          "today",
+          "late_days",
+          "team",
+          "lanes",
+          "changes",
+          "pick",
+          "pick_date",
+          "best_date",
+          "reachable",
+          "locked",
+          "run_seconds",
+          "run_usd"
+        ],
+        "title": "FitAnswerOut"
+      },
+      "FitApprovedOut": {
+        "properties": {
+          "prd": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "target": {
+            "type": "string",
+            "format": "date",
+            "title": "Target"
+          },
+          "approved_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Approved At"
+          },
+          "needs_estimate": {
+            "items": {
+              "$ref": "#/components/schemas/FitEstimate"
+            },
+            "type": "array",
+            "title": "Needs Estimate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd",
+          "version",
+          "date",
+          "target",
+          "approved_at",
+          "needs_estimate"
+        ],
+        "title": "FitApprovedOut"
+      },
+      "FitChangeOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "lever": {
+            "type": "string",
+            "enum": [
+              "move",
+              "next_prd",
+              "slice",
+              "ungate",
+              "split",
+              "overlap",
+              "capacity"
+            ],
+            "title": "Lever"
+          },
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "days": {
+            "type": "integer",
+            "title": "Days"
+          },
+          "pw_saved": {
+            "type": "number",
+            "title": "Pw Saved"
+          },
+          "cost_kind": {
+            "type": "string",
+            "enum": [
+              "none",
+              "risk",
+              "gate",
+              "goal",
+              "must"
+            ],
+            "title": "Cost Kind"
+          },
+          "cost": {
+            "type": "string",
+            "title": "Cost"
+          },
+          "pickable": {
+            "type": "boolean",
+            "title": "Pickable"
+          },
+          "moves": {
+            "items": {
+              "$ref": "#/components/schemas/FitMove"
+            },
+            "type": "array",
+            "title": "Moves"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "lever",
+          "item",
+          "title",
+          "days",
+          "pw_saved",
+          "cost_kind",
+          "cost",
+          "pickable",
+          "moves"
+        ],
+        "title": "FitChangeOut"
+      },
+      "FitDateMove": {
+        "properties": {
+          "what": {
+            "type": "string",
+            "title": "What"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "in",
+              "out"
+            ],
+            "title": "Kind"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "what",
+          "kind"
+        ],
+        "title": "FitDateMove"
+      },
+      "FitDraftOut": {
+        "properties": {
+          "prd": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "prd_version": {
+            "type": "integer",
+            "title": "Prd Version"
+          },
+          "next_version": {
+            "type": "integer",
+            "title": "Next Version"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/FitPrdChange"
+            },
+            "type": "array",
+            "title": "Changes"
+          },
+          "dates": {
+            "items": {
+              "$ref": "#/components/schemas/FitDateMove"
+            },
+            "type": "array",
+            "title": "Dates"
+          },
+          "new_target": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Target"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "needs_estimate": {
+            "items": {
+              "$ref": "#/components/schemas/FitEstimate"
+            },
+            "type": "array",
+            "title": "Needs Estimate"
+          },
+          "run_seconds": {
+            "type": "integer",
+            "title": "Run Seconds"
+          },
+          "run_usd": {
+            "type": "number",
+            "title": "Run Usd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd",
+          "prd_version",
+          "next_version",
+          "changes",
+          "dates",
+          "date",
+          "needs_estimate",
+          "run_seconds",
+          "run_usd"
+        ],
+        "title": "FitDraftOut"
+      },
+      "FitEstimate": {
+        "properties": {
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item"
+        ],
+        "title": "FitEstimate"
+      },
+      "FitGoalOut": {
+        "properties": {
+          "prd": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "prd_version": {
+            "type": "integer",
+            "title": "Prd Version"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal"
+          },
+          "goal_now": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Now"
+          },
+          "milestone": {
+            "type": "string",
+            "title": "Milestone"
+          },
+          "milestone_name": {
+            "type": "string",
+            "title": "Milestone Name"
+          },
+          "target": {
+            "type": "string",
+            "format": "date",
+            "title": "Target"
+          },
+          "today": {
+            "type": "string",
+            "format": "date",
+            "title": "Today"
+          },
+          "late_days": {
+            "type": "integer",
+            "title": "Late Days"
+          },
+          "team": {
+            "$ref": "#/components/schemas/FitTeam"
+          },
+          "lanes": {
+            "items": {
+              "$ref": "#/components/schemas/FitLane"
+            },
+            "type": "array",
+            "title": "Lanes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd",
+          "prd_version",
+          "milestone",
+          "milestone_name",
+          "target",
+          "today",
+          "late_days",
+          "team",
+          "lanes"
+        ],
+        "title": "FitGoalOut"
+      },
+      "FitLane": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FitLaneItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "items"
+        ],
+        "title": "FitLane"
+      },
+      "FitLaneItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "locked": {
+            "type": "boolean",
+            "title": "Locked",
+            "default": false
+          },
+          "needs_estimate": {
+            "type": "boolean",
+            "title": "Needs Estimate",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "FitLaneItem"
+      },
+      "FitLiveOut": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "target": {
+            "type": "string",
+            "format": "date",
+            "title": "Target"
+          },
+          "over_days": {
+            "type": "integer",
+            "title": "Over Days"
+          },
+          "pw_saved": {
+            "type": "number",
+            "title": "Pw Saved"
+          },
+          "picks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Picks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "target",
+          "over_days",
+          "pw_saved",
+          "picks"
+        ],
+        "title": "FitLiveOut"
+      },
+      "FitLockedOut": {
+        "properties": {
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "pw": {
+            "type": "number",
+            "title": "Pw"
+          },
+          "why": {
+            "type": "string",
+            "title": "Why"
+          },
+          "would_reach": {
+            "type": "boolean",
+            "title": "Would Reach"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item",
+          "pw",
+          "why",
+          "would_reach"
+        ],
+        "title": "FitLockedOut"
+      },
+      "FitMove": {
+        "properties": {
+          "what": {
+            "type": "string",
+            "title": "What"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          }
+        },
+        "type": "object",
+        "required": [
+          "what"
+        ],
+        "title": "FitMove"
+      },
+      "FitPicksIn": {
+        "properties": {
+          "milestone": {
+            "type": "string",
+            "title": "Milestone"
+          },
+          "picks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Picks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "milestone",
+          "picks"
+        ],
+        "title": "FitPicksIn"
+      },
+      "FitPrdChange": {
+        "properties": {
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "change": {
+            "type": "string",
+            "title": "Change"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item",
+          "change"
+        ],
+        "title": "FitPrdChange"
+      },
+      "FitTeam": {
+        "properties": {
+          "engineers": {
+            "type": "integer",
+            "title": "Engineers"
+          },
+          "focus": {
+            "type": "number",
+            "title": "Focus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "engineers",
+          "focus"
+        ],
+        "title": "FitTeam"
       },
       "FixAction": {
         "properties": {

@@ -12293,6 +12293,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/fit-date": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Fit Dates
+         * @description Each readable PRD's dated goal milestones with their target and their date on today's
+         *     plan, the latest first.
+         */
+        get: operations["list_fit_dates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/prds/{prd}/fit-date": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Fit Date
+         * @description Oracle's ranked changes to bring the milestone in to its target.
+         */
+        get: operations["get_fit_date"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/prds/{prd}/fit-date/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fit Date Live
+         * @description The milestone's date with these changes picked: the capacity queue, no model call.
+         */
+        post: operations["fit_date_live"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/prds/{prd}/fit-date/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fit Date Draft
+         * @description The re-plan the picks write into the PRD's next version: nothing changes until it is
+         *     approved.
+         */
+        post: operations["fit_date_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/prds/{prd}/fit-date/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fit Date Approve
+         * @description Make the re-plan live: the PRD's next version, approved the way any version is (its
+         *     roadmap follows); sliced or split items need a new estimate.
+         */
+        post: operations["fit_date_approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/sessions": {
         parameters: {
             query?: never;
@@ -23681,6 +23784,276 @@ export interface components {
             organizer: string | null;
             /** Same Title */
             same_title: components["schemas"]["FirefliesSameTitleOut"][];
+        };
+        /** FitAnswerOut */
+        FitAnswerOut: {
+            prd: components["schemas"]["SimpleDocRef"];
+            /** Prd Version */
+            prd_version: number;
+            /** Goal */
+            goal?: string | null;
+            /** Goal Now */
+            goal_now?: string | null;
+            /** Milestone */
+            milestone: string;
+            /** Milestone Name */
+            milestone_name: string;
+            /**
+             * Target
+             * Format: date
+             */
+            target: string;
+            /**
+             * Today
+             * Format: date
+             */
+            today: string;
+            /** Late Days */
+            late_days: number;
+            team: components["schemas"]["FitTeam"];
+            /** Lanes */
+            lanes: components["schemas"]["FitLane"][];
+            /** Changes */
+            changes: components["schemas"]["FitChangeOut"][];
+            /** Pick */
+            pick: string[];
+            /**
+             * Pick Date
+             * Format: date
+             */
+            pick_date: string;
+            /**
+             * Best Date
+             * Format: date
+             */
+            best_date: string;
+            /** Reachable */
+            reachable: boolean;
+            /** Locked */
+            locked: components["schemas"]["FitLockedOut"][];
+            /** Run Seconds */
+            run_seconds: number;
+            /** Run Usd */
+            run_usd: number;
+        };
+        /** FitApprovedOut */
+        FitApprovedOut: {
+            prd: components["schemas"]["SimpleDocRef"];
+            /** Version */
+            version: number;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Target
+             * Format: date
+             */
+            target: string;
+            /**
+             * Approved At
+             * Format: date-time
+             */
+            approved_at: string;
+            /** Needs Estimate */
+            needs_estimate: components["schemas"]["FitEstimate"][];
+        };
+        /** FitChangeOut */
+        FitChangeOut: {
+            /** Id */
+            id: string;
+            /**
+             * Lever
+             * @enum {string}
+             */
+            lever: "move" | "next_prd" | "slice" | "ungate" | "split" | "overlap" | "capacity";
+            /** Item */
+            item: string;
+            /** Title */
+            title: string;
+            /** Days */
+            days: number;
+            /** Pw Saved */
+            pw_saved: number;
+            /**
+             * Cost Kind
+             * @enum {string}
+             */
+            cost_kind: "none" | "risk" | "gate" | "goal" | "must";
+            /** Cost */
+            cost: string;
+            /** Pickable */
+            pickable: boolean;
+            /** Moves */
+            moves: components["schemas"]["FitMove"][];
+        };
+        /** FitDateMove */
+        FitDateMove: {
+            /** What */
+            what: string;
+            /** Before */
+            before?: string | null;
+            /** After */
+            after?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "in" | "out";
+            /** Note */
+            note?: string | null;
+        };
+        /** FitDraftOut */
+        FitDraftOut: {
+            prd: components["schemas"]["SimpleDocRef"];
+            /** Prd Version */
+            prd_version: number;
+            /** Next Version */
+            next_version: number;
+            /** Changes */
+            changes: components["schemas"]["FitPrdChange"][];
+            /** Dates */
+            dates: components["schemas"]["FitDateMove"][];
+            /** New Target */
+            new_target?: string | null;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Needs Estimate */
+            needs_estimate: components["schemas"]["FitEstimate"][];
+            /** Run Seconds */
+            run_seconds: number;
+            /** Run Usd */
+            run_usd: number;
+        };
+        /** FitEstimate */
+        FitEstimate: {
+            /** Item */
+            item: string;
+            /** Owner */
+            owner?: string | null;
+        };
+        /** FitGoalOut */
+        FitGoalOut: {
+            prd: components["schemas"]["SimpleDocRef"];
+            /** Prd Version */
+            prd_version: number;
+            /** Goal */
+            goal?: string | null;
+            /** Goal Now */
+            goal_now?: string | null;
+            /** Milestone */
+            milestone: string;
+            /** Milestone Name */
+            milestone_name: string;
+            /**
+             * Target
+             * Format: date
+             */
+            target: string;
+            /**
+             * Today
+             * Format: date
+             */
+            today: string;
+            /** Late Days */
+            late_days: number;
+            team: components["schemas"]["FitTeam"];
+            /** Lanes */
+            lanes: components["schemas"]["FitLane"][];
+        };
+        /** FitLane */
+        FitLane: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Date */
+            date?: string | null;
+            /** Items */
+            items: components["schemas"]["FitLaneItem"][];
+        };
+        /** FitLaneItem */
+        FitLaneItem: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Date */
+            date?: string | null;
+            /**
+             * Locked
+             * @default false
+             */
+            locked: boolean;
+            /**
+             * Needs Estimate
+             * @default false
+             */
+            needs_estimate: boolean;
+        };
+        /** FitLiveOut */
+        FitLiveOut: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Target
+             * Format: date
+             */
+            target: string;
+            /** Over Days */
+            over_days: number;
+            /** Pw Saved */
+            pw_saved: number;
+            /** Picks */
+            picks: string[];
+        };
+        /** FitLockedOut */
+        FitLockedOut: {
+            /** Item */
+            item: string;
+            /** Pw */
+            pw: number;
+            /** Why */
+            why: string;
+            /** Would Reach */
+            would_reach: boolean;
+        };
+        /** FitMove */
+        FitMove: {
+            /** What */
+            what: string;
+            /** Before */
+            before?: string | null;
+            /** After */
+            after?: string | null;
+        };
+        /** FitPicksIn */
+        FitPicksIn: {
+            /** Milestone */
+            milestone: string;
+            /** Picks */
+            picks: string[];
+        };
+        /** FitPrdChange */
+        FitPrdChange: {
+            /** Item */
+            item: string;
+            /** Change */
+            change: string;
+        };
+        /** FitTeam */
+        FitTeam: {
+            /** Engineers */
+            engineers: number;
+            /** Focus */
+            focus: number;
         };
         /**
          * FixAction
@@ -69948,6 +70321,164 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimplePlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_fit_dates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FitGoalOut"][];
+                };
+            };
+        };
+    };
+    get_fit_date: {
+        parameters: {
+            query: {
+                milestone: string;
+            };
+            header?: never;
+            path: {
+                prd: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FitAnswerOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fit_date_live: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                prd: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FitPicksIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FitLiveOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fit_date_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                prd: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FitPicksIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FitDraftOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fit_date_approve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                prd: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FitPicksIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FitApprovedOut"];
                 };
             };
             /** @description Validation Error */

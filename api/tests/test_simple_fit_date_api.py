@@ -90,8 +90,8 @@ async def test_approve_makes_the_next_version_live(client):
     assert r.status_code == 200, r.text
     assert r.json()["version"] == 2
     async with tenant_session(ctx.tenant_id) as s:
-        vs = list(await s.scalars(select(DocumentVersion).where(
-            DocumentVersion.document_id == ids["prd"]).order_by(DocumentVersion.number)))  # fmt: skip
+        q = select(DocumentVersion).where(DocumentVersion.document_id == ids["prd"])
+        vs = list(await s.scalars(q.order_by(DocumentVersion.number)))
     assert [v.approved_at is not None for v in vs] == [True, True]
     assert vs[0].markdown == BODY
     assert "## Re-plan" in vs[1].markdown
