@@ -171,7 +171,7 @@ import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visual
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
-import { appliedVersionOf, approvedPrdToDraft, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { appliedVersionOf, approvedPrdToDraft, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -910,6 +910,18 @@ function seedSimpleDecidersScenario(): Db {
     viewer: join("vic.moss@example.com", "Vic Moss", "viewer", 3),
   });
   db.simple_roadmap.people = Object.fromEntries(db.members.map((m) => [m.id, m.name ?? m.email]));
+  return db;
+}
+
+/**
+ * meeting-changes-only-its-agenda "meeting-agenda" scenario: the default company, with the
+ * Welcome video (on the onboarding roadmap) built from Usage alerts, so a review of Usage
+ * alerts (pinned to the alerts roadmap) sees an item it does not review.
+ */
+function seedMeetingAgendaScenario(): Db {
+  const db = seed();
+  db.simple_roadmap = seedSimpleRoadmap();
+  itemOfOtherPrd(db.simple_roadmap, "setup-video", "alerts-roadmap");
   return db;
 }
 
@@ -3150,6 +3162,8 @@ function load(): Db {
                 ? seedManyPeople
               : scenario === "simple-deciders"
                 ? seedSimpleDecidersScenario
+              : scenario === "meeting-agenda"
+                ? seedMeetingAgendaScenario
               : scenario === "simple-home"
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-move"

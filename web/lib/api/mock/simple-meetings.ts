@@ -414,12 +414,18 @@ function reviewedRoadmap(ctx: MeetingsCtx, p: Prd, named: string | null | undefi
   return home && on.includes(roadmapId(home)) ? roadmapId(home) : null;
 }
 
+/** meeting-changes-only-its-agenda (agenda.Agenda): the roadmaps a meeting reviews: its own, else every one its PRD's items are on. */
+function reviewedRoadmaps(ctx: MeetingsCtx, m: Meeting): string[] | undefined {
+  if (m.roadmap_id) return [m.roadmap_id];
+  const p = prds(ctx).find((x) => x.slug === m.prd);
+  return p ? [...new Set(prdItems(ctx, p).map((i) => i.roadmap.id))] : undefined;
+}
+
 /** meeting-changes-only-its-agenda (agenda.Agenda.covers): whether an item is on what the meeting reviews. */
 function onAgenda(ctx: MeetingsCtx, m: Meeting, itemId: unknown): boolean {
-  const p = prds(ctx).find((x) => x.slug === m.prd);
+  const reviewed = reviewedRoadmaps(ctx, m);
   const item = items(ctx).find((i) => i.id === itemId);
-  if (!p || !item) return true;
-  const reviewed = m.roadmap_id ? [m.roadmap_id] : [...new Set(prdItems(ctx, p).map((i) => i.roadmap.id))];
+  if (!reviewed || !item) return true;
   return reviewed.includes(item.roadmap.id);
 }
 
@@ -877,7 +883,7 @@ export function chatMeetings(open: () => { db: MeetingsDb; ctx: MeetingsCtx }): 
       if (m) endIdle(open().ctx, meetings(), m);
       return m
         ? { title: m.title, presenter_id: m.presenter_id, attendee_ids: m.attendee_ids, change_mode: m.change_mode, change_people: m.change_people, ended: m.status === "ended",
-            prd: m.prd, ended_at: m.ended_at, ended_by: m.ended_by, ended_by_itself: !!m.ended_by_itself }
+            prd: m.prd, ended_at: m.ended_at, ended_by: m.ended_by, ended_by_itself: !!m.ended_by_itself, roadmaps: reviewedRoadmaps(open().ctx, m) }
         : null;
     },
     setMode(id, mode, people) {
