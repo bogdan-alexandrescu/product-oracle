@@ -34,7 +34,7 @@ export function seedGoalBuckets(): GoalBucketsDb {
     features.push({ id: stableUuid(`feature-bucket/${s.feature_code}`), key: s.feature_code, title: s.name.replace(/, part \d+ of \d+$/, ""), goal_ids: goal ? [goal.id] : [] });
   }
   // One feature serves a second goal too, so its row reads "+1 goal".
-  const second = features.find((f) => f.key === "F-05");
+  const second = features.find((f) => f.key === "F-14");
   const growth = goals.find((g) => g.title === "Growth");
   if (second && growth && !second.goal_ids.includes(growth.id)) second.goal_ids.push(growth.id);
   return { goals, features };

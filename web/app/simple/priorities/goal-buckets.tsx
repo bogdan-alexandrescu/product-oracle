@@ -82,6 +82,8 @@ function parseDay(text: string, year: string): string | null {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** "A, B and C". */
+const andList = (xs: string[]) => (xs.length < 2 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 const count = (n: number) => `${n} ${n === 1 ? "feature" : "features"} in the plan`;
 const lower = (s: string) => (/^[A-Z][a-z]/.test(s) ? s[0].toLowerCase() + s.slice(1) : s);
 
@@ -260,10 +262,11 @@ export function FeatureRows({
               {milestones.map((code) => {
                 const c = milestoneColour(plan, code);
                 const name = plan.milestones.find((m) => m.code === code)?.name ?? "";
+                const of = f.slices.filter((x) => x.milestone === code);
+                const weeks = of.every((x) => x.pm_owned || x.effort_weeks == null) ? "PM-owned" : `${wk(of.reduce((n, x) => n + (x.effort_weeks ?? 0), 0))} wk`;
                 return (
-                  <span key={code} data-testid="plan-chip" title={`${code} ${name}`} className="inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-full px-2 text-[12px] font-[650]" style={{ background: c.tag, color: c.ink }}>
-                    <span>{code}</span>
-                    <span>{name}</span>
+                  <span key={code} data-testid="plan-chip" title={`${code} ${name}: ${weeks}`} className="inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-full px-2 text-[12px] font-[650]" style={{ background: c.tag, color: c.ink }}>
+                    <span>{code}</span> <span>{name}</span>
                   </span>
                 );
               })}
@@ -305,7 +308,7 @@ export function ArchiveDialog({ goal, plan, gb, onClose, onArchive }: { goal: Go
       <div ref={ref} role="dialog" aria-modal="true" aria-label={`Archive ${goal.title}`} className="flex max-h-[88vh] w-full max-w-lg flex-col rounded-t-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg sm:rounded-[var(--simple-card-radius)]" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Archive {goal.title}?</h2>
         <p className="mt-1 text-[15px] text-text2">
-          {list.length ? `It holds ${feats} with work in ${ms.map(msLabel).join(" and ")}. The milestones stay as planned; their work moves with the features.` : "It holds no features in the plan. The milestones stay as planned."}
+          {list.length ? `It holds ${feats} with work in ${andList(ms.map(msLabel))}. The milestones stay as planned; their work moves with the features.` : "It holds no features in the plan. The milestones stay as planned."}
         </p>
         {list.length > 0 && (
           <div className="mt-3 grid gap-2 text-[15px]">
