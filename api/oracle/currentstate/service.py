@@ -11,14 +11,19 @@ something or its items' tasks are under way, else *new*.
 merged pull requests, every task done, a measured value), and no Not yet from the owner
 since the proof was last read.
 
-**Re-reading** (:func:`reread`): the tasks proof is read from the feature's roadmap
-items' tasks (done of all, dropped left out); the code map, pull request and measured
-proofs keep what they hold, through one hook per kind (:data:`READERS`) where a live
-source plugs in. A measured value from a past month is not still true ("not read yet").
+**Re-reading** (:func:`reread`, one reader per kind in :data:`READERS`): code map hits
+are the shared code maps' entries that name the feature (its key, title or items' keys);
+pull requests are the synced merged ones that name it; tasks are its roadmap items' tasks
+(done of all, dropped left out); the measured value is the latest week of the metric of
+the goal it supports. A source with nothing for the feature keeps the stored proof,
+unconfirmed: the mark ages on ``checked_at`` (a live read, a move or the owner's "still
+runs"), not on ``read_at`` (any re-read). A measured value from a past month is not
+still true ("not read yet").
 :func:`nightly` re-reads every feature with a state or proofs once a night (the
 scheduled ticker, oracle.ticker.body).
 """
 
+import re
 import uuid
 from collections.abc import Awaitable, Callable, Iterable
 from datetime import datetime, timedelta
@@ -29,8 +34,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle.baseline.models import Edge, Entity
 from oracle.currentstate.models import PROOF_KINDS, FeatureProof, FeatureState
 from oracle.currentstate.schemas import FeatureProofOut, FeatureStateOut, FeatureStatesOut
+from oracle.engineering import codemap, codemaps
+from oracle.metrics.models import Metric, MetricValue
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple.models import RoadmapItemTask
+from oracle.sources.connectors.github import _MERGED
+from oracle.sources.models import SourceItem, SourceItemVersion
 
 OLD_AFTER = timedelta(days=30)
 # A feature re-read within this long is not read again by the nightly job.
@@ -95,7 +104,8 @@ def ready(state: FeatureState | None, proofs: Iterable[FeatureProof]) -> bool:
     ):
         return False
     if state is not None and state.not_yet_at is not None:
-        latest = max((p.checked_at for p in by.values() if p.checked_at), default=None)
+        read = [p.checked_at for p in by.values()] + [state.read_at]
+        latest = max((at for at in read if at), default=None)
         if latest is None or state.not_yet_at >= latest:
             return False
     return True
@@ -169,29 +179,98 @@ async def _tasks(db: AsyncSession, items: list[RoadmapItem]) -> list[RoadmapItem
     ]
 
 
-# Hooks: one per proof kind, reading it again from its live source. Without one here the
-# stored count or value is kept and re-confirmed.
-Reader = Callable[[AsyncSession, Entity, FeatureProof, datetime], Awaitable[None]]
+# One reader per proof kind, reading it again from its live source. Each says whether that
+# source confirmed the proof now; without anything there the stored count or value stays,
+# not confirmed.
+Reader = Callable[[AsyncSession, Entity, FeatureProof, datetime], Awaitable[bool]]
 
 
-async def read_code_map(db: AsyncSession, f: Entity, proof: FeatureProof, now: datetime) -> None:
-    """Code map hits for the feature: kept as stored (no live code map read yet)."""
+async def _names(db: AsyncSession, f: Entity) -> list[str]:
+    """The words that name the feature in code and pull requests: its key, its title (as
+    words and as a slug) and its roadmap items' keys."""
+    title = (f.title or "").strip()
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+    words = [f.key, title, slug, *(i.item_key for i in (await _items(db, [f.id])).get(f.id, []))]
+    return sorted({w.lower() for w in words if w and len(w) > 2})
+
+
+def _names_in(names: list[str], text: str) -> bool:
+    text = text.lower()
+    return any(re.search(rf"(?<![a-z0-9]){re.escape(n)}(?![a-z0-9])", text) for n in names)
+
+
+async def read_code_map(db: AsyncSession, f: Entity, proof: FeatureProof, now: datetime) -> bool:
+    """Code map hits: the entries of each shared code map (its latest per repo) whose id,
+    name, path or summary names the feature."""
+    names = await _names(db, f)
+    hits = 0
+    for m in await codemaps.latest_shared(db):
+        for kind in codemap.KINDS:
+            for entry in (m.content or {}).get(kind) or []:
+                if isinstance(entry, dict):
+                    words = (entry.get(k) for k in ("id", "name", "path", "summary"))
+                    hits += _names_in(names, " ".join(w for w in words if isinstance(w, str)))
+    if hits:
+        proof.count = hits
     proof.still_true = (proof.count or 0) > 0
+    return hits > 0
 
 
 async def read_pull_requests(
     db: AsyncSession, f: Entity, proof: FeatureProof, now: datetime
-) -> None:
-    """Merged pull requests for the feature: kept as stored (no live read yet)."""
+) -> bool:
+    """Merged pull requests that name the feature in their title or text."""
+    names = await _names(db, f)
+    rows = await db.execute(
+        select(SourceItemVersion.title, SourceItemVersion.content)
+        .join(SourceItem, SourceItem.current_version_id == SourceItemVersion.id)
+        .where(SourceItem.kind == "pull_request", SourceItem.deleted_at.is_(None))
+    )
+    merged = sum(
+        bool(m and m.group(1) != "no") and _names_in(names, f"{title or ''}\n{content}")
+        for title, content in rows
+        for m in [_MERGED.search(content)]
+    )
+    if merged:
+        proof.count = merged
     proof.still_true = (proof.count or 0) > 0
+    return merged > 0
 
 
-async def read_measured(db: AsyncSession, f: Entity, proof: FeatureProof, now: datetime) -> None:
-    """The measured value: kept as stored; one from a past month is not still true."""
+async def read_measured(db: AsyncSession, f: Entity, proof: FeatureProof, now: datetime) -> bool:
+    """The latest week of the metric that measures the feature's goal ("3,410 sent", its
+    month); one from a past month is not still true."""
+    goal = (
+        await db.execute(
+            select(Edge.dst_id)
+            .join(Entity, Entity.id == Edge.dst_id)
+            .where(Edge.src_id == f.id, Edge.type == "supports", Edge.status != "rejected",
+                   Entity.type == "goal", Entity.status == "confirmed")
+            .order_by(Entity.key)
+            .limit(1)
+        )
+    ).scalar_one_or_none()  # fmt: skip
+    latest = None
+    if goal is not None:
+        latest = (
+            await db.execute(
+                select(MetricValue.value, MetricValue.week_start, Metric.unit)
+                .join(Metric, Metric.id == MetricValue.metric_id)
+                .where(Metric.goal_id == goal, Metric.status != "archived")
+                .order_by(MetricValue.week_start.desc())
+                .limit(1)
+            )
+        ).first()
+    if latest is not None:
+        value, week, unit = latest
+        number = f"{value:,.0f}" if value == value.to_integral_value() else f"{value:,}"
+        proof.value = f"{number} {unit}".strip()
+        proof.period = week.strftime("%b")
     proof.still_true = bool(proof.value) and not _past_period(proof.period, now)
+    return latest is not None and bool(proof.still_true)
 
 
-async def read_tasks(db: AsyncSession, f: Entity, proof: FeatureProof, now: datetime) -> None:
+async def read_tasks(db: AsyncSession, f: Entity, proof: FeatureProof, now: datetime) -> bool:
     """Tracker tasks under the feature's roadmap items: done of all, dropped left out. With
     no tasks there the stored numbers stay."""
     tasks = [t for t in await _tasks(db, (await _items(db, [f.id])).get(f.id, [])) if
@@ -200,6 +279,7 @@ async def read_tasks(db: AsyncSession, f: Entity, proof: FeatureProof, now: date
         proof.total = len(tasks)
         proof.count = sum(t.status == "done" for t in tasks)
     proof.still_true = (proof.total or 0) > 0 and proof.count == proof.total
+    return bool(tasks)
 
 
 READERS: dict[str, Reader] = {
@@ -223,18 +303,27 @@ def _ok(proof: FeatureProof) -> bool:
 
 
 async def reread(db: AsyncSession, f: Entity, now: datetime) -> FeatureState:
-    """Read each of the feature's proofs again now (a tasks proof is made when its items
-    have tasks); stamps the state's checked_at."""
-    proofs = {p.kind: p for p in await proofs_of(db, f.id)}
-    if "tasks" not in proofs and await _tasks(db, (await _items(db, [f.id])).get(f.id, [])):
-        proofs["tasks"] = FeatureProof(feature_id=f.id, kind="tasks")
-        db.add(proofs["tasks"])
-    for kind, proof in proofs.items():
-        await READERS[kind](db, f, proof, now)
+    """Read each of the feature's proofs again now (a kind with nothing stored is made
+    when its source has something); stamps the state's read_at. Only a proof a live source
+    read again (it had rows for the feature) is stamped checked now, and the state's
+    checked_at with it: a re-read that finds nothing leaves old proof old."""
+    stored = {p.kind: p for p in await proofs_of(db, f.id)}
+    confirmed = False
+    for kind in PROOF_KINDS:
+        proof = stored.get(kind) or FeatureProof(feature_id=f.id, kind=kind)
+        live = await READERS[kind](db, f, proof, now)
+        if kind not in stored and not live:
+            continue
+        if kind not in stored:
+            db.add(proof)
         proof.ok = _ok(proof)
-        proof.checked_at = now
+        if live:
+            proof.checked_at = now
+            confirmed = True
     st = await _state(db, f.id)
-    st.checked_at, st.checking = now, False
+    st.read_at, st.checking = now, False
+    if confirmed:
+        st.checked_at = now
     await db.flush()
     return st
 
@@ -260,7 +349,7 @@ async def reread_all(db: AsyncSession, now: datetime, *, since: datetime | None 
     n = 0
     for f in (await db.execute(select(Entity).where(Entity.id.in_(ids)))).scalars():
         st = states.get(f.id)
-        if since is not None and st is not None and st.checked_at and st.checked_at >= since:
+        if since is not None and st is not None and st.read_at and st.read_at >= since:
             continue
         await reread(db, f, now)
         n += 1

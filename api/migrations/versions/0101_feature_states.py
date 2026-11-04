@@ -54,6 +54,7 @@ def upgrade() -> None:
         sa.Column("answered_at", ts, nullable=True),
         sa.Column("answered_by", sa.Uuid(), nullable=True),
         sa.Column("checked_at", ts, nullable=True),
+        sa.Column("read_at", ts, nullable=True),
         sa.Column("checking", sa.Boolean(), server_default=sa.false(), nullable=False),
         sa.CheckConstraint("status IN ('desired', 'shipped', 'current')",
                            name=op.f(f"ck_{S}_status")),

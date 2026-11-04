@@ -58,8 +58,11 @@ class FeatureState(TenantScoped, Base):
     answer: Mapped[str | None] = mapped_column(Text)
     answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     answered_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
-    # When the proof was last read again.
+    # When the proof was last confirmed: a live source read it again, the owner moved the
+    # feature or answered "still runs". The mark ages on this.
     checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # When Oracle last re-read it (Check again or the nightly job), found something or not.
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     checking: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=false()
     )
