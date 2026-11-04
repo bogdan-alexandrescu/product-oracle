@@ -101,3 +101,30 @@ test("an item marked done leaves every view, its broken links and every count, a
 
   expect(await homeLinks(page)).toBe(before - onIt);
 });
+
+/**
+ * roadmap-decide (owner, Nov 4: draft, shown live): the decider's change stays in the working
+ * draft, every count reads it at once, and the banner gives the decider Approve and publish in
+ * place of Send for review. fails_when: a count still reads the approved version, or the
+ * decider must send the draft for review first; no_claim: who else may approve
+ * (api/tests/test_simple_roadmap_done.py).
+ */
+test("the decider's working draft is read at once everywhere, with Approve and publish in place", async ({ page }) => {
+  await login(page);
+  await openRoadmap(page);
+  const before = await stripCount(page);
+  await strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Move the dependents" }).click();
+  const banner = page.getByTestId("draft-banner");
+  await expect(banner).toBeVisible();
+  await expect.poll(() => stripCount(page)).toBe(before - 1);
+  expect(await trayLinks(page)).toBe(before - 1);
+  await expect.poll(() => badgeLinks(page)).toBe(before - 1);
+  await expect(banner.getByTestId("draft-next")).toContainText("Next: you approve it");
+  await expect(banner.getByRole("button", { name: "Send for review" })).toHaveCount(0);
+  await expect(banner.getByTestId("draft-publish")).toHaveText("Approve and publish");
+  await banner.getByTestId("draft-publish").click();
+  await expect(page.getByText(/Approved: .* is published/)).toBeVisible();
+  await expect(banner).toHaveCount(0);
+  await expect.poll(() => stripCount(page)).toBe(before - 1);
+  expect(await homeLinks(page)).toBe(before - 1);
+});

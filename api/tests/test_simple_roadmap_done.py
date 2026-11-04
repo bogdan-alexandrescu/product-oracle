@@ -112,3 +112,40 @@ async def test_shipped_dependent_clears_the_cut_flag(client):
     assert items["b"]["status"] == "done"
     assert items["a"]["flags"] == []
     assert await _walk_links(client, ctx) == []
+
+
+async def test_decider_approves_and_publishes_a_working_draft(client):
+    """roadmap-decide (owner, Nov 4: draft, shown live): the decider's working draft offers
+    Approve and publish (can_publish) in place of Send for review, and approving it publishes
+    the version at once; the owner, not its decider, keeps Send for review."""
+    from tests.test_simple_drafts_api import DRAFTS, edit_title, the_draft, title_in, world
+    from tests.test_simple_drafts_api import roadmap as read
+
+    w = await world()
+    await edit_title(client, w, "decider")
+    d = await the_draft(client, w)
+    assert d["status"] == "working" and d["can_publish"] is True
+    owner = await the_draft(client, w, "owner")
+    assert owner["can_publish"] is False and owner["can_submit"] is True
+    # The owner, not the decider, may not approve a working draft.
+    r = await client.post(f"{DRAFTS}/{d['id']}/approve", headers=w.ctx.as_("owner"))
+    assert r.status_code in (403, 409), r.text
+    r = await client.post(f"{DRAFTS}/{d['id']}/approve", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "approved" and r.json()["version"] == 2
+    assert title_in(await read(client, w, "viewer"), "edit_title-a") == "Ledger v2"
+
+
+async def test_publish_waits_for_required_reviewers(client):
+    """With a required reviewer, the decider's Approve and publish sends the draft and
+    records the decider's approval; it is published once the reviewer approves."""
+    from tests.test_simple_drafts_api import DRAFTS, edit_title, the_draft, world
+
+    w = await world(reviewers=("approver",))
+    await edit_title(client, w, "decider")
+    d = await the_draft(client, w)
+    assert d["can_publish"] is True
+    r = await client.post(f"{DRAFTS}/{d['id']}/approve", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "submitted" and r.json()["decider_approved"]
+    assert r.json()["waiting_on"] == [str(w.ctx.users["approver"].id)]

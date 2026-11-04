@@ -90,15 +90,15 @@ test("the draft's change list names the item on every line, and the banner says 
   await open(page);
   await strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Move the dependents" }).click();
   const banner = page.getByTestId("draft-banner");
-  await expect(banner.getByTestId("draft-next")).toContainText("Next: you send it for review");
+  // roadmap-decide (owner, Nov 4: draft, shown live): the decider approves and publishes in place.
+  await expect(banner.getByTestId("draft-next")).toContainText("Next: you approve it");
   await expect(banner).not.toContainText("no approved version yet");
   await banner.getByRole("button", { name: "See changes" }).click();
   const rows = banner.getByTestId("draft-changes").locator("li");
   await expect(rows.first()).toContainText("Move the dependents: Weekly alert digest");
   for (const row of await rows.all()) await expect(row).toContainText(/: \S/);
-  await banner.getByRole("button", { name: "Send for review" }).click();
-  await expect(banner.getByTestId("draft-next")).toContainText("Sent for review: it waits for your approval");
-  await banner.getByTestId("draft-approve").click();
+  await expect(banner.getByRole("button", { name: "Send for review" })).toHaveCount(0);
+  await banner.getByTestId("draft-publish").click();
   await expect(page.getByText(/Approved: .* is published/)).toBeVisible();
 });
 
