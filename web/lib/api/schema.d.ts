@@ -41299,6 +41299,8 @@ export interface components {
             reviews_in_trash?: "roadmap" | null;
             /** Reviews Deleted */
             reviews_deleted?: "roadmap" | null;
+            /** Reviews Deleted At */
+            reviews_deleted_at?: string | null;
         };
         /** SimpleVisualCommentIn */
         SimpleVisualCommentIn: {
