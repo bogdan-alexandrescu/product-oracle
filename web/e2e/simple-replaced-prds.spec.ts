@@ -40,12 +40,12 @@ for (const [name, viewport] of [["desktop", { width: 1440, height: 900 }], ["pho
 
       await page.goto("/simple");
       const card = page.getByTestId("home-read");
-      await expect(card.getByRole("link").first()).toBeVisible();
+      await expect(card.locator("li").first()).toBeVisible();
       await expect(card.getByRole("link", { name: OLD, exact: true })).toHaveCount(0);
-      const shown = await card.locator("li").count();
+      // The card shows the first few and counts the rest: together, the list's rows.
       const more = card.getByTestId("home-more");
-      const left = (await more.count()) ? Number((await more.innerText()).match(/\d+/)![0]) : 0;
-      expect(shown + left).toBe(total);
+      const counted = async () => (await card.locator("li").count()) + ((await more.count()) ? Number((await more.innerText()).match(/\d+/)![0]) : 0);
+      await expect.poll(counted).toBe(total);
     });
 
     /**
