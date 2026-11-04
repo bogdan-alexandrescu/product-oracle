@@ -17,7 +17,8 @@ from sqlalchemy import select
 import oracle.main  # noqa: F401 - registers the lanes' checks
 from oracle import company_time
 from oracle.docs.models import Document, DocumentVersion
-from oracle.roadmap.models import ProductTrack, RoadmapItem, ScheduleBasis
+from oracle.launches.models import Launch
+from oracle.roadmap.models import ProductTrack, RoadmapItem, ScheduleBasis, TrackMilestone
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
 
@@ -293,3 +294,77 @@ async def test_a_version_with_no_plan_table_changes_nothing(client):
     assert by_key(out)["route-search"]["end"]["date"] == "2027-01-20"
     assert "offline-sync" in by_key(out)
     assert out["applied_versions"] == []
+
+
+async def test_launches_are_planned_from_the_applied_plan(client):
+    """protects=(2) approving plans launches after the version's plan is applied: the item it
+    adds gets one, the items it marks shipped or moves to the next PRD get none;
+    fails_when=launches are planned from the carried-forward items before the plan."""
+    ctx, ids = await world()
+    await approve(client, ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        keys = {k for launch in await s.scalars(select(Launch)) for k in launch.item_keys}
+    assert "keep-improving" in keys
+    assert "offline-sync" not in keys and "trail-chat" not in keys
+    assert {"route-search", "trip-reports", "photo-pins"} <= keys
+
+
+async def test_a_later_version_with_no_plan_does_not_claim_the_earlier_one(client):
+    """protects=(5) once version 4 is approved without plan tables, Simple no longer says it
+    matches version 3; fails_when=its carried-forward rows keep version 3's applied mark and
+    the line still reads "Matches roadmap version 3"."""
+    ctx, ids = await world(person_dates=False)
+    await approve(client, ctx)
+    assert (await read(client, ctx))["applied_versions"][0]["version"] == 3
+    async with tenant_session(ctx.tenant_id) as s:
+        v3 = await s.get(DocumentVersion, ids["v3"])
+        body = "# Outdoors v4\n\nThe same plan, a new intro.\n"
+        v4 = await _add(s, DocumentVersion(document_id=ids["roadmap"], number=4, markdown=body,
+                                           content_hash=_hash(body),
+                                           source_version_id=v3.source_version_id))  # fmt: skip
+        for r in await s.scalars(
+            select(RoadmapItem).where(RoadmapItem.roadmap_version_id == ids["v3"])
+        ):
+            s.add(RoadmapItem(roadmap_document_id=r.roadmap_document_id,
+                              roadmap_version_id=v4.id, track_id=r.track_id,
+                              item_key=r.item_key, title=r.title, horizon=r.horizon,
+                              position=r.position, start_date=r.start_date,
+                              end_date=r.end_date, date_source=r.date_source,
+                              date_basis=r.date_basis, plan_state=r.plan_state,
+                              applied=r.applied, prd_document_id=r.prd_document_id,
+                              prd_version_id=r.prd_version_id))  # fmt: skip
+        await s.commit()
+    r = await client.post("/v1/documents/outdoors/versions/4/approve", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    out = await read(client, ctx)
+    assert out["applied_versions"] == []
+    assert by_key(out)["route-search"]["end"]["date"] == "2027-01-08"
+
+
+async def test_a_persons_milestone_of_the_same_name_is_left_alone(client):
+    """protects=(3) a milestone a person made is never taken over by the version's one of the
+    same name, nor deleted by a later apply; fails_when=its gates, basis and version are
+    replaced, or it is deleted."""
+    ctx, ids = await world()
+    async with tenant_session(ctx.tenant_id) as s:
+        own = await _add(s, TrackMilestone(track_id=ids["track"], name="Beta", horizon="now",
+                                           status="planned",
+                                           item_keys=["photo-pins"]))  # fmt: skip
+        own_id = own.id
+        await s.commit()
+    await approve(client, ctx)
+    r = await client.post(APPLY, headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        m = await s.get(TrackMilestone, own_id)
+        assert m is not None
+        assert (m.target_date, m.item_keys, m.roadmap_version_id, m.basis_ids) == (
+            None,
+            ["photo-pins"],
+            None,
+            [],
+        )
+        names = [x.name for x in await s.scalars(
+            select(TrackMilestone).where(TrackMilestone.track_id == ids["track"])
+        )]  # fmt: skip
+    assert sorted(names) == ["Beta", "Launch"]
