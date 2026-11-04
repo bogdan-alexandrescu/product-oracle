@@ -1230,6 +1230,11 @@ async def approve_version(
             from oracle.quality import capture
 
             await capture.predictions_for_roadmap(session, principal, version, owner_id=who)
+        # approved-roadmap-to-simple: the version's plan (dates, shipped and new items,
+        # milestones) goes on its items, so Simple reads the approved version.
+        from oracle.simple import approved_roadmap
+
+        await approved_roadmap.apply(session, principal, document, version)
     if document.kind in ("roadmap", "prd"):
         # #730 review: approving it here settles the Simple draft it came from (a PRD's
         # from its one-pager too, #723 review).

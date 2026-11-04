@@ -286,6 +286,10 @@ class SimpleRoadmapItem(BaseModel):
     # The bar's source (its end's, else its start's) and whether it is an estimate.
     source: DateSource
     estimated: bool
+    # approved-roadmap-to-simple: the applied roadmap version's words for the dates
+    # ("engineering estimate", "founder commitment", "set by <person>"); null when the
+    # dates are not the version's (none applied, or a person changed them since).
+    date_basis: str | None = None
     suggestion: DateSuggestionOut | None = None
     milestone: SimpleItemMilestone | None = None
     phases: list[SimplePhase]
@@ -365,6 +369,23 @@ class SimpleMilestone(BaseModel):
     targets: list["SimpleMilestoneTarget"] = []
 
 
+class SimpleAppliedVersion(BaseModel):
+    """approved-roadmap-to-simple: the approved roadmap version a roadmap's shown items were
+    applied from (oracle.simple.approved_roadmap): ``matches`` when nothing changed since,
+    else ``differences`` in words; the items it took off the plan; ``can_apply``: the
+    reader may apply it again (an approver and up)."""
+
+    roadmap: "SimpleDocRef"
+    version: int
+    approved_at: dt.datetime
+    href: str
+    matches: bool
+    differences: list[str] = []
+    shipped: list[str] = []
+    moved_out: list[str] = []
+    can_apply: bool = False
+
+
 class SimpleKeyDate(BaseModel):
     """Roadmap-plus: one of a roadmap's key dates (a conference, a product launch, a board
     meeting), as the reader reads it (the working draft's when they see it)."""
@@ -413,6 +434,8 @@ class SimpleRoadmapOut(BaseModel):
     roadmap: "SimpleDocRef | None" = None
     # plan-model: the shown PRDs' plan span ("this quarter"); null with no plan.
     span: "SimplePlanSpan | None" = None
+    # approved-roadmap-to-simple: one line per shown roadmap applied from an approved version.
+    applied_versions: list[SimpleAppliedVersion] = []
 
 
 class DateSuggestionEdit(BaseModel):
