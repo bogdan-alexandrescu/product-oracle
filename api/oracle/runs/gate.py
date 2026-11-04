@@ -12,6 +12,7 @@ Each checkpoint kind's blocking reasons come from the spec that owns the kind, r
 one gate every path reads.
 """
 
+import hashlib
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -35,6 +36,28 @@ UNKNOWN_CODES = frozenset(
 UNKNOWN_NOT_WAIVED = "This cannot be waived; leave it out or send it back"
 # C8 Priority order snapshot: every problem is fixed by C9 moves or Request changes.
 ORDER_NOT_WAIVED = "a priority order problem is never waived: send it back to the agents"
+
+
+# A waiver names a problem by its code (every problem of the code on the item) or, for a C6
+# or C8 problem, by its own ref: the code, REF_MARK and a short hash of what it is about.
+REF_MARK = "~"
+
+
+def problem_ref(p: dict[str, Any]) -> str:
+    """One stored problem's own name among its feature's: two problems of the same code
+    (a missing field on two requirements) are waived each on its own."""
+    about = f"{p.get('requirement') or ''}\n{p.get('message') or ''}"
+    return f"{p.get('code')}{REF_MARK}{hashlib.sha1(about.encode()).hexdigest()[:8]}"
+
+
+def answer_code(answer: str) -> str:
+    """The code a waiver's answer names (a ref's code)."""
+    return answer.split(REF_MARK, 1)[0]
+
+
+def names(answers: Iterable[str], code: str, ref: str | None) -> bool:
+    """A reason is named by its code (all of the code) or by its own ref."""
+    return any(a == code or (ref is not None and a == ref) for a in answers)
 
 
 class Action(Protocol):
@@ -83,6 +106,7 @@ def _problems(check: Any, file_codes: Iterable[str] = ()) -> tuple[list[dict[str
                 "item": p["feature"],
                 "item_title": None,
                 "code": p.get("code"),
+                "ref": problem_ref(p),
                 "severity": BLOCKING if blocking else "advisory",
                 "label": p.get("message"),
             }
@@ -141,18 +165,21 @@ OWNER_WAIVE_FIELD = "owner"
 
 def waivable(kind: str, code: str) -> bool:
     source = BLOCKING_SOURCES.get(kind)
+    code = answer_code(code)
     return (
         source is not None and source.not_waivable is not None and code not in source.not_waivable
     )
 
 
 def _waives(action: Action, kind: str, reason: dict[str, Any]) -> bool:
-    """A staged waiver of the reason's item answers the codes it names (every waivable
-    reason of the item when it names none); a non-waivable code is never answered."""
+    """A staged waiver of the reason's item answers the codes and refs it names (every
+    waivable reason of the item when it names none); a non-waivable code is never answered."""
     if action.state != "staged" or action.kind != "waive" or action.item_key != reason["item"]:
         return False
     code = reason["code"]
-    return waivable(kind, code) and (not action.answers or code in action.answers)
+    return waivable(kind, code) and (
+        not action.answers or names(action.answers, code, reason.get("ref"))
+    )
 
 
 def approve_gate(
@@ -172,6 +199,7 @@ def approve_gate(
             item=r["item"],
             item_title=r.get("item_title"),
             code=r["code"],
+            ref=r.get("ref") or r["code"],
             label=r.get("label") or r["code"],
             waivable=waivable(cp.kind, r["code"]),
             question_id=r.get("question_id"),

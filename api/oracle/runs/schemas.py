@@ -849,6 +849,9 @@ class GateLeft(BaseModel):
     item: str
     item_title: str | None = None
     code: str
+    # This reason's own name among its item's (a C6 or C8 problem's gate.problem_ref, else
+    # its code): Waive… on it names it, so it is waived alone, with its own reason.
+    ref: str = ""
     label: str
     waivable: bool
     # F4's blocking_question: the question left unanswered.
