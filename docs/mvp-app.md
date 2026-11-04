@@ -77,6 +77,10 @@ resolutions:                         # optional: how this version handled earlie
   - feedback_id: 0b8c...             # id from the feedback package
     status: addressed                # addressed | declined
     note: "Ranked by installs, see §5.2"
+  - id: note-1                       # a point of a send-back's note: no feedback_id
+    kind: note
+    status: addressed                # addressed | declined
+    note: "Shortened the summary"
 ---
 
 # Checkout redesign PRD {#title}
@@ -101,7 +105,10 @@ Rules:
   "citation #1 (c1) is invalid: confidence must be a number from 0 to 1".
 - Same content hash as an existing version: return that version (200), no duplicate.
 - `resolutions` are applied on import: each referenced feedback item gets its status,
-  note and `addressed_in_version`.
+  note and `addressed_in_version`. An entry with no `feedback_id` (`kind: note`, or an
+  `id` such as `note-1`) answers a point of a send-back's note: it is kept with the
+  version and noted in a `note_answered` warning, and closes no feedback item. A malformed
+  entry never refuses the draft: it is dropped with a `resolution_dropped` warning.
 - If a section that was **approved** in the previous version changes, the import
   succeeds but the version carries a `locked_section_changed` warning listing ids.
 - Brief layer (O1f, see `docs/brief-and-full.md`): the sections named in `brief`, else
