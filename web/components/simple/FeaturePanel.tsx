@@ -715,7 +715,7 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
     <div>
       <div className="flex items-start gap-2">
         {/* review 7: the name is changed in place, as every other field. */}
-        <h2 className="min-w-0 flex-1 text-lg leading-6 font-semibold break-words" title={item.title}>
+        <h2 className="min-w-0 flex-1 text-lg leading-6 font-semibold break-words" title={item.title} aria-label={item.title}>
           <Title c={c} />
         </h2>
         <button type="button" aria-label="Close" onClick={onClose} className="h-8 w-8 flex-none rounded text-text2 hover:bg-surface2">
