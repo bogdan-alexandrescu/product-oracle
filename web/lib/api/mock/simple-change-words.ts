@@ -78,6 +78,12 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
     case "add_feature_ask": return title ? `filed the feature ask ${title}` : "filed a feature ask";
     case "set_owner": return `changed the owner of ${x}`;
     case "set_decider": return `changed the decider of ${x}`;
+    // ask-oracle-actions: a dependency added or removed in the feature talk (change_words.py).
+    case "set_depends_on": {
+      const dep = target.dependency ? String(target.dependency) : null;
+      const gone = ((after.depends_on as unknown[] | undefined) ?? []).length < ((before.depends_on as unknown[] | undefined) ?? []).length;
+      return !dep ? `changed what ${x} depends on` : gone ? `${x} no longer depends on ${dep}` : `${x} now depends on ${dep}`;
+    }
     // prd-questions: a PRD question (a decision) answered, or its decider named.
     case "decide_question": return `decided ${x}`;
     case "name_decider": return `named who decides ${x}`;

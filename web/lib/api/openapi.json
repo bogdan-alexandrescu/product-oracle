@@ -60407,7 +60407,8 @@
                   "decide_question",
                   "name_decider",
                   "cut_with_dependents",
-                  "edit_goal_milestone"
+                  "edit_goal_milestone",
+                  "set_depends_on"
                 ]
               },
               {
@@ -60419,7 +60420,8 @@
                   "agenda_next",
                   "agenda_skip",
                   "suggest_feature",
-                  "mark_shipped"
+                  "mark_shipped",
+                  "api_action"
                 ]
               }
             ],
@@ -60799,7 +60801,8 @@
               "decide_question",
               "name_decider",
               "cut_with_dependents",
-              "edit_goal_milestone"
+              "edit_goal_milestone",
+              "set_depends_on"
             ],
             "title": "Op"
           },
@@ -82248,7 +82251,8 @@
               "decide_question",
               "name_decider",
               "cut_with_dependents",
-              "edit_goal_milestone"
+              "edit_goal_milestone",
+              "set_depends_on"
             ],
             "title": "Op"
           },
@@ -115942,7 +115946,8 @@
               "decide_question",
               "name_decider",
               "cut_with_dependents",
-              "edit_goal_milestone"
+              "edit_goal_milestone",
+              "set_depends_on"
             ],
             "title": "Op"
           },
@@ -116081,7 +116086,8 @@
               "decide_question",
               "name_decider",
               "cut_with_dependents",
-              "edit_goal_milestone"
+              "edit_goal_milestone",
+              "set_depends_on"
             ],
             "title": "Op"
           },

@@ -773,6 +773,35 @@ function rebaseShift(c: StoredCard, current: Record<string, unknown>) {
   if (c.correct) c.correct = { ...c.correct, values: { start_date: a, end_date: b } };
 }
 
+/** ask-oracle-actions: "it should not depend on X (. remove that dependency relationship)", "X depends on Y" (chat_actions' remove_dependency / add_dependency). */
+const DEP_REMOVE = /^(.+?)\s+(?:should\s*n[o']t|must\s*n[o']t|does\s*n[o']t\s+need\s+to|no\s+longer(?:\s+needs\s+to)?)\s+depends?\s+on\s+(.+?)(?:[.,;]?\s+(?:so\s+|please\s+)?remove\s+(?:that|the|this)\s+dependency(?:\s+relationship)?)?$/i;
+const DEP_REMOVE_OF = /^remove\s+(?:the\s+)?dependency\s+(?:of|from)\s+(.+?)\s+on\s+(.+)$/i;
+const DEP_ADD = /^(?:make\s+)?(.+?)\s+(?:should\s+|must\s+)?depends?\s+on\s+(.+)$/i;
+const label = (i: Item) => (i.code ? `${i.code} ${i.title}` : i.title);
+
+/** The dependency in words: which of the patterns the line is, its two items' words. Null: none. */
+function dependencyWords(t: string): { remove: boolean; x: string; on: string } | null {
+  const m = DEP_REMOVE.exec(t) ?? DEP_REMOVE_OF.exec(t);
+  if (m) return { remove: true, x: m[1], on: m[2] };
+  const a = DEP_ADD.exec(t);
+  return a ? { remove: false, x: a[1], on: a[2] } : null;
+}
+
+/** set_depends_on's card (chat_actions._depends_build): the item's depends_on keys without, or with, the other item's. */
+function dependencyDraft(db: SimpleDb, i: Item, dep: Item, remove: boolean): ReaderOut {
+  const own = db.items.find((x) => db.ids[x.key] === i.id);
+  const other = db.items.find((x) => db.ids[x.key] === dep.id);
+  if (!own || !other) return { refusal: "Which item?" };
+  if (own.key === other.key) return { refusal: `${i.title} cannot depend on itself.` };
+  const now_ = [...(own.depends ?? [])];
+  if (remove && !now_.includes(other.key)) return { refusal: `${i.title} does not depend on ${label(dep)}.` };
+  if (!remove && now_.includes(other.key)) return { refusal: `${i.title} depends on ${label(dep)} already.` };
+  if (!remove && own.roadmap !== other.roadmap) return { refusal: `${label(dep)} is on another roadmap: a dependency joins items of one roadmap.` };
+  const after = remove ? now_.filter((k) => k !== other.key) : [...now_, other.key];
+  const summary = remove ? `Remove dependency: ${i.title} no longer depends on ${label(dep)}` : `Add dependency: ${i.title} depends on ${label(dep)}`;
+  return { card: actionDraft(summary, "set_depends_on", i, { item_id: i.id, dependency_id: dep.id, dependency: label(dep) }, { depends_on: now_ }, { depends_on: after }, null) };
+}
+
 /** A builder's args: `item` is null for an op about no item (a decision, a minutes note). */
 export type ReaderArgs = { db: SimpleDb; ctx: ChatCtx; item: Item | null; months?: number; period?: [string, string]; rest?: string; meeting: Meeting | null; documentId: string | null };
 export type ReaderOut = { card: Draft } | { refusal: string };
@@ -809,6 +838,8 @@ export const mockReaderOps: Record<string, (a: ReaderArgs) => ReaderOut> = {
   // chat-join: chat-actions' ops, built by the same drafts as its phrases.
   set_owner: (a) => who(a, "owner"),
   set_decider: (a) => who(a, "decider"),
+  remove_dependency: (a) => dependsOn(a, true),
+  add_dependency: (a) => dependsOn(a, false),
   record_decision: ({ ctx, meeting, documentId, rest }) => {
     if (!rest) return { refusal: "What was decided?" };
     return { card: decisionDraft(meeting, documentId, { id: ctx.id, name: ctx.names[ctx.id] ?? "someone" }, rest, askProposal(ctx, meeting, documentId)) };
@@ -818,6 +849,13 @@ export const mockReaderOps: Record<string, (a: ReaderArgs) => ReaderOut> = {
   agenda_next: ({ meeting, item }) => (!meeting ? { refusal: MEETING_ONLY } : !item ? { refusal: "Which item?" } : { card: agendaDraft(meeting, item, "next") }),
   agenda_skip: ({ meeting, item }) => (!meeting ? { refusal: MEETING_ONLY } : !item ? { refusal: "Which item?" } : { card: agendaDraft(meeting, item, "skip") }),
 };
+
+/** remove_dependency / add_dependency: the item `rest` names, on the same roadmap's items. */
+function dependsOn({ db, ctx, item, rest }: ReaderArgs, remove: boolean): ReaderOut {
+  if (!item) return { refusal: "Which item?" };
+  const [dep] = named(itemsFor(db, ctx), rest ?? "");
+  return dep ? dependencyDraft(db, item, dep, remove) : { refusal: `I could not find “${unquote(rest ?? "")}” on the roadmap.` };
+}
 
 /** set_owner / set_decider: the person `rest` names (a person the company does not have: a refusal). */
 function who({ db, ctx, item, rest }: ReaderArgs, word: "owner" | "decider"): ReaderOut {
@@ -848,6 +886,12 @@ function clauses(text: string, skipped: string[] = []): Clause[] {
     }
     if ((m = /^add\s+(?:an?\s+)?(.+?)\s+item\s+to\s+(M\d)\b(?:\s+under\s+(.+))?$/i.exec(part))) {
       out.push({ op: "add_item", x: "", rest: [m[1], m[2], m[3] ?? ""].join("|") });
+      continue;
+    }
+    // ask-oracle-actions: a dependency removed or added ("X should not depend on Y").
+    const dw = dependencyWords(part);
+    if (dw) {
+      out.push({ op: dw.remove ? "remove_dependency" : "add_dependency", x: dw.x, rest: dw.on });
       continue;
     }
     // chat-join: chat-actions' ops in free words.
@@ -1255,6 +1299,13 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
       cards.push(buildAdd(`${i.title}: slice ${k + 1}`, goal, i.milestone?.name ?? null, a, b));
     }
     return { kind: "cards", body: `I understood: split ${about(i)} into ${n} slices.`, cards };
+  }
+  const dw = dependencyWords(t);
+  if (dw && new RegExp(`^${it}$`, "i").test(dw.x.trim())) {
+    const [dep] = named(items, dw.on);
+    if (!dep) return { kind: "note", body: `I could not find “${unquote(dw.on)}” on the roadmap. Say it another way.`, cards: [] };
+    const o = dependencyDraft(db, i, dep, dw.remove);
+    return "card" in o ? { kind: "cards", body: ONE_CHANGE, cards: [o.card] } : { kind: "note", body: o.refusal, cards: [] };
   }
   const add = /^add (?:an? )?(.+?) item(?: to (M\d))?(?: under (.+))?$/i.exec(t);
   if (add) {
