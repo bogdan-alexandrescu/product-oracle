@@ -15,6 +15,9 @@ Test cards (protects / fails_when / no_claim):
   wording for a one-pager line is in the PRD decider's ``simple_proposals`` with the
   one-pager's ``document_id``, the line's id and the line as it reads as ``subject``;
   Decline removes it; fails_when=no row, no subject or line id, or it stays once declined.
+- test_deciding_the_question_on_decisions_removes_its_proposal: protects=the decider
+  deciding Q3 on Decisions while a proposal on it waits removes that proposal from their
+  Inbox; fails_when=it still waits (Accept would only say it is outdated).
 """
 
 import pytest
@@ -98,3 +101,21 @@ async def test_a_proposed_one_pager_wording_waits_named_by_its_line(client):
     inbox = await _inbox(client, ctx, "decider")
     assert _row(inbox, change["id"]) is None
     assert inbox["total"] == before
+
+
+async def test_deciding_the_question_on_decisions_removes_its_proposal(client):
+    ctx = await make_ctx()
+    await q_tests.seed(ctx)
+    qs = (await q_tests.page(client, ctx, "owner"))["questions"]
+    q3 = next(q for q in qs if q["code"] == "Q3")
+    body = {"op": "decide_question", "target": {"decision_id": q3["id"]},
+            "before": {"status": "proposed"}, "after": {"option": "recommended"}}  # fmt: skip
+    r = await client.post(CHANGES, headers=ctx.as_("commenter"), json=body)
+    assert r.status_code == 201, r.text
+    change = r.json()["change"]
+    assert _row(await _inbox(client, ctx, "decider"), change["id"]) is not None
+    # The decider decides Q3 on Decisions instead: nothing is left to accept.
+    r = await client.post(CHANGES, headers=ctx.as_("decider"), json=body)
+    assert r.status_code == 201, r.text
+    assert r.json()["change"]["status"] == "applied"
+    assert _row(await _inbox(client, ctx, "decider"), change["id"]) is None
