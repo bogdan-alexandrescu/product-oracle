@@ -5,7 +5,7 @@ import { datesInWords } from "@/lib/dates";
 
 /*
  * decisions-reversed-or-trashed banner: an open draft's notes about the decisions it cited
- * (decision_notes, "D-12 Cut bulk export was reversed: <why>") and a read's left_out line
+ * (decision_notes, "D-12 Cut bulk export was reversed on Nov 3: <why>") and a read's left_out line
  * ("Left out, no longer standing: D-9 Ship alerts by email only (about a roadmap now in
  * Trash)."), drawn in the draft banner as plain words: "Decision 12 Cut bulk export", linked
  * to it in Company › Decisions.
@@ -34,7 +34,7 @@ function Note({ text }: { text: string }) {
   return (
     <>
       <DecisionLink n={n} title={title} /> was {why}
-      {on ? datesInWords(on) : ""}; the next draft drops what it changed.
+      {on ? datesInWords(on) : ""}; the next draft no longer relies on it.
       {said ? ` Why: ${plain(said)}.` : ""}
     </>
   );

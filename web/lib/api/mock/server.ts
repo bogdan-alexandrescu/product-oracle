@@ -160,6 +160,7 @@ import {
   type PricingContext,
   type PricingDb,
 } from "./pricing";
+import { routeGoalBuckets, seedGoalBucketsHard } from "./goal-buckets";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
@@ -170,8 +171,10 @@ import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedFramesTalk, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
+import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
-import { appliedVersionOf, approvedPrdToDraft, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
+import { appliedVersionOf, approvedPrdToDraft, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -199,8 +202,12 @@ import {
  * latest_version, approved_version, source and an update's period are read off the versions;
  * visibility is "company" unless the row says otherwise (H8: updates are "approvers").
  */
-export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source" | "visibility" | "period"> & {
+export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source" | "visibility" | "period" | "company_roadmap"> & {
   visibility?: Schemas["DocumentSummary"]["visibility"];
+  /** one-roadmap-many-prds: the company's one roadmap (false when not set). */
+  company_roadmap?: boolean;
+  /** one-roadmap-many-prds: the PRDs that replace this one (ids, in order); read-only while any. */
+  replaced_by?: string[];
 };
 export type VersionRow = Omit<Schemas["VersionOut"], "sections" | "date_marks"> & {
   sections: (Omit<Schemas["SectionOut"], "verdict" | "spec_states"> & Partial<Pick<Schemas["SectionOut"], "spec_states">>)[];
@@ -571,6 +578,7 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * about Weekly alert digest, as the picked mk-featurepanel frames draw it (build-feature-panel review 2).
  * "simple-home-move" as "simple-home" plus a "Move the dependents" proposal Home's Accept confirms.
  * "simple-home-same-name" as "simple-home" plus a second goal named Grow retention and a proposal to change an owner.
+ * "goal-order" as "simple-home" with five goals in a set order, each with work; "goal-order-hard" adds three more and an archived one.
  * "simple-500" as the default company with 500 invented items on Simple's roadmap (S4, dod-perf:
  * 12 more roadmaps each from its own PRD, 8 goals, 6 tracks, dated and undated, with dependencies).
  * "simple-chat" as "simple-home" plus S9's invented meeting, Weekly plan review (the owner
@@ -940,6 +948,18 @@ function seedFeaturePanelFramesScenario(): Db {
 }
 
 /**
+ * meeting-changes-only-its-agenda "meeting-agenda" scenario: the default company, with the
+ * Welcome video (on the onboarding roadmap) built from Usage alerts, so a review of Usage
+ * alerts (pinned to the alerts roadmap) sees an item it does not review.
+ */
+function seedMeetingAgendaScenario(): Db {
+  const db = seed();
+  db.simple_roadmap = seedSimpleRoadmap();
+  itemOfOtherPrd(db.simple_roadmap, "setup-video", "alerts-roadmap");
+  return db;
+}
+
+/**
  * The plan strip's "+N more" (#723 polish): "simple-home" plus ten invented items on the
  * onboarding roadmap (Guided setup, the top PRD by priority), each with its own milestone.
  */
@@ -1201,6 +1221,80 @@ function seedSimplePlanTwoScenario(): Db {
 }
 
 /**
+ * GB2 "goal-buckets-hard" (mk-goalbuckets gb2-a-hard): "simple-plan" (dated) plus its scenario's
+ * extra feature (F-22, plan.big_goal) and the goal buckets' Grow partner network goal, which
+ * holds all 15 features the plan places only in M2 and M3, four of which also serve Growth.
+ * Invented data.
+ */
+export const GOAL_BUCKETS_HARD_SCENARIO = "goal-buckets-hard";
+
+function seedGoalBucketsHardScenario(): Db {
+  const db = seedSimplePlanScenario(true);
+  const rm = db.simple_roadmap!;
+  rm.plan = { ...rm.plan!, big_goal: true };
+  rm.goal_buckets = seedGoalBucketsHard();
+  return db;
+}
+
+/** mk-milestones "roadmap-milestones-hard": 26 more alert features for Grow retention's roadmap
+ * work, so its goal card reads 30 items (invented, every one about the team's alert work). */
+const ROADMAP_MILESTONES_HARD_ITEMS: [string, string][] = [
+  ["alert-quiet-hours", "Quiet hours"],
+  ["alert-snooze-rules", "Snooze rules"],
+  ["alert-templates", "Alert templates"],
+  ["alert-slack-cards", "Slack alert cards"],
+  ["alert-email-layout", "Email alert layout"],
+  ["alert-owners", "Alert owners"],
+  ["alert-team-inbox", "Team alert inbox"],
+  ["alert-search", "Alert search"],
+  ["alert-muted-list", "Muted alert list"],
+  ["alert-sound-picker", "Alert sound picker"],
+  ["alert-daily-summary", "Daily summary"],
+  ["alert-rate-limits", "Alert rate limits"],
+  ["alert-escalation-steps", "Escalation steps"],
+  ["alert-oncall-handoff", "On-call handoff"],
+  ["alert-labels", "Alert labels"],
+  ["alert-bulk-mute", "Bulk mute"],
+  ["alert-audit-log", "Alert audit log"],
+  ["alert-retry-sends", "Retry failed sends"],
+  ["alert-preview", "Alert preview"],
+  ["alert-read-receipts", "Read receipts"],
+  ["alert-digest-timing", "Digest timing"],
+  ["alert-colours", "Alert colours"],
+  ["alert-weekend-mode", "Weekend mode"],
+  ["alert-pinned", "Pinned alerts"],
+  ["alert-feedback", "Alert feedback"],
+  ["alert-health-page", "Alert health page"],
+];
+
+/**
+ * mk-milestones "roadmap-milestones-hard" (ms1/ms2/ms3-a-hard-1512): "simple-milestones" grown so
+ * Grow retention holds 30 items (its usual four, plus 26 more dated alert features); two more of
+ * its own milestones, M3 Jan 20 and M4 Feb 17, and a second milestone on Faster activation, M2
+ * Dec 22 (the same day as Grow retention's own M2): the Timeline's axis reads "2 on Dec 22", and
+ * M3 waits on Alert routing by team, M2 on Team invite nudges, each ending after it ("Ends after
+ * M3 ..." and "Ends after M2 ...", as the frames draw). Invented data.
+ */
+export const ROADMAP_MILESTONES_HARD_SCENARIO = "roadmap-milestones-hard";
+
+function seedRoadmapMilestonesHardScenario(): Db {
+  const db = seed();
+  const rm = (db.simple_roadmap = seedSimpleRoadmap());
+  ROADMAP_MILESTONES_HARD_ITEMS.forEach(([key, title], i) => {
+    const start = -15 + (i % 8) * 4;
+    rm.items.push({ key, title, horizon: "later", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", start, end: start + 25 + (i % 5) * 6 });
+    rm.ids[key] = stableUuid(`simple-item/${key}`);
+  });
+  rm.goal_milestones = [
+    ...seedOwnMilestones(),
+    { id: stableUuid("simple-gm/m3"), roadmap: "alerts-roadmap", code: "M3", name: "Teams set 3 rules in week 1", date: "2027-01-20", goal: "grow-retention", gates: ["alert-sso"], counts_when: "Holds 7 days in a row", progress: "not_started" },
+    { id: stableUuid("simple-gm/m4"), roadmap: "alerts-roadmap", code: "M4", name: "Digest opened by 70%", date: "2027-02-17", goal: "grow-retention", gates: [], counts_when: "Sent to every team 2 weeks in a row", progress: "not_started" },
+    { id: stableUuid("simple-gm/a2"), roadmap: "onboarding-roadmap", code: "M2", name: "Half of new teams invite a teammate", date: "2026-12-22", goal: "faster-activation", gates: ["setup-ideas"], counts_when: "Holds 14 days in a row on all teams", progress: "not_started" },
+  ];
+  return db;
+}
+
+/**
  * #723 S1 Home's "simple-home" scenario: the default company whose confirmed goals are those
  * Simple's roadmap items serve (Grow retention, Faster activation) plus a guardrail goal, each
  * with a weight and a metric path; two proposals the commenter made (routed to the owners);
@@ -1237,6 +1331,32 @@ function seedApprovedRoadmapScenario(): Db {
   return db;
 }
 
+/**
+ * one-roadmap-many-prds ("one-roadmap", ./one-roadmap.ts): the default company plus the area PRDs
+ * User Safety and Scale feeding the one Product roadmap, and the older PRD Trust plan replaced by
+ * both (read-only), whose own roadmap stays as history.
+ */
+function seedOneRoadmapScenario(): Db {
+  const db = seed();
+  const at = "2026-10-01T09:00:00Z";
+  const doc = (id: string, slug: string, title: string, kind: "prd" | "roadmap", extra: Partial<DocumentRow> = {}): DocumentRow => {
+    const row: DocumentRow = { id, slug, title, status: "approved", kind, template: null, template_version: null, theme: null, created_at: at, updated_at: at, ...extra };
+    db.documents.push(row);
+    const v = buildVersion(row, { number: 1, created_at: at, sections: [{ key: "summary", level: 2, heading: "Summary", body: `${title}, invented for the example.` }], citations: [] });
+    v.approved_at = at;
+    db.versions.push(v);
+    return row;
+  };
+  const areas = AREA_PRDS.map(([slug, title]) => doc(oneRoadmapPrd(slug, title).id, slug, title, "prd"));
+  const old = doc(oneRoadmapPrd(...OLD_PRD).id, OLD_PRD[0], OLD_PRD[1], "prd", { replaced_by: areas.map((a) => a.id), status: "draft" });
+  // Its draft v2, left open when it was replaced: read-only too (nothing writes it a v3).
+  db.versions.push(buildVersion(old, { number: 2, created_at: at, sections: [{ key: "summary", level: 2, heading: "Summary", body: `${OLD_PRD[1]}, a draft left open.` }], citations: [] }));
+  doc(uuid(), OLD_ROADMAP[0], OLD_ROADMAP[1], "roadmap");
+  doc(uuid(), COMPANY_SLUG, COMPANY_TITLE, "roadmap", { company_roadmap: true });
+  db.simple_roadmap = seedCompanyRoadmap(seedSimpleRoadmap());
+  return db;
+}
+
 function seedSimpleHomeScenario(): Db {
   const db = seed();
   db.simple_roadmap = seedSimpleRoadmap();
@@ -1254,6 +1374,50 @@ function seedSimpleHomeScenario(): Db {
   seedSimpleProposal(db.simple_roadmap, who, "edit_title", "alert-export", { title: "Alert history export" }, { title: "Alert history as CSV" }, "2026-10-26T15:00:00Z", "Says what people get");
   seedSimpleProposal(db.simple_roadmap, who, "change_horizon", "setup-ideas", { horizon: "next" }, { horizon: "now" }, "2026-10-26T16:30:00Z");
   seedSimpleProposal(db.simple_roadmap, who, "add_item_task", "alert-digest", {}, { title: "Digest email for team leads" }, "2026-10-26T17:00:00Z", "A new step in the digest flow");
+  return db;
+}
+
+/**
+ * build-goal-order-control, the "goal-order" scenario: "simple-home" with five confirmed goals in
+ * a set order (Faster activation, Grow retention, Grow paid conversion, Keep alerts quiet, Cut
+ * support load), each with work on the roadmap. "goal-order-hard" adds three more (one with a
+ * long name) and an archived one, which is not in the order. Invented data.
+ */
+function seedGoalOrderScenario(hard = false): Db {
+  const db = seedSimpleHomeScenario();
+  const rm = db.simple_roadmap!;
+  const template = db.baseline.entities.find((e) => e.key === "grow-retention")!;
+  const goal = (key: string, title: string, status: "confirmed" | "rejected" = "confirmed") => {
+    db.baseline.entities.push({ ...template, id: stableUuid(`simple-goal/${key}`), key, title, attrs: { metric: "Weekly count", target_text: "up 10%", weight: 1 }, status });
+  };
+  const paid = db.baseline.entities.find((e) => e.key === "g.paid-conversion")!;
+  paid.status = "confirmed";
+  goal("support-load", "Cut support load");
+  if (hard) {
+    goal("guided-week", "Make the first week feel guided for every new team, from sign-up to their first shared report");
+    goal("mid-size", "Win more mid-size teams");
+    goal("page-speed", "Faster page loads");
+    goal("partner-store", "Open a partner app store", "rejected");
+  }
+  const order = ["faster-activation", "grow-retention", "g.paid-conversion", "quiet-alerts", "support-load", ...(hard ? ["guided-week", "mid-size", "page-speed"] : [])];
+  for (const e of db.baseline.entities) if (order.includes(e.key)) e.attrs = { ...e.attrs, position: order.indexOf(e.key) + 1 };
+  const items: SimpleDb["items"] = [
+    { key: "go-trial-nudge", title: "Trial end reminders", horizon: "now", roadmap: "pricing-roadmap", goal: "g.paid-conversion", confidence: "high", start: 5, end: 40, source: "typed", status: "in_progress" },
+    { key: "go-plan-compare", title: "Plan compare page", horizon: "next", roadmap: "pricing-roadmap", goal: "g.paid-conversion", confidence: "medium", start: 45, end: 85, source: "typed" },
+    { key: "go-mute-rules", title: "Smart mute rules", horizon: "now", roadmap: "alerts-roadmap", goal: "quiet-alerts", track: "alerts", confidence: "medium", start: 15, end: 55, source: "typed", status: "in_progress" },
+    { key: "go-help-search", title: "Help center search", horizon: "now", roadmap: "onboarding-roadmap", goal: "support-load", confidence: "high", start: 0, end: 35, source: "typed", status: "in_progress" },
+    ...(hard
+      ? ([
+          { key: "go-first-report", title: "First report wizard", horizon: "next", roadmap: "onboarding-roadmap", goal: "guided-week", confidence: "low", start: 40, end: 80, source: "typed" },
+          { key: "go-team-plans", title: "Team plan bundles", horizon: "next", roadmap: "pricing-roadmap", goal: "mid-size", confidence: "medium", start: 50, end: 90, source: "typed" },
+          { key: "go-fast-load", title: "Lighter dashboard load", horizon: "now", roadmap: "alerts-roadmap", goal: "page-speed", confidence: "high", start: 10, end: 30, source: "engineering", status: "in_progress" },
+        ] as SimpleDb["items"])
+      : []),
+  ];
+  for (const i of items) {
+    rm.items.push(i);
+    rm.ids[i.key] = stableUuid(`simple-item/${i.key}`);
+  }
   return db;
 }
 
@@ -3178,10 +3342,16 @@ function load(): Db {
                 ? seedSimpleDecidersScenario
               : scenario === "feature-panel-frames"
                 ? seedFeaturePanelFramesScenario
+              : scenario === "meeting-agenda"
+                ? seedMeetingAgendaScenario
               : scenario === "simple-home"
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-move"
                 ? seedSimpleHomeMoveScenario
+              : scenario === "goal-order"
+                ? () => seedGoalOrderScenario()
+              : scenario === "goal-order-hard"
+                ? () => seedGoalOrderScenario(true)
               : scenario === "simple-home-same-name"
                 ? seedSimpleHomeSameNameScenario
               : scenario === "simple-home-deciders"
@@ -3212,6 +3382,17 @@ function load(): Db {
                     (db.simple_roadmap = seedSimpleRoadmap()).unapproved = ["alerts-roadmap"];
                     return db;
                   }
+              : scenario === "simple-milestones" || scenario === "simple-prd-milestones"
+                ? () => {
+                    // build-milestones-on-roadmap: the roadmaps' own milestones per goal; with a PRD's (Usage alerts).
+                    const db = seed();
+                    (db.simple_roadmap = seedSimpleRoadmap()).goal_milestones = scenario === "simple-milestones" ? seedOwnMilestones() : seedPrdMilestones();
+                    return db;
+                  }
+              : scenario === ROADMAP_MILESTONES_HARD_SCENARIO
+                ? seedRoadmapMilestonesHardScenario
+              : scenario === GOAL_BUCKETS_HARD_SCENARIO
+                ? seedGoalBucketsHardScenario
               : scenario === "simple-plan"
                 ? () => seedSimplePlanScenario()
               : scenario === "roadmap-keydates"
@@ -3302,6 +3483,8 @@ function load(): Db {
                   }
               : scenario === APPROVED_ROADMAP_SCENARIO
                 ? seedApprovedRoadmapScenario
+              : scenario === ONE_ROADMAP_SCENARIO
+                ? seedOneRoadmapScenario
               : scenario === "simple-500"
                 ? () => ({ ...seed(), simple_roadmap: seedSimpleMany() })
                 : scenario === "strategy" || scenario === "strategy-no-vision"
@@ -3678,8 +3861,7 @@ function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): Su
     return { key: `run_item:${run.id}:${cp.kind}:${s.item_key}`, label: `${label} · ${s.item_key}`, url: `/runs/${run.id}`, run_id: run.id };
   }
   if (kind === "priorities") return { key: "priorities", label: "Priority order", url: "/priorities" };
-  // ask-page-context: the page's own name, as the API (Labels.of).
-  if (kind === "screen") return { key: `screen:${s.path}`, label: (s.view as { name?: string } | undefined)?.name || screenPageName(String(s.path)), url: String(s.path) };
+  if (kind === "screen") return { key: `screen:${s.path}`, label: screenPageName(String(s.path)), url: String(s.path) };
   const id = Object.values(s)[0];
   return { key: `${kind}:${id}`, label: kind.replace("_", " "), url: "/" };
 }
@@ -3790,6 +3972,78 @@ export function resetMockData() {
 
 // ---------------------------------------------------------------- domain helpers
 
+/** A document as GET /v1/documents/{doc} returns it (DocumentOut). */
+function documentOut(db: Db, doc: DocumentRow): Schemas["DocumentOut"] {
+  // one-roadmap-many-prds: the PRDs that replace it, by name (oracle.roadmap.company.refs).
+  const replacedBy = (doc.replaced_by ?? []).flatMap((id) => db.documents.filter((x) => x.id === id).map((x) => ({ id: x.id, slug: x.slug, title: x.title })));
+  return { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary), replaced_by: replacedBy, changes_in_review: 0 };
+}
+
+/**
+ * one-roadmap-many-prds (api/oracle/roadmap/company_router.py): GET/POST /v1/roadmaps/company,
+ * GET /v1/roadmaps/company/queue, POST /v1/documents/{doc}/replaced-by.
+ */
+async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
+  const m = req.method;
+  const company = () => db.documents.find((d) => d.company_roadmap && d.kind === "roadmap");
+  const ref = (d: DocumentRow) => ({ id: d.id, slug: d.slug, title: d.title });
+  if (p[1] === "roadmaps" && p[2] === "company" && !p[3]) {
+    if (m === "GET") {
+      const found = company();
+      return found ? json(200, ref(found)) : json(404, { detail: "No company roadmap yet" });
+    }
+    if (m === "POST") {
+      if (!atLeast(me.role, "approver")) return forbidden("approver");
+      const found = company();
+      if (found) return json(200, ref(found));
+      let slug = COMPANY_SLUG;
+      for (let n = 2; db.documents.some((d) => d.slug === slug); n++) slug = `${COMPANY_SLUG}-${n}`;
+      const at = now();
+      const row: DocumentRow = { id: uuid(), slug, title: COMPANY_TITLE, status: "draft", kind: "roadmap", template: null, template_version: null, theme: null, created_at: at, updated_at: at, company_roadmap: true };
+      db.documents.push(row);
+      return json(201, ref(row));
+    }
+  }
+  if (p[1] === "roadmaps" && p[2] === "company" && p[3] === "queue" && !p[4] && m === "GET") {
+    const cap = (mockSettingValue("team_capacity") ?? { team_size: 1, focus: 1 }) as { team_size: number; focus: number };
+    const found = company();
+    const replaced = new Set(db.documents.filter((d) => d.kind === "prd" && (d.replaced_by ?? []).length > 0).map((d) => d.id));
+    const prd = q.get("prd");
+    const rm = db.simple_roadmap;
+    const items =
+      found && rm
+        ? rm.items
+            .filter((s) => s.roadmap === found.slug && !(s.prd_doc && replaced.has(s.prd_doc.id)))
+            .map((s) => {
+              const { start, end } = shownDates(rm, s.key);
+              const days = Math.max(1, (Date.parse(end) - Date.parse(start)) / 86_400_000 + 1);
+              return { key: s.key, title: s.title, prd: s.prd_doc ?? null, milestone: null, effort_weeks: Math.round((days / 7) * 10) / 10, start, end };
+            })
+            .filter((i) => !prd || (i.prd && (i.prd.slug === prd || i.prd.id === prd)))
+        : [];
+    return json(200, { roadmap: found ? ref(found) : null, team_size: Math.trunc(cap.team_size), focus: Number(cap.focus), items });
+  }
+  if (p[1] === "documents" && p[2] && p[3] === "replaced-by" && !p[4] && m === "POST") {
+    if (!atLeast(me.role, "approver")) return forbidden("approver");
+    const doc = findDocument(db, p[2]);
+    if (!doc) return json(404, { detail: `document '${p[2]}' not found` });
+    const input = JSON.parse((await req.text()) || "null") as Partial<Schemas["ReplacedByIn"]> | null;
+    if (!input || !Array.isArray(input.prds)) return json(422, { detail: "prds is a list of PRD slugs" });
+    if ((doc.kind ?? "prd") !== "prd") return json(422, { detail: "only a PRD can be replaced" });
+    const by: DocumentRow[] = [];
+    for (const slug of [...new Set(input.prds)]) {
+      const other = db.documents.find((d) => d.slug === slug);
+      if (!other || (other.kind ?? "prd") !== "prd") return json(422, { detail: `'${slug}' is not a PRD` });
+      if (other.id === doc.id) return json(422, { detail: "a PRD cannot replace itself" });
+      if ((other.replaced_by ?? []).length > 0) return json(422, { detail: `${other.title} is itself replaced` });
+      by.push(other);
+    }
+    doc.replaced_by = by.map((d) => d.id);
+    return json(200, documentOut(db, doc));
+  }
+  return null;
+}
+
 function findDocument(db: Db, ref: string) {
   return db.documents.find((d) => d.slug === ref || d.id === ref);
 }
@@ -3887,9 +4141,12 @@ function documentSummary(db: Db, d: DocumentRow): Schemas["DocumentSummary"] {
   const vs = docVersions(db, d);
   const latest = vs[vs.length - 1];
   const period = d.kind === "update" ? ((latest?.front_matter.period as UpdatePeriod | undefined) ?? null) : null;
+  const row: Omit<DocumentRow, "replaced_by"> & { replaced_by?: string[] } = { ...d };
+  delete row.replaced_by;
   return {
-    ...d,
+    ...row,
     kind: d.kind ?? "prd",
+    company_roadmap: d.company_roadmap ?? false,
     visibility: d.visibility ?? "company",
     // O5: a roadmap without a default audience reads as "team"; other kinds have none.
     audience: d.kind === "roadmap" ? (d.audience ?? "team") : null,
@@ -6130,6 +6387,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   const v2 = routeV2(v2Db, req, p, q, me.id);
   if (v2) return v2;
 
+  const oneRoadmap = await routeOneRoadmap(db, me, req, p, q);
+  if (oneRoadmap) return oneRoadmap;
   // Roadmap alignment and product tracks (CR-11).
   const roadmapCtx = roadmapContext(db, me);
   // E1: a PRD draft's roadmap items and the PRD's "Derive for each new draft" switch.
@@ -6194,6 +6453,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   const simpleRoute = async (r: Request): Promise<Response | null> => {
     // goal-order: Simple's goals follow the baseline's one goal order.
     knowCompanyGoals(db.baseline.entities.filter((e) => e.type === "goal"));
+    // build-goal-order-control: the "goal-order" scenarios' added goals name their roadmap work on every load.
+    knowGoalOrderGoals(db.baseline.entities);
     // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
     // served the same invented page under its own slug and title, with its own draft and changes.
     const onePagerDb = await onePagerOf(db, r, p);
@@ -6250,6 +6511,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       const out = appliedVersionOf(db.simple_roadmap!, doc.slug, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames });
       return out ? json(200, out) : json(404, { detail: "No such roadmap" });
     }
+    const bucketsRes = await routeGoalBuckets(db.simple_roadmap!, me.role, r, p);
+    if (bucketsRes) return bucketsRes;
     const simpleRes = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, r, p, q);
     if (simpleRes) return simpleRes;
     const companyGoals = db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title }));
@@ -6532,7 +6795,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   const doc = findDocument(db, p[2]);
   if (!doc) return notFound("Document");
   if (p.length === 3) {
-    return json(200, { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary) });
+    return json(200, documentOut(db, doc));
   }
   // H8: who sees the document (owners only, with a reason; the API audits it).
   if (p[3] === "visibility" && p.length === 4 && m === "PATCH") {

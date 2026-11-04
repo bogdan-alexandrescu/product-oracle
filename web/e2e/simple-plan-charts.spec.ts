@@ -71,10 +71,10 @@ async function setUp(page: Page, scheme: "light" | "dark", scenario: string | nu
 }
 
 const GOALS = [
-  { goal: "Reliability", parts: ["M1 · 4 wk", "M2 · 3 wk", "M3 · 4 wk"], total: "11 wk" },
-  { goal: "Growth", parts: ["M1 · 3 wk", "M2 · 7 wk", "M3 · 6 wk"], total: "16 wk" },
-  { goal: "Activation", parts: ["M1 · 6 wk", "M2 · 3 wk", "M3 · 4 wk"], total: "13 wk" },
-  { goal: "Revenue", parts: ["M2 · 2 wk", "M3 · 9 wk"], total: "11 wk" },
+  { goal: "Reliability", parts: ["M1 Prove it · 4 wk", "M2 Scale volume · 3 wk", "M3 Open to all · 4 wk"], total: "11 wk" },
+  { goal: "Growth", parts: ["M1 Prove it · 3 wk", "M2 Scale volume · 7 wk", "M3 Open to all · 6 wk"], total: "16 wk" },
+  { goal: "Activation", parts: ["M1 Prove it · 6 wk", "M2 Scale volume · 3 wk", "M3 Open to all · 4 wk"], total: "13 wk" },
+  { goal: "Revenue", parts: ["M2 Scale volume · 2 wk", "M3 Open to all · 9 wk"], total: "11 wk" },
 ];
 
 /** The labels whose text reads under 4.5:1 on their own background (the nearest painted one). */
@@ -157,9 +157,10 @@ for (const v of VIEWS) {
       // B's strong milestone colours, not pale tints: each segment's text is --on-accent on it.
       const fills = await head.getByTestId("goal-bar-segment").evaluateAll((els) => [...new Set(els.map((e) => getComputedStyle(e).backgroundColor))]);
       expect(fills).toHaveLength(3);
-      // A label shows only where it fits (B leaves a narrow segment blank, its words in its title).
+      // A label shows only where it fits (B leaves a narrow segment blank, its words in its title);
+      // named labels ("M2 Scale volume · 3 wk") fit fewer segments than the code alone did.
       await nothingCut(head.locator('[data-testid="goal-bar-label"], [data-testid="milestone-chip"]'));
-      if (!v.phone) await expect(head.getByTestId("goal-bar-label")).toHaveCount(11);
+      if (!v.phone) await expect(head.getByTestId("goal-bar-label")).toHaveCount(5);
       // Every label on a milestone colour reads at AA (4.5:1), light and dark.
       expect(await contrasts(head.getByTestId("goal-bar-label"))).toEqual([]);
 
@@ -170,11 +171,11 @@ for (const v of VIEWS) {
       await expect(growth.getByTestId("plan-goal-count")).toHaveText("5 features in the plan");
       const invites = growth.locator('[data-testid="plan-feature"][data-code="F-05"]');
       await expect(invites).toContainText("F-05 Team invites");
-      await expect(invites.getByTestId("plan-chip")).toHaveText(["M1", "M2"]);
+      await expect(invites.getByTestId("plan-chip")).toHaveText(["M1 Prove it", "M2 Scale volume"]);
       await expect(invites.getByTestId("plan-chip").first()).toHaveAttribute("title", "M1 Prove it: 3 wk");
       await expect(invites.getByTestId("plan-feature-total")).toHaveText("5 wk");
       const launch = growth.locator('[data-testid="plan-feature"][data-code="F-10"]');
-      await expect(launch.getByTestId("plan-chip")).toHaveText(["M2"]);
+      await expect(launch.getByTestId("plan-chip")).toHaveText(["M2 Scale volume"]);
       await expect(launch.getByTestId("plan-feature-total")).toHaveText("PM-owned");
       await expect(page.getByTestId("plan-goal")).toHaveCount(4);
       await nothingCut(page.locator('[data-testid="plan-chip"]'));

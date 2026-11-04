@@ -108,7 +108,8 @@ const fits = (label: string, px: number) => px >= label.length * 8 + 12;
 
 function GoalBar({ plan, goal, code, parts, total, max }: { plan: Plan; goal: string; code: string | null; parts: { milestone: string; weeks: number }[]; total: number; max: number }) {
   const [track, width] = useWidth<HTMLDivElement>();
-  const label = (p: { milestone: string; weeks: number }) => `${p.milestone} · ${wk(p.weeks)} wk`;
+  // mk-goalbuckets: a segment names its milestone ("M2 Fleet care · 4 wk"), never the code alone.
+  const label = (p: { milestone: string; weeks: number }) => `${p.milestone} ${plan.milestones.find((x) => x.code === p.milestone)?.name ?? ""} · ${wk(p.weeks)} wk`.replace("  ", " ");
   return (
     <li data-testid="goal-bar" data-goal={goal} className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 py-1.5 sm:grid-cols-[170px_1fr_90px]">
       <div className="min-w-0 text-[17px] font-[650] leading-6">
@@ -193,53 +194,6 @@ export function planFeatures(plan: Plan, goal: string | null): { code: string; n
     const weeks = slices.reduce((n, s) => n + (s.effort_weeks ?? 0), 0);
     return { code, name: featureName(slices[0]), slices, weeks: slices.every((s) => s.pm_owned) ? null : weeks };
   });
-}
-
-/** B's rows: the code, the name, a chip per milestone it lands in, its engineer-weeks (or PM-owned). */
-export function PlanFeatureList({ plan, goal }: { plan: Plan; goal: string | null }) {
-  const features = planFeatures(plan, goal);
-  if (!features.length) return <p className="mt-2 text-[15px] text-text2">Nothing in the plan yet</p>;
-  return (
-    <ul className="mt-2">
-      {features.map((f) => {
-        const milestones = [...new Set(f.slices.map((s) => s.milestone))];
-        return (
-          <li key={f.code} data-testid="plan-feature" data-code={f.code} className="flex items-center gap-2 border-b border-line py-[5px] text-[16px] leading-[22px]">
-            <CodeTag code={f.code} title={f.name} />{" "}
-            <span data-testid="plan-feature-name" className="min-w-0 flex-1">
-              {/* build-feature-panel review 5: a plan feature's name opens the one feature panel, by
-               * its feature code (F-05), which FeaturePanelHost resolves to its roadmap item: a slice
-               * carries no item id. */}
-              <button type="button" data-feature={f.code} className="text-left hover:underline">
-                {f.name}
-              </button>
-            </span>
-            <span className="flex flex-none gap-1">
-              {milestones.map((code) => {
-                const c = milestoneColour(plan, code);
-                const of = f.slices.filter((s) => s.milestone === code);
-                const weeks = of.every((s) => s.pm_owned || s.effort_weeks == null) ? "PM-owned" : `${wk(of.reduce((n, s) => n + (s.effort_weeks ?? 0), 0))} wk`;
-                return (
-                  <span
-                    key={code}
-                    data-testid="plan-chip"
-                    title={`${code} ${of[0].milestone_name}: ${weeks}`}
-                    className="inline-flex h-5 items-center whitespace-nowrap rounded-full px-2 text-[12px] font-[650]"
-                    style={{ background: c.tag, color: c.ink }}
-                  >
-                    {code}
-                  </span>
-                );
-              })}
-            </span>
-            <span data-testid="plan-feature-total" className="w-[76px] flex-none text-right text-[15px] tabular-nums text-text2">
-              {f.weeks == null ? "PM-owned" : `${wk(f.weeks)} wk`}
-            </span>
-          </li>
-        );
-      })}
-    </ul>
-  );
 }
 
 /** "4 features in the plan" (the plan may run past the quarter). */

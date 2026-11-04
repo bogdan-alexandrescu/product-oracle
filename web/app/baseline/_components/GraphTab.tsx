@@ -7,7 +7,8 @@ import type { EdgeOut, EntityOut, GraphOut, TraceFeature, TraceReport } from "@/
 import { named, namedText, type Named } from "@/lib/codes";
 import { formatPercent } from "@/lib/format";
 import { assess, goalViews, type GoalView } from "@/app/home/_goals";
-import { goalTree } from "@/lib/goal-tree";
+import { GoalNum } from "@/components/simple/GoalOrder";
+import { goalNumbers, goalTree } from "@/lib/goal-tree";
 
 import type { AddKind } from "./AddItem";
 import {
@@ -219,6 +220,8 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
   const goals = sortedGoals(graph);
   // #345: the goals table is a tree; a goal's subgoals fold under it.
   const tree = new Map(goalTree(graph.entities).map((n) => [n.goal.id, n]));
+  // build-goal-order-control: each confirmed goal's number, 1 to n, as Home's row orders them.
+  const numbers = goalNumbers(graph.entities);
   const codes = new Map([...tree].map(([id, n]) => [id, n.code]));
   const [folded, setFolded] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState<EntityOut | null>(null);
@@ -299,6 +302,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
                 {folded.has(g.id) ? "▸" : "▾"}
               </button>
             )}
+            <GoalNum n={numbers.get(g.id)} />
             <CodeChip
               kind="goal"
               entityId={g.id}

@@ -545,6 +545,17 @@ async def import_items(
         )
         db.add(item)
         result.items.append(item)
+    if draft is None:
+        # one-roadmap-many-prds: the company roadmap keeps every other PRD's items.
+        from oracle.roadmap import company
+
+        target = await db.get(Document, version.document_id)
+        if target is not None and target.company_roadmap:
+            await company.carry_other_prds(
+                db, version, prd_doc.id if prd_doc else None, len(result.items)
+            )
+            await db.flush()
+            await company.carry_for_version(db, version)
     await db.flush()
     return result
 
@@ -694,20 +705,30 @@ async def carry_forward(db: AsyncSession, version: DocumentVersion) -> int:
     return copied
 
 
-async def run_items_file(db: AsyncSession, document: Document) -> tuple[str, Run] | None:
-    """The items file of the active prd_to_roadmap run writing this roadmap, if any."""
-    run = await db.scalar(
-        select(Run)
-        .where(
-            Run.flow == "prd_to_roadmap",
-            Run.status.in_(ACTIVE_RUNS),
-            or_(
-                Run.document_id == document.id,
-                Run.knobs["document_slug"].astext == document.slug,
-            ),
+async def run_items_file(
+    db: AsyncSession, document: Document, version: DocumentVersion | None = None
+) -> tuple[str, Run] | None:
+    """The items file of the active prd_to_roadmap run writing this roadmap, if any; with
+    ``version``, the run of the PRD version it was written from first (one-roadmap-many-prds:
+    several PRDs' runs may write the company roadmap at once)."""
+    runs = list(
+        await db.scalars(
+            select(Run)
+            .where(
+                Run.flow == "prd_to_roadmap",
+                Run.status.in_(ACTIVE_RUNS),
+                or_(
+                    Run.document_id == document.id,
+                    Run.knobs["document_slug"].astext == document.slug,
+                ),
+            )
+            .order_by(Run.created_at.desc())
         )
-        .order_by(Run.created_at.desc())
-        .limit(1)
+    )
+    source = str(version.source_version_id) if version and version.source_version_id else None
+    run = next(
+        (r for r in runs if source and (r.knobs or {}).get("source_version_id") == source),
+        runs[0] if runs else None,
     )
     if run is None:
         return None
@@ -731,7 +752,7 @@ async def on_roadmap_version(
     # the run's items_check already showed the file's problems at its checkpoint.
     try:
         async with db.begin_nested():
-            found = await run_items_file(db, document)
+            found = await run_items_file(db, document, version)
             if found is not None:
                 text, run = found
                 # Parsed once, by import_items (a refused file stores no items).

@@ -33028,6 +33028,200 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/roadmaps/company": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Get Company Roadmap",
+        "description": "The company's one roadmap, which every PRD feeds.",
+        "operationId": "get_company_roadmap",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyRoadmapOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The company has no company roadmap yet"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      },
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Create Company Roadmap",
+        "description": "Create the company roadmap ('Product roadmap') empty when none exists (the first-run\nstep); with one, return it (200). Approvers and owners.",
+        "operationId": "create_company_roadmap",
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyRoadmapOut"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "It already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyRoadmapOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/roadmaps/company/queue": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Get Company Queue",
+        "description": "Every item on the company roadmap planned as one team's capacity queue (team size x\nfocus; milestone order, then the company goal order, then priority). ``prd`` (slug or\nid): only that PRD's items, with their places in the shared queue.",
+        "operationId": "get_company_queue",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prd"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/documents/{doc}/replaced-by": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Set Replaced By",
+        "description": "Mark a PRD replaced by one or more PRDs (one per area of focus): it turns read-only,\nnames them at its top, its items stop feeding the roadmap, and its verified schedule\nbases follow their items to the replacing PRDs ('carried from <title>').",
+        "operationId": "set_replaced_by",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplacedByIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/roadmaps/{doc}/items": {
       "get": {
         "tags": [
@@ -42471,6 +42665,221 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/simple/roadmap/milestones": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Create Goal Milestone",
+        "description": "Add a milestone to a goal on a roadmap: coded the next \"M<n>\" in that goal on that\nroadmap. Who may change the roadmap directly (an owner, its decider, with none its\nowner while an approver, same as a key date); a commenter is refused (403: milestones\nare not proposed here, unlike key dates).",
+        "operationId": "create_goal_milestone",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimpleGoalMilestoneIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleGoalMilestone"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/roadmap/milestones/{milestone_id}": {
+      "patch": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Patch Goal Milestone",
+        "description": "Edit a milestone's name, date, goal, items it waits on or counts-when rule. A PRD's\nown milestone is read-only here: a date or counts-when edit instead proposes a change\nto the PRD's owner (``pending`` filled, the milestone unchanged) through the change\nengine (``POST /v1/simple/changes/{id}/accept|decline``); its name, goal and items are\nthe PRD's own and are 422 here.",
+        "operationId": "patch_goal_milestone",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "milestone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Milestone Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimpleGoalMilestonePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleGoalMilestone"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
+      },
+      "delete": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Delete Goal Milestone",
+        "description": "Delete one of the roadmap's own milestones (undo: PATCH the old values back, or\nrestore). A PRD's own milestone is 409: it is not deleted here.",
+        "operationId": "delete_goal_milestone",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "milestone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Milestone Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/roadmap/milestones/{milestone_id}/restore": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Restore Goal Milestone",
+        "description": "Undo a delete: clears the milestone's ``deleted_at``.",
+        "operationId": "restore_goal_milestone",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "milestone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Milestone Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleGoalMilestone"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
+      }
+    },
     "/v1/simple/prds/{prd}/plan": {
       "get": {
         "tags": [
@@ -42573,6 +42982,328 @@
           }
         },
         "x-min-role": "owner"
+      }
+    },
+    "/v1/simple/goal-buckets": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "List Goal Buckets",
+        "description": "The goals in order and each feature's goal links.",
+        "operationId": "list_goal_buckets",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalBucketsOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/goal-buckets/goals": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Create Bucket Goal",
+        "description": "A new goal, after the others.",
+        "operationId": "create_bucket_goal",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoalIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalBucketWrite"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/goal-buckets/goals/{goal_id}": {
+      "patch": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Update Bucket Goal",
+        "description": "Edit a goal's name, measure, target and date (its order stays Baseline's).",
+        "operationId": "update_bucket_goal",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoalIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalBucketWrite"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/goal-buckets/goals/{goal_id}/archive": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Archive Bucket Goal",
+        "description": "Archive a goal and move its features' links in one step.",
+        "operationId": "archive_bucket_goal",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalBucketWrite"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/goal-buckets/features/{feature_id}/move": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Move Bucket Feature",
+        "description": "The feature's first goal link becomes the goal it was dropped on.",
+        "operationId": "move_bucket_feature",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "feature_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Feature Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalBucketWrite"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/goal-buckets/undo": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Undo Goal Buckets",
+        "description": "Puts back every goal and link a write changed.",
+        "operationId": "undo_goal_buckets",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoalBucketsUndo"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalBucketsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "approver"
       }
     },
     "/v1/simple/sessions": {
@@ -52736,6 +53467,24 @@
         ],
         "title": "ApproveOut"
       },
+      "ArchiveIn": {
+        "properties": {
+          "to_goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Goal Id"
+          }
+        },
+        "type": "object",
+        "title": "ArchiveIn"
+      },
       "ArtifactDependencyOut": {
         "properties": {
           "id": {
@@ -59664,7 +60413,8 @@
                   "restore_link",
                   "restore_dates",
                   "set_goal",
-                  "restore_goal"
+                  "restore_goal",
+                  "edit_goal_milestone"
                 ]
               },
               {
@@ -59940,6 +60690,17 @@
             "type": "boolean",
             "title": "Asks With Dependents Outside",
             "default": false
+          },
+          "elsewhere": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elsewhere"
           }
         },
         "type": "object",
@@ -60051,7 +60812,8 @@
               "restore_link",
               "restore_dates",
               "set_goal",
-              "restore_goal"
+              "restore_goal",
+              "edit_goal_milestone"
             ],
             "title": "Op"
           },
@@ -62492,6 +63254,30 @@
           "kinds"
         ],
         "title": "CompanyMemberCoverage"
+      },
+      "CompanyRoadmapOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "title"
+        ],
+        "title": "CompanyRoadmapOut"
       },
       "CompareCheckpoint": {
         "properties": {
@@ -70050,6 +70836,11 @@
               }
             ]
           },
+          "company_roadmap": {
+            "type": "boolean",
+            "title": "Company Roadmap",
+            "default": false
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -70066,6 +70857,14 @@
             },
             "type": "array",
             "title": "Versions",
+            "default": []
+          },
+          "replaced_by": {
+            "items": {
+              "$ref": "#/components/schemas/PrdRef"
+            },
+            "type": "array",
+            "title": "Replaced By",
             "default": []
           },
           "changes_in_review": {
@@ -70478,6 +71277,11 @@
                 "type": "null"
               }
             ]
+          },
+          "company_roadmap": {
+            "type": "boolean",
+            "title": "Company Roadmap",
+            "default": false
           },
           "created_at": {
             "type": "string",
@@ -74565,6 +75369,28 @@
         "title": "FeatureSetProblem",
         "description": "One problem of feature_set.yaml or of the stored scope (oracle.runs.feature_set). A\nblocking one refuses Approve until it is fixed (call c3)."
       },
+      "FeatureSnap": {
+        "properties": {
+          "feature_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Feature Id"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/GoalLinkSnap"
+            },
+            "type": "array",
+            "title": "Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature_id",
+          "links"
+        ],
+        "title": "FeatureSnap"
+      },
       "FeatureTrace": {
         "properties": {
           "title": {
@@ -76811,6 +77637,196 @@
         ],
         "title": "GithubRepoPage"
       },
+      "GoalBucketFeature": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "goal_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Goal Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title"
+        ],
+        "title": "GoalBucketFeature"
+      },
+      "GoalBucketGoal": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "order": {
+            "type": "integer",
+            "title": "Order"
+          },
+          "measure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
+          },
+          "can_edit": {
+            "type": "boolean",
+            "title": "Can Edit",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "order"
+        ],
+        "title": "GoalBucketGoal"
+      },
+      "GoalBucketWrite": {
+        "properties": {
+          "goal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalBucketGoal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "undo": {
+            "$ref": "#/components/schemas/GoalBucketsUndo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "undo"
+        ],
+        "title": "GoalBucketWrite"
+      },
+      "GoalBucketsOut": {
+        "properties": {
+          "can_edit": {
+            "type": "boolean",
+            "title": "Can Edit"
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/GoalBucketGoal"
+            },
+            "type": "array",
+            "title": "Goals"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/GoalBucketFeature"
+            },
+            "type": "array",
+            "title": "Features"
+          }
+        },
+        "type": "object",
+        "required": [
+          "can_edit",
+          "goals",
+          "features"
+        ],
+        "title": "GoalBucketsOut"
+      },
+      "GoalBucketsUndo": {
+        "properties": {
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/GoalSnap"
+            },
+            "type": "array",
+            "title": "Goals"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/FeatureSnap"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "added_goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Added Goal Id"
+          },
+          "sig": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sig"
+          }
+        },
+        "type": "object",
+        "title": "GoalBucketsUndo",
+        "description": "What a write changed, as it was before: Undo puts exactly this back."
+      },
       "GoalCalibration": {
         "properties": {
           "n": {
@@ -76912,6 +77928,41 @@
         ],
         "title": "GoalCheck"
       },
+      "GoalIn": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "measure": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Measure"
+          },
+          "target": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Target"
+          },
+          "due": {
+            "type": "string",
+            "format": "date",
+            "title": "Due"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "measure",
+          "target",
+          "due"
+        ],
+        "title": "GoalIn"
+      },
       "GoalInterviewOut": {
         "properties": {
           "discussion_id": {
@@ -76980,6 +78031,89 @@
           "matched_on"
         ],
         "title": "GoalLink"
+      },
+      "GoalLinkSnap": {
+        "properties": {
+          "goal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Goal Id"
+          },
+          "contribution": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contribution"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "attrs": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attrs"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "goal_id"
+        ],
+        "title": "GoalLinkSnap"
       },
       "GoalMeasurePushback": {
         "properties": {
@@ -77060,6 +78194,36 @@
         "type": "object",
         "title": "GoalProgress",
         "description": "#345: a goal's progress, 0 to 1: its own measurement (\"own\") when it has one, else\nthe weighted progress of its subgoals (\"subgoals\"); null source without either."
+      },
+      "GoalSnap": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "attrs": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Attrs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "attrs"
+        ],
+        "title": "GoalSnap"
       },
       "GoalTerm": {
         "properties": {
@@ -81104,7 +82268,8 @@
               "restore_link",
               "restore_dates",
               "set_goal",
-              "restore_goal"
+              "restore_goal",
+              "edit_goal_milestone"
             ],
             "title": "Op"
           },
@@ -81222,6 +82387,16 @@
               "done"
             ],
             "title": "State"
+          },
+          "from_meeting": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleChangeMeeting"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -90348,6 +91523,32 @@
         "title": "MoveChange",
         "description": "Move an item to another horizon (to the end of it)."
       },
+      "MoveIn": {
+        "properties": {
+          "from_goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Goal Id"
+          },
+          "to_goal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "To Goal Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "to_goal_id"
+        ],
+        "title": "MoveIn"
+      },
       "MyAccountOut": {
         "properties": {
           "user_id": {
@@ -95989,6 +97190,30 @@
         "title": "PrdLinks",
         "description": "Cross-document links from a roadmap draft to its PRD version's sections."
       },
+      "PrdRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "title"
+        ],
+        "title": "PrdRef"
+      },
       "PrdScopeOut": {
         "properties": {
           "id": {
@@ -99837,6 +101062,98 @@
         ],
         "title": "QuestionsWithdrawn"
       },
+      "QueueItem": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrdRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "milestone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone"
+          },
+          "effort_weeks": {
+            "type": "number",
+            "title": "Effort Weeks"
+          },
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "effort_weeks",
+          "start",
+          "end"
+        ],
+        "title": "QueueItem"
+      },
+      "QueueOut": {
+        "properties": {
+          "roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompanyRoadmapOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "team_size": {
+            "type": "integer",
+            "title": "Team Size"
+          },
+          "focus": {
+            "type": "number",
+            "title": "Focus"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/QueueItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "team_size",
+          "focus"
+        ],
+        "title": "QueueOut"
+      },
       "QueueWait": {
         "properties": {
           "code": {
@@ -101579,6 +102896,22 @@
         ],
         "title": "ReorderChange",
         "description": "Put an item at ``position`` (0 first) within its horizon."
+      },
+      "ReplacedByIn": {
+        "properties": {
+          "prds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Prds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prds"
+        ],
+        "title": "ReplacedByIn"
       },
       "ReplyCounts": {
         "properties": {
@@ -114636,7 +115969,8 @@
               "restore_link",
               "restore_dates",
               "set_goal",
-              "restore_goal"
+              "restore_goal",
+              "edit_goal_milestone"
             ],
             "title": "Op"
           },
@@ -114675,6 +116009,26 @@
           "before"
         ],
         "title": "SimpleChangeIn"
+      },
+      "SimpleChangeMeeting": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SimpleChangeMeeting",
+        "description": "meeting-changes-only-its-agenda: the meeting a change was made in."
       },
       "SimpleChangeOut": {
         "properties": {
@@ -114761,7 +116115,8 @@
               "restore_link",
               "restore_dates",
               "set_goal",
-              "restore_goal"
+              "restore_goal",
+              "edit_goal_milestone"
             ],
             "title": "Op"
           },
@@ -114896,6 +116251,27 @@
               }
             ],
             "title": "Words"
+          },
+          "from_meeting": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleChangeMeeting"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "off_agenda": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Off Agenda"
           }
         },
         "type": "object",
@@ -116450,6 +117826,244 @@
         ],
         "title": "SimpleGoalBucket"
       },
+      "SimpleGoalMilestone": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "roadmap_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Roadmap Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "item_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Item Ids",
+            "default": []
+          },
+          "counts_when": {
+            "type": "string",
+            "title": "Counts When",
+            "default": ""
+          },
+          "progress": {
+            "type": "string",
+            "enum": [
+              "on_track",
+              "at_risk",
+              "not_started",
+              "met"
+            ],
+            "title": "Progress",
+            "default": "not_started"
+          },
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prd_owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Owner"
+          },
+          "pending": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleMilestonePending"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "can_change": {
+            "type": "boolean",
+            "title": "Can Change",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "roadmap_id",
+          "code",
+          "name"
+        ],
+        "title": "SimpleGoalMilestone",
+        "description": "build-milestones-on-roadmap: a milestone on the Simple roadmap, per goal. ``prd``\nset: read from that PRD's own milestones (read-only except through ``pending``);\n``prd_owner``: its display name. ``date`` null: no date yet."
+      },
+      "SimpleGoalMilestoneIn": {
+        "properties": {
+          "roadmap_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Roadmap Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "item_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Item Ids",
+            "default": []
+          },
+          "counts_when": {
+            "type": "string",
+            "title": "Counts When",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "roadmap_id",
+          "name",
+          "date"
+        ],
+        "title": "SimpleGoalMilestoneIn"
+      },
+      "SimpleGoalMilestonePatch": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "item_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Ids"
+          },
+          "counts_when": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counts When"
+          }
+        },
+        "type": "object",
+        "title": "SimpleGoalMilestonePatch"
+      },
       "SimpleGoalPick": {
         "properties": {
           "id": {
@@ -117692,6 +119306,18 @@
             ],
             "title": "Due At"
           },
+          "roadmap": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap"
+          },
           "attendee_ids": {
             "items": {
               "type": "string",
@@ -118319,6 +119945,59 @@
           "item_ids"
         ],
         "title": "SimpleMilestone"
+      },
+      "SimpleMilestonePending": {
+        "properties": {
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "counts_when": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counts When"
+          },
+          "asked_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asked Of"
+          },
+          "change_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Id"
+          }
+        },
+        "type": "object",
+        "title": "SimpleMilestonePending",
+        "description": "build-milestones-on-roadmap: an edit to a PRD's milestone, waiting on its owner's\ndecision through the change engine (the milestone's date and ``counts_when`` stay as\nthe PRD has them until it is accepted)."
       },
       "SimpleMilestoneTarget": {
         "properties": {
@@ -120604,6 +122283,14 @@
             },
             "type": "array",
             "title": "Milestones"
+          },
+          "goal_milestones": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleGoalMilestone"
+            },
+            "type": "array",
+            "title": "Goal Milestones",
+            "default": []
           },
           "changes_in_review": {
             "type": "integer",

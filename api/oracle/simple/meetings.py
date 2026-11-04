@@ -55,11 +55,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, company_time, wording
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.baseline.goal_order import sort_goals
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError as ImportRejected
 from oracle.models import AuditEvent
-from oracle.roadmap.models import RoadmapItem
+from oracle.roadmap.models import ProductTrack, RoadmapItem
 from oracle.simple import change_words, drafts, minutes
 from oracle.simple.models import (
     SimpleChange,
@@ -459,6 +460,7 @@ async def start(db: AsyncSession, principal: Any, body: SimpleMeetingIn) -> Simp
             ritual = await db.get(Ritual, occurrence.ritual_id)
             title = f"{ritual.title}: {document.title}" if ritual else ""
     title = title or f"Review: {document.title}"
+    roadmap_id = await _reviewed_roadmap(db, principal, document, body.roadmap)
     session = await changes.start_session(db, principal, "meeting")
     m = SimpleMeeting(
         title=title[:200],
@@ -475,6 +477,7 @@ async def start(db: AsyncSession, principal: Any, body: SimpleMeetingIn) -> Simp
         length_min=body.length_min,
         status="live",
         started_at=session.started_at,
+        agenda={"roadmap_id": str(roadmap_id)} if roadmap_id else {},
     )
     db.add(m)
     await db.flush()
@@ -482,6 +485,31 @@ async def start(db: AsyncSession, principal: Any, body: SimpleMeetingIn) -> Simp
                        data={"prd": str(document.id), "attendees": [str(a) for a in attendees],
                              "change_mode": m.change_mode})  # fmt: skip
     return m
+
+
+async def _reviewed_roadmap(
+    db: AsyncSession, principal: Any, document: Document, ref: str | None
+) -> uuid.UUID | None:
+    """meeting-changes-only-its-agenda: the roadmap the meeting reviews: the one named
+    (422 unless a roadmap with the PRD's items), else the one the PRD's items are on; on
+    several, the one its track is on; None when none is (the meeting reviews them all)."""
+    _, on = await _prd_items(db, document)
+    if ref:
+        try:
+            where = Document.id == uuid.UUID(ref)
+        except ValueError:
+            where = Document.slug == ref
+        rm = await db.scalar(select(Document).where(where, Document.kind == "roadmap"))
+        if rm is None or rm.id not in on or not await _readable(db, principal, rm):
+            raise MeetingError(422, f"No roadmap with items of {document.title} is named {ref}")
+        return rm.id
+    if len(on) <= 1:
+        return next(iter(on), None)
+    # On several: the roadmap of the PRD's own track (one per PRD), else all of them.
+    home = await db.scalar(
+        select(ProductTrack.roadmap_document_id).where(ProductTrack.prd_document_id == document.id)
+    )
+    return home if home in on else None
 
 
 def may_start_ritual(principal: Any, ritual: Any) -> bool:
@@ -1242,14 +1270,15 @@ async def set_agenda(db: AsyncSession, meeting_id: uuid.UUID, item_id: uuid.UUID
         skipped.append(str(item_id))
         if nxt == str(item_id):
             nxt = None
-    m.agenda = {"next": nxt, "skipped": skipped}
+    m.agenda = {**was, "next": nxt, "skipped": skipped}
     await db.flush()
     return {"next": was.get("next"), "skipped": list(was.get("skipped") or [])}
 
 
 async def restore_agenda(db: AsyncSession, meeting_id: uuid.UUID, agenda: dict) -> None:
     m = await _live(db, meeting_id)
-    m.agenda = {"next": agenda.get("next"), "skipped": list(agenda.get("skipped") or [])}
+    m.agenda = {**(m.agenda or {}), "next": agenda.get("next"),
+                "skipped": list(agenda.get("skipped") or [])}  # fmt: skip
     await db.flush()
 
 
@@ -2178,13 +2207,16 @@ async def decided_in(
     if not subjects:
         return out
     wanted = {(s["kind"], s["id"], s.get("ref")) for s in subjects}
+    from oracle.decisions import standing
+
+    # Lapsed ones (reversed, withdrawn, replaced) are read too, so standing.split names them
+    # in the left-out line; only decided ones are kept.
     rows = await db.scalars(
         select(Decision)
-        .where(Decision.status == "decided")
+        .where(Decision.status.in_(("decided", *standing.LAPSED)))
         .where(or_(*[Decision.subjects.contains([{"kind": k, "id": i}]) for k, i, _ in wanted]))
         .order_by(Decision.number.desc())
     )
-    from oracle.decisions import standing
 
     # None about something in Trash (decisions-reversed-or-trashed).
     kept, gone = await standing.split(db, list(rows))
@@ -2434,8 +2466,9 @@ async def decisions_page(
         other=[_row(d, names) for d in others],
         prds=[SimpleFilterOption(id=d.slug, title=d.title)
               for d in sorted(docs.values(), key=lambda d: d.title) if d.id in readable],
+        # goal-order: the Goal filter lists the goals in the one goal order.
         goals=[SimpleFilterOption(id=g.key, title=g.title)
-               for g in sorted(goals.values(), key=lambda g: g.key)],
+               for g in sort_goals(goals.values())],
         meeting_options=[SimpleFilterOption(id=str(m.id), title=_meeting_option_title(m))
                          for m in ms],  # fmt: skip
         runs=run_groups,

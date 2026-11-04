@@ -35,6 +35,7 @@ from tests.test_roadmap import (  # noqa: F401 - fixtures
     runtime,
     seed_baseline,
     start,
+    with_plan,
 )
 from tests.test_roadmap_reasons import roadmap_items_check
 from tests.test_runs import get, tick
@@ -189,7 +190,10 @@ async def test_the_roadmap_version_imports_the_edited_items(edits, runtime):  # 
     """protects=criterion 8: the roadmap version's items follow the edited file;
     fails_when=a dropped item is imported or the old horizon kept; no_claim=the draft."""
     rv = edits
-    runtime.script["roadmap_draft"] = [Outcome(artifacts={"roadmap.md": ROADMAP_MD})]
+    # The plan tables of the edited file: Mobile push is dropped.
+    md = with_plan(ROADMAP_MD, ITEMS)
+    md = "".join(line for line in md.splitlines(True) if "Mobile push" not in line)
+    runtime.script["roadmap_draft"] = [Outcome(artifacts={"roadmap.md": md})]
     await stage_three(rv)
     await rv.decide("approver", decision="approved")
     await tick(rv.client, rv.auth)

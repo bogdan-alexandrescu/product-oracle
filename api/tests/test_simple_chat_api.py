@@ -558,9 +558,9 @@ async def test_meeting_apply_uses_the_meeting_session(client, meetings, monkeypa
     tried: list[uuid.UUID | None] = []
     create = changes.create
 
-    async def spy(db, principal, body):
+    async def spy(db, principal, body, **kw):
         tried.append(body.session_id)
-        return await create(db, principal, body)
+        return await create(db, principal, body, **kw)
 
     monkeypatch.setattr(changes, "create", spy)
     # The decider is not the presenter: their Apply still goes into the meeting's session

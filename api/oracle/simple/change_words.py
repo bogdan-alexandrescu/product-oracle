@@ -142,6 +142,10 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             return f"decided {x}"
         case "name_decider":
             return f"named who decides {x}"
+        # Goal milestones: a PRD's own milestone's date or counts-when rule, asked of its owner.
+        case "edit_goal_milestone":
+            name = _quoted(target.get("name")) or item
+            return f"changed the milestone {name}" if name else "changed a milestone"
     return f"changed {x}"
 
 

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
 import { peopleByIds } from "@/components/PersonPicker";
+import { inTextField, useSplitPanel } from "@/components/ds/panel-close";
 import { Button, Chip, CodeChip, InfoTip, Inspector, InspectorSection, Notice } from "@/components/ds";
 import { INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type EdgeOut, type EntityDetail, type EntityOut, type GraphOut, type Schemas } from "@/lib/api/client";
@@ -175,6 +176,7 @@ export function EntityDrawer({
   const treeCode = d?.parent_id ? goalCodes(graph).get(entity.id) : undefined;
   const code = treeCode !== undefined ? treeCode : named(title, d?.key ?? entity.key).code;
   const root = useRef<HTMLDivElement>(null);
+  const split = useSplitPanel();
 
   // Below the tables (narrow screens), bring the inspector into view when it opens.
   useEffect(() => {
@@ -183,11 +185,13 @@ export function EntityDrawer({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented) onClose();
+      if (e.key !== "Escape" || e.defaultPrevented || inTextField(e.target)) return;
+      if (split) split.closeWith(onClose);
+      else onClose();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, split]);
 
   async function write(run: () => Promise<string | null>) {
     setBusy(true);
@@ -397,11 +401,7 @@ export function EntityDrawer({
             )}
           </>
         }
-        action={
-          <Button variant="hero" icon="x" onClick={onClose} aria-label="Close">
-            Close
-          </Button>
-        }
+        onClose={onClose}
         stats={[
           // A score is built on evidence: none, no score (qa-plan-8).
           { label: "Confidence", figure: <ConfidenceRing value={(d ?? entity).confidence} evidence={evidence} low={low} size={44} /> },

@@ -9,15 +9,16 @@ import { expect, test, type Page } from "./test";
  * Decision 12, since reversed, and Decision 9, made about a roadmap now in Trash.
  *
  * Card decision-notes-banner: protects = the one-pager's and the roadmap's working-draft
- * banners say in plain words which decision was reversed, by number and name, and what it
- * means for the draft, linked to the decision in Company › Decisions; under the banner one
+ * banners say in plain words which decision was reversed, by number and name, on which
+ * day, and what it means for the draft, linked to the decision in Company › Decisions; under the banner one
  * quiet line names the decisions the read left out, linked the same way; fails_when = a
  * note is missing, reads the raw "D-12" token, or links nowhere; no_claim = which drafts
  * get a note and which decisions are left out (api/tests/test_decisions_reversed_or_trashed.py).
  */
 
+// The note carries the reversal's day (the mock reversed it the day before MOCK_NOW, Oct 22).
 const NOTE =
-  "Decision 12 Cut bulk export from the first release was reversed; the next draft drops what it changed. Why: Customers asked for exports back.";
+  "Decision 12 Cut bulk export from the first release was reversed on Oct 21; the next draft no longer relies on it. Why: Customers asked for exports back.";
 const LEFT_OUT =
   "Left out, no longer standing: Decision 12 Cut bulk export from the first release (reversed); Decision 9 Ship alerts by email only (about a roadmap now in Trash).";
 const DESKTOP = { width: 1366, height: 820 };

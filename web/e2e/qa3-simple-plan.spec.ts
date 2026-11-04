@@ -282,8 +282,9 @@ test.describe("QA pass 3: simple-plan, a dated plan", () => {
   test("plan buckets read weeks with their unit and say the heading once", async ({ page }) => {
     await setUp(page, { scenario: "simple-plan", phone: true, scheme: "dark" });
     await open(page, "?tab=buckets");
-    await expect(page.getByTestId("prio-subtitle")).not.toContainText("Where the engineer-weeks go");
-    for (const l of await page.getByTestId("goal-bar-segment").locator(".sr-only, [data-testid=goal-bar-label]").allTextContents()) expect(l).toMatch(/^M\d · [\d.]+ wk$/);
+    // mk-goalbuckets frames: the intro says where the weeks go and names the plan's quarter.
+    await expect(page.getByTestId("prio-subtitle")).toHaveText("Where the engineer-weeks go, goal by goal. Q4 2026.");
+    for (const l of await page.getByTestId("goal-bar-segment").locator(".sr-only, [data-testid=goal-bar-label]").allTextContents()) expect(l).toMatch(/^M\d [A-Z][\w ]* · [\d.]+ wk$/);
     const outside = page.getByTestId("plan-outside-goal").first();
     if ((await outside.count()) > 0) await expect(outside).toContainText(/\d wk/);
   });

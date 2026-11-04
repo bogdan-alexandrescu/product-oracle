@@ -3,8 +3,10 @@
 // state has its own look with the key on top (QR2 A), broken links sit in a panel above the
 // chart (QR3 A) and an item opens in a side panel (QR4 A; a sheet on a phone).
 
+import { MsLayer, type MsLane, type MsRow } from "./_milestones";
 import {
   memo,
+  useContext,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -15,6 +17,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
 import { addMonths } from "@/lib/dates";
 
 import { FixButtons, type Act } from "./_card";
@@ -362,6 +365,8 @@ export function ConflictPanel({
 /** A desktop's chart: one row per item, days to scale, zoomed to six months around today. */
 function DayChart(props: TimelineProps) {
   const { data, phone, openKey, onOpen } = props;
+  // build-goal-order-control: a goal lane's header leads with the goal's number.
+  const numbers = useContext(GoalNumbers);
   const rows = useMemo(() => rowsOf(data), [data]);
   const [zoom, setZoom] = useState<Zoom>("6m");
   const fit = zoom === "all";
@@ -736,6 +741,7 @@ function DayChart(props: TimelineProps) {
                   className="pointer-events-none relative z-[11] flex h-8 items-end border-b border-line bg-surface2/70"
                 >
                   <div className="sticky left-0 px-3 pb-1 text-sm font-semibold whitespace-nowrap">
+                    {data.group === "goal" && r.key !== "none" && r.key !== "below" && <GoalNum n={numbers.get(r.key) ?? numbers.get(r.title)} />}
                     {r.title}{" "}
                     <span className="font-normal text-text2">
                       · {r.count} {r.count === 1 ? "item" : "items"}
@@ -767,10 +773,31 @@ function DayChart(props: TimelineProps) {
               />
             );
           })}
+          {/* build-milestones-on-roadmap: the milestones over the Timeline */}
+          <TimelineMilestones rows={rows} moved={moved} x={x} labelW={labelW} trackW={trackW} phone={phone} />
         </div>
       </div>
     </div>
   );
+}
+
+/** build-milestones-on-roadmap: each row's place, for the milestone layer over the Timeline. */
+function TimelineMilestones({ rows, moved, x, labelW, trackW, phone }: { rows: Row[]; moved: Record<string, [string, string]>; x: (d: string) => number; labelW: number; trackW: number; phone: boolean }) {
+  let y = 44;
+  const out: MsRow[] = [];
+  const lanes: MsLane[] = [];
+  for (const r of rows) {
+    if (r.kind === "lane") {
+      lanes.push({ key: r.key, title: r.title, y0: y, y1: y + 32 });
+      y += 32;
+      continue;
+    }
+    const [s, e] = moved[r.item.id] ?? barSpan(r.item);
+    out.push({ id: r.item.id, title: r.item.title, lane: lanes[lanes.length - 1]?.key ?? "", y, h: ROW_H, start: s, end: e });
+    y += ROW_H;
+    if (lanes.length) lanes[lanes.length - 1].y1 = y;
+  }
+  return <MsLayer view="timeline" x={x} left={labelW} top={44} axisY={33} height={y} width={labelW + trackW} rows={out} lanes={lanes} phone={phone} />;
 }
 
 const NO_WARN: string[] = [];

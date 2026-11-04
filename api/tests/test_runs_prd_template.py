@@ -18,7 +18,7 @@ import uuid
 import pytest
 from sqlalchemy import select
 
-from oracle.runs import flows
+from oracle.runs import flows, plan_tables
 from oracle.runs import service as runs_service
 from oracle.runs.models import Run, RunSegment
 from oracle.swarm import FakeRuntime, set_runtime
@@ -143,7 +143,21 @@ async def test_the_prd_draft_prompt_names_the_template_and_pastes_the_skeleton(c
 # Refreshed for roadmap-draft-wording, whose only changes are flows.ROADMAP_WORDS in the
 # task and the named-code rules (flows.NAMED_CODES) line; ROADMAP_PINS_BEFORE_WORDING
 # proves nothing else moved.
+# Refreshed for roadmap-plan-tables, whose only change is the plan tables block
+# (oracle.runs.plan_tables.prompt_lines) in a draft with a source PRD;
+# ROADMAP_PINS_BEFORE_PLAN_TABLES proves nothing else moved. Refreshed again when the block
+# named a left-out item and the Dates from words (roadmap-plan-tables review).
 ROADMAP_PINS = {
+    (True, "roadmap-board", False): ["9dfc859b14298eed", "b22b851d6c2385d7"],
+    (True, "roadmap-board", True): ["facb642d1bbb759c", "353fa2fc5e4b7127"],
+    (True, None, False): ["e78152dee48bdddc", "8dbff203db77111d"],
+    (True, None, True): ["66d3b3e3d6b12ad1", "38eed31be25e5459"],
+    (False, "roadmap-board", False): ["c4cae288ba0a5f7b", "b7500f7de560911b"],
+    (False, "roadmap-board", True): ["c4cae288ba0a5f7b", "b7500f7de560911b"],
+    (False, None, False): ["2e25bae37d8aa957", "36b2abd791eb6c40"],
+    (False, None, True): ["2e25bae37d8aa957", "36b2abd791eb6c40"],
+}
+ROADMAP_PINS_BEFORE_PLAN_TABLES = {
     (True, "roadmap-board", False): ["c1822234fcbf6ed6", "d629969c71f442c7"],
     (True, "roadmap-board", True): ["fad4e7a40af88bf5", "362224006ca4045c"],
     (True, None, False): ["0feea63605c8ac58", "4e17458e6584d1ca"],
@@ -244,10 +258,21 @@ def test_the_roadmap_draft_prompt_is_byte_for_byte_unchanged(case):
     steps = flows.build_steps(flow, flow.segment("roadmap_draft"), knobs, ctx)
     digests = [hashlib.sha256(s[2].encode()).hexdigest()[:16] for s in steps]
     assert digests == ROADMAP_PINS[case]
-    for s in steps:
-        assert s[2].count(flows.ROADMAP_WORDS) == 1 and s[2].count(flows.NAMED_CODES) == 1
+    prompts = [s[2] for s in steps]
+    if with_source:
+        plan = plan_tables.engineering_plan(None, [])
+        blocks = [
+            "\n" + "\n".join(plan_tables.prompt_lines(plan, critic=s[1] == "critic")) for s in steps
+        ]
+        assert all(p.count(b) == 1 for p, b in zip(prompts, blocks, strict=True))
+        prompts = [p.replace(b, "") for p, b in zip(prompts, blocks, strict=True)]
+    assert [hashlib.sha256(p.encode()).hexdigest()[:16] for p in prompts] == (
+        ROADMAP_PINS_BEFORE_PLAN_TABLES[case]
+    )
+    for p in prompts:
+        assert p.count(flows.ROADMAP_WORDS) == 1 and p.count(flows.NAMED_CODES) == 1
     plain = [
-        s[2].replace(flows.ROADMAP_WORDS, "").replace("\n" + flows.NAMED_CODES, "") for s in steps
+        p.replace(flows.ROADMAP_WORDS, "").replace("\n" + flows.NAMED_CODES, "") for p in prompts
     ]
     assert [hashlib.sha256(t.encode()).hexdigest()[:16] for t in plain] == (
         ROADMAP_PINS_BEFORE_WORDING[case]

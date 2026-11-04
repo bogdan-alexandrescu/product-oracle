@@ -40,6 +40,7 @@ from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document, DocumentVersion
 from oracle.members.names import display_name
 from oracle.review.models import DocumentReviewPolicy
+from oracle.roadmap import company
 from oracle.roadmap.models import (
     ProductTrack,
     RoadmapChangeSet,
@@ -258,7 +259,10 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
         d.id: d
         for d in await db.scalars(select(Document).where(Document.kind.in_(("roadmap", "prd"))))
     }
-    roadmap_ids = [d.id for d in docs.values() if d.kind == "roadmap"]
+    # one-roadmap-many-prds: the company roadmap alone while there is one.
+    roadmap_ids = await company.feeding_ids(
+        db, [d.id for d in docs.values() if d.kind == "roadmap"]
+    )
     entries: list[Entry] = []
     if not roadmap_ids:
         return Read(today, windows, entries, [], {})
@@ -293,6 +297,9 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 .order_by(RoadmapItem.position, RoadmapItem.item_key)
             )
         )
+        # one-roadmap-many-prds: a replaced PRD's items no longer feed the roadmap.
+        if replaced := await company.replaced_prd_ids(db):
+            rows = [r for r in rows if r.prd_document_id not in replaced]
     if overlays:
         rows = [
             drafts.overlaid(r, overlays.get(r.roadmap_document_id, {}).get(str(r.id))) for r in rows
@@ -1090,6 +1097,9 @@ async def build(
             select(Document).where(Document.kind == "roadmap").order_by(Document.title)
         )
     }
+    # one-roadmap-many-prds: older per-PRD roadmaps are history, not a choice.
+    feeding = set(await company.feeding_ids(db, list(readable)))
+    readable = {i: d for i, d in readable.items() if i in feeding}
     chosen: Document | None = None
     if roadmap:
         chosen = next((d for d in readable.values() if roadmap in (str(d.id), d.slug)), None)
@@ -1170,6 +1180,11 @@ async def build(
         | {p.id for of in kd_prds.values() for p in of},
     )
     kds, kd_roadmaps = await key_dates.read_key_dates(db, principal, kd_docs, read.entries, views)
+    from oracle.simple import goal_milestones
+
+    shown_goal_milestones = await goal_milestones.list_for_roadmaps(
+        db, principal, kd_docs, read.entries, views, kd_prds
+    )
     all_roadmaps = kd_roadmaps
     if chosen is not None:
         _, all_roadmaps = await key_dates.roadmap_key_dates(db, principal, readable)
@@ -1199,6 +1214,7 @@ async def build(
             _milestone_out(m, keyed, ids, views.get(track_prd.get(m.track_id)))  # type: ignore[arg-type]
             for m in read.milestones
         ],
+        goal_milestones=shown_goal_milestones,
         span=span,
         changes_in_review=seen.of(chosen.id if chosen else None)[1],
         drafts=seen.of(chosen.id if chosen else None)[0],
