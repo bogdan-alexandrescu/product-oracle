@@ -20,6 +20,7 @@ import { betSubject, flowFor, type VisualsDb } from "./simple-visuals";
 import type { OnePagerDb } from "./simple-one-pager";
 import { appliedMilestones, type AppliedRecord } from "./approved-roadmap";
 import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
+import { COMPANY_SLUG, COMPANY_TITLE } from "./one-roadmap";
 
 type Item = Schemas["SimpleRoadmapItem"];
 type Suggestion = Schemas["DateSuggestionOut"];
@@ -575,15 +576,34 @@ function knowFitRoadmap(db: { items: { roadmap: string }[] } | undefined): void 
   }
 }
 
-/** The fit-date scenarios: the Help desk roadmap's items, added to the company's roadmap. */
-export function seedFitDateRoadmap(db: SimpleDb): void {
+/** An item only the Help desk roadmap holds once the company roadmap exists: history, never on Simple. */
+export const FIT_OLD_ITEM = "Saved reply folders";
+
+/**
+ * The fit-date scenarios: the Help desk roadmap's items, added to the company's roadmap. With
+ * `company` (one-roadmap-many-prds), they sit on the company roadmap (Product roadmap), which alone
+ * feeds Simple, and the PRD's older Help desk roadmap keeps one item of its own as history.
+ */
+export function seedFitDateRoadmap(db: SimpleDb, company = false): void {
+  const roadmap = company ? COMPANY_SLUG : FIT_ROADMAP;
   for (const [key, title, end] of FIT_ITEMS) {
     db.items.push({
-      key, title, horizon: horizonOf(end), roadmap: FIT_ROADMAP, goal: "reply-faster", track: "help-desk", confidence: "medium",
+      key, title, horizon: horizonOf(end), roadmap, goal: "reply-faster", track: "help-desk", confidence: "medium",
       status: end <= "2026-12-04" ? "in_progress" : "planned", prd_doc: FIT_PRD,
       dates: { start: addDays(end, -20), end, source: "engineering" },
     });
     db.ids[key] = stableUuid(`simple-item/${key}`);
+  }
+  if (company) {
+    const end = "2027-01-15";
+    db.items.push({
+      key: "fit-old-folders", title: FIT_OLD_ITEM, horizon: horizonOf(end), roadmap: FIT_ROADMAP, goal: "reply-faster", track: "help-desk",
+      confidence: "medium", status: "planned", prd_doc: FIT_PRD, dates: { start: addDays(end, -20), end, source: "engineering" },
+    });
+    db.ids["fit-old-folders"] = stableUuid("simple-item/fit-old-folders");
+    db.extra_roadmaps = { ...db.extra_roadmaps, [COMPANY_SLUG]: { title: COMPANY_TITLE, prd: FIT_PRD.title, track: "help-desk", track_title: "Help desk track" } };
+    // The company roadmap alone feeds Simple (api/oracle/roadmap/company.feeding_ids).
+    db.company_roadmap = COMPANY_SLUG;
   }
   knowFitRoadmap(db);
 }
@@ -605,7 +625,9 @@ export function applyFitDate(db: SimpleDb | undefined): void {
   const was = fitMoves;
   fitMoves = null;
   if (!was || !db) return;
-  const named = (s: SeedItem, names: string[]) => s.roadmap === FIT_ROADMAP && (names.includes(s.key) || names.includes(s.title));
+  // The re-plan lands on the company roadmap while there is one (fit_date_router._roadmap_id).
+  const on = db.company_roadmap ?? FIT_ROADMAP;
+  const named = (s: SeedItem, names: string[]) => s.roadmap === on && (names.includes(s.key) || names.includes(s.title));
   for (const s of db.items) {
     const to = was.moves.find((m) => named(s, [m.item]));
     if (to?.end && s.dates) {

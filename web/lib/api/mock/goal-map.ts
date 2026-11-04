@@ -5,11 +5,15 @@
  * (api/oracle/simple/goal_map.py). Invented data: three goals, a guardrail, four areas,
  * seven gated milestones and twelve features. The "goal-map-hard" scenario
  * (MOCK_SCENARIO_KEY) gives the hard case: 5 areas, 12 milestones, 40 features, one
- * milestone missed, revenue not measured yet. Invented people, products and numbers only.
+ * milestone missed, revenue not measured yet. Under "fit-date-company-roadmap" the company roadmap
+ * exists next to an older roadmap that still holds goal milestones of its own: only the company
+ * roadmap's show (goal_map._on_map). Invented people, products and numbers only.
  */
 import type { Schemas } from "@/lib/api/client";
 
+import { FIT_COMPANY_SCENARIO } from "./fit-date";
 import { stableUuid } from "./ids";
+import { COMPANY_SLUG } from "./one-roadmap";
 
 export type GoalMap = Schemas["GoalMapOut"];
 export type GmGoal = Schemas["GmGoal"];
@@ -273,8 +277,28 @@ function noGate(): GoalMap {
   return map;
 }
 
+/** Goal milestones only an older roadmap holds: history once the company roadmap exists. */
+export const OLDER_MILESTONES = ["15 sign-ups per rep", "$8k revenue per day"];
+
+/**
+ * one-roadmap-many-prds: the map's milestones on the company roadmap, the older roadmap's beside
+ * them; the map reads the roadmaps that feed Simple alone (company.feeding_ids), the company's.
+ */
+function companyRoadmap(): GoalMap {
+  const map = plain();
+  const older = [
+    ms("old1", OLDER_MILESTONES[0], "signups", 15, 31, "met", ["scale"], [], "Sep"),
+    ms("old2", OLDER_MILESTONES[1], "revenue", 8000, 11200, "met", ["onboard"], ["old1"], "Sep", "$"),
+  ];
+  const on = [...map.milestones.map((m) => ({ m, roadmap: COMPANY_SLUG })), ...older.map((m) => ({ m, roadmap: "help-desk-roadmap" }))];
+  map.milestones = on.filter((x) => x.roadmap === COMPANY_SLUG).map((x) => x.m);
+  return map;
+}
+
 export function seedGoalMap(scenario: string | null): GoalMap {
-  return withIds(scenario === "goal-map-hard" ? hard() : scenario === "goal-map-no-gate" ? noGate() : plain());
+  return withIds(
+    scenario === "goal-map-hard" ? hard() : scenario === "goal-map-no-gate" ? noGate() : scenario === FIT_COMPANY_SCENARIO ? companyRoadmap() : plain(),
+  );
 }
 
 /** As the API orders them: by what each comes after, then as added. */
@@ -352,14 +376,16 @@ export async function routeGoalMap(
     if (!g) return json(422, { detail: "Pick a goal" });
     const name = String(body?.name ?? "").trim();
     if (!(Number(body?.threshold) > 0)) return json(422, { detail: "The threshold must be above 0" });
-    if (map.milestones.some((m) => m.name === name)) return json(409, { detail: "A milestone with this name is already on the roadmap" });
     // Not sent: it comes after the goal's last milestone.
     const after = body && "after" in body ? afterOf(map, null, body.after) : [...map.milestones].reverse().find((m) => m.goal === g.id) ?? null;
     if (after instanceof Response) return after;
+    const areas: string[] = body?.areas ?? [];
+    if (areas.some((a) => !map.areas.some((x) => x.id === a))) return json(422, { detail: "Pick areas of this map" });
+    if (map.milestones.some((m) => m.name === name)) return json(409, { detail: "A milestone with this name is already on the roadmap" });
     const days = DAYS_BACK.map((i) => (g.current === null ? null : Math.round((g.current - i * 0.6) * 10) / 10));
     map.milestones.push({
       id: crypto.randomUUID(), name, goal: g.id, measure: g.measure, threshold: Number(body?.threshold), unit: g.unit, current: g.current,
-      status: g.current === null ? "not_measured" : "on_track", areas: body?.areas ?? [], depends: after ? [after.id] : [], month: "Nov", due: null, days, confirmed: null, confirmed_on: null, proposed: true,
+      status: g.current === null ? "not_measured" : "on_track", areas, depends: after ? [after.id] : [], month: "Nov", due: null, days, confirmed: null, confirmed_on: null, proposed: true,
     });
     map.milestones = ordered(map.milestones);
     return out();
