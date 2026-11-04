@@ -156,3 +156,31 @@ test("a change asked of a PRD is its owner's to approve: on the chip and under P
   await page.getByTestId("needs-decision").click();
   await expect(tray(page).getByTestId("tray-proposal").filter({ hasText: "PRD milestone" })).toHaveCount(0);
 });
+
+test("milestone labels and the PRD ask keep to their header row: none covers another or a bar, at every zoom", async ({ page }) => {
+  await open(page, "simple-prd-milestones");
+  await page.getByTestId("ms-prd-label").filter({ hasText: "M2 Digest for all teams" }).click();
+  const prd = page.getByTestId("ms-prd-card");
+  await prd.getByLabel("Date").fill("2027-01-05");
+  await prd.getByRole("button", { name: "Ask to change it" }).click();
+  await expect(page.getByTestId("ms-asked")).toBeVisible();
+  for (const zoom of ["6m", "1y", "all"]) {
+    await page.getByTestId(`zoom-${zoom}`).click();
+    await expect(page.getByTestId(`zoom-${zoom}`)).toHaveAttribute("aria-pressed", "true");
+    const hits = await page.evaluate(() => {
+      const box = (e: Element) => e.getBoundingClientRect();
+      const meet = (a: DOMRect, b: DOMRect) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+      const labels = [...document.querySelectorAll("[data-ms-label]")].filter((e) => (e as HTMLElement).style.visibility !== "hidden");
+      const bars = [...document.querySelectorAll('[data-testid="timeline-bar"]')];
+      const out: string[] = [];
+      labels.forEach((a, n) => {
+        const ra = box(a);
+        if (ra.height > 24) out.push(`${a.textContent} wraps`);
+        for (const b of labels.slice(n + 1)) if (meet(ra, box(b))) out.push(`${a.textContent} / ${b.textContent}`);
+        for (const b of bars) if (meet(ra, box(b))) out.push(`${a.textContent} / ${b.getAttribute("aria-label")}`);
+      });
+      return out;
+    });
+    expect(hits, zoom).toEqual([]);
+  }
+});

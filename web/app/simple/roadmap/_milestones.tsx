@@ -211,10 +211,11 @@ function Diamond({ x, y, code, size = 12, hollow = false, dashed = false, title,
 /** A label's width at text-xs semibold, near enough to keep labels apart. */
 const textW = (t: string) => Math.ceil(t.length * 7.6) + 24;
 
-function Chip({ children, style, className = "", mx, testid, onClick }: { children: ReactNode; style?: CSSProperties; className?: string; mx?: number; testid?: string; onClick?: () => void }) {
+function Chip({ children, style, className = "", mx, testid, title, onClick }: { children: ReactNode; style?: CSSProperties; className?: string; mx?: number; testid?: string; title?: string; onClick?: () => void }) {
   return (
     <span
       data-testid={testid}
+      title={title}
       data-ms-label={mx != null ? "" : undefined}
       data-mx={mx}
       data-t0={mx != null ? style?.top : undefined}
@@ -261,8 +262,8 @@ export function MsLayer(props: MsLayerProps) {
   const ms = useMsCtl();
   const ref = useRef<HTMLDivElement>(null);
   // A label keeps all its words inside the chart's visible part: it sits right of its diamond when it
-  // fits there, else left of it; with no room for one line on either side it wraps to two lines on the
-  // roomier side. The names column (the Timeline's sticky one) counts as an edge, and a label whose
+  // fits there, else left of it, else after the label it meets, on one line (cut short when the row runs
+  // out). The names column (the Timeline's sticky one) counts as an edge, and a label whose
   // diamond has scrolled out of sight goes with it.
   useLayoutEffect(() => {
     const layer = ref.current;
@@ -276,42 +277,51 @@ export function MsLayer(props: MsLayerProps) {
       const right = b.right - 6;
       const leftEdge = b.left + inset + 6;
       const lx = layer.getBoundingClientRect().left;
-      const placed: DOMRect[] = [];
-      // Top rows first, so a label that steps down only ever lands below the one it met.
-      const labels = [...layer.querySelectorAll<HTMLElement>("[data-ms-label]")].sort((a, b) => (Number(a.dataset.t0) || 0) - (Number(b.dataset.t0) || 0));
-      for (const el of labels) {
-        const mx = Number(el.dataset.mx);
+      // roadmap-decide: one line per header row, never stepping down over the item rows' bars and
+      // dates: each sits right of its diamond (or left of it near the right edge), and one that would
+      // run into the next label is cut short there (its words in its tooltip).
+      const labels = [...layer.querySelectorAll<HTMLElement>("[data-ms-label]")].sort((a, b) => (Number(a.dataset.t0) || 0) - (Number(b.dataset.t0) || 0) || Number(a.dataset.mx) - Number(b.dataset.mx));
+      const shown = labels.filter((el) => {
+        const mx = lx + Number(el.dataset.mx);
+        const gone = mx < leftEdge - 6 || mx > right + 6;
+        el.style.visibility = gone ? "hidden" : "";
+        return !gone;
+      });
+      let end = -Infinity;
+      shown.forEach((el, n) => {
+        const t0 = Number(el.dataset.t0) || 0;
+        const prev = shown[n - 1];
+        if (!prev || (Number(prev.dataset.t0) || 0) !== t0) end = -Infinity;
+        const next = shown[n + 1];
+        const nextT = next && (Number(next.dataset.t0) || 0) === t0 ? lx + Number(next.dataset.mx) + 6 : Infinity;
         el.style.whiteSpace = "nowrap";
         el.style.width = "";
         el.style.maxWidth = "";
-        const w = el.scrollWidth + 2;
-        const t0 = Number(el.dataset.t0) || 0;
-        const gone = lx + mx < leftEdge - 6 || lx + mx > right + 6;
-        el.style.visibility = gone ? "hidden" : "";
-        if (gone) continue;
-        const startR = Math.max(lx + mx + 6, leftEdge);
-        const roomR = right - startR;
-        const roomL = lx + mx - 6 - leftEdge;
-        const wrap = roomR < w && roomL < w;
-        el.style.whiteSpace = wrap ? "normal" : "nowrap";
-        el.style.lineHeight = wrap ? "14px" : "";
-        el.style.paddingBlock = wrap ? "2px" : "";
-        el.style.borderRadius = wrap ? "8px" : "";
-        const cw = wrap ? Math.min(Math.max(roomR, roomL), Math.ceil(w * 0.6) + 12) : w;
-        el.style.maxWidth = `${cw}px`;
-        el.style.width = wrap ? `${cw}px` : "";
-        el.style.left = `${roomR >= w || (wrap && roomR >= roomL) ? startR - lx : mx - 6 - cw}px`;
         el.style.top = `${t0}px`;
-        // Any label that meets one placed before steps down below it (one flipped left of a diamond
-        // near the right edge lands where the row's earlier labels are).
-        for (let n = 0; n < 4; n++) {
-          const r = el.getBoundingClientRect();
-          const hit = placed.find((o) => r.left < o.right + 2 && o.left < r.right + 2 && r.top < o.bottom + 1 && o.top < r.bottom + 1);
-          if (!hit) break;
-          el.style.top = `${parseFloat(el.style.top) + (hit.bottom - r.top) + 3}px`;
+        const w = el.scrollWidth + 2;
+        const mx = lx + Number(el.dataset.mx);
+        // A change asked of a PRD keeps all its words; the labels after it make room.
+        const lead = el.dataset.testid === "ms-asked";
+        let l = Math.max(mx + 6, leftEdge, end + 4);
+        let cw = w;
+        const room = Math.min(lead ? Infinity : nextT - 4, right) - l;
+        if (w > room) {
+          if ((lead || nextT === Infinity) && mx - 6 - w >= Math.max(leftEdge, end + 4)) l = mx - 6 - w;
+          else cw = Math.max(40, Math.min(w, room));
         }
-        placed.push(el.getBoundingClientRect());
-      }
+        if (l + cw > right) {
+          // No room left in the row: it waits behind the ones before it (its diamond keeps its name).
+          if (!lead && l + 40 > right) {
+            el.style.visibility = "hidden";
+            return;
+          }
+          l = Math.max(leftEdge, right - cw);
+        }
+        el.style.maxWidth = `${cw}px`;
+        el.style.width = cw < w ? `${cw}px` : "";
+        el.style.left = `${l - lx}px`;
+        end = l + cw;
+      });
     };
     fit();
     box.addEventListener("scroll", fit);
@@ -331,25 +341,38 @@ export function MsLayer(props: MsLayerProps) {
   for (const m of shown) byDay.set(m.date!, (byDay.get(m.date!) ?? 0) + 1);
   const seenDay = new Map<string, number>();
 
-  // Labels in a goal's header row: each keeps its name; one that has no room moves to the row below,
-  // and one near the right edge sits to the left of its diamond.
-  const tiers = new Map<string, number[]>();
+  // Labels in a goal's header row, one line of them (roadmap-decide: never spilling into the item rows
+  // below, where they drew over the bars' dates): each starts at its line, or right after the label
+  // before it; one near the right edge sits to the left of its line, else is cut short (its full
+  // words in its tooltip).
+  const ends = new Map<string, number>();
   const labelAt = (band: string, mx: number, y0: number, text: string, cap = phone ? 160 : 320) => {
-    const w = Math.min(textW(text), cap);
-    let l = mx + 6;
-    if (l + w > props.width - 6) l = mx - 6 - w;
-    const ends = tiers.get(band) ?? [];
-    let t = ends.findIndex((e) => l >= e + 4);
-    if (t < 0) t = ends.length < 3 ? ends.length : ends.indexOf(Math.min(...ends));
-    ends[t] = l + w;
-    tiers.set(band, ends);
-    return { left: l, top: y0 + 6 + t * 24, maxWidth: w };
+    let w = Math.min(textW(text), cap);
+    const end = ends.get(band) ?? -Infinity;
+    let l = Math.max(mx + 6, end + 4);
+    if (l + w > props.width - 6) {
+      if (mx - 6 - w >= end + 4) l = mx - 6 - w;
+      else w = Math.max(48, props.width - 6 - l);
+    }
+    ends.set(band, l + w);
+    return { left: l, top: y0 + 5, maxWidth: w };
   };
-  const order = [...shown.map((m) => ({ m, fromPrd: false })), ...prd.map((m) => ({ m, fromPrd: true }))].sort((a, b) => a.m.date!.localeCompare(b.m.date!));
+  const askWords = (m: GoalMilestone, asked: string, live: boolean) =>
+    live ? `Moving ${words(m)} to ${day(asked)}` : `Asked the PRD: move ${words(m)} to ${day(asked)} · waits for ${m.prd_owner ?? "its owner"}`;
+  type Label = { key: string; date: string; m: GoalMilestone; text: string };
+  const labels: Label[] = [
+    ...shown.map((m) => ({ key: m.id, date: m.date!, m, text: `${words(m)} · ${day(m.date!)}` })),
+    ...prd.map((m) => ({ key: m.id, date: m.date!, m, text: `PRD · ${words(m)}` })),
+  ];
+  for (const m of prd) {
+    const live = ms.moving?.id === m.id ? ms.moving.date : null;
+    const asked = live ?? m.pending?.date ?? null;
+    if (asked && asked !== m.date) labels.push({ key: `ask-${m.id}`, date: asked, m, text: askWords(m, asked, !!live) });
+  }
   const at = new Map<string, { left: number; top: number; maxWidth: number }>();
-  for (const { m, fromPrd } of order) {
+  for (const { key, date, m, text } of labels.sort((a, b) => a.date.localeCompare(b.date))) {
     const lane = laneOf(m.goal_id);
-    if (lane) at.set(m.id, labelAt(lane.key, X(m.date!), lane.y0, fromPrd ? `PRD · ${words(m)}` : `${words(m)} · ${day(m.date!)}`));
+    if (lane) at.set(key, labelAt(lane.key, X(date), lane.y0, text));
   }
   // A drag on a diamond moves it; a click (no move) opens it.
   const grab = (m: GoalMilestone) => (e: ReactPointerEvent) => {
@@ -401,7 +424,7 @@ export function MsLayer(props: MsLayerProps) {
     out.push(<div key={`v-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: `1.5px solid ${msEdge(m.code)}` }} />);
     out.push(<div key={`s-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: lane.y0 - axisY - 6, borderLeft: `1px dotted ${msEdge(m.code)}`, opacity: 0.6 }} />);
     out.push(
-      <Chip key={`f-${m.id}`} testid="ms-label" mx={mx} onClick={() => ms.edit(m)} style={{ ...at.get(m.id), background: msFill(m.code), color: msInk(m.code), border: `1px solid ${msEdge(m.code)}` }}>
+      <Chip key={`f-${m.id}`} testid="ms-label" mx={mx} title={`${words(m)} · ${day(date)}`} onClick={() => ms.edit(m)} style={{ ...at.get(m.id), background: msFill(m.code), color: msInk(m.code), border: `1px solid ${msEdge(m.code)}` }}>
         {words(m)} · {day(date)}
       </Chip>,
     );
@@ -438,7 +461,7 @@ export function MsLayer(props: MsLayerProps) {
     if (!lane) continue;
     out.push(<div key={`pv-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: `1.5px dashed ${msEdge(m.code)}`, opacity: to != null ? 0.4 : 1 }} />);
     out.push(
-      <Chip key={`pc-${m.id}`} testid="ms-prd-label" mx={mx} onClick={() => ms.edit(m)} className="border" style={{ background: "var(--surface)", ...at.get(m.id), borderStyle: "dashed", color: msInk(m.code), borderColor: msEdge(m.code), opacity: to != null ? 0.5 : 1 }}>
+      <Chip key={`pc-${m.id}`} testid="ms-prd-label" mx={mx} title={`PRD · ${words(m)}`} onClick={() => ms.edit(m)} className="border" style={{ background: "var(--surface)", ...at.get(m.id), borderStyle: "dashed", color: msInk(m.code), borderColor: msEdge(m.code), opacity: to != null ? 0.5 : 1 }}>
         <span className="font-normal text-text2">PRD · </span>
         {words(m)}
       </Chip>,
@@ -449,13 +472,13 @@ export function MsLayer(props: MsLayerProps) {
       // roadmap-decide: the PRD's owner gets the ask as an action: the chip opens Approve / Decline in place.
       const mine = !live && !!m.pending?.can_decide;
       out.push(
-        <Chip key={`ppc-${m.id}`} testid="ms-asked" mx={to} className="border border-warn bg-warn-bg text-warn" onClick={mine ? () => ms.setAsking(ms.asking === m.id ? null : m.id) : undefined} style={{ left: to + 6, top: lane.y0 + 4 }}>
-          {live ? `Moving ${words(m)} to ${day(asked!)}` : `Asked the PRD: move ${words(m)} to ${day(asked!)} · waits for ${m.prd_owner ?? "its owner"}`}
+        <Chip key={`ppc-${m.id}`} testid="ms-asked" mx={to} title={askWords(m, asked!, !!live)} className="border border-warn bg-warn-bg text-warn" onClick={mine ? () => ms.setAsking(ms.asking === m.id ? null : m.id) : undefined} style={{ left: to + 6, top: lane.y0 + 5, ...at.get(`ask-${m.id}`) }}>
+          {askWords(m, asked!, !!live)}
         </Chip>,
       );
       if (mine && ms.asking === m.id)
         out.push(
-          <span key={`ppd-${m.id}`} role="group" aria-label={`Decide the change to ${words(m)}`} data-testid="ms-asked-decide" className="absolute z-[17] flex gap-1.5 rounded-lg border border-line bg-surface p-1.5 shadow-tip" style={{ left: to + 6, top: lane.y0 + 28 }}>
+          <span key={`ppd-${m.id}`} role="group" aria-label={`Decide the change to ${words(m)}`} data-testid="ms-asked-decide" className="absolute z-[17] flex gap-1.5 rounded-lg border border-line bg-surface p-1.5 shadow-tip" style={{ left: at.get(`ask-${m.id}`)?.left ?? to + 6, top: lane.y0 + 30 }}>
             <Button variant="solid" className="!h-7 !px-2 !text-xs" onClick={() => void ms.decide(m, "accept")}>
               Approve
             </Button>
