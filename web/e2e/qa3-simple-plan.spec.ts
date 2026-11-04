@@ -283,7 +283,7 @@ test.describe("QA pass 3: simple-plan, a dated plan", () => {
     await setUp(page, { scenario: "simple-plan", phone: true, scheme: "dark" });
     await open(page, "?tab=buckets");
     await expect(page.getByTestId("prio-subtitle")).not.toContainText("Where the engineer-weeks go");
-    for (const l of await page.getByTestId("goal-bar-segment").locator(".sr-only, [data-testid=goal-bar-label]").allTextContents()) expect(l).toMatch(/^M\d · [\d.]+ wk$/);
+    for (const l of await page.getByTestId("goal-bar-segment").locator(".sr-only, [data-testid=goal-bar-label]").allTextContents()) expect(l).toMatch(/^M\d [A-Z][\w ]* · [\d.]+ wk$/);
     const outside = page.getByTestId("plan-outside-goal").first();
     if ((await outside.count()) > 0) await expect(outside).toContainText(/\d wk/);
   });

@@ -157,9 +157,10 @@ for (const v of VIEWS) {
       // B's strong milestone colours, not pale tints: each segment's text is --on-accent on it.
       const fills = await head.getByTestId("goal-bar-segment").evaluateAll((els) => [...new Set(els.map((e) => getComputedStyle(e).backgroundColor))]);
       expect(fills).toHaveLength(3);
-      // A label shows only where it fits (B leaves a narrow segment blank, its words in its title).
+      // A label shows only where it fits (B leaves a narrow segment blank, its words in its title);
+      // named labels ("M2 Scale volume · 3 wk") fit fewer segments than the code alone did.
       await nothingCut(head.locator('[data-testid="goal-bar-label"], [data-testid="milestone-chip"]'));
-      if (!v.phone) await expect(head.getByTestId("goal-bar-label")).toHaveCount(11);
+      if (!v.phone) await expect(head.getByTestId("goal-bar-label")).toHaveCount(5);
       // Every label on a milestone colour reads at AA (4.5:1), light and dark.
       expect(await contrasts(head.getByTestId("goal-bar-label"))).toEqual([]);
 
