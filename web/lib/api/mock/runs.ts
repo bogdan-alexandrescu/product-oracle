@@ -632,12 +632,17 @@ function reviewOf(r: RunOut, s: SegmentOut): CheckpointOut | undefined {
 }
 
 /** As the API: approving is refused while the draft its segment left is not imported. */
-const NOT_IMPORTED = "the draft was not imported: retry import, or request changes";
+const NOT_IMPORTED = "the draft was not imported: retry import, or send it back to the writer";
+/** As the API's not_imported (Nov 3): the refusal names what is wrong in plain words, the summary's causes. */
+function notImported(summary: string | null | undefined): string {
+  const causes = (summary ?? "").match(/^Oracle (?:refused|could not import) [^:]+: (.+)\.$/)?.[1];
+  return causes ? `the draft was not imported: ${causes.split(". ").join("; ")}; retry import, or send it back to the writer` : NOT_IMPORTED;
+}
 /** As the API: blocking problems are the approve gate's (D3, gateOf), the feature set's and the priority order's included. */
 function cannotApprove(c: CheckpointOut): string | null {
   if (c.status !== "pending") return null;
-  const payload = c.payload as { import?: { error?: string | null } } | undefined;
-  return payload?.import?.error ? NOT_IMPORTED : null;
+  const payload = c.payload as { import?: { error?: string | null; summary?: string | null } } | undefined;
+  return payload?.import?.error ? notImported(payload.import.summary) : null;
 }
 
 /** As oracle.runs.gate (D3): a date reason is never waived; file-level problems never are. */
@@ -2270,7 +2275,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     // C7: a feature set's edits and adds are its rows (counted as edits), never staged actions.
     const sent = staged.filter((a) => cp.kind !== "feature_set" || (a.kind !== "edit" && a.kind !== "add"));
     const scopeEdited = cp.kind === "feature_set" ? scopeEdits(ctx.db, r.id) : 0;
-    if (decision === "changes_requested" && !text && !reviewed && !sent.length && !scopeEdited) return fail(422, "Stage a change, ask a question, or write a note to send back.");
+    // As the API (Nov 3): a refused draft goes back with its import problems; no note is needed.
+    const refusedDraft = !!(cp.payload as { import?: { error?: string | null } } | undefined)?.import?.error;
+    if (decision === "changes_requested" && !text && !reviewed && !sent.length && !scopeEdited && !refusedDraft) return fail(422, "Stage a change, ask a question, or write a note to send back.");
     const status = confirming ? "approved" : (decision as "approved" | "changes_requested");
     // A confirmed console answer is its author's, as the API names it, not the confirmer's.
     const answerer = confirming ? (ctx.members ?? []).find((x) => x.email === cp.console?.answered_by) : undefined;
