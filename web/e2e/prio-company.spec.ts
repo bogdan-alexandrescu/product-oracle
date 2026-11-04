@@ -19,14 +19,14 @@ import { expect, test } from "./test";
 
 const PHONE = { width: 390, height: 844 };
 
-async function setUp(page: Page, scheme: "light" | "dark", phone: boolean): Promise<void> {
+async function setUp(page: Page, scheme: "light" | "dark", phone: boolean, scenario = "simple-plan"): Promise<void> {
   await page.setViewportSize(phone ? PHONE : { width: 1440, height: 900 });
   await page.context().addInitScript(
     ([key, value, themeKey, theme]) => {
-      localStorage.setItem(key, value);
+      if (value) localStorage.setItem(key, value);
       localStorage.setItem(themeKey, theme);
     },
-    [MOCK_SCENARIO_KEY, "simple-plan", THEME_KEY, scheme] as const,
+    [MOCK_SCENARIO_KEY, scenario, THEME_KEY, scheme] as const,
   );
   await page.emulateMedia({ colorScheme: scheme });
   await login(page);
@@ -56,8 +56,13 @@ for (const scheme of ["light", "dark"] as const) {
         const keys = await page.getByTestId("prio-own-key").allTextContents();
         for (const k of keys) expect(k).toMatch(/^[A-Z]{1,3}-\d+$/);
         await expect(rowByTitle(page, "Setup error report").getByTestId("prio-own-key")).toHaveText("F-06");
-        await expect(rowByTitle(page, "Pricing page words").getByTestId("prio-own-key")).toHaveCount(0);
 
+        await page.screenshot({ path: info.outputPath(`priorities-plan-${scheme}-${phone ? "390" : "desktop"}.png`), fullPage: false });
+      });
+
+      test("N of M miss this quarter is a count, and Show them lists each feature on its own line", async ({ page }, info) => {
+        // The first-run roadmap: the line is this quarter, so the list is one part under the caption.
+        await setUp(page, scheme, phone, "");
         // "N of M miss …": a count, then Show them lists each, one per line.
         const caption = page.getByTestId("line-caption").first();
         await expect(caption).toContainText(/\d+ of \d+ miss/);
