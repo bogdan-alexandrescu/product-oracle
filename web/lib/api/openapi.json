@@ -114914,9 +114914,15 @@
             ]
           },
           "off_agenda": {
-            "type": "boolean",
-            "title": "Off Agenda",
-            "default": false
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Off Agenda"
           }
         },
         "type": "object",

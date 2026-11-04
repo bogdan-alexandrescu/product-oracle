@@ -536,6 +536,7 @@ function DecisionTray({
     <li key={c.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-proposal">
       <span className="min-w-0 flex-1 text-[15px]">
         {title(c)}: {opWords(c.op).toLowerCase()} · <span className="text-text2">{c.by_name}</span>
+        {c.from_meeting && <span className="block text-sm text-text2" data-testid="proposal-from-meeting">Asked for by the meeting {c.from_meeting.title}</span>}
       </span>
       <Button onClick={() => onDecide(c, "accept")}>Accept</Button>
       <Button variant="ghost" onClick={() => onDecide(c, "decline")}>

@@ -1205,11 +1205,11 @@ class _View:
         # meeting-changes-only-its-agenda: each meeting session's agenda, by session id.
         self.agendas: dict[uuid.UUID, Any] = {}
 
-    def meeting(self, c: SimpleChange) -> tuple[SimpleChangeMeeting | None, bool]:
+    def meeting(self, c: SimpleChange) -> tuple[SimpleChangeMeeting | None, bool | None]:
         """(the meeting it was made in, whether its item is off that meeting's agenda)."""
         ag = self.agendas.get(c.session_id) if c.session_id else None
         if ag is None:
-            return None, False
+            return None, None
         e = self.entry(c) if c.target.get("item_id") else None
         off = (not ag.covers(e.row)) if e is not None else not ag.covers_document(c.document_id)
         return SimpleChangeMeeting(id=ag.meeting_id, title=ag.title), off

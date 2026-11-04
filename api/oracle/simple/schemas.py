@@ -653,8 +653,9 @@ class SimpleChangeOut(BaseModel):
     # meeting-changes-only-its-agenda: the meeting it was made in, and whether it is on an
     # item that meeting does not review (so a proposal for the item's owner, never applied
     # by the meeting): "Asked for by the meeting Payments review".
+    # null: not made in a meeting.
     from_meeting: SimpleChangeMeeting | None = None
-    off_agenda: bool = False
+    off_agenda: bool | None = None
 
 
 class SimpleItemFlags(BaseModel):

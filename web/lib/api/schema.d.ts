@@ -38101,11 +38101,8 @@ export interface components {
             /** Words */
             words?: string | null;
             from_meeting?: components["schemas"]["SimpleChangeMeeting"] | null;
-            /**
-             * Off Agenda
-             * @default false
-             */
-            off_agenda: boolean;
+            /** Off Agenda */
+            off_agenda?: boolean | null;
         };
         /** SimpleChangeResult */
         SimpleChangeResult: {

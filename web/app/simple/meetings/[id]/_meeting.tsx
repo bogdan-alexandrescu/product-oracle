@@ -527,6 +527,9 @@ function RoadmapSlice({ m, reload, refresh }: { m: Meeting; reload: () => Promis
     act(async () => {
       const r = await unwrap(api.POST("/v1/simple/changes", { body: { ...body, session_id: m.session_id } }));
       const c = r.change;
+      // meeting-changes-only-its-agenda: an item on another roadmap is only sent to its owner.
+      const title = q.data?.items.find((x) => x.id === String(body.target.item_id))?.title ?? "This item";
+      if (c.off_agenda) return setSaid(`${title} is on another roadmap: sent to its owner to decide.`);
       setSaid(c.status === "proposed" ? `Proposed: ${words[0]!.toLowerCase()}${words.slice(1)}. It waits on its decider.` : `${words}.`);
       // The rest of qa4-simple-decide-16: an applied move or cut is undone from its toast, like a decided question.
       if (c.can_undo)
@@ -636,8 +639,9 @@ function DecisionsStep({ m, reload }: { m: Meeting; reload: () => Promise<unknow
             <li key={c.id} data-change={c.id} className="flex flex-wrap items-center justify-between gap-2">
               <span>
                 {c.by_name} proposes: {proposalWords(c)}
+                {c.off_agenda && <span className="block simple-small text-text2" data-testid="proposal-elsewhere">On another roadmap: sent to its owner to decide.</span>}
               </span>
-              {c.can_decide && (
+              {c.can_decide && !c.off_agenda && (
                 <span className="flex gap-2">
                   {/* qa4-simple-decide-31: one height for both. */}
                   <Button variant="primary" className={`h-10 ${PHONE_TAP}`} disabled={busy} onClick={() => decide(c.id, "accept")}>Accept</Button>

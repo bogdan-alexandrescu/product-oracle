@@ -925,6 +925,27 @@ export function seedSimpleProposal(
   (db.changes ??= []).push(c);
 }
 
+/**
+ * meeting-changes-only-its-agenda (changes.create): a change a meeting makes to an item it does
+ * not review is never applied: a proposal for the item's own decider (never the meeting's),
+ * naming the meeting that asked for it.
+ */
+export function proposeOffAgenda(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"], meeting: { id: string; title: string }, sessionId: string): Schemas["SimpleChangeResult"] | Response {
+  const key = keyOf(db, body.target.item_id);
+  if (!key) return json(404, { detail: "No such roadmap item" });
+  const fields = FIELDS[body.op] ?? Object.keys(body.after ?? {});
+  const after = body.op === "cut" ? { cut: true } : body.op === "restore" ? { cut: false } : { ...(body.after ?? {}) };
+  const c: Change = {
+    id: crypto.randomUUID(), session_id: sessionId, document_id: stableUuid(`simple-doc/${seed(db, key).roadmap}`), draft_ids: [],
+    op: body.op, target: { ...body.target }, before: body.before ?? read(db, key, fields, body.target), after, status: "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
+    decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null, routed_to: [], undoes_id: null, undone: false, can_decide: false, can_undo: false,
+    from_meeting: meeting, off_agenda: true,
+  };
+  c.routed_to = route(db, ctx, c);
+  (db.changes ??= []).push(c);
+  return { change: view(db, ctx, c), flags: [] };
+}
+
 /** Inbox rows (changes.inbox_rows): proposals waiting for me, decisions on mine. */
 export function simpleInboxRows(
   db: SimpleDb | undefined,
@@ -939,6 +960,7 @@ export function simpleInboxRows(
       id: c.id, op: c.op, status: c.status, item_id: (c.target.item_id as string) ?? null, item_title: key ? seed(db!, key).title : typeof c.after.title === "string" ? c.after.title : null,
       document_id: c.document_id, by: c.by, by_name: c.by_name, at: c.at, decided_by: c.decided_by, decided_at: c.decided_at,
       reason: c.reason, decision_reason: c.decision_reason, state: state ?? (!seen || (at && at > seen) ? "new" : "open"),
+      from_meeting: c.from_meeting ?? null,
     };
   };
   return {

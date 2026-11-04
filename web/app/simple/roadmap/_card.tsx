@@ -1032,6 +1032,7 @@ export function FloatingCard({
                     <span className="min-w-0 flex-1">
                       {opWords(c.op)} ·{" "}
                       <span className="text-text2">{c.by_name}</span>
+                      {c.from_meeting && <span className="block text-sm text-text2" data-testid="proposal-from-meeting">Asked for by the meeting {c.from_meeting.title}</span>}
                     </span>
                     {c.can_decide && (
                       <>
