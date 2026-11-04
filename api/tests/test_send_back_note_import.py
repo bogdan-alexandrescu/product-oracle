@@ -70,7 +70,10 @@ async def test_a_draft_with_note_answers_and_a_bad_resolution_imports(client):
 
 
 async def test_send_back_to_writer_with_no_note_sends_the_import_problems(
-    client, owner, runtime, monkeypatch
+    client,
+    owner,
+    runtime,
+    monkeypatch,  # noqa: F811
 ):
     _, auth = owner
     run = await _rejected(client, auth, runtime, monkeypatch)
@@ -85,7 +88,10 @@ async def test_send_back_to_writer_with_no_note_sends_the_import_problems(
 
 
 async def test_the_stop_names_the_import_problem_in_plain_words(
-    client, owner, runtime, monkeypatch
+    client,
+    owner,
+    runtime,
+    monkeypatch,  # noqa: F811
 ):
     _, auth = owner
     run = await _rejected(client, auth, runtime, monkeypatch)
