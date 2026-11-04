@@ -208,8 +208,15 @@ async def list_for_roadmaps(
         for u in (await db.scalars(select(User).where(User.id.in_(first_owners))))
     } if first_owners else {}  # fmt: skip
     out = [
-        await _out(db, principal, r, docs[r.roadmap_id], prds_by_id.get(r.origin_prd_id), w,  # type: ignore[arg-type]
-                   names)  # fmt: skip
+        await _out(
+            db,
+            principal,
+            r,
+            docs[r.roadmap_id],
+            prds_by_id.get(r.origin_prd_id),  # type: ignore[arg-type]
+            w,
+            names,
+        )
         for r in shown
     ]
     out.sort(key=lambda m: (str(m.roadmap_id), m.goal_id is None, str(m.goal_id), m.code))
