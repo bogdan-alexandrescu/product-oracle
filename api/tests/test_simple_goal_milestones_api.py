@@ -28,6 +28,7 @@ from sqlalchemy import select
 
 from oracle import company_time
 from oracle.auth.models import User
+from oracle.docs.models import Document
 from oracle.members.names import display_name
 from oracle.roadmap.models import TrackMilestone
 from oracle.simple.models import SimpleChange, SimplePrdPlan
@@ -54,12 +55,12 @@ async def seed_roadmap(ctx: Ctx) -> dict:
         return {"roadmap_id": str(rm.id), "goal_id": str(goal.id)}
 
 
-async def seed_prd_roadmap(ctx: Ctx, owner_id: uuid.UUID) -> dict:
+async def seed_prd_roadmap(ctx: Ctx, owner_id: uuid.UUID, slug: str = "setup") -> dict:
     """A roadmap with one item from a PRD whose plan has two milestones: M1 dated, M2
     with no date anywhere."""
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
-        prd, pv, rm, rv = await seed.roadmap("setup")
+        prd, pv, rm, rv = await seed.roadmap(slug)
         await seed.track(pv, rm, title="Guided setup", owner_id=owner_id)
         await seed.item(rv, pv, "f-03", track_id=None)
         data = {
@@ -185,3 +186,132 @@ async def test_prd_milestones_appear_dated_and_propose_through_the_change_engine
     after = by_code(await get_roadmap(client, ctx, "viewer"))
     assert after["M1"]["date"] == "2026-12-04"
     assert after["M1"]["pending"] is None
+
+
+async def approve_new_plan(ctx: Ctx, prd_id: str, n: int, milestones: list[dict]) -> None:
+    """The PRD gets a newer approved version whose stored plan has these milestones."""
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        prd = await s.get(Document, uuid.UUID(prd_id))
+        v = await seed.version(prd, n=n)
+        plan = await s.scalar(select(SimplePrdPlan).where(SimplePrdPlan.document_id == prd.id))
+        plan.version_id = v.id
+        plan.data = {**plan.data, "milestones": milestones}
+        await s.commit()
+
+
+async def test_a_newer_approved_prd_version_redates_and_renames_its_milestones(client):
+    """protects=each PRD milestone's date and name come from the PRD's latest approved
+    version on every read, not only the first: a milestone with no date gets the date a
+    later version gives it, a moved date moves, a renamed one is renamed; an accepted change
+    holds until the PRD's own plan moves that milestone again; fails_when=the row keeps the
+    values it was first read with."""
+    ctx = await make_ctx()
+    async with tenant_session(ctx.tenant_id) as s:
+        owner = User(email="planowner@example.com", name="Pat Planner", password_hash="x",
+                     role="approver")  # fmt: skip
+        s.add(owner)
+        await s.commit()
+        ctx.users["prdowner"] = owner
+    ids = await seed_prd_roadmap(ctx, owner.id)
+    first = by_code(await get_roadmap(client, ctx, "viewer"))
+    assert (first["M1"]["date"], first["M2"]["date"]) == ("2026-11-27", None)
+    await approve_new_plan(ctx, ids["prd_id"], 2, [
+        {"code": "M1", "name": "Prove it", "start": "2026-11-02", "end": "2026-12-11",
+         "effort_weeks": 6, "done_when": [], "targets": []},
+        {"code": "M2", "name": "Scale it up", "start": "2026-12-14", "end": "2027-01-15",
+         "effort_weeks": 4, "done_when": [], "targets": []},
+    ])  # fmt: skip
+    second = by_code(await get_roadmap(client, ctx, "viewer"))
+    assert (second["M1"]["date"], second["M2"]["date"]) == ("2026-12-11", "2027-01-15")
+    assert second["M2"]["name"] == "Scale it up"
+    assert second["M1"]["id"] == first["M1"]["id"]
+    # An accepted change holds while the PRD's plan keeps its date for that milestone...
+    r = await client.patch(f"{MILESTONES}/{second['M1']['id']}", json={"date": "2026-12-18"},
+                           headers=ctx.as_("commenter"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    r = await client.post(f"{CHANGES}/{r.json()['pending']['change_id']}/accept",
+                          headers=ctx.as_("prdowner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert by_code(await get_roadmap(client, ctx, "viewer"))["M1"]["date"] == "2026-12-18"
+    # ...and gives way when a newer approved version moves it.
+    await approve_new_plan(ctx, ids["prd_id"], 3, [
+        {"code": "M1", "name": "Prove it", "start": "2026-11-02", "end": "2027-01-08",
+         "effort_weeks": 8, "done_when": [], "targets": []},
+        {"code": "M2", "name": "Scale it up", "start": "2027-01-11", "end": "2027-01-29",
+         "effort_weeks": 3, "done_when": [], "targets": []},
+    ])  # fmt: skip
+    third = by_code(await get_roadmap(client, ctx, "viewer"))
+    assert (third["M1"]["date"], third["M2"]["date"]) == ("2027-01-08", "2027-01-29")
+
+
+async def test_the_first_reads_of_a_prd_roadmap_at_once_both_succeed(client, monkeypatch):
+    """protects=two people opening a PRD roadmap for the first time at the same moment both
+    get it: the other reader materialises the PRD's milestones between this read's look at
+    the rows and its insert, and this read still answers 200 with each milestone once (and
+    the same ids); fails_when=the second insert of the same row raises a duplicate key and
+    the roadmap read returns 500."""
+    from oracle.simple import goal_milestones
+
+    ctx = await make_ctx()
+    async with tenant_session(ctx.tenant_id) as s:
+        owner = User(email="racer@example.com", name="Robin Racer", password_hash="x",
+                     role="approver")  # fmt: skip
+        s.add(owner)
+        await s.commit()
+    await seed_prd_roadmap(ctx, owner.id)
+    real = goal_milestones._rows
+    raced: list[dict] = []
+
+    async def other_reader_first(db, roadmap_ids):
+        if not raced:
+            monkeypatch.setattr(goal_milestones, "_rows", real)
+            raced.append(await get_roadmap(client, ctx, "commenter"))
+            return []
+        return await real(db, roadmap_ids)
+
+    monkeypatch.setattr(goal_milestones, "_rows", other_reader_first)
+    mine = await get_roadmap(client, ctx, "viewer")
+    assert raced, "the other reader ran"
+    assert sorted(m["code"] for m in mine["goal_milestones"]) == ["M1", "M2"]
+    assert by_code(mine)["M1"]["id"] == by_code(raced[0])["M1"]["id"]
+    again = (await get_roadmap(client, ctx, "viewer"))["goal_milestones"]
+    assert sorted(m["code"] for m in again) == ["M1", "M2"]
+
+
+async def test_the_prd_owners_names_are_read_in_one_query(client):
+    """protects=the roadmap read names every PRD milestone's owner from one read of the
+    users, however many PRDs (and owners) its milestones come from; fails_when=one users
+    read per PRD milestone's owner (an N+1 on the roadmap read)."""
+    from sqlalchemy import event
+
+    from oracle.db import get_engine
+
+    ctx = await make_ctx()
+    owners = []
+    async with tenant_session(ctx.tenant_id) as s:
+        for n in range(3):
+            u = User(email=f"owner{n}@example.com", name=f"Owner {n}", password_hash="x",
+                     role="approver")  # fmt: skip
+            s.add(u)
+            owners.append(u)
+        await s.commit()
+    for n, u in enumerate(owners):
+        await seed_prd_roadmap(ctx, u.id, f"setup-{n}")
+    statements: list[str] = []
+
+    def count(conn, cursor, statement, *args):
+        statements.append(statement)
+
+    engine = get_engine().sync_engine
+    event.listen(engine, "before_cursor_execute", count)
+    try:
+        out = await get_roadmap(client, ctx, "viewer")
+    finally:
+        event.remove(engine, "before_cursor_execute", count)
+    names = {m["prd_owner"] for m in out["goal_milestones"]}
+    assert names == {display_name(u.email, u.name) for u in owners}
+    # The 6 PRD milestones of 3 owners: no one-user read each (another part of the
+    # roadmap read makes one of its own).
+    single = [st for st in statements if "FROM users" in st and "WHERE users.id = " in st]
+    assert len(single) <= 1, len(single)
