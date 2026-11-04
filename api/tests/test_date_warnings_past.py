@@ -74,8 +74,16 @@ def test_a_future_claim_without_a_basis_still_warns():
     ) == [("notes", "Oct 27")]
 
 
+# Only a recent past reading is skipped there (owner, Nov 4): a year-less day whose most
+# recent past occurrence is within about 60 days before the version's day.
 @pytest.mark.parametrize(
-    "cell", ["be#1358 closed on Oct 27", "Shop owners can reorder by Jan 9", "after Feb 2"]
+    "cell",
+    [
+        "be#1358 closed on Oct 27",
+        "Gift wrap went out 27 Oct",
+        "merged on the 27th of October",
+        "after Oct 2",
+    ],
 )
 def test_counts_when_evidence_and_sources_are_not_schedule_places(cell):
     assert flagged(ITEMS + MILESTONES.replace("@cell", cell), ref=DAY) == []
@@ -86,6 +94,41 @@ def test_counts_when_evidence_and_sources_are_not_schedule_places(cell):
         f"- Counts when: {cell}.\n- Evidence: {cell}.\n- Sources: {cell}.\n"
     )
     assert flagged(ITEMS + evidence, ref=DAY) == []
+
+
+# A future day written without a year in a Counts when, evidence, sources, proof or
+# measured-by place warns like one with a year (owner, Nov 4).
+@pytest.mark.parametrize(
+    ("cell", "date"),
+    [
+        ("Shop owners can reorder by Jan 9", "Jan 9"),
+        ("after Feb 2", "Feb 2"),
+        ("GA ships Dec 20", "Dec 20"),
+    ],
+)
+def test_a_future_year_less_day_in_an_evidence_place_warns(cell, date):
+    assert flagged(ITEMS + MILESTONES.replace("@cell", cell), ref=DAY) == [
+        ("plan-milestones", date)
+    ]
+    table = f"| Item | Evidence |\n|---|---|\n| [Gift notes](#now-gift-notes) | {cell} |"
+    assert flagged(f"## Notes {{#notes}}\n\n{table}\n\n" + ITEMS, ref=DAY) == [("notes", date)]
+
+
+@pytest.mark.parametrize(
+    ("line", "dates"),
+    [
+        ("Evidence: GA ships Dec 20.", ["Dec 20"]),
+        ("Sources: beta closed Oct 27, GA ships Dec 20.", ["Dec 20"]),
+        ("Proof: GA on Dec 20.", ["Dec 20"]),
+        ("Measured by: reorders after Jan 9.", ["Jan 9"]),
+        ("Counts when: GA ships Dec 20.", ["Dec 20"]),
+        ("Evidence: closed Oct 27\nLaunch Dec 20", ["Dec 20"]),
+    ],
+)
+def test_a_future_year_less_day_in_a_labelled_sentence_warns(line, dates):
+    assert flagged(f"## Notes {{#notes}}\n\n{line}\n\n" + ITEMS, ref=DAY) == [
+        ("notes", d) for d in dates
+    ]
 
 
 def test_a_future_milestone_date_without_a_basis_still_warns():
@@ -159,8 +202,17 @@ def test_only_a_whole_evidence_header_is_not_a_schedule_place(header):
 def test_a_label_skips_only_its_own_sentence():
     line = "Evidence: be#1358 closed on Oct 27. Gift notes ship on Dec 10."
     assert flagged(f"## Notes {{#notes}}\n\n{line}\n\n" + ITEMS, ref=DAY) == [("notes", "Dec 10")]
-    line = "Counts when: shop owners can reorder by Jan 9.\nGift notes ship on Dec 10."
+    line = "Counts when: be#1358 closed on Oct 27.\nGift notes ship on Dec 10."
     assert flagged(f"## Notes {{#notes}}\n\n{line}\n\n" + ITEMS, ref=DAY) == [("notes", "Dec 10")]
+    # A future year-less day in the labelled sentence itself warns too.
+    line = "Counts when: shop owners can reorder by Jan 9.\nGift notes ship on Dec 10."
+    assert flagged(f"## Notes {{#notes}}\n\n{line}\n\n" + ITEMS, ref=DAY) == [
+        ("notes", "Jan 9"),
+        ("notes", "Dec 10"),
+    ]
+    # A line break ends the labelled part: the next line's recent day is no evidence.
+    line = "Evidence: be#1358 closed\nGift notes beta Oct 30"
+    assert flagged(f"## Notes {{#notes}}\n\n{line}\n", bases=[], ref=DAY) == [("notes", "Oct 30")]
     # A ';' ends the labelled part too.
     line = "Evidence: issue closed; launch on Dec 20."
     assert flagged(f"## Notes {{#notes}}\n\n{line}\n", bases=[], ref=DAY) == [("notes", "Dec 20")]
@@ -259,3 +311,15 @@ async def test_a_far_past_reading_blocks_approval(client, owner, runtime):  # no
     resp = await client.post(f"{VERSIONS}/1/approve", headers=auth)
     assert resp.status_code == 409, resp.text
     assert "not backed by a confirmed schedule: Dec 10, 2026" in resp.json()["detail"]
+
+
+@pytest.mark.usefixtures("pinned")
+async def test_a_future_year_less_evidence_day_blocks_approval(client, owner, runtime):  # noqa: F811
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    md = with_line("Evidence: GA ships Dec 20.", "summary", ROADMAP_MD)
+    version = await _run_pinned(client, auth, tenant_id, runtime, md)
+    assert len(_date_warnings(version)) == 1
+    resp = await client.post(f"{VERSIONS}/1/approve", headers=auth)
+    assert resp.status_code == 409, resp.text
+    assert "not backed by a confirmed schedule: Dec 20, 2026" in resp.json()["detail"]
