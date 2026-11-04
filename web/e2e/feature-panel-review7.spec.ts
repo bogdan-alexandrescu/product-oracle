@@ -45,9 +45,9 @@ test.describe("feature panel review 7", () => {
     await expect(page.getByRole("dialog", { name: "Weekly alert summary" }).getByRole("heading", { level: 2 })).toHaveText("Weekly alert summary");
     // The ranked row behind the panel reads the new name without leaving the page.
     await expect(rankedName(page, "Weekly alert summary")).toBeAttached();
-    const toastUndo = page.getByRole("button", { name: "Undo" });
-    await expect(page.getByText("Renamed Weekly alert digest to Weekly alert summary").first()).toBeVisible();
-    await toastUndo.first().click();
+    const toast = page.getByTestId("toasts").getByRole("status").filter({ hasText: "Renamed Weekly alert digest to Weekly alert summary" });
+    await expect(toast).toBeVisible();
+    await toast.getByRole("button", { name: "Undo" }).click();
     await expect(page.getByRole("dialog", { name: "Weekly alert digest" })).toBeVisible();
     await expect(rankedName(page, "Weekly alert digest")).toBeAttached();
   });
@@ -108,7 +108,7 @@ test.describe("feature panel review 7", () => {
     await deps.getByRole("button", { name: "Remove Alert rules engine" }).click();
     await expect(page.getByText("Removed the link: Weekly alert digest no longer depends on Alert rules engine").first()).toBeVisible();
     await expect(deps.getByRole("heading")).toHaveText("Depends on (0)");
-    await page.getByRole("button", { name: "Undo" }).first().click();
+    await page.getByTestId("toasts").getByRole("status").filter({ hasText: "Removed the link" }).getByRole("button", { name: "Undo" }).click();
     await expect(deps.getByRole("heading")).toHaveText("Depends on (1)");
   });
 
