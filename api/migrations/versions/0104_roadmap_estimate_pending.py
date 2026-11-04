@@ -9,8 +9,8 @@ Live-safe: a column with a constant default and a wider check constraint.
 
 The downgrade deletes the ``estimate_requested`` notifications and drops the column.
 
-Revision ID: 0101_roadmap_estimate_pending
-Revises: 0100_source_lost_connection
+Revision ID: 0104_roadmap_estimate_pending
+Revises: 0103_approved_roadmap_plan
 """
 
 from collections.abc import Sequence
@@ -20,8 +20,8 @@ from alembic import op
 
 from oracle.migration_checks import add_check_values, remove_check_values
 
-revision: str = "0101_roadmap_estimate_pending"
-down_revision: str | None = "0100_source_lost_connection"
+revision: str = "0104_roadmap_estimate_pending"
+down_revision: str | None = "0103_approved_roadmap_plan"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
