@@ -13,6 +13,10 @@ items by those who may see it (``overlays``); everyone else gets the published v
 ``changes_in_review``. A version submitted from a draft is never shown before it is
 approved.
 
+approved-roadmap-to-simple: items an applied roadmap version took off the plan (shipped,
+next PRD) are not read; each item says the version's words for its dates (``date_basis``)
+and ``applied_versions`` which version the roadmap matches (oracle.simple.approved_roadmap).
+
 It reads in bulk, a fixed number of statements whatever the company's size, and writes
 nothing. :func:`load` is also what the daily suggestions read, as Oracle (no principal).
 """
@@ -44,7 +48,7 @@ from oracle.roadmap.models import (
     TrackerRecord,
     TrackMilestone,
 )
-from oracle.simple import constraints, dates, plan_strip
+from oracle.simple import approved_roadmap, constraints, dates, plan_strip
 from oracle.simple.models import RoadmapDateSuggestion, SimpleVisual
 from oracle.simple.schemas import (
     DateSuggestionOut,
@@ -278,7 +282,11 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
         rows = list(
             await db.scalars(
                 select(RoadmapItem)
-                .where(RoadmapItem.roadmap_version_id.in_(list(shown.values())))
+                .where(
+                    RoadmapItem.roadmap_version_id.in_(list(shown.values())),
+                    # approved-roadmap-to-simple: shipped or moved to the next PRD.
+                    RoadmapItem.plan_state.is_(None),
+                )
                 .order_by(RoadmapItem.position, RoadmapItem.item_key)
             )
         )
@@ -867,6 +875,7 @@ def item_out(
         end=_date(r.end),
         source=r.source,
         estimated=r.estimated,
+        date_basis=approved_roadmap.date_basis(row),
         suggestion=suggestion_out(e.suggestion, row, may, e.suggestion_span)
         if e.suggestion is not None
         else None,
@@ -990,6 +999,8 @@ def _milestone_out(m: TrackMilestone, keyed: dict, ids: set, view: Any) -> Simpl
         item_ids=[
             keyed[(m.track_id, k)] for k in m.item_keys or [] if keyed.get((m.track_id, k)) in ids
         ],
+        # approved-roadmap-to-simple: how a roadmap version's milestone counts.
+        done_when=[m.counts] if m.counts else [],
     )
     pm = view.milestone(plan_strip.milestone_of(m.name)[0]) if view is not None else None
     if pm is not None:
@@ -1161,4 +1172,10 @@ async def build(
         roadmaps=all_roadmaps,
         roadmap=_ref(chosen),
         left_out=meetings.left_out_entry(left_out),
+        applied_versions=await approved_roadmap.lines(
+            db,
+            principal,
+            [e for e in read.entries if chosen is None or e.roadmap.id == chosen.id],
+            [chosen] if chosen is not None else list(readable.values()),
+        ),
     )

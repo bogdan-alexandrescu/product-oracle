@@ -9,6 +9,7 @@
  * on purpose: health, drift and staleness follow the API's rules, not its every message.
  * Synthetic placeholders only. Reads need a viewer; writes an approver, as in the API.
  */
+import { APPROVED_ROADMAP_SCENARIO, TRAILS_BASES, TRAILS_PRD_SLUG } from "./approved-roadmap";
 import type { Schemas } from "@/lib/api/client";
 import { calendarDay } from "@/lib/dates";
 import type { AcceptDateOut, InboxTrack, TrackAlertAction, TrackAlertOut, TrackerRecordEventOut } from "@/lib/api/track-alerts";
@@ -228,7 +229,8 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
   const noGaBasis = scenario === DATE_BASES_SCENARIO || scenario === SHARED_DATE_SCENARIO || scenario === NOT_CLAIMS_SCENARIO || scenario === VERSION_WARNINGS_SCENARIO || twoWay;
   const planStale = scenario === PLAN_STALE_SCENARIO;
   const simpleItemBasis = scenario === SIMPLE_ITEM_BASIS_SCENARIO;
-  const key = withItems || withDiff || noGaBasis || planStale || simpleItemBasis ? `roadmap:${scenario}` : "roadmap";
+  const trails = scenario === APPROVED_ROADMAP_SCENARIO;
+  const key = withItems || withDiff || noGaBasis || planStale || simpleItemBasis || trails ? `roadmap:${scenario}` : "roadmap";
   return seeded(key, () => {
     const db: RoadmapDb = { items: {}, tracks: [], milestones: [], bases: [], records: [], changes: [] };
     const prd = ctx.documents.find((d) => d.slug === "usage-alerts");
@@ -276,6 +278,19 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
         withdrawn_reason: status === "withdrawn" ? "The team re-estimated" : null,
         rejected_by: null, rejected_at: null, rejected_reason: null, created_at: AT,
       });
+    }
+    // approved-roadmap-to-simple: Example trails' dates rest on Trail maps' verified estimates.
+    const trailPrd = trails ? ctx.documents.find((d) => d.slug === TRAILS_PRD_SLUG) : undefined;
+    if (trailPrd) {
+      for (const [reference, day] of TRAILS_BASES) {
+        db.bases.push({
+          id: mockUuid(), kind: "estimate", reference, supports_date: day, detail: null, prd_document_id: trailPrd.id,
+          item_key: null, tracker_key: null, tracker_record_id: null, status: "verified", note: null,
+          proposed_by: null, proposed_at: null, verified_by: ctx.userId, verified_at: AT,
+          withdrawn_by: null, withdrawn_at: null, withdrawn_reason: null,
+          rejected_by: null, rejected_at: null, rejected_reason: null, created_at: AT,
+        });
+      }
     }
     // F3 "date-bases": the tracker record a basis may be recorded from (the GA date's issue).
     if (scenario === DATE_BASES_SCENARIO) {

@@ -12171,6 +12171,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/roadmap/apply-approved": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Approved Roadmap
+         * @description approved-roadmap-to-simple: apply the roadmap's latest approved version to its items
+         *     again (its dates, shipped and new items, milestones), approvers and up. 404: no such
+         *     roadmap, or none approved; 409: the version has no plan to apply.
+         */
+        post: operations["apply_approved_roadmap"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/roadmap/date-suggestions/refresh": {
         parameters: {
             query?: never;
@@ -37877,6 +37899,47 @@ export interface components {
             /** Title */
             title: string;
         };
+        /**
+         * SimpleAppliedVersion
+         * @description approved-roadmap-to-simple: the approved roadmap version a roadmap's shown items were
+         *     applied from (oracle.simple.approved_roadmap): ``matches`` when nothing changed since,
+         *     else ``differences`` in words; the items it took off the plan; ``can_apply``: the
+         *     reader may apply it again (an approver and up).
+         */
+        SimpleAppliedVersion: {
+            roadmap: components["schemas"]["SimpleDocRef"];
+            /** Version */
+            version: number;
+            /**
+             * Approved At
+             * Format: date-time
+             */
+            approved_at: string;
+            /** Href */
+            href: string;
+            /** Matches */
+            matches: boolean;
+            /**
+             * Differences
+             * @default []
+             */
+            differences: string[];
+            /**
+             * Shipped
+             * @default []
+             */
+            shipped: string[];
+            /**
+             * Moved Out
+             * @default []
+             */
+            moved_out: string[];
+            /**
+             * Can Apply
+             * @default false
+             */
+            can_apply: boolean;
+        };
         /** SimpleAttendee */
         SimpleAttendee: {
             /**
@@ -40158,6 +40221,8 @@ export interface components {
             source: "typed" | "accepted" | "engineering" | "tracker" | "estimated";
             /** Estimated */
             estimated: boolean;
+            /** Date Basis */
+            date_basis?: string | null;
             suggestion?: components["schemas"]["DateSuggestionOut"] | null;
             milestone?: components["schemas"]["SimpleItemMilestone"] | null;
             /** Phases */
@@ -40277,6 +40342,11 @@ export interface components {
             roadmap?: components["schemas"]["SimpleDocRef"] | null;
             span?: components["schemas"]["SimplePlanSpan"] | null;
             left_out?: components["schemas"]["SimpleLeftOut"] | null;
+            /**
+             * Applied Versions
+             * @default []
+             */
+            applied_versions: components["schemas"]["SimpleAppliedVersion"][];
         };
         /**
          * SimpleRunGroup
@@ -69816,6 +69886,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DateSuggestionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_approved_roadmap: {
+        parameters: {
+            query: {
+                roadmap: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleAppliedVersion"];
                 };
             };
             /** @description Validation Error */

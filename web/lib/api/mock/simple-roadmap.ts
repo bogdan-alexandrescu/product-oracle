@@ -17,6 +17,7 @@ import { companyDayIso } from "./connections";
 import { newCompany, seeded, stableUuid } from "./ids";
 import { betSubject, flowFor, type VisualsDb } from "./simple-visuals";
 import type { OnePagerDb } from "./simple-one-pager";
+import { appliedMilestones, type AppliedRecord } from "./approved-roadmap";
 import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
 
 type Item = Schemas["SimpleRoadmapItem"];
@@ -84,6 +85,9 @@ interface SeedItem {
   dates?: { start: string | null; end: string; source: "engineering" | "accepted" };
   /** build-runplan RP2: the PRD it belongs to when not its roadmap's own (./meeting-draft.ts). */
   prd_doc?: { id: string; slug: string; title: string };
+  /** approved-roadmap-to-simple: the source words of the dates an applied roadmap version gave it
+   * ("founder commitment"); its `dates` are that version's. */
+  basis?: string;
 }
 
 interface SimpleDb {
@@ -139,6 +143,11 @@ interface SimpleDb {
   /** roadmap-keydates review ("roadmap-keydates-uncoded"): a track milestone record's own day
    * (record name -> day), as a record with a target date reads; none: undated. */
   record_dates?: Record<string, string>;
+  /** approved-roadmap-to-simple: roadmaps Simple knows besides ROADMAPS (slug -> its title,
+   * PRD, track key and track title), known while their items are the roadmap's. */
+  extra_roadmaps?: Record<string, { title: string; prd: string; track: string; track_title: string }>;
+  /** approved-roadmap-to-simple (./approved-roadmap.ts): what each roadmap's last applied version said. */
+  applied?: Record<string, AppliedRecord>;
 }
 
 /** roadmap-keydates: a PRD's milestone as its plan reads it: its code, name and end day. */
@@ -449,6 +458,27 @@ export function knowManyPlans(db: { items: { key: string; roadmap: string }[] } 
     for (const k of manyAdded.goals) delete GOALS[k];
     for (const k of manyAdded.tracks) delete TRACKS[k];
     manyAdded = null;
+  }
+}
+
+/**
+ * approved-roadmap-to-simple: the roadmaps and tracks a db adds (SimpleDb.extra_roadmaps), known
+ * while it is the roadmap's, as knowManyPlans; taken out again once it is not.
+ */
+let extraAdded: { roadmaps: string[]; tracks: string[] } = { roadmaps: [], tracks: [] };
+export function knowExtraRoadmaps(db: { extra_roadmaps?: SimpleDb["extra_roadmaps"] } | undefined): void {
+  for (const k of extraAdded.roadmaps) delete ROADMAPS[k];
+  for (const k of extraAdded.tracks) delete TRACKS[k];
+  extraAdded = { roadmaps: [], tracks: [] };
+  for (const [slug, r] of Object.entries(db?.extra_roadmaps ?? {})) {
+    if (!(slug in ROADMAPS)) {
+      ROADMAPS[slug] = { title: r.title, visibility: "company", prd: r.prd, draft: 1 };
+      extraAdded.roadmaps.push(slug);
+    }
+    if (!(r.track in TRACKS)) {
+      TRACKS[r.track] = r.track_title;
+      extraAdded.tracks.push(r.track);
+    }
   }
 }
 
@@ -875,6 +905,7 @@ export function readerDb(db: SimpleDb, me: { id: string; role: Role }): SimpleDb
 
 export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Who): Schemas["SimpleRoadmapOut"] | null {
   knowTalkGoals(db);
+  knowExtraRoadmaps(db);
   const decides = (s: SeedItem) => canDecideItem(db, s, me ?? { id: "", role });
   const deciders = (s: SeedItem) => {
     const ids = deciderIds(db, s, me?.roles);
@@ -911,6 +942,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),
       draft: !!s.draft,
       start: r.start, end: r.end,
+      // approved-roadmap-to-simple: the applied version's words, until a person changes the dates.
+      date_basis: s.basis && s.dates && !db.own[s.key] ? s.basis : null,
       source: r.end.estimated ? r.start.source : r.end.source,
       estimated: r.start.estimated && r.end.estimated,
       suggestion: suggestion ? { ...suggestion, can_decide: decides(s) } : null,
@@ -992,6 +1025,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
         const of = seeds.filter((s) => s.record === name);
         return { id: recordOf(of[0]).record_id!, track_id: stableUuid(`simple-track/${of[0].track}`), name, date: db.record_dates?.[name] ?? null, horizon: "now" as const, status: "planned" as const, item_ids: of.map((s) => db.ids[s.key]), ...UNDATED };
       }),
+      // approved-roadmap-to-simple: each shown roadmap's applied version's milestones.
+      ...(chosen ? [chosen] : readable).flatMap((slug) => appliedMilestones(db, slug)),
       // The plan's dated milestones (M1-M3), each naming the items with a slice in it.
       // roadmap-gantt: each planned PRD's own records ("simple-plan-two": two PRDs, M1-M3 each).
       ...(db.plan ? [PLAN_PRD_SLUG, ...(db.plan.prds ?? [])] : []).flatMap((slug) =>
@@ -1015,7 +1050,60 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     roadmap: chosen ? { id: roadmapId(chosen), slug: chosen, title: roadmapTitle(db, chosen) } : null,
     // decisions-reversed-or-trashed: the items' decisions left out as no longer standing.
     left_out: leftOut(),
+    applied_versions: (chosen ? [chosen] : readable).flatMap((slug) => {
+      const a = appliedVersionOut(db, slug, role, all);
+      return a ? [a] : [];
+    }),
   };
+}
+
+/** "Dec 2" (Simple's dates in a difference line). */
+const dayWord = (d: string | null): string => (d ? word(d) : "no date");
+
+/**
+ * approved-roadmap-to-simple: the line for a roadmap whose shown version was applied: whether
+ * its items still read what that version says, else each difference in plain words.
+ */
+function appliedVersionOut(db: SimpleDb, slug: string, role: Role, all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>): Schemas["SimpleAppliedVersion"] | null {
+  const a = db.applied?.[slug];
+  if (!a) return null;
+  const n = a.version;
+  const differences: string[] = [];
+  // As the API's oracle.simple.approved_roadmap.lines: the shown items in order; one the
+  // version did not list was added after it, a listed one cut since was cut after it.
+  const listed = new Map(a.plan.map((row) => [row.key, row]));
+  for (const x of all.values()) {
+    if (x.s.roadmap !== slug) continue;
+    const row = listed.get(x.s.key);
+    if (!row) {
+      differences.push(`${x.s.title} was added after version ${n}`);
+      continue;
+    }
+    if (x.s.status === "cut") {
+      differences.push(`${x.s.title} was cut after version ${n}`);
+      continue;
+    }
+    if (!row.start && !row.end) continue;
+    const [start, end] = [x.r.start.date, x.r.end.date];
+    const startDiffers = !!row.start && row.start !== start;
+    const endDiffers = row.end !== end;
+    if (startDiffers && endDiffers) differences.push(`${x.s.title} runs ${dayWord(start)} to ${dayWord(end)}, version ${n} says ${dayWord(row.start)} to ${dayWord(row.end)}`);
+    else if (endDiffers) differences.push(`${x.s.title} ends ${dayWord(end)}, version ${n} says ${dayWord(row.end)}`);
+    else if (startDiffers) differences.push(`${x.s.title} starts ${dayWord(start)}, version ${n} says ${dayWord(row.start)}`);
+  }
+  return {
+    roadmap: { id: roadmapId(slug), slug, title: roadmapTitle(db, slug) },
+    version: n, approved_at: a.approved_at, href: a.href,
+    matches: differences.length === 0, differences,
+    shipped: [...a.shipped], moved_out: [...a.moved_out],
+    can_apply: RANK[role] >= RANK.approver,
+  };
+}
+
+/** The applied-version line of one roadmap, as GET /v1/simple/roadmap?roadmap= reads it. */
+export function appliedVersionOf(db: SimpleDb, slug: string, me: Who): Schemas["SimpleAppliedVersion"] | null {
+  const out = roadmapOut(db, me.role, new URLSearchParams({ roadmap: slug }), me);
+  return out?.applied_versions?.find((x) => x.roadmap.slug === slug) ?? null;
 }
 
 const roadmapTitle = (db: SimpleDb, slug: string): string => db.titles?.[slug] ?? ROADMAPS[slug].title;

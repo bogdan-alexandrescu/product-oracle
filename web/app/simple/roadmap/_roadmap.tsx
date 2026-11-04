@@ -13,6 +13,7 @@ import { getBranding, logoDataUrl } from "@/lib/api/branding";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { CARD_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { displayZone, plainClock } from "@/lib/dates";
+import { formatDate } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
@@ -391,6 +392,65 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onReview, title
         </ol>
       )}
     </section>
+  );
+}
+
+/**
+ * approved-roadmap-to-simple: one line per shown roadmap whose approved version was applied:
+ * it matches that version (with a link to it), or what differs, with "Apply version N again"
+ * for an approver and up (the line's own can_apply).
+ */
+function AppliedVersions({ lines, onApply }: { lines: Schemas["SimpleAppliedVersion"][]; onApply: (line: Schemas["SimpleAppliedVersion"]) => Promise<void> }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  if (!lines.length) return null;
+  const link = (l: Schemas["SimpleAppliedVersion"]) => (
+    <Link href={l.href} className="font-semibold text-accent-ink underline">
+      roadmap version {l.version}
+    </Link>
+  );
+  return (
+    <div className="space-y-1 text-sm text-text2">
+      {lines.map((l) => (
+        <div key={l.roadmap.id} data-testid="applied-version" data-matches={l.matches ? "true" : "false"}>
+          {(l.shipped.length > 0 || l.moved_out.length > 0) && (
+            <p data-testid="applied-off-plan">
+              {l.shipped.length > 0 && `Shipped, off the plan: ${l.shipped.join(", ")}. `}
+              {l.moved_out.length > 0 && `Moved to the next PRD: ${l.moved_out.join(", ")}.`}
+            </p>
+          )}
+          {l.matches ? (
+            <p>
+              {lines.length > 1 && `${l.roadmap.title}: `}Matches {link(l)}, approved {formatDate(l.approved_at)}
+            </p>
+          ) : (
+            <>
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span>
+                  {lines.length > 1 && `${l.roadmap.title}: `}Differs from {link(l)}, approved {formatDate(l.approved_at)}:
+                </span>
+                {l.can_apply && (
+                  <Button
+                    variant="ghost"
+                    disabled={busy === l.roadmap.id}
+                    onClick={() => {
+                      setBusy(l.roadmap.id);
+                      void onApply(l).finally(() => setBusy(null));
+                    }}
+                  >
+                    Apply version {l.version} again
+                  </Button>
+                )}
+              </p>
+              <ul className="list-disc pl-5" data-testid="applied-differences">
+                {l.differences.map((d) => (
+                  <li key={d}>{d}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -1351,6 +1411,14 @@ export function SimpleRoadmap() {
       {draftBanner}
       {/* The items' decisions left out as no longer standing, one quiet line under the banner. */}
       <LeftOutLine leftOut={data.left_out} className="px-1 text-sm text-text-faint" />
+      <AppliedVersions
+        lines={data.applied_versions ?? []}
+        onApply={async (l) => {
+          const r = await api.POST("/v1/simple/roadmap/apply-approved", { params: { query: { roadmap: l.roadmap.id } } });
+          toast({ message: r.data ? `Applied version ${l.version} of ${l.roadmap.title}` : `Version ${l.version} could not be applied` });
+          await reload();
+        }}
+      />
       {/* #36: on a phone, Roadmap/Goal/Track and Group by read before the chart, not after
        * the legend and goal cards at the page's foot. */}
       {!blank && filters}
