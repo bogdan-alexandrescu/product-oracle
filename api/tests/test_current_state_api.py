@@ -6,16 +6,25 @@ ready band and the owner's Move / Not yet, Check again, the "still runs?" answer
 The company's clock is fixed at Nov 4, 2026, noon UTC (``company_time.now``).
 """
 
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import select
 
 from oracle import company_time
+from oracle.baseline.models import Entity
 from oracle.currentstate import service
 from oracle.currentstate.models import FeatureProof, FeatureState
+from oracle.engineering.models import CodeMap
+from oracle.metrics.models import Metric, MetricValue
 from oracle.simple.models import RoadmapItemTask
+from oracle.sources import store
+from oracle.sources.base import ItemUpsert
+from oracle.sources.models import Source
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
+from tests.test_code_maps import MAP, shared_map
 from tests.test_simple_roadmap_api import Seed
 
 URL = "/v1/feature-states"
@@ -291,7 +300,7 @@ async def test_nightly_reread_all(clock):
     assert n == 7  # every feature but fresh
     async with tenant_session(w.ctx.tenant_id) as s:
         st = await service.state_of(s, w.ids["old"])
-        assert st is not None and st.checked_at == later
+        assert st is not None and st.read_at == later
         tracked = await service.proofs_of(s, w.ids["tracked"])
         tasks = next(p for p in tracked if p.kind == "tasks")
         assert (tasks.count, tasks.total, tasks.checked_at) == (2, 3, later)
@@ -307,7 +316,7 @@ async def test_the_tick_rereads_proof_once_a_night(client, clock):
     assert r.status_code == 200, r.text
     async with tenant_session(w.ctx.tenant_id) as s:
         st = await service.state_of(s, w.ids["running"])
-        assert st is not None and st.checked_at == NOW + timedelta(days=1)
+        assert st is not None and st.read_at == NOW + timedelta(days=1)
 
 
 async def test_each_feature_names_its_roadmap_items(client, clock):
@@ -317,3 +326,68 @@ async def test_each_feature_names_its_roadmap_items(client, clock):
     rows = await w.rows(client)
     assert rows["tracked"]["item_ids"] == [w.item_id]
     assert rows["gone"]["item_ids"] == []
+
+
+async def test_the_nightly_reread_does_not_make_old_proof_fresh(clock):
+    """protects=the nightly re-read finds nothing new in a live source for a feature whose
+    proof was confirmed 41 days ago, so it still reads exists_old (only a live source or the
+    owner's answer confirms it); the job still skips it for the rest of the night;
+    fails_when=a re-read alone stamps the proof fresh; no_claim=the wording."""
+    w = await world()
+    later = NOW + timedelta(days=1)
+    async with tenant_session(w.ctx.tenant_id) as s:
+        await service.nightly(s, later)
+        await s.commit()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        st = await service.state_of(s, w.ids["old"])
+        assert st is not None
+        assert st.checked_at == NOW - timedelta(days=41) and st.read_at == later
+        f = await service.feature(s, w.ids["old"])
+        assert (await service.one(s, f, later)).mark == "exists_old"
+        assert await service.nightly(s, later + timedelta(hours=2)) == 0
+
+
+async def test_live_sources_make_a_feature_ready(client, clock):
+    """protects=Check again reads the code map, merged pull requests and the goal's metric
+    for a feature (as well as its tasks), so with all four in it reads ready and its proof
+    is fresh; fails_when=a proof kind has no live reader; no_claim=the matching words."""
+    w = await world()
+    fid = w.ids["tracked"]
+    content = {**MAP, "modules": [*MAP["modules"], {"id": "module:tracked", "path": "api/tracked",
+               "summary": "The Tracked feature", "depends_on": []}]}  # fmt: skip
+    map_id = await shared_map(w.ctx.tenant_id, content)
+    async with tenant_session(w.ctx.tenant_id) as s:
+        code_map = await s.get(CodeMap, map_id)
+        assert code_map is not None
+        source = await s.get(Source, code_map.source_id)
+        assert source is not None
+        for n, merged in ((1, "2026-10-30T10:00:00Z"), (2, "no")):
+            await store.upsert_item(s, source, ItemUpsert(
+                external_id=f"example-org/app:pull:{n}", kind="pull_request",
+                title=f"pay-1: tracked step {n}", url=None, author="sam",
+                content=f"# pay-1: tracked step {n}\n\n- Merged: {merged}\n"))  # fmt: skip
+        goal = (await s.execute(select(Entity).where(Entity.type == "goal"))).scalar_one()
+        feature = await s.get(Entity, uuid.UUID(fid))
+        assert feature is not None
+        await Seed(s).supports(feature, goal)
+        m = Metric(title="Alerts sent", description="Alerts sent each week", kind="output",
+                   unit="sent", direction="up", source="manual", goal_id=goal.id,
+                   owner_id=w.ctx.users["owner"].id)  # fmt: skip
+        s.add(m)
+        await s.flush()
+        s.add(MetricValue(metric_id=m.id, week_start=datetime(2026, 11, 2).date(), value=3410,
+                          source="manual", definition_version=1))  # fmt: skip
+        for t in (await s.execute(select(RoadmapItemTask))).scalars():
+            if t.status == "todo":
+                t.status = "done"
+        await s.commit()
+    r = await w.post(client, "tracked", "check")
+    assert r.status_code == 200, r.text
+    out = r.json()
+    proofs = {p["kind"]: p for p in out["proofs"]}
+    assert proofs["code_map"]["count"] == 1
+    assert proofs["pull_requests"]["count"] == 1
+    assert (proofs["tasks"]["count"], proofs["tasks"]["total"]) == (3, 3)
+    assert proofs["measured"]["value"] == "3,410 sent" and proofs["measured"]["period"] == "Nov"
+    assert out["ready"] is True
+    assert datetime.fromisoformat(out["checked_at"]) == NOW
