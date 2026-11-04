@@ -1041,9 +1041,21 @@ function appliedVersionOut(db: SimpleDb, slug: string, role: Role, all: Map<stri
   if (!a) return null;
   const n = a.version;
   const differences: string[] = [];
-  for (const row of a.plan) {
-    const x = all.get(row.key);
-    if (!x || x.s.roadmap !== slug) continue;
+  // As the API's oracle.simple.approved_roadmap.lines: the shown items in order; one the
+  // version did not list was added after it, a listed one cut since was cut after it.
+  const listed = new Map(a.plan.map((row) => [row.key, row]));
+  for (const x of all.values()) {
+    if (x.s.roadmap !== slug) continue;
+    const row = listed.get(x.s.key);
+    if (!row) {
+      differences.push(`${x.s.title} was added after version ${n}`);
+      continue;
+    }
+    if (x.s.status === "cut") {
+      differences.push(`${x.s.title} was cut after version ${n}`);
+      continue;
+    }
+    if (!row.start && !row.end) continue;
     const [start, end] = [x.r.start.date, x.r.end.date];
     const startDiffers = !!row.start && row.start !== start;
     const endDiffers = row.end !== end;

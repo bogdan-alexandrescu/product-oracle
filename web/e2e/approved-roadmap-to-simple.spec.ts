@@ -54,9 +54,8 @@ test.describe("a person's change after the version", () => {
     await expect(line).toContainText("Differs from roadmap version 3, approved Oct 22, 2026");
     await expect(line.getByTestId("applied-differences")).toHaveText("Trail photo tips was added after version 3");
 
-    const applied = page.waitForResponse((r) => r.url().includes("/simple/roadmap/apply-approved") && r.request().method() === "POST");
     await line.getByRole("button", { name: "Apply version 3 again" }).click();
-    expect((await applied).status()).toBe(200);
+    await expect(page.getByText("Applied version 3 of Example trails").filter({ visible: true }).first()).toBeVisible();
     await expect(line.getByRole("button", { name: "Apply version 3 again" })).toBeEnabled();
     await expect(line.getByTestId("applied-differences")).toHaveText("Trail photo tips was added after version 3");
     await expect(line.getByTestId("applied-off-plan")).toHaveText("Shipped, off the plan: Offline sync. Moved to the next PRD: Trail chat.");

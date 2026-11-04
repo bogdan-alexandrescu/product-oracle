@@ -145,7 +145,7 @@ export function applyApprovedRoadmap(db: SimpleDb, slug: string, version: { numb
   const was = db.applied?.[slug];
   (db.applied ??= {})[slug] = {
     version: version.number, approved_at: version.approved_at, href: version.href,
-    plan: plan.rows.filter((r) => !leaves(r.status) && r.end), milestones: plan.milestones,
+    plan: plan.rows.filter((r) => !leaves(r.status)), milestones: plan.milestones,
     // Applying the same version again keeps what it moved off the plan.
     shipped: shipped.length || was?.version !== version.number ? shipped : was.shipped,
     moved_out: moved.length || was?.version !== version.number ? moved : was.moved_out,
