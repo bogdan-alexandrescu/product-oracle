@@ -667,7 +667,7 @@ function GoalCard({ g, onEdit, goals, canEdit }: { g: GmGoal; onEdit: () => void
 }
 
 /** The goal cards' widths as the picked frame draws them: the last (the top goal) widest. */
-const GOAL_GROW = [0.9, 1, 1.3];
+const GOAL_GROW = [1.04, 1, 1.3];
 
 function Goals({ map, open, arrows = true }: Ctx & { arrows?: boolean }) {
   return (
@@ -737,16 +737,17 @@ function Ladder(ctx: Ctx) {
                       </span>
                       {m.proposed ? <Pill cls="bg-surface text-accent-ink border border-accent">Proposed</Pill> : <StatusPill s={m.status} />}
                     </span>
-                    <span className="text-[17px] font-semibold leading-6">{m.name}</span>
+                    {map.can_edit ? (
+                      <button type="button" data-testid="gm-edit-gate" title={m.proposed ? "Set and confirm the gate" : "Edit the gate"} onClick={() => open("gate", undefined, m.id)} className="text-left text-[17px] font-semibold leading-6 hover:underline">
+                        {m.name}
+                      </button>
+                    ) : (
+                      <span className="text-[17px] font-semibold leading-6">{m.name}</span>
+                    )}
                     <span className="text-[16px] leading-6 text-text2">
                       {num(m.current, m.unit)} of {num(m.threshold, m.unit)} · {afterWords(m, map)}
                     </span>
                     <Proof m={m} compact week={ctx.week} />
-                    {map.can_edit && (
-                      <button type="button" data-testid="gm-edit-gate" onClick={() => open("gate", undefined, m.id)} className="self-start rounded-full px-1.5 text-[14px] font-semibold text-accent-ink hover:underline">
-                        {m.proposed ? "Set and confirm the gate" : "Edit the gate"}
-                      </button>
-                    )}
                   </div>
                 ))}
                 {map.areas.map((a, ai) => (
