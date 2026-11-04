@@ -119,3 +119,42 @@ async def test_removed_oracle_link_stays_and_restores(client):
     assert (await w.item("fp-b")).depends_on == ["fp-a"]
     it = await item_of(client, ctx, "decider", b)
     assert it["links"] == [{"item_id": a, "by": None, "removed": False, "removed_by": None}]
+
+
+async def test_own_owner_and_milestone_read_back_on_the_item(client):
+    """build-feature-panel review: the panel's Owner and Milestone fields. protects=an owner
+    set on the item (``set_owner``) is the item's owner, ``source`` "item", over its track's
+    (``source`` "track"); null gives it back to the track's owner; a milestone set on it reads
+    back and a second change names it as ``before``; fails_when=the item still shows the
+    track's owner, or the stored milestone cannot be named as the panel shows it;
+    no_claim=who may set them (test_simple_chat_actions)."""
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, track_owner="approver", ops=["fp"])
+    a = w.ids["fp-a"]
+    it = await item_of(client, ctx, "decider", a)
+    assert it["owner"]["id"] == str(ctx.users["approver"].id)
+    assert it["owner"]["source"] == "track"
+    dee = str(ctx.users["decider"].id)
+    r = await post(client, ctx, "decider", "set_owner", {"item_id": a}, {"owner_id": None},
+                   {"owner_id": dee})  # fmt: skip
+    assert r.status_code == 201, r.text
+    it = await item_of(client, ctx, "decider", a)
+    assert it["owner"] == {"id": dee, "name": "Dee Cider", "source": "item"}
+    r = await post(client, ctx, "decider", "set_owner", {"item_id": a}, {"owner_id": dee},
+                   {"owner_id": None})  # fmt: skip
+    assert r.status_code == 201, r.text
+    it = await item_of(client, ctx, "decider", a)
+    assert it["owner"]["source"] == "track"
+
+    m = {"name": "Beta for the pilot", "date": "2026-12-18"}
+    r = await post(client, ctx, "decider", "set_milestone", {"item_id": a}, {"milestone": None},
+                   {"milestone": m})  # fmt: skip
+    assert r.status_code == 201, r.text
+    it = await item_of(client, ctx, "decider", a)
+    assert (it["milestone"]["name"], it["milestone"]["date"], it["milestone"]["source"]) == (
+        "Beta for the pilot", "2026-12-18", "item",
+    )  # fmt: skip
+    seen = {**m, "date_source": "typed"}
+    r = await post(client, ctx, "decider", "set_milestone", {"item_id": a}, {"milestone": seen},
+                   {"milestone": None})  # fmt: skip
+    assert r.status_code == 201, r.text
