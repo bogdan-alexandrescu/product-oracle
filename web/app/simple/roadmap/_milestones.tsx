@@ -47,6 +47,8 @@ export interface MsCtl {
   overLane: (goal: string | null) => void;
   begin: (date: string, goal: string | null) => void;
   edit: (m: GoalMilestone) => void;
+  /** An item it waits on, opened in the item's own panel (the milestone's card closes). */
+  openItem: (itemId: string) => void;
   /** A bar tapped while the card is open: an item it waits on (again: no longer). */
   pick: (itemId: string) => boolean;
   save: (again: boolean) => Promise<void>;
@@ -61,7 +63,7 @@ export const MsProvider = ({ value, children }: { value: MsCtl; children: ReactN
 export const useMsCtl = () => useContext(Ctx);
 
 /** The milestones' state and their changes for one read of the roadmap (`reload` reads it again). */
-export function useMilestones({ data, phone, canChange, reload }: { data: Roadmap | undefined; phone: boolean; canChange: boolean; reload: () => Promise<unknown> }): MsCtl | null {
+export function useMilestones({ data, phone, canChange, reload, openItem }: { data: Roadmap | undefined; phone: boolean; canChange: boolean; reload: () => Promise<unknown>; openItem: (itemId: string) => void }): MsCtl | null {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [hover, setHover] = useState<string | null>(null);
   const [moving, setMoving] = useState<{ id: string; date: string } | null>(null);
@@ -101,6 +103,10 @@ export function useMilestones({ data, phone, canChange, reload }: { data: Roadma
     begin: (date, goal) => {
       setToast(null);
       setDraft((d) => (d && !d.id ? { ...d, date } : fresh(date, goal ?? lastLane.current ?? goals[0]?.id ?? null)));
+    },
+    openItem: (itemId) => {
+      setDraft(null);
+      openItem(itemId);
     },
     edit: (m) => {
       setToast(null);
@@ -631,7 +637,13 @@ export function MsCard() {
             const it = ms.items.get(id);
             return (
               <span key={id} data-testid="ms-waits-chip" className="inline-flex items-center gap-1 rounded-full border border-line-strong bg-surface2 px-2 text-xs leading-6">
-                {it?.title ?? "An item"}
+                {it ? (
+                  <button type="button" data-testid="ms-waits-open" className="underline-offset-2 hover:underline" onClick={() => ms.openItem(id)}>
+                    {it.title}
+                  </button>
+                ) : (
+                  "An item"
+                )}
                 {it && late(id) && <span className="font-semibold text-crit">· ends {day(it.end.date)}, after it</span>}
                 <button type="button" aria-label={`Take ${it?.title ?? "it"} off`} className="text-text2" onClick={() => set({ item_ids: d.item_ids.filter((x) => x !== id) })}>
                   ×
