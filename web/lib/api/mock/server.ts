@@ -23,6 +23,7 @@ import { brandHeaderHtml, brandStyleHtml, emptyBranding, routeBranding, type Bra
 import { capabilitiesOut } from "./capabilities";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
+import { carriedFor, REPLACED_PRD_SCENARIO, seedReplacedBases } from "./replaced-prd";
 import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
 import { generalReply } from "./general-chat";
@@ -98,7 +99,7 @@ import { routeFirefliesBrowse } from "./fireflies";
 import { liveReply, routeLive } from "./live";
 import { sourceBrowseRoute } from "./source-browse";
 import { DRAFT_NEW_ITEMS_SCENARIO, itemsChangedSince, routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
-import { BEFORE_DRAFTING, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
+import { BEFORE_DRAFTING, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type IntakeContext, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, REPORT_PRD_MOVED_SCENARIO, reportsRoute, type LiveTracks, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
@@ -3761,6 +3762,51 @@ export function resetMockData() {
 
 // ---------------------------------------------------------------- domain helpers
 
+/** new-prd-from-replaced-prd: what a new PRD replacing an approved PRD carries, read off the
+ * mock's documents, roadmap items, decisions and schedule bases (./replaced-prd.ts). */
+function replacedPrd(db: Db, me: MemberRow): IntakeContext["carried"] {
+  return (documentId, itemKeys, area) => {
+    const dctx = decisionsContext(db, me);
+    const decisions = ensureDecisions(db, dctx);
+    const roadmap = (db.roadmap = ensureRoadmap(db, roadmapContext(db, me)));
+    const doc = findDocument(db, documentId);
+    const vs = doc ? docVersions(db, doc) : [];
+    const items = Object.values(roadmap.items)
+      .flat()
+      .filter((i) => doc && i.prd?.document?.id === doc.id);
+    if (doc && localStorage.getItem(MOCK_SCENARIO_KEY) === REPLACED_PRD_SCENARIO && !roadmap.bases.some((b) => b.prd_document_id === doc.id && b.reference === "EX-101")) {
+      const keys = [...new Set(items.map((i) => i.item_key))].sort();
+      roadmap.bases.push(...seedReplacedBases(doc.id, keys, uuid));
+      const owner = db.members.find((m) => m.role === "owner");
+      const about = [{ kind: "document", id: doc.id, ref: doc.slug }];
+      const first = items.find((i) => i.item_key === keys[0]);
+      const seeds = [
+        { title: "Cut voice notes from the first release", subjects: about, chosen: "cut" },
+        { title: "Cap alerts at 30 a minute", subjects: first ? [{ kind: "roadmap_item", id: first.id, ref: first.item_key }] : about, chosen: "cap" },
+        { title: "Drop email alerts", subjects: about, chosen: "drop" },
+      ];
+      for (const [n, d] of seeds.entries()) {
+        const id = uuid();
+        logMeetingDecision(dctx, decisions, { id, at: `2026-10-2${n}T17:00:00Z`, approver_id: owner?.id ?? me.id, meeting_title: `Review: ${doc.title}`, ...d });
+        if (n === 2) decisions.decisions.find((x) => x.id === id)!.status = "reversed";
+      }
+    }
+    return carriedFor(
+      {
+        doc: doc && { id: doc.id, slug: doc.slug, title: doc.title, kind: doc.kind },
+        approvedVersion: vs.filter((v) => v.approved_at).pop()?.number ?? null,
+        versionIds: vs.map((v) => v.id),
+        items,
+        decisions: decisions.decisions,
+        trashedAbout: (d) => dctx.trashedAbout?.(d.subjects) ?? null,
+        bases: roadmap.bases,
+      },
+      itemKeys,
+      area,
+    );
+  };
+}
+
 function findDocument(db: Db, ref: string) {
   return db.documents.find((d) => d.slug === ref || d.id === ref);
 }
@@ -6009,7 +6055,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     };
     const intake = await routeIntake(
       v2db,
-      { userId: me.id, role: me.role, createRun, updateRun, runStatus, startRun, people: db.members, subjects, confirmedGoals, goalKeys, lockedSections, requests, questionsLevel: () => levelFor((db.autonomy ??= emptyAutonomy()), "questions"), learned: () => nudges(db.quality?.learnings, "question_category"), raiseFeedback, withdrawFeedback },
+      { userId: me.id, role: me.role, carried: replacedPrd(db, me), createRun, updateRun, runStatus, startRun, people: db.members, subjects, confirmedGoals, goalKeys, lockedSections, requests, questionsLevel: () => levelFor((db.autonomy ??= emptyAutonomy()), "questions"), learned: () => nudges(db.quality?.learnings, "question_category"), raiseFeedback, withdrawFeedback },
       req,
       p,
       q,
