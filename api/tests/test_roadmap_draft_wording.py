@@ -173,6 +173,11 @@ def test_a_written_goal_cell_of_bare_codes_renders_the_items_goal_by_name():
     table = variants._table(named, _shown(item), variants.VARIANTS["engineering"],
                             {item.key: item}, {})  # fmt: skip
     assert "| G-B Faster setup |" in table
+    # One bare code keeps its place, with its goal's name.
+    one = written.replace("G-B, G-C, G-A1", "G-B")
+    table = variants._table(one, _shown(item), variants.VARIANTS["engineering"],
+                            {item.key: item}, {})  # fmt: skip
+    assert "| G-B Faster setup |" in table
 
 
 def test_a_queue_date_reads_as_the_items_place_in_the_queue_with_its_own_effort():

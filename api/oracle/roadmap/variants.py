@@ -876,10 +876,13 @@ def _table(
                 cells.append(f"\u2691 {title}" if item.no_goal and "\u2691" not in title else title)
             elif n == goal_col:
                 named = ", ".join(goal_names(item, variant))
-                # roadmap-draft-wording: a written cell of bare codes ("G-B, G-C") names
-                # the item's goal instead, when it has one.
+                # roadmap-draft-wording: a written cell of bare codes names the item's
+                # goal, when it has one: one code with it ("G1 Activation"), several
+                # ("G-B, G-C") by the name alone.
                 if row and not (named and named_codes.only_codes(row[n])):
                     cells.append(_keep_links(row[n], known))
+                elif row and len(named_codes.codes_in(row[n])) == 1:
+                    cells.append(_cell(f"{row[n].strip()} {named}"))
                 else:
                     cells.append(_cell(named))
             elif n == outcome_col:

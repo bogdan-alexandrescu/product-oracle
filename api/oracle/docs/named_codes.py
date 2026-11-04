@@ -56,6 +56,11 @@ def _codes(text: str) -> list[re.Match[str]]:
     ]
 
 
+def codes_in(text: str) -> list[str]:
+    """The codes ``text`` writes, in order."""
+    return [m.group(1) for m in _codes(text)]
+
+
 def only_codes(text: str) -> bool:
     """Whether ``text`` is codes alone, with no name ("G-B, G-C, G-A1"): a table cell a
     renderer replaces with the names it knows."""
