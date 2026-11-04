@@ -66,7 +66,7 @@ function Lock() {
 }
 
 /** A label's width at text-xs semibold, near enough to keep labels apart. */
-const textW = (t: string) => Math.ceil(t.length * 7.1) + 22;
+const textW = (t: string) => Math.ceil(t.length * 7.6) + 24;
 
 function Chip({ children, style, className = "", mx }: { children: ReactNode; style?: CSSProperties; className?: string; mx?: number }) {
   return (
@@ -106,9 +106,17 @@ export function MsLayer(props: MsLayerProps) {
       const right = box.getBoundingClientRect().right - 6;
       const lx = layer.getBoundingClientRect().left;
       for (const el of layer.querySelectorAll<HTMLElement>("[data-ms-label]")) {
+        // Room to the right keeps the label there, cut to its first words; too little room moves it left.
         const mx = Number(el.dataset.mx);
-        const w = el.offsetWidth;
-        el.style.left = `${lx + mx + 6 + w > right ? mx - 6 - w : mx + 6}px`;
+        const w = Number((el.dataset.w0 ??= String(el.offsetWidth)));
+        const room = right - (lx + mx + 6);
+        if (room >= Math.min(w, 80)) {
+          el.style.left = `${mx + 6}px`;
+          el.style.maxWidth = `${Math.min(w, room)}px`;
+        } else {
+          el.style.left = `${mx - 6 - w}px`;
+          el.style.maxWidth = `${w}px`;
+        }
       }
     };
     fit();
@@ -138,7 +146,7 @@ export function MsLayer(props: MsLayerProps) {
     if (left + w > props.width - 6) left = mx - 6 - w;
     const ends = tiers.get(band) ?? [];
     let t = ends.findIndex((e) => left >= e + 4);
-    if (t < 0) t = ends.length < 2 ? ends.length : ends.indexOf(Math.min(...ends));
+    if (t < 0) t = ends.length < 3 ? ends.length : ends.indexOf(Math.min(...ends));
     ends[t] = left + w;
     tiers.set(band, ends);
     return { left, top: y0 + 6 + t * 24, maxWidth: w };
@@ -238,7 +246,7 @@ export function MsLayer(props: MsLayerProps) {
     }
   }
 
-  if (ms.ms3 && !(ms.ms3 === "c" && p !== "done"))
+  if (ms.ms3 && !(ms.ms3 === "c" && p !== "done") && !phone)
     out.push(
       // The key for the PRD's milestones, pinned to the chart's top-left corner.
       <div key="ms3-key" className="sticky top-0 left-0 z-[30] h-0 w-0">

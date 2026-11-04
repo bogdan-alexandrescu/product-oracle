@@ -16,7 +16,8 @@ const SCROLL = (dev: string) => {
     if (e && ds.length) {
       const er = e.getBoundingClientRect();
       const xs = ds.map((d) => d.getBoundingClientRect().left - er.left + e!.scrollLeft);
-      const hi = Math.max(...xs), lo = Math.min(...xs);
+      const prd = layer.querySelector("[title^='M2 Digest']");
+      const hi = dev === "phone" && prd ? prd.getBoundingClientRect().left - er.left + e.scrollLeft : Math.max(...xs), lo = Math.min(...xs);
       const sl = dev === "phone" ? hi - (170 + 0.35 * (e.clientWidth - 170)) : Math.max(Math.min(lo - 250, hi - e.clientWidth * 0.62), hi - e.clientWidth * 0.66);
       e.scrollLeft = Math.max(0, sl);
     }
