@@ -875,6 +875,18 @@ export default function SimpleHome() {
                           </span>
                         </>
                       )}
+                      {/* home-deleted-roadmap: and once its roadmaps were deleted for good, says that. */}
+                      {next.reviews_deleted === "roadmap" && (
+                        <>
+                          <br />
+                          <span data-testid="home-meeting-deleted">
+                            Its roadmap was deleted ·{" "}
+                            <Link className="underline" href={`/company/rituals?ritual=${next.ritual_id}`}>
+                              Ritual settings
+                            </Link>
+                          </span>
+                        </>
+                      )}
                       <br />
                       {next.pre_read_ready && next.occurrence_id ? (
                         <Link className="underline" href={`/simple/meetings?pre_read=${next.occurrence_id}`}>
