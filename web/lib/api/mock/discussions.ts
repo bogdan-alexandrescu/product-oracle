@@ -228,6 +228,23 @@ export const NO_ACCOUNT_MESSAGE =
   "No Claude account: an owner adds one on Settings > Claude accounts (or sets a fallback setup-token or API key there)";
 /** The mock's canned reply, citing the seed's "Raise activation" goal. */
 export const CANNED_REPLY = ["Yes, if caps ", "read the plan thresholds only ", "[c:1]. Detection can follow ", "once activation holds; ", "the goal does not depend on it."];
+
+const withoutView = (subject: Record<string, unknown>) => Object.fromEntries(Object.entries(subject).filter(([k]) => k !== "view"));
+
+/**
+ * ask-page-context: a "This page" question about what the page shows ("these items") is
+ * answered from it: the API reads the view in the person's own panel chat. The listed items
+ * (lines with their fields after " · "), else the page's first lines, by name.
+ */
+export function pageReply(d: Pick<DiscussionRow, "subject" | "origin" | "visibility">, question: string): { pieces: string[]; citations: Record<string, unknown>[] } | null {
+  const view = d.subject.view as { name?: string; lines?: string[] } | undefined;
+  if (!view?.lines?.length || d.origin !== "panel" || d.visibility !== "private") return null;
+  if (!/\b(these|this page|on the page|listed)\b/i.test(question)) return null;
+  const items = view.lines.filter((l) => l.includes(" · horizon "));
+  const names = (items.length ? items : view.lines).slice(0, 4).map((l) => l.split(" · ")[0]);
+  return { pieces: [`On ${view.name ?? "this page"} I can see `, names.join(", "), ". Each can take a date once its milestone has one."], citations: [] };
+}
+
 /** G2 §4: one discussion_research run, the researcher at quick depth (the API's cost table). */
 export const RESEARCH_USD = 2;
 export const RESEARCH_ANSWER =
@@ -1126,7 +1143,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         // #406: Oracle reads the document the discussion is on; else the canned answer.
         const d = db.discussions.find((y) => y.id === x.discussion_id);
         const asked = [...db.messages].reverse().find((y) => y.discussion_id === x.discussion_id && y.author_kind === "person");
-        const read = d && asked ? documentReply(asked.body, ctx.documentText?.(d) ?? []) : null;
+        const read = d && asked ? (documentReply(asked.body, ctx.documentText?.(d) ?? []) ?? pageReply(d, asked.body)) : null;
         // B6: a goals interview's scripted reply comes first.
         const pieces = x.script ?? read?.pieces ?? CANNED_REPLY;
         const citations = x.script ? (x.script_citations ?? []) : (read?.citations ?? CANNED_CITATIONS);
@@ -1374,7 +1391,8 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       const d: DiscussionRow = {
         id: ctx.uuid(),
         subject_kind: input.subject_kind,
-        subject: input.subject ?? {},
+        // ask-page-context: what the page showed stays in the person's own panel chat (as the API).
+        subject: panel ? (input.subject ?? {}) : withoutView(input.subject ?? {}),
         subject_key: info.key,
         subject_label: info.label,
         subject_url: info.url,
@@ -1686,6 +1704,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     const at = ctx.now();
     const shared: DiscussionRow = {
       ...d,
+      subject: withoutView(d.subject),
       id: ctx.uuid(),
       title: (input.title ?? "").trim() || d.subject_label.slice(0, 200),
       visibility: "open",

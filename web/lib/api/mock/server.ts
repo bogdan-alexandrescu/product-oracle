@@ -3568,7 +3568,8 @@ function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): Su
     return { key: `run_item:${run.id}:${cp.kind}:${s.item_key}`, label: `${label} · ${s.item_key}`, url: `/runs/${run.id}`, run_id: run.id };
   }
   if (kind === "priorities") return { key: "priorities", label: "Priority order", url: "/priorities" };
-  if (kind === "screen") return { key: `screen:${s.path}`, label: screenPageName(String(s.path)), url: String(s.path) };
+  // ask-page-context: the page's own name, as the API (Labels.of).
+  if (kind === "screen") return { key: `screen:${s.path}`, label: (s.view as { name?: string } | undefined)?.name || screenPageName(String(s.path)), url: String(s.path) };
   const id = Object.values(s)[0];
   return { key: `${kind}:${id}`, label: kind.replace("_", " "), url: "/" };
 }
