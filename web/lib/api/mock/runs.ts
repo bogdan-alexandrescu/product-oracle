@@ -2784,7 +2784,7 @@ export function seedFeatureSetRun(db: RunsDb, ctx: Omit<RunsContext, "db">, twoO
               blocking: true,
               feature: "bulk-address-edit",
               requirement: null,
-              message: "bulk-address-edit depends on address-labels, which is excluded",
+              message: "bulk-address-edit depends on address-sharing, which is excluded",
             },
           ]
         : []),

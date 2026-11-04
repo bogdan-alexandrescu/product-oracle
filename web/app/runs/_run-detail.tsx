@@ -1285,10 +1285,11 @@ function SegmentItem({
               anchor={deciding.includes(waitingCp) && decidedOnScreen(waitingCp)}
             />
           )}
-          {waitingCp?.kind === "feature_set" && reviewHref(waitingCp) && !deciding.includes(waitingCp) && (
-            // C7: commenters suggest and viewers read on the review screen too.
+          {waitingCp?.kind === "feature_set" && !deciding.includes(waitingCp) && (
+            // C7: commenters suggest and viewers read on the review screen too: this run's
+            // feature set, by the run on screen (as every other review link here).
             <p className="mt-2" data-testid="review-link">
-              <LinkButton href={reviewHref(waitingCp)!} icon="flag">
+              <LinkButton href={reviewHref({ ...waitingCp, run_id: run.id })!} icon="flag">
                 Review feature set
               </LinkButton>
             </p>
@@ -2385,10 +2386,11 @@ function CheckpointRow({
           {agentsOnly}
         </p>
       )}
-      {cp.kind === "feature_set" && reviewHref(cp) && cp.status === "pending" && (
-        // C7: the feature set is reviewed row by row on its own screen; the raw files stay below.
+      {cp.kind === "feature_set" && cp.status === "pending" && (
+        // C7: the feature set is reviewed row by row on its own screen (this run's, by the run on
+        // screen); the raw files stay below.
         <p className="mt-2">
-          <LinkButton href={reviewHref(cp)!} variant="solid" icon="flag">
+          <LinkButton href={reviewHref({ ...cp, run_id: run.id })!} variant="solid" icon="flag">
             Review feature set
           </LinkButton>
         </p>
