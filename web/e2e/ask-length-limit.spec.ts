@@ -54,7 +54,7 @@ for (const size of SIZES) {
 
     test("a line with more than five changes gets five cards and names each change it did not use", async ({ page }) => {
       const panel = await openAsk(page, size.name === "phone");
-      const items = ["Mobile alert push", "Alert history export", "Alert routing by team", "Sample data import", "In-app tour", "Welcome video", "Team invite nudges"];
+      const items = ["Mobile alert push", "Alert history export", "Alert routing by team", "Sample data import", "Setup checklist", "Welcome video", "Team invite nudges"];
       await panel.getByRole("textbox", { name: "Message Oracle" }).fill(items.map((i) => `cut ${i}`).join("; "));
       await panel.getByRole("button", { name: "Send" }).click();
       const reply = panel.locator('[data-testid="chat-message"][data-author="oracle"]').last();
