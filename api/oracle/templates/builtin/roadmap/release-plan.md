@@ -122,7 +122,7 @@ layout:
 
 ## Plan {#plan}
 
-<!-- The plan approving this version applies to Simple. A table with the columns Key, Item, Start, End, Dates from, Status: one row per item of the roadmap's items, dates month first (Nov 30, 2026). End is the engineering date; Start stays empty when the engineering dates give none. Dates from says what the end rests on: estimate, team queue, commitment, or no date yet. Status is planned, shipped or next PRD. -->
+<!-- The plan approving this version applies to Simple. A table with the columns Key, Item, Start, End, Dates from, Status: one row per item of the roadmap's items, dates month first. End is the engineering date; Start stays empty when the engineering dates give none. Dates from says what the end rests on: estimate, team queue, commitment, or no date yet. Status is planned, shipped or next PRD. -->
 
 ## Milestones {#plan-milestones}
 
