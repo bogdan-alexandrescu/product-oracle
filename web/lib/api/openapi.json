@@ -117065,6 +117065,11 @@
             "type": "boolean",
             "title": "Can Approve"
           },
+          "can_publish": {
+            "type": "boolean",
+            "title": "Can Publish",
+            "default": false
+          },
           "change_log": {
             "items": {
               "$ref": "#/components/schemas/SimpleDraftChange"

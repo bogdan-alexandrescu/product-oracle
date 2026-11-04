@@ -832,6 +832,9 @@ async def outs(
                 and me in (d.created_by, w.deciders.get(d.document_id)),
                 can_approve=d.status == "submitted"
                 and (_approver_of(principal, d, w) or me in (d.waiting_on or [])),
+                can_publish=d.status == "working"
+                and _approver_of(principal, d, w)
+                and can_edit(principal, d.document_id, w),
                 change_log=logs.get(d.id, []),
                 published=d.document_id in approved,
                 can_withdraw=d.status == "submitted"
@@ -1394,8 +1397,12 @@ async def _approve(
 
 async def approve(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) -> SimpleDraftOut:
     """The caller's approval: the decider's (held until the required reviewers have
-    approved) or a required reviewer's (the caller commits)."""
+    approved) or a required reviewer's (the caller commits). roadmap-decide (owner, Nov 4):
+    the decider's approval of a working draft sends it first (Approve and publish), as a
+    meeting's approval does."""
     d, w = await _get(db, principal, draft_id)
+    if d.status == "working" and _approver_of(principal, d, w):
+        await submit(db, principal, d.id)
     other = await _approve(db, principal.tenant_id, d, w, principal, [], None)
     return (await outs(db, principal, [d], other))[0]
 

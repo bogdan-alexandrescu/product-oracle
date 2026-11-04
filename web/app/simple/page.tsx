@@ -729,7 +729,7 @@ export default function SimpleHome() {
                 {draftNext(draft, (id) => nameOf(id, "a reviewer")).words}.
               </span>
               <Link href={`/simple/roadmap?draft=${draft.id}`} className="simple-button">
-                {draftNext(draft).action === "approve" ? "Open draft to approve" : draftNext(draft).action === "submit" ? "Open draft to send for review" : "Open draft"}
+                {draftNext(draft).action === "approve" || draftNext(draft).action === "publish" ? "Open draft to approve" : draftNext(draft).action === "submit" ? "Open draft to send for review" : "Open draft"}
               </Link>
             </p>
           ))}

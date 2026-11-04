@@ -836,6 +836,9 @@ class SimpleDraftOut(BaseModel):
     can_submit: bool
     can_resume: bool
     can_approve: bool
+    # roadmap-decide (owner, Nov 4: draft, shown live): the decider's Approve and publish on a
+    # working draft, in place of Send for review (POST .../approve sends it and approves it).
+    can_publish: bool = False
     # D-d: every applied change it holds, not undone, oldest first (one shared draft per
     # roadmap: approving it publishes them all).
     change_log: list[SimpleDraftChange] = []

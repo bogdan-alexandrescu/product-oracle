@@ -38954,6 +38954,11 @@ export interface components {
             /** Can Approve */
             can_approve: boolean;
             /**
+             * Can Publish
+             * @default false
+             */
+            can_publish: boolean;
+            /**
              * Change Log
              * @default []
              */

@@ -354,7 +354,10 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onRe
   const since = working.map((d) => d.created_at).sort()[0];
   const log = working.flatMap((d) => d.change_log).sort((a, b) => (a.at < b.at ? -1 : 1));
   const last = [...log].reverse().find((c) => c.by === meId);
-  const submittable = working.filter((d) => d.status === "working" && d.can_submit && (d.changes > 0 || !!d.from_prds?.length));
+  const ready = (d: Draft) => d.status === "working" && (d.changes > 0 || !!d.from_prds?.length);
+  // roadmap-decide (owner, Nov 4: draft, shown live): the decider approves and publishes in place; others send it for review.
+  const publishable = working.filter((d) => ready(d) && d.can_publish);
+  const submittable = working.filter((d) => ready(d) && d.can_submit && !d.can_publish);
   // approved-prd-roadmap: what each approved PRD put in the draft.
   const fromPrds = working.flatMap((d) => d.from_prds ?? []);
   // walkb-roadmap review 5a: a roadmap built from a PRD and not approved yet has no approved roadmap to keep published.
@@ -375,9 +378,15 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onRe
         <Button variant="ghost" aria-expanded={open} onClick={() => setOpen(!open)}>
           See changes
         </Button>
-        <Button variant="solid" disabled={!submittable.length} onClick={() => onSubmit(submittable)}>
-          Send for review
-        </Button>
+        {publishable.length > 0 ? (
+          <Button variant="solid" data-testid="draft-publish" onClick={() => onApprove(publishable)}>
+            Approve and publish
+          </Button>
+        ) : (
+          <Button variant="solid" disabled={!submittable.length} onClick={() => onSubmit(submittable)}>
+            Send for review
+          </Button>
+        )}
         {approvable.length > 0 && (
           <Button variant="solid" data-testid="draft-approve" onClick={() => onApprove(approvable)}>
             Approve

@@ -423,6 +423,8 @@ function draftOut(db: SimpleDb, ctx: SimpleChangesCtx, d: MockDraft): Schemas["S
     can_submit: d.out.status === "working" && edits,
     can_resume: d.out.status === "working" && (d.out.created_by === ctx.id || decider === ctx.id),
     can_approve: d.out.status === "submitted" && edits,
+    // roadmap-decide (drafts.outs): the decider's Approve and publish on a working draft (with no decider, an owner's).
+    can_publish: d.out.status === "working" && edits && (decider ? decider === ctx.id : true),
     can_withdraw: d.out.status === "submitted" && (d.out.created_by === ctx.id || edits),
     published: !(db.unapproved ?? []).includes(d.roadmap),
     // decisions-reversed-or-trashed: notes on decisions it cited that were reversed since.
@@ -451,6 +453,11 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
     return json(200, draftOut(db, ctx, d));
   }
   if (p[4] === "approve") {
+    // roadmap-decide (drafts.approve): the decider's approval of a working draft sends it first.
+    if (d.out.status === "working" && draftOut(db, ctx, d).can_publish) {
+      if (!draftChanges(db, d.out.id) && !draftPrds(d).length) return json(422, { detail: "Nothing to submit: the draft has no changes" });
+      Object.assign(d.out, { status: "submitted", version: (d.out.base_version ?? 1) + 1, submitted_at: now, submitted_by: ctx.id });
+    }
     if (d.out.status !== "submitted") return json(409, { detail: `This draft is ${d.out.status}: only a submitted draft is approved` });
     if (!canEditRoadmap(db, d.roadmap, ctx)) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
     // No required reviewers in the mock: the approval publishes the version.
