@@ -841,7 +841,7 @@ export default function SimpleHome() {
                 <Link href={`/simple/roadmap?roadmap=${t.roadmap_id}`} className="simple-link">
                   {t.title}
                 </Link>{" "}
-                · <MarkForItem itemId={t.item_id} /> {t.item_title}
+                · {t.item_title} <MarkForItem itemId={t.item_id} />
                 {t.due_date ? ` · due ${calendarDay(t.due_date)}` : ""}
                 {t.late ? " · late" : ""}
               </li>

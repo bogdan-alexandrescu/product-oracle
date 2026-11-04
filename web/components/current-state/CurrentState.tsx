@@ -38,11 +38,14 @@ const TONE: Record<Mark, string> = {
   exists_old: "bg-warn-bg text-warn",
 };
 
+/** The pill's word: in a narrow spot (compact), the old-proof word is cut short. */
+export const pillWord = (mark: Mark, compact = false) => (compact && mark === "exists_old" ? "Exists ·!" : MARK_WORD[mark]);
+
 /** The word pill. compact: a narrow spot (a roadmap bar), where the old-proof word is cut short. */
 export function FeaturePill({ mark, compact = false }: { mark: Mark; compact?: boolean }) {
   return (
     <span data-testid="cs-mark" data-mark={mark} title={MARK_WORD[mark]} className={`inline-flex flex-none items-center whitespace-nowrap rounded-full px-2 py-px text-[12px] font-semibold uppercase tracking-wide ${TONE[mark]}`}>
-      {compact && mark === "exists_old" ? "Exists ·!" : MARK_WORD[mark]}
+      {pillWord(mark, compact)}
     </span>
   );
 }
@@ -91,8 +94,8 @@ function MarkCard({ f }: { f: FeatureState }) {
   return (
     <div role="dialog" aria-label={`${f.title}: ${MARK_WORD[f.mark]}`} onClick={(e) => e.stopPropagation()} className="absolute left-0 top-full z-30 mt-2 w-[360px] max-w-[calc(100vw-24px)] rounded-xl border border-line bg-surface p-4 text-left text-[14px] font-normal normal-case tracking-normal text-text shadow-xl" data-testid="cs-mark-card">
       <div className="mb-2 flex items-center gap-2">
-        <FeaturePill mark={f.mark} />
         <span className="font-semibold">{f.title}</span>
+        <FeaturePill mark={f.mark} />
       </div>
       <p className="mb-3 text-text2">{MEANS[f.mark]}</p>
       {f.no_proof_yet ? (

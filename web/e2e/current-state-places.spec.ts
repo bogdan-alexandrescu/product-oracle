@@ -21,6 +21,14 @@ import { ADMIN } from "./helpers";
 
 const PHONE = { width: 390, height: 844 };
 
+/** The pill follows the name, as chips do (owner, Nov 4): to its right on the same line, or on a line under it. */
+async function pillAfter(name: Locator, pill: Locator) {
+  const n = (await name.boundingBox())!;
+  const p = (await pill.boundingBox())!;
+  const sameLine = p.y < n.y + n.height && n.y < p.y + p.height;
+  expect(sameLine ? p.x >= n.x + n.width - 1 : p.y >= n.y + n.height - 1, "the pill comes after the name").toBe(true);
+}
+
 async function tap(l: Locator) {
   await l.evaluate((el) => el.scrollIntoView({ block: "center" }));
   await l.click();
@@ -57,6 +65,8 @@ for (const size of ["desktop", "phone"] as const) {
       const title = reply.getByTestId("answer-title");
       await expect(title).toContainText("Weekly alert digest");
       await expect(title.getByTestId("cs-mark")).toHaveText("Exists");
+      // The title reads the name first, its pill last (the name is the title's own text).
+      await expect(title).toHaveText(/^Weekly alert digest.*Exists$/);
 
       await tap(title.getByRole("button", { name: "What Exists means" }));
       const card = reply.getByTestId("cs-mark-card");
@@ -86,6 +96,7 @@ for (const size of ["desktop", "phone"] as const) {
       for (const [r, name, word, means, proof] of kinds) {
         const it = item(r, name);
         await expect(it.getByTestId("cs-mark")).toHaveText(word);
+        await pillAfter(it.getByText(name, { exact: true }), it.getByTestId("cs-mark"));
         await tap(it.getByRole("button", { name: `What ${word} means` }));
         const card = it.getByTestId("cs-mark-card");
         await expect(card).toBeVisible();
@@ -116,6 +127,7 @@ for (const size of ["desktop", "phone"] as const) {
       const strip = page.getByTestId("agenda-strip");
       await expect(page.getByTestId("agenda-next")).toHaveText("Next: Setup checklist");
       await expect(strip.getByTestId("cs-mark")).toHaveText("In progress");
+      await pillAfter(page.getByTestId("agenda-next"), strip.getByTestId("cs-mark"));
 
       await tap(strip.getByRole("button", { name: "What In progress means" }));
       const card = strip.getByTestId("cs-mark-card");
