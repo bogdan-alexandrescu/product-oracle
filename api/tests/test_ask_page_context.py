@@ -113,3 +113,57 @@ async def test_an_open_discussion_never_carries_a_page_view(client):
     assert resp.status_code == 201, resp.text
     assert "view" not in resp.json()["subject"]
     assert "Saved carts for guests" not in await built(ctx, resp.json()["id"])
+
+
+# protects=AUD-9 in the API: a person's own pages (Sources, Settings, the Inbox, the account)
+# hold the page's name only, whatever the client sends; fails_when=another client's view of
+# such a page is stored or read; no_claim=what the web sends (pageNameOnly).
+async def test_a_persons_own_page_keeps_its_name_only_whatever_is_sent(client):
+    ctx, _doc = await company(client)
+    shown = {"name": "Members", "lines": ["Pat Example, pat@example.com, owner"]}
+    for path in ("/settings/members", "/sources", "/inbox", "/account", "/settings"):
+        d = await start(
+            client, ctx,
+            {
+                "subject_kind": "screen", "subject": {"path": path, "view": shown},
+                "origin": "panel", "visibility": "private",
+            },
+        )  # fmt: skip
+        async with tenant_session(ctx.tenant_id) as s:
+            row = await s.get(Discussion, uuid.UUID(d["id"]))
+            assert "view" not in row.subject, path
+        text = await built(ctx, d["id"])
+        assert "pat@example.com" not in text and "The page shows" not in text, path
+    d = await start(
+        client, ctx,
+        {
+            "subject_kind": "screen", "subject": {"path": "/settingsfoo", "view": DATES},
+            "origin": "panel", "visibility": "private",
+        },
+    )  # fmt: skip
+    assert "- Beta, Dec 15" in await built(ctx, d["id"])
+
+
+# protects=the view (up to 16,000 characters) stays in the stored subject, read by the
+# reply's context only; fails_when=a discussion or a run's discussion list sends it back;
+# no_claim=the subject's other fields.
+async def test_the_page_view_is_never_sent_back(client):
+    ctx, _doc = await company(client)
+    run_id, cp_id = await review_stop(ctx)
+    d = await start(
+        client, ctx,
+        {
+            "subject_kind": "checkpoint",
+            "subject": {"run_id": run_id, "checkpoint_id": cp_id, "view": VIEW},
+            "origin": "panel", "visibility": "private",
+        },
+    )  # fmt: skip
+    assert "view" not in d["subject"]
+    one = await client.get(f"/v1/discussions/{d['id']}", headers=ctx.as_("commenter"))
+    assert one.status_code == 200, one.text
+    assert "view" not in one.json()["subject"]
+    listed = await client.get(f"/v1/runs/{run_id}/discussions", headers=ctx.as_("commenter"))
+    assert listed.status_code == 200, listed.text
+    rows = [r for r in listed.json()["discussions"] if r["id"] == d["id"]]
+    assert rows and "view" not in rows[0]["subject"]
+    assert "Saved carts for guests" in await built(ctx, d["id"])
