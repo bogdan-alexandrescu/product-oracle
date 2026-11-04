@@ -894,7 +894,7 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
   const legend = <LanesLegend data={data} lanes={lanes} noWork={noWork} />;
   return (
     <div
-      className="overflow-hidden rounded-[14px] border border-[var(--simple-rule)] bg-[var(--simple-paper)] pt-[14px] pb-3"
+      className="isolate overflow-hidden rounded-[14px] border border-[var(--simple-rule)] bg-[var(--simple-paper)] pt-[14px] pb-3"
       data-testid="simple-chart"
       data-format="timeline"
       data-view="lanes"
