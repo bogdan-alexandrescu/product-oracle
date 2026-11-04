@@ -70,7 +70,7 @@ const textW = (t: string) => Math.ceil(t.length * 7.6) + 24;
 
 function Chip({ children, style, className = "", mx }: { children: ReactNode; style?: CSSProperties; className?: string; mx?: number }) {
   return (
-    <span data-ms-label={mx != null ? "" : undefined} data-mx={mx} className={`absolute z-[14] overflow-hidden text-ellipsis rounded-full px-2 text-xs leading-5 font-semibold whitespace-nowrap ${className}`} style={style}>
+    <span data-ms-label={mx != null ? "" : undefined} data-mx={mx} data-t0={mx != null ? style?.top : undefined} className={`absolute z-[14] overflow-hidden text-ellipsis rounded-full px-2 text-xs leading-5 font-semibold whitespace-nowrap ${className}`} style={style}>
       {children}
     </span>
   );
@@ -95,28 +95,77 @@ export interface MsLayerProps {
 export function MsLayer(props: MsLayerProps) {
   const ms = useMs();
   const ref = useRef<HTMLDivElement>(null);
-  // A label that would run past the chart's visible right edge sits to the left of its diamond.
+  // A label keeps all its words inside the chart's visible part: it sits right of its diamond when it
+  // fits there, else left of it; with no room for one line on either side it wraps to two lines on the
+  // roomier side. The names column (the Timeline's sticky one) counts as an edge, and a label whose
+  // diamond has scrolled out of sight goes with it.
   useLayoutEffect(() => {
     const layer = ref.current;
     let sc = layer?.parentElement ?? null;
     while (sc && !(sc.scrollWidth > sc.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(sc).overflowX))) sc = sc.parentElement;
     if (!layer || !sc) return;
     const box = sc;
+    const inset = props.view === "timeline" ? (props.left ?? 0) : 0;
     const fit = () => {
-      const right = box.getBoundingClientRect().right - 6;
+      const b = box.getBoundingClientRect();
+      const right = b.right - 6;
+      const leftEdge = b.left + inset + 6;
       const lx = layer.getBoundingClientRect().left;
-      for (const el of layer.querySelectorAll<HTMLElement>("[data-ms-label]")) {
-        // Room to the right keeps the label there, cut to its first words; too little room moves it left.
+      const placed: DOMRect[] = [];
+      // Top rows first, so a label that steps down only ever lands below the one it met.
+      const labels = [...layer.querySelectorAll<HTMLElement>("[data-ms-label]")].sort((a, b) => (Number(a.dataset.t0) || 0) - (Number(b.dataset.t0) || 0));
+      for (const el of labels) {
         const mx = Number(el.dataset.mx);
-        const w = Number((el.dataset.w0 ??= String(el.offsetWidth)));
-        const room = right - (lx + mx + 6);
-        if (room >= Math.min(w, 80)) {
-          el.style.left = `${mx + 6}px`;
-          el.style.maxWidth = `${Math.min(w, room)}px`;
-        } else {
-          el.style.left = `${mx - 6 - w}px`;
-          el.style.maxWidth = `${w}px`;
+        // Its full width on one line and its own row, read once before any fitting.
+        const w = Number((el.dataset.w0 ??= String(el.scrollWidth + 2)));
+        const t0 = Number(el.dataset.t0) || 0;
+        // A diamond scrolled out of sight takes its words with it; none is left half shown.
+        const gone = lx + mx < leftEdge - 6 || lx + mx > right + 6;
+        el.style.visibility = gone ? "hidden" : "";
+        if (gone) continue;
+        const startR = Math.max(lx + mx + 6, leftEdge);
+        const roomR = right - startR;
+        const roomL = lx + mx - 6 - leftEdge;
+        const wrap = roomR < w && roomL < w;
+        el.style.whiteSpace = wrap ? "normal" : "nowrap";
+        el.style.lineHeight = wrap ? "14px" : "";
+        el.style.paddingBlock = wrap ? "2px" : "";
+        el.style.borderRadius = wrap ? "8px" : "";
+        const cw = wrap ? Math.min(Math.max(roomR, roomL), Math.ceil(w * 0.6) + 12) : w;
+        el.style.maxWidth = `${cw}px`;
+        el.style.width = wrap ? `${cw}px` : "";
+        el.style.left = `${roomR >= w || (wrap && roomR >= roomL) ? startR - lx : mx - 6 - cw}px`;
+        // A wrapped label is taller than its planned row: it steps down past any label it would sit on.
+        el.style.top = `${t0}px`;
+        for (let n = 0; wrap && n < 4; n++) {
+          const r = el.getBoundingClientRect();
+          const hit = placed.find((o) => r.left < o.right + 2 && o.left < r.right + 2 && r.top < o.bottom + 1 && o.top < r.bottom + 1);
+          if (!hit) break;
+          el.style.top = `${parseFloat(el.style.top) + (hit.bottom - r.top) + 3}px`;
         }
+        placed.push(el.getBoundingClientRect());
+      }
+      // The chart's own key-date and track marks: a word cut by an edge moves to the mark's other side
+      // or slides in from the edge; a mark scrolled out of sight takes its word with it.
+      for (const t of box.querySelectorAll<SVGTextElement>("[data-testid=key-date-marker] text, [data-testid=track-milestone] text")) {
+        const x0 = Number((t.dataset.x0 ??= t.getAttribute("x") ?? "0"));
+        const a0 = (t.dataset.a0 ??= t.getAttribute("text-anchor") ?? "start");
+        t.setAttribute("x", String(x0));
+        t.setAttribute("text-anchor", a0);
+        const mark = t.parentElement?.querySelector("rect")?.getBoundingClientRect();
+        const kx = mark ? mark.left + mark.width / 2 : 0;
+        const gone = !mark || kx < leftEdge - 6 || kx > right + 6;
+        t.style.visibility = gone ? "hidden" : "";
+        if (gone) continue;
+        const r = t.getBoundingClientRect();
+        if (r.left < leftEdge && a0 === "end" && r.right + r.width + 18 <= right) {
+          t.setAttribute("text-anchor", "start");
+          t.setAttribute("x", String(x0 + 18));
+        } else if (r.left < leftEdge) t.setAttribute("x", String(x0 + (leftEdge - r.left)));
+        else if (r.right > right && a0 === "start" && r.left - r.width - 18 >= leftEdge) {
+          t.setAttribute("text-anchor", "end");
+          t.setAttribute("x", String(x0 - 18));
+        } else if (r.right > right) t.setAttribute("x", String(x0 - (r.right - right)));
       }
     };
     fit();
@@ -140,7 +189,7 @@ export function MsLayer(props: MsLayerProps) {
   // Labels in a goal's header row: each keeps its name; one that has no room moves to the row below,
   // and one near the right edge sits to the left of its diamond. They keep off the built "Beta" flag's word.
   const tiers = new Map<string, number[]>();
-  const labelAt = (band: string, mx: number, y0: number, text: string, cap = phone ? 120 : 320) => {
+  const labelAt = (band: string, mx: number, y0: number, text: string, cap = phone ? 160 : 320) => {
     const w = Math.min(textW(text), cap);
     let left = mx + 6;
     if (left + w > props.width - 6) left = mx - 6 - w;
@@ -174,7 +223,7 @@ export function MsLayer(props: MsLayerProps) {
       // C: the diamond on the axis, and a small one in the goal's header.
       if (lane)
         out.push(
-          <Chip key={`t-${m.id}`} className="bg-surface !pl-1" style={{ ...at.get(m.id), color: msInk(m.code) }}>
+          <Chip key={`t-${m.id}`} mx={mx - 13} className="bg-surface !pl-1" style={{ ...at.get(m.id), color: msInk(m.code) }}>
             <i aria-hidden data-testid="ms-lane-diamond" className="mr-1 inline-block h-2 w-2 rotate-45 align-[1px]" style={{ background: msEdge(m.code) }} />
             {m.code} {m.name}
           </Chip>,
@@ -246,27 +295,6 @@ export function MsLayer(props: MsLayerProps) {
     }
   }
 
-  if (ms.ms3 && !(ms.ms3 === "c" && p !== "done") && !phone)
-    out.push(
-      // The key for the PRD's milestones, pinned to the chart's top-left corner.
-      <div key="ms3-key" className="sticky top-0 left-0 z-[30] h-0 w-0">
-        <span data-testid="ms3-key" className="absolute flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 text-xs leading-6 whitespace-nowrap text-text2" style={{ left: 8, top: view === "timeline" ? 6 : axisY - 12 }}>
-          {ms.ms3 === "c" ? (
-            <><i aria-hidden className="inline-block h-2.5 w-2.5 rotate-45" style={{ background: msEdge("M1") }} /> Copied from the PRD Usage alerts: the roadmap’s own now</>
-          ) : (
-            <><i aria-hidden className="inline-block h-2.5 w-2.5 rotate-45 border-[1.5px] border-dashed" style={{ borderColor: msEdge("M1") }} /> Hollow, dashed: from the PRD Usage alerts{ms.ms3 === "b" && <> · <Lock />changes only there</>}{ms.ms3 === "a" && <> · a change asks its owner</>}</>
-          )}
-        </span>
-      </div>,
-    );
-  if (ms.ms3 === "c" && p !== "done" && !phone)
-    out.push(
-      <div key="tray" className="sticky top-0 left-0 z-[30] h-0 w-0">
-        <span data-testid="ms3-tray" className="absolute rounded-full border border-dashed border-line-strong bg-surface px-2.5 text-xs leading-6 font-semibold whitespace-nowrap text-text" style={{ left: 8, top: view === "timeline" ? 6 : axisY - 12 }}>
-          The PRD Usage alerts has 4 milestones · <span className="text-accent-ink underline">Copy onto the roadmap</span>
-        </span>
-      </div>,
-    );
   if (ms.ms3 === "b" && p === "mid") {
     const lx = X("2026-12-15");
     out.push(<Cursor key="cur" x={lx + 2} y={axisY + 4} grab />);
@@ -549,6 +577,31 @@ export function MsTypeBar() {
       </span>
       {ms.phase === "open" && <span className="text-xs text-text2">Grow retention · Jan 20, 2027 · Enter to add</span>}
       {ms.phase === "second" && <span className="text-xs text-text2">M3 added · keep typing for the next</span>}
+    </div>
+  );
+}
+
+/** MS3: the key for the PRD's milestones (or C's copy line), in a row of its own above the chart so
+ * it never covers the time axis, the Today mark or a month. */
+export function MsKey({ phone }: { phone: boolean }) {
+  const ms = useMs();
+  if (!ms.on || !ms.ms3 || phone) return null;
+  const tray = ms.ms3 === "c" && ms.phase !== "done";
+  return (
+    <div data-testid="ms3-key-row" className="flex flex-wrap items-center gap-2">
+      {tray ? (
+        <span data-testid="ms3-tray" className="rounded-full border border-dashed border-line-strong bg-surface px-2.5 text-xs leading-6 font-semibold whitespace-nowrap text-text">
+          The PRD Usage alerts has 4 milestones · <span className="text-accent-ink underline">Copy onto the roadmap</span>
+        </span>
+      ) : (
+        <span data-testid="ms3-key" className="flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 text-xs leading-6 whitespace-nowrap text-text2">
+          {ms.ms3 === "c" ? (
+            <><i aria-hidden className="inline-block h-2.5 w-2.5 rotate-45" style={{ background: msEdge("M1") }} /> Copied from the PRD Usage alerts: the roadmap’s own now</>
+          ) : (
+            <><i aria-hidden className="inline-block h-2.5 w-2.5 rotate-45 border-[1.5px] border-dashed" style={{ borderColor: msEdge("M1") }} /> Hollow, dashed: from the PRD Usage alerts{ms.ms3 === "b" && <> · <Lock />changes only there</>}{ms.ms3 === "a" && <> · a change asks its owner</>}</>
+          )}
+        </span>
+      )}
     </div>
   );
 }

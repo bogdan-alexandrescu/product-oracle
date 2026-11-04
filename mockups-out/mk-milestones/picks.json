@@ -54,7 +54,7 @@
             },
             {
               "file": "frames/ms1-a-phone-done.html",
-              "caption": "Phone 390: M3 added; each label keeps its first words, and one near the edge sits left of its diamond."
+              "caption": "Phone 390: M3 added; every label keeps all its words: near an edge it sits on the inside or wraps to two lines."
             },
             {
               "file": "frames/ms1-a-dark.html",
@@ -222,20 +222,20 @@
               "caption": "At rest: each milestone a diamond on the axis, a line across its own goal's rows, named in the goal's row."
             },
             {
-              "file": "frames/ms2-a-open.html",
-              "caption": "A click on M3 opens its card to edit, with Remove."
-            },
-            {
               "file": "frames/ms2-a-mid.html",
-              "caption": "Adding: the card asks for name, date, goal, the items it waits on (tapped on the chart) and when it counts."
+              "caption": "Add M3: the card asks for name, date, goal, the items it waits on (tapped on the chart) and when it counts."
             },
             {
               "file": "frames/ms2-a-done.html",
-              "caption": "Drawn: a diamond on the axis, a line across its own goal's rows only, its items tied by dotted lines, and “Ends after M3” on the late one."
+              "caption": "M3 added: a diamond on the axis, a line across its own goal's rows only, its items tied by dotted lines, and “Ends after M3” on the late one."
+            },
+            {
+              "file": "frames/ms2-a-open.html",
+              "caption": "Edit M3: a click on the new M3 opens its card again, with Remove."
             },
             {
               "file": "frames/ms2-a-done-gantt.html",
-              "caption": "The same on the Gantt."
+              "caption": "Done: the same M3 on the Gantt."
             },
             {
               "file": "frames/ms2-a-second.html",
@@ -255,7 +255,7 @@
             },
             {
               "file": "frames/ms2-a-phone.html",
-              "caption": "Phone 390: lines and ties kept; labels keep their first words."
+              "caption": "Phone 390: lines and ties kept; labels keep all their words, wrapping to two lines near an edge."
             },
             {
               "file": "frames/ms2-a-dark.html",
@@ -276,20 +276,20 @@
               "caption": "At rest: each milestone a line down the whole chart, named at the top of the rows."
             },
             {
-              "file": "frames/ms2-b-open.html",
-              "caption": "A click on M3 opens the side panel to edit, with Remove; the panel covers the right of the chart."
-            },
-            {
               "file": "frames/ms2-b-mid.html",
-              "caption": "Adding: the panel has every field and the status, and ticks the goal's items it waits on. Cost: it covers the right of the chart, where M3 sits."
+              "caption": "Add M3: the panel has every field and the status, and ticks the goal's items it waits on. Cost: it covers the right of the chart, where M3 sits."
             },
             {
               "file": "frames/ms2-b-done.html",
-              "caption": "Drawn: a line down the whole chart with its name at the top; no ties, the late item marked."
+              "caption": "M3 added: a line down the whole chart with its name at the top; no ties, the late item marked."
+            },
+            {
+              "file": "frames/ms2-b-open.html",
+              "caption": "Edit M3: a click on the new M3 opens the side panel again, with Remove; the panel covers the right of the chart."
             },
             {
               "file": "frames/ms2-b-done-gantt.html",
-              "caption": "The same on the Gantt: every milestone crosses every goal's rows."
+              "caption": "Done: the same on the Gantt, where every milestone crosses every goal's rows."
             },
             {
               "file": "frames/ms2-b-second.html",
@@ -322,20 +322,20 @@
               "caption": "At rest: a diamond on the axis, and the milestone named with a small diamond in its goal's row; no lines."
             },
             {
-              "file": "frames/ms2-c-open.html",
-              "caption": "A click on M3 opens a small card to edit its name and date, with Remove."
-            },
-            {
               "file": "frames/ms2-c-mid.html",
-              "caption": "Adding: a small card asks only for a name and a date."
+              "caption": "Add M3: a small card asks only for a name and a date."
             },
             {
               "file": "frames/ms2-c-done.html",
-              "caption": "Drawn: a diamond on the axis and its name in the goal's row; nothing on the items. The toast only says “M3 added”."
+              "caption": "M3 added: a diamond on the axis and its name in the goal's row; nothing on the items. The toast only says “M3 added”."
+            },
+            {
+              "file": "frames/ms2-c-open.html",
+              "caption": "Edit M3: a click on the new M3 opens the small card again to edit its name and date, with Remove."
             },
             {
               "file": "frames/ms2-c-done-gantt.html",
-              "caption": "The same on the Gantt: least clutter, but no sign of what it waits on or what is late."
+              "caption": "Done: the same on the Gantt; least clutter, but no sign of what it waits on or what is late."
             },
             {
               "file": "frames/ms2-c-second.html",
@@ -373,7 +373,7 @@
           "frames": [
             {
               "file": "frames/ms3-a-rest.html",
-              "caption": "A roadmap built with the PRD Usage alerts: its four milestones drawn hollow with dashed lines, each label starting “PRD”, and a key in the corner."
+              "caption": "A roadmap built with the PRD Usage alerts: its four milestones drawn hollow with dashed lines, each label starting “PRD”, and a key above the chart."
             },
             {
               "file": "frames/ms3-a-open.html",
@@ -449,7 +449,7 @@
           "frames": [
             {
               "file": "frames/ms3-c-rest.html",
-              "caption": "Not drawn: one line in the chart's corner says the PRD has 4 milestones, with “Copy onto the roadmap”."
+              "caption": "Not drawn: one line above the chart says the PRD has 4 milestones, with “Copy onto the roadmap”."
             },
             {
               "file": "frames/ms3-c-open.html",
@@ -465,7 +465,7 @@
             },
             {
               "file": "frames/ms3-c-hard-1512.html",
-              "caption": "Hard case at 1512, 30 items in Grow retention: nothing of the PRD is drawn until it is copied, only the line in the corner."
+              "caption": "Hard case at 1512, 30 items in Grow retention: nothing of the PRD is drawn until it is copied, only the line above the chart."
             },
             {
               "file": "frames/ms3-c-phone.html",

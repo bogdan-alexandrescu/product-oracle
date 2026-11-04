@@ -16,7 +16,7 @@ import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 import { QuickAdd } from "./_add";
-import { MsLayer, MsPickBar, MsTypeBar } from "./_msmock"; // MOCK-HOOK
+import { MsKey, MsLayer, MsPickBar, MsTypeBar } from "./_msmock"; // MOCK-HOOK
 import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, MARK_WORDS, PM_LANE, type Horizon, type LegendEntry } from "./_board";
 import { useKeyBurst } from "./_burst";
 import { changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
@@ -1293,6 +1293,7 @@ export function SimpleRoadmap() {
       {/* #36: on a phone, Roadmap/Goal/Track and Group by read before the chart, not after
        * the legend and goal cards at the page's foot. */}
       {!blank && filters}
+      {!blank && <MsKey phone={phone} />} {/* MOCK-HOOK mk-milestones */}
       {blank && (
         <p className="text-[15px] text-text2" data-testid="roadmap-empty">
           {hasGoals ? (

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { test, type Browser } from "@playwright/test";
-const OUT = "/workspace/att_c5822002be4b47719c9e/work/repo/mockups-out/mk-milestones";
+const OUT = process.env.SNAP_OUT ?? path.resolve(__dirname, "../../mockups-out/mk-milestones");
 const frames: { file: string; q: string; dev: string; theme: string }[] = JSON.parse(fs.readFileSync(process.env.SNAP_FRAMES!, "utf8"));
 const only = (process.env.SNAP_ONLY ?? "").split(",").filter(Boolean);
 const SCROLL = (dev: string) => {

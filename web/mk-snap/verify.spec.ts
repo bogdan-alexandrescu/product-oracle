@@ -1,6 +1,7 @@
 import fs from "node:fs";
+import path from "node:path";
 import { test } from "@playwright/test";
-const DIR = "/workspace/att_c5822002be4b47719c9e/work/repo/mockups-out/mk-milestones/frames";
+const DIR = path.resolve(process.env.SNAP_OUT ?? path.resolve(__dirname, "../../mockups-out/mk-milestones"), "frames");
 const OUT = process.env.VOUT!;
 test("verify", async ({ browser }) => {
   for (const f of fs.readdirSync(DIR).filter((x) => x.endsWith(".html"))) {
