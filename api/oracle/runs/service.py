@@ -3147,7 +3147,7 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
     else:
         known_from, known = await _known_roadmap_items(db, run)
     frozen = (
-        await _frozen_queue(db, run, version.document_id)
+        await _frozen_queue(db, run, version)
         if run.flow == "prd_to_roadmap"
         else {"rows": [], "per_week": None, "today": None}
     )
@@ -3158,7 +3158,7 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
         horizons=await _run_horizons(db, run),
         schedule_bases=[b.as_json() for b in bases],
         company_queue=frozen["rows"],
-        company_plan={k: frozen[k] for k in ("per_week", "today")},
+        company_plan={k: v for k, v in frozen.items() if k != "rows"},
         slug=document.slug if document else str(version.document_id),
         title=document.title if document else "",
         version=version.number,
@@ -3171,15 +3171,20 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
     )
 
 
-async def _frozen_queue(db: AsyncSession, run: Run, prd_id: uuid.UUID | None) -> dict[str, Any]:
+async def _frozen_queue(
+    db: AsyncSession, run: Run, source: DocumentVersion | None
+) -> dict[str, Any]:
     """one-roadmap-many-prds: the shared queue this run reads (oracle.roadmap.company
-    .frozen_queue), stored on the run when its prompt is first built; the prompt, every
+    .frozen_queue), stored on the run when its first prompt (the roadmap_items segment's)
+    is built, before the run writes its items file; that prompt, the roadmap draft's, every
     rewrite after a refusal and the check read that copy, though other PRDs' runs land or
-    the team's capacity changes meanwhile."""
+    the team's capacity changes meanwhile. ``source``: the run's PRD version."""
     frozen = (run.knobs or {}).get(COMPANY_QUEUE)
     if isinstance(frozen, dict) and isinstance(frozen.get("rows"), list):
         return frozen
-    frozen = await roadmap_company.frozen_queue(db, prd_id, run.created_at)
+    frozen = await roadmap_company.frozen_queue(
+        db, source.document_id if source else None, run.created_at, source
+    )
     _set_knob(run, COMPANY_QUEUE, frozen)
     await db.flush()
     return frozen
@@ -4733,10 +4738,11 @@ async def _plan_table_problems(
     source = await db.get(DocumentVersion, source_id) if source_id else None
     bases = await schedule.verified_bases(db, source.document_id if source else None)
     # one-roadmap-many-prds: the other PRDs' items on the company roadmap are in the tables
-    # too, from the queue the run froze when its prompt was first built.
-    frozen = await _frozen_queue(db, run, source.document_id if source else None)
-    others = roadmap_company.with_run_items(frozen["rows"], items, per_week=frozen["per_week"],
-                                            today=frozen["today"])  # fmt: skip
+    # too, from the queue the run froze when its first prompt (roadmap_items) was built.
+    frozen = await _frozen_queue(db, run, source)
+    others = roadmap_company.with_run_items(
+        frozen["rows"], items, **{k: v for k, v in frozen.items() if k != "rows"}
+    )
     plan = plan_tables.engineering_plan(items, [b.as_json() for b in bases], others=others)
     today = frozen["today"]
     day = date.fromisoformat(today) if today else await roadmap_company.run_day(db, run.created_at)

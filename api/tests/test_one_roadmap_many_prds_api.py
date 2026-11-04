@@ -561,29 +561,29 @@ items:
 """
 
 
+QUICK_REPORT_ITEMS = REPORT_ITEMS + "    economics: {effort_weeks: 0.01}\n"
+
+
 async def test_a_runs_prompt_and_check_date_the_queue_from_the_runs_own_day(client, monkeypatch):
     from oracle.roadmap import company
     from oracle.runs import plan_tables, service
     from oracle.runs.models import Run, RunSegment
 
     ctx, ids = await world(client)
+    # The run's file makes the report button a few hours' work: it ends on the run's own day.
     started = datetime.now(UTC)
     run_day = company_time.day(started, company_time.DEFAULT_ZONE)
     monkeypatch.setattr(company_time, "now", lambda: started)
     async with tenant_session(ctx.tenant_id) as s:
-        # The report button is a few hours' work: it ends on the run's own day.
-        report = await s.scalar(select(RoadmapItem).where(
-            RoadmapItem.roadmap_version_id == ids["v1"],
-            RoadmapItem.item_key == "report-button"))  # fmt: skip
-        report.economics = {"declared": {"effort_weeks": 0.01}}
         run = await _add(s, Run(flow="prd_to_roadmap", status="running", created_at=started))
         s.add(RunSegment(run_id=run.id, seq=1, name="roadmap_items", status="succeeded",
-                         artifacts={"files": {plan_tables.ITEMS_FILE: REPORT_ITEMS}}))  # fmt: skip
+                         artifacts={"files": {
+                             plan_tables.ITEMS_FILE: QUICK_REPORT_ITEMS}}))  # fmt: skip
         await s.commit()
         prompt_rows = await company.run_queue(s, ids["safety"], as_of=started)
     assert prompt_rows[0]["start"] == run_day.isoformat()
-    queued = company.with_run_items(prompt_rows, REPORT_ITEMS)
-    plan = plan_tables.engineering_plan(REPORT_ITEMS, [], others=queued)
+    queued = company.with_run_items(prompt_rows, QUICK_REPORT_ITEMS)
+    plan = plan_tables.engineering_plan(QUICK_REPORT_ITEMS, [], others=queued)
     written = plan_tables.markdown(plan)
     # The writer words the run's day without its year, as people do.
     day = company_time.calendar_day(run_day)

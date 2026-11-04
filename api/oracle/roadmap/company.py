@@ -378,17 +378,71 @@ async def run_queue(
     return (await frozen_queue(db, prd_id, as_of))["rows"]
 
 
+async def _feature_goals(db: AsyncSession) -> tuple[dict[str, int | None], dict[uuid.UUID, int]]:
+    """Every feature's key -> its rank in the company goal order (the first goal it
+    supports, over every goal; None: it supports none), and the same by feature id."""
+    features = {
+        e.key: e.id
+        for e in await db.scalars(
+            select(Entity).where(Entity.type == "feature", Entity.status != "rejected")
+        )
+    }
+    found = (
+        await db.execute(
+            select(Edge.src_id, Entity)
+            .join(Entity, Entity.id == Edge.dst_id)
+            .where(
+                Edge.type == "supports",
+                Edge.status != "rejected",
+                Entity.type == "goal",
+                Entity.status != "rejected",
+            )
+        )
+    ).all()
+    rank = {key: n for n, key in enumerate(sorted({goal_sort_key(g) for _, g in found}))}
+    by_id: dict[uuid.UUID, int] = {}
+    for src, goal in found:
+        by_id[src] = min(by_id.get(src, len(rank)), rank[goal_sort_key(goal)])
+    return {k: by_id.get(i) for k, i in features.items()}, by_id
+
+
+async def _section_features(
+    db: AsyncSession, prd_version: DocumentVersion | None
+) -> dict[str, str]:
+    """Each section of the run's PRD version -> the key of the feature it links, the one
+    landing traces an item naming that section to (oracle.roadmap.items.derive_traces)."""
+    from oracle.docs.models import Section
+    from oracle.roadmap.items import _linked_by_section
+
+    if prd_version is None:
+        return {}
+    keys = set(await db.scalars(select(Section.section_key).where(
+        Section.version_id == prd_version.id)))  # fmt: skip
+    linked = await _linked_by_section(db, prd_version, keys)
+    return {
+        k: next(e.key for e in found if e.type == "feature")
+        for k, found in linked.items()
+        if any(e.type == "feature" for e in found)
+    }
+
+
 async def frozen_queue(
-    db: AsyncSession, prd_id: uuid.UUID | None, as_of: datetime | None = None
+    db: AsyncSession,
+    prd_id: uuid.UUID | None,
+    as_of: datetime | None = None,
+    prd_version: DocumentVersion | None = None,
 ) -> dict[str, Any]:
-    """The shared queue as a run stores it once, when its prompt is first built (JSON):
-    {rows: :func:`run_queue`'s rows, per_week: the team's capacity, today: the run's day};
-    per_week and today are None without a company roadmap. The run's prompt, every rewrite
-    and its check read this copy, though other PRDs' runs land or the capacity changes."""
+    """The shared queue as a run stores it once, when its first prompt is built (JSON):
+    {rows: :func:`run_queue`'s rows, per_week: the team's capacity, today: the run's day,
+    features: :func:`_feature_goals`' keys, sections: :func:`_section_features` of the
+    run's PRD version ``prd_version``}; per_week and today are None without a company
+    roadmap. The run's prompts, every rewrite and its check read this copy, though other
+    PRDs' runs land or the capacity changes."""
     if await active(db) is None:
-        return {"rows": [], "per_week": None, "today": None}
+        return {"rows": [], "per_week": None, "today": None, "features": {}, "sections": {}}
     cap, queued = await queue(db, as_of)
     today = (await run_day(db, as_of)).isoformat()
+    features, goal_of = await _feature_goals(db)
     rows = [
         {
             "key": q.item.item_key,
@@ -401,7 +455,7 @@ async def frozen_queue(
             "milestone": _milestone_name(q.item.milestone),
             "horizon": HORIZON_ORDER.get(q.item.horizon, 3),
             "position": q.item.position,
-            "goal": None if q.order[2][0] else q.order[2][1],
+            "goal": goal_of.get(q.item.feature_id) if q.item.feature_id else None,
             "priority": _priority(q.item),
             "effort_weeks": q.effort_weeks,
             "per_week": _per_week(cap),
@@ -409,7 +463,8 @@ async def frozen_queue(
         }
         for q in queued
     ]
-    return {"rows": rows, "per_week": _per_week(cap), "today": today}
+    return {"rows": rows, "per_week": _per_week(cap), "today": today, "features": features,
+            "sections": await _section_features(db, prd_version)}  # fmt: skip
 
 
 def _run_entries(items_text: str | None) -> list[dict[str, Any]] | None:
@@ -439,41 +494,55 @@ def _run_entries(items_text: str | None) -> list[dict[str, Any]] | None:
     return out
 
 
+def _run_goal(raw: dict[str, Any], features: dict[str, Any], sections: dict[str, str]) -> Any:
+    """The goal rank of the feature landing traces a file's item to (derive_traces): the
+    one it declares, else the one its PRD section links, else the one keyed as the item."""
+    from oracle.runs.roadmap import _text
+
+    declared = raw.get("feature") if isinstance(raw.get("feature"), str) else None
+    section = _text(raw.get("prd_section"))
+    for key in (declared, sections.get(section) if section else None, _text(raw.get("id"))):
+        if key and key in features:
+            return features[key]
+    return None
+
+
 def with_run_items(
     rows: list[dict[str, Any]],
     items_text: str | None,
     *,
     per_week: float | None = None,
     today: str | None = None,
+    features: dict[str, Any] | None = None,
+    sections: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """The shared queue with this run's items file in it, as :func:`queue` will plan it once
     the file lands: the run's PRD's rows are replaced by the file's items, which take
     positions 0..n-1 in file order (import_items), and every other PRD's item comes after
     them in its current order (carry_other_prds); each milestone's place and the order are
     :func:`_orders`'. ``per_week`` and ``today`` (the run's frozen capacity and day, else the
-    rows'): the run's own items are dated though the shared queue is empty."""
+    rows'): the run's own items are dated though the shared queue is empty. ``features`` and
+    ``sections`` (:func:`frozen_queue`'s): the goal each item's feature serves."""
     per_week = per_week or (rows[0]["per_week"] if rows and "per_week" in rows[0] else None)
     today = today or (rows[0]["today"] if rows and "today" in rows[0] else None)
     entries = _run_entries(items_text)
     if entries is None or not per_week or not today:
         return rows
-    ours = {r["key"]: r for r in rows if r["ours"]}
-    prd = next((r["prd"] for r in ours.values()), "")
+    prd = next((r["prd"] for r in rows if r["ours"]), "")
     merged: list[dict[str, Any]] = []
     for raw in entries:
-        key, old = raw["id"], ours.get(raw["id"])
+        # Landing stores the file's priority and declared economics alone, whether or not
+        # the item was on the roadmap (its baseline economics never carry effort_weeks), and
+        # traces the item to its feature again.
         item = RoadmapItem(horizon=raw.get("horizon"), position=len(merged),
                            milestone=raw.get("milestone"),
                            priority=raw["priority"] if isinstance(raw.get("priority"), dict)
                            else None,
                            economics={"declared": raw["economics"]}
                            if isinstance(raw.get("economics"), dict) else {})  # fmt: skip
-        place = _place(item, old["goal"] if old else None)
-        if old is not None and item.priority is None:
-            place["priority"] = old["priority"]
-        merged.append({"key": key, "title": str(raw.get("title")).strip(), "prd": prd,
-                       "ours": True, "effort_weeks": old["effort_weeks"] if old
-                       else _effort(item), **place})  # fmt: skip
+        merged.append({"key": raw["id"], "title": str(raw.get("title")).strip(), "prd": prd,
+                       "ours": True, "effort_weeks": _effort(item),
+                       **_place(item, _run_goal(raw, features or {}, sections or {}))})  # fmt: skip
     for r in sorted((r for r in rows if not r["ours"]), key=lambda r: r["position"]):
         merged.append({**r, "position": len(merged)})
     orders = _orders(merged)
