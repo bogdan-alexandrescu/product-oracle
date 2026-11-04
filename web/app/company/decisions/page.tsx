@@ -234,7 +234,22 @@ function Decisions() {
       cell: (d) => <span className="tnum text-sm">{d.ref}</span>,
     },
     // The title wraps: it is what a row is read by, never cut mid-word.
-    { key: "title", header: "Title", phone: "title", wrap: true, cell: (d) => <span className="font-medium">{d.title}</span> },
+    {
+      key: "title",
+      header: "Title",
+      phone: "title",
+      wrap: true,
+      cell: (d) => (
+        <>
+          <span className="font-medium">{d.title}</span>
+          {d.trash_note && (
+            <span data-testid="decision-row-trash-note" className="block text-sm text-text2">
+              {d.trash_note}
+            </span>
+          )}
+        </>
+      ),
+    },
     {
       key: "state",
       header: "State",

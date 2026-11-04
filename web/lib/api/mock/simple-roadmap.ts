@@ -11,6 +11,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { goalPosition, sortGoals, type OrderedGoal } from "@/lib/goal-order";
 import { plainFlow } from "./simple-visuals";
+import { leftOut } from "./decision-notes";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, seeded, stableUuid } from "./ids";
@@ -1012,6 +1013,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     ...keyDatesOut(db, reader.full, chosen ? [chosen] : readable, me ?? { id: "", role }),
     roadmaps: keyDatesOut(db, reader.full, readable, me ?? { id: "", role }).key_date_roadmaps,
     roadmap: chosen ? { id: roadmapId(chosen), slug: chosen, title: roadmapTitle(db, chosen) } : null,
+    // decisions-reversed-or-trashed: the items' decisions left out as no longer standing.
+    left_out: leftOut(),
   };
 }
 
@@ -1235,6 +1238,7 @@ export function approvedPrdToDraft(
         created_by: me,
         created_at: new Date(mockNowMs()).toISOString(),
         participant_ids: [me],
+        decision_notes: [],
         submitted_at: null,
         submitted_by: null,
         decider_approved: false,

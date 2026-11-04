@@ -22,6 +22,7 @@ import { planByMonth } from "@/lib/simple-home";
 import { planSlices } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
+import { draftDecisionNotes, leftOut } from "./decision-notes";
 import { stableUuid } from "./ids";
 import { annotate, resolved, type Cites } from "./one-pager-checks";
 import { betSubject, flowFor, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
@@ -593,6 +594,8 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     ),
     // As the API: the sections the page's lines rest on.
     sections: db.sections.filter((s) => db.blocks.some((b) => b.lines.some((l) => l.keys.includes(s.key)))).map((s) => ({ key: s.key, heading: s.heading, body: sectionNow(db, s.key, sees) })),
+    // decisions-reversed-or-trashed: the lines' decisions left out as no longer standing.
+    left_out: leftOut(),
     notes,
     draft: sees && db.draft
       ? {
@@ -601,7 +604,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
           // build-review: who approves once sent (the PRD's required reviewers), on a working draft.
           reviewers: (db.draft.status ?? "working") === "working" ? ctx.reviewers.map((i) => ({ id: i, name: ctx.names[i] ?? "someone" })) : [],
           can_submit: (db.draft.status ?? "working") === "working" && decides(ctx) && liveChanges(db).length > 0,
-          reminded_at: remindedAt(db), can_remind: mayRemind(ctx) && dueReminders(db).length > 0,
+          reminded_at: remindedAt(db), can_remind: mayRemind(ctx) && dueReminders(db).length > 0, decision_notes: draftDecisionNotes(),
         }
       : null,
     changes_in_review: hiddenDraft + (proposals.length - shown.length),

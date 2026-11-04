@@ -20462,6 +20462,8 @@ export interface components {
              */
             created_at: string;
             source?: components["schemas"]["DecisionSource"] | null;
+            /** Trash Note */
+            trash_note?: string | null;
             /** Question */
             question?: string | null;
             /** Context */
@@ -20757,6 +20759,8 @@ export interface components {
              */
             created_at: string;
             source?: components["schemas"]["DecisionSource"] | null;
+            /** Trash Note */
+            trash_note?: string | null;
         };
         /**
          * DeckOut
@@ -30155,6 +30159,11 @@ export interface components {
              * @default []
              */
             blocked_by: string[];
+            /**
+             * Decision Notes
+             * @default []
+             */
+            decision_notes: string[];
         };
         /**
          * OnePagerFlow
@@ -30389,6 +30398,7 @@ export interface components {
              * @default []
              */
             sections: components["schemas"]["OnePagerSource"][];
+            left_out?: components["schemas"]["SimpleLeftOut"] | null;
             /** Notes */
             notes: components["schemas"]["OnePagerNote"][];
             draft: components["schemas"]["OnePagerDraft"] | null;
@@ -38395,6 +38405,11 @@ export interface components {
              */
             can_withdraw: boolean;
             /**
+             * Decision Notes
+             * @default []
+             */
+            decision_notes: string[];
+            /**
              * From Prds
              * @default []
              */
@@ -38903,6 +38918,26 @@ export interface components {
              * @default false
              */
             can_change: boolean;
+        };
+        /**
+         * SimpleLeftOut
+         * @description A read's sources entry: the decisions left out as no longer standing
+         *     (decisions-reversed-or-trashed; oracle.decisions.standing.sources_entry).
+         */
+        SimpleLeftOut: {
+            /**
+             * Kind
+             * @default left_out
+             * @constant
+             */
+            kind: "left_out";
+            /** Title */
+            title: string;
+            /**
+             * Decision Ids
+             * @default []
+             */
+            decision_ids: string[];
         };
         /**
          * SimpleLine
@@ -40241,6 +40276,7 @@ export interface components {
             roadmaps: components["schemas"]["SimpleKeyDateRoadmap"][];
             roadmap?: components["schemas"]["SimpleDocRef"] | null;
             span?: components["schemas"]["SimplePlanSpan"] | null;
+            left_out?: components["schemas"]["SimpleLeftOut"] | null;
         };
         /**
          * SimpleRunGroup

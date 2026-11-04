@@ -66274,6 +66274,17 @@
               }
             ]
           },
+          "trash_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trash Note"
+          },
           "question": {
             "anyOf": [
               {
@@ -67176,6 +67187,17 @@
                 "type": "null"
               }
             ]
+          },
+          "trash_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trash Note"
           }
         },
         "type": "object",
@@ -92337,6 +92359,14 @@
             "type": "array",
             "title": "Blocked By",
             "default": []
+          },
+          "decision_notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Decision Notes",
+            "default": []
           }
         },
         "type": "object",
@@ -92921,6 +92951,16 @@
             "type": "array",
             "title": "Sections",
             "default": []
+          },
+          "left_out": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleLeftOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "notes": {
             "items": {
@@ -115546,6 +115586,14 @@
             "title": "Can Withdraw",
             "default": false
           },
+          "decision_notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Decision Notes",
+            "default": []
+          },
           "from_prds": {
             "items": {
               "$ref": "#/components/schemas/SimpleDraftPrd"
@@ -116867,6 +116915,35 @@
         ],
         "title": "SimpleKeyDateRoadmap",
         "description": "A roadmap whose key dates the reader reads; ``applies``: their change applies (an\nowner, the decider, with none its owner), ``can_change``: they may change or propose."
+      },
+      "SimpleLeftOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "left_out",
+            "title": "Kind",
+            "default": "left_out"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "decision_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Decision Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "SimpleLeftOut",
+        "description": "A read's sources entry: the decisions left out as no longer standing\n(decisions-reversed-or-trashed; oracle.decisions.standing.sources_entry)."
       },
       "SimpleLine": {
         "properties": {
@@ -120130,6 +120207,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SimplePlanSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "left_out": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleLeftOut"
               },
               {
                 "type": "null"

@@ -83,6 +83,7 @@ from oracle.simple.schemas import (
     SimpleDocRef,
     SimpleEmailDelivery,
     SimpleFilterOption,
+    SimpleLeftOut,
     SimpleMeetingBrief,
     SimpleMeetingCan,
     SimpleMeetingDecision,
@@ -2167,10 +2168,11 @@ async def titles_by_session(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.
 
 
 async def decided_in(
-    db: AsyncSession, subjects: list[dict]
+    db: AsyncSession, subjects: list[dict], left: list | None = None
 ) -> dict[tuple[str, str, str | None], list[SimpleDecidedRef]]:
     """The decided decisions naming each subject ``(kind, id, ref)``, newest first, with
-    who decided, when and the meeting's minutes (decided_refs)."""
+    who decided, when and the meeting's minutes (decided_refs). Those no longer standing
+    are left out and, given ``left``, added to it (standing.LeftOut) for the sources."""
     out: dict[tuple[str, str, str | None], list[Decision]] = {}
     if not subjects:
         return out
@@ -2181,7 +2183,13 @@ async def decided_in(
         .where(or_(*[Decision.subjects.contains([{"kind": k, "id": i}]) for k, i, _ in wanted]))
         .order_by(Decision.number.desc())
     )
-    for d in rows:
+    from oracle.decisions import standing
+
+    # None about something in Trash (decisions-reversed-or-trashed).
+    kept, gone = await standing.split(db, list(rows))
+    if left is not None:
+        left.extend(x for x in gone if all(y.decision.id != x.decision.id for y in left))
+    for d in kept:
         for s in d.subjects or []:
             for key in (
                 (s.get("kind"), s.get("id"), s.get("ref")),
@@ -2194,6 +2202,14 @@ async def decided_in(
     decisions = {d.id: d for lst in out.values() for d in lst}  # type: ignore[union-attr]
     refs = await decided_refs(db, list(decisions.values()))  # type: ignore[arg-type]
     return {k: [refs[d.id] for d in lst] for k, lst in out.items()}
+
+
+def left_out_entry(left: list) -> SimpleLeftOut | None:
+    """A read's sources entry for the decisions decided_in left out, if any."""
+    from oracle.decisions import standing
+
+    entry = standing.sources_entry(left)
+    return SimpleLeftOut(**entry) if entry else None
 
 
 async def decided_refs(db: AsyncSession, ds: list[Decision]) -> dict[uuid.UUID, SimpleDecidedRef]:
