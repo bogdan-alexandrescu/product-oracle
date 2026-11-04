@@ -122,3 +122,22 @@ def test_storyboard_and_flow_words_carry_no_raw_tokens():
     assert flow.nodes[1].label == "Is it a conversion?"
     assert flow.nodes[1].yes == "Count it" and flow.steps[0] == "Open the game metric"
     assert flow.screen.regions == ["Chart", "Filters"]
+
+
+async def test_a_notification_title_carries_no_raw_tokens(db):
+    """Notifications (and their Slack pings) read a title that may quote a draft."""
+    from sqlalchemy import select
+
+    from oracle.auth.models import User
+    from oracle.review.collab import notify
+    from oracle.review.models import Notification
+
+    u = User(email="ana@example.com", name="Ana Example", password_hash="x", role="owner")
+    db.add(u)
+    await db.flush()
+    n = await notify(
+        db, [u.id], kind="comment", title="Capacity is low [c:capacity] [l:2]", actor="oracle"
+    )
+    assert n == 1
+    row = await db.scalar(select(Notification).where(Notification.user_id == u.id))
+    assert row.title == "Capacity is low"
