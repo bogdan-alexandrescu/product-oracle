@@ -24,6 +24,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
+import { draftDecisionNotes } from "./decision-notes";
 import { stableUuid } from "./ids";
 import { changeSentence } from "./simple-change-words";
 import { priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
@@ -411,6 +412,8 @@ function draftOut(db: SimpleDb, ctx: SimpleChangesCtx, d: MockDraft): Schemas["S
     can_approve: d.out.status === "submitted" && edits,
     can_withdraw: d.out.status === "submitted" && (d.out.created_by === ctx.id || edits),
     published: !(db.unapproved ?? []).includes(d.roadmap),
+    // decisions-reversed-or-trashed: notes on decisions it cited that were reversed since.
+    decision_notes: [...(d.out.decision_notes ?? []), ...draftDecisionNotes()],
   };
 }
 

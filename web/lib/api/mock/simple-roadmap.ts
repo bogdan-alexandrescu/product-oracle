@@ -10,6 +10,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { plainFlow } from "./simple-visuals";
+import { leftOut } from "./decision-notes";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, seeded, stableUuid } from "./ids";
@@ -987,6 +988,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     ...keyDatesOut(db, reader.full, chosen ? [chosen] : readable, me ?? { id: "", role }),
     roadmaps: keyDatesOut(db, reader.full, readable, me ?? { id: "", role }).key_date_roadmaps,
     roadmap: chosen ? { id: roadmapId(chosen), slug: chosen, title: roadmapTitle(db, chosen) } : null,
+    // decisions-reversed-or-trashed: the items' decisions left out as no longer standing.
+    left_out: leftOut(),
   };
 }
 
