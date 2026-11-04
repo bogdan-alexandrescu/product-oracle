@@ -751,19 +751,29 @@ async def date_warnings(
 
 
 async def refresh_date_warnings(db: AsyncSession, prd_document_id: uuid.UUID) -> None:
-    """date-warnings-honest: re-run the date check of every stored roadmap or update
-    version that rests on this PRD's bases, when one is recorded, verified or withdrawn,
+    """date-warnings-honest: re-run the date check of each roadmap or update document's
+    latest version that rests on this PRD's bases, when one is recorded, verified or withdrawn,
     and store its warnings as they stand now. A version whose dates are still being
     found keeps its stored ones (its reads re-check them)."""
     from oracle.roadmap import doc_dates
 
     source = aliased(DocumentVersion)
+    # Only each document's latest version: this runs inside the request, and an older
+    # version's read re-checks its own dates.
+    newer = aliased(DocumentVersion)
+    latest = (
+        select(func.max(newer.number))
+        .where(newer.document_id == DocumentVersion.document_id)
+        .correlate(DocumentVersion)
+        .scalar_subquery()
+    )
     versions = list(
         await db.scalars(
             select(DocumentVersion)
             .join(Document, Document.id == DocumentVersion.document_id)
             .outerjoin(source, source.id == DocumentVersion.source_version_id)
             .where(
+                DocumentVersion.number == latest,
                 Document.kind.in_(doc_dates.DATED_KINDS),
                 (Document.kind == "update")
                 | (source.document_id == prd_document_id)

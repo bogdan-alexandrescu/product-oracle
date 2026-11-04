@@ -299,8 +299,11 @@ async def test_stored_warnings_follow_a_tracker_re_match(client, owner, runtime)
     assert _stored_date_warnings(doc) == []
 
 
-async def test_a_basis_change_re_checks_only_each_document_s_latest_version(  # noqa: F811
-    client, owner, runtime, monkeypatch
+async def test_a_basis_change_re_checks_only_each_document_s_latest_version(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+    monkeypatch,
 ):
     # Review minor: the refresh runs inside the request, so it re-finds the dates of each
     # document's latest version only (an older version's read still re-checks its own).
@@ -316,12 +319,13 @@ async def test_a_basis_change_re_checks_only_each_document_s_latest_version(  # 
     checked: list[int] = []
     real = doc_dates.occurrences_for_version
 
-    async def counted(db, version, sections):
+    async def counted(db, version, *args, **kwargs):
         checked.append(version.number)
-        return await real(db, version, sections)
+        return await real(db, version, *args, **kwargs)
 
     monkeypatch.setattr(doc_dates, "occurrences_for_version", counted)
     await record(client, auth, "ENG-78", "2026-12-15", item_key="payment-step")
     assert checked == [2]
+    monkeypatch.undo()
     # The older version's own read still follows the bases.
     assert _date_warnings((await client.get(f"{VERSIONS}/1", headers=auth)).json()) == []
