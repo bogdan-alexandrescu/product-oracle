@@ -997,7 +997,8 @@ export function FloatingCard({
       phone={phone}
       onClose={onClose}
       talk={talkPanel}
-      more={<section className="py-3" data-testid="floating-card" data-wide={wide ? "true" : "false"} data-flow-open={flowOpen ? "true" : "false"}>{details}</section>}
+      testId="floating-card"
+      more={<section className="py-3" data-testid="fp-more" data-wide={wide ? "true" : "false"} data-flow-open={flowOpen ? "true" : "false"}>{details}</section>}
     />
   );
 }

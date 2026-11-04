@@ -466,7 +466,6 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
   );
   const talkCol = (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      {!phone && <h3 className="flex-none px-4 pt-3 font-semibold">Talk about this feature</h3>}
       {talk}
     </div>
   );
