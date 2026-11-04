@@ -135,6 +135,8 @@ DEFAULTS: dict[str, Any] = {
         "long_from_months": 12,
         "long_to_months": 24,
     },
+    # one-roadmap-many-prds: one team plans every PRD's items (oracle.roadmap.company.queue).
+    "team_capacity": {"team_size": 1, "focus": 1.0},
     # F6 (defaults the spec picks): Monday 08:00, for the week that just ended, in the
     # Company time zone.
     "alignment_report": {
@@ -380,6 +382,8 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         return validate_shared_drives(value)
     if key == "planning_horizons":
         return validate_planning_horizons(value)
+    if key == "team_capacity":
+        return validate_team_capacity(value)
     if key == "alignment_report":
         from oracle.reports.alignment import validate_setting
 
@@ -442,6 +446,18 @@ def validate_planning_horizons(value: Any) -> dict[str, int]:
     if not long_from < long_to <= 60:
         raise InvalidSetting("'To' must be after 'From' and at most 60 months.")
     return {k: value[k] for k in HORIZON_KEYS}
+
+
+def validate_team_capacity(value: Any) -> dict[str, Any]:
+    """{team_size: a whole number 1-1000, focus: the share of its time 0-1 (above 0)}."""
+    if not isinstance(value, dict) or set(value) != {"team_size", "focus"}:
+        raise InvalidSetting("team_capacity needs team_size and focus")
+    size, focus = value["team_size"], value["focus"]
+    if isinstance(size, bool) or not isinstance(size, int) or not 1 <= size <= 1000:
+        raise InvalidSetting("team_size must be a whole number from 1 to 1000")
+    if isinstance(focus, bool) or not isinstance(focus, int | float) or not 0 < focus <= 1:
+        raise InvalidSetting("focus must be more than 0 and at most 1")
+    return {"team_size": size, "focus": float(focus)}
 
 
 def validate_company_domains(value: Any) -> list[str]:

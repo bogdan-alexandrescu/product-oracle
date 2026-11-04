@@ -171,6 +171,7 @@ import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
+import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { appliedVersionOf, approvedPrdToDraft, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
@@ -201,8 +202,12 @@ import {
  * latest_version, approved_version, source and an update's period are read off the versions;
  * visibility is "company" unless the row says otherwise (H8: updates are "approvers").
  */
-export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source" | "visibility" | "period"> & {
+export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source" | "visibility" | "period" | "company_roadmap"> & {
   visibility?: Schemas["DocumentSummary"]["visibility"];
+  /** one-roadmap-many-prds: the company's one roadmap (false when not set). */
+  company_roadmap?: boolean;
+  /** one-roadmap-many-prds: the PRDs that replace this one (ids, in order); read-only while any. */
+  replaced_by?: string[];
 };
 export type VersionRow = Omit<Schemas["VersionOut"], "sections" | "date_marks"> & {
   sections: (Omit<Schemas["SectionOut"], "verdict" | "spec_states"> & Partial<Pick<Schemas["SectionOut"], "spec_states">>)[];
@@ -1297,6 +1302,32 @@ function seedApprovedRoadmapScenario(): Db {
   }
   roadmap.updated_at = "2026-10-20T09:00:00Z";
   db.simple_roadmap = seedTrails(seedSimpleRoadmap());
+  return db;
+}
+
+/**
+ * one-roadmap-many-prds ("one-roadmap", ./one-roadmap.ts): the default company plus the area PRDs
+ * User Safety and Scale feeding the one Product roadmap, and the older PRD Trust plan replaced by
+ * both (read-only), whose own roadmap stays as history.
+ */
+function seedOneRoadmapScenario(): Db {
+  const db = seed();
+  const at = "2026-10-01T09:00:00Z";
+  const doc = (id: string, slug: string, title: string, kind: "prd" | "roadmap", extra: Partial<DocumentRow> = {}): DocumentRow => {
+    const row: DocumentRow = { id, slug, title, status: "approved", kind, template: null, template_version: null, theme: null, created_at: at, updated_at: at, ...extra };
+    db.documents.push(row);
+    const v = buildVersion(row, { number: 1, created_at: at, sections: [{ key: "summary", level: 2, heading: "Summary", body: `${title}, invented for the example.` }], citations: [] });
+    v.approved_at = at;
+    db.versions.push(v);
+    return row;
+  };
+  const areas = AREA_PRDS.map(([slug, title]) => doc(oneRoadmapPrd(slug, title).id, slug, title, "prd"));
+  const old = doc(oneRoadmapPrd(...OLD_PRD).id, OLD_PRD[0], OLD_PRD[1], "prd", { replaced_by: areas.map((a) => a.id), status: "draft" });
+  // Its draft v2, left open when it was replaced: read-only too (nothing writes it a v3).
+  db.versions.push(buildVersion(old, { number: 2, created_at: at, sections: [{ key: "summary", level: 2, heading: "Summary", body: `${OLD_PRD[1]}, a draft left open.` }], citations: [] }));
+  doc(uuid(), OLD_ROADMAP[0], OLD_ROADMAP[1], "roadmap");
+  doc(uuid(), COMPANY_SLUG, COMPANY_TITLE, "roadmap", { company_roadmap: true });
+  db.simple_roadmap = seedCompanyRoadmap(seedSimpleRoadmap());
   return db;
 }
 
@@ -3424,6 +3455,8 @@ function load(): Db {
                   }
               : scenario === APPROVED_ROADMAP_SCENARIO
                 ? seedApprovedRoadmapScenario
+              : scenario === ONE_ROADMAP_SCENARIO
+                ? seedOneRoadmapScenario
               : scenario === "simple-500"
                 ? () => ({ ...seed(), simple_roadmap: seedSimpleMany() })
                 : scenario === "strategy" || scenario === "strategy-no-vision"
@@ -3911,6 +3944,78 @@ export function resetMockData() {
 
 // ---------------------------------------------------------------- domain helpers
 
+/** A document as GET /v1/documents/{doc} returns it (DocumentOut). */
+function documentOut(db: Db, doc: DocumentRow): Schemas["DocumentOut"] {
+  // one-roadmap-many-prds: the PRDs that replace it, by name (oracle.roadmap.company.refs).
+  const replacedBy = (doc.replaced_by ?? []).flatMap((id) => db.documents.filter((x) => x.id === id).map((x) => ({ id: x.id, slug: x.slug, title: x.title })));
+  return { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary), replaced_by: replacedBy, changes_in_review: 0 };
+}
+
+/**
+ * one-roadmap-many-prds (api/oracle/roadmap/company_router.py): GET/POST /v1/roadmaps/company,
+ * GET /v1/roadmaps/company/queue, POST /v1/documents/{doc}/replaced-by.
+ */
+async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
+  const m = req.method;
+  const company = () => db.documents.find((d) => d.company_roadmap && d.kind === "roadmap");
+  const ref = (d: DocumentRow) => ({ id: d.id, slug: d.slug, title: d.title });
+  if (p[1] === "roadmaps" && p[2] === "company" && !p[3]) {
+    if (m === "GET") {
+      const found = company();
+      return found ? json(200, ref(found)) : json(404, { detail: "No company roadmap yet" });
+    }
+    if (m === "POST") {
+      if (!atLeast(me.role, "approver")) return forbidden("approver");
+      const found = company();
+      if (found) return json(200, ref(found));
+      let slug = COMPANY_SLUG;
+      for (let n = 2; db.documents.some((d) => d.slug === slug); n++) slug = `${COMPANY_SLUG}-${n}`;
+      const at = now();
+      const row: DocumentRow = { id: uuid(), slug, title: COMPANY_TITLE, status: "draft", kind: "roadmap", template: null, template_version: null, theme: null, created_at: at, updated_at: at, company_roadmap: true };
+      db.documents.push(row);
+      return json(201, ref(row));
+    }
+  }
+  if (p[1] === "roadmaps" && p[2] === "company" && p[3] === "queue" && !p[4] && m === "GET") {
+    const cap = (mockSettingValue("team_capacity") ?? { team_size: 1, focus: 1 }) as { team_size: number; focus: number };
+    const found = company();
+    const replaced = new Set(db.documents.filter((d) => d.kind === "prd" && (d.replaced_by ?? []).length > 0).map((d) => d.id));
+    const prd = q.get("prd");
+    const rm = db.simple_roadmap;
+    const items =
+      found && rm
+        ? rm.items
+            .filter((s) => s.roadmap === found.slug && !(s.prd_doc && replaced.has(s.prd_doc.id)))
+            .map((s) => {
+              const { start, end } = shownDates(rm, s.key);
+              const days = Math.max(1, (Date.parse(end) - Date.parse(start)) / 86_400_000 + 1);
+              return { key: s.key, title: s.title, prd: s.prd_doc ?? null, milestone: null, effort_weeks: Math.round((days / 7) * 10) / 10, start, end };
+            })
+            .filter((i) => !prd || (i.prd && (i.prd.slug === prd || i.prd.id === prd)))
+        : [];
+    return json(200, { roadmap: found ? ref(found) : null, team_size: Math.trunc(cap.team_size), focus: Number(cap.focus), items });
+  }
+  if (p[1] === "documents" && p[2] && p[3] === "replaced-by" && !p[4] && m === "POST") {
+    if (!atLeast(me.role, "approver")) return forbidden("approver");
+    const doc = findDocument(db, p[2]);
+    if (!doc) return json(404, { detail: `document '${p[2]}' not found` });
+    const input = JSON.parse((await req.text()) || "null") as Partial<Schemas["ReplacedByIn"]> | null;
+    if (!input || !Array.isArray(input.prds)) return json(422, { detail: "prds is a list of PRD slugs" });
+    if ((doc.kind ?? "prd") !== "prd") return json(422, { detail: "only a PRD can be replaced" });
+    const by: DocumentRow[] = [];
+    for (const slug of [...new Set(input.prds)]) {
+      const other = db.documents.find((d) => d.slug === slug);
+      if (!other || (other.kind ?? "prd") !== "prd") return json(422, { detail: `'${slug}' is not a PRD` });
+      if (other.id === doc.id) return json(422, { detail: "a PRD cannot replace itself" });
+      if ((other.replaced_by ?? []).length > 0) return json(422, { detail: `${other.title} is itself replaced` });
+      by.push(other);
+    }
+    doc.replaced_by = by.map((d) => d.id);
+    return json(200, documentOut(db, doc));
+  }
+  return null;
+}
+
 function findDocument(db: Db, ref: string) {
   return db.documents.find((d) => d.slug === ref || d.id === ref);
 }
@@ -4008,9 +4113,12 @@ function documentSummary(db: Db, d: DocumentRow): Schemas["DocumentSummary"] {
   const vs = docVersions(db, d);
   const latest = vs[vs.length - 1];
   const period = d.kind === "update" ? ((latest?.front_matter.period as UpdatePeriod | undefined) ?? null) : null;
+  const row: Omit<DocumentRow, "replaced_by"> & { replaced_by?: string[] } = { ...d };
+  delete row.replaced_by;
   return {
-    ...d,
+    ...row,
     kind: d.kind ?? "prd",
+    company_roadmap: d.company_roadmap ?? false,
     visibility: d.visibility ?? "company",
     // O5: a roadmap without a default audience reads as "team"; other kinds have none.
     audience: d.kind === "roadmap" ? (d.audience ?? "team") : null,
@@ -6251,6 +6359,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   const v2 = routeV2(v2Db, req, p, q, me.id);
   if (v2) return v2;
 
+  const oneRoadmap = await routeOneRoadmap(db, me, req, p, q);
+  if (oneRoadmap) return oneRoadmap;
   // Roadmap alignment and product tracks (CR-11).
   const roadmapCtx = roadmapContext(db, me);
   // E1: a PRD draft's roadmap items and the PRD's "Derive for each new draft" switch.
@@ -6657,7 +6767,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   const doc = findDocument(db, p[2]);
   if (!doc) return notFound("Document");
   if (p.length === 3) {
-    return json(200, { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary) });
+    return json(200, documentOut(db, doc));
   }
   // H8: who sees the document (owners only, with a reason; the API audits it).
   if (p[3] === "visibility" && p.length === 4 && m === "PATCH") {

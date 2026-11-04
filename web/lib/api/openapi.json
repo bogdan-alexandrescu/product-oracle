@@ -33028,6 +33028,200 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/roadmaps/company": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Get Company Roadmap",
+        "description": "The company's one roadmap, which every PRD feeds.",
+        "operationId": "get_company_roadmap",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyRoadmapOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The company has no company roadmap yet"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      },
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Create Company Roadmap",
+        "description": "Create the company roadmap ('Product roadmap') empty when none exists (the first-run\nstep); with one, return it (200). Approvers and owners.",
+        "operationId": "create_company_roadmap",
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyRoadmapOut"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "It already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyRoadmapOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/roadmaps/company/queue": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Get Company Queue",
+        "description": "Every item on the company roadmap planned as one team's capacity queue (team size x\nfocus; milestone order, then the company goal order, then priority). ``prd`` (slug or\nid): only that PRD's items, with their places in the shared queue.",
+        "operationId": "get_company_queue",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prd"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/documents/{doc}/replaced-by": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Set Replaced By",
+        "description": "Mark a PRD replaced by one or more PRDs (one per area of focus): it turns read-only,\nnames them at its top, its items stop feeding the roadmap, and its verified schedule\nbases follow their items to the replacing PRDs ('carried from <title>').",
+        "operationId": "set_replaced_by",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplacedByIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/roadmaps/{doc}/items": {
       "get": {
         "tags": [
@@ -63043,6 +63237,30 @@
         ],
         "title": "CompanyMemberCoverage"
       },
+      "CompanyRoadmapOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "title"
+        ],
+        "title": "CompanyRoadmapOut"
+      },
       "CompareCheckpoint": {
         "properties": {
           "id": {
@@ -70600,6 +70818,11 @@
               }
             ]
           },
+          "company_roadmap": {
+            "type": "boolean",
+            "title": "Company Roadmap",
+            "default": false
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -70616,6 +70839,14 @@
             },
             "type": "array",
             "title": "Versions",
+            "default": []
+          },
+          "replaced_by": {
+            "items": {
+              "$ref": "#/components/schemas/PrdRef"
+            },
+            "type": "array",
+            "title": "Replaced By",
             "default": []
           },
           "changes_in_review": {
@@ -71028,6 +71259,11 @@
                 "type": "null"
               }
             ]
+          },
+          "company_roadmap": {
+            "type": "boolean",
+            "title": "Company Roadmap",
+            "default": false
           },
           "created_at": {
             "type": "string",
@@ -96929,6 +97165,30 @@
         "title": "PrdLinks",
         "description": "Cross-document links from a roadmap draft to its PRD version's sections."
       },
+      "PrdRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "title"
+        ],
+        "title": "PrdRef"
+      },
       "PrdScopeOut": {
         "properties": {
           "id": {
@@ -100777,6 +101037,98 @@
         ],
         "title": "QuestionsWithdrawn"
       },
+      "QueueItem": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrdRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "milestone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone"
+          },
+          "effort_weeks": {
+            "type": "number",
+            "title": "Effort Weeks"
+          },
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "effort_weeks",
+          "start",
+          "end"
+        ],
+        "title": "QueueItem"
+      },
+      "QueueOut": {
+        "properties": {
+          "roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompanyRoadmapOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "team_size": {
+            "type": "integer",
+            "title": "Team Size"
+          },
+          "focus": {
+            "type": "number",
+            "title": "Focus"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/QueueItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "team_size",
+          "focus"
+        ],
+        "title": "QueueOut"
+      },
       "QueueWait": {
         "properties": {
           "code": {
@@ -102519,6 +102871,22 @@
         ],
         "title": "ReorderChange",
         "description": "Put an item at ``position`` (0 first) within its horizon."
+      },
+      "ReplacedByIn": {
+        "properties": {
+          "prds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Prds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prds"
+        ],
+        "title": "ReplacedByIn"
       },
       "ReplyCounts": {
         "properties": {

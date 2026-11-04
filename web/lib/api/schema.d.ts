@@ -9452,6 +9452,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/roadmaps/company": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Company Roadmap
+         * @description The company's one roadmap, which every PRD feeds.
+         */
+        get: operations["get_company_roadmap"];
+        put?: never;
+        /**
+         * Create Company Roadmap
+         * @description Create the company roadmap ('Product roadmap') empty when none exists (the first-run
+         *     step); with one, return it (200). Approvers and owners.
+         */
+        post: operations["create_company_roadmap"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/company/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Company Queue
+         * @description Every item on the company roadmap planned as one team's capacity queue (team size x
+         *     focus; milestone order, then the company goal order, then priority). ``prd`` (slug or
+         *     id): only that PRD's items, with their places in the shared queue.
+         */
+        get: operations["get_company_queue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/replaced-by": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Replaced By
+         * @description Mark a PRD replaced by one or more PRDs (one per area of focus): it turns read-only,
+         *     names them at its top, its items stop feeding the roadmap, and its verified schedule
+         *     bases follow their items to the replacing PRDs ('carried from <title>').
+         */
+        post: operations["set_replaced_by"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/roadmaps/{doc}/items": {
         parameters: {
             query?: never;
@@ -19261,6 +19330,18 @@ export interface components {
             /** Kinds */
             kinds: components["schemas"]["CompanyKindCoverage"][];
         };
+        /** CompanyRoadmapOut */
+        CompanyRoadmapOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+        };
         /** CompareCheckpoint */
         CompareCheckpoint: {
             /**
@@ -21999,6 +22080,11 @@ export interface components {
             approved_version?: number | null;
             source?: components["schemas"]["VersionSource"] | null;
             /**
+             * Company Roadmap
+             * @default false
+             */
+            company_roadmap: boolean;
+            /**
              * Created At
              * Format: date-time
              */
@@ -22013,6 +22099,11 @@ export interface components {
              * @default []
              */
             versions: components["schemas"]["VersionSummary"][];
+            /**
+             * Replaced By
+             * @default []
+             */
+            replaced_by: components["schemas"]["PrdRef"][];
             /**
              * Changes In Review
              * @default 0
@@ -22150,6 +22241,11 @@ export interface components {
             /** Approved Version */
             approved_version?: number | null;
             source?: components["schemas"]["VersionSource"] | null;
+            /**
+             * Company Roadmap
+             * @default false
+             */
+            company_roadmap: boolean;
             /**
              * Created At
              * Format: date-time
@@ -31737,6 +31833,18 @@ export interface components {
              */
             unresolved: string[];
         };
+        /** PrdRef */
+        PrdRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+        };
         /**
          * PrdScopeOut
          * @description A PRD scope (C6): the features and requirements a feature-set stop approves for one
@@ -33146,6 +33254,41 @@ export interface components {
             /** Question Ids */
             question_ids: string[];
         };
+        /** QueueItem */
+        QueueItem: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            prd?: components["schemas"]["PrdRef"] | null;
+            /** Milestone */
+            milestone?: string | null;
+            /** Effort Weeks */
+            effort_weeks: number;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+        };
+        /** QueueOut */
+        QueueOut: {
+            roadmap?: components["schemas"]["CompanyRoadmapOut"] | null;
+            /** Team Size */
+            team_size: number;
+            /** Focus */
+            focus: number;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["QueueItem"][];
+        };
         /**
          * QueueWait
          * @description Why SwarmCloud holds the run's current step (oracle.runs.waits), as Oracle last
@@ -33755,6 +33898,11 @@ export interface components {
             key: string;
             /** Position */
             position: number;
+        };
+        /** ReplacedByIn */
+        ReplacedByIn: {
+            /** Prds */
+            prds: string[];
         };
         /** ReplyCounts */
         ReplyCounts: {
@@ -65168,6 +65316,128 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DesignReviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_company_roadmap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyRoadmapOut"];
+                };
+            };
+            /** @description The company has no company roadmap yet */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_company_roadmap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description It already exists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyRoadmapOut"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyRoadmapOut"];
+                };
+            };
+        };
+    };
+    get_company_queue: {
+        parameters: {
+            query?: {
+                prd?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_replaced_by: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplacedByIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
                 };
             };
             /** @description Validation Error */
