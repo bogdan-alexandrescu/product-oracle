@@ -353,3 +353,34 @@ async def test_a_prd_run_reads_the_shared_queue(client):
     lines = company.queue_lines(rows)
     assert any(line.startswith("* Report button (User Safety): Nov") for line in lines)
     assert any(line.startswith("- Read replicas (Scale): Nov") for line in lines)
+
+
+async def test_a_feature_added_in_simple_lands_on_the_company_roadmap(client):
+    from oracle.simple import additions
+
+    ctx, ids = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        # An older per-PRD roadmap made before the company one: history, never a target.
+        older = await _add(s, Document(slug="scale-roadmap", title="Scale roadmap",
+                                       kind="roadmap", status="approved", visibility="company",
+                                       created_at=datetime(2026, 1, 1, tzinfo=UTC)))  # fmt: skip
+        goal = await _add(s, Entity(type="goal", key="calm", title="Calm nights",
+                                    status="confirmed", origin="user"))  # fmt: skip
+        await s.commit()
+        older_id, goal_id = older.id, goal.id
+    r = await client.post("/v1/simple/changes", headers=ctx.as_("owner"), json={
+        "op": "add_item", "target": {"where": {"kind": "horizon", "value": "now"}},
+        "before": {}, "after": {"title": "Night alerts digest"}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.scalar(select(RoadmapItem).where(RoadmapItem.title == "Night alerts digest"))
+        assert row is not None and row.roadmap_document_id == ids["company"]
+        # A goal with no items yet files its suggestions under the company roadmap too.
+        doc = await additions._job_document(s, await s.get(Entity, goal_id))
+        assert doc is not None and doc.id == ids["company"]
+    # Asking for a history roadmap by id is refused.
+    r = await client.post("/v1/simple/changes", headers=ctx.as_("owner"), json={
+        "op": "add_item", "target": {"roadmap_id": str(older_id),
+                                     "where": {"kind": "horizon", "value": "now"}},
+        "before": {}, "after": {"title": "Old place"}})  # fmt: skip
+    assert r.status_code in (404, 409, 422), r.text
