@@ -19,7 +19,7 @@ import {
   confidenceWord,
   milestoneInk,
   shortDay,
-  sourceWord,
+  datesFrom,
   statusWord,
   storedDates,
   type Change,
@@ -668,7 +668,7 @@ export function FloatingCard({
   const span = yearSpan(item.start.date, item.end.date);
   const dates = item.estimated
     ? `${span} · Estimated by Oracle (the ${item.horizon} window)`
-    : `${span} · ${sourceWord(item.source)}`;
+    : `${span} · ${datesFrom(item)}`;
   const beside = talk && !phone;
   const talkRight = useTalkPlace(beside);
   // A widened card (a proposal's flow) keeps inside the roadmap, not the 380 px card's left.
