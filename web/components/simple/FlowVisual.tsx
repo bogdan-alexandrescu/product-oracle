@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
+import { cleanFlow } from "@/lib/raw-tokens";
 import { useQuery } from "@/lib/use-query";
 
 import { Code, FlowDiagram, FlowScreen, FlowStepList, Icon, ICONS, ScreenCard, stepsOf, StoryCard, Tabs, usePhone } from "./FlowViews";
@@ -463,8 +464,9 @@ export function FlowPanel({
 
   if (q.error) return <p className="mt-3 text-[length:var(--simple-small)] text-danger">{q.error}</p>;
   if (!q.data) return <p className="mt-3 text-[length:var(--simple-small)] text-text2">Loading the flow…</p>;
-  const v = q.data;
-  const flow = old ?? v.flow;
+  // raw-tokens-everywhere: the drawing's words never show a writer's "[c:id]".
+  const v = { ...q.data, flow: cleanFlow(q.data.flow) };
+  const flow = cleanFlow(old) ?? v.flow;
   const open = v.comments.filter((c) => c.addressed_in === null);
   // qa4-simple-prd-33: a reader who may not comment (a viewer) is not offered "Comment": the same
   // panel reads as the flow's comments, notes and versions.

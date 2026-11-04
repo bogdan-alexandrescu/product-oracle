@@ -1,4 +1,5 @@
 import type { Schemas } from "@/lib/api/client";
+import { cleanFlow } from "@/lib/raw-tokens";
 
 import { stableUuid } from "./ids";
 
@@ -219,7 +220,7 @@ export const plainFlow = (f: Pick<Flow, "title" | "steps" | "screen"> & Partial<
  * API's visuals._flow: its words without a writer's raw "[c:id]" tokens. */
 export function flowFor(db: VisualsDb | undefined, kind: string, id: string): Flow | null {
   const v = db?.visuals[`${kind}:${id}`];
-  return v?.versions.at(-1) ?? null;
+  return cleanFlow(v?.versions.at(-1) ?? null);
 }
 
 /** The one-pager's shape of a flow. */
@@ -242,7 +243,7 @@ function out(v: MockVisual | undefined, kind: string, id: string, ctx: Ctx, docu
     subject_kind: kind,
     subject_id: id,
     brief: v.brief,
-    flow: n ? { ...v.versions[n - 1], versions: n } : null,
+    flow: n ? cleanFlow({ ...v.versions[n - 1], versions: n }) : null,
     versions: v.versions
       .map((f, i) => ({ number: f.version, title: f.title, made_at: f.made_at ?? at, made_by_name: v.made_by[i] ? (ctx.names[v.made_by[i]!] ?? "someone") : null, addressed: v.comments.filter((c) => c.addressed_in === f.version).length }))
       .reverse(),
@@ -293,7 +294,7 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
   }
   if (m === "GET" && p[5] === "versions") {
     const f = v?.versions.find((x) => x.version === Number(p[6]));
-    return f ? json(200, { ...f, versions: v!.versions.length }) : json(404, { detail: "No such version" });
+    return f ? json(200, cleanFlow({ ...f, versions: v!.versions.length })) : json(404, { detail: "No such version" });
   }
   if (m !== "POST") return null;
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;

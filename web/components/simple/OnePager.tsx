@@ -20,6 +20,7 @@ import { DownloadNote, useDownloadNote } from "@/components/DownloadNote";
 import { downloadedNote } from "@/lib/export-note";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
+import { stripRawTokens } from "@/lib/raw-tokens";
 
 type View = Schemas["OnePagerOut"];
 type Line = Schemas["OnePagerLine"];
@@ -27,7 +28,7 @@ type Note = Schemas["OnePagerNote"];
 
 export { quoteLine };
 
-/** A section's Markdown as plain lines: no "- " bullets, "#" heads or "**" marks (qa-simple-prd-16/17). */
+/** A section's Markdown as plain lines: no "- " bullets, "#" heads, "**" marks (qa-simple-prd-16/17) or raw "[c:id]" tokens. */
 export function plainLines(md: string): { text: string; bullet: boolean }[] {
   return md
     .split("\n")
@@ -35,7 +36,7 @@ export function plainLines(md: string): { text: string; bullet: boolean }[] {
     .filter(Boolean)
     .map((x) => {
       const bullet = /^([-*+]|\d+[.)])\s+/.test(x);
-      return { text: x.replace(/^([-*+]|\d+[.)]|#+)\s+/, "").replace(/\*\*|__|`/g, ""), bullet };
+      return { text: stripRawTokens(x.replace(/^([-*+]|\d+[.)]|#+)\s+/, "").replace(/\*\*|__|`/g, "")), bullet };
     });
 }
 
