@@ -6,8 +6,9 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
-/** One marker with the space before it ("appears [c:c1]." → "appears."). */
-const RAW_TOKEN = /[ \t]*\[[cls]:[^[\]\n]*\]/g;
+/** One marker with the space before it ("appears [c:c1]." → "appears."). A match starts only at
+ * the head of a space run, so a long run is scanned once. */
+const RAW_TOKEN = /(?<![ \t])[ \t]*\[[cls]:[^[\]\n]*\]/g;
 /** What a nested or unclosed marker leaves: its opener. */
 const OPENER = /\[[cls]:/g;
 
