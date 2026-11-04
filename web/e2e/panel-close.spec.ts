@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/ids";
-import { LONG_GOALS_SCENARIO } from "../lib/api/mock/lane-f";
+import { LONG_GOALS_SCENARIO, ranking } from "../lib/api/mock/lane-f";
 import { login } from "./helpers";
 
 /*
@@ -142,6 +142,62 @@ test.describe("desktop", () => {
     await expect(second).toBeFocused();
     expect(await focusRinged(second)).toBe(true);
   });
+
+  test("Esc in a text field leaves the field, not the panel", async ({ page }) => {
+    await login(page);
+    await page.goto("/company/decisions?state=all");
+    const panel = decisionPanel(page);
+    await expect(panel).toBeVisible();
+    const search = page.getByRole("searchbox", { name: "Search decisions" });
+    await search.click();
+    await search.pressSequentially("pricing");
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeVisible();
+    await expect(search).toBeFocused();
+  });
+
+  test("Baseline: a blocker's panel has one ×; it and Esc close the panel, focus back on the row", async ({ page }) => {
+    await login(page);
+    await page.goto("/baseline?tab=blockers");
+    const row = page.getByTestId("blocker-row").filter({ hasText: "Same-day refund rule unanswered" });
+    await row.click();
+    const panel = page.getByTestId("blocker-inspector");
+    await expect(panel.getByRole("heading", { name: "Same-day refund rule unanswered" })).toBeVisible();
+    // One close control in the head: the same × as every other page.
+    await expect(panel.getByRole("button", { name: /close/i })).toHaveCount(1);
+    await expect(panel.getByRole("button", { name: "Close the details" })).toBeVisible();
+
+    await panel.getByRole("button", { name: "Close the details" }).click();
+    await expect(panel).toHaveCount(0);
+    await expect(row).toBeFocused();
+
+    // Esc in a field of the panel leaves the field; Esc then closes the panel.
+    await row.click();
+    await expect(panel).toBeVisible();
+    await panel.getByRole("button", { name: "Propose option" }).click();
+    const title = panel.getByRole("form", { name: "Propose option" }).getByLabel("Title");
+    await title.fill("Ask the payments team");
+    await title.press("Escape");
+    await expect(panel).toBeVisible();
+    await expect(title).toHaveValue("Ask the payments team");
+    await panel.getByRole("heading", { name: "Same-day refund rule unanswered" }).click();
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+    await expect(row).toBeFocused();
+  });
+
+  test("Baseline: a goal's panel has one ×, which closes it", async ({ page }) => {
+    await login(page);
+    await page.goto("/baseline");
+    const goal = page.getByTestId("goal-g.activation");
+    await expect(goal).toBeVisible();
+    await goal.getByRole("button", { name: "Raise activation", exact: true }).click();
+    const drawer = page.getByRole("dialog", { name: "Raise activation" });
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByRole("button", { name: /close/i })).toHaveCount(1);
+    await drawer.getByRole("button", { name: "Close the details" }).click();
+    await expect(drawer).toHaveCount(0);
+  });
 });
 
 test.describe("phone", () => {
@@ -171,4 +227,23 @@ test.describe("phone", () => {
     await expect(sheet).toHaveCount(0);
     await expect(page.getByRole("grid", { name: "Decisions" })).toBeVisible();
   });
+});
+
+// The mock's long-goals features come from the scenario each time it ranks, never from a list
+// an earlier scenario changed: a ranking under any other scenario has none of them.
+test("mock: the long-goals features show in their scenario only", () => {
+  const keys = () => ranking("goal_weighted").features.map((f) => f.key);
+  const store = new Map<string, string>([[MOCK_SCENARIO_KEY, LONG_GOALS_SCENARIO]]);
+  const g = globalThis as { localStorage?: Pick<Storage, "getItem"> };
+  g.localStorage = { getItem: (k: string) => store.get(k) ?? null };
+  try {
+    expect(keys()).toHaveLength(14);
+    expect(keys()).toContain("F-9");
+    store.set(MOCK_SCENARIO_KEY, "default");
+    expect(keys()).toHaveLength(8);
+    expect(keys()).not.toContain("F-9");
+  } finally {
+    delete g.localStorage;
+  }
+  expect(keys()).not.toContain("F-9");
 });
