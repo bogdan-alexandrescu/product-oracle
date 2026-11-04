@@ -21,8 +21,8 @@ const AREAS = ["Sign-up and onboarding", "Billing", "Search", "Phone app", "Repo
 // Invented proof for the features that run today: files, pull requests, tasks, the measured value, days since checked.
 const RUNNING: [number, number, number, string, number, number][] = [
   [14, 6, 9, "92% sign in on first try", 1, 233],
-  [31, 11, 17, "1.8% of payments fail", 2, 216],
   [9, 4, 6, "3,410 sent last month", 41, 168],
+  [31, 11, 17, "1.8% of payments fail", 2, 216],
   [12, 5, 8, "71% found in one try", 3, 148],
   [7, 3, 5, "44% open it", 4, 127],
 ];
@@ -48,7 +48,7 @@ function proofs(files: number, prs: number, done: number, total: number, value: 
 export function seedCurrentState(rows: Row[], today: number): CurrentStateDb {
   const states: CurrentStateDb["states"] = {};
   const iso = (days: number) => new Date(today - days * DAY).toISOString();
-  const running = [2, 6, 13, 19, 26].filter((i) => i < rows.length);
+  const running = [2, 6, 8, 19, 26].filter((i) => i < rows.length);
   const building = [0, 1, 3, 5].filter((i) => i < rows.length);
   running.forEach((i, k) => {
     const [files, prs, tasks, value, days, shipped] = RUNNING[k];
