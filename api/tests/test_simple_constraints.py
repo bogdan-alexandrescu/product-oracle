@@ -98,7 +98,7 @@ def test_cut_with_dependents():
     b = node("export", d(2026, 11, 1), d(2026, 12, 1), depends_on=["ledger"])
     out = constraints.check([cut, a, b])
     (flag,) = out["ledger"]
-    assert (flag.kind, flag.fixes) == ("cut_with_dependents", ["accept_risk"])
+    assert (flag.kind, flag.fixes) == ("cut_with_dependents", ["restore", "remove_dependency", "accept_risk"])
     assert "Import" in flag.reason and "1 other" in flag.reason
     assert flag.reason.startswith("Cut, but ‘Import’ and 1 other")
     lone = node("solo", d(2026, 10, 1), d(2026, 10, 20), status="cut")

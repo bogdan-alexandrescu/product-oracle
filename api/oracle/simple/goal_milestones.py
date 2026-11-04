@@ -103,6 +103,10 @@ async def _out(
             counts_when=pc.get("counts_when"),
             asked_of=pc.get("asked_of_name"),
             change_id=uuid.UUID(pc["change_id"]) if pc.get("change_id") else None,
+            can_decide=prd is not None
+            and (
+                has_role(principal.role, "owner") or _me(principal) in w.owners.get(prd.id, set())
+            ),
         )
     prd_owner = None
     can_change: bool

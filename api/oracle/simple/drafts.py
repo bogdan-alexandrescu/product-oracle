@@ -741,6 +741,26 @@ async def _logs(db: AsyncSession, ds: list[SimpleDraft]) -> dict[uuid.UUID, list
         else {}
     )
     people = {c.by for c in rows}
+    # roadmap-decide: each line names its item, however the op stored it.
+    item_ids: set[uuid.UUID] = set()
+    for c in rows:
+        try:
+            item_ids |= (
+                {uuid.UUID(str(c.target.get("item_id")))} if c.target.get("item_id") else set()
+            )
+        except ValueError:
+            pass
+    item_titles = (
+        dict(
+            (
+                await db.execute(
+                    select(RoadmapItem.id, RoadmapItem.title).where(RoadmapItem.id.in_(item_ids))
+                )
+            ).all()
+        )
+        if item_ids
+        else {}
+    )
     names = {
         u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(people)))
     }
@@ -754,7 +774,8 @@ async def _logs(db: AsyncSession, ds: list[SimpleDraft]) -> dict[uuid.UUID, list
             id=c.id, op=c.op, item_id=item_id, by=c.by, by_name=names.get(c.by, "someone"),
             at=c.at, session_kind=kind, in_meeting=kind == "meeting",  # type: ignore[arg-type]
             titles=[str(t) for t in c.target.get("titles") or []]
-            if c.op == "cut_with_dependents" else [],
+            or ([item_titles[item_id]] if item_id in item_titles else [])
+            or ([str(c.target["name"])] if c.target.get("name") else []),
         )  # fmt: skip
         for i in c.draft_ids:
             if i in out:

@@ -17,7 +17,9 @@ FlagKind = Literal[
     "cut_with_dependents",
     "draft_without_owner",
 ]
-FixKind = Literal["shift_dependents", "move_dependency", "accept_risk"]
+FixKind = Literal[
+    "shift_dependents", "move_dependency", "accept_risk", "restore", "remove_dependency"
+]
 ItemStatus = Literal["planned", "in_progress", "done", "cut", "draft", "merged"]
 SuggestionStatus = Literal["open", "accepted", "edited", "dismissed"]
 
@@ -423,6 +425,8 @@ class SimpleMilestonePending(BaseModel):
     counts_when: str | None = None
     asked_of: str | None = None
     change_id: uuid.UUID | None = None
+    # roadmap-decide: the viewer is the PRD's owner (or a company owner) and decides it.
+    can_decide: bool = False
 
 
 MilestoneProgress = Literal["on_track", "at_risk", "not_started", "met"]
@@ -569,6 +573,8 @@ ChangeOp = Literal[
     # build-milestones-on-roadmap: a proposed date/counts_when on a PRD's own goal
     # milestone, on the PRD document, routed to its owner (oracle.simple.goal_milestones).
     "edit_goal_milestone",
+    # roadmap-decide: a dependent no longer depends on a cut item (its fix).
+    "remove_dependency",
 ]
 # chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
 # the change engine (oracle.simple.chat_actions).
@@ -782,7 +788,7 @@ class SimpleDraftChange(BaseModel):
     session_kind: Literal["editing", "meeting"] | None
     in_meeting: bool
     # fix5-cut-dependents: the titles of every item a cut_with_dependents cut (the item
-    # first); empty for every other op.
+    # first); roadmap-decide: every other op names its item (a fix: then what else moved).
     titles: list[str] = []
 
 

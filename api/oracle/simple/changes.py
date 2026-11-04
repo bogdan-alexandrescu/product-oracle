@@ -117,6 +117,7 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "set_milestone": ("milestone",),
     "set_owner": ("owner_id",),
     "set_decider": ("decider_id",),
+    "remove_dependency": ("depends_on",),
 }
 FIXES = ("shift_dependents", "move_dependency")
 # fix5-cut-dependents: the item and every item that waits on it, cut as one change.
@@ -595,6 +596,10 @@ async def _plan(
             raise await _conflict(db, seen, set(seen), "Changed since you saw it")
         moves = _fix_plan(op, entry, dep, by_id)
         await _lock(db, list(moves))
+        # roadmap-decide: the draft's change list names the item, then what else moved.
+        target["titles"] = [entry.row.title] + [
+            by_id[i].row.title for i in moves if i != entry.row.id and i in by_id
+        ]
         before = {str(i): read(by_id[i].row, (*DATES, "date_source"), target) for i in moves}
         after = {
             str(i): {"start_date": s.isoformat(), "end_date": e.isoformat(), "date_source": "typed"}
@@ -696,6 +701,14 @@ async def _plan(
         after = {"position": pos}
     elif op in ("cut", "restore"):
         after = {"cut": op == "cut"}
+    elif op == "remove_dependency":
+        # roadmap-decide: the item no longer depends on ``target.subject`` (a cut item's fix).
+        dep = by_id.get(_uuid(target.get("subject"), "subject"))
+        if dep is None or dep.row.id not in entry.depends_on:
+            raise ChangeError(422, "target.subject: an item the target depends on")
+        target["subject"] = str(dep.row.id)
+        target["titles"] = [row.title, dep.row.title]
+        after = {"depends_on": [k for k in row.depends_on or [] if k != dep.row.item_key]}
     elif op == "confirm_item":
         after = {"draft": False}
     elif op == "keep_both":
@@ -1276,7 +1289,8 @@ class _View:
         owners, decider and reviewers (#723 owner answer)."""
         # S5: a one-pager line's change is on a PRD, not a roadmap of this read.
         if (c.document_id is not None and c.document_id not in self.docs
-                and c.op not in ("edit_line", "decide_question", "name_decider")):  # fmt: skip
+                and c.op not in ("edit_line", "decide_question", "name_decider",
+                                 "edit_goal_milestone")):  # fmt: skip
             return False
         if self.me is None:
             return False

@@ -132,6 +132,11 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
         case "edit_goal_milestone":
             name = _quoted(target.get("name")) or item
             return f"changed the milestone {name}" if name else "changed a milestone"
+        # roadmap-decide: a cut item's fix, the dependency dropped.
+        case "remove_dependency":
+            titles = target.get("titles") or []
+            dep = _quoted(titles[1]) if len(titles) > 1 else None
+            return f"removed {x}'s dependency on {dep}" if dep else f"removed a dependency of {x}"
     return f"changed {x}"
 
 

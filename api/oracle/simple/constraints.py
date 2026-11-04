@@ -29,12 +29,13 @@ FlagKind = Literal[
     "cut_with_dependents",
     "draft_without_owner",
 ]
-Fix = Literal["shift_dependents", "move_dependency", "accept_risk"]
+Fix = Literal["shift_dependents", "move_dependency", "accept_risk", "restore", "remove_dependency"]
 FIXES: dict[str, list[str]] = {
     "dependency_order": ["shift_dependents", "move_dependency", "accept_risk"],
     "blocker_date": ["accept_risk"],
     "outside_milestone": ["accept_risk"],
-    "cut_with_dependents": ["accept_risk"],
+    # roadmap-decide: a cut item others depend on is brought back, or a dependent drops it.
+    "cut_with_dependents": ["restore", "remove_dependency", "accept_risk"],
     "draft_without_owner": [],
 }
 TITLE = 40
@@ -115,7 +116,9 @@ def check(nodes: list[Node]) -> dict[str, list[Flag]]:
     out: dict[str, list[Flag]] = {}
     for n in nodes:
         flags: list[Flag] = []
-        for dep_id in n.depends_on:
+        # roadmap-decide: a cut item (below the line) is not checked for its order; its
+        # dependencies' cut flag says what is left to decide.
+        for dep_id in n.depends_on if n.status != "cut" else []:
             dep = by_id.get(dep_id)
             if dep is None or dep.id == n.id or dep.status == "cut":
                 continue

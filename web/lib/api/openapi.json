@@ -60407,7 +60407,8 @@
                   "decide_question",
                   "name_decider",
                   "cut_with_dependents",
-                  "edit_goal_milestone"
+                  "edit_goal_milestone",
+                  "remove_dependency"
                 ]
               },
               {
@@ -60799,7 +60800,8 @@
               "decide_question",
               "name_decider",
               "cut_with_dependents",
-              "edit_goal_milestone"
+              "edit_goal_milestone",
+              "remove_dependency"
             ],
             "title": "Op"
           },
@@ -82248,7 +82250,8 @@
               "decide_question",
               "name_decider",
               "cut_with_dependents",
-              "edit_goal_milestone"
+              "edit_goal_milestone",
+              "remove_dependency"
             ],
             "title": "Op"
           },
@@ -115942,7 +115945,8 @@
               "decide_question",
               "name_decider",
               "cut_with_dependents",
-              "edit_goal_milestone"
+              "edit_goal_milestone",
+              "remove_dependency"
             ],
             "title": "Op"
           },
@@ -116081,7 +116085,8 @@
               "decide_question",
               "name_decider",
               "cut_with_dependents",
-              "edit_goal_milestone"
+              "edit_goal_milestone",
+              "remove_dependency"
             ],
             "title": "Op"
           },
@@ -117365,7 +117370,9 @@
               "enum": [
                 "shift_dependents",
                 "move_dependency",
-                "accept_risk"
+                "accept_risk",
+                "restore",
+                "remove_dependency"
               ]
             },
             "type": "array",
@@ -119801,6 +119808,11 @@
               }
             ],
             "title": "Change Id"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
           }
         },
         "type": "object",
