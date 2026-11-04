@@ -100,7 +100,9 @@ for (const phone of [false, true]) {
       await expect(page.getByTestId("suggestion-popover")).toBeVisible();
       await expect(page.getByTestId("suggestion-popover")).toContainText("Oracle suggests");
 
+      // Seen once, the row waits under Seen.
       await page.goto("/inbox");
+      await tap(page.getByRole("tab", { name: /^Seen/ }));
       const again = page.getByRole("row").filter({ has: page.getByTestId("date-suggestion-context") }).filter({ hasText: name }).first();
       await tap(again.getByTestId("feature-name"));
       await expect(page).toHaveURL(/\/simple\/roadmap\?.*item=/);
@@ -116,7 +118,7 @@ for (const phone of [false, true]) {
       const row = page.getByRole("row").filter({ hasText: "Oracle suggests it for the goal Keep alerts quiet" }).first();
       await expect(row).toBeVisible();
       await expect(row.getByTestId("goal-suggestion-context")).toContainText(MONTH_FIRST);
-      const title = (await row.locator("span[title]").first().getAttribute("title"))!;
+      const title = (await row.getByTestId("goal-suggestion-title").textContent())!.trim();
       await tap(row.getByRole("link", { name: "Open the suggestions for Keep alerts quiet" }));
       await expect(page).toHaveURL(/\/simple\/roadmap\?.*suggestions=/);
       await expect(page.getByTestId("goal-suggestion").filter({ hasText: title }).first()).toBeVisible();

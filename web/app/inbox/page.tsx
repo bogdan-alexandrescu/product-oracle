@@ -188,7 +188,7 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   { id: "outcomes", title: "Outcomes" },
   { id: "webhooks", title: "Webhooks" },
   { id: "reminders", title: "Review reminders" },
-  { id: "proposals", title: "Asked for by a meeting" },
+  { id: "proposals", title: "Proposals and suggestions" },
   { id: "minutes", title: "Meeting minutes" },
   { id: "oracle-actions", title: "Oracle did" },
   { id: "feedback", title: "Feedback" },

@@ -151,7 +151,7 @@ export function goalSuggestionRows(rows: GoalSuggestion[], seenBefore: string | 
       kind: "Suggestion",
       item: (
         <>
-          <span className="min-w-0 truncate" title={s.title}>
+          <span className="min-w-0 truncate" title={s.title} data-testid="goal-suggestion-title">
             {s.title}
           </span>
           <span className="block basis-full text-sm break-words whitespace-normal text-text2" data-testid="goal-suggestion-context">
