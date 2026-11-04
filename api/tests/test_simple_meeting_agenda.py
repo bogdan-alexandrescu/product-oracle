@@ -226,7 +226,8 @@ async def test_an_added_item_on_another_roadmap_is_not_decided_by_the_meeting(cl
     b = await with_roadmap_b(w)
     m = await meeting(client, w)
     sid = m["session_id"]
-    body = {"op": "add_item", "target": {"roadmap_id": b, "where": {"kind": "horizon", "value": "next"}},
+    where = {"kind": "horizon", "value": "next"}
+    body = {"op": "add_item", "target": {"roadmap_id": b, "where": where},
             "before": {}, "after": {"title": "Parcel tracking"}, "session_id": sid}  # fmt: skip
     r = await client.post(CHANGES, json=body, headers=w.ctx.as_("commenter"))
     assert r.status_code == 201, r.text
