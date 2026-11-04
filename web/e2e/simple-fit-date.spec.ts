@@ -75,7 +75,10 @@ test.describe("desktop", () => {
     await expect(locked).toContainText("Oracle will not cut these");
     await expect(locked).toContainText("Send check before a draft goes out (3 person-weeks). Guardrail");
     await expect(locked).toContainText("Hide card numbers in drafts (2 person-weeks). Safety");
-    await expect(panel).toContainText("About 40 seconds, about $0.20.");
+    // Drafting is the capacity queue, not a run: no made-up time or cost.
+    await expect(panel).toContainText("Oracle drafts the next PRD and roadmap versions for you to check.");
+    await expect(panel).not.toContainText("seconds");
+    await expect(panel).not.toContainText("$0.");
 
     // The draft: what changes in the PRD and every date that moves, old struck through.
     await page.getByRole("button", { name: "Draft 5 changes" }).click();
@@ -119,6 +122,7 @@ test.describe("desktop", () => {
     const hard = page.getByTestId("fit-hard");
     await expect(hard).toContainText("No set of cuts reaches Jan 8. The earliest is Jan 16, 8 days after.");
     await expect(hard).toContainText("Cutting it would reach Jan 8; Oracle will not offer it.");
+    await expect(hard).toContainText("Every change is picked. Another engineer counts only after a 3-week start, so lands too late to help. Two items stay whatever the date:");
     await expect(page.getByTestId("fit-meter-date")).toHaveAttribute("data-state", "miss");
     await expect(page.getByRole("button", { name: "Draft 7 changes and the Jan 16 target" })).toBeVisible();
     await page.getByRole("button", { name: "Draft 7 changes and the Jan 16 target" }).click();
