@@ -920,10 +920,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   const error = docQ.error || verQ.error;
   const warnings = version?.warnings ?? [];
   // date-warnings-honest: one date warning per date and item that lacks a basis (the API
-  // counts them so); the header names how many and opens Plan › Dates filtered to them.
+  // counts them so); the header names how many dates and opens Plan › Dates filtered to them.
   const dateWarnings = warnings.filter((w) => w.code === "unverified_date");
   const otherWarnings = warnings.length - dateWarnings.length;
   const lackingDays = [...new Set(dateWarnings.map(warningDay).filter((d): d is string => !!d))];
+  // The header counts dates, not date-and-item pairs: one date written for two items is one.
+  const lackingCount = new Set(dateWarnings.map((w) => warningDay(w) ?? w.message)).size;
   const datesHref = (days: string[]) => planDatesHref(version?.source?.document_id ?? null, days);
 
   // Feedback: one list, one definition of "open" (lib/feedback.ts) for every count.
@@ -1209,7 +1211,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
               {dateWarnings.length > 0 && (
                 <Link href={datesHref(lackingDays)} data-testid="dates-lacking" className="inline-flex">
                   <Chip kind="warn">
-                    {dateWarnings.length} date{dateWarnings.length === 1 ? " lacks" : "s lack"} a basis
+                    {lackingCount} date{lackingCount === 1 ? " lacks" : "s lack"} a basis
                   </Chip>
                 </Link>
               )}
