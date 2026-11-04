@@ -140,9 +140,8 @@ async def test_a_date_other_than_the_engineering_date_is_refused(client, owner, 
             in run["segments"][1]["draft_import"]["error"])  # fmt: skip
 
 
-async def test_a_draft_with_the_tables_imports_and_approval_applies_its_dates(  # noqa: F811
-    client, owner, runtime
-):
+async def test_a_draft_with_the_tables_imports_and_applies(client, owner, runtime):  # noqa: F811
+    """Approving the imported draft applies its dates."""
     tenant_id, auth = owner
     run = await _run(client, auth, tenant_id, runtime, ROADMAP_MD)
     assert run["status"] == "succeeded", run
