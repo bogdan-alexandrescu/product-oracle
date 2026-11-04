@@ -217,6 +217,31 @@ export function knowTalkGoals(db: { items: { key: string }[]; plan?: unknown }):
 const GOALS_KNOWN: Record<string, boolean> = {};
 
 /**
+ * build-goal-order-control: the "goal-order" scenarios' added goals (server.ts seeds them), named
+ * while the baseline holds them confirmed so their roadmap work names its goal. As knowManyPlans,
+ * once another scenario's data loads the ones it added are taken out again. Invented data.
+ */
+const GOAL_ORDER_GOALS: Record<string, string> = {
+  "g.paid-conversion": "Grow paid conversion",
+  "support-load": "Cut support load",
+  "guided-week": "Make the first week feel guided for every new team, from sign-up to their first shared report",
+  "mid-size": "Win more mid-size teams",
+  "page-speed": "Faster page loads",
+};
+let goalOrderAdded: string[] = [];
+export function knowGoalOrderGoals(entities: { key: string; status: string }[]): void {
+  const scenario = entities.some((e) => e.key === "support-load");
+  const want = Object.keys(GOAL_ORDER_GOALS).filter((k) => scenario && entities.some((e) => e.key === k && e.status === "confirmed"));
+  for (const k of goalOrderAdded) if (!want.includes(k)) delete GOALS[k];
+  goalOrderAdded = goalOrderAdded.filter((k) => want.includes(k));
+  for (const k of want)
+    if (!(k in GOALS)) {
+      GOALS[k] = GOAL_ORDER_GOALS[k];
+      goalOrderAdded.push(k);
+    }
+}
+
+/**
  * goal-order: the company's goals (the baseline's), so Simple's goal refs, groups, buckets and
  * goal cards follow the one goal order (lib/goal-order.ts). server.ts names them before every
  * Simple route; a goal the baseline does not hold comes after those it does, by key.

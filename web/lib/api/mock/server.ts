@@ -170,7 +170,7 @@ import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
-import { approvedPrdToDraft, GOALS, itemSubjectName, knowCompanyGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { approvedPrdToDraft, itemSubjectName, knowCompanyGoals, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -1206,13 +1206,6 @@ function seedSimpleHomeScenario(): Db {
  * support load), each with work on the roadmap. "goal-order-hard" adds three more (one with a
  * long name) and an archived one, which is not in the order. Invented data.
  */
-const GOAL_ORDER_GOALS: Record<string, string> = {
-  "g.paid-conversion": "Grow paid conversion",
-  "support-load": "Cut support load",
-  "guided-week": "Make the first week feel guided for every new team, from sign-up to their first shared report",
-  "mid-size": "Win more mid-size teams",
-  "page-speed": "Faster page loads",
-};
 function seedGoalOrderScenario(hard = false): Db {
   const db = seedSimpleHomeScenario();
   const rm = db.simple_roadmap!;
@@ -6143,8 +6136,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     // goal-order: Simple's goals follow the baseline's one goal order.
     knowCompanyGoals(db.baseline.entities.filter((e) => e.type === "goal"));
     // build-goal-order-control: the "goal-order" scenarios' added goals name their roadmap work on every load.
-    if (db.baseline.entities.some((e) => e.key === "support-load"))
-      for (const [key, title] of Object.entries(GOAL_ORDER_GOALS)) if (db.baseline.entities.some((e) => e.key === key && e.status === "confirmed")) GOALS[key] = title;
+    knowGoalOrderGoals(db.baseline.entities);
     // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
     // served the same invented page under its own slug and title, with its own draft and changes.
     const onePagerDb = await onePagerOf(db, r, p);
