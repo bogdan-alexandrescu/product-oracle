@@ -329,6 +329,15 @@ function prdWords(p: { prd: { title: string }; version?: number | null; items: n
   return `${parts.join(" and ")} came from ${p.prd.title}${p.version ? ` (version ${p.version})` : ""}`;
 }
 
+/** Where an item's card or Oracle's dates open: under its bar in the chart (`wrap`), above it when there is no room. */
+function barAnchor(wrap: HTMLElement | null, id: string): { left: number; top: number; above: number } {
+  const el = wrap?.querySelector(`[data-bar-id="${id}"]`);
+  const box = wrap?.getBoundingClientRect();
+  const r = el?.getBoundingClientRect();
+  if (!r || !box) return { left: 0, top: 0, above: 0 };
+  return { left: Math.max(0, Math.min(r.left - box.left, box.width - 390)), top: r.bottom - box.top + 6, above: r.top - box.top - 6 };
+}
+
 /** The working-draft banner (D18 as amended: one shared draft per roadmap). */
 function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onReview, titleOf }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; onApprove: (d: Draft) => void; onReview: (prdSlug: string) => void; titleOf: (id: string | null) => string | undefined }) {
   const [open, setOpen] = useState(false);
@@ -927,11 +936,9 @@ export function SimpleRoadmap() {
     if (!it && !dated?.suggestion) return;
     itemLinked.current = true;
     requestAnimationFrame(() => {
-      if (it) setCard({ id: it.id, ...anchorOf(it.id) });
-      else if (dated) setPop({ id: dated.id, ...anchorOf(dated.id) });
+      if (it) setCard({ id: it.id, ...barAnchor(wrap.current, it.id) });
+      else if (dated) setPop({ id: dated.id, ...barAnchor(wrap.current, dated.id) });
     });
-    // anchorOf reads the drawn bars when it runs; it is not a dependency.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, byId, params]);
   const goalLinked = useRef(false);
   useEffect(() => {
@@ -1038,13 +1045,7 @@ export function SimpleRoadmap() {
     [horizons],
   );
 
-  const anchorOf = (id: string): { left: number; top: number; above: number } => {
-    const el = wrap.current?.querySelector(`[data-bar-id="${id}"]`);
-    const box = wrap.current?.getBoundingClientRect();
-    const r = el?.getBoundingClientRect();
-    if (!r || !box) return { left: 0, top: 0, above: 0 };
-    return { left: Math.max(0, Math.min(r.left - box.left, box.width - 390)), top: r.bottom - box.top + 6, above: r.top - box.top - 6 };
-  };
+  const anchorOf = (id: string) => barAnchor(wrap.current, id);
 
   const onDecide = useCallback(
     async (c: Change, how: "accept" | "decline") => {
