@@ -98,13 +98,16 @@ async def _truncate_after_test(migrated_db):
 
 @pytest.fixture(autouse=True)
 def _forget_items_checks():
-    """Each test checks its roadmap_items.yaml afresh: the checks one test kept
-    (oracle.runs.roadmap._checks, the only cache of them) are not another's."""
+    """Each test checks and parses its roadmap_items.yaml afresh: the checks and parses one
+    test kept (oracle.runs.roadmap._checks and _parses, the only caches of them) are not
+    another's."""
     from oracle.runs import roadmap
 
     roadmap._checks.clear()
+    roadmap._parses.clear()
     yield
     roadmap._checks.clear()
+    roadmap._parses.clear()
 
 
 # The suites written before "Start paused until goals" (owner decision 2026-10-29) that

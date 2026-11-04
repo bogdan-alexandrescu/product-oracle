@@ -472,12 +472,12 @@ def _run_entries(items_text: str | None) -> list[dict[str, Any]] | None:
     keeps them: a mapping with a horizon, a title and an id not used before); None: the
     file cannot be read."""
     from oracle.roadmap.models import HORIZONS
-    from oracle.runs.roadmap import ItemsYamlError, _text, load_items_yaml
+    from oracle.runs.roadmap import ItemsYamlError, _text, parsed_items
 
     if not items_text:
         return None
     try:
-        data = load_items_yaml(items_text)
+        data = parsed_items(items_text)
     except ItemsYamlError:
         return None
     entries = data.get("items") if isinstance(data, dict) else None

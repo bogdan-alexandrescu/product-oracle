@@ -46,7 +46,11 @@ A check is a pure function of the text and the inputs it is given, so
 (:class:`_Checks`, at most ``CHECKS_KEPT`` checks): the Inbox re-reads every pending
 checkpoint's file on each call (D9) and a roadmap import re-checks its run's file, and a
 file checked before with the same inputs is neither parsed again nor sent to the parse pool.
-A check that timed out or could not read the file is not kept.
+A check that timed out or could not read the file is not kept. Every other reader of a
+run's file (the plan tables, oracle.runs.plan_tables; the shared queue with the run's items
+in it, oracle.roadmap.company.with_run_items) reads it through :func:`parsed_items`, which
+keeps the last parses by the text's hash (``_parses``): one step's check, prompt and plan
+table check parse the file once.
 """
 
 import copy
@@ -76,6 +80,8 @@ MAX_STORED_BYTES = 1_000_000
 PARSE_SECONDS = safe_yaml.PARSE_SECONDS
 # The checks kept (_Checks): at most this many, least recently used dropped first.
 CHECKS_KEPT = 256
+# The parses kept (parsed_items): at most this many, least recently used dropped first.
+PARSES_KEPT = 32
 
 # A cross-document link to a document version's section, as the roadmap draft writes it
 # (oracle.runs.flows.prd_link): /documents/<slug>/v/<n>#<section>.
@@ -161,7 +167,7 @@ def check_items(
     ``date_bases``, every date against the verified schedule bases)."""
     out = ItemsCheck()
     try:
-        data = load_items_yaml(text)
+        data = parsed_items(text)
     except ItemsYamlError as exc:
         out.add(exc.code, str(exc))
         return out
@@ -316,14 +322,14 @@ def _check_slices(out: ItemsCheck) -> None:
 
 
 class _Checks:
-    """The last checks of roadmap_items.yaml, by the SHA-256 of the text and the check's
-    inputs, least recently used dropped first. Each caller gets its own copy, so no caller
+    """The last checks (or parses) of roadmap_items.yaml, by the SHA-256 of the text and the
+    check's inputs, least recently used dropped first. Each caller gets its own copy, so no caller
     sees another's changes."""
 
     def __init__(self, keep: int) -> None:
         self.keep = keep
         self._lock = threading.Lock()
-        self._kept: OrderedDict[Hashable, ItemsCheck] = OrderedDict()
+        self._kept: OrderedDict[Hashable, Any] = OrderedDict()
 
     def __len__(self) -> int:
         return len(self._kept)
@@ -340,7 +346,7 @@ class _Checks:
             inputs.append((name, value))
         return digest, tuple(inputs)
 
-    def get(self, key: Hashable) -> ItemsCheck | None:
+    def get(self, key: Hashable) -> Any:
         with self._lock:
             found = self._kept.get(key)
             if found is None:
@@ -348,7 +354,7 @@ class _Checks:
             self._kept.move_to_end(key)
         return copy.deepcopy(found)
 
-    def put(self, key: Hashable, check: ItemsCheck) -> None:
+    def put(self, key: Hashable, check: Any) -> None:
         check = copy.deepcopy(check)
         with self._lock:
             self._kept.pop(key, None)
@@ -362,6 +368,27 @@ class _Checks:
 
 
 _checks = _Checks(CHECKS_KEPT)
+# The last parses of roadmap_items.yaml (parsed_items), by the text's hash.
+_parses = _Checks(PARSES_KEPT)
+
+
+def parsed_items(text: str) -> Any:
+    """:func:`load_items_yaml` once per text: a text parsed before (by a check, a prompt's or
+    a draft's plan tables, the shared queue) is returned as it was parsed, or refused as it
+    was, each caller getting its own copy. A file that could not be read is not kept (it may
+    read next time)."""
+    key = _Checks.key(text, {})
+    kept = _parses.get(key)
+    if kept is None:
+        try:
+            kept = ("parsed", load_items_yaml(text))
+        except ItemsYamlError as exc:
+            kept = ("refused", exc.code, str(exc))
+        if kept[0] == "parsed" or kept[1] != "unreadable_yaml":
+            _parses.put(key, kept)
+    if kept[0] == "refused":
+        raise ItemsYamlError(kept[1], kept[2])
+    return kept[1]
 
 
 async def check_items_async(text: str, **kwargs: Any) -> ItemsCheck:
