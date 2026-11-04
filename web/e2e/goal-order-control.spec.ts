@@ -83,6 +83,8 @@ for (const [label, viewport] of [
       await expect(page.getByText("Drag a goal, or use its arrows. The order shows on every page once saved.")).toBeVisible();
       expect(await editNames(page)).toEqual(before);
       const cards = page.getByTestId("goal-order-card");
+      // On a phone the cards stack: the row's top in view, so the first and third cards both show.
+      await page.getByTestId("goal-order-edit").evaluate((e) => e.scrollIntoView({ block: "start" }));
       const from = (await cards.nth(2).getByTestId("goal-order-grip").boundingBox())!;
       await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
       await page.mouse.down();
