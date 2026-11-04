@@ -22,8 +22,9 @@ version, dates month first.
 a draft that lacks either table (``missing_plan_table``, ``missing_milestones_table``),
 lists an item the items file does not have (``unknown_plan_item``), leaves out one it has
 (``missing_plan_item``), gives a date other than the engineering one
-(``plan_date_differs``) or other Dates from words (``plan_basis_differs``) is refused: the
-writer must fix it.
+(``plan_date_differs``) or other Dates from words (``plan_basis_differs``), or changes the
+status of a row the roadmap keeps off the plan (``plan_state_differs``, the feedback loop),
+is refused: the writer must fix it.
 
 **The feedback loop** (the owner, Nov 4: every roadmap draft): a next draft of a roadmap
 has no items file of its own; its items are the roadmap's latest ones (the source PRD's,
@@ -330,6 +331,10 @@ def check(
                                 "title", item=p.key or p.title))  # fmt: skip
             continue
         listed.add(eng.key)
+        if eng.state is not None and p.state != eng.state:
+            was, now = STATE_WORDS[eng.state], STATE_WORDS.get(p.state or "", PLANNED)
+            out.append(_problem("plan_state_differs", f"{eng.title} is {was} {where}, not "
+                                f"{now}: keep its row with its status", item=eng.key))  # fmt: skip
         if p.state is not None or eng.state is not None:
             continue
         said = (p.basis or "").strip()

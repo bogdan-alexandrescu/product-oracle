@@ -4712,7 +4712,8 @@ async def _loop_plan_inputs(
     roadmap, the shared queue with the other PRDs' items, as prd_to_roadmap reads it; the
     items an approved version took off the plan, shipped or moved to the next PRD, whose
     plan_state carry_forward keeps: {key, title, state}, so the tables show them with their
-    status and a draft that keeps their rows is not refused)."""
+    status and a draft that keeps their rows is not refused). A roadmap with no items (or
+    no document) gives an empty plan: its loop draft still needs both tables, empty."""
     from oracle.roadmap import draft_items
     from oracle.roadmap.models import RoadmapItem
 
