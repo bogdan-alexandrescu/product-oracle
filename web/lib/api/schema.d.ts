@@ -36881,6 +36881,11 @@ export interface components {
             /** Code */
             code: string;
             /**
+             * Ref
+             * @default
+             */
+            ref: string;
+            /**
              * Severity
              * @enum {string}
              */

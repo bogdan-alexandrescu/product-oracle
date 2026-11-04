@@ -130,14 +130,16 @@ def reasons_of(
         severity = "blocking" if blocking else "to_confirm"
         can_waive = blocking and gate.waivable("feature_set", code)
         mine = by_key.get(key, [])
+        ref = gate.problem_ref(p)
         answered = (
-            any(_answers(a, code, "waive", gate.problem_ref(p)) for a in mine)
+            any(_answers(a, code, "waive", ref) for a in mine)
             if blocking
             else any(_answers(a, code, "accept") for a in mine)
         )
         out.setdefault(key, []).append(
             ScopeReason(
                 code=code,
+                ref=ref,
                 severity=severity,  # type: ignore[arg-type]
                 label=p.get("message") or code,
                 requirement=p.get("requirement"),
@@ -153,6 +155,7 @@ def reasons_of(
             out.setdefault(item.key, []).append(
                 ScopeReason(
                     code=flag,
+                    ref=flag,
                     severity="to_confirm",
                     label=FLAG_LABELS.get(flag, flag.replace("_", " ")),
                     answered=any(_answers(a, flag, "accept") for a in mine),

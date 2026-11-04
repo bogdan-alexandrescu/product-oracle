@@ -13,6 +13,7 @@ one gate every path reads.
 """
 
 import hashlib
+import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -46,7 +47,7 @@ REF_MARK = "~"
 def problem_ref(p: dict[str, Any]) -> str:
     """One stored problem's own name among its feature's: two problems of the same code
     (a missing field on two requirements) are waived each on its own."""
-    about = f"{p.get('requirement') or ''}\n{p.get('message') or ''}"
+    about = "\n".join(str(p.get(k) or "") for k in ("code", "feature", "requirement", "message"))
     return f"{p.get('code')}{REF_MARK}{hashlib.sha1(about.encode()).hexdigest()[:8]}"
 
 
@@ -89,6 +90,14 @@ def _roadmap_items(cp: Checkpoint) -> tuple[list[dict[str, Any]], int]:
     return list(check.get("reasons") or []), int(check.get("file_problems") or 0)
 
 
+def _titled(message: str | None, titles: dict[str, str]) -> str | None:
+    """A problem's message with each feature's key read as its title."""
+    if not message or not titles:
+        return message
+    keys = "|".join(re.escape(k) for k in sorted(titles, key=len, reverse=True))
+    return re.sub(rf"(?<![\w-])(?:{keys})(?![\w-])", lambda m: titles[m.group(0)], message)
+
+
 def _problems(check: Any, file_codes: Iterable[str] = ()) -> tuple[list[dict[str, Any]], int]:
     """A C6 or C8 stored check's problems as reasons: a problem of a feature is that
     feature's; one of no feature (or of the file itself) is file-level."""
@@ -96,6 +105,7 @@ def _problems(check: Any, file_codes: Iterable[str] = ()) -> tuple[list[dict[str
         return [], 0
     reasons: list[dict[str, Any]] = []
     file_problems = 0
+    titles = check.get("titles") or {}
     for p in check.get("problems") or []:
         blocking = p.get("blocking", True)
         if not p.get("feature") or p.get("code") in file_codes:
@@ -104,11 +114,11 @@ def _problems(check: Any, file_codes: Iterable[str] = ()) -> tuple[list[dict[str
         reasons.append(
             {
                 "item": p["feature"],
-                "item_title": None,
+                "item_title": titles.get(p["feature"]),
                 "code": p.get("code"),
                 "ref": problem_ref(p),
                 "severity": BLOCKING if blocking else "advisory",
-                "label": p.get("message"),
+                "label": _titled(p.get("message"), titles),
             }
         )
     return reasons, file_problems

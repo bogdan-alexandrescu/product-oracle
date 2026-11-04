@@ -561,6 +561,9 @@ class ScopeReason(BaseModel):
     answers it."""
 
     code: str
+    # This reason's own name among its feature's (a problem's gate.problem_ref, a flag's
+    # code): Waive on it names it, so it is waived alone, with its own reason.
+    ref: str = ""
     severity: Literal["blocking", "to_confirm"]
     label: str
     requirement: str | None = None
