@@ -442,8 +442,11 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 e.depends_on.append(dep.row.id)
                 dep.needed_by.append(e.row.id)
     # walkb-roadmap: an estimated start never comes before what the item depends on.
+    # roadmap-done: what is done holds nothing up.
+    done = {e.row.id for e in entries if e.status == "done"}
     moved = dates.after_dependencies(
-        {e.row.id: e.resolved for e in entries}, {e.row.id: e.depends_on for e in entries}
+        {e.row.id: e.resolved for e in entries},
+        {e.row.id: [d for d in e.depends_on if d not in done] for e in entries},
     )
     for e in entries:
         e.resolved = moved[e.row.id]

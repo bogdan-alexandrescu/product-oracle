@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
-import { Button, clearToast, Notice, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
+import { Button, clearToast, Icon, Notice, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
 import { GoalPanel, goalRows, SuggestionCard, useGoalSuggestions, type GoalBrief, type GoalPanelStart, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
 import { DecisionNotes, LeftOutLine } from "@/components/simple/DecisionNotes";
 import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
@@ -418,6 +418,48 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onRe
  * it matches that version (with a link to it), or what differs, with "Apply version N again"
  * for an approver and up (the line's own can_apply).
  */
+/** roadmap-done: the items done (shipped), off the plan, kept for history in a collapsed list; each opens the item. */
+function DoneItems({ items, open, onOpen }: { items: Item[]; open: string | null; onOpen: (item: Item) => void }) {
+  const [shown, setShown] = useState(false);
+  if (!items.length) return null;
+  return (
+    <section data-testid="done-items" className="mt-3 rounded-xl border border-line bg-surface px-3 py-2">
+      <button
+        type="button"
+        data-testid="done-items-toggle"
+        aria-expanded={shown}
+        aria-controls="roadmap-done-items"
+        onClick={() => setShown((v) => !v)}
+        className="inline-flex min-h-9 items-center gap-1.5 text-[14px] font-semibold text-text2 hover:text-text"
+      >
+        <span aria-hidden className={`inline-flex transition-transform ${shown ? "" : "-rotate-90"}`}>
+          <Icon name="chevron-down" size={16} />
+        </span>
+        Done · {items.length}
+      </button>
+      {shown && (
+        <ul id="roadmap-done-items" className="mt-1 flex flex-col gap-0.5 pb-1">
+          {items.map((i) => (
+            <li key={i.id} className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+              <button
+                type="button"
+                data-testid="done-item"
+                data-bar-id={i.id}
+                aria-pressed={open === i.id}
+                onClick={() => onOpen(i)}
+                className="min-h-9 truncate text-left text-[14px] font-medium text-text underline-offset-2 hover:underline"
+              >
+                {i.title}
+              </button>
+              {i.goal && <span className="truncate text-[13px] text-text2">{i.goal.title}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function AppliedVersions({ lines, onApply }: { lines: Schemas["SimpleAppliedVersion"][]; onApply: (line: Schemas["SimpleAppliedVersion"]) => Promise<void> }) {
   const [busy, setBusy] = useState<string | null>(null);
   if (!lines.length) return null;
@@ -905,7 +947,11 @@ export function SimpleRoadmap() {
   };
 
   // The filters' choices: every PRD, goal and track seen, so narrowing keeps the others.
-  const data = roadmap.data;
+  // roadmap-done (owner, Nov 4): a done (shipped) item leaves the plan: no view draws it and no
+  // count reads it (the API checks it no more); it is kept under the Done list, which opens it.
+  const all = roadmap.data;
+  const data = useMemo(() => (all ? { ...all, items: all.items.filter((i) => i.status !== "done") } : undefined), [all]);
+  const doneItems = useMemo(() => (all?.items ?? []).filter((i) => i.status === "done"), [all]);
   // roadmap-gantt: the rows' lanes, and the plans' no-work weeks (each PRD with planned items).
   const laned = useMemo(() => (data ? oneLane(lanes(data, f.group), f.group) : null), [data, f.group]);
   // The Timeline always draws goal lanes, the same groups the goal cards count.
@@ -926,7 +972,7 @@ export function SimpleRoadmap() {
       track: add(seen.track, data.items.flatMap((i) => (i.track ? [[i.track.id, i.track.title] as [string, string]] : []))),
     });
   }
-  const byId = useMemo(() => new Map((data?.items ?? []).map((i) => [i.id, i])), [data]);
+  const byId = useMemo(() => new Map((all?.items ?? []).map((i) => [i.id, i])), [all]);
   const titleOf = useCallback((id: string | null) => (id ? byId.get(id)?.title : undefined), [byId]);
   const canChange = can("create_simple_change");
   // build-milestones-on-roadmap: the milestones per goal, added on the time axis.
@@ -1118,7 +1164,7 @@ export function SimpleRoadmap() {
   // no filter narrowing it): one line on what shows here and the next step, no empty chart and
   // no review or export of nothing.
   const blank =
-    !data.items.length && !data.milestones.length && !data.key_dates?.length && !f.prd && !f.goal && !f.track && !f.from && !f.to && !data.roadmap;
+    !data.items.length && !doneItems.length && !data.milestones.length && !data.key_dates?.length && !f.prd && !f.goal && !f.track && !f.from && !f.to && !data.roadmap;
   const hasGoals = (suggestions.data?.goals.length ?? 0) > 0;
 
   // S7 quick add: where an item may go, and whether the caller's add applies there (an item
@@ -1622,7 +1668,16 @@ export function SimpleRoadmap() {
             />
           </div>
         )}
-        {format !== "timeline" && cardItem && card && (
+        <DoneItems
+          items={doneItems}
+          open={card?.id ?? null}
+          onOpen={(item) => {
+            setPop(null);
+            setCard({ id: item.id, ...anchorOf(item.id) });
+          }}
+        />
+        {/* The Timeline opens its own items in its panel; a done item, off it, opens here. */}
+        {(format !== "timeline" || cardItem?.status === "done") && cardItem && card && (
           <FloatingCard
             key={cardItem.id}
             item={cardItem}

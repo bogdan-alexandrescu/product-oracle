@@ -342,6 +342,8 @@ export const readableRoadmap = (asked: string | null, role: Role): string | unde
   asked ? ROADMAP_SLUGS().find((r) => (r === asked || roadmapId(r) === asked) && readsRoadmap(r, role)) : undefined;
 /** S7: an item closed for the plan (cut, or a draft merged into another). */
 export const closed = (s: SeedItem): boolean => s.status === "cut" || !!s.merged_into;
+/** roadmap-done (owner, Nov 4), as the API's status: a done (shipped) item is off the roadmap, never checked, and holds nothing up. */
+export const doneItem = (s: SeedItem): boolean => !closed(s) && !s.draft && s.status === "done";
 const TRACKS: Record<string, string> = { alerts: "Usage alerts track", onboarding: "Guided setup track", welcome: "Welcome media track" };
 
 const SEED: SeedItem[] = [
@@ -584,7 +586,7 @@ function afterDependencies(all: Map<string, { s: SeedItem; r: { start: Dated; en
     const x = all.get(key);
     if (!x || done.has(key)) return;
     done.add(key);
-    const deps = (x.s.depends ?? []).filter((k) => k !== key && all.has(k));
+    const deps = (x.s.depends ?? []).filter((k) => k !== key && all.has(k) && !doneItem(all.get(k)!.s));
     deps.forEach(visit);
     const ends = deps.map((k) => all.get(k)!.r.end.date).sort();
     const latest = ends[ends.length - 1];
@@ -676,10 +678,12 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
     const risk = s.risks?.find((x) => x.flag === kind && (!x.subject || x.subject === subject));
     out.push({ kind, reason, fixes, state: risk ? "amber" : "red", subject, risk_note: risk?.note ?? null, moves: [] });
   };
+  // roadmap-done, as constraints.check: a done item is not checked, and a dependency on one is met.
+  if (doneItem(s)) return out;
   // roadmap-decide, as constraints.check: a cut item (below the line) is not checked for its order.
   for (const key of s.status === "cut" ? [] : (s.depends ?? [])) {
     const dep = all.get(key);
-    if (!dep || closed(dep.s) || (dep.r.end.estimated && r.start.estimated)) continue;
+    if (!dep || closed(dep.s) || doneItem(dep.s) || (dep.r.end.estimated && r.start.estimated)) continue;
     if (r.start.estimated) {
       // walkb-roadmap, as constraints.check: an invented start breaks no link; a real end before the dependency's end does.
       if (!r.end.estimated && dep.r.end.date >= r.end.date)
@@ -694,7 +698,7 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
     if (r.end.date > day) flag("outside_milestone", `‘${short(s.title)}’ ends ${word(r.end.date)}, after its milestone ‘${s.milestone.name}’ (${word(day)})`, ["accept_risk"], s.milestone.name);
   }
   if (s.status === "cut") {
-    const live = [...all.values()].filter((x) => x.s.status !== "cut" && x.s.depends?.includes(s.key));
+    const live = [...all.values()].filter((x) => x.s.status !== "cut" && !doneItem(x.s) && x.s.depends?.includes(s.key));
     if (live.length) {
       const more = live.length > 1 ? ` and ${live.length - 1} other${live.length > 2 ? "s" : ""}` : "";
       flag("cut_with_dependents", `Cut, but ‘${short(live[0].s.title)}’${more} ${live.length > 1 ? "depend" : "depends"} on it`, ["restore", "remove_dependency", "accept_risk"]);

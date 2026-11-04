@@ -88,7 +88,8 @@ export function goalTiles(goals: Entity[], roadmap: Roadmap | undefined, waiting
     .filter((v) => !v.parentId)
     .map((v) => {
       const a = (byId.get(v.id)?.attrs ?? {}) as Record<string, unknown>;
-      const items = (roadmap?.items ?? []).filter((i) => i.goal?.id === v.id && i.status !== "cut");
+      // roadmap-done: a done item is off the plan; it puts no goal at risk.
+      const items = (roadmap?.items ?? []).filter((i) => i.goal?.id === v.id && i.status !== "cut" && i.status !== "done");
       const why = items.map((i) => itemAtRisk(i, today)).find(Boolean) ?? null;
       const measured = num(a.current) != null;
       const unit = typeof a.unit === "string" ? a.unit : "";

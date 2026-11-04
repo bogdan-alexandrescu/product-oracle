@@ -68,7 +68,7 @@ export function FixButtons({
   if (!canChange) return null;
   const dep = flag.subject ? items.get(flag.subject) : undefined;
   // roadmap-decide: a cut item others depend on: bring it back, or a dependent drops it.
-  const live = item.needed_by.map((id) => items.get(id)).filter((n): n is Item => !!n && n.status !== "cut");
+  const live = item.needed_by.map((id) => items.get(id)).filter((n): n is Item => !!n && n.status !== "cut" && n.status !== "done");
   const restore = () =>
     void act(`Brought back '${item.title}'`, { op: "restore", target: { item_id: item.id }, before: { cut: true }, after: { cut: false } });
   const unlink = (n: Item) => {

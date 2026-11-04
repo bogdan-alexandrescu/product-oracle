@@ -12,6 +12,9 @@ one-click fixes S3 applies.
   Fixes: accept_risk.
 - ``draft_without_owner``: a draft item (added in Simple) without an owner. No fixes.
 
+roadmap-done (owner, Nov 4): a done (shipped) item is off the roadmap: it is not checked, a
+dependency on it is met, and a done dependent needs nothing of a cut item.
+
 A risk accepted on a flag (``roadmap_items.accepted_risks``: ``{"flag", "subject"?, "note"}``,
 a missing subject covering every subject of that flag) keeps the flag, amber, with its note.
 """
@@ -116,11 +119,14 @@ def check(nodes: list[Node]) -> dict[str, list[Flag]]:
     out: dict[str, list[Flag]] = {}
     for n in nodes:
         flags: list[Flag] = []
+        if n.status == "done":
+            out[n.id] = flags
+            continue
         # roadmap-decide: a cut item (below the line) is not checked for its order; its
         # dependencies' cut flag says what is left to decide.
         for dep_id in n.depends_on if n.status != "cut" else []:
             dep = by_id.get(dep_id)
-            if dep is None or dep.id == n.id or dep.status == "cut":
+            if dep is None or dep.id == n.id or dep.status in ("cut", "done"):
                 continue
             if dep.end.estimated and n.start.estimated:
                 continue
@@ -159,7 +165,7 @@ def check(nodes: list[Node]) -> dict[str, list[Flag]]:
             )
             flags.append(_flag(n, "outside_milestone", reason, name))
         if n.status == "cut":
-            live = [d for d in dependents[n.id] if d.status != "cut"]
+            live = [d for d in dependents[n.id] if d.status not in ("cut", "done")]
             if live:
                 more = f" and {len(live) - 1} other" + ("s" if len(live) > 2 else "")
                 reason = f"Cut, but ‘{_t(live[0].title)}’{more if len(live) > 1 else ''} " + (
