@@ -12,6 +12,8 @@ the bases as they stand, so they are never stale."""
 import uuid
 from datetime import date
 
+import pytest
+
 from oracle.docs.parser import parse_draft
 from oracle.roadmap import doc_dates, schedule
 from oracle.swarm import Outcome
@@ -140,18 +142,49 @@ def test_a_milestone_date_is_the_latest_verified_end_of_its_items():
 # --------------------------------------------------------------------------- (2) not claims
 
 
-def test_dates_that_are_not_schedule_claims_are_not_checked():
-    body = (
-        "## Summary {#summary}\n\n"
-        "Updated Nov 3, 2026. Today is Nov 3.\n\n"
-        "Decision needed by Nov 10 on the gift-note length.\n\n"
-        "Work runs Q1 2027 (Jan 1 – Mar 31, 2027).\n\n"
-        '> The courier wrote: "we can carry parcels from Feb 2, 2027".\n\n'
-        'The courier said "pickups start Feb 9, 2027" in their letter.\n\n'
-        "## History {#history}\n\n"
-        "- Oct 28, 2026: gift notes moved to Now.\n\n"
-    ) + ITEMS
-    assert flagged(body) == []
+# Each kind of date that is not a schedule claim, beside the same date written as a claim:
+# the claim is flagged, so each skip is shown to be needed on its own.
+NOT_CLAIMS = {
+    "own day": ("Updated Nov 3, 2026.", "Gift wrap ships Nov 3, 2026."),
+    "today": ("Today is Nov 3.", "Gift wrap ships Nov 3."),
+    "decision due": (
+        "Decision needed by Nov 10 on the gift-note length.",
+        "Gift wrap ships by Nov 10 for the gift-note length.",
+    ),
+    "quarter range": (
+        "Work runs Q1 2027 (Jan 1 – Mar 31, 2027).",
+        "Work runs Jan 5 – Mar 31, 2027.",
+    ),
+    "blockquote": (
+        '> The courier wrote: "we can carry parcels from Feb 2, 2027".',
+        "The courier can carry parcels from Feb 2, 2027.",
+    ),
+    "quotation": (
+        'The courier said "pickups start Feb 9, 2027" in their letter.',
+        "The courier's pickups start Feb 9, 2027.",
+    ),
+}
+
+
+@pytest.mark.parametrize("kind", NOT_CLAIMS)
+def test_a_date_that_is_not_a_schedule_claim_is_not_checked(kind):
+    skipped, claim = NOT_CLAIMS[kind]
+    assert flagged(f"## Summary {{#summary}}\n\n{skipped}\n\n" + ITEMS) == []
+    assert flagged(f"## Summary {{#summary}}\n\n{claim}\n\n" + ITEMS) != []
+
+
+def test_a_history_section_s_dates_are_not_checked():
+    history = "- Oct 28, 2026: gift notes moved to Now.\n\n"
+    assert flagged("## History {#history}\n\n" + history + ITEMS) == []
+    assert flagged("## Notes {#notes}\n\n" + history + ITEMS) != []
+
+
+def test_a_decision_word_before_an_other_clause_does_not_hide_its_date():
+    # Review minor: "Sign-off from legal, then ship on Mar 3" claims a ship date.
+    body = "## Summary {#summary}\n\nSign-off from legal, then ship on Mar 3, 2027.\n\n" + ITEMS
+    assert flagged(body) == [("summary", "Mar 3, 2027")]
+    # The decision's own due date stays skipped.
+    assert flagged("## Summary {#summary}\n\nSign-off needed on Mar 3, 2027.\n\n" + ITEMS) == []
 
 
 def test_a_truly_unbacked_date_is_still_flagged():
