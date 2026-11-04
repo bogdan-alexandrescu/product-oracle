@@ -43,7 +43,7 @@ async function saveOrder(page: Page) {
 }
 
 /** Roadmap's goal cards and Baseline's goal rows carry the numbers in `want`'s order. */
-async function everyPageShows(page: Page, want: string[]) {
+async function everyPageShows(page: Page, want: string[], phone: boolean) {
   await page.goto("/simple/roadmap");
   const cards = page.getByTestId("goal-counters").getByTestId("goal-counter");
   await expect(cards.first()).toBeVisible();
@@ -53,10 +53,17 @@ async function everyPageShows(page: Page, want: string[]) {
     const name = (await names(card.locator("p:first-child")))[0];
     if (want.includes(name)) await expect(card.getByTestId("order-num")).toHaveText(String(want.indexOf(name) + 1));
   }
-  // The lane headers lead with the same number.
-  const lane = page.getByTestId("chart-group").filter({ hasText: want[0] }).first();
-  await expect(lane).toBeVisible();
-  await expect(lane.getByTestId("order-num").first()).toHaveText("1");
+  // The lane headers lead with the same number: the Timeline's (the Roadmap's first view; a
+  // phone's Timeline is a list with no lanes), then the Gantt's.
+  if (!phone) {
+    const lane = page.getByTestId("timeline-lane").filter({ hasText: want[0] }).first();
+    await expect(lane).toBeVisible();
+    await expect(lane.getByTestId("order-num")).toHaveText("1");
+  }
+  await page.getByRole("button", { name: "Gantt", exact: true }).click();
+  const group = page.getByTestId("chart-group").filter({ hasText: want[0] }).first();
+  await expect(group).toBeVisible();
+  await expect(group.getByTestId("order-num")).toHaveText("1");
 
   await page.goto("/baseline");
   await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
@@ -127,7 +134,7 @@ for (const [label, viewport] of [
       await saveOrder(page);
       await expect.poll(() => homeNames(page)).toEqual(thirdFirst(before));
 
-      await everyPageShows(page, thirdFirst(before));
+      await everyPageShows(page, thirdFirst(before), label === "phone");
     });
 
     test("a save that fails partway leaves the order as it was", async ({ page }) => {
