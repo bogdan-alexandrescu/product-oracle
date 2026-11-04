@@ -8,7 +8,6 @@ that replace it and its items no longer feed the roadmap. Against Postgres. Inve
 """
 
 import hashlib
-import uuid
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
@@ -500,23 +499,48 @@ async def test_a_run_item_that_names_a_milestone_takes_that_milestones_place(cli
     assert by["sharding"]["end"] == (TODAY + 4 * week).isoformat()
 
 
-async def test_a_runs_prompt_and_check_date_the_queue_from_the_runs_own_day(client, monkeypatch):
-    from types import SimpleNamespace
+REPORT_ITEMS = """\
+version: 1
+prd: {document: user-safety, version: 1}
+items:
+  - id: report-button
+    title: Report button
+    outcome: People report harm in one tap
+    horizon: now
+"""
 
+
+async def test_a_runs_prompt_and_check_date_the_queue_from_the_runs_own_day(client, monkeypatch):
     from oracle.roadmap import company
     from oracle.runs import plan_tables, service
+    from oracle.runs.models import Run, RunSegment
 
     ctx, ids = await world(client)
     started = datetime.now(UTC)
     run_day = company_time.day(started, company_time.DEFAULT_ZONE)
     monkeypatch.setattr(company_time, "now", lambda: started)
     async with tenant_session(ctx.tenant_id) as s:
+        # The report button is a few hours' work: it ends on the run's own day.
+        report = await s.scalar(select(RoadmapItem).where(
+            RoadmapItem.roadmap_version_id == ids["v1"],
+            RoadmapItem.item_key == "report-button"))  # fmt: skip
+        report.economics = {"declared": {"effort_weeks": 0.01}}
+        run = await _add(s, Run(flow="prd_to_roadmap", status="running", created_at=started))
+        s.add(RunSegment(run_id=run.id, seq=1, name="roadmap_items", status="succeeded",
+                         artifacts={"files": {plan_tables.ITEMS_FILE: REPORT_ITEMS}}))  # fmt: skip
+        await s.commit()
         prompt_rows = await company.run_queue(s, ids["safety"], as_of=started)
     assert prompt_rows[0]["start"] == run_day.isoformat()
-    written = plan_tables.markdown(plan_tables.engineering_plan(None, [], others=prompt_rows))
+    queued = company.with_run_items(prompt_rows, REPORT_ITEMS)
+    plan = plan_tables.engineering_plan(REPORT_ITEMS, [], others=queued)
+    written = plan_tables.markdown(plan)
+    # The writer words the run's day without its year, as people do.
+    day = company_time.calendar_day(run_day)
+    assert f"| {plan_tables.day(run_day)} | team queue |" in written
+    written = written.replace(f"| {plan_tables.day(run_day)} |", f"| {day} |")
+    assert f"| report-button | Report button |  | {day} | team queue |" in written
     # The check runs after the company's midnight: it still dates the queue from the run's day.
     monkeypatch.setattr(company_time, "now", lambda: started + timedelta(days=1))
-    run = SimpleNamespace(id=uuid.uuid4(), created_at=started)
     async with tenant_session(ctx.tenant_id) as s:
         check_rows = await company.run_queue(s, ids["safety"], as_of=started)
         problems = await service._plan_table_problems(s, run, written, ids["sv"])
