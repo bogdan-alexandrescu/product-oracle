@@ -1,12 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { AnswerQuestion, type InboxQuestion } from "@/components/AnswerQuestion";
 import { Avatar, Button, Chip, Empty, InfoTip, Mark, Panel, SegmentedControl, initialsOf } from "@/components/ds";
 import { PersonPicker, findPeople, peopleByIds, type Person } from "@/components/PersonPicker";
 import { FIELD_LABEL, InlineError, SELECT, TEXTAREA } from "@/components/review/parts";
-import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
+import { ApiError, SOMETHING_WENT_WRONG, api, unwrap, type Schemas } from "@/lib/api/client";
 import { plural } from "@/lib/format";
 import { useMe, type Role } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
@@ -18,6 +19,65 @@ type Me = { id: string | null; role: Role | null };
 type People = ReadonlyMap<string, Person>;
 type Message = Schemas["InterviewMessageOut"];
 type Turn = (questionId: string, body: string | null, skip: boolean) => Promise<boolean>;
+type Proposal = Summary["proposals"][number];
+
+/** A send that never came back whole (the server or the way to it failed or took too long). */
+const SEND_LOST = "Your answer did not reach Oracle in time. Your text is still here: send it again.";
+
+/** The research proposed for a question: its own, else its gap's; the latest first. */
+function researchFor(s: Summary, questionId: string, gapId: string | null | undefined): Proposal | undefined {
+  const mine = s.proposals.filter((p) => p.kind === "research_run" && (p.question_id === questionId || (!!gapId && p.gap_id === gapId)));
+  return [...mine].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+}
+
+/**
+ * brief-answers: a question sent to research says where the research is: proposed and
+ * waiting for an approver (a link to the proposal), or running (a link to its run).
+ */
+function Research({ proposal, onOpen }: { proposal: Proposal | undefined; onOpen?: (proposalId: string) => void }) {
+  const run = proposal?.status === "accepted" && typeof proposal.result?.run_id === "string" ? proposal.result.run_id : null;
+  const refused = run && typeof proposal?.result?.start_error === "string" ? proposal.result.start_error : null;
+  // brief-answers review: a research run Accept could not start says why, not "Being researched".
+  if (refused)
+    return (
+      <span data-testid="question-research" className="inline-flex flex-wrap items-center gap-1.5">
+        <Chip kind="warn">Research did not start</Chip>
+        <span className="break-words text-text2">{refused}</span>
+      </span>
+    );
+  if (run)
+    return (
+      <span data-testid="question-research" className="inline-flex items-center gap-1.5">
+        <Chip kind="acc">Being researched</Chip>
+        <Link href={`/runs/${run}`} className="font-semibold text-accent-ink underline">
+          Open the run
+        </Link>
+      </span>
+    );
+  if (proposal?.status === "dismissed")
+    return (
+      <span data-testid="question-research">
+        <Chip kind="na">Research dismissed</Chip>
+      </span>
+    );
+  return (
+    <span data-testid="question-research" className="inline-flex items-center gap-1.5">
+      <Chip kind="warn">Research proposed: waits for approval</Chip>
+      {proposal && onOpen && (
+        <a
+          href={`#proposal-${proposal.id}`}
+          className="font-semibold text-accent-ink underline"
+          onClick={(e) => {
+            e.preventDefault();
+            onOpen(proposal.id);
+          }}
+        >
+          See the proposal
+        </a>
+      )}
+    </span>
+  );
+}
 
 /** C3 team follow-ups: "Oracle follows up" is on unless this person turned it off. */
 const FOLLOW_UP_KEY = "po-interview-follow-up";
@@ -161,6 +221,7 @@ function QuestionBubble({
   transcript,
   onTurn,
   focus,
+  onOpenProposal,
 }: {
   card: Card;
   summary: Summary;
@@ -173,6 +234,8 @@ function QuestionBubble({
   onTurn?: Turn;
   /** Oracle moved here after recording the previous answer: open the answer form. */
   focus: boolean;
+  /** Shows a proposal in the brief's Proposals tab. */
+  onOpenProposal?: (proposalId: string) => void;
 }) {
   const q = card.question;
   const gap = card.gap;
@@ -285,7 +348,7 @@ function QuestionBubble({
                 )}
               </span>
             )}
-            {q.status === "researching" && <Chip kind="acc">Being researched</Chip>}
+            {q.status === "researching" && <Research proposal={researchFor(s, q.id, q.gap_id)} onOpen={onOpenProposal} />}
             {q.status === "retired" && <Chip kind="na">Retired</Chip>}
           </div>
           {/* qa-docs-86: an open question's actions sit in its card, not below it. */}
@@ -297,7 +360,7 @@ function QuestionBubble({
           <OracleBubble key={m.id} message={m} testId="follow-up" />
         ) : m.kind === "closing" && m.body !== RECORDED ? (
           <OracleBubble key={m.id} message={m} testId="oracle-note" />
-        ) : waiting && m.kind === "answer" && round.includes(m) ? (
+        ) : waiting && !standing && m.kind === "answer" && round.includes(m) ? (
           <PendingBubble key={m.id} message={m} />
         ) : null,
       )}
@@ -335,7 +398,8 @@ function QuestionBubble({
             }}
           />
         )}
-        {open && waiting && onTurn && !thinking && <FollowUpReply onTurn={turn} />}
+        {/* brief-answers: the answer is recorded with Oracle's follow-up; the reply adds to it. */}
+        {(open || standing) && waiting && onTurn && !thinking && <FollowUpReply onTurn={turn} />}
         {(answerable || unsure) && !waiting && mode === "answer" && (
           <div className="rounded-panel border border-line bg-surface p-3">
             <AnswerQuestion
@@ -504,12 +568,14 @@ export function QuestionsTab({
   me,
   version,
   onChanged,
+  onOpenProposal,
 }: {
   summary: Summary;
   batches: Batch[];
   me: Me;
   version: number;
   onChanged: () => void;
+  onOpenProposal?: (proposalId: string) => void;
 }) {
   const [people, setPeople] = useState<People>(new Map());
   const ids = batches.flatMap((b) => b.questions.flatMap((c) => [c.question.asked_to, ...c.answers.flatMap((a) => [a.answered_by, a.delegated_to])]));
@@ -569,6 +635,10 @@ export function QuestionsTab({
       }),
     ).catch((e: unknown) => {
       if (e instanceof ApiError && e.status === 429) throw new ApiError(429, "Oracle is still reading your last answer. Wait a moment, then send again.");
+      // brief-answers: a send cut off on the way (a timeout, a server error) says why; the
+      // text stays in the form, and sending it again saves it once.
+      if (e instanceof ApiError && e.status >= 500 && e.message === SOMETHING_WENT_WRONG) throw new ApiError(e.status, SEND_LOST);
+      if (!(e instanceof ApiError)) throw new ApiError(0, SEND_LOST);
       throw e;
     });
     setInterview((iv) => (iv ? { ...iv, messages: [...iv.messages, ...out.messages] } : iv));
@@ -618,6 +688,7 @@ export function QuestionsTab({
                   transcript={interview?.messages.filter((m) => m.question_id === c.question.id) ?? []}
                   onTurn={followUp && interview ? turn : undefined}
                   focus={focus === c.question.id}
+                  onOpenProposal={onOpenProposal}
                 />
               ))}
             </ul>

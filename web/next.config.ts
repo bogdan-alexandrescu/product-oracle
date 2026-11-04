@@ -52,6 +52,12 @@ const nextConfig: NextConfig = {
   // specs drive Simple's screens (app/simple/_flag.ts).
   env: { ORACLE_SIMPLE_MODE: process.env.ORACLE_SIMPLE_MODE ?? (process.env.NEXT_PUBLIC_API_MOCKS === "1" ? "1" : "") },
   partialPrefetching: true,
+  experimental: {
+    // brief-answers: the /v1 proxy waits as long as a call may take. Next's default (30 s)
+    // cut off an interview turn (a 25-second model call plus recording the answer), so a
+    // long answer's first Send answer read "Something went wrong" though it was saved.
+    proxyTimeout: 120_000,
+  },
   turbopack: {
     rules: {
       "*.css": {

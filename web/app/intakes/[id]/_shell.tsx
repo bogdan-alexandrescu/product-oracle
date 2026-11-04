@@ -324,7 +324,18 @@ export function BeforeDrafting({ id }: { id: string }) {
             <>
               {batchesQ.error && <ErrorNote>{batchesQ.error}</ErrorNote>}
               {batchesQ.data ? (
-                <QuestionsTab summary={s} batches={batchesQ.data} me={{ id: me?.user_id ?? null, role }} version={version} onChanged={changed} />
+                <QuestionsTab
+                  summary={s}
+                  batches={batchesQ.data}
+                  me={{ id: me?.user_id ?? null, role }}
+                  version={version}
+                  onChanged={changed}
+                  onOpenProposal={(proposalId) => {
+                    // brief-answers: a question's "See the proposal" shows it in the Proposals tab, once drawn.
+                    setTab("proposals");
+                    setTimeout(() => document.getElementById(`proposal-${proposalId}`)?.scrollIntoView({ block: "start" }), 0);
+                  }}
+                />
               ) : (
                 <Loading />
               )}

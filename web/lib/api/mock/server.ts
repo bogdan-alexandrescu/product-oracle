@@ -593,6 +593,8 @@ export const MOCK_FAIL_KEY = "po-mock-fail";
 export const MOCK_FAIL_ONCE_KEY = "po-mock-fail-once";
 /** Tests set this localStorage key to a path ("/v1/decisions/5") to make its GETs answer late, after calls made later, or to "METHOD /path" for that call (made at once, answered late). A path ending in "*" slows every GET under it. */
 export const MOCK_SLOW_KEY = "po-mock-slow";
+/** brief-answers review: tests set this localStorage key to a refusal's words to have Start refuse an accepted research run with them. */
+export const MOCK_RUN_START_REFUSED_KEY = "po-mock-run-start-refused";
 export const MOCK_SLOW_MS = 1500;
 /** A test may hold the slow call longer (ms, in localStorage). */
 export const MOCK_SLOW_MS_KEY = "po-mock-slow-ms";
@@ -5785,6 +5787,13 @@ async function route(db: Db, req: Request): Promise<Response> {
         question: (id) => v2db.questions.find((x) => x.id === id) ?? null,
         nextQuestion,
         recordAnswer,
+        saved: (id) => {
+          const question = v2db.questions.find((x) => x.id === id);
+          if (!question || question.status !== "answered") return null;
+          const answer = v2db.answers.filter((a) => a.question_id === id).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+          if (!answer || answer.kind !== "answer" || answer.answered_by !== me.id) return null;
+          return { answer, question, gap: v2db.gaps.find((g) => g.id === question.gap_id) ?? null };
+        },
       },
       req,
       p,
@@ -5833,6 +5842,18 @@ async function route(db: Db, req: Request): Promise<Response> {
       if (!run || run.status !== "draft") return null;
       const patch = new Request(new URL(`/v1/runs/${id}`, req.url), { method: "PATCH", body: JSON.stringify(body) });
       return routeRuns({ ...runsContext(db), db: db.runs! }, patch, ["v1", "runs", id]).then((r) => r ?? notFound("Route"));
+    };
+    const runStatus = (id: string) => db.runs?.runs.find((r) => r.id === id)?.status ?? null;
+    // brief-answers review: the refusal's words when the run cannot start (as answers.start_research keeps them).
+    const startRun = async (id: string): Promise<string | null> => {
+      for (const step of ["estimate", "start"]) {
+        const refused = step === "start" ? localStorage.getItem(MOCK_RUN_START_REFUSED_KEY) : null;
+        if (refused) return refused;
+        const call = new Request(new URL(`/v1/runs/${id}/${step}`, req.url), { method: "POST" });
+        const resp = await routeRuns({ ...runsContext(db), db: db.runs! }, call, ["v1", "runs", id, step]);
+        if (!resp?.ok) return resp ? (((await resp.json()) as { detail?: unknown }).detail as string) ?? "The run could not start" : "The run could not start";
+      }
+      return null;
     };
     const confirmedGoals = () => new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.title]));
     const goalKeys = () => new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.key]));
@@ -5901,7 +5922,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     };
     const intake = await routeIntake(
       v2db,
-      { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, goalKeys, lockedSections, requests, questionsLevel: () => levelFor((db.autonomy ??= emptyAutonomy()), "questions"), learned: () => nudges(db.quality?.learnings, "question_category"), raiseFeedback, withdrawFeedback },
+      { userId: me.id, role: me.role, createRun, updateRun, runStatus, startRun, people: db.members, subjects, confirmedGoals, goalKeys, lockedSections, requests, questionsLevel: () => levelFor((db.autonomy ??= emptyAutonomy()), "questions"), learned: () => nudges(db.quality?.learnings, "question_category"), raiseFeedback, withdrawFeedback },
       req,
       p,
       q,

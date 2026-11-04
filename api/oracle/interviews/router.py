@@ -215,7 +215,13 @@ async def take_team_turn(
         for m in added
     ]
     row = await service.get_row(db, interview_id)
-    following = await team.next_question(db, principal, row, body.question_id) if result else None
+    # While Oracle's follow-up waits for its reply, the member stays on this question.
+    asked_back = any(m.kind == "follow_up" for m in added)
+    following = (
+        await team.next_question(db, principal, row, body.question_id)
+        if result and not asked_back
+        else None
+    )
     await db.commit()
     return TeamTurnOut(
         messages=messages,
