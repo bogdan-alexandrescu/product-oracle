@@ -118406,6 +118406,21 @@
           "name": {
             "type": "string",
             "title": "Name"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "item",
+                  "track"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
           }
         },
         "type": "object",

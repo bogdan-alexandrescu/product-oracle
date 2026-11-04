@@ -38,7 +38,6 @@ import {
   GOALS,
   goalId,
   itemDeciderId,
-  itemOwnerId,
   lookalikes,
   shiftPlan,
   ownDates,
@@ -490,11 +489,13 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     const hit = Object.entries(ctx.names).find(([, n]) => n.toLowerCase() === asked) ?? Object.entries(ctx.names).find(([, n]) => n.toLowerCase().split(" ")[0] === asked);
     if (hit) Object.assign(after, { owner_id: hit[0], owner_name: hit[1] });
   }
+  // The item's owner reads by name, as the API's SimpleOwnerRef does.
+  if (body.op === "set_owner" && after.owner_id && ctx.names[String(after.owner_id)]) (db.people ??= {})[String(after.owner_id)] ??= ctx.names[String(after.owner_id)];
   if (body.op === "add_item_task" && after.owner_id && !after.owner_name) after.owner_name = ctx.names[String(after.owner_id)] ?? null;
   const before: Values = ranking
     ? priorityBefore(db, keyOf(db, target.item_id)!, body.op, id)
     : (body.op as string) === "set_owner"
-      ? { owner_id: itemOwnerId(db, keyOf(db, target.item_id)!) }
+      ? { owner_id: ownOwnerId(db, String(target.item_id)) }
       : body.op === "set_milestone"
         ? { milestone: ownMilestone(db, String(target.item_id)) }
       : (body.op as string) === "set_decider"
@@ -515,6 +516,12 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   }
   (db.changes ??= []).push(change);
   return json(201, { change: view(db, ctx, change), flags: [] });
+}
+
+/** The item's own owner as the API stores it (changes.py set_owner's before): null when it has only its track's. */
+function ownOwnerId(db: SimpleDb, itemId: string): string | null {
+  const t = db.targets?.[itemId];
+  return t && typeof t.owner_id === "string" ? t.owner_id : null;
 }
 
 /** The item's own milestone as the API stores it (changes.py set_milestone's before): null when it has only its track's. */

@@ -887,7 +887,9 @@ def item_out(
         depends_on=e.depends_on,
         needed_by=e.needed_by,
         flags=flags_out(e),
-        owner=SimpleOwnerRef(id=e.track.owner_id, name=e.owner_name)  # type: ignore[arg-type]
+        owner=SimpleOwnerRef(id=row.owner_id, name=e.owner_name, source="item")
+        if row.owner_id is not None and e.owner_name
+        else SimpleOwnerRef(id=e.track.owner_id, name=e.owner_name, source="track")  # type: ignore[arg-type]
         if e.track is not None and e.track.owner_id is not None and e.owner_name
         else None,
         can_decide=may,

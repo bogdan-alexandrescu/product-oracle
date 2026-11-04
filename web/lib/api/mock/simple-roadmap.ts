@@ -703,7 +703,8 @@ export function shiftPlan(items: Map<string, Item>, itemId: string, depId: strin
 /** S4: the item's track owner, by name (service: an enabled track owner). */
 function ownerOf(db: SimpleDb, s: SeedItem): Item["owner"] {
   const id = itemOwnerId(db, s.key);
-  return id ? { id, name: db.people?.[id] ?? "Track owner" } : null;
+  const own = namedOn(db, s.key, "owner_id");
+  return id ? { id, name: db.people?.[id] ?? "Track owner", source: own ? "item" : "track" } : null;
 }
 
 /** A chat card's set_owner / set_decider (the targets kept by item id), if any: the item's own owner or decider. */

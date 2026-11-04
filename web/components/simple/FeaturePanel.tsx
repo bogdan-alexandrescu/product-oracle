@@ -181,7 +181,7 @@ function Owner({ c }: { c: Ctx }) {
       onSave={async (d) => {
         if (d === (item.owner?.id ?? "")) return null;
         const name = list.find((p) => p.user_id === d)?.name;
-        await act(name ? `Made ${name} the owner of '${item.title}'` : `Gave '${item.title}' back to its track's owner`, { op: "set_owner", target: { item_id: item.id }, before: { owner_id: item.owner?.id ?? null }, after: { owner_id: d || null } });
+        await act(name ? `Made ${name} the owner of '${item.title}'` : `Gave '${item.title}' back to its track's owner`, { op: "set_owner", target: { item_id: item.id }, before: { owner_id: item.owner?.source === "item" ? item.owner.id : null }, after: { owner_id: d || null } });
         return null;
       }}
     />

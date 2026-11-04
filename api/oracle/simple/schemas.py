@@ -99,6 +99,9 @@ class SimpleItemMilestone(BaseModel):
 class SimpleOwnerRef(BaseModel):
     id: uuid.UUID
     name: str
+    # build-feature-panel review: "item" when the item has its own owner (set_owner), "track"
+    # for its track's owner (null: not said, as on a task's owner).
+    source: Literal["item", "track"] | None = None
 
 
 class SimpleMilestoneTarget(BaseModel):

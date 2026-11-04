@@ -39538,6 +39538,8 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /** Source */
+            source?: ("item" | "track") | null;
         };
         /** SimplePersonRef */
         SimplePersonRef: {
