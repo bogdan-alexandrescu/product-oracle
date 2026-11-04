@@ -384,3 +384,34 @@ async def test_a_feature_added_in_simple_lands_on_the_company_roadmap(client):
                                      "where": {"kind": "horizon", "value": "now"}},
         "before": {}, "after": {"title": "Old place"}})  # fmt: skip
     assert r.status_code in (404, 409, 422), r.text
+
+
+async def test_a_prd_runs_own_items_take_their_place_in_the_shared_queue(client):
+    from oracle.roadmap import company
+    from oracle.runs import plan_tables
+
+    ctx, ids = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        rows = await company.run_queue(s, ids["safety"])
+    queued = company.with_run_items(rows, SAFETY_ITEMS)
+    plan = plan_tables.engineering_plan(SAFETY_ITEMS, [], others=queued)
+    by = {r.key: r for r in plan.items}
+    assert [r.key for r in plan.items] == ["report-button", "block-list", "read-replicas"]
+    # One team, one week each: report button, then read replicas, then the new block list.
+    week = timedelta(days=7)
+    assert by["report-button"].end == TODAY + week
+    assert by["read-replicas"].end == TODAY + 2 * week
+    assert by["block-list"].end == TODAY + 3 * week
+    assert {r.basis for r in plan.items} == {"team queue"}
+    # The run's prompt lists the new item in the queue too.
+    assert any(line.startswith("* Block list for") or "Block list" in line
+               for line in company.queue_lines(queued))  # fmt: skip
+
+
+async def test_the_queue_starts_on_the_companys_day(client, monkeypatch):
+    # 3 AM UTC on Nov 4 is still Nov 3 in the company's time zone (Los Angeles).
+    monkeypatch.setattr(company_time, "now", lambda: datetime(2026, 11, 4, 3, 0, tzinfo=UTC))
+    ctx, _ = await world(client)
+    r = await client.get(f"{COMPANY}/queue", headers=ctx.as_("viewer"))
+    assert r.status_code == 200, r.text
+    assert r.json()["items"][0]["start"] == "2026-11-03"
