@@ -5,6 +5,7 @@ checks their role and their place in the discussion at the moment it writes. Aud
 holds ids and lengths, never message text.
 """
 
+import re
 import uuid
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -223,6 +224,21 @@ SUBJECTS: dict[str, type[_Subject]] = {
     "priorities": PrioritiesSubject,
     "screen": ScreenSubject,
 }
+
+
+# AUD-9: a person's own pages (sources, settings, the Inbox, the account): a chat on one
+# holds the page's name only (the web's pageNameOnly).
+_NAME_ONLY = re.compile(r"^/(sources|settings|inbox|account)(/|$)")
+
+
+def name_only(path: str) -> bool:
+    return bool(_NAME_ONLY.match(path.split("?")[0]))
+
+
+def without_view(subject: dict[str, Any] | None) -> dict[str, Any]:
+    """The subject as it is sent back: the page's view (ask-page-context, up to 16,000
+    characters) stays stored for the reply's context only."""
+    return {k: v for k, v in (subject or {}).items() if k != "view"}
 
 
 def parse_subject(kind: str, raw: dict[str, Any]) -> dict[str, Any]:
@@ -695,7 +711,7 @@ async def discussion_out(db: AsyncSession, principal: "Principal", d: Discussion
     fields["me"] = DiscussionMe(**fields["me"], can_manage=access.can_manage(seat))
     out = DiscussionOut(
         **fields,
-        subject=d.subject,
+        subject=without_view(d.subject),
         participants=[
             DiscussionParticipantOut(
                 user_id=p.user_id,
@@ -1061,6 +1077,8 @@ async def start(
     panel = body.origin == "panel"
     if not panel:  # ask-page-context: what one person's page showed stays in their own chat
         subject.pop("view", None)
+    if body.subject_kind == "screen" and name_only(subject["path"]):
+        subject.pop("view", None)  # AUD-9: a person's own page is its name only, from any client
     # G7 "Panel chats" (owner, 2026-10-21): only you, until shared.
     visibility = "private" if author_only or panel else body.visibility
     picked = list(dict.fromkeys(u for u in body.participants if u != me))
@@ -1254,7 +1272,7 @@ async def share(
         db, principal,
         DiscussionCreate(
             subject_kind=chat.subject_kind,
-            subject={k: v for k, v in chat.subject.items() if k != "view"},
+            subject=without_view(chat.subject),
             title=body.title,
             message=DiscussionMessageIn(body=body.first_message),
         ),

@@ -336,6 +336,10 @@ def _view(ctx: Context, d: Discussion) -> None:
     view = (d.subject or {}).get("view")
     if not view or d.origin != "panel" or d.visibility != "private":
         return
+    from oracle.discussions.service import name_only
+
+    if d.subject_kind == "screen" and name_only(d.subject.get("path", "")):
+        return  # AUD-9: a person's own page, its name only
     if view.get("name"):
         ctx.note(f"The page shows: {view['name']}")
     if view.get("filters"):
