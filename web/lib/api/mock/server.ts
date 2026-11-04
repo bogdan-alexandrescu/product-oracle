@@ -170,6 +170,7 @@ import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
+import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { approvedPrdToDraft, itemSubjectName, knowCompanyGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
 import { routeGoalMap, type GoalMap } from "./goal-map";
@@ -3137,6 +3138,13 @@ function load(): Db {
                     // walkb-roadmap review 5a: the Alerts roadmap was built from its PRD and has no approved version yet.
                     const db = seed();
                     (db.simple_roadmap = seedSimpleRoadmap()).unapproved = ["alerts-roadmap"];
+                    return db;
+                  }
+              : scenario === "simple-milestones" || scenario === "simple-prd-milestones"
+                ? () => {
+                    // build-milestones-on-roadmap: the roadmaps' own milestones per goal; with a PRD's (Usage alerts).
+                    const db = seed();
+                    (db.simple_roadmap = seedSimpleRoadmap()).goal_milestones = scenario === "simple-milestones" ? seedOwnMilestones() : seedPrdMilestones();
                     return db;
                   }
               : scenario === "simple-plan"

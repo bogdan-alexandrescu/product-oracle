@@ -7,8 +7,8 @@ roadmap item serving a track milestone, with expected and measured lift. On
 waits on) and the gate: ``gate_threshold``, ``gate_confirmed_by``, ``gate_confirmed_on``
 and ``gate_area_ids``. The reading, 7 days and status are read from the goal.
 
-Revision ID: 0101_goal_map
-Revises: 0100_source_lost_connection
+Revision ID: 0103_goal_map
+Revises: 0102_goal_milestone_plan_date
 """
 
 from collections.abc import Sequence
@@ -17,8 +17,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0101_goal_map"
-down_revision: str | None = "0100_source_lost_connection"
+revision: str = "0103_goal_map"
+down_revision: str | None = "0102_goal_milestone_plan_date"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

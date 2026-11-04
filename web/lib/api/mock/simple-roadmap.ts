@@ -14,6 +14,7 @@ import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, seeded, stableUuid } from "./ids";
+import { milestoneOut, routeMilestones, type MockMilestone } from "./simple-milestones";
 import { betSubject, flowFor, type VisualsDb } from "./simple-visuals";
 import type { OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
@@ -133,6 +134,8 @@ interface SimpleDb {
   /** roadmap-keydates: each PRD's dated milestones as its latest approved version has them
    * (PRD slug -> milestones), read by the server before every request (prdMilestonesOf). */
   prd_milestones?: Record<string, PrdMilestone[]>;
+  /** build-milestones-on-roadmap: each roadmap's milestones per goal (./simple-milestones.ts). */
+  goal_milestones?: MockMilestone[];
   /** roadmap-keydates review ("roadmap-keydates-uncoded"): a track milestone record's own day
    * (record name -> day), as a record with a target date reads; none: undated. */
   record_dates?: Record<string, string>;
@@ -1002,6 +1005,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
         })),
       ),
     ],
+    // build-milestones-on-roadmap: the shown roadmaps' milestones per goal (a PRD's among them).
+    goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)))),
     span: db.plan ? planSpan() : null,
     // A working draft belongs to one roadmap: a chosen roadmap's read carries its own only.
     changes_in_review: chosen ? (reader.hiddenBy[roadmapId(chosen)] ?? 0) : reader.hidden,
@@ -1144,6 +1149,9 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
     const out = roadmapOut(db, me.role, q, me);
     return out ? json(200, out) : json(422, { detail: "group: goal, track or prd" });
   }
+  const slugOf = (id: string) => Object.keys(ROADMAPS).find((r) => roadmapId(r) === id) ?? null;
+  const ms = await routeMilestones(db, me, req, p, slugOf, (r) => canEditRoadmap(db, r, me));
+  if (ms) return ms;
   if (p[3] !== "date-suggestions") return null;
   if (!p[4] && m === "GET") {
     const status = q.get("status") ?? "open";

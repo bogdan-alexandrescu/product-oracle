@@ -23,13 +23,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
-from oracle.simple import changes, drafts, service, suggestions
+from oracle.simple import changes, drafts, goal_milestones, service, suggestions
 from oracle.simple.schemas import (
     DateSuggestionEdit,
     DateSuggestionOut,
     RefreshOut,
     RoadmapGroup,
     SimpleChangeResult,
+    SimpleGoalMilestone,
+    SimpleGoalMilestoneIn,
+    SimpleGoalMilestonePatch,
     SimpleRoadmapOut,
 )
 
@@ -145,3 +148,47 @@ async def dismiss_date_suggestion(
 ) -> DateSuggestionOut:
     """Dismiss: the item stays undated."""
     return await _decide(db, principal, suggestion_id, "dismiss")
+
+
+# --------------------------------------------------------------------------- goal milestones
+
+
+@router.post("/milestones", response_model=SimpleGoalMilestone,
+             status_code=status.HTTP_201_CREATED)  # fmt: skip
+async def create_goal_milestone(
+    body: SimpleGoalMilestoneIn, principal: Commenter, db: TenantDB
+) -> SimpleGoalMilestone:
+    """Add a milestone to a goal on a roadmap: coded the next "M<n>" in that goal on that
+    roadmap. Who may change the roadmap directly (an owner, its decider, with none its
+    owner while an approver, same as a key date); a commenter is refused (403: milestones
+    are not proposed here, unlike key dates)."""
+    return await goal_milestones.create(db, principal, body)
+
+
+@router.patch("/milestones/{milestone_id}", response_model=SimpleGoalMilestone)
+async def patch_goal_milestone(
+    milestone_id: uuid.UUID, body: SimpleGoalMilestonePatch, principal: Commenter, db: TenantDB
+) -> SimpleGoalMilestone:
+    """Edit a milestone's name, date, goal, items it waits on or counts-when rule. A PRD's
+    own milestone is read-only here: a date or counts-when edit instead proposes a change
+    to the PRD's owner (``pending`` filled, the milestone unchanged) through the change
+    engine (``POST /v1/simple/changes/{id}/accept|decline``); its name, goal and items are
+    the PRD's own and are 422 here."""
+    return await goal_milestones.patch(db, principal, milestone_id, body)
+
+
+@router.delete("/milestones/{milestone_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_goal_milestone(
+    milestone_id: uuid.UUID, principal: Commenter, db: TenantDB
+) -> None:
+    """Delete one of the roadmap's own milestones (undo: PATCH the old values back, or
+    restore). A PRD's own milestone is 409: it is not deleted here."""
+    await goal_milestones.delete(db, principal, milestone_id)
+
+
+@router.post("/milestones/{milestone_id}/restore", response_model=SimpleGoalMilestone)
+async def restore_goal_milestone(
+    milestone_id: uuid.UUID, principal: Commenter, db: TenantDB
+) -> SimpleGoalMilestone:
+    """Undo a delete: clears the milestone's ``deleted_at``."""
+    return await goal_milestones.restore(db, principal, milestone_id)
