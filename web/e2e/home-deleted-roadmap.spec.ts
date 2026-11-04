@@ -12,7 +12,8 @@ import { onlyTheRoadmapRefresh, trashEvery } from "./trash-helpers";
  * - deleted for good: protects=with every roadmap moved to Trash through its menu and 31
  *   days gone by, "Next review meeting" reads "Its roadmap was deleted · Ritual settings"
  *   and the link opens the ritual; fails_when=it still says the roadmap is in Trash, or
- *   shows the refresh as if its roadmap were live; no_claim=the API's check (pytest:
+ *   shows the refresh as if its roadmap were live, or only says so once Trash is visited;
+ *   no_claim=the API's check (pytest:
  *   test_home_ritual_deleted.py).
  */
 
@@ -40,11 +41,8 @@ async function roadmapDeletedForGood(page: Page) {
   await expect(meeting.getByTestId("home-meeting-trash")).toHaveText("Reviews a roadmap in Trash · Ritual settings");
   await expect(meeting.getByTestId("home-meeting-deleted")).toHaveCount(0);
 
-  // A month on, Trash has deleted them for good.
+  // A month on, Trash has deleted them for good: Home knows without a visit to Trash first.
   await page.clock.setSystemTime(new Date(mockNow().getTime() + 31 * DAY_MS));
-  await page.goto("/settings/trash");
-  await expect(page.getByTestId("trash-entry")).toHaveCount(0);
-
   await page.goto("/simple");
   await expect(meeting).toContainText("Monthly roadmap refresh");
   const line = meeting.getByTestId("home-meeting-deleted");
@@ -53,6 +51,9 @@ async function roadmapDeletedForGood(page: Page) {
   await line.getByRole("link", { name: "Ritual settings" }).click();
   await expect(page).toHaveURL(/\/company\/rituals\?ritual=/);
   await expect(page.getByRole("heading", { name: "Monthly roadmap refresh" }).filter({ visible: true })).toBeVisible();
+
+  await page.goto("/settings/trash");
+  await expect(page.getByTestId("trash-entry")).toHaveCount(0);
 }
 
 test("once its roadmap is deleted for good, the next review meeting says so", async ({ page }) => {
