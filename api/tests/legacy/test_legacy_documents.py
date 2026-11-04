@@ -263,11 +263,12 @@ async def test_v2_applies_resolutions_and_diffs_by_section(client):
     assert layers["rollout"] == (None, "detail")
 
 
-async def test_unknown_resolution_ids_still_reject_the_import(client):
+async def test_unknown_resolution_ids_are_dropped_not_refused(client):
     _, auth, _ = await _v1(client)
     resp = await import_md(client, auth, V2)  # no feedback items exist
-    assert resp.status_code == 422
-    assert [e["code"] for e in resp.json()["errors"]] == ["unknown_feedback_item"] * 2
+    assert resp.status_code == 201, resp.text
+    codes = [w["code"] for w in resp.json()["warnings"]]
+    assert codes.count("resolution_dropped") == 2
 
 
 async def test_legacy_drafts_without_brief_markers_still_import(client):

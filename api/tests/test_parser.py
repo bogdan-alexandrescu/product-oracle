@@ -392,5 +392,5 @@ def test_a_malformed_resolution_is_dropped_not_refused():
     parsed = parse_draft(text)
     assert parsed.resolutions == []
     assert parsed.dropped_resolutions == [
-        "resolution #1 was dropped: its feedback_id names no feedback item"
+        "resolution #1 was dropped: its feedback_id is missing or not a feedback id"
     ]

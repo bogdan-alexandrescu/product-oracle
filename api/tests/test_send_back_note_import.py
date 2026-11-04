@@ -108,7 +108,8 @@ async def test_the_stop_names_the_import_problem_in_plain_words(
 @pytest.mark.parametrize(
     ("message", "plain"),
     [
-        ("resolution #1 is invalid: feedback_id", "1 resolution names no feedback item"),
+        ("resolution #1 is invalid: feedback_id", "1 resolution isn't valid"),
+        ("resolution #1 is invalid: status", "1 resolution isn't valid"),
     ],
 )
 def test_a_refused_resolution_reads_in_plain_words(message, plain):
