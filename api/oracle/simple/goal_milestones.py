@@ -68,51 +68,6 @@ async def _company_owners(db: AsyncSession) -> list[uuid.UUID]:
     return await owners(db)
 
 
-# --------------------------------------------------------------------------- materializing
-
-
-async def _goal_of(doc_id: uuid.UUID, prd_id: uuid.UUID, entries: list[Any]) -> uuid.UUID | None:
-    for e in entries:
-        if e.roadmap.id == doc_id and e.prd is not None and e.prd.id == prd_id:
-            if e.goal is not None:
-                return e.goal.id
-    return None
-
-
-async def _materialized(
-    db: AsyncSession, doc_id: uuid.UUID, prd: Document, view: Any, entries: list[Any]
-) -> list[TrackMilestone]:
-    """Each of the PRD's plan milestones as a ``track_milestones`` row for this roadmap,
-    idempotently (a stable id per roadmap and code): the plan's date at the time it is
-    first materialised, a null date kept when the plan has none. Once a row exists it is
-    not overwritten here (an accepted change's date would otherwise be lost on the next
-    read); it moves only through a person's edit, proposed and accepted, or the PRD's
-    owner editing it directly here (not a PRD-plan re-read)."""
-    existing = {
-        m.code: m
-        for m in await db.scalars(
-            select(TrackMilestone).where(
-                TrackMilestone.roadmap_id == doc_id, TrackMilestone.origin_prd_id == prd.id
-            )
-        )
-    }
-    goal_id = await _goal_of(doc_id, prd.id, entries)
-    out: list[TrackMilestone] = []
-    for m in view.milestones:
-        row = existing.get(m.code)
-        if row is None:
-            row = TrackMilestone(
-                id=uuid.uuid5(prd.id, f"goal-milestone:{doc_id}:{m.code}"),
-                track_id=None, roadmap_id=doc_id, goal_id=goal_id, origin_prd_id=prd.id,
-                code=m.code, name=m.name, target_date=m.end_date,
-            )  # fmt: skip
-            db.add(row)
-        out.append(row)
-    if out:
-        await db.flush()
-    return out
-
-
 # --------------------------------------------------------------------------- reading
 
 
@@ -159,28 +114,55 @@ async def list_for_roadmaps(
     kd_prds: dict[uuid.UUID, list[Document]],
 ) -> list[SimpleGoalMilestone]:
     """Each shown roadmap's goal milestones: its own, and each dated-or-not milestone of
-    the PRDs its items come from (materialised as rows on first read)."""
+    the PRDs its items come from (materialised as rows on first read). One read for all the
+    roadmaps' rows, so the roadmap read stays bulk."""
     if not docs:
         return []
-    w = await drafts.who(db, set(docs) | {p.id for of in kd_prds.values() for p in of})
-    out: list[SimpleGoalMilestone] = []
-    for doc_id, doc in docs.items():
+    rows = list(
+        await db.scalars(select(TrackMilestone).where(TrackMilestone.roadmap_id.in_(list(docs))))
+    )
+    prds_by_id = {p.id: p for of in kd_prds.values() for p in of}
+    goal_of: dict[tuple[uuid.UUID, uuid.UUID], uuid.UUID] = {}
+    for e in entries:
+        if e.prd is not None and e.goal is not None:
+            goal_of.setdefault((e.roadmap.id, e.prd.id), e.goal.id)
+    have = {(r.roadmap_id, r.origin_prd_id, r.code) for r in rows if r.origin_prd_id}
+    added = False
+    for doc_id in docs:
         for prd in kd_prds.get(doc_id, []):
             view = views.get(prd.id)
-            if view is None:
-                continue
-            for row in await _materialized(db, doc_id, prd, view, entries):
-                out.append(await _out(db, principal, row, doc, prd, w))
-        own = await db.scalars(
-            select(TrackMilestone).where(
-                TrackMilestone.roadmap_id == doc_id,
-                TrackMilestone.origin_prd_id.is_(None),
-                TrackMilestone.deleted_at.is_(None),
-            )
-        )
-        for row in own:
-            out.append(await _out(db, principal, row, doc, None, w))
-    await db.commit()
+            for m in view.milestones if view is not None else []:
+                if (doc_id, prd.id, m.code) in have:
+                    continue
+                row = TrackMilestone(
+                    id=uuid.uuid5(prd.id, f"goal-milestone:{doc_id}:{m.code}"),
+                    track_id=None, roadmap_id=doc_id, goal_id=goal_of.get((doc_id, prd.id)),
+                    origin_prd_id=prd.id, code=m.code, name=m.name, target_date=m.end_date,
+                )  # fmt: skip
+                db.add(row)
+                rows.append(row)
+                have.add((doc_id, prd.id, m.code))
+                added = True
+    if added:
+        await db.commit()
+    in_plan = {
+        (doc_id, prd.id, m.code)
+        for doc_id in docs
+        for prd in kd_prds.get(doc_id, [])
+        for m in (views[prd.id].milestones if views.get(prd.id) is not None else [])
+    }
+    shown = [
+        r for r in rows
+        if (r.origin_prd_id is None and r.deleted_at is None)
+        or (r.roadmap_id, r.origin_prd_id, r.code) in in_plan
+    ]  # fmt: skip
+    if not shown:
+        return []
+    w = await drafts.who(db, set(docs) | set(prds_by_id))
+    out = [
+        await _out(db, principal, r, docs[r.roadmap_id], prds_by_id.get(r.origin_prd_id), w)  # type: ignore[arg-type]
+        for r in shown
+    ]
     out.sort(key=lambda m: (str(m.roadmap_id), m.goal_id is None, str(m.goal_id), m.code))
     return out
 
