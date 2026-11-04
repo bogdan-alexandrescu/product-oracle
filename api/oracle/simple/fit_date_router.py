@@ -103,9 +103,26 @@ class FitTeam(BaseModel):
     focus: float
 
 
+class FitApprovalOut(BaseModel):
+    """The last re-plan approved for this milestone: who, when, the versions it made live,
+    the milestone's date before and after, and what moved in words."""
+
+    at: dt.datetime
+    by_me: bool
+    version: int
+    roadmap_version: int | None = None
+    was: dt.date
+    date: dt.date
+    target: dt.date
+    moves: list[str] = []
+
+
 class FitGoalOut(BaseModel):
     prd: SimpleDocRef
     prd_version: int
+    # The PRD's roadmap and its latest version (None: the PRD is on no roadmap yet).
+    roadmap: SimpleDocRef | None = None
+    roadmap_version: int | None = None
     goal: str | None = None
     # What is measured now, in words ("26 replied threads per agent today").
     goal_now: str | None = None
@@ -116,6 +133,7 @@ class FitGoalOut(BaseModel):
     late_days: int
     team: FitTeam
     lanes: list[FitLane]
+    approved: FitApprovalOut | None = None
 
 
 class FitAnswerOut(FitGoalOut):
@@ -166,6 +184,7 @@ class FitDraftOut(BaseModel):
     prd: SimpleDocRef
     prd_version: int
     next_version: int
+    roadmap_version: int | None = None
     changes: list[FitPrdChange]
     dates: list[FitDateMove]
     new_target: dt.date | None = None
@@ -281,6 +300,44 @@ async def _load(db, principal, prd: str, milestone: str):
     return document, v, view, p
 
 
+async def _roadmap(db, document: Document) -> tuple[SimpleDocRef | None, int | None]:
+    from oracle.roadmap.models import ProductTrack
+
+    rid = await db.scalar(
+        select(ProductTrack.roadmap_document_id).where(ProductTrack.prd_document_id == document.id)
+    )
+    rm = await db.get(Document, rid) if rid else None
+    if rm is None:
+        return None, None
+    n = await db.scalar(
+        select(DocumentVersion.number)
+        .where(DocumentVersion.document_id == rm.id)
+        .order_by(DocumentVersion.number.desc())
+        .limit(1)
+    )
+    return _ref(rm), n
+
+
+async def _approval(db, principal, document: Document, milestone: str) -> FitApprovalOut | None:
+    from oracle.models import AuditEvent
+
+    ev = await db.scalar(
+        select(AuditEvent)
+        .where(AuditEvent.action == "simple_fit_date.approved", AuditEvent.entity_id == document.id)
+        .order_by(AuditEvent.created_at.desc())
+        .limit(1)
+    )
+    if ev is None or ev.data.get("milestone") != milestone or "was" not in ev.data:
+        return None
+    d = ev.data
+    return FitApprovalOut(
+        at=ev.created_at, by_me=ev.actor == f"user:{getattr(principal, 'user_id', '')}",
+        version=d["version"], roadmap_version=d.get("roadmap_version"),
+        was=dt.date.fromisoformat(d["was"]), date=dt.date.fromisoformat(d["date"]),
+        target=dt.date.fromisoformat(d["target"]), moves=d.get("moves", []),
+    )  # fmt: skip
+
+
 def _ref(d: Document) -> SimpleDocRef:
     return SimpleDocRef(id=d.id, slug=d.slug, title=d.title)
 
@@ -295,6 +352,13 @@ def _lanes(p: fd.Plan, resized: set[str] = frozenset()) -> list[FitLane]:
         ])
         for m in p.milestones
     ]  # fmt: skip
+
+
+async def _goal_of(db, principal, document, v, view, p: fd.Plan) -> FitGoalOut:
+    g = _goal(document, v, view, p)
+    g.roadmap, g.roadmap_version = await _roadmap(db, document)
+    g.approved = await _approval(db, principal, document, p.milestone)
+    return g
 
 
 def _goal(document, v, view, p: fd.Plan) -> FitGoalOut:
@@ -336,7 +400,7 @@ async def list_fit_dates(principal: Reader, db: TenantDB) -> list[FitGoalOut]:
                 continue
             p = build_plan(v.markdown, view, ms.code, await company_time.company_today(db))
             if p is not None:
-                out.append(_goal(d, v, view, p))
+                out.append(await _goal_of(db, principal, d, v, view, p))
     return sorted(out, key=lambda g: (-g.late_days, g.prd.title, g.milestone))
 
 
@@ -348,7 +412,7 @@ async def get_fit_date(
     document, v, view, p = await _load(db, principal, prd, milestone)
     a = fd.answer(p)
     return FitAnswerOut(
-        **_goal(document, v, view, p).model_dump(),
+        **(await _goal_of(db, principal, document, v, view, p)).model_dump(),
         changes=[
             FitChangeOut(id=c.id, lever=c.lever, item=c.item, title=c.title, days=c.days,
                          pw_saved=c.pw_saved, cost_kind=c.cost_kind, cost=c.cost,
@@ -409,7 +473,9 @@ async def fit_date_draft(
     """The re-plan the picks write into the PRD's next version: nothing changes until it is
     approved."""
     document, v, _, p = await _load(db, principal, prd, body.milestone)
-    return _draft_out(document, v, p, fd.draft(p, body.picks))
+    out = _draft_out(document, v, p, fd.draft(p, body.picks))
+    out.roadmap_version = (await _roadmap(db, document))[1]
+    return out
 
 
 def replan_markdown(text: str, p: fd.Plan, d: fd.Draft, picks: list[str]) -> str:
@@ -465,8 +531,19 @@ async def fit_date_approve(
     except Exception as e:  # a gate refusing the version says why
         detail = getattr(e, "detail", None) or str(e)
         raise HTTPException(status.HTTP_409_CONFLICT, detail) from e
-    await audit.record(db, principal, "simple_fit_date.approved", "document", document.id,
-                       data={"version": nv.number, "picks": body.picks})  # fmt: skip
+    was = fd.schedule(p).milestones[p.milestone]
+    date = fd.schedule(d.plan).milestones[p.milestone]
+    moves = [
+        m.what + (f": {m.after:%b} {m.after.day}" if m.after else ": not dated")
+        for m in _draft_out(document, v, p, d).dates
+        if m.what != f"{p.milestone} target"
+    ]
+    _, rv = await _roadmap(db, document)
+    await audit.record(db, principal, "simple_fit_date.approved", "document", document.id, data={
+        "version": nv.number, "roadmap_version": rv, "picks": body.picks,
+        "milestone": p.milestone, "was": was.isoformat(), "date": date.isoformat(),
+        "target": (d.new_target or p.target).isoformat(), "moves": moves,
+    })  # fmt: skip
     await db.commit()
     return FitApprovedOut(
         prd=_ref(doc), version=nv.number, date=fd.schedule(d.plan).milestones[p.milestone],

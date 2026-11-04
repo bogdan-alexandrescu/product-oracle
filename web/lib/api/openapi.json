@@ -75709,6 +75709,27 @@
             "type": "integer",
             "title": "Prd Version"
           },
+          "roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "roadmap_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Version"
+          },
           "goal": {
             "anyOf": [
               {
@@ -75762,6 +75783,16 @@
             },
             "type": "array",
             "title": "Lanes"
+          },
+          "approved": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FitApprovalOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "changes": {
             "items": {
@@ -75828,6 +75859,68 @@
           "run_usd"
         ],
         "title": "FitAnswerOut"
+      },
+      "FitApprovalOut": {
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "by_me": {
+            "type": "boolean",
+            "title": "By Me"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "roadmap_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Version"
+          },
+          "was": {
+            "type": "string",
+            "format": "date",
+            "title": "Was"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "target": {
+            "type": "string",
+            "format": "date",
+            "title": "Target"
+          },
+          "moves": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Moves",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "at",
+          "by_me",
+          "version",
+          "was",
+          "date",
+          "target"
+        ],
+        "title": "FitApprovalOut",
+        "description": "The last re-plan approved for this milestone: who, when, the versions it made live,\nthe milestone's date before and after, and what moved in words."
       },
       "FitApprovedOut": {
         "properties": {
@@ -76019,6 +76112,17 @@
             "type": "integer",
             "title": "Next Version"
           },
+          "roadmap_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Version"
+          },
           "changes": {
             "items": {
               "$ref": "#/components/schemas/FitPrdChange"
@@ -76113,6 +76217,27 @@
             "type": "integer",
             "title": "Prd Version"
           },
+          "roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "roadmap_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Version"
+          },
           "goal": {
             "anyOf": [
               {
@@ -76166,6 +76291,16 @@
             },
             "type": "array",
             "title": "Lanes"
+          },
+          "approved": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FitApprovalOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

@@ -99,6 +99,9 @@ async def test_approve_makes_the_next_version_live(client):
     assert again["prd_version"] == 2
     assert again["today"] == draft["date"]
     assert again["target"] == (draft["new_target"] or "2026-12-25")
+    assert again["approved"]["version"] == 2 and again["approved"]["by_me"] is True
+    assert again["approved"]["date"] == draft["date"] and again["approved"]["was"] > draft["date"]
+    assert again["roadmap"]["slug"] == "setup-roadmap"
 
 
 @pytest.mark.parametrize("route", ["draft", "approve"])

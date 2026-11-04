@@ -23790,6 +23790,9 @@ export interface components {
             prd: components["schemas"]["SimpleDocRef"];
             /** Prd Version */
             prd_version: number;
+            roadmap?: components["schemas"]["SimpleDocRef"] | null;
+            /** Roadmap Version */
+            roadmap_version?: number | null;
             /** Goal */
             goal?: string | null;
             /** Goal Now */
@@ -23813,6 +23816,7 @@ export interface components {
             team: components["schemas"]["FitTeam"];
             /** Lanes */
             lanes: components["schemas"]["FitLane"][];
+            approved?: components["schemas"]["FitApprovalOut"] | null;
             /** Changes */
             changes: components["schemas"]["FitChangeOut"][];
             /** Pick */
@@ -23835,6 +23839,44 @@ export interface components {
             run_seconds: number;
             /** Run Usd */
             run_usd: number;
+        };
+        /**
+         * FitApprovalOut
+         * @description The last re-plan approved for this milestone: who, when, the versions it made live,
+         *     the milestone's date before and after, and what moved in words.
+         */
+        FitApprovalOut: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** By Me */
+            by_me: boolean;
+            /** Version */
+            version: number;
+            /** Roadmap Version */
+            roadmap_version?: number | null;
+            /**
+             * Was
+             * Format: date
+             */
+            was: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Target
+             * Format: date
+             */
+            target: string;
+            /**
+             * Moves
+             * @default []
+             */
+            moves: string[];
         };
         /** FitApprovedOut */
         FitApprovedOut: {
@@ -23911,6 +23953,8 @@ export interface components {
             prd_version: number;
             /** Next Version */
             next_version: number;
+            /** Roadmap Version */
+            roadmap_version?: number | null;
             /** Changes */
             changes: components["schemas"]["FitPrdChange"][];
             /** Dates */
@@ -23941,6 +23985,9 @@ export interface components {
             prd: components["schemas"]["SimpleDocRef"];
             /** Prd Version */
             prd_version: number;
+            roadmap?: components["schemas"]["SimpleDocRef"] | null;
+            /** Roadmap Version */
+            roadmap_version?: number | null;
             /** Goal */
             goal?: string | null;
             /** Goal Now */
@@ -23964,6 +24011,7 @@ export interface components {
             team: components["schemas"]["FitTeam"];
             /** Lanes */
             lanes: components["schemas"]["FitLane"][];
+            approved?: components["schemas"]["FitApprovalOut"] | null;
         };
         /** FitLane */
         FitLane: {
