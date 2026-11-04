@@ -56,7 +56,7 @@ test.describe("desktop", () => {
 
   test("qa4-company-4: a recorded weekly value becomes the linked goal's current value, in the inspector and on Home", async ({ page }) => {
     await login(page);
-    await expect(page.getByTestId("home-goal-G1").getByTestId("goal-to-go")).toHaveText("7 pts to go");
+    await expect(page.getByTestId("home-goal-G3").getByTestId("goal-to-go")).toHaveText("7 pts to go");
     const dialog = await openAddMetric(page);
     await dialog.getByLabel("Unit", { exact: true }).selectOption("%");
     await expect(dialog.getByTestId("metric-goal-help")).toHaveText("Confirmed goals measured in the same unit. The latest weekly value becomes the goal’s current value.");
@@ -75,7 +75,7 @@ test.describe("desktop", () => {
     await expect(inspector).not.toContainText("7 pts to go");
 
     await page.goto("/home");
-    await expect(page.getByTestId("home-goal-G1").getByTestId("goal-to-go")).toHaveText("4 pts to go");
+    await expect(page.getByTestId("home-goal-G3").getByTestId("goal-to-go")).toHaveText("4 pts to go");
   });
 
   test("qa4-company-38: Add metric says once that a unit comes first", async ({ page }) => {

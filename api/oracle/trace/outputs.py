@@ -7,6 +7,7 @@ from collections import defaultdict
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle.baseline.goal_order import goal_position
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document, DocumentVersion
 from oracle.trace.schemas import (
@@ -35,6 +36,7 @@ def entity_ref(e: Entity) -> TraceEntityRef:
         status=e.status,
         locked=e.locked,
         confidence=None if e.confidence is None else float(e.confidence),
+        position=goal_position(e.attrs) if e.type == "goal" else None,
     )
 
 

@@ -262,7 +262,7 @@ export function targetTitle(graph: GraphOut | undefined, entityId?: string | nul
   return "—";
 }
 
-/** Live goals as a tree, heaviest first, each followed by its subgoals (#345): the order
+/** Live goals as a tree, in the one goal order (lib/goal-order.ts), each followed by its subgoals (#345): the order
  * of the ledger's goal columns and of their G1, G1.1, G2 tags. */
 export function sortedGoals(graph: GraphOut | undefined): EntityOut[] {
   return goalTree(graph?.entities ?? []).map((n) => n.goal);

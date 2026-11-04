@@ -124,7 +124,7 @@ async def test_read_order_and_rows(client):
     rows = rows_by_code(out)
     one = rows["pay-1"]
     assert one["item_id"] == w.ids["pay-1"] and one["feature_id"] == w.ids["ledger"]
-    assert one["goal"] == {"key": "growth", "title": "Growth"}
+    assert one["goal"] == {"key": "growth", "title": "Growth", "position": None}
     assert (one["goal_value"], one["effort"], one["score"]) == (2, 1, 1)
     assert (one["horizon"], one["above_line"], one["no_goal"]) == ("now", True, False)
     assert (one["oracle_rank"], one["override"], one["before_override"]) == (1, None, None)
@@ -136,7 +136,7 @@ async def test_read_order_and_rows(client):
     assert rows["pay-2"]["above_line"] is False and rows["pay-2"]["after"] is None
     ins = rows["insights"]
     assert (ins["item_id"], ins["horizon"], ins["can_reorder"]) == (None, None, False)
-    assert ins["goal"] == {"key": "retention", "title": "Retention"}
+    assert ins["goal"] == {"key": "retention", "title": "Retention", "position": None}
     assert rows["pay-4"]["no_goal"] is True and rows["pay-4"]["goal"] is None
     widgets = rows["widgets"]
     assert (widgets["effort"], widgets["score"]) == (None, None)
@@ -167,7 +167,7 @@ async def test_buckets_and_drafts(client):
     assert buckets["growth"]["share"] == 0.5 and none["share"] == 0
     assert [d["code"] for d in out["drafts"]] == ["pay-5"]
     draft = out["drafts"][0]
-    assert draft["goal"] == {"key": "retention", "title": "Retention"}
+    assert draft["goal"] == {"key": "retention", "title": "Retention", "position": None}
     assert draft["roadmap"]["slug"] == "payments" and draft["applies"] is True
     merge = [m["code"] for m in draft["merge_into"]]
     assert merge == ["pay-3", "pay-1", "pay-2", "pay-4", "pay-6", "pay-7"]

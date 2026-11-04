@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import company_time
 from oracle.baseline import figures
 from oracle.baseline.figures import Figure
+from oracle.baseline.goal_order import sort_goals
 from oracle.baseline.models import Edge, Entity, GoalMeasurement, Proposal
 from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion
@@ -203,7 +204,7 @@ async def _goals(db: AsyncSession, confirmed: bool = True) -> list[Entity]:
     q = select(Entity).where(Entity.type == "goal").order_by(Entity.title)
     if confirmed:
         q = q.where(Entity.status == "confirmed")
-    return list(await db.scalars(q))
+    return sort_goals(await db.scalars(q))
 
 
 def _shown(v: Any) -> str | None:

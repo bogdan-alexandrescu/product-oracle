@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth.deps import Principal
 from oracle.baseline import goals, service
+from oracle.baseline.goal_order import sort_goals
 from oracle.baseline.models import Entity, GoalMeasurement
 from oracle.metrics.models import Metric
 
@@ -129,7 +130,7 @@ async def fill_from_text(db: AsyncSession, principal: Principal) -> dict[str, An
         .where(Entity.type == "goal", Entity.status != "rejected")
         .order_by(Entity.key)
     )
-    for goal in rows.all():
+    for goal in sort_goals(rows.all()):
         attrs = dict(goal.attrs or {})
         values, unread = goals.read_text(attrs, on=on, horizons=horizons)
         left += [

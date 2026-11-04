@@ -146,7 +146,7 @@ test("roadmap table: grouped by horizon, goal or PRD; draft items are dashed Pro
 
   const group = page.getByRole("group", { name: "Group by" });
   await group.getByRole("button", { name: "Goal" }).click();
-  await expect(groups(page)).toHaveText(["Raise activation · 4", "Grow paid conversion · 1", "Cut early churn · 1", "No goal · 1"]);
+  await expect(groups(page)).toHaveText(["Cut early churn · 1", "Grow paid conversion · 1", "Raise activation · 4", "No goal · 1"]);
   await group.getByRole("button", { name: "PRD" }).click();
   await expect(groups(page)).toHaveText(["Usage alerts PRD · 7"]);
   await group.getByRole("button", { name: "Horizon" }).click();

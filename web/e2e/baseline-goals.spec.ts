@@ -148,8 +148,8 @@ test("Fill from text: the result notice, and early churn's target becomes < 8%",
 test("measurements: Home shows 7 pts to go; Record value 40 today moves the chart and Home to 5 pts", async ({ page }) => {
   await login(page);
   await page.goto("/home");
-  await expect(page.getByTestId("home-goal-G1").getByTestId("goal-to-go")).toHaveText("7 pts to go");
-  await expect(page.getByTestId("home-goal-G3").getByTestId("goal-to-go")).toHaveText("No current value yet");
+  await expect(page.getByTestId("home-goal-G3").getByTestId("goal-to-go")).toHaveText("7 pts to go");
+  await expect(page.getByTestId("home-goal-G1").getByTestId("goal-to-go")).toHaveText("No current value yet");
 
   await page.goto("/baseline");
   await page.getByTestId("goal-g.activation").getByRole("button", { name: "Raise activation" }).click();
@@ -170,8 +170,8 @@ test("measurements: Home shows 7 pts to go; Record value 40 today moves the char
   await expect(section.getByRole("img", { name: "Measurements" }).locator("circle")).toHaveCount(8);
 
   await page.goto("/home");
-  await expect(page.getByTestId("home-goal-G1").getByTestId("goal-figure")).toHaveText("40%/ 45%");
-  await expect(page.getByTestId("home-goal-G1").getByTestId("goal-to-go")).toHaveText("5 pts to go");
+  await expect(page.getByTestId("home-goal-G3").getByTestId("goal-figure")).toHaveText("40%/ 45%");
+  await expect(page.getByTestId("home-goal-G3").getByTestId("goal-to-go")).toHaveText("5 pts to go");
 
   // Deleting it, with the in-page confirmation, rolls back to 38%.
   await page.goto("/baseline");
@@ -181,7 +181,7 @@ test("measurements: Home shows 7 pts to go; Record value 40 today moves the char
   await row.getByRole("button", { name: "Delete value" }).click();
   await expect(d.getByTestId("goal-measurements").getByTestId("measurement-row")).toHaveCount(7);
   await page.goto("/home");
-  await expect(page.getByTestId("home-goal-G1").getByTestId("goal-to-go")).toHaveText("7 pts to go");
+  await expect(page.getByTestId("home-goal-G3").getByTestId("goal-to-go")).toHaveText("7 pts to go");
 });
 
 // protects: decided 2026-10-21, B5 "Vague goals": confirming a goal that is not measurable
@@ -196,10 +196,10 @@ test("confirm a Not measurable goal: Confirmed with the chip still on, and Home 
   await expect(churn.getByTestId("not-measurable")).toBeVisible();
 
   await page.goto("/home");
-  const g3 = page.getByTestId("home-goal-G3");
+  const churnCard = page.getByTestId("home-goal-G1");
   // qa-plan-14: never "No target" beside the shown target "below 8%".
-  await expect(g3.getByTestId("goal-to-go")).toHaveText("No current value yet");
-  await expect(g3.getByTestId("goal-to-go").locator("[title]")).toHaveAttribute(
+  await expect(churnCard.getByTestId("goal-to-go")).toHaveText("No current value yet");
+  await expect(churnCard.getByTestId("goal-to-go").locator("[title]")).toHaveAttribute(
     "title",
     "Not measurable yet: missing target, horizon, owner",
   );

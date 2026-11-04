@@ -42,6 +42,8 @@ class TraceEntityRef(BaseModel):
     status: str
     locked: bool
     confidence: float | None = None
+    # goal-order: the goal's place (its attrs.position, 1 = first); none when unset.
+    position: int | None = None
 
 
 class TraceChainStep(BaseModel):

@@ -78,7 +78,7 @@ test.describe("desktop", () => {
     const plan = page.getByTestId("plan-goals");
     const toGo = (tag: string) =>
       plan.getByTestId(`home-goal-${tag}`).getByTestId("goal-to-go");
-    await expect(toGo("G1")).toHaveText("7 pts to go");
+    await expect(toGo("G3")).toHaveText("7 pts to go");
     await expect(toGo("G2")).toHaveText("2.6 pts to go");
 
     await page

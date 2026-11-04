@@ -132,7 +132,7 @@ export function direction(raw: unknown): Direction | null {
 
 export type GoalView = {
   id: string;
-  /** G1, G2… in the baseline's order (heaviest first): an order, never drawn (#304). */
+  /** G1, G2… in the baseline's order (the one goal order): an order, never drawn (#304). */
   tag: string;
   title: string;
   /** The company's code ("G-B"), if it has one, and the name after it. */
@@ -186,7 +186,7 @@ function typedText(f: Figure): string {
 
 const text = (v: unknown) => (v == null || v === "" ? null : String(v));
 
-/** Live goals, heaviest first, each followed by its subgoals, tagged G1, G1.1, G2… as the Baseline tags them. */
+/** Live goals, in the one goal order, each followed by its subgoals, tagged G1, G1.1, G2… as the Baseline tags them. */
 export function goalViews(entities: EntityOut[], numbered: EntityOut[] = entities): GoalView[] {
   return goalTree(entities, numbered).map(({ goal: g, tag, code, name, parentId, children }) => {
     const a = g.attrs ?? {};

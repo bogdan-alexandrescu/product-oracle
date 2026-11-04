@@ -34,6 +34,7 @@ from oracle.auth.deps import Principal, TenantDB
 from oracle.auth.models import User
 from oracle.authz import require_role
 from oracle.baseline import goals, service
+from oracle.baseline.goal_order import sort_goals
 from oracle.baseline.models import Entity, Proposal
 from oracle.baseline.schemas import EntityOut
 from oracle.discussions import kinds, replies
@@ -137,12 +138,14 @@ async def _check(db: AsyncSession, e: Entity) -> dict[str, Any]:
 
 
 async def vague_goals(db: AsyncSession) -> list[tuple[Entity, dict[str, Any]]]:
-    """The confirmed and proposed goals that are not measurable, oldest first, with
-    their check."""
-    rows = await db.scalars(
-        select(Entity)
-        .where(Entity.type == "goal", Entity.status.in_(OFFERED))
-        .order_by(Entity.created_at, Entity.id)
+    """The confirmed and proposed goals that are not measurable, in the one goal order
+    (oldest first among those without a position), with their check."""
+    rows = sort_goals(
+        await db.scalars(
+            select(Entity)
+            .where(Entity.type == "goal", Entity.status.in_(OFFERED))
+            .order_by(Entity.created_at, Entity.id)
+        )
     )
     on, horizons = await goals.company_today(db), await goals.company_horizons(db)
     out = []
