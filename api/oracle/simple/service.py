@@ -112,6 +112,9 @@ class Entry:
     # The item's code as every reader reads it (its feature's code, F-12 or the PRD's
     # F-06; else its own PRD section's): Home, the card's "Looks like" and "Merged into".
     code: str | None = None
+    # build-feature-panel review 2: the goal a person set on the item (oracle.simple.panel's
+    # goal_sets), which wins over its feature's; None: Oracle's goal.
+    goal_set: dict[str, Any] | None = None
 
 
 @dataclass
@@ -360,6 +363,9 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
             )
         )
     }
+    from oracle.simple import panel
+
+    goal_sets = await panel.goal_sets(db, {r.roadmap_document_id for r in rows})
     blockers = await _blockers(db, {b for r in rows for b in r.blocker_ids or []})
     cut = await _cut(db, roadmap_ids)
     # The item's first open suggestion (plan-model: its first slice's, shown with the span
@@ -408,8 +414,11 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 roadmap=roadmap,
                 prd=prd,
                 track=track,
-                goal=(goals.get(row.feature_id) if row.feature_id else None)
+                goal=(linked.get(row.goal_ids[0]) if row.goal_ids else None)
+                if str(row.id) in goal_sets
+                else (goals.get(row.feature_id) if row.feature_id else None)
                 or next((linked[g] for g in row.goal_ids or [] if g in linked), None),
+                goal_set=goal_sets.get(str(row.id)),
                 window=window,
                 resolved=dates.resolve(cands, window),
                 status=_status(row, recs, cut.get(roadmap.id, set())),

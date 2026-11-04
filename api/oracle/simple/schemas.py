@@ -290,6 +290,21 @@ class SimpleLink(BaseModel):
     removed_by: str | None = None
 
 
+class SimpleGoalPick(BaseModel):
+    id: uuid.UUID
+    title: str
+
+
+class SimpleGoalSet(BaseModel):
+    """build-feature-panel review 2: the goal (and measure) a person set on the item over
+    Oracle's: Oracle's goal as the item showed it (null: none), who set it and when."""
+
+    oracle: SimpleGoalPick | None = None
+    by: str | None = None
+    at: dt.datetime | None = None
+    measure: str | None = None
+
+
 class SimpleRoadmapItem(BaseModel):
     id: uuid.UUID
     key: str
@@ -351,6 +366,8 @@ class SimpleRoadmapItem(BaseModel):
     # the item's links with who made them (Oracle's removed ones too).
     override: SimpleOverride | None = None
     links: list[SimpleLink] = []
+    # build-feature-panel review 2: the goal a person set over Oracle's (``goal`` is it).
+    goal_set: SimpleGoalSet | None = None
     # S8: the decided decisions that changed the item (newest first; the Decisions page).
     decided_in: list["SimpleDecidedRef"] = []
     # walkc-roadmap-tasks: the work under the item (not dropped), in order.
@@ -545,6 +562,9 @@ ChangeOp = Literal[
     "remove_link",
     "restore_link",
     "restore_dates",
+    # build-feature-panel review 2: an item's own goal and measure, and Oracle's put back.
+    "set_goal",
+    "restore_goal",
 ]
 # chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
 # the change engine (oracle.simple.chat_actions).

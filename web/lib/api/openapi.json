@@ -59661,7 +59661,9 @@
                   "add_link",
                   "remove_link",
                   "restore_link",
-                  "restore_dates"
+                  "restore_dates",
+                  "set_goal",
+                  "restore_goal"
                 ]
               },
               {
@@ -60045,7 +60047,9 @@
               "add_link",
               "remove_link",
               "restore_link",
-              "restore_dates"
+              "restore_dates",
+              "set_goal",
+              "restore_goal"
             ],
             "title": "Op"
           },
@@ -81095,7 +81099,9 @@
               "add_link",
               "remove_link",
               "restore_link",
-              "restore_dates"
+              "restore_dates",
+              "set_goal",
+              "restore_goal"
             ],
             "title": "Op"
           },
@@ -114624,7 +114630,9 @@
               "add_link",
               "remove_link",
               "restore_link",
-              "restore_dates"
+              "restore_dates",
+              "set_goal",
+              "restore_goal"
             ],
             "title": "Op"
           },
@@ -114746,7 +114754,9 @@
               "add_link",
               "remove_link",
               "restore_link",
-              "restore_dates"
+              "restore_dates",
+              "set_goal",
+              "restore_goal"
             ],
             "title": "Op"
           },
@@ -116435,6 +116445,25 @@
         ],
         "title": "SimpleGoalBucket"
       },
+      "SimpleGoalPick": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SimpleGoalPick"
+      },
       "SimpleGoalRef": {
         "properties": {
           "id": {
@@ -116480,6 +116509,57 @@
           "title"
         ],
         "title": "SimpleGoalRef"
+      },
+      "SimpleGoalSet": {
+        "properties": {
+          "oracle": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleGoalPick"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "measure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure"
+          }
+        },
+        "type": "object",
+        "title": "SimpleGoalSet",
+        "description": "build-feature-panel review 2: the goal (and measure) a person set on the item over\nOracle's: Oracle's goal as the item showed it (null: none), who set it and when."
       },
       "SimpleGoalSuggestion": {
         "properties": {
@@ -120350,6 +120430,16 @@
             "type": "array",
             "title": "Links",
             "default": []
+          },
+          "goal_set": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleGoalSet"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "decided_in": {
             "items": {

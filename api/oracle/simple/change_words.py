@@ -129,6 +129,10 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             return f"filed the feature ask {title}" if title else "filed a feature ask"
         case "set_owner":
             return f"changed the owner of {x}"
+        case "set_goal":
+            return f"changed the goal of {x}"
+        case "restore_goal":
+            return f"put Oracle's goal back on {x}"
         case "set_decider":
             return f"changed the decider of {x}"
         # prd-questions: a PRD question (a decision) answered, or its decider named.

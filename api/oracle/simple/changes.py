@@ -38,6 +38,12 @@ Ops and the fields they write (``before`` must name the key fields):
 - ``edit_title``: title. ``edit_outcome``: outcome.
 - ``set_milestone`` (S9): the item's own milestone, ``{"milestone": {name, date,
   date_source: "typed"}}`` (date optional), or null to clear it.
+- ``set_goal`` / ``restore_goal`` (build-feature-panel review 2): the item's own goal
+  (``{"goal_ids": [id] or []}``, with an optional ``measure``, kept on the change's target),
+  which wins over the goal its feature supports (oracle.simple.panel); ``restore_goal`` puts
+  back the goal_ids it had before. 422 for no change or an id that is not a goal.
+- ``set_milestone``'s ``before`` is matched by the milestone's name and date as the item
+  reads them: the date engine's own fields (``date_source``, ``basis_ids``...) are not seen.
 - ``set_owner`` / ``set_decider`` (chat-actions): the item's own owner_id / decider_id, a
   member of the company (null: back to its track's owner / its roadmap's decider).
 - ``accept_risk``: the risk accepted on one flag (``target.flag``, ``target.subject``),
@@ -78,6 +84,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.baseline.models import Entity
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import HORIZONS, RoadmapItem
 from oracle.simple import drafts, service
@@ -120,6 +127,8 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "remove_link": ("depends_on",),
     "restore_link": ("depends_on",),
     "restore_dates": DATES,
+    "set_goal": ("goal_ids",),
+    "restore_goal": ("goal_ids",),
 }
 LINK_OPS = ("add_link", "remove_link", "restore_link")
 FIXES = ("shift_dependents", "move_dependency")
@@ -332,6 +341,13 @@ def write(row: RoadmapItem, values: dict[str, Any], target: dict[str, Any]) -> N
             row.accepted_risks = kept + ([v] if v is not None else [])
         else:
             setattr(row, f, drafts._typed(f, v))
+
+
+def _seen_milestone(m: Any) -> tuple | None:
+    """A milestone as the item reads it: its name and day, None when it has neither."""
+    if not isinstance(m, dict) or not (m.get("name") or m.get("date")):
+        return None
+    return (m.get("name") or None, _iso(_day(m.get("date"), "milestone.date")))
 
 
 def _normal(fields: tuple[str, ...], values: dict[str, Any]) -> dict[str, Any]:
@@ -675,7 +691,13 @@ async def _plan(
     current = read(row, fields, target)
     # A suggestion accepted after the item got dates is "outdated" (S2-minor).
     lead = "outdated" if op == "accept_date_suggestion" else "Changed since you saw it"
-    if _normal(fields, body.before) != current:
+    seen = _normal(fields, body.before)
+    if op == "set_milestone":
+        # build-feature-panel review 2: the milestone as the item reads it (name, date).
+        same = _seen_milestone(seen["milestone"]) == _seen_milestone(current["milestone"])
+    else:
+        same = seen == current
+    if not same:
         raise await _conflict(db, current, {str(row.id)}, lead)
     a = body.after
     after: dict[str, Any]
@@ -787,6 +809,41 @@ async def _plan(
             ):
                 raise ChangeError(422, f"after.{field}: a member of this company")
         after = {field: str(person) if person else None}
+        if after == current:
+            raise ChangeError(422, "No change: it is so already")
+    elif op == "set_goal":
+        ids = a.get("goal_ids") if isinstance(a.get("goal_ids"), list) else None
+        if ids is None or len(ids) > 1:
+            raise ChangeError(422, "after.goal_ids: one goal, or none")
+        goal_ids = [str(_uuid(g, "after.goal_ids")) for g in ids]
+        if (
+            goal_ids
+            and (
+                await db.scalar(
+                    select(Entity.id).where(
+                        Entity.id == uuid.UUID(goal_ids[0]), Entity.type == "goal"
+                    )
+                )
+            )
+            is None
+        ):
+            raise ChangeError(422, "after.goal_ids: a goal of this company")
+        measure = " ".join(str(a.get("measure") or "").split())[:TITLE_MAX] or None
+        now_goal = str(entry.goal.id) if entry.goal is not None else None
+        own = entry.goal_set or {}
+        if (goal_ids[0] if goal_ids else None) == now_goal and measure == own.get("measure"):
+            raise ChangeError(422, "No change: it is so already")
+        target["measure"] = measure
+        if entry.goal_set is None:
+            # Oracle's goal as the item showed it, for the panel's "Oracle suggested" line.
+            target["oracle"] = (
+                {"id": now_goal, "title": entry.goal.title} if entry.goal is not None else None
+            )
+        after = {"goal_ids": goal_ids}
+    elif op == "restore_goal":
+        if entry.goal_set is None:
+            raise ChangeError(422, "No goal of Oracle's to restore")
+        after = {"goal_ids": list(entry.goal_set["restore"])}
     elif op == "edit_outcome":
         outcome = a.get("outcome")
         outcome = str(outcome).strip() if outcome is not None else None
