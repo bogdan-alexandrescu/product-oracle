@@ -719,3 +719,68 @@ async def test_a_runs_queue_is_frozen_when_its_prompt_is_first_built(client):
             source.company_queue, source.company_plan)  # fmt: skip
         problems = await service._plan_table_problems(s, run, written, sv_id)
     assert not problems, [p.message for p in problems]
+
+
+REESTIMATE_ITEMS = """\
+version: 1
+prd: {document: user-safety, version: 1}
+items:
+  - id: report-button
+    title: Report button
+    outcome: People report harm in one tap
+    horizon: now
+    milestone: {name: Beta}
+    economics: {effort_weeks: 3}
+  - id: mute-words
+    title: Mute words
+    outcome: People hide the words they choose
+    horizon: now
+    milestone: {name: Beta}
+    priority: {score: 5}
+  - id: block-list
+    title: Block list
+    outcome: People block whoever they choose
+    horizon: now
+    milestone: {name: Beta}
+    feature: blocking
+"""
+
+
+async def test_a_run_items_effort_priority_and_goal_are_the_ones_landing_stores(client):
+    """The file re-estimates the report button (3 weeks), drops the mute words' effort and
+    the report button's priority, and names a feature that serves a company goal for the
+    new block list: the plan tables use what landing stores, not the old item's values."""
+    from oracle.roadmap import company
+
+    ctx, ids = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        await _goal(s, "fewer-harmful-posts", "Fewer harmful posts", 1, "blocking")
+        report = await s.scalar(select(RoadmapItem).where(
+            RoadmapItem.roadmap_version_id == ids["v1"],
+            RoadmapItem.item_key == "report-button"))  # fmt: skip
+        report.milestone = {"name": "Beta"}
+        report.priority = {"score": 9}
+        report.economics = {"declared": {"effort_weeks": 1}, "priority_score": 9}
+        replicas = await s.scalar(select(RoadmapItem).where(
+            RoadmapItem.roadmap_version_id == ids["v1"],
+            RoadmapItem.item_key == "read-replicas"))  # fmt: skip
+        replicas.milestone, replicas.position = {"name": "Beta"}, 3
+        rm = await s.get(Document, ids["company"])
+        v1 = await s.get(DocumentVersion, ids["v1"])
+        safety, sv = await s.get(Document, ids["safety"]), await s.get(DocumentVersion, ids["sv"])
+        s.add(_item(rm, v1, safety, sv, "mute-words", "Mute words", 2,
+                    milestone={"name": "Beta"},
+                    economics={"declared": {"effort_weeks": 2}}))  # fmt: skip
+        await s.commit()
+        frozen = await company.frozen_queue(s, ids["safety"])
+    plan = {k: v for k, v in frozen.items() if k != "rows"}
+    queued = company.with_run_items(frozen["rows"], REESTIMATE_ITEMS, **plan)
+    # In Beta: the block list serves a goal, so it goes first; then priority (the mute words'
+    # 5, the report button has none now), then the report button's 3 weeks.
+    assert [r["key"] for r in queued] == ["block-list", "mute-words", "report-button",
+                                          "read-replicas"]  # fmt: skip
+    by = {r["key"]: r for r in queued}
+    week = timedelta(days=7)
+    assert (by["report-button"]["start"], by["report-button"]["end"]) == (
+        (TODAY + 2 * week).isoformat(), (TODAY + 5 * week).isoformat())  # fmt: skip
+    assert await _landed(ctx, ids, REESTIMATE_ITEMS) == _planned(queued)
