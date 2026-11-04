@@ -215,7 +215,7 @@ async def test_run_prompt_lists_the_carried_inputs(client, ctx):
     assert f"- D-{w['reversed']['number']} " not in text
     assert "EX-101" in text and "Dec 15, 2026" in text and "Q4 safety plan" in text
     assert "EX-303" not in text and "EX-102" not in text and "EX-900" not in text
-    assert "Continues: <old key>" in text and "Rate caps, safe mode" in text
+    assert "Continues: <old item name> (<old key>)" in text and "Rate caps, safe mode" in text
 
 
 def _carried(n_cap: int = 7) -> carried.Carried:
@@ -228,9 +228,12 @@ def _carried(n_cap: int = 7) -> carried.Carried:
     )  # fmt: skip
 
 
+CARRIED_SECTION = f"# Carried from {OLD} {{#carried}}\n- D-7 Cap at 30 messages a minute\n"
+
+
 def test_critic_flags_a_departure_and_a_dropped_item():
     c = _carried()
-    good = (
+    good = CARRIED_SECTION + (
         "# Rate caps {#caps}\nContinues: caps\nWe keep D-7 Cap at 30 messages a minute.\n"
         "# Left out {#out}\nNot carried: safe-mode because the Growth PRD takes it.\n"
     )
@@ -240,7 +243,7 @@ def test_critic_flags_a_departure_and_a_dropped_item():
     codes = [p.code for p in carried.draft_problems(c, departs, AREA)]
     assert codes == ["carried_decision_contradicted"]
 
-    dropped = "# Rate caps {#caps}\nContinues: caps\nWe keep D-7.\n"
+    dropped = CARRIED_SECTION + "# Rate caps {#caps}\nContinues: caps\nWe keep D-7.\n"
     problems = carried.draft_problems(c, dropped, AREA)
     assert [(p.code, p.refs) for p in problems] == [
         ("carried_item_dropped", {"item_key": "safe-mode"})
@@ -308,3 +311,110 @@ async def test_new_prd_items_keep_a_link_to_the_old_items_they_continue(client, 
         "safe": [(w["old"]["id"], "safe-mode", "declared")],
         "invites": [],
     }
+
+
+def _titled(title: str) -> carried.Carried:
+    c = _carried()
+    c.decisions[0].title = title
+    return c
+
+
+def test_critic_reads_departure_words_outside_the_decisions_own_title():
+    """protects=a carried decision whose own title has a departure word ('override',
+    'instead of') is not flagged when the draft names it, in the 'Carried from' list or in
+    the text; a departure said outside its title still is; fails_when=the title's own words
+    flag it (the draft is sent back for ever)."""
+    for title in ("Allow an admin override of the alert cap", "Use SMS instead of email"):
+        c = _titled(title)
+        listed = (
+            f"# Carried from {OLD} {{#carried}}\n- D-7 {title} (kept)\n"
+            f"# Alerts {{#alerts}}\nContinues: Message rate caps (caps)\nWe keep D-7 {title}.\n"
+            "Not carried: Safe mode (safe-mode) because the Growth PRD takes it.\n"
+        )
+        assert carried.draft_problems(c, listed, AREA) == [], title
+        departs = listed.replace(f"We keep D-7 {title}.", f"We reverse D-7 {title}.")
+        assert [p.code for p in carried.draft_problems(c, departs, AREA)] == [
+            "carried_decision_contradicted"
+        ], title
+
+
+def test_critic_wants_the_carried_from_section():
+    """protects=a draft that carries decisions or estimates has its 'Carried from <old
+    PRD>' section; fails_when=a draft without it passes."""
+    c = _carried()
+    body = (
+        "# Rate caps {#caps}\nContinues: caps\nWe keep D-7.\n"
+        "Not carried: safe-mode because the Growth PRD takes it.\n"
+    )
+    problems = carried.draft_problems(c, body, AREA)
+    assert [p.code for p in problems] == ["carried_section_missing"]
+    assert f"Carried from {OLD}" in problems[0].message
+    assert carried.draft_problems(c, CARRIED_SECTION + body, AREA) == []
+    # Nothing carried: no section is asked for.
+    bare = carried.Carried(document_id=uuid.uuid4(), slug="example-chat-prd", title=OLD,
+                           version=1, items=c.items, decisions=[])  # fmt: skip
+    assert carried.draft_problems(bare, body, AREA) == []
+
+
+def test_markers_name_the_item_and_its_key():
+    """protects=the 'Continues:' and 'Not carried:' lines people read name the item with
+    its key ('Safe mode (safe-mode)'), the critic matches on the key in brackets, not on
+    words of the name; fails_when=a raw key is asked for, or a name's word is taken as a
+    key."""
+    c = carried.Carried(
+        document_id=uuid.uuid4(), slug="example-chat-prd", title=OLD, version=1,
+        items=[carried.CarriedItem(key="caps", title="Safe mode caps", in_area=True),
+               carried.CarriedItem(key="safe-mode", title="Safe mode", in_area=True)],
+    )  # fmt: skip
+    md = "# Caps {#caps}\nContinues: Safe mode caps (caps)\n"
+    assert carried.continues_in(md) == ["caps"]
+    # 'safe-mode' is neither continued nor left out: the name 'Safe mode caps' is no key.
+    assert [p.refs for p in carried.draft_problems(c, md, AREA)] == [{"item_key": "safe-mode"}]
+    assert (
+        "Not carried: Safe mode (safe-mode) because"
+        in carried.draft_problems(c, md, AREA)[0].message
+    )
+    left = md + "Not carried: Safe mode (safe-mode) because the Growth PRD takes it.\n"
+    assert carried.draft_problems(c, left, AREA) == []
+    # A bare key still reads.
+    assert carried.continues_in("Continues: caps, safe-mode\n") == ["caps", "safe-mode"]
+
+
+async def test_a_run_draft_that_departs_is_sent_back(client, ctx):
+    """protects=import_draft, for a run whose brief replaces a PRD, refuses a draft the
+    critic flags (DraftError naming the problem) and takes one it passes;
+    fails_when=the hook is dropped."""
+    from oracle.docs import service as docs_service
+    from oracle.docs.service import DraftError
+    from oracle.runs.models import Run
+
+    w = await _world(client, ctx)
+    replaces = {"document_id": w["old"]["id"], "area_name": "User Safety",
+                "area_scope": "caps, tripwires and ban prevention", "item_keys": AREA}  # fmt: skip
+    made = await create_intake(client, ctx, replaces=replaces)
+    n = w["cap"]["number"]
+    head = "---\ndocument: example-user-safety\ntitle: Example User Safety PRD\n---\n"
+    good = (
+        f"{head}# Carried from {OLD} {{#carried}}\n\n- D-{n} Cap at 30 messages a minute\n\n"
+        f"# Rate caps {{#caps}}\n\nContinues: Message rate caps (caps)\n\n"
+        "Not carried: Safe mode (safe-mode) because the Growth PRD takes it.\n"
+    )
+    bad = good.replace("Not carried: Safe mode (safe-mode) because the Growth PRD takes it.\n",
+                       f"We reverse D-{n} here.\n")  # fmt: skip
+    from oracle.auth.deps import Principal
+
+    principal = Principal(tenant_id=ctx.tenant_id, kind="user", role="owner",
+                          user_id=ctx.users["owner"].id)  # fmt: skip
+    async with tenant_session(ctx.tenant_id) as s:
+        run = Run(flow="baseline_to_prd", status="running", created_by=ctx.users["owner"].id,
+                  knobs={"intake_id": made["intake"]["id"]})  # fmt: skip
+        s.add(run)
+        await s.flush()
+        with pytest.raises(DraftError) as e:
+            await docs_service.import_draft(s, "example-user-safety", bad, principal,
+                                            run_id=run.id, commit=False)  # fmt: skip
+        codes = sorted(p.code for p in e.value.problems)
+        assert codes == ["carried_decision_contradicted", "carried_item_dropped"]
+        result = await docs_service.import_draft(s, "example-user-safety", good, principal,
+                                                 run_id=run.id, commit=False)  # fmt: skip
+        assert result.version.number == 1
