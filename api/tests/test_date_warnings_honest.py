@@ -263,3 +263,37 @@ async def test_warnings_follow_bases_verified_and_withdrawn(client, owner, runti
     version = (await client.get(f"{VERSIONS}/1", headers=auth)).json()
     (warning,) = _date_warnings(version)
     assert "Dec 15, 2026" in warning["message"]
+
+
+def _stored_date_warnings(doc: dict) -> list[dict]:
+    return [w for v in doc["versions"] for w in v["warnings"] if w["code"] == "unverified_date"]
+
+
+async def test_stored_warnings_follow_a_tracker_re_match(client, owner, runtime):  # noqa: F811
+    # Review minor: re-matching a tracker issue changes the items its basis covers, and
+    # the versions list's stored warnings follow.
+    from tests.test_tracks import track_of
+
+    _, auth = owner
+    await approved_prd(client, auth)
+    await _run_roadmap(client, auth, runtime, with_line("GA on 2026-12-15."))
+    track = await track_of(client, auth)
+
+    async def match(item_key: str) -> None:
+        resp = await client.post(
+            "/v1/tracker/records",
+            json={"tracker": "jira", "records": [
+                {"external_ref": "ENG-700", "state": "todo", "track_id": track["id"],
+                 "item_key": item_key}]},
+            headers=auth,
+        )  # fmt: skip
+        assert resp.status_code == 200, resp.text
+
+    await match("shipping-step")
+    await record(client, auth, "CAP-9", "2026-12-15", tracker_key="ENG-700")
+    doc = (await client.get(f"/v1/documents/{ROADMAP}", headers=auth)).json()
+    assert len(_stored_date_warnings(doc)) == 1
+
+    await match("payment-step")
+    doc = (await client.get(f"/v1/documents/{ROADMAP}", headers=auth)).json()
+    assert _stored_date_warnings(doc) == []
