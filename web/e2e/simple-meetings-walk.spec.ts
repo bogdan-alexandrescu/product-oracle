@@ -157,10 +157,10 @@ for (const phone of [false, true]) {
         const firstTitle = (await rows.first().locator("strong").innerText()).trim();
         const waiting = await upcoming.getByRole("button", { name: "Start review" }).count();
         expect(waiting).toBeGreaterThan(0);
+        // home-waiting-one-list: an upcoming review waits on nobody, so the rail counts none of them.
         if (!phone) {
-          const badge = page.getByTestId("simple-nav-meetings-count");
-          await expect(badge).toHaveText(String(waiting));
-          await expect(badge).toHaveAttribute("aria-label", `${waiting} ${waiting === 1 ? "review" : "reviews"} live or coming up`);
+          await expect(page.getByTestId("simple-nav-decisions-count")).toBeVisible();
+          await expect(page.getByTestId("simple-nav-meetings-count")).toHaveCount(0);
         }
         // Home's next review is Upcoming's first row; its Start meeting opens the sheet on it.
         await page.goto("/simple");
@@ -179,7 +179,14 @@ for (const phone of [false, true]) {
         // qa-simple-decide-34: a live review is listed under Live only.
         await expect(upcoming.getByRole("link", { name: "Open" })).toHaveCount(0);
         const after = await upcoming.getByRole("button", { name: "Start review" }).count();
-        if (!phone) await expect(page.getByTestId("simple-nav-meetings-count")).toHaveText(String(after + 1));
+        expect(after).toBe(waiting - 1);
+        // The rail counts the one meeting live now, and says so.
+        if (!phone) {
+          const badge = page.getByTestId("simple-nav-meetings-count");
+          await expect(badge).toHaveText("1");
+          await expect(badge).toHaveAttribute("aria-label", "1 meeting live now");
+          await expect(badge).toHaveAttribute("title", "1 meeting live now");
+        }
         // A viewer reads the same list, and Home's next is its first row.
         await switchTo(page, "viewer@example.com");
         await page.goto("/simple/meetings");
@@ -293,7 +300,7 @@ for (const phone of [false, true]) {
         test("Moving between Simple's pages does not read the meetings list again for the rail", async ({ page }) => {
           await login(page);
           await page.goto("/simple/roadmap");
-          await expect(page.getByTestId("simple-nav-meetings-count")).toBeVisible();
+          await expect(page.getByTestId("simple-nav-decisions-count")).toBeVisible();
           await page.evaluate(() => ((globalThis as { __poMockCalls?: string[] }).__poMockCalls = []));
           await page.getByTestId("simple-nav-decisions").filter({ visible: true }).click();
           await expect(page).toHaveURL(/\/simple\/decisions/);
@@ -301,7 +308,7 @@ for (const phone of [false, true]) {
           await expect(page).toHaveURL(/\/simple\/one-pagers/);
           await page.getByTestId("simple-nav-roadmap").filter({ visible: true }).click();
           await expect(page).toHaveURL(/\/simple\/roadmap/);
-          await expect(page.getByTestId("simple-nav-meetings-count")).toBeVisible();
+          await expect(page.getByTestId("simple-nav-decisions-count")).toBeVisible();
           const calls = await page.evaluate(() => (globalThis as { __poMockCalls?: string[] }).__poMockCalls ?? []);
           expect(calls.filter((c) => c === "GET /v1/simple/meetings")).toEqual([]);
         });
