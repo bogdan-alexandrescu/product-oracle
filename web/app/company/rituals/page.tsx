@@ -65,7 +65,7 @@ function Rituals() {
   const [adding, setAdding] = useState(false);
   // qa-company-6: on a phone the selected ritual opens in a sheet, as Decisions does.
   const phone = usePhone();
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(!!asked);
   const companyZone = useCompanyZone();
   const zone = zoneText(companyZone, !!zoneQ.data?.is_default);
   const rows = ritualsQ.data ?? [];
