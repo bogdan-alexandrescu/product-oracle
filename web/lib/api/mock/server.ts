@@ -171,6 +171,7 @@ import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
+import { applyFitDate, seedFitDateRoadmap } from "./simple-roadmap";
 import { approvedPrdToDraft, itemSubjectName, knowCompanyGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
@@ -3223,6 +3224,13 @@ function load(): Db {
                     }
                     return db;
                   }
+              : scenario === "fit-date" || scenario === "fit-date-hard"
+                ? () => {
+                    // Bring a date in (./fit-date.ts): its PRD's items on the Help desk roadmap.
+                    const db = seed();
+                    seedFitDateRoadmap((db.simple_roadmap ??= seedSimpleRoadmap()));
+                    return db;
+                  }
               : scenario === "simple-500"
                 ? () => ({ ...seed(), simple_roadmap: seedSimpleMany() })
                 : scenario === "strategy" || scenario === "strategy-no-vision"
@@ -6119,6 +6127,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (onePagerRes) return onePagerRes;
     // Bring a date in (oracle.simple.fit_date_router), under the fit-date scenarios.
     const fitRes = await routeFitDate(localStorage.getItem(MOCK_SCENARIO_KEY), me.role, r, p);
+    // An approved re-plan moves the PRD's items on the Help desk roadmap (fitDateApproved).
+    applyFitDate(db.simple_roadmap);
     if (fitRes) return fitRes;
     // The plan-model lane: a PRD's plan (GET .../plan, owners' POST .../plan/read-again).
     const planRes = routeSimplePlan(

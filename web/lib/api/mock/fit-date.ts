@@ -6,6 +6,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { MOCK_NOW } from "./clock";
 import { stableUuid } from "./ids";
+import { fitDateApproved } from "./simple-roadmap";
 
 type Goal = Schemas["FitGoalOut"];
 type Answer = Schemas["FitAnswerOut"];
@@ -215,8 +216,10 @@ export async function routeFitDate(scenario: string | null, role: string, req: R
     s.roadmapVersion += 1;
     s.picks = picks;
     if (d.new_target) s.target = d.new_target;
+    // The roadmap follows: its items take the draft's new dates ("Thread summary card (first slice)": Thread summary card).
+    fitDateApproved(d.dates.map((x) => ({ item: x.what.replace(/ \(.*\)$/, ""), end: x.after })), d.needs_estimate.map((n) => n.item));
     s.approved = {
-      at: new Date(Date.parse(MOCK_NOW) + 3 * 3600000 + 14 * 60000).toISOString(), by_me: true, version: s.version, roadmap_version: s.roadmapVersion,
+      at: new Date(Date.parse(MOCK_NOW) + 3 * 3600000 + 14 * 60000).toISOString(), by_me: true, version: s.version, roadmap_version: s.roadmapVersion, roadmap_live: true,
       was, date: d.date, target: s.target,
       moves: [
         ...(picks.includes("bulk") ? ["Reply to similar threads at once moved to M3 Team inbox: it lands Mar 19, and M3 lands Apr 9 (was Apr 2)."] : []),

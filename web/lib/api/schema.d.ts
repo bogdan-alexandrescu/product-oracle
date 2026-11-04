@@ -40322,6 +40322,11 @@ export interface components {
              */
             end_estimated: boolean;
             /**
+             * Estimate Pending
+             * @default false
+             */
+            estimate_pending?: boolean;
+            /**
              * No Goal
              * @default false
              */
@@ -40525,6 +40530,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Estimate Pending
+             * @default false
+             */
+            estimate_pending?: boolean;
             /** Key */
             key: string;
             /** Code */

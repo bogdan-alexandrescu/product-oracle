@@ -81,6 +81,8 @@ interface SeedItem {
   dates?: { start: string | null; end: string; source: "engineering" | "accepted" };
   /** build-runplan RP2: the PRD it belongs to when not its roadmap's own (./meeting-draft.ts). */
   prd_doc?: { id: string; slug: string; title: string };
+  /** Bring a date in: the re-plan sliced or split it, so its date waits for a new estimate. */
+  estimate_pending?: boolean;
 }
 
 interface SimpleDb {
@@ -431,6 +433,7 @@ const manySlug = (n: number): string => `${MANY_PRDS[n].toLowerCase().replace(/ 
  */
 let manyAdded: { roadmaps: string[]; goals: string[]; tracks: string[] } | null = null;
 export function knowManyPlans(db: { items: { key: string; roadmap: string }[] } | undefined): void {
+  knowFitRoadmap(db);
   const many = !!db?.items.some((x) => x.roadmap === manySlug(0));
   if (many && !manyAdded) {
     manyAdded = {
@@ -466,6 +469,87 @@ export function seedSimpleMany(n = 500): SimpleDb {
   const db: SimpleDb = { items, ids: Object.fromEntries(items.map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])), own: {}, suggestions: [] };
   knowManyPlans(db);
   return db;
+}
+
+/**
+ * Bring a date in (./fit-date.ts): its invented PRD's items on the Help desk roadmap, under the
+ * fit-date scenarios, ending where its plan has them. An approved re-plan moves them
+ * (fitDateApproved), as the API's fit_date_router._roadmap_follows does in the roadmap's next version.
+ */
+const FIT_ROADMAP = "help-desk-roadmap";
+const FIT_PRD = { id: stableUuid("fit-date/prd"), slug: "reply-faster", title: "Reply faster in the shared inbox" };
+const FIT_ITEMS: [key: string, title: string, end: string][] = [
+  ["fit-views", "Shared inbox views", "2026-11-27"],
+  ["fit-assign", "Assign a thread", "2026-12-04"],
+  ["fit-drafts", "Reply drafts in the inbox", "2026-12-18"],
+  ["fit-guard", "Send check before a draft goes out", "2026-12-30"],
+  ["fit-summary", "Thread summary card", "2027-01-22"],
+  ["fit-bulk", "Reply to similar threads at once", "2027-02-12"],
+  ["fit-analytics", "Reply time chart", "2027-02-19"],
+  ["fit-tone", "Tone presets", "2027-02-26"],
+  ["fit-snippets", "Import saved snippets", "2027-03-05"],
+  ["fit-redact", "Hide card numbers in drafts", "2027-03-12"],
+  ["fit-edit", "Edit a thread summary", "2027-04-02"],
+];
+const horizonOf = (end: string): Horizon => {
+  const w = simpleWindows(companyToday());
+  return end <= w.now[1] ? "now" : end <= w.next[1] ? "next" : "later";
+};
+
+/** The Help desk roadmap, its goal and track, known while the roadmap holds its items (as knowManyPlans). */
+function knowFitRoadmap(db: { items: { roadmap: string }[] } | undefined): void {
+  if (db?.items.some((x) => x.roadmap === FIT_ROADMAP)) {
+    ROADMAPS[FIT_ROADMAP] ??= { title: "Help desk roadmap", visibility: "company", prd: FIT_PRD.title, draft: 3 };
+    GOALS["reply-faster"] ??= "Reply faster";
+    TRACKS["help-desk"] ??= "Help desk track";
+  } else if (ROADMAPS[FIT_ROADMAP]) {
+    delete ROADMAPS[FIT_ROADMAP];
+    delete GOALS["reply-faster"];
+    delete TRACKS["help-desk"];
+  }
+}
+
+/** The fit-date scenarios: the Help desk roadmap's items, added to the company's roadmap. */
+export function seedFitDateRoadmap(db: SimpleDb): void {
+  for (const [key, title, end] of FIT_ITEMS) {
+    db.items.push({
+      key, title, horizon: horizonOf(end), roadmap: FIT_ROADMAP, goal: "reply-faster", track: "help-desk", confidence: "medium",
+      status: end <= "2026-12-04" ? "in_progress" : "planned", prd_doc: FIT_PRD,
+      dates: { start: addDays(end, -20), end, source: "engineering" },
+    });
+    db.ids[key] = stableUuid(`simple-item/${key}`);
+  }
+  knowFitRoadmap(db);
+}
+
+/** Moves an approve sent, until the request's roadmap takes them (applyFitDate). */
+let fitMoves: { moves: { item: string; end?: string | null }[]; pending: string[] } | null = null;
+
+/**
+ * Bring a date in's approval (./fit-date.ts): each item (by key or title) moves to its new end
+ * date (null: it leaves the plan's dates as they were), and the sliced or split ones wait on a
+ * new estimate. Applied to the roadmap by applyFitDate in the same request.
+ */
+export function fitDateApproved(moves: { item: string; end?: string | null }[], pending: string[]): void {
+  fitMoves = { moves, pending };
+}
+
+/** The approval's moves (fitDateApproved), made on the mock's roadmap; nothing when none waits. */
+export function applyFitDate(db: SimpleDb | undefined): void {
+  const was = fitMoves;
+  fitMoves = null;
+  if (!was || !db) return;
+  const named = (s: SeedItem, names: string[]) => s.roadmap === FIT_ROADMAP && (names.includes(s.key) || names.includes(s.title));
+  for (const s of db.items) {
+    const to = was.moves.find((m) => named(s, [m.item]));
+    if (to?.end && s.dates) {
+      const start = s.dates.start && s.dates.start < addDays(to.end, -7) ? s.dates.start : addDays(to.end, -14);
+      s.dates = { ...s.dates, start, end: to.end };
+      s.horizon = horizonOf(to.end);
+      delete db.own[s.key];
+    }
+    if (named(s, was.pending)) s.estimate_pending = true;
+  }
 }
 
 /** The item's stored dates (the API's start_date, end_date, date_source columns): moved or
@@ -899,6 +983,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     const suggestion = itemSuggestion(db, db.ids[s.key]);
     return {
       id: db.ids[s.key], key: s.key, title: s.title, outcome: s.outcome ?? null, horizon: s.horizon,
+      estimate_pending: !!s.estimate_pending,
       code: prdCode(s.section),
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
       prd: ownPrd(s),

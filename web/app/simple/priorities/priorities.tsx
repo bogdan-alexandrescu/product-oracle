@@ -559,6 +559,12 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
                   )}
                 </span>
                 {/* walkb-priorities: a long milestone name wraps inside the card (a phone scrolled sideways). */}
+                {/* Bring a date in: a sliced or split feature's new date waits for its estimate. */}
+                {r.estimate_pending && r.end_date && (
+                  <span data-testid="prio-estimate-pending" className="whitespace-nowrap rounded-full bg-warn-bg px-2 text-warn">
+                    Ends {calendarDay(r.end_date)} · Estimate pending
+                  </span>
+                )}
                 {r.milestone && <span data-testid="prio-milestone" className="min-w-0 max-w-full [overflow-wrap:anywhere]">Milestone {r.milestone}</span>}
                 {/* qa-simple-plan-3: value · confidence · weeks · score, in the order of the score's formula; no bar. */}
                 <Numbers r={r} />
