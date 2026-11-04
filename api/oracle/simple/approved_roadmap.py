@@ -13,7 +13,8 @@ approved version says, not the estimates its items were carried forward with.
 - milestones: a table whose header names ``Milestone`` and ``Date`` (optionally ``Gates``:
   item keys or titles, comma separated, and ``Counts when``).
 
-A version with neither table changes nothing.
+A version with neither table changes nothing but an earlier version's mark carried on its
+items (so Simple never says it matches that one).
 
 **What applying writes** (:func:`apply`, from ``approve_version`` and on demand for the
 latest approved version, ``POST /v1/simple/roadmap/apply-approved``), on the version's own
@@ -26,7 +27,8 @@ items:
    (oracle.roadmap.shipped), is ``plan_state`` shipped; a next-PRD item ``next_prd``: both
    leave Simple's plan. A listed item the version has no row for is added;
 3. its milestones are its track's milestones (``roadmap_version_id``; an earlier version's
-   are replaced, one of the same name updated), with the gated items' keys and how each
+   are replaced, one of the same name updated; a person's own milestone of the same name is
+   left alone and the version's is not added), with the gated items' keys and how each
    counts; dated only with a verified basis of the track's PRD for that day;
 4. dependency marks need nothing: Simple computes them from the dates it reads.
 
@@ -234,8 +236,6 @@ async def apply(
     from oracle.roadmap.shipped import shipped_items
 
     plan = parse(version.markdown or "", await company_time.company_today(db))
-    if plan.empty:
-        return False
     rows = list(
         await db.scalars(
             select(RoadmapItem)
@@ -243,6 +243,14 @@ async def apply(
             .order_by(RoadmapItem.position)
         )
     )
+    if plan.empty:
+        # Rows carried forward keep an earlier version's mark; this version applied
+        # nothing, so Simple must not say it matches that one.
+        for r in rows:
+            if (r.applied or {}).get("version") not in (None, version.number):
+                r.applied = None
+        await db.flush()
+        return False
     by_key = {r.item_key: r for r in rows}
     by_title = {r.title.strip().lower(): r for r in rows}
     track = await _track(db, document, rows)
@@ -327,11 +335,16 @@ async def _milestones(
             TrackMilestone.name.not_in([m.name for m in plan.milestones]),
         )
     )
-    existing = {
-        m.name: m
-        for m in await db.scalars(select(TrackMilestone).where(TrackMilestone.track_id == track.id))
-    }
+    existing: dict[str, TrackMilestone] = {}
+    people: set[str] = set()
+    for m in await db.scalars(select(TrackMilestone).where(TrackMilestone.track_id == track.id)):
+        if m.roadmap_version_id is None:
+            people.add(m.name)
+        else:
+            existing[m.name] = m
     for p in plan.milestones:
+        if p.name in people:
+            continue  # a person's own milestone of that name stays theirs
         keys = []
         for g in p.gates:
             row = by_key.get(g) or by_title.get(g.lower())
