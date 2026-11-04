@@ -18173,10 +18173,10 @@
                   "type": "null"
                 }
               ],
-              "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, comma-separated",
+              "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, prd, comma-separated",
               "title": "Origin"
             },
-            "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, comma-separated"
+            "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, prd, comma-separated"
           },
           {
             "name": "chosen",
@@ -66106,7 +66106,8 @@
               "checkpoint",
               "request_decline",
               "pricing",
-              "meeting"
+              "meeting",
+              "prd"
             ],
             "title": "Origin"
           },
@@ -67008,7 +67009,8 @@
               "checkpoint",
               "request_decline",
               "pricing",
-              "meeting"
+              "meeting",
+              "prd"
             ],
             "title": "Origin"
           },
@@ -120598,6 +120600,18 @@
             "type": "boolean",
             "title": "Can Start",
             "default": false
+          },
+          "reviews_in_trash": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "roadmap"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviews In Trash"
           }
         },
         "type": "object",

@@ -312,7 +312,13 @@ export default function SimpleHome() {
     [myTasks.length, "task", "tasks"],
   ]);
   const brokenWords = brokenOthers === 1 ? "a broken link" : "broken links";
-  const sentence = reads
+  // home-honest-loading: what waits is said only once every source it counts has answered
+  // (the role, the decisions and tasks, the proposals, the roadmap's links, the run stops).
+  const answered = (q: { data?: unknown; error?: unknown }) => q.data !== undefined || !!q.error;
+  const known = capsReady && (reads || ([waiting, changes, roadmap, inbox].every(answered) && runStops !== undefined));
+  const sentence = !known
+    ? "Checking what waits on you…"
+    : reads
     ? "Here is where the plan stands."
     : brokenOthers === 0
       ? waits
@@ -560,21 +566,32 @@ export default function SimpleHome() {
           {greeting(hour)}
           {firstName ? `, ${firstName}` : ""}. <span data-testid="home-sentence">{sentence}</span>
         </p>
-        {/* NP1: New PRD beside the walk, opening the guided sheet. */}
-        {!walking && capsReady && ((!reads && counted && !nothingToWalk) || canStartPrd) && (
+        {/* NP1: New PRD beside the walk, opening the guided sheet. home-honest-loading: while the
+            role or what waits is unknown, each button's place is kept (invisible), so New PRD
+            never moves under the pointer as the walk arrives. */}
+        {!walking && (!capsReady || !reads || canStartPrd) && (
           <div className="flex flex-wrap gap-2">
-            {!reads && counted && !nothingToWalk && (
-              <button type="button" ref={walkButton} className="simple-button simple-button-primary" onClick={() => setWalking(true)}>
+            {!capsReady || (!reads && !counted) ? (
+              <span aria-hidden data-testid="home-walk-slot" className="simple-button invisible">
                 Walk me through it
-              </button>
+              </span>
+            ) : (
+              !reads &&
+              !nothingToWalk && (
+                <button type="button" ref={walkButton} className="simple-button simple-button-primary" onClick={() => setWalking(true)}>
+                  Walk me through it
+                </button>
+              )
             )}
-            {canStartPrd && <NewPrdButton onOpen={() => setNewPrd(true)} />}
-          </div>
-        )}
-        {/* While the role or what waits is unknown the walk's slot keeps its height; a reader known has no walk and no gap. */}
-        {!walking && (!capsReady || (!reads && !counted && !canStartPrd)) && (
-          <div aria-hidden data-testid="home-walk-slot" className="invisible">
-            <span className="simple-button">Walk me through it</span>
+            {canStartPrd ? (
+              <NewPrdButton onOpen={() => setNewPrd(true)} />
+            ) : (
+              !capsReady && (
+                <span aria-hidden data-testid="home-new-prd-slot" className="simple-button invisible">
+                  <Icon name="plus" size={18} /> New PRD
+                </span>
+              )
+            )}
           </div>
         )}
       </header>
@@ -845,6 +862,18 @@ export default function SimpleHome() {
                           .slice(0, 4)
                           .map((a) => a.name)
                           .join(", ")}`}
+                      {/* home-honest-loading: a review of roadmaps that are all in Trash says so. */}
+                      {next.reviews_in_trash === "roadmap" && (
+                        <>
+                          <br />
+                          <span data-testid="home-meeting-trash">
+                            Reviews a roadmap in Trash ·{" "}
+                            <Link className="underline" href={`/company/rituals?ritual=${next.ritual_id}`}>
+                              Ritual settings
+                            </Link>
+                          </span>
+                        </>
+                      )}
                       <br />
                       {next.pre_read_ready && next.occurrence_id ? (
                         <Link className="underline" href={`/simple/meetings?pre_read=${next.occurrence_id}`}>

@@ -6087,6 +6087,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       onePager: db.simple_one_pager,
       rituals: ensureRituals(db, me),
       documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title })),
+      // home-honest-loading: every document of a kind in Trash (trash.only_in_trash).
+      onlyInTrash: (kind) =>
+        !db.documents.some((d) => d.kind === kind) && (db.trash?.entries ?? []).some((e) => (e.documents as { kind?: string }[]).some((d) => d.kind === kind)),
       chatLines: (id) =>
         Object.values(db.simple_chat?.threads ?? {})
           .filter((t) => t.meeting_id === id)

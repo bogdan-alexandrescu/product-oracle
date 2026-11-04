@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
 import { Button, Chip, type Column, DataTable, Empty, InfoTip, PageSkeleton, Panel, SegmentedControl, Sheet, Split, ViewOnly, confirmInPage } from "@/components/ds";
@@ -58,7 +59,9 @@ function Rituals() {
   const zoneQ = useQuery(owner ? "settings|company_timezone" : "settings|company_timezone|none", () =>
     owner ? unwrap(api.GET("/v1/settings/{key}", { params: { path: { key: "company_timezone" } } })) : Promise.resolve(undefined),
   );
-  const [picked, setPicked] = useState<string | null>(null);
+  // home-honest-loading: Home's "Ritual settings" opens with its ritual picked (?ritual=<id>).
+  const asked = useSearchParams().get("ritual");
+  const [picked, setPicked] = useState<string | null>(asked);
   const [adding, setAdding] = useState(false);
   // qa-company-6: on a phone the selected ritual opens in a sheet, as Decisions does.
   const phone = usePhone();
