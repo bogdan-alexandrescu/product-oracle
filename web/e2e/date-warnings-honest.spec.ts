@@ -76,3 +76,24 @@ for (const [label, viewport] of [
     });
   });
 }
+
+test("Plan › Dates looks up its people once, not again and again", async ({ page }) => {
+  // protects=date-warnings-honest review blocker (Plan › Dates fetched people in an endless
+  // loop); fails_when=the people lookup keeps running after the tab has loaded, unfiltered
+  // or filtered to a PRD; no_claim=which names the By column shows.
+  await openRoadmap(page);
+  const calls = () => page.evaluate(() => window.__peopleCalls ?? 0);
+  const steady = async () => {
+    await expect(page.locator("[data-basis]").filter({ visible: true }).first()).toBeVisible();
+    await page.waitForTimeout(1000);
+    const settled = await calls();
+    await page.waitForTimeout(1500);
+    expect(await calls()).toBe(settled);
+    expect(settled).toBeLessThan(5);
+  };
+  await lacking(page).click();
+  await expect(page).toHaveURL(/\/plan\/dates\?prd=/);
+  await steady();
+  await page.goto("/plan/dates");
+  await steady();
+});

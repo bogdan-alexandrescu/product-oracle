@@ -50,6 +50,13 @@ type Category = Gap["category"];
 type Impact = Gap["impact"][number];
 type Importance = Gap["importance"];
 
+/** How many times the mock answered GET /v1/people, for tests counting requests. */
+declare global {
+  interface Window {
+    __peopleCalls?: number;
+  }
+}
+
 /** A member as the mock knows them (GET /v1/people, who can be asked). */
 export interface MockPerson {
   id: string;
@@ -978,6 +985,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
   }
 
   if (p[1] === "people" && p.length === 2 && m === "GET") {
+    if (typeof window !== "undefined") window.__peopleCalls = (window.__peopleCalls ?? 0) + 1;
     const needle = (q.get("q") ?? "").trim().toLowerCase();
     const limit = Math.min(Number(q.get("limit") ?? 20), 500);
     const offset = Math.max(0, Number(q.get("offset") ?? 0));
