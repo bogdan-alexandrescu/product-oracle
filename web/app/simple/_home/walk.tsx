@@ -41,6 +41,12 @@ const TYPE_HINT: Record<Step["kind"], string> = {
 type NextMeeting = { ritual_title: string; due_at: string };
 
 /** "1 decision", "5 broken links". */
+/** The feature a broken link's or a proposal's step is about: its item's id, else its name. */
+const featureOf = (step: WalkStep): string => {
+  const target = step.change?.target.item_id;
+  return step.card?.item_id ?? (typeof target === "string" ? target : step.title);
+};
+
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 /** "a, b and c". */
 const joinAnd = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
@@ -293,7 +299,14 @@ export function Walk({ onDone }: { onDone: () => void }) {
             {step.kind === "agenda_decision" ? agendaWords(step) : KIND_WORDS[step.kind]}
           </p>
           <p className="font-semibold" data-testid="walk-step-title">
-            {step.title}
+            {step.kind !== "broken_link" && step.kind !== "proposal" ? (
+              step.title
+            ) : (
+              // build-feature-panel review 6: a broken link's or a proposal's feature opens the one feature panel.
+              <button type="button" data-feature={featureOf(step)} className="text-left hover:underline">
+                {step.title}
+              </button>
+            )}
           </p>
           <p className="simple-small" data-testid="walk-step-why">
             {step.why}

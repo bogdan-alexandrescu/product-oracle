@@ -40,14 +40,15 @@ export function FeaturePanelHost({ children }: { children: ReactNode }) {
       e.preventDefault();
       setOpen(el.dataset.feature ?? null);
     };
-    const onOpen = (e: Event) => setOpen((e as CustomEvent<string>).detail || null);
     document.addEventListener("click", onClick, true);
-    document.addEventListener(OPEN_EVENT, onOpen);
-    return () => {
-      document.removeEventListener("click", onClick, true);
-      document.removeEventListener(OPEN_EVENT, onOpen);
-    };
+    return () => document.removeEventListener("click", onClick, true);
   }, [roadmap]);
+  // Opened from code on every page, Roadmap too (a goal panel's look-alike, build-feature-panel review 6).
+  useEffect(() => {
+    const onOpen = (e: Event) => setOpen((e as CustomEvent<string>).detail || null);
+    document.addEventListener(OPEN_EVENT, onOpen);
+    return () => document.removeEventListener(OPEN_EVENT, onOpen);
+  }, []);
   const close = useCallback(() => setOpen(null), []);
   return (
     <>

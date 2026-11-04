@@ -827,7 +827,11 @@ export default function SimpleHome() {
                 <Link href={`/simple/roadmap?roadmap=${t.roadmap_id}`} className="simple-link">
                   {t.title}
                 </Link>{" "}
-                · {t.item_title}
+                ·{" "}
+                {/* build-feature-panel review 6: the task's feature opens the one feature panel. */}
+                <button type="button" data-feature={t.item_id} className="text-left hover:underline">
+                  {t.item_title}
+                </button>
                 {t.due_date ? ` · due ${calendarDay(t.due_date)}` : ""}
                 {t.late ? " · late" : ""}
               </li>

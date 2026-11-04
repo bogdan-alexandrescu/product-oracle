@@ -594,7 +594,12 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
             )}
             {r.after && (
               <p className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12" data-testid="prio-after">
-                After {r.after.title}, which it needs.
+                After{" "}
+                {/* build-feature-panel review 6: the feature it needs opens the one feature panel. */}
+                <button type="button" data-feature={data.rows.find((x) => x.code === r.after!.code)?.item_id ?? r.after.code} className="hover:underline">
+                  {r.after.title}
+                </button>
+                , which it needs.
               </p>
             )}
             {r.override && (
@@ -667,7 +672,12 @@ function OracleOrder({ data }: { data: Out }) {
                 className={`inline-block h-3 w-3 flex-none rounded-full border-2 border-accent ${r.above_line ? "bg-accent" : "bg-transparent"}`}
               />
               <CodeChip r={r} />
-              <span className="min-w-[8rem] flex-1 font-medium">{r.title}</span>
+              {/* build-feature-panel review 6: the feature's name opens the one feature panel. */}
+              <span className="min-w-[8rem] flex-1 font-medium">
+                <button type="button" data-feature={r.item_id ?? r.code} className="text-left hover:underline">
+                  {r.title}
+                </button>
+              </span>
               <span className="flex flex-wrap items-center gap-x-3 text-[length:var(--simple-small)] text-text2">
                 {goalOf(r) ? (
                   <span data-testid="oracle-goal">{goalOf(r)}</span>
@@ -1483,7 +1493,15 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                 data-selected={isSelected ? "true" : undefined}
                 className={`scroll-my-4 rounded-lg border text-[15px] leading-[22px] ${isSelected ? "border-accent bg-accent-soft ring-2 ring-accent" : words ? "border-accent ring-2 ring-accent" : "border-line"} ${isSelected ? "" : r.above_line ? "bg-surface" : "bg-surface2 text-text2"}`}
               >
-                <button type="button" aria-pressed={isSelected} onClick={() => select(r.feature_id, "row")} className="flex w-full items-center gap-1.5 rounded-lg px-2 py-0.5 text-left">
+                <button
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={(e) => {
+                    select(r.feature_id, "row");
+                    // build-feature-panel review 6: Enter or Space on the row opens the one feature panel too (a mouse opens it from the title).
+                    if (e.detail === 0) openFeaturePanel(r.item_id ?? r.code);
+                  }}
+                  className="flex w-full items-center gap-1.5 rounded-lg px-2 py-0.5 text-left">
                   <span className="w-5 flex-none text-right font-[650] tabular-nums" data-testid="side-rank">
                     {r.rank}
                   </span>
@@ -1687,7 +1705,7 @@ function lineSplit(rows: Row[]): number {
  * 320 px side list): three names and "and N more", every name in its title.
  */
 function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }) {
-  const misses = data.rows.filter((r) => !r.above_line).map((r) => r.title);
+  const misses = data.rows.filter((r) => !r.above_line);
   // qa-simple-plan-19: "and N more" opens the rest.
   const [all, setAll] = useState(false);
   const cut = compact && misses.length > 3 && !all;
@@ -1696,7 +1714,17 @@ function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }
       <span className="font-medium text-accent-ink">
         {misses.length} of {data.rows.length} miss {lineLabel(data)}
       </span>
-      {misses.length > 0 && `: ${cut ? `${misses.slice(0, 3).join(", ")} ` : misses.join(", ")}`}
+      {misses.length > 0 && ": "}
+      {/* build-feature-panel review 6: each name opens the one feature panel. */}
+      {(cut ? misses.slice(0, 3) : misses).map((r, k) => (
+        <span key={r.feature_id}>
+          {k > 0 && ", "}
+          <button type="button" data-feature={r.item_id ?? r.code} className="text-left hover:underline">
+            {r.title}
+          </button>
+        </span>
+      ))}
+      {cut && " "}
       {cut && (
         <button type="button" data-testid="line-caption-more" aria-expanded={false} onClick={() => setAll(true)} className="font-semibold text-accent-ink underline">
           and {misses.length - 3} more
@@ -1998,7 +2026,10 @@ function PlanBuckets({ data, plan, suggestions }: { data: Out; plan: Schemas["Si
                     <span key={r.code} className="inline-flex items-center gap-1.5">
                       {k > 0 && ", "}
                       <CodeChip r={r} />
-                      {r.title}
+                      {/* build-feature-panel review 6: the feature's name opens the one feature panel. */}
+                      <button type="button" data-feature={r.item_id ?? r.code} className="text-left hover:underline">
+                        {r.title}
+                      </button>
                     </span>
                   ))}
                   <span className="whitespace-nowrap text-text2"> · {fmt(rows.reduce((n, r) => n + (r.effort ?? 0), 0))}{"\u00a0"}wk</span>
