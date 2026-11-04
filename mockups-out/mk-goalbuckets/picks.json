@@ -123,7 +123,7 @@
             },
             {
               "file": "frames/gb1-c-mid.html",
-              "caption": "Mid-edit: Fewer bikes in repair has a new target and needs a date, and goal 5 is renamed, so Save all waits."
+              "caption": "Mid-edit: Fewer bikes in repair has a new target and needs a date, and goal 5 is renamed below, out of view: 2 goals changed, so Save all waits."
             },
             {
               "file": "frames/gb1-c-result.html",
@@ -189,7 +189,7 @@
             },
             {
               "file": "frames/gb1-d-phone-390.html",
-              "caption": "On a phone the flagged bucket sits last. Phone, dark."
+              "caption": "On a phone the flagged bucket sits last, with the \"Add a goal\" line below it; the note with Undo sits above the tab bar. Phone, dark."
             },
             {
               "file": "frames/gb1-d-phone-390-light.html",
@@ -220,7 +220,7 @@
             },
             {
               "file": "frames/gb2-a-open.html",
-              "caption": "Archive goal on Grow shop partners: its two features have work in M2 and M3; nothing is picked yet, so Archive goal is off."
+              "caption": "Archive goal on Grow shop partners: its two features have work in M2 Fleet care and M3 Winter launch; nothing is picked yet, so Archive goal is off."
             },
             {
               "file": "frames/gb2-a-mid.html",
@@ -228,11 +228,11 @@
             },
             {
               "file": "frames/gb2-a-result.html",
-              "caption": "Result: the bucket is gone, both features sit under Faster first ride, and the note above offers Undo."
+              "caption": "Result: the bucket is gone, both features sit under Faster first ride, and the note above offers Undo. The goal numbers skip 4 (1, 2, 3, 5): they are the owner's order from Baseline, so the gap is on purpose."
             },
             {
               "file": "frames/gb2-a-hard.html",
-              "caption": "Hard case: 15 features over M2 and M3; four serve another goal too and go there, the other 11 go to the goal picked."
+              "caption": "Hard case: 15 features over M2 Fleet care and M3 Winter launch; four serve another goal too and go there, the other 11 go to the goal picked."
             },
             {
               "file": "frames/gb2-a-hard-1512.html",
@@ -266,7 +266,7 @@
             },
             {
               "file": "frames/gb2-b-open.html",
-              "caption": "Archive goal on Grow shop partners is refused: it still holds two features in M2 and M3. Move all 2 to Faster first ride is set up below the list."
+              "caption": "Archive goal on Grow shop partners is refused: it still holds two features in M2 Fleet care and M3 Winter launch. Move all 2 to Faster first ride is set up below the list."
             },
             {
               "file": "frames/gb2-b-mid.html",
@@ -274,7 +274,7 @@
             },
             {
               "file": "frames/gb2-b-result.html",
-              "caption": "Result: archived; the note above offers Undo."
+              "caption": "Result: archived; the note above offers Undo. The goal numbers skip 4 (1, 2, 3, 5): they are the owner's order from Baseline, so the gap is on purpose."
             },
             {
               "file": "frames/gb2-b-hard.html",
@@ -316,31 +316,31 @@
             },
             {
               "file": "frames/gb2-c-mid.html",
-              "caption": "Done: its two features now sit under No goal, marked as coming from it; the note above offers Undo, and the archived goal waits on the shelf below."
+              "caption": "Done: its two features now sit under No goal, marked as coming from it; the note above offers Undo, and the archived goal waits on the shelf below. The goal numbers skip 4 (1, 2, 3, 5): they are the owner's order from Baseline, so the gap is on purpose."
             },
             {
               "file": "frames/gb2-c-result.html",
-              "caption": "Result: the shelf at the end lists the archived goal, what it held, that Avery Stone archived it, and Bring back."
+              "caption": "Result: the shelf at the end lists the archived goal, what it held, that Avery Stone archived it, and Bring back. The goal numbers skip 4 (1, 2, 3, 5): they are the owner's order from Baseline, so the gap is on purpose."
             },
             {
               "file": "frames/gb2-c-hard.html",
-              "caption": "Hard case: Grow shop partners held 15 features; the 11 with no other goal land under No goal at once."
+              "caption": "Hard case: Grow shop partners held 15 features; the 11 with no other goal land under No goal at once. The goal numbers skip 4 (1, 2, 3, 5): they are the owner's order from Baseline, so the gap is on purpose."
             },
             {
               "file": "frames/gb2-c-hard-1512.html",
-              "caption": "The same hard case. At the owner's 1512 window: the picture is scaled down to 1440 px wide; the page file opens at full size."
+              "caption": "The same hard case. At the owner's 1512 window: the picture is scaled down to 1440 px wide; the page file opens at full size. The goal numbers skip 4 (1, 2, 3, 5): they are the owner's order from Baseline, so the gap is on purpose."
             },
             {
               "file": "frames/gb2-c-mid-dark.html",
-              "caption": "No goal after the archive, in dark."
+              "caption": "No goal after the archive, in dark. The goal numbers skip 4 (1, 2, 3, 5): they are the owner's order from Baseline, so the gap is on purpose."
             },
             {
               "file": "frames/gb2-c-phone-390.html",
-              "caption": "On a phone No goal sits after all the goals. Phone, dark."
+              "caption": "On a phone No goal sits after all the goals; the note with Undo sits above the tab bar. Phone, dark. The goal numbers skip 4 (1, 2, 3, 5): they are the owner's order from Baseline, so the gap is on purpose."
             },
             {
               "file": "frames/gb2-c-phone-390-light.html",
-              "caption": "The same phone view in light."
+              "caption": "The same phone view in light. The goal numbers skip 4 (1, 2, 3, 5): they are the owner's order from Baseline, so the gap is on purpose."
             }
           ]
         },
@@ -354,7 +354,7 @@
           "frames": [
             {
               "file": "frames/gb2-a-rest.html",
-              "caption": "At rest: the same buckets as A, a \"⋯\" on each goal."
+              "caption": "At rest: a \"⋯\" on each goal; its menu is closed here."
             },
             {
               "file": "frames/gb2-d-open.html",
@@ -366,7 +366,7 @@
             },
             {
               "file": "frames/gb2-d-result.html",
-              "caption": "Result: the goal is gone; each feature sits under its picked goal, and the note above offers Undo."
+              "caption": "Result: the goal is gone; each feature sits under its picked goal, and the note above offers Undo. The goal numbers skip 4 (1, 2, 3, 5): they are the owner's order from Baseline, so the gap is on purpose."
             },
             {
               "file": "frames/gb2-d-hard.html",
@@ -436,7 +436,7 @@
             },
             {
               "file": "frames/gb3-a-phone-390.html",
-              "caption": "On a phone a drag under way: the card covers the bucket, and the page scrolls under the finger. Phone, dark."
+              "caption": "On a phone a drag under way over Lower support load: the lifted card spans the row and stays below the goal's measure line. Phone, dark."
             },
             {
               "file": "frames/gb3-a-phone-390-light.html",

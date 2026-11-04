@@ -27,6 +27,9 @@ const ITEM = "flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left ho
 /** "Dec 31", or "Feb 12, 2027" past this year. */
 const day = (iso: string): string => (iso ? calendarDay(iso, iso.startsWith("2026") ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" }) : ""); // MOCK-HOOK
 
+/** A milestone's code with its name, never the bare code: "M2 Fleet care". */
+const msLabel = (code: string): string => `${code} ${MK_MILESTONES.find((m) => m.code === code)?.name ?? ""}`.trim(); // MOCK-HOOK
+
 /** A plan built from the mock-up's goals and features, so the buckets' header draws as built. */
 function planOf(goals: MkGoal[], features: MkFeature[]): Plan { // MOCK-HOOK
   const weeks = (g: string | null, m: string) => features.filter((f) => (f.goals[0] ?? null) === g && f.ms.includes(m)).reduce((n, f) => n + f.weeks / f.ms.length, 0);
@@ -153,7 +156,7 @@ export function GoalBucketsMockup() { // MOCK-HOOK
   const ticking = dec === "gb3" && v === "c" && (phase === "open" || phase === "mid");
 
   return (
-    <section aria-label="Goal buckets" data-mockup={`${dec}-${v}-${phase}`} className="pb-20">
+    <section aria-label="Goal buckets" data-mockup={`${dec}-${v}-${phase}`} className={`pb-20 ${toast ? "max-sm:pb-48" : ""}`}>
       <PlanBucketsHead plan={plan} codeOf={() => null} />
       {edits && <Toolbar dec={dec} v={v} phase={phase} hard={hard} editMode={editMode} ticking={ticking} go={go} />}
       {toast && <Toast>{toast}</Toast>}
@@ -328,7 +331,7 @@ function GoalCard({ g, list, goals, edits, editMode, ticking, sw, features }: { 
       )}
       {!editMode && <Rows list={list} goals={goals} sw={sw} edits={edits} ticking={ticking} />}
       {editMode && <p className="mt-2 text-[15px] text-text2">{count(list.length)}, hidden while you edit</p>}
-      {dropTarget && <DragGhost f={features.find((f) => f.code === "F-5")!} left="18%" top="64px" />}
+      {dropTarget && <DragGhost f={features.find((f) => f.code === "F-5")!} left="18%" top="64px" phone="max-sm:!left-5 max-sm:!top-[128px] max-sm:w-[calc(100%-32px)] max-sm:max-w-none" />}
       {dropTarget && <p className="mt-2 rounded-lg border border-dashed border-accent px-3 py-2 text-[15px] text-accent-ink">Drop here: Lower support load becomes the goal it moves most</p>}
       {also.length > 0 && dec === "gb3" && v === "d" && !editMode && (
         <p className="mt-2 text-[14px] text-text2">
@@ -541,10 +544,10 @@ function Rows({ list, goals, sw, edits, ticking }: { list: MkFeature[]; goals: M
             key={f.code}
             data-testid="plan-feature"
             data-code={f.code}
-            className={`relative flex items-center gap-2 border-b border-line py-[5px] text-[16px] leading-[22px] ${lifted ? "[&>*:not(.mk-ghost)]:opacity-30" : ""} ${ticked(f.code) ? "bg-accent-soft" : ""}`}
+            className={`relative flex items-center gap-2 border-b border-line py-[5px] text-[16px] leading-[22px] max-sm:flex-wrap max-sm:gap-y-1 ${lifted ? "[&>*:not(.mk-ghost)]:opacity-30" : ""} ${ticked(f.code) ? "bg-accent-soft" : ""}`}
           >
             {edits && dec === "gb3" && v === "a" && (
-              <span aria-hidden title="Drag to another goal" className={`flex-none cursor-grab select-none text-[15px] ${lifted ? "text-accent-ink" : "text-text"}`}>
+              <span aria-hidden title="Drag to another goal" className={`flex-none cursor-grab select-none text-[15px] ${lifted ? "text-accent-ink" : "text-text2"}`}>
                 ⠿
               </span>
             )}
@@ -558,12 +561,13 @@ function Rows({ list, goals, sw, edits, ticking }: { list: MkFeature[]; goals: M
                 </span>
               )}
             </span>
-            <span className="flex flex-none gap-1">
+            <span className="flex flex-none gap-1 max-sm:order-last max-sm:basis-full max-sm:pl-[60px]">
               {f.ms.map((m) => {
                 const k = MK_MILESTONES.findIndex((x) => x.code === m) + 1;
                 return (
-                  <span key={m} data-testid="plan-chip" className="inline-flex h-5 items-center whitespace-nowrap rounded-full px-2 text-[12px] font-[650]" style={{ background: `var(--simple-m${k}-tag)`, color: `var(--simple-m${k}-tag-ink)` }}>
-                    {m}
+                  <span key={m} data-testid="plan-chip" title={msLabel(m)} className="inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-full px-2 text-[12px] font-[650]" style={{ background: `var(--simple-m${k}-tag)`, color: `var(--simple-m${k}-tag-ink)` }}>
+                    <span>{m}</span>
+                    <span>{MK_MILESTONES[k - 1].name}</span>
                   </span>
                 );
               })}
@@ -571,7 +575,7 @@ function Rows({ list, goals, sw, edits, ticking }: { list: MkFeature[]; goals: M
             <span data-testid="plan-feature-total" className="w-[56px] flex-none text-right text-[15px] tabular-nums text-text2">
               {wk(f.weeks)} wk
             </span>
-            {lifted && phase === "open" && <DragGhost f={f} left="12px" top="-10px" />}
+            {lifted && phase === "open" && <DragGhost f={f} left="12px" top="-10px" phone="max-sm:!left-1 max-sm:w-full max-sm:max-w-none" />}
             {edits && dec === "gb3" && (v === "b" || v === "d") && (
               <span className="relative flex-none">
                 <button type="button" aria-label={v === "b" ? `Move ${f.name}` : `Goals ${f.name} serves`} className={`${ICON} h-7 w-7 ${menu || links ? "border-line-strong bg-surface2" : ""}`} onClick={() => go({ phase: "open" })}>
@@ -628,7 +632,7 @@ function LinksPopover({ f, goals, mid, go }: { f: MkFeature; goals: MkGoal[]; mi
             </span>
             <input type="checkbox" readOnly checked={f.goals.includes(g.id)} aria-label={`Serves ${g.title}`} className="h-4 w-4 justify-self-center accent-[var(--accent)]" />
             <span className="flex items-center gap-1 justify-self-start">
-              <input type="radio" readOnly checked={main === g.id} aria-label={`Moves ${g.title} most`} className="h-4 w-4 accent-[var(--accent)]" />
+              <input type="radio" readOnly checked={main === g.id} aria-label={`Moves ${g.title} most`} className="h-4 w-4 flex-none appearance-none rounded-full border-2 border-line-strong bg-surface checked:border-[5px] checked:border-accent" />
               <span className={`w-9 text-[12px] font-[650] text-accent-ink ${main === g.id ? "" : "invisible"}`}>most</span>
             </span>
           </div>
@@ -678,9 +682,9 @@ function MoveBar() { // MOCK-HOOK
   );
 }
 
-function DragGhost({ f, left, top, fixed }: { f: MkFeature; left: string; top: string; fixed?: boolean }) { // MOCK-HOOK
+function DragGhost({ f, left, top, fixed, phone = "" }: { f: MkFeature; left: string; top: string; fixed?: boolean; phone?: string }) { // MOCK-HOOK
   return (
-    <div aria-hidden data-testid="drag-ghost" className={`mk-ghost pointer-events-none ${fixed ? "fixed" : "absolute"} z-40 flex w-[420px] max-w-[80vw] rotate-[-1.5deg] items-center gap-2 rounded-md border-2 border-accent bg-surface px-2 py-[5px] text-[16px] shadow-2xl`} style={{ left, top }}>
+    <div aria-hidden data-testid="drag-ghost" className={`mk-ghost pointer-events-none ${fixed ? "fixed" : "absolute"} z-40 flex w-[420px] max-w-[80vw] ${phone} rotate-[-1.5deg] items-center gap-2 rounded-md border-2 border-accent bg-surface px-2 py-[5px] text-[16px] shadow-2xl`} style={{ left, top }}>
       <span className="text-[15px]">⠿</span>
       <CodeTag code={f.code} />
       <span className="flex-1">{f.name}</span>
@@ -703,7 +707,7 @@ function ArchiveDialog({ v, goal, list, goals, hard, go, mid }: { v: string; goa
           <>
             <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Grow shop partners still has work</h2>
             <p className="mt-1 text-[15px] text-text2">
-              A goal can be archived once no feature sits under it. It holds {feats} in {ms.join(" and ")}. Move them to other goals first.
+              A goal can be archived once no feature sits under it. It holds {feats} in {ms.map(msLabel).join(" and ")}. Move them to other goals first.
             </p>
             <ul className="mt-2 min-h-0 overflow-auto text-[15px]">
               {list.map((f) => (
@@ -733,7 +737,7 @@ function ArchiveDialog({ v, goal, list, goals, hard, go, mid }: { v: string; goa
           <>
             <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Archive Grow shop partners?</h2>
             <p className="mt-1 text-[15px] text-text2">
-              It holds {feats} with work in {ms.join(" and ")}. The milestones stay as planned; their work moves with the features.
+              It holds {feats} with work in {ms.map(msLabel).join(" and ")}. The milestones stay as planned; their work moves with the features.
             </p>
             {v === "a" ? (
               <div className="mt-3 grid gap-2 text-[15px]">
@@ -800,7 +804,7 @@ function ArchiveDialog({ v, goal, list, goals, hard, go, mid }: { v: string; goa
 
 function Toast({ children }: { children: ReactNode }) { // MOCK-HOOK
   return (
-    <div role="status" data-mk-toast="" className="z-30 mt-4 flex shadow-md sm:sticky sm:top-2 items-center gap-3 rounded-lg border border-accent bg-accent-soft px-4 py-2.5 text-[15px] text-text">
+    <div role="status" data-mk-toast="" className="z-30 mt-4 flex shadow-md sm:sticky sm:top-2 max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[calc(76px+env(safe-area-inset-bottom))] items-center gap-3 rounded-lg border border-accent bg-accent-soft px-4 py-2.5 text-[15px] text-text">
       <span className="min-w-0 flex-1">{children}</span>
       <button type="button" className="flex-none font-[650] text-accent-ink underline">
         Undo
