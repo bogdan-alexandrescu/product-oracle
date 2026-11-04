@@ -274,5 +274,5 @@ async def test_resized_items_wait_on_an_estimate(client):
     board = await client.get("/v1/simple/roadmap", params={"roadmap": "setup-roadmap"},
                              headers=ctx.as_("viewer"))  # fmt: skip
     assert board.status_code == 200, board.text
-    pending = {i["code"]: i["estimate_pending"] for i in board.json()["items"]}
+    pending = {i["key"]: i.get("estimate_pending") for i in board.json()["items"]}
     assert pending.get("f-06") is True, pending

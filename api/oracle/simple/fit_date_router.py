@@ -658,6 +658,7 @@ async def _roadmap_follows(
     published = await views.version_items(db, base) if base is not None else []
     overlay = dict(draft.overlay or {})
     wrote: dict = {}
+    asks: list = []
     for row in published:
         code = prd_code(row.prd_section_key)
         if row.prd_document_id != document.id or code is None:
@@ -667,13 +668,19 @@ async def _roadmap_follows(
         if not got:
             continue
         cur = drafts.overlaid(row, overlay.get(str(row.id)))
-        if cur.end_date == max(got):
+        sized = [i for i in d.needs_estimate if re.fullmatch(rf"{re.escape(code)}[a-z]?", i.id)]
+        resized = bool(sized)
+        if cur.end_date == max(got) and cur.estimate_pending == resized:
             continue
         changed = drafts.overlaid(row, drafts.snapshot(cur))
         changed.end_date = max(got)
         if changed.start_date and changed.start_date > changed.end_date:
             changed.start_date = None
+        # A sliced or split item's date waits on a new estimate from its owner.
+        changed.estimate_pending = resized
         overlay[str(row.id)] = wrote[str(row.id)] = drafts.snapshot(changed)
+        if resized and not cur.estimate_pending:
+            asks.append((row, sized[0].title))
     if not wrote:
         return None, False
     sources = dict(overlay.get(prd_roadmap.KEY) or {})
@@ -704,7 +711,23 @@ async def _roadmap_follows(
         pass
     await db.refresh(draft)
     version = await db.get(DocumentVersion, draft.version_id)
+    await _ask_estimates(db, principal, rid, version, asks)
     return version.number, draft.status == "approved"
+
+
+async def _ask_estimates(db, principal: Principal, rid, version: DocumentVersion, asks) -> None:
+    """Each resized item's owner is asked for a new estimate (their Inbox); its date on the
+    roadmap reads "Estimate pending" until then."""
+    from oracle.review import collab
+
+    actor = f"user:{getattr(principal, 'user_id', '')}"
+    for row, title in asks:
+        await collab.notify(
+            db, [row.owner_id], kind="estimate_requested", actor=actor,
+            title=f"{title} needs a new estimate: the re-plan resized it",
+            document_id=rid, version_number=version.number,
+            data={"item_id": str(row.id), "item_key": row.item_key},
+        )  # fmt: skip
 
 
 @router.post("/prds/{prd}/fit-date/approve", response_model=FitApprovedOut)

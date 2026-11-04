@@ -864,6 +864,7 @@ def item_out(
         end=_date(r.end),
         source=r.source,
         estimated=r.estimated,
+        estimate_pending=row.estimate_pending,
         suggestion=suggestion_out(e.suggestion, row, may, e.suggestion_span)
         if e.suggestion is not None
         else None,

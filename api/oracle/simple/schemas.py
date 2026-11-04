@@ -288,6 +288,8 @@ class SimpleRoadmapItem(BaseModel):
     # The bar's source (its end's, else its start's) and whether it is an estimate.
     source: DateSource
     estimated: bool
+    # A re-plan resized it: its date waits on a new estimate from its owner.
+    estimate_pending: bool = False
     suggestion: DateSuggestionOut | None = None
     milestone: SimpleItemMilestone | None = None
     phases: list[SimplePhase]
@@ -834,6 +836,8 @@ class SimplePriorityRow(BaseModel):
     # Roadmap-plus: the item's end as the roadmap resolves it (stored or estimated).
     end_date: dt.date | None = None
     end_estimated: bool = False
+    # A re-plan resized it: its date waits on a new estimate from its owner.
+    estimate_pending: bool = False
     # Serves no confirmed goal.
     no_goal: bool = False
     # plan-charts: the item is the PRD's whose plan "this quarter" is (Goal buckets lists the
