@@ -14,7 +14,7 @@ import { login } from "./helpers";
  * Test cards:
  * - "carried before Start": protects=the Replaces field lists approved PRDs only, asks for
  *   the area, and shows the carried decisions and the area items' verified estimates (not a
- *   proposed one, not an item outside the area) before Next; fails_when=the field is
+ *   proposed one, not an unticked item's) before Next; fails_when=the field is
  *   missing, a draft PRD is offered, a reversed decision or an out-of-area estimate is
  *   shown, or nothing shows before Start; no_claim=the run's prompt and the critic (pytest
  *   test_new_prd_from_replaced_prd).
@@ -76,19 +76,21 @@ for (const [label, size] of [
       await expect(carried.getByTestId("np-carried-left-out")).toContainText("Drop email alerts (reversed)");
       await expect(carried.getByText("Pick its items in this area to carry their estimates.")).toBeVisible();
 
-      // Tick two of its three items: their verified estimates come, nothing else.
+      // Tick one of its two items: only that item's verified estimate comes (not a proposed
+      // one, not the other item's); then the other's comes too.
       const items = replaces.getByRole("button", { pressed: false });
-      await expect(items).toHaveCount(3);
-      const titles = await items.allInnerTexts();
-      await items.filter({ hasText: titles[0]!.trim() }).click();
-      await replaces.getByRole("button", { name: titles[1]!.trim(), exact: true }).click();
-      await expect(replaces.getByRole("button", { pressed: true })).toHaveCount(2);
+      await expect(items).toHaveCount(2);
+      const [first, second] = (await items.allInnerTexts()).map((t) => t.trim());
+      await replaces.getByRole("button", { name: first, exact: true }).click();
+      await expect(replaces.getByRole("button", { pressed: true })).toHaveCount(1);
       const estimates = carried.getByTestId("np-carried-estimates");
-      await expect(estimates.getByRole("listitem")).toHaveCount(2);
-      await expect(estimates).toContainText(`Estimate EX-101 for ${titles[0]!.trim()}: Dec 15, 2026`);
-      await expect(estimates).toContainText(`Commitment Q4 safety plan for ${titles[1]!.trim()}: Nov 30, 2026`);
+      await expect(estimates.getByRole("listitem")).toHaveCount(1);
+      await expect(estimates).toContainText(`Estimate EX-101 for ${first}: Dec 15, 2026`);
       await expect(estimates).not.toContainText("EX-102");
-      await expect(estimates).not.toContainText("EX-303");
+      await expect(estimates).not.toContainText("Q4 safety plan");
+      await replaces.getByRole("button", { name: second, exact: true }).click();
+      await expect(estimates.getByRole("listitem")).toHaveCount(2);
+      await expect(estimates).toContainText(`Commitment Q4 safety plan for ${second}: Nov 30, 2026`);
       await expect(carried).not.toContainText("2026-12-15");
 
       // Start: the brief says what it carries.
