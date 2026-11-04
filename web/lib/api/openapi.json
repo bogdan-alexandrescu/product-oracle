@@ -116686,6 +116686,14 @@
             "type": "array",
             "title": "Tasks",
             "default": []
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleWaitingItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
           }
         },
         "type": "object",
@@ -123194,6 +123202,82 @@
         ],
         "title": "SimpleWait",
         "description": "What still waits on whom (an absent required reviewer's approval, a proposal)."
+      },
+      "SimpleWaitingItem": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "run_stop",
+              "question",
+              "broken_link",
+              "date",
+              "draft",
+              "proposal",
+              "goal_suggestion"
+            ],
+            "title": "Kind"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "ref_id": {
+            "type": "string",
+            "title": "Ref Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "default": ""
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "href": {
+            "type": "string",
+            "title": "Href"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "op": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Op"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "key",
+          "ref_id",
+          "title",
+          "action",
+          "href"
+        ],
+        "title": "SimpleWaitingItem",
+        "description": "home-decisions-one-list: one thing waiting on the signed-in person\n(oracle.simple.waiting_list): what it is, its action in words and where it is done."
       },
       "SimpleWindow": {
         "properties": {
