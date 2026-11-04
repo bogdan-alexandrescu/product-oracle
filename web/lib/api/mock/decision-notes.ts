@@ -1,4 +1,6 @@
 import type { Schemas } from "@/lib/api/client";
+import { mockNowMs } from "./clock";
+import { companyDayInWords } from "./connections";
 import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
 
 /*
@@ -17,7 +19,9 @@ const on = () => typeof localStorage !== "undefined" && localStorage.getItem(MOC
 
 /** An open draft's decision_notes (standing.note_reversed's text). */
 export function draftDecisionNotes(): string[] {
-  return on() ? [`D-${REVERSED.number} ${REVERSED.title} was reversed: ${REVERSED.note}`] : [];
+  // Reversed the day before "now", worded as the API words it (the company's day, month first).
+  const day = companyDayInWords(new Date(mockNowMs() - 24 * 3600 * 1000));
+  return on() ? [`D-${REVERSED.number} ${REVERSED.title} was reversed on ${day}: ${REVERSED.note}`] : [];
 }
 
 /** A roadmap or one-pager read's left_out (standing.sources_entry), null when none. */

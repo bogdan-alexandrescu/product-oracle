@@ -52,7 +52,7 @@ import { stableUuid } from "./ids";
 import { nextOccurrence, type RitualsDb } from "./rituals";
 import { publishOnePager, type OnePagerDb } from "./simple-one-pager";
 import { APPROVED_KEY, draftAct, draftRoadmapOut } from "./meeting-draft";
-import { roadmapOut, tasksWaiting, type SimpleDb } from "./simple-roadmap";
+import { goalRank, roadmapOut, tasksWaiting, type SimpleDb } from "./simple-roadmap";
 import type { ChatMeetings, MeetingAgenda, MeetingNote } from "./simple-chat";
 
 export const MOCK_MEETINGS_KEY = "po-mock-simple-meetings";
@@ -1008,7 +1008,8 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
     // qa4-simple-decide-37 (as decisions_page: both from the PRDs the reader reads): every PRD whose questions are shown.
     prds: [...new Map([...ps.map((x) => [x.slug, x.title] as const), ...questionsOut(ctx, qd, null).map((x) => [x.prd.slug, x.prd.title] as const)])]
       .sort((a, b) => a[1].localeCompare(b[1])).map(([id, title]) => ({ id, title })),
-    goals: [...goals.values()].sort((a, b) => a.key.localeCompare(b.key)).map((g) => ({ id: g.key, title: g.title })),
+    // goal-order (as decisions_page): the Goal filter lists the goals in the one goal order.
+    goals: [...goals.values()].sort((a, b) => goalRank(a.key) - goalRank(b.key) || a.key.localeCompare(b.key)).map((g) => ({ id: g.key, title: g.title })),
     // qa-simple-decide-11: the meeting's title carries its day (the company's zone) and,
     // while it is still live, " · live".
     meeting_options: ms.map((m) => ({ id: m.id, title: `${m.title} · ${companyDateInWords(m.started_at)}${m.status === "live" ? " · live" : ""}` })),

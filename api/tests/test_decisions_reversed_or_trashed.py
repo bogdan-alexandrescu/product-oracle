@@ -34,7 +34,6 @@ import pytest
 from sqlalchemy import select
 
 from oracle import company_time
-
 from oracle.decisions.models import Decision
 from oracle.discussions import plan
 from oracle.discussions.context import Context
