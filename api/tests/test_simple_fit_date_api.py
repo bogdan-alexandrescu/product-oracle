@@ -28,6 +28,10 @@ Test cards (protects / fails_when / no_claim):
 - test_approve_refuses_a_foreign_draft_edit (review 2): protects=approving never publishes
   someone else's unsubmitted edits in the roadmap's working draft: it refuses, naming them,
   and nothing is written; fails_when=the PRD or the roadmap gets a new version.
+- test_resized_items_wait_on_an_estimate (review 2): protects=when the roadmap follows, an
+  item the re-plan sliced or split is marked estimate pending on the roadmap's new version
+  and its owner is asked for a new estimate (an Inbox notification); the board's item says
+  so; fails_when=the resized item's date reads as settled or nobody is asked.
 - test_draft_claims_no_run (review): protects=the draft, computed from the capacity queue,
   claims no run time or cost; fails_when=a fixed "40 seconds, $0.20" is sent.
 """
@@ -239,3 +243,36 @@ async def test_approve_refuses_a_foreign_draft_edit(client):
             DocumentVersion.document_id == rm.id))  # fmt: skip
         d = await s.scalar(select(SimpleDraft).where(SimpleDraft.document_id == rm.id))
     assert (n_prd, n_rm) == (1, 1) and d.status == "working"
+
+
+async def test_resized_items_wait_on_an_estimate(client):
+    from oracle.review.models import Notification
+
+    ctx = await make_ctx()
+    await seed(ctx, BODY, items=("f-06", "f-03"))
+    async with tenant_session(ctx.tenant_id) as s:
+        for row in await s.scalars(select(RoadmapItem)):
+            row.owner_id = ctx.users["commenter"].id
+        await s.commit()
+    h = ctx.as_("decider")
+    picks = {"milestone": "M2", "picks": ["F-03b", "F-06", "focus"]}
+    r = await client.post(f"{URL}/approve", json=picks, headers=h)
+    assert r.status_code == 200, r.text
+    assert [e["item"] for e in r.json()["needs_estimate"]] == ["Bulk invite"]
+    async with tenant_session(ctx.tenant_id) as s:
+        rm = await s.scalar(select(Document).where(Document.slug == "setup-roadmap"))
+        v2 = await s.scalar(select(DocumentVersion).where(
+            DocumentVersion.document_id == rm.id, DocumentVersion.number == 2))  # fmt: skip
+        rows = {r.item_key: r for r in await s.scalars(
+            select(RoadmapItem).where(RoadmapItem.roadmap_version_id == v2.id))}  # fmt: skip
+        asked = list(await s.scalars(select(Notification).where(
+            Notification.kind == "estimate_requested")))  # fmt: skip
+    assert rows["f-06"].estimate_pending is True and rows["f-03"].estimate_pending is False
+    assert [(n.user_id, n.title) for n in asked] == [
+        (ctx.users["commenter"].id, "Bulk invite needs a new estimate: the re-plan resized it")
+    ]
+    board = await client.get("/v1/simple/roadmap", params={"roadmap": "setup-roadmap"},
+                             headers=ctx.as_("viewer"))  # fmt: skip
+    assert board.status_code == 200, board.text
+    pending = {i["code"]: i["estimate_pending"] for i in board.json()["items"]}
+    assert pending.get("f-06") is True, pending
