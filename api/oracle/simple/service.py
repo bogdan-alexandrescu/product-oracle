@@ -923,14 +923,19 @@ def task_out(t: Any, names: dict[uuid.UUID, str]) -> SimpleItemTask:
                           due_date=t.due_date)  # fmt: skip
 
 
-async def _decided(db: AsyncSession, shown: list[Entry]) -> dict[uuid.UUID, list]:
+async def _decided(
+    db: AsyncSession, shown: list[Entry], left: list | None = None
+) -> dict[uuid.UUID, list]:
     """S8: the decided decisions naming each item, in any version of its roadmap (an
-    approved draft is a new version: its rows are new, its keys are the same)."""
+    approved draft is a new version: its rows are new, its keys are the same); those no
+    longer standing go to ``left`` (meetings.decided_in)."""
 
-    return await decided_of_rows(db, [e.row for e in shown])
+    return await decided_of_rows(db, [e.row for e in shown], left)
 
 
-async def decided_of_rows(db: AsyncSession, rows: list[Any]) -> dict[uuid.UUID, list]:
+async def decided_of_rows(
+    db: AsyncSession, rows: list[Any], left: list | None = None
+) -> dict[uuid.UUID, list]:
     """_decided for roadmap item rows (Detailed's Plan items too), keyed by row id."""
     from oracle.simple import meetings
 
@@ -948,7 +953,9 @@ async def decided_of_rows(db: AsyncSession, rows: list[Any]) -> dict[uuid.UUID, 
     ).all():
         if (doc, key) in keyed:
             alias[rid] = keyed[(doc, key)]
-    found = await meetings.decided_in(db, [{"kind": "roadmap_item", "id": str(i)} for i in alias])
+    found = await meetings.decided_in(
+        db, [{"kind": "roadmap_item", "id": str(i)} for i in alias], left
+    )
     out: dict[uuid.UUID, list] = defaultdict(list)
     for (_, sid, _), lst in found.items():
         target = alias.get(uuid.UUID(sid))
@@ -1070,7 +1077,10 @@ async def build(
 
     await item_codes(db, read.entries)
     extra = await additions.item_extras(db, read, shown)
-    decided = await _decided(db, shown)
+    from oracle.simple import meetings
+
+    left_out: list = []
+    decided = await _decided(db, shown, left_out)
     tasks = await _tasks(db, shown)
     ids = {e.row.id for e in read.entries}
     keyed = {(e.track.id, e.row.item_key): e.row.id for e in read.entries if e.track is not None}
@@ -1140,4 +1150,5 @@ async def build(
         key_date_roadmaps=kd_roadmaps,
         roadmaps=all_roadmaps,
         roadmap=_ref(chosen),
+        left_out=meetings.left_out_entry(left_out),
     )

@@ -605,14 +605,25 @@ async def _standing_rows(db: AsyncSession, query: Any) -> list[dict[str, Any]]:
 
 async def decisions_due(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
     """Decided judgement calls whose review date has come by the due time (H1's
-    ``review_due``); none about something in Trash."""
+    ``review_due``). One about something in Trash is still due for its review, so it
+    stays, marked so."""
+    from oracle.decisions import standing
     from oracle.decisions.models import Decision
 
-    return await _standing_rows(db,
+    ds = list(await db.scalars(
         select(Decision)
         .where(Decision.status == "decided", Decision.origin != "checkpoint",
                Decision.review_at <= ctx.period_to.date())
-        .order_by(Decision.review_at, Decision.number))  # fmt: skip
+        .order_by(Decision.review_at, Decision.number)))  # fmt: skip
+    trashed = await standing.trashed_about(db, ds)
+    rows = []
+    for d in ds:
+        row = _decision_row(d)
+        if d.id in trashed:
+            note = standing.trash_label(trashed[d.id])
+            row["trash_note"], row["text"] = note, f"{row['text']} ({note[0].lower()}{note[1:]})"
+        rows.append(row)
+    return rows
 
 
 async def decisions_made(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:

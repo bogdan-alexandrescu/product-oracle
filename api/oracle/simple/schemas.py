@@ -413,6 +413,9 @@ class SimpleRoadmapOut(BaseModel):
     roadmap: "SimpleDocRef | None" = None
     # plan-model: the shown PRDs' plan span ("this quarter"); null with no plan.
     span: "SimplePlanSpan | None" = None
+    # The items' decided decisions left out as no longer standing (about something in
+    # Trash), named in one line; null when none was.
+    left_out: "SimpleLeftOut | None" = None
 
 
 class DateSuggestionEdit(BaseModel):
@@ -553,6 +556,15 @@ class SimpleDecidedRef(SimpleOpenDecision):
     decided_at: dt.datetime | None = None
     meeting: SimpleMeetingRef | None = None
     minutes_url: str | None = None
+
+
+class SimpleLeftOut(BaseModel):
+    """A read's sources entry: the decisions left out as no longer standing
+    (decisions-reversed-or-trashed; oracle.decisions.standing.sources_entry)."""
+
+    kind: Literal["left_out"] = "left_out"
+    title: str
+    decision_ids: list[uuid.UUID] = []
 
 
 class SimpleItemTask(BaseModel):
@@ -1279,6 +1291,8 @@ class OnePagerOut(BaseModel):
     # bars); None with no roadmap items.
     plan: SimplePlanStrip | None = None
     sections: list[OnePagerSource] = []
+    # The lines' decided decisions left out as no longer standing, named in one line.
+    left_out: "SimpleLeftOut | None" = None
     notes: list[OnePagerNote]
     draft: OnePagerDraft | None
     # Drafts and proposals the reader may not see (the count only).
