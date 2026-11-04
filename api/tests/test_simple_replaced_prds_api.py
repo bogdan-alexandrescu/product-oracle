@@ -92,7 +92,10 @@ async def test_decisions_filter_and_questions_only_the_area_prds(client):
     ctx = await world(client)
     page = await _get(client, ctx, "/v1/simple/decisions")
     assert {o["title"] for o in page["prds"]} == AREAS
-    assert page["questions"] and {q["prd"]["title"] for q in page["questions"]} == AREAS
+    # Its open questions leave Simple; a decided one stays as history (re-review round 3).
+    open_ = [q for q in page["questions"] if q["status"] == "proposed"]
+    assert open_ and {q["prd"]["title"] for q in open_} == AREAS
+    assert {q["status"] for q in page["questions"] if q["prd"]["title"] == OLD} <= {"decided"}
     waiting = await _get(client, ctx, "/v1/simple/decisions/waiting")
     assert waiting["questions"]
     assert {q["prd"]["title"] for q in waiting["questions"]} == AREAS

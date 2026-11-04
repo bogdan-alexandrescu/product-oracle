@@ -2367,9 +2367,11 @@ async def decisions_page(
 
     ms = list(await db.scalars(select(SimpleMeeting).order_by(SimpleMeeting.started_at.desc())))
     docs = {d.id: d for d in await db.scalars(
-        select(Document).where(Document.kind == "prd", Document.deleted_at.is_(None),
-                               _current()))}  # fmt: skip
+        select(Document).where(Document.kind == "prd", Document.deleted_at.is_(None)))}  # fmt: skip
     readable = {i for i, d in docs.items() if await _readable(db, principal, d)}
+    # simple-replaced-prds: a replaced PRD leaves the PRD filter and its open questions; its
+    # past meetings, their decisions and its decided questions stay as history.
+    replaced = {i for i in readable if docs[i].replaced_by}
     ms = [m for m in ms if m.prd_document_id in readable]
     await _settle(db, ms)
     from oracle.simple import questions as prd_questions
@@ -2382,7 +2384,7 @@ async def decisions_page(
     prd_doc = None
     if prd:
         prd_doc = next((d for d in docs.values() if prd in (str(d.id), d.slug)), None)
-        if prd_doc is None or prd_doc.id not in readable:
+        if prd_doc is None or prd_doc.id not in readable or prd_doc.id in replaced:
             raise MeetingError(404, "No such PRD")
     goal_ent = None
     if goal:
@@ -2469,11 +2471,12 @@ async def decisions_page(
         else await _run_groups(db, principal, {i: docs[i] for i in qdocs})
     )
     return SimpleDecisionsOut(
-        **await questions.page_fields(db, principal, qdocs, only),
+        **await questions.page_fields(db, principal, qdocs, only, replaced),
         meetings=groups,
         other=[_row(d, names) for d in others],
         prds=[SimpleFilterOption(id=d.slug, title=d.title)
-              for d in sorted(docs.values(), key=lambda d: d.title) if d.id in readable],
+              for d in sorted(docs.values(), key=lambda d: d.title)
+              if d.id in readable and d.id not in replaced],
         # goal-order: the Goal filter lists the goals in the one goal order.
         goals=[SimpleFilterOption(id=g.key, title=g.title)
                for g in sort_goals(goals.values())],
