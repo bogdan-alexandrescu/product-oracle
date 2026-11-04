@@ -24346,6 +24346,8 @@ export interface components {
         GateIn: {
             /** Threshold */
             threshold?: number | null;
+            /** After */
+            after?: string | null;
             /**
              * Confirm
              * @default false
@@ -24496,7 +24498,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "met" | "on_track" | "at_risk" | "missed" | "not_measured";
+            status: "met" | "on_track" | "at_risk" | "missed" | "not_measured" | "no_gate";
             /** Math */
             math: string;
             /** Builds On */
@@ -24568,7 +24570,7 @@ export interface components {
             /** Measure */
             measure: string;
             /** Threshold */
-            threshold: number;
+            threshold: number | null;
             /** Unit */
             unit: string;
             /** Current */
@@ -24577,7 +24579,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "met" | "on_track" | "at_risk" | "missed" | "not_measured";
+            status: "met" | "on_track" | "at_risk" | "missed" | "not_measured" | "no_gate";
             /** Areas */
             areas: string[];
             /** Depends */

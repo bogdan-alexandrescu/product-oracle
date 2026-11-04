@@ -199,10 +199,6 @@ class TrackMilestone(TenantScoped, Base):
         Text, nullable=False, default="planned", server_default="planned"
     )
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
-    # The goal it moves and the milestones it waits on (named as the milestones lane names
-    # them, so the two lanes add each column once).
-    goal_id: Mapped[uuid.UUID | None] = _fk("entities", "SET NULL")
-    waits_on_ids: Mapped[list[uuid.UUID]] = _uuids()
     # Goal map gate (build-goal-map): the threshold met when the goal holds it 7 days, who
     # confirmed it and when (unconfirmed: only proposed), and the areas it pulls. Its
     # reading, 7 days and status are read from the goal's measurements, never stored.
@@ -210,6 +206,8 @@ class TrackMilestone(TenantScoped, Base):
     gate_confirmed_by: Mapped[str | None] = mapped_column(Text)
     gate_confirmed_on: Mapped[date | None] = mapped_column(Date)
     gate_area_ids: Mapped[list[uuid.UUID]] = _uuids()
+    # The milestone it comes after (picked, never derived); the Goal map's column order.
+    after_id: Mapped[uuid.UUID | None] = _fk("track_milestones", "SET NULL")
     lock_version: Mapped[int] = _lock_version()
     __mapper_args__ = {"version_id_col": lock_version}
     updated_at: Mapped[datetime] = _updated_at()
