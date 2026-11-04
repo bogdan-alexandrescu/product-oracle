@@ -129,15 +129,8 @@ export function Split({
   panel?: PanelClose;
 }) {
   // The children keep their place in the tree with or without an inspector: one that comes
-  // in later (its data loaded) must not remount them, or a box being typed in loses focus.
-  if (!inspector)
-    return (
-      <div className="min-w-0">
-        <div className="min-w-0">
-          <div className="flex min-w-0 flex-col gap-4">{children}</div>
-        </div>
-      </div>
-    );
+  // in later (its data loaded), or goes when the pick is cleared, must not remount them, or a
+  // box being typed in loses focus and a row its place. ClosableSplit lays out both.
   const cols = byRoom
     ? "grid-cols-1 @min-[920px]:grid-cols-[minmax(0,1fr)_380px]"
     : `grid-cols-[minmax(0,1fr)_380px] max-[1100px]:grid-cols-1 ${wide ? "max-[1320px]:grid-cols-1" : ""}`;

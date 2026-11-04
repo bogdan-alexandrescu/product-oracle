@@ -68,7 +68,8 @@ export function ClosableSplit({
   const { open, setOpen } = panel ?? own;
   const [tables, setTables] = useState(0);
   const root = useRef<HTMLDivElement>(null);
-  const pickable = tables > 0;
+  const shown = !!inspector;
+  const pickable = shown && tables > 0;
   const closed = pickable && !open;
 
   const register = useCallback(() => {
@@ -104,7 +105,7 @@ export function ClosableSplit({
     <SplitPanelContext.Provider value={value}>
       <div
         ref={root}
-        className={byRoom ? "@container min-w-0" : "min-w-0"}
+        className={byRoom && shown ? "@container min-w-0" : "min-w-0"}
         data-panel={pickable ? (closed ? "closed" : "open") : undefined}
         onKeyDown={(e) => {
           if (e.key !== "Escape" || e.defaultPrevented || closed || !pickable || window.matchMedia(PHONE).matches)
@@ -115,18 +116,20 @@ export function ClosableSplit({
         }}
       >
         {/* Closed, the panel is hidden on a desktop only: a phone shows it below the table as before. */}
-        <div className={`grid items-start gap-4 max-[600px]:gap-3 ${closed ? "grid-cols-1" : cols}`}>
+        <div className={`grid items-start gap-4 max-[600px]:gap-3 ${closed || !shown ? "grid-cols-1" : cols}`}>
           <div
-            className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3"
+            className={`flex min-w-0 flex-col gap-4 ${shown ? "max-[600px]:gap-3" : ""}`}
             data-split-table
             onClickCapture={(e) => reopen(e.target)}
             onKeyDownCapture={(e) => (e.key === "Enter" || e.key === " ") && reopen(e.target)}
           >
             {children}
           </div>
-          <div className={`min-w-0 ${sticky} ${closed ? "min-[601px]:hidden" : ""}`}>
-            <InPanel.Provider value={true}>{inspector}</InPanel.Provider>
-          </div>
+          {shown && (
+            <div className={`min-w-0 ${sticky} ${closed ? "min-[601px]:hidden" : ""}`}>
+              <InPanel.Provider value={true}>{inspector}</InPanel.Provider>
+            </div>
+          )}
         </div>
       </div>
     </SplitPanelContext.Provider>
