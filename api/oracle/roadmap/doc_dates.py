@@ -40,7 +40,9 @@ matched to (``tracker_key``), supports a date only where that item owns the date
 item's own section (``{#now-<key>}``), or a table row, list item or paragraph whose
 first item link is that item's (``[Payment](#now-payment-step)``). A mention of the
 key elsewhere does not count. A tracker basis also supports a date in a block that
-names the tracker key.
+names the tracker key. A date outside every item is supported by an item's basis when
+that item has a section in the roadmap, or by any item's basis when the template gives
+items no section of their own (quarterly-timeline, release-plan).
 
 On import (oracle.docs.service.import_draft):
 
@@ -867,8 +869,11 @@ def _in_scope(b: schedule.Basis, found: Found) -> bool:
     if b.item_key:
         # walkb-roadmap: a date outside every item (a summary, a brief table) is backed by
         # the verified basis for that day of one of this roadmap's own items.
+        # roadmap-draft-wording review: a roadmap whose items have no section of their
+        # own (quarterly-timeline lanes, release-plan releases) names no items to scope
+        # by, so there any item's basis of its PRD backs the day.
         if not owner:
-            return b.item_key.lower() in found.items
+            return not found.items or b.item_key.lower() in found.items
         return owner == b.item_key.lower()
     if b.tracker_key:
         if schedule._names(b.tracker_key, found.block):
