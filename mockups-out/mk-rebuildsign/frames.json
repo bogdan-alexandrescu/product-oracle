@@ -1,0 +1,992 @@
+[
+  {
+    "name": "a-one-pager-running-desktop-dark",
+    "proposal": "A",
+    "page": "one-pager",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "dark",
+    "url": "/simple/one-pagers/checkout-redesign?rb=a&rbstate=running",
+    "caption": "A \u00b7 status chip: Simple one-pager, a run mid-step"
+  },
+  {
+    "name": "a-list-running-desktop-dark",
+    "proposal": "A",
+    "page": "list",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "dark",
+    "url": "/simple/one-pagers?rb=a&rbstate=running",
+    "caption": "A \u00b7 status chip: One-pagers list, a run mid-step"
+  },
+  {
+    "name": "a-roadmap-running-desktop-dark",
+    "proposal": "A",
+    "page": "roadmap",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "dark",
+    "url": "/simple/roadmap?rb=a&rbstate=running",
+    "caption": "A \u00b7 status chip: Simple Roadmap, a run mid-step"
+  },
+  {
+    "name": "a-detailed-running-desktop-dark",
+    "proposal": "A",
+    "page": "detailed",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "dark",
+    "url": "/documents/checkout-redesign?rb=a&rbstate=running",
+    "caption": "A \u00b7 status chip: Detailed PRD page, a run mid-step"
+  },
+  {
+    "name": "a-home-running-desktop-dark",
+    "proposal": "A",
+    "page": "home",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "dark",
+    "url": "/simple?rb=a&rbstate=running",
+    "caption": "A \u00b7 status chip: Home, a run mid-step"
+  },
+  {
+    "name": "a-home-done-desktop-dark",
+    "proposal": "A",
+    "page": "home",
+    "state": "done",
+    "viewport": "desktop",
+    "theme": "dark",
+    "url": "/simple?rb=a&rbstate=done",
+    "caption": "A \u00b7 status chip: Home, the new version has landed"
+  },
+  {
+    "name": "b-one-pager-running-desktop-dark",
+    "proposal": "B",
+    "page": "one-pager",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "dark",
+    "url": "/simple/one-pagers/checkout-redesign?rb=b&rbstate=running",
+    "caption": "B \u00b7 banner: Simple one-pager, a run mid-step"
+  },
+  {
+    "name": "b-list-running-desktop-dark",
+    "proposal": "B",
+    "page": "list",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "dark",
+    "url": "/simple/one-pagers?rb=b&rbstate=running",
+    "caption": "B \u00b7 banner: One-pagers list, a run mid-step"
+  },
+  {
+    "name": "b-roadmap-running-desktop-dark",
+    "proposal": "B",
+    "page": "roadmap",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "dark",
+    "url": "/simple/roadmap?rb=b&rbstate=running",
+    "caption": "B \u00b7 banner: Simple Roadmap, a run mid-step"
+  },
+  {
+    "name": "b-detailed-running-desktop-dark",
+    "proposal": "B",
+    "page": "detailed",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "dark",
+    "url": "/documents/checkout-redesign?rb=b&rbstate=running",
+    "caption": "B \u00b7 banner: Detailed PRD page, a run mid-step"
+  },
+  {
+    "name": "b-home-running-desktop-dark",
+    "proposal": "B",
+    "page": "home",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "dark",
+    "url": "/simple?rb=b&rbstate=running",
+    "caption": "B \u00b7 banner: Home, a run mid-step"
+  },
+  {
+    "name": "b-home-done-desktop-dark",
+    "proposal": "B",
+    "page": "home",
+    "state": "done",
+    "viewport": "desktop",
+    "theme": "dark",
+    "url": "/simple?rb=b&rbstate=done",
+    "caption": "B \u00b7 banner: Home, the new version has landed"
+  },
+  {
+    "name": "c-one-pager-running-desktop-dark",
+    "proposal": "C",
+    "page": "one-pager",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "dark",
+    "url": "/simple/one-pagers/checkout-redesign?rb=c&rbstate=running",
+    "caption": "C \u00b7 quiet marker and note: Simple one-pager, a run mid-step"
+  },
+  {
+    "name": "c-list-running-desktop-dark",
+    "proposal": "C",
+    "page": "list",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "dark",
+    "url": "/simple/one-pagers?rb=c&rbstate=running",
+    "caption": "C \u00b7 quiet marker and note: One-pagers list, a run mid-step"
+  },
+  {
+    "name": "c-roadmap-running-desktop-dark",
+    "proposal": "C",
+    "page": "roadmap",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "dark",
+    "url": "/simple/roadmap?rb=c&rbstate=running",
+    "caption": "C \u00b7 quiet marker and note: Simple Roadmap, a run mid-step"
+  },
+  {
+    "name": "c-detailed-running-desktop-dark",
+    "proposal": "C",
+    "page": "detailed",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "dark",
+    "url": "/documents/checkout-redesign?rb=c&rbstate=running",
+    "caption": "C \u00b7 quiet marker and note: Detailed PRD page, a run mid-step"
+  },
+  {
+    "name": "c-home-running-desktop-dark",
+    "proposal": "C",
+    "page": "home",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "dark",
+    "url": "/simple?rb=c&rbstate=running",
+    "caption": "C \u00b7 quiet marker and note: Home, a run mid-step"
+  },
+  {
+    "name": "c-home-done-desktop-dark",
+    "proposal": "C",
+    "page": "home",
+    "state": "done",
+    "viewport": "desktop",
+    "theme": "dark",
+    "url": "/simple?rb=c&rbstate=done",
+    "caption": "C \u00b7 quiet marker and note: Home, the new version has landed"
+  },
+  {
+    "name": "a-one-pager-running-desktop-light",
+    "proposal": "A",
+    "page": "one-pager",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=a&rbstate=running",
+    "caption": "A \u00b7 status chip: Simple one-pager, a run mid-step"
+  },
+  {
+    "name": "a-list-running-desktop-light",
+    "proposal": "A",
+    "page": "list",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers?rb=a&rbstate=running",
+    "caption": "A \u00b7 status chip: One-pagers list, a run mid-step"
+  },
+  {
+    "name": "a-roadmap-running-desktop-light",
+    "proposal": "A",
+    "page": "roadmap",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/roadmap?rb=a&rbstate=running",
+    "caption": "A \u00b7 status chip: Simple Roadmap, a run mid-step"
+  },
+  {
+    "name": "a-detailed-running-desktop-light",
+    "proposal": "A",
+    "page": "detailed",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/documents/checkout-redesign?rb=a&rbstate=running",
+    "caption": "A \u00b7 status chip: Detailed PRD page, a run mid-step"
+  },
+  {
+    "name": "a-home-running-desktop-light",
+    "proposal": "A",
+    "page": "home",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple?rb=a&rbstate=running",
+    "caption": "A \u00b7 status chip: Home, a run mid-step"
+  },
+  {
+    "name": "a-one-pager-scheduled-desktop-light",
+    "proposal": "A",
+    "page": "one-pager",
+    "state": "scheduled",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=a&rbstate=scheduled",
+    "caption": "A \u00b7 status chip: Simple one-pager, a scheduled run"
+  },
+  {
+    "name": "a-one-pager-waiting-desktop-light",
+    "proposal": "A",
+    "page": "one-pager",
+    "state": "waiting",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=a&rbstate=waiting",
+    "caption": "A \u00b7 status chip: Simple one-pager, a run waiting at a stop for Priya Raman"
+  },
+  {
+    "name": "a-one-pager-failed-desktop-light",
+    "proposal": "A",
+    "page": "one-pager",
+    "state": "failed",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=a&rbstate=failed",
+    "caption": "A \u00b7 status chip: Simple one-pager, a run that failed"
+  },
+  {
+    "name": "a-one-pager-done-desktop-light",
+    "proposal": "A",
+    "page": "one-pager",
+    "state": "done",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=a&rbstate=done",
+    "caption": "A \u00b7 status chip: Simple one-pager, the new version has landed"
+  },
+  {
+    "name": "a-roadmap-waiting-desktop-light",
+    "proposal": "A",
+    "page": "roadmap",
+    "state": "waiting",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/roadmap?rb=a&rbstate=waiting",
+    "caption": "A \u00b7 status chip: Simple Roadmap, a run waiting at a stop for Priya Raman"
+  },
+  {
+    "name": "a-detailed-done-desktop-light",
+    "proposal": "A",
+    "page": "detailed",
+    "state": "done",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/documents/checkout-redesign?rb=a&rbstate=done",
+    "caption": "A \u00b7 status chip: Detailed PRD page, the new version has landed"
+  },
+  {
+    "name": "a-one-pager-running-rbtick1-desktop-light",
+    "proposal": "A",
+    "page": "one-pager",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=a&rbstate=running&rbtick=1",
+    "caption": "A \u00b7 status chip: Simple one-pager, a run mid-step; mid-update: a poll just moved it to step 3"
+  },
+  {
+    "name": "a-one-pager-running-rbopen1-desktop-light",
+    "proposal": "A",
+    "page": "one-pager",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=a&rbstate=running&rbopen=1",
+    "caption": "A \u00b7 status chip: Simple one-pager, a run mid-step; its popover open: steps, who started it, the next stop, Open run"
+  },
+  {
+    "name": "a-roadmap-running-rbopen1-desktop-light",
+    "proposal": "A",
+    "page": "roadmap",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/roadmap?rb=a&rbstate=running&rbopen=1",
+    "caption": "A \u00b7 status chip: Simple Roadmap, a run mid-step; its popover open"
+  },
+  {
+    "name": "a-one-pager-running-rbcasetwo-desktop-light",
+    "proposal": "A",
+    "page": "one-pager",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=a&rbstate=running&rbcase=two",
+    "caption": "A \u00b7 status chip: Simple one-pager, a run mid-step; hard case: a regenerate and a roadmap run on the same PRD"
+  },
+  {
+    "name": "a-roadmap-running-rbcasefour-desktop-light",
+    "proposal": "A",
+    "page": "roadmap",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/roadmap?rb=a&rbstate=running&rbcase=four",
+    "caption": "A \u00b7 status chip: Simple Roadmap, a run mid-step; hard case: a roadmap fed by four PRDs, two of them rebuilding"
+  },
+  {
+    "name": "b-one-pager-running-desktop-light",
+    "proposal": "B",
+    "page": "one-pager",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=b&rbstate=running",
+    "caption": "B \u00b7 banner: Simple one-pager, a run mid-step"
+  },
+  {
+    "name": "b-list-running-desktop-light",
+    "proposal": "B",
+    "page": "list",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers?rb=b&rbstate=running",
+    "caption": "B \u00b7 banner: One-pagers list, a run mid-step; a list row carries the quiet marker; the banner is on the page itself"
+  },
+  {
+    "name": "b-roadmap-running-desktop-light",
+    "proposal": "B",
+    "page": "roadmap",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/roadmap?rb=b&rbstate=running",
+    "caption": "B \u00b7 banner: Simple Roadmap, a run mid-step"
+  },
+  {
+    "name": "b-detailed-running-desktop-light",
+    "proposal": "B",
+    "page": "detailed",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/documents/checkout-redesign?rb=b&rbstate=running",
+    "caption": "B \u00b7 banner: Detailed PRD page, a run mid-step"
+  },
+  {
+    "name": "b-home-running-desktop-light",
+    "proposal": "B",
+    "page": "home",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple?rb=b&rbstate=running",
+    "caption": "B \u00b7 banner: Home, a run mid-step"
+  },
+  {
+    "name": "b-one-pager-scheduled-desktop-light",
+    "proposal": "B",
+    "page": "one-pager",
+    "state": "scheduled",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=b&rbstate=scheduled",
+    "caption": "B \u00b7 banner: Simple one-pager, a scheduled run"
+  },
+  {
+    "name": "b-one-pager-waiting-desktop-light",
+    "proposal": "B",
+    "page": "one-pager",
+    "state": "waiting",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=b&rbstate=waiting",
+    "caption": "B \u00b7 banner: Simple one-pager, a run waiting at a stop for Priya Raman"
+  },
+  {
+    "name": "b-one-pager-failed-desktop-light",
+    "proposal": "B",
+    "page": "one-pager",
+    "state": "failed",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=b&rbstate=failed",
+    "caption": "B \u00b7 banner: Simple one-pager, a run that failed"
+  },
+  {
+    "name": "b-one-pager-done-desktop-light",
+    "proposal": "B",
+    "page": "one-pager",
+    "state": "done",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=b&rbstate=done",
+    "caption": "B \u00b7 banner: Simple one-pager, the new version has landed"
+  },
+  {
+    "name": "b-roadmap-waiting-desktop-light",
+    "proposal": "B",
+    "page": "roadmap",
+    "state": "waiting",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/roadmap?rb=b&rbstate=waiting",
+    "caption": "B \u00b7 banner: Simple Roadmap, a run waiting at a stop for Priya Raman"
+  },
+  {
+    "name": "b-detailed-done-desktop-light",
+    "proposal": "B",
+    "page": "detailed",
+    "state": "done",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/documents/checkout-redesign?rb=b&rbstate=done",
+    "caption": "B \u00b7 banner: Detailed PRD page, the new version has landed"
+  },
+  {
+    "name": "b-one-pager-running-rbtick1-desktop-light",
+    "proposal": "B",
+    "page": "one-pager",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=b&rbstate=running&rbtick=1",
+    "caption": "B \u00b7 banner: Simple one-pager, a run mid-step; mid-update: a poll just moved it to step 3"
+  },
+  {
+    "name": "b-one-pager-running-rbcasetwo-desktop-light",
+    "proposal": "B",
+    "page": "one-pager",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=b&rbstate=running&rbcase=two",
+    "caption": "B \u00b7 banner: Simple one-pager, a run mid-step; hard case: a regenerate and a roadmap run on the same PRD"
+  },
+  {
+    "name": "b-roadmap-running-rbcasefour-desktop-light",
+    "proposal": "B",
+    "page": "roadmap",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/roadmap?rb=b&rbstate=running&rbcase=four",
+    "caption": "B \u00b7 banner: Simple Roadmap, a run mid-step; hard case: a roadmap fed by four PRDs, two of them rebuilding"
+  },
+  {
+    "name": "c-one-pager-running-desktop-light",
+    "proposal": "C",
+    "page": "one-pager",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=c&rbstate=running",
+    "caption": "C \u00b7 quiet marker and note: Simple one-pager, a run mid-step"
+  },
+  {
+    "name": "c-list-running-desktop-light",
+    "proposal": "C",
+    "page": "list",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers?rb=c&rbstate=running",
+    "caption": "C \u00b7 quiet marker and note: One-pagers list, a run mid-step"
+  },
+  {
+    "name": "c-roadmap-running-desktop-light",
+    "proposal": "C",
+    "page": "roadmap",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/roadmap?rb=c&rbstate=running",
+    "caption": "C \u00b7 quiet marker and note: Simple Roadmap, a run mid-step"
+  },
+  {
+    "name": "c-detailed-running-desktop-light",
+    "proposal": "C",
+    "page": "detailed",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/documents/checkout-redesign?rb=c&rbstate=running",
+    "caption": "C \u00b7 quiet marker and note: Detailed PRD page, a run mid-step"
+  },
+  {
+    "name": "c-home-running-desktop-light",
+    "proposal": "C",
+    "page": "home",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple?rb=c&rbstate=running",
+    "caption": "C \u00b7 quiet marker and note: Home, a run mid-step"
+  },
+  {
+    "name": "c-one-pager-scheduled-desktop-light",
+    "proposal": "C",
+    "page": "one-pager",
+    "state": "scheduled",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=c&rbstate=scheduled",
+    "caption": "C \u00b7 quiet marker and note: Simple one-pager, a scheduled run"
+  },
+  {
+    "name": "c-one-pager-waiting-desktop-light",
+    "proposal": "C",
+    "page": "one-pager",
+    "state": "waiting",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=c&rbstate=waiting",
+    "caption": "C \u00b7 quiet marker and note: Simple one-pager, a run waiting at a stop for Priya Raman"
+  },
+  {
+    "name": "c-one-pager-failed-desktop-light",
+    "proposal": "C",
+    "page": "one-pager",
+    "state": "failed",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=c&rbstate=failed",
+    "caption": "C \u00b7 quiet marker and note: Simple one-pager, a run that failed"
+  },
+  {
+    "name": "c-one-pager-done-desktop-light",
+    "proposal": "C",
+    "page": "one-pager",
+    "state": "done",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=c&rbstate=done",
+    "caption": "C \u00b7 quiet marker and note: Simple one-pager, the new version has landed"
+  },
+  {
+    "name": "c-roadmap-waiting-desktop-light",
+    "proposal": "C",
+    "page": "roadmap",
+    "state": "waiting",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/roadmap?rb=c&rbstate=waiting",
+    "caption": "C \u00b7 quiet marker and note: Simple Roadmap, a run waiting at a stop for Priya Raman"
+  },
+  {
+    "name": "c-detailed-done-desktop-light",
+    "proposal": "C",
+    "page": "detailed",
+    "state": "done",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/documents/checkout-redesign?rb=c&rbstate=done",
+    "caption": "C \u00b7 quiet marker and note: Detailed PRD page, the new version has landed"
+  },
+  {
+    "name": "c-one-pager-running-rbtick1-desktop-light",
+    "proposal": "C",
+    "page": "one-pager",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=c&rbstate=running&rbtick=1",
+    "caption": "C \u00b7 quiet marker and note: Simple one-pager, a run mid-step; mid-update: a poll just moved it to step 3"
+  },
+  {
+    "name": "c-one-pager-running-rbcasetwo-desktop-light",
+    "proposal": "C",
+    "page": "one-pager",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=c&rbstate=running&rbcase=two",
+    "caption": "C \u00b7 quiet marker and note: Simple one-pager, a run mid-step; hard case: a regenerate and a roadmap run on the same PRD"
+  },
+  {
+    "name": "c-roadmap-running-rbcasefour-desktop-light",
+    "proposal": "C",
+    "page": "roadmap",
+    "state": "running",
+    "viewport": "desktop",
+    "theme": "light",
+    "url": "/simple/roadmap?rb=c&rbstate=running&rbcase=four",
+    "caption": "C \u00b7 quiet marker and note: Simple Roadmap, a run mid-step; hard case: a roadmap fed by four PRDs, two of them rebuilding"
+  },
+  {
+    "name": "a-one-pager-running-phone-dark",
+    "proposal": "A",
+    "page": "one-pager",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "dark",
+    "url": "/simple/one-pagers/checkout-redesign?rb=a&rbstate=running",
+    "caption": "A \u00b7 status chip: Simple one-pager, a run mid-step"
+  },
+  {
+    "name": "a-list-running-phone-dark",
+    "proposal": "A",
+    "page": "list",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "dark",
+    "url": "/simple/one-pagers?rb=a&rbstate=running",
+    "caption": "A \u00b7 status chip: One-pagers list, a run mid-step"
+  },
+  {
+    "name": "a-roadmap-running-phone-dark",
+    "proposal": "A",
+    "page": "roadmap",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "dark",
+    "url": "/simple/roadmap?rb=a&rbstate=running",
+    "caption": "A \u00b7 status chip: Simple Roadmap, a run mid-step"
+  },
+  {
+    "name": "a-detailed-running-phone-dark",
+    "proposal": "A",
+    "page": "detailed",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "dark",
+    "url": "/documents/checkout-redesign?rb=a&rbstate=running",
+    "caption": "A \u00b7 status chip: Detailed PRD page, a run mid-step"
+  },
+  {
+    "name": "a-home-running-phone-dark",
+    "proposal": "A",
+    "page": "home",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "dark",
+    "url": "/simple?rb=a&rbstate=running",
+    "caption": "A \u00b7 status chip: Home, a run mid-step"
+  },
+  {
+    "name": "a-one-pager-waiting-phone-dark",
+    "proposal": "A",
+    "page": "one-pager",
+    "state": "waiting",
+    "viewport": "phone",
+    "theme": "dark",
+    "url": "/simple/one-pagers/checkout-redesign?rb=a&rbstate=waiting",
+    "caption": "A \u00b7 status chip: Simple one-pager, a run waiting at a stop for Priya Raman"
+  },
+  {
+    "name": "b-one-pager-running-phone-dark",
+    "proposal": "B",
+    "page": "one-pager",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "dark",
+    "url": "/simple/one-pagers/checkout-redesign?rb=b&rbstate=running",
+    "caption": "B \u00b7 banner: Simple one-pager, a run mid-step"
+  },
+  {
+    "name": "b-list-running-phone-dark",
+    "proposal": "B",
+    "page": "list",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "dark",
+    "url": "/simple/one-pagers?rb=b&rbstate=running",
+    "caption": "B \u00b7 banner: One-pagers list, a run mid-step"
+  },
+  {
+    "name": "b-roadmap-running-phone-dark",
+    "proposal": "B",
+    "page": "roadmap",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "dark",
+    "url": "/simple/roadmap?rb=b&rbstate=running",
+    "caption": "B \u00b7 banner: Simple Roadmap, a run mid-step"
+  },
+  {
+    "name": "b-detailed-running-phone-dark",
+    "proposal": "B",
+    "page": "detailed",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "dark",
+    "url": "/documents/checkout-redesign?rb=b&rbstate=running",
+    "caption": "B \u00b7 banner: Detailed PRD page, a run mid-step"
+  },
+  {
+    "name": "b-home-running-phone-dark",
+    "proposal": "B",
+    "page": "home",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "dark",
+    "url": "/simple?rb=b&rbstate=running",
+    "caption": "B \u00b7 banner: Home, a run mid-step"
+  },
+  {
+    "name": "b-one-pager-waiting-phone-dark",
+    "proposal": "B",
+    "page": "one-pager",
+    "state": "waiting",
+    "viewport": "phone",
+    "theme": "dark",
+    "url": "/simple/one-pagers/checkout-redesign?rb=b&rbstate=waiting",
+    "caption": "B \u00b7 banner: Simple one-pager, a run waiting at a stop for Priya Raman"
+  },
+  {
+    "name": "c-one-pager-running-phone-dark",
+    "proposal": "C",
+    "page": "one-pager",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "dark",
+    "url": "/simple/one-pagers/checkout-redesign?rb=c&rbstate=running",
+    "caption": "C \u00b7 quiet marker and note: Simple one-pager, a run mid-step"
+  },
+  {
+    "name": "c-list-running-phone-dark",
+    "proposal": "C",
+    "page": "list",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "dark",
+    "url": "/simple/one-pagers?rb=c&rbstate=running",
+    "caption": "C \u00b7 quiet marker and note: One-pagers list, a run mid-step"
+  },
+  {
+    "name": "c-roadmap-running-phone-dark",
+    "proposal": "C",
+    "page": "roadmap",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "dark",
+    "url": "/simple/roadmap?rb=c&rbstate=running",
+    "caption": "C \u00b7 quiet marker and note: Simple Roadmap, a run mid-step"
+  },
+  {
+    "name": "c-detailed-running-phone-dark",
+    "proposal": "C",
+    "page": "detailed",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "dark",
+    "url": "/documents/checkout-redesign?rb=c&rbstate=running",
+    "caption": "C \u00b7 quiet marker and note: Detailed PRD page, a run mid-step"
+  },
+  {
+    "name": "c-home-running-phone-dark",
+    "proposal": "C",
+    "page": "home",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "dark",
+    "url": "/simple?rb=c&rbstate=running",
+    "caption": "C \u00b7 quiet marker and note: Home, a run mid-step"
+  },
+  {
+    "name": "c-one-pager-waiting-phone-dark",
+    "proposal": "C",
+    "page": "one-pager",
+    "state": "waiting",
+    "viewport": "phone",
+    "theme": "dark",
+    "url": "/simple/one-pagers/checkout-redesign?rb=c&rbstate=waiting",
+    "caption": "C \u00b7 quiet marker and note: Simple one-pager, a run waiting at a stop for Priya Raman"
+  },
+  {
+    "name": "a-one-pager-running-phone-light",
+    "proposal": "A",
+    "page": "one-pager",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=a&rbstate=running",
+    "caption": "A \u00b7 status chip: Simple one-pager, a run mid-step"
+  },
+  {
+    "name": "a-list-running-phone-light",
+    "proposal": "A",
+    "page": "list",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "light",
+    "url": "/simple/one-pagers?rb=a&rbstate=running",
+    "caption": "A \u00b7 status chip: One-pagers list, a run mid-step"
+  },
+  {
+    "name": "a-roadmap-running-phone-light",
+    "proposal": "A",
+    "page": "roadmap",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "light",
+    "url": "/simple/roadmap?rb=a&rbstate=running",
+    "caption": "A \u00b7 status chip: Simple Roadmap, a run mid-step"
+  },
+  {
+    "name": "a-detailed-running-phone-light",
+    "proposal": "A",
+    "page": "detailed",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "light",
+    "url": "/documents/checkout-redesign?rb=a&rbstate=running",
+    "caption": "A \u00b7 status chip: Detailed PRD page, a run mid-step"
+  },
+  {
+    "name": "a-home-running-phone-light",
+    "proposal": "A",
+    "page": "home",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "light",
+    "url": "/simple?rb=a&rbstate=running",
+    "caption": "A \u00b7 status chip: Home, a run mid-step"
+  },
+  {
+    "name": "a-one-pager-waiting-phone-light",
+    "proposal": "A",
+    "page": "one-pager",
+    "state": "waiting",
+    "viewport": "phone",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=a&rbstate=waiting",
+    "caption": "A \u00b7 status chip: Simple one-pager, a run waiting at a stop for Priya Raman"
+  },
+  {
+    "name": "a-one-pager-running-rbopen1-phone-light",
+    "proposal": "A",
+    "page": "one-pager",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=a&rbstate=running&rbopen=1",
+    "caption": "A \u00b7 status chip: Simple one-pager, a run mid-step; its popover open"
+  },
+  {
+    "name": "b-one-pager-running-phone-light",
+    "proposal": "B",
+    "page": "one-pager",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=b&rbstate=running",
+    "caption": "B \u00b7 banner: Simple one-pager, a run mid-step"
+  },
+  {
+    "name": "b-list-running-phone-light",
+    "proposal": "B",
+    "page": "list",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "light",
+    "url": "/simple/one-pagers?rb=b&rbstate=running",
+    "caption": "B \u00b7 banner: One-pagers list, a run mid-step"
+  },
+  {
+    "name": "b-roadmap-running-phone-light",
+    "proposal": "B",
+    "page": "roadmap",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "light",
+    "url": "/simple/roadmap?rb=b&rbstate=running",
+    "caption": "B \u00b7 banner: Simple Roadmap, a run mid-step"
+  },
+  {
+    "name": "b-detailed-running-phone-light",
+    "proposal": "B",
+    "page": "detailed",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "light",
+    "url": "/documents/checkout-redesign?rb=b&rbstate=running",
+    "caption": "B \u00b7 banner: Detailed PRD page, a run mid-step"
+  },
+  {
+    "name": "b-home-running-phone-light",
+    "proposal": "B",
+    "page": "home",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "light",
+    "url": "/simple?rb=b&rbstate=running",
+    "caption": "B \u00b7 banner: Home, a run mid-step"
+  },
+  {
+    "name": "b-one-pager-waiting-phone-light",
+    "proposal": "B",
+    "page": "one-pager",
+    "state": "waiting",
+    "viewport": "phone",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=b&rbstate=waiting",
+    "caption": "B \u00b7 banner: Simple one-pager, a run waiting at a stop for Priya Raman"
+  },
+  {
+    "name": "c-one-pager-running-phone-light",
+    "proposal": "C",
+    "page": "one-pager",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=c&rbstate=running",
+    "caption": "C \u00b7 quiet marker and note: Simple one-pager, a run mid-step"
+  },
+  {
+    "name": "c-list-running-phone-light",
+    "proposal": "C",
+    "page": "list",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "light",
+    "url": "/simple/one-pagers?rb=c&rbstate=running",
+    "caption": "C \u00b7 quiet marker and note: One-pagers list, a run mid-step"
+  },
+  {
+    "name": "c-roadmap-running-phone-light",
+    "proposal": "C",
+    "page": "roadmap",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "light",
+    "url": "/simple/roadmap?rb=c&rbstate=running",
+    "caption": "C \u00b7 quiet marker and note: Simple Roadmap, a run mid-step"
+  },
+  {
+    "name": "c-detailed-running-phone-light",
+    "proposal": "C",
+    "page": "detailed",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "light",
+    "url": "/documents/checkout-redesign?rb=c&rbstate=running",
+    "caption": "C \u00b7 quiet marker and note: Detailed PRD page, a run mid-step"
+  },
+  {
+    "name": "c-home-running-phone-light",
+    "proposal": "C",
+    "page": "home",
+    "state": "running",
+    "viewport": "phone",
+    "theme": "light",
+    "url": "/simple?rb=c&rbstate=running",
+    "caption": "C \u00b7 quiet marker and note: Home, a run mid-step"
+  },
+  {
+    "name": "c-one-pager-waiting-phone-light",
+    "proposal": "C",
+    "page": "one-pager",
+    "state": "waiting",
+    "viewport": "phone",
+    "theme": "light",
+    "url": "/simple/one-pagers/checkout-redesign?rb=c&rbstate=waiting",
+    "caption": "C \u00b7 quiet marker and note: Simple one-pager, a run waiting at a stop for Priya Raman"
+  }
+]

@@ -65,8 +65,9 @@ def plan():
         add("one-pager", "waiting", vp="phone")
         if p == "a":
             add("one-pager", vp="phone", extra="rbopen=1", note="its popover open")
-        add("one-pager", theme="dark")
-        add("roadmap", theme="dark")
+        for page in PAGES:
+            add(page, theme="dark")
+            add(page, vp="phone", theme="dark")
         add("one-pager", "waiting", vp="phone", theme="dark")
         add("home", "done", theme="dark")
     return out
@@ -139,7 +140,8 @@ def main():
         page.wait_for_url("**/simple", timeout=60000)
     meta_path = HERE / "frames.json"
     meta = {f["name"]: f for f in json.loads(meta_path.read_text())} if meta_path.exists() else {}
-    report = {}
+    report_path = HERE / "capture-report.json"
+    report = json.loads(report_path.read_text()) if report_path.exists() and ONLY else {}
     current = None
     for f in sorted(plan(), key=lambda f: (f["viewport"], f["theme"])):
         if ONLY and ONLY not in f["name"]:
@@ -159,7 +161,7 @@ def main():
         print(f["name"], width, len(errors), flush=True)
     meta_path.write_text(json.dumps(list(meta.values()), indent=2) + "\n")
     write_index(list(meta.values()))
-    (HERE / "capture-report.json").write_text(json.dumps(report, indent=2) + "\n")
+    report_path.write_text(json.dumps(report, indent=2) + "\n")
     page.evaluate("localStorage.removeItem('oracle-theme')")
     page.close()
     pw.stop()
