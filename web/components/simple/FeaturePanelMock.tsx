@@ -173,7 +173,8 @@ function Panel({ o, anchor, onClose }: { o: Opts; anchor: DOMRect | null; onClos
   }
   if (fp1 === "d") {
     // Beside the feature it was opened from, as today's roadmap card is.
-    const left = anchor ? Math.min(anchor.right + 12, innerWidth - 400) : 360;
+    // Right of the feature when there is room, else left of it.
+    const left = anchor ? (anchor.right + 392 < innerWidth ? anchor.right + 12 : Math.max(8, anchor.left - 392)) : 360;
     const top = anchor ? Math.max(12, Math.min(anchor.top - 8, innerHeight - 560)) : 120;
     return (
       <aside role="dialog" aria-label={o.f.title} data-fp-panel="d" style={{ left, top }} className={`${base} max-h-[560px] w-[380px] rounded-xl border`}>
@@ -300,7 +301,7 @@ function Section({ title, o, id, children, wide }: { title: string; o: Opts; id:
   );
 }
 
-const afterSet = (p: Phase) => p === "set" || p === "added" || p === "done";
+const afterSet = (p: Phase) => p === "set";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -333,7 +334,7 @@ function Body({ o, grid }: { o: Opts; grid?: boolean }) {
     <Section key="goal" id="goal" title="Goal" o={o}>
       <Goal o={o} />
     </Section>,
-    <Section key="links" id="links" title="Links" o={o} wide={grid && o.fp3 === "c"}>
+    <Section key="links" id="links" title="Links" o={o}>
       <Links o={o} />
     </Section>,
     <Section key="milestone" id="milestone" title="Milestone" o={o}>
@@ -375,7 +376,13 @@ function Body({ o, grid }: { o: Opts; grid?: boolean }) {
       </dl>
     </Section>,
   ];
-  if (grid) return <div className="grid grid-cols-2 gap-x-8">{parts}</div>;
+  if (grid)
+    return (
+      <div className="grid grid-cols-2 gap-x-8">
+        <div>{[parts[0], parts[2]]}</div>
+        <div>{[parts[1], parts[3], parts[4]]}</div>
+      </div>
+    );
   // A compact card (FP1 d) shows dates, goal and links first; the rest below.
   return <div>{parts}</div>;
 }
@@ -385,7 +392,7 @@ function Dates({ o }: { o: Opts }) {
   const set = !o.big && afterSet(phase);
   const end = set ? NEW_END : f.end.date;
   const mid = phase === "mid" && !o.read;
-  const conflict = o.big ? f.conflict : phase === "added" ? (o.fp3 === "c" ? null : FP_ADDED_CONFLICT) : set ? FP_AFTER_SET : f.conflict;
+  const conflict = phase === "added" && !o.big ? null : o.big ? f.conflict : set ? FP_AFTER_SET : f.conflict;
   return (
     <div>
       {fp2 === "b" && set && (
@@ -446,7 +453,7 @@ function Dates({ o }: { o: Opts }) {
         </Row>
         {mid && fp2 === "c" && (
           <Row label="Why">
-            <input readOnly value="To be ready for the Beta on Nov 30" className="h-9 w-full rounded-md border border-line-strong bg-surface px-2 text-[15px]" />
+            <textarea readOnly rows={2} value="To be ready for the Beta on Nov 30" className="w-full resize-none rounded-md border border-line-strong bg-surface px-2 py-1 text-[15px]" />
             <span className="mt-1 block text-sm text-text2">Oracle suggests Dec 10 (engineering estimate). Saving keeps your dates until someone restores Oracle&apos;s.</span>
             <div className="mt-1.5 flex gap-2">
               <Button variant="solid" onClick={() => o.setPhase("set")}>
@@ -479,7 +486,7 @@ function Clash({ text, fixes, read }: { text: string; fixes: string[]; read: boo
       {!read && (
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {fixes.map((x, i) => (
-            <Button key={x} variant={i === 0 ? "solid" : "ghost"}>
+            <Button key={x} variant={i === 0 ? "solid" : "secondary"}>
               {x}
             </Button>
           ))}
@@ -520,6 +527,7 @@ function Links({ o }: { o: Opts }) {
     <div>
       <DepList o={o} title="Depends on" deps={dependsOn} add="Add an item it depends on" />
       {phase === "deps" && !o.read && (fp3 === "a" ? <Search /> : <PickHint />)}
+      {added && <Clash text={FP_ADDED_CONFLICT.text} fixes={FP_ADDED_CONFLICT.fixes} read={o.read} />}
       <DepList o={o} title="Needed by" deps={f.neededBy} add="Add an item that needs it" />
     </div>
   );

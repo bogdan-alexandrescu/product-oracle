@@ -33,5 +33,12 @@ for x in "abc":
     fr(f"fp3-{x}-goals-mid", u(G, fp3=x, open=1, phase="deps"))
     fr(f"fp3-{x}-mid-390", u(H, fp3=x, open=1, phase="deps"), w=390)
     fr(f"fp3-{x}-added-dark", u(R, fp3=x, open=1, phase="added", theme="dark"), theme="dark")
+FIND = "(()=>{const w=document.createTreeWalker(document.querySelector('main')||document.body,NodeFilter.SHOW_TEXT);for(let n=w.nextNode();n;n=w.nextNode()){if(n.textContent.trim().startsWith('Weekly alert digest')&&!n.parentElement.closest('[data-fp-mock]')){n.parentElement.scrollIntoView({block:'%s'});return}}})()"
+LINKS = "document.querySelector('[data-fp-section=links]')?.scrollIntoView({block:'start'})"
+for f in F:
+    js = []
+    if f["url"].startswith(H + "?"): js.append(FIND % ("start" if f.get("w") == 390 else "center"))
+    if "phase=deps" in f["url"] or "phase=added" in f["url"]: js.append(LINKS)
+    f["js"] = js + [j for j in f.get("js", []) if j not in js]
 json.dump(F, open("frames.json", "w"), indent=1)
 print(len(F))

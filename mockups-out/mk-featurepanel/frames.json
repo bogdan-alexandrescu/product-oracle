@@ -1,220 +1,291 @@
 [
  {
   "file": "fp1-a-roadmap",
-  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&open=1"
+  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&open=1",
+  "js": []
  },
  {
   "file": "fp1-a-goals",
-  "url": "/simple/priorities?tab=buckets&fp1=a&fp2=a&fp3=a&open=1"
+  "url": "/simple/priorities?tab=buckets&fp1=a&fp2=a&fp3=a&open=1",
+  "js": []
  },
  {
   "file": "fp1-a-home",
-  "url": "/simple?fp1=a&fp2=a&fp3=a&open=1"
+  "url": "/simple?fp1=a&fp2=a&fp3=a&open=1",
+  "js": [
+   "(()=>{const w=document.createTreeWalker(document.querySelector('main')||document.body,NodeFilter.SHOW_TEXT);for(let n=w.nextNode();n;n=w.nextNode()){if(n.textContent.trim().startsWith('Weekly alert digest')&&!n.parentElement.closest('[data-fp-mock]')){n.parentElement.scrollIntoView({block:'center'});return}}})()"
+  ]
  },
  {
   "file": "fp1-a-mid",
-  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&open=1&phase=mid"
+  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&open=1&phase=mid",
+  "js": []
  },
  {
   "file": "fp1-a-hard-1512",
   "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&open=1&feat=big&viewer=read",
-  "w": 1512
+  "w": 1512,
+  "js": []
  },
  {
   "file": "fp1-a-phone-390",
   "url": "/simple?fp1=a&fp2=a&fp3=a&open=1",
-  "w": 390
+  "w": 390,
+  "js": [
+   "(()=>{const w=document.createTreeWalker(document.querySelector('main')||document.body,NodeFilter.SHOW_TEXT);for(let n=w.nextNode();n;n=w.nextNode()){if(n.textContent.trim().startsWith('Weekly alert digest')&&!n.parentElement.closest('[data-fp-mock]')){n.parentElement.scrollIntoView({block:'start'});return}}})()"
+  ]
  },
  {
   "file": "fp1-a-dark",
   "url": "/simple/priorities?tab=buckets&fp1=a&fp2=a&fp3=a&open=1&theme=dark",
-  "theme": "dark"
+  "theme": "dark",
+  "js": []
  },
  {
   "file": "fp1-b-roadmap",
-  "url": "/simple/roadmap?fp1=b&fp2=a&fp3=a&open=1"
+  "url": "/simple/roadmap?fp1=b&fp2=a&fp3=a&open=1",
+  "js": []
  },
  {
   "file": "fp1-b-goals",
-  "url": "/simple/priorities?tab=buckets&fp1=b&fp2=a&fp3=a&open=1"
+  "url": "/simple/priorities?tab=buckets&fp1=b&fp2=a&fp3=a&open=1",
+  "js": []
  },
  {
   "file": "fp1-b-home",
-  "url": "/simple?fp1=b&fp2=a&fp3=a&open=1"
+  "url": "/simple?fp1=b&fp2=a&fp3=a&open=1",
+  "js": [
+   "(()=>{const w=document.createTreeWalker(document.querySelector('main')||document.body,NodeFilter.SHOW_TEXT);for(let n=w.nextNode();n;n=w.nextNode()){if(n.textContent.trim().startsWith('Weekly alert digest')&&!n.parentElement.closest('[data-fp-mock]')){n.parentElement.scrollIntoView({block:'center'});return}}})()"
+  ]
  },
  {
   "file": "fp1-b-mid",
-  "url": "/simple/roadmap?fp1=b&fp2=a&fp3=a&open=1&phase=mid"
+  "url": "/simple/roadmap?fp1=b&fp2=a&fp3=a&open=1&phase=mid",
+  "js": []
  },
  {
   "file": "fp1-b-hard-1512",
   "url": "/simple/roadmap?fp1=b&fp2=a&fp3=a&open=1&feat=big&viewer=read",
-  "w": 1512
+  "w": 1512,
+  "js": []
  },
  {
   "file": "fp1-b-phone-390",
   "url": "/simple?fp1=b&fp2=a&fp3=a&open=1",
-  "w": 390
+  "w": 390,
+  "js": [
+   "(()=>{const w=document.createTreeWalker(document.querySelector('main')||document.body,NodeFilter.SHOW_TEXT);for(let n=w.nextNode();n;n=w.nextNode()){if(n.textContent.trim().startsWith('Weekly alert digest')&&!n.parentElement.closest('[data-fp-mock]')){n.parentElement.scrollIntoView({block:'start'});return}}})()"
+  ]
  },
  {
   "file": "fp1-b-dark",
   "url": "/simple/priorities?tab=buckets&fp1=b&fp2=a&fp3=a&open=1&theme=dark",
-  "theme": "dark"
+  "theme": "dark",
+  "js": []
  },
  {
   "file": "fp1-c-roadmap",
-  "url": "/simple/roadmap?fp1=c&fp2=a&fp3=a&open=1"
+  "url": "/simple/roadmap?fp1=c&fp2=a&fp3=a&open=1",
+  "js": []
  },
  {
   "file": "fp1-c-goals",
-  "url": "/simple/priorities?tab=buckets&fp1=c&fp2=a&fp3=a&open=1"
+  "url": "/simple/priorities?tab=buckets&fp1=c&fp2=a&fp3=a&open=1",
+  "js": []
  },
  {
   "file": "fp1-c-home",
-  "url": "/simple?fp1=c&fp2=a&fp3=a&open=1"
+  "url": "/simple?fp1=c&fp2=a&fp3=a&open=1",
+  "js": [
+   "(()=>{const w=document.createTreeWalker(document.querySelector('main')||document.body,NodeFilter.SHOW_TEXT);for(let n=w.nextNode();n;n=w.nextNode()){if(n.textContent.trim().startsWith('Weekly alert digest')&&!n.parentElement.closest('[data-fp-mock]')){n.parentElement.scrollIntoView({block:'center'});return}}})()"
+  ]
  },
  {
   "file": "fp1-c-mid",
-  "url": "/simple/roadmap?fp1=c&fp2=a&fp3=a&open=1&phase=mid"
+  "url": "/simple/roadmap?fp1=c&fp2=a&fp3=a&open=1&phase=mid",
+  "js": []
  },
  {
   "file": "fp1-c-hard-1512",
   "url": "/simple/roadmap?fp1=c&fp2=a&fp3=a&open=1&feat=big&viewer=read",
-  "w": 1512
+  "w": 1512,
+  "js": []
  },
  {
   "file": "fp1-c-phone-390",
   "url": "/simple?fp1=c&fp2=a&fp3=a&open=1",
-  "w": 390
+  "w": 390,
+  "js": [
+   "(()=>{const w=document.createTreeWalker(document.querySelector('main')||document.body,NodeFilter.SHOW_TEXT);for(let n=w.nextNode();n;n=w.nextNode()){if(n.textContent.trim().startsWith('Weekly alert digest')&&!n.parentElement.closest('[data-fp-mock]')){n.parentElement.scrollIntoView({block:'start'});return}}})()"
+  ]
  },
  {
   "file": "fp1-c-dark",
   "url": "/simple/priorities?tab=buckets&fp1=c&fp2=a&fp3=a&open=1&theme=dark",
-  "theme": "dark"
+  "theme": "dark",
+  "js": []
  },
  {
   "file": "fp1-d-roadmap",
-  "url": "/simple/roadmap?fp1=d&fp2=a&fp3=a&open=1"
+  "url": "/simple/roadmap?fp1=d&fp2=a&fp3=a&open=1",
+  "js": []
  },
  {
   "file": "fp1-d-goals",
-  "url": "/simple/priorities?tab=buckets&fp1=d&fp2=a&fp3=a&open=1"
+  "url": "/simple/priorities?tab=buckets&fp1=d&fp2=a&fp3=a&open=1",
+  "js": []
  },
  {
   "file": "fp1-d-home",
-  "url": "/simple?fp1=d&fp2=a&fp3=a&open=1"
+  "url": "/simple?fp1=d&fp2=a&fp3=a&open=1",
+  "js": [
+   "(()=>{const w=document.createTreeWalker(document.querySelector('main')||document.body,NodeFilter.SHOW_TEXT);for(let n=w.nextNode();n;n=w.nextNode()){if(n.textContent.trim().startsWith('Weekly alert digest')&&!n.parentElement.closest('[data-fp-mock]')){n.parentElement.scrollIntoView({block:'center'});return}}})()"
+  ]
  },
  {
   "file": "fp1-d-mid",
-  "url": "/simple/roadmap?fp1=d&fp2=a&fp3=a&open=1&phase=mid"
+  "url": "/simple/roadmap?fp1=d&fp2=a&fp3=a&open=1&phase=mid",
+  "js": []
  },
  {
   "file": "fp1-d-hard-1512",
   "url": "/simple/roadmap?fp1=d&fp2=a&fp3=a&open=1&feat=big&viewer=read",
-  "w": 1512
+  "w": 1512,
+  "js": []
  },
  {
   "file": "fp1-d-phone-390",
   "url": "/simple?fp1=d&fp2=a&fp3=a&open=1",
-  "w": 390
+  "w": 390,
+  "js": [
+   "(()=>{const w=document.createTreeWalker(document.querySelector('main')||document.body,NodeFilter.SHOW_TEXT);for(let n=w.nextNode();n;n=w.nextNode()){if(n.textContent.trim().startsWith('Weekly alert digest')&&!n.parentElement.closest('[data-fp-mock]')){n.parentElement.scrollIntoView({block:'start'});return}}})()"
+  ]
  },
  {
   "file": "fp1-d-dark",
   "url": "/simple/priorities?tab=buckets&fp1=d&fp2=a&fp3=a&open=1&theme=dark",
-  "theme": "dark"
+  "theme": "dark",
+  "js": []
  },
  {
   "file": "fp2-a-rest",
-  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&open=1"
+  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&open=1",
+  "js": []
  },
  {
   "file": "fp2-a-mid",
-  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&open=1&phase=mid"
+  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&open=1&phase=mid",
+  "js": []
  },
  {
   "file": "fp2-a-set",
-  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&open=1&phase=set"
+  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&open=1&phase=set",
+  "js": []
  },
  {
   "file": "fp2-a-done",
-  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&phase=done&what=date"
+  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&phase=done&what=date",
+  "js": []
  },
  {
   "file": "fp2-a-read-1512",
   "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&open=1&feat=big&viewer=read",
-  "w": 1512
+  "w": 1512,
+  "js": []
  },
  {
   "file": "fp2-a-mid-390",
   "url": "/simple?fp1=a&fp2=a&fp3=a&open=1&phase=mid",
-  "w": 390
+  "w": 390,
+  "js": [
+   "(()=>{const w=document.createTreeWalker(document.querySelector('main')||document.body,NodeFilter.SHOW_TEXT);for(let n=w.nextNode();n;n=w.nextNode()){if(n.textContent.trim().startsWith('Weekly alert digest')&&!n.parentElement.closest('[data-fp-mock]')){n.parentElement.scrollIntoView({block:'start'});return}}})()"
+  ]
  },
  {
   "file": "fp2-a-set-dark",
   "url": "/simple/priorities?tab=buckets&fp1=a&fp2=a&fp3=a&open=1&phase=set&theme=dark",
-  "theme": "dark"
+  "theme": "dark",
+  "js": []
  },
  {
   "file": "fp2-b-rest",
-  "url": "/simple/roadmap?fp1=a&fp2=b&fp3=a&open=1"
+  "url": "/simple/roadmap?fp1=a&fp2=b&fp3=a&open=1",
+  "js": []
  },
  {
   "file": "fp2-b-mid",
-  "url": "/simple/roadmap?fp1=a&fp2=b&fp3=a&open=1&phase=mid"
+  "url": "/simple/roadmap?fp1=a&fp2=b&fp3=a&open=1&phase=mid",
+  "js": []
  },
  {
   "file": "fp2-b-set",
-  "url": "/simple/roadmap?fp1=a&fp2=b&fp3=a&open=1&phase=set"
+  "url": "/simple/roadmap?fp1=a&fp2=b&fp3=a&open=1&phase=set",
+  "js": []
  },
  {
   "file": "fp2-b-done",
-  "url": "/simple/roadmap?fp1=a&fp2=b&fp3=a&phase=done&what=date"
+  "url": "/simple/roadmap?fp1=a&fp2=b&fp3=a&phase=done&what=date",
+  "js": []
  },
  {
   "file": "fp2-b-read-1512",
   "url": "/simple/roadmap?fp1=a&fp2=b&fp3=a&open=1&feat=big&viewer=read",
-  "w": 1512
+  "w": 1512,
+  "js": []
  },
  {
   "file": "fp2-b-mid-390",
   "url": "/simple?fp1=a&fp2=b&fp3=a&open=1&phase=mid",
-  "w": 390
+  "w": 390,
+  "js": [
+   "(()=>{const w=document.createTreeWalker(document.querySelector('main')||document.body,NodeFilter.SHOW_TEXT);for(let n=w.nextNode();n;n=w.nextNode()){if(n.textContent.trim().startsWith('Weekly alert digest')&&!n.parentElement.closest('[data-fp-mock]')){n.parentElement.scrollIntoView({block:'start'});return}}})()"
+  ]
  },
  {
   "file": "fp2-b-set-dark",
   "url": "/simple/priorities?tab=buckets&fp1=a&fp2=b&fp3=a&open=1&phase=set&theme=dark",
-  "theme": "dark"
+  "theme": "dark",
+  "js": []
  },
  {
   "file": "fp2-c-rest",
-  "url": "/simple/roadmap?fp1=a&fp2=c&fp3=a&open=1"
+  "url": "/simple/roadmap?fp1=a&fp2=c&fp3=a&open=1",
+  "js": []
  },
  {
   "file": "fp2-c-mid",
-  "url": "/simple/roadmap?fp1=a&fp2=c&fp3=a&open=1&phase=mid"
+  "url": "/simple/roadmap?fp1=a&fp2=c&fp3=a&open=1&phase=mid",
+  "js": []
  },
  {
   "file": "fp2-c-set",
-  "url": "/simple/roadmap?fp1=a&fp2=c&fp3=a&open=1&phase=set"
+  "url": "/simple/roadmap?fp1=a&fp2=c&fp3=a&open=1&phase=set",
+  "js": []
  },
  {
   "file": "fp2-c-done",
-  "url": "/simple/roadmap?fp1=a&fp2=c&fp3=a&phase=done&what=date"
+  "url": "/simple/roadmap?fp1=a&fp2=c&fp3=a&phase=done&what=date",
+  "js": []
  },
  {
   "file": "fp2-c-read-1512",
   "url": "/simple/roadmap?fp1=a&fp2=c&fp3=a&open=1&feat=big&viewer=read",
-  "w": 1512
+  "w": 1512,
+  "js": []
  },
  {
   "file": "fp2-c-mid-390",
   "url": "/simple?fp1=a&fp2=c&fp3=a&open=1&phase=mid",
-  "w": 390
+  "w": 390,
+  "js": [
+   "(()=>{const w=document.createTreeWalker(document.querySelector('main')||document.body,NodeFilter.SHOW_TEXT);for(let n=w.nextNode();n;n=w.nextNode()){if(n.textContent.trim().startsWith('Weekly alert digest')&&!n.parentElement.closest('[data-fp-mock]')){n.parentElement.scrollIntoView({block:'start'});return}}})()"
+  ]
  },
  {
   "file": "fp2-c-set-dark",
   "url": "/simple/priorities?tab=buckets&fp1=a&fp2=c&fp3=a&open=1&phase=set&theme=dark",
-  "theme": "dark"
+  "theme": "dark",
+  "js": []
  },
  {
   "file": "fp3-a-rest",
@@ -225,15 +296,22 @@
  },
  {
   "file": "fp3-a-mid",
-  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&open=1&phase=deps"
+  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&open=1&phase=deps",
+  "js": [
+   "document.querySelector('[data-fp-section=links]')?.scrollIntoView({block:'start'})"
+  ]
  },
  {
   "file": "fp3-a-added",
-  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&open=1&phase=added"
+  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&open=1&phase=added",
+  "js": [
+   "document.querySelector('[data-fp-section=links]')?.scrollIntoView({block:'start'})"
+  ]
  },
  {
   "file": "fp3-a-done",
-  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&phase=done&what=link"
+  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&phase=done&what=link",
+  "js": []
  },
  {
   "file": "fp3-a-hard-1512",
@@ -245,17 +323,27 @@
  },
  {
   "file": "fp3-a-goals-mid",
-  "url": "/simple/priorities?tab=buckets&fp1=a&fp2=a&fp3=a&open=1&phase=deps"
+  "url": "/simple/priorities?tab=buckets&fp1=a&fp2=a&fp3=a&open=1&phase=deps",
+  "js": [
+   "document.querySelector('[data-fp-section=links]')?.scrollIntoView({block:'start'})"
+  ]
  },
  {
   "file": "fp3-a-mid-390",
   "url": "/simple?fp1=a&fp2=a&fp3=a&open=1&phase=deps",
-  "w": 390
+  "w": 390,
+  "js": [
+   "(()=>{const w=document.createTreeWalker(document.querySelector('main')||document.body,NodeFilter.SHOW_TEXT);for(let n=w.nextNode();n;n=w.nextNode()){if(n.textContent.trim().startsWith('Weekly alert digest')&&!n.parentElement.closest('[data-fp-mock]')){n.parentElement.scrollIntoView({block:'start'});return}}})()",
+   "document.querySelector('[data-fp-section=links]')?.scrollIntoView({block:'start'})"
+  ]
  },
  {
   "file": "fp3-a-added-dark",
   "url": "/simple/roadmap?fp1=a&fp2=a&fp3=a&open=1&phase=added&theme=dark",
-  "theme": "dark"
+  "theme": "dark",
+  "js": [
+   "document.querySelector('[data-fp-section=links]')?.scrollIntoView({block:'start'})"
+  ]
  },
  {
   "file": "fp3-b-rest",
@@ -266,15 +354,22 @@
  },
  {
   "file": "fp3-b-mid",
-  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=b&open=1&phase=deps"
+  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=b&open=1&phase=deps",
+  "js": [
+   "document.querySelector('[data-fp-section=links]')?.scrollIntoView({block:'start'})"
+  ]
  },
  {
   "file": "fp3-b-added",
-  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=b&open=1&phase=added"
+  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=b&open=1&phase=added",
+  "js": [
+   "document.querySelector('[data-fp-section=links]')?.scrollIntoView({block:'start'})"
+  ]
  },
  {
   "file": "fp3-b-done",
-  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=b&phase=done&what=link"
+  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=b&phase=done&what=link",
+  "js": []
  },
  {
   "file": "fp3-b-hard-1512",
@@ -286,17 +381,27 @@
  },
  {
   "file": "fp3-b-goals-mid",
-  "url": "/simple/priorities?tab=buckets&fp1=a&fp2=a&fp3=b&open=1&phase=deps"
+  "url": "/simple/priorities?tab=buckets&fp1=a&fp2=a&fp3=b&open=1&phase=deps",
+  "js": [
+   "document.querySelector('[data-fp-section=links]')?.scrollIntoView({block:'start'})"
+  ]
  },
  {
   "file": "fp3-b-mid-390",
   "url": "/simple?fp1=a&fp2=a&fp3=b&open=1&phase=deps",
-  "w": 390
+  "w": 390,
+  "js": [
+   "(()=>{const w=document.createTreeWalker(document.querySelector('main')||document.body,NodeFilter.SHOW_TEXT);for(let n=w.nextNode();n;n=w.nextNode()){if(n.textContent.trim().startsWith('Weekly alert digest')&&!n.parentElement.closest('[data-fp-mock]')){n.parentElement.scrollIntoView({block:'start'});return}}})()",
+   "document.querySelector('[data-fp-section=links]')?.scrollIntoView({block:'start'})"
+  ]
  },
  {
   "file": "fp3-b-added-dark",
   "url": "/simple/roadmap?fp1=a&fp2=a&fp3=b&open=1&phase=added&theme=dark",
-  "theme": "dark"
+  "theme": "dark",
+  "js": [
+   "document.querySelector('[data-fp-section=links]')?.scrollIntoView({block:'start'})"
+  ]
  },
  {
   "file": "fp3-c-rest",
@@ -307,15 +412,22 @@
  },
  {
   "file": "fp3-c-mid",
-  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=c&open=1&phase=deps"
+  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=c&open=1&phase=deps",
+  "js": [
+   "document.querySelector('[data-fp-section=links]')?.scrollIntoView({block:'start'})"
+  ]
  },
  {
   "file": "fp3-c-added",
-  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=c&open=1&phase=added"
+  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=c&open=1&phase=added",
+  "js": [
+   "document.querySelector('[data-fp-section=links]')?.scrollIntoView({block:'start'})"
+  ]
  },
  {
   "file": "fp3-c-done",
-  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=c&phase=done&what=link"
+  "url": "/simple/roadmap?fp1=a&fp2=a&fp3=c&phase=done&what=link",
+  "js": []
  },
  {
   "file": "fp3-c-hard-1512",
@@ -327,16 +439,26 @@
  },
  {
   "file": "fp3-c-goals-mid",
-  "url": "/simple/priorities?tab=buckets&fp1=a&fp2=a&fp3=c&open=1&phase=deps"
+  "url": "/simple/priorities?tab=buckets&fp1=a&fp2=a&fp3=c&open=1&phase=deps",
+  "js": [
+   "document.querySelector('[data-fp-section=links]')?.scrollIntoView({block:'start'})"
+  ]
  },
  {
   "file": "fp3-c-mid-390",
   "url": "/simple?fp1=a&fp2=a&fp3=c&open=1&phase=deps",
-  "w": 390
+  "w": 390,
+  "js": [
+   "(()=>{const w=document.createTreeWalker(document.querySelector('main')||document.body,NodeFilter.SHOW_TEXT);for(let n=w.nextNode();n;n=w.nextNode()){if(n.textContent.trim().startsWith('Weekly alert digest')&&!n.parentElement.closest('[data-fp-mock]')){n.parentElement.scrollIntoView({block:'start'});return}}})()",
+   "document.querySelector('[data-fp-section=links]')?.scrollIntoView({block:'start'})"
+  ]
  },
  {
   "file": "fp3-c-added-dark",
   "url": "/simple/roadmap?fp1=a&fp2=a&fp3=c&open=1&phase=added&theme=dark",
-  "theme": "dark"
+  "theme": "dark",
+  "js": [
+   "document.querySelector('[data-fp-section=links]')?.scrollIntoView({block:'start'})"
+  ]
  }
 ]
