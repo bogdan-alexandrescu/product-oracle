@@ -285,7 +285,8 @@ def build_plan(
 ) -> fd.Plan | None:
     """The fit-date plan of a PRD's approved version: None when the milestone has no date.
     ``scale`` (a smaller goal, :func:`_scale`): the asked milestone's own work for its goal,
-    unlocked items only, counts at that share of its size."""
+    unlocked items only, counts at that share of its size, each at least a tenth of it
+    (guardrail, safety and must-include items keep their full size)."""
     ms = view.milestone(milestone)
     if ms is None or ms.end_date is None:
         return None
@@ -307,7 +308,8 @@ def build_plan(
         guard = f"{kind.capitalize()}: {why}" if kind in ("guardrail", "safety") else None
         pw = sl.effort_weeks or 0
         if scale < 1 and sl.milestone == milestone and sl.goal == asked_goal and not kind:
-            pw = round(pw * scale, 1)
+            # Never under a tenth of its own effort, a small item rounded too.
+            pw = max(round(pw * scale, 1), pw * 0.1)
         lever = _lever(sl, asked_goal)
         items.append(fd.Item(
             id=sl.code, title=sl.name, pw=pw, milestone=sl.milestone, guard=guard,
