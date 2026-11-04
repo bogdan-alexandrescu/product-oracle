@@ -18,8 +18,8 @@ import { login } from "./helpers";
  */
 
 // The run the "feature-set-two" mock scenario seeds (web/lib/api/mock/runs.ts).
-const FIRST = "bulk-address-edit depends on shared-address-book-export, which is excluded";
-const SECOND = "bulk-address-edit depends on address-sharing, which is excluded";
+const FIRST = "Bulk address edit depends on Shared address book export, which is excluded";
+const SECOND = "Bulk address edit depends on Address sharing, which is excluded";
 
 async function openStop(page: Page) {
   await page.addInitScript((key) => localStorage.setItem(key, "feature-set-two"), MOCK_SCENARIO_KEY);
