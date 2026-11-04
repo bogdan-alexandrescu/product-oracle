@@ -37,11 +37,12 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 
 from oracle import company_time
 from oracle.baseline.models import GoalMeasurement
 from oracle.roadmap.models import TrackMilestone
+from oracle.simple import goal_map
 from oracle.simple.models import FocusArea, MilestoneFeature
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
@@ -95,30 +96,30 @@ async def world() -> tuple[Ctx, dict[str, str]]:
         track = await seed.track(pv, rm, "Growth")
         m1 = await seed.add(
             TrackMilestone(
-                track_id=track.id, name="25 sign-ups per rep", gate_goal_id=signups.id,
-                gate_threshold=Decimal(25), gate_reading=Decimal(31),
-                gate_days=[30, 29, 31, 30, 31, 30, 31], gate_confirmed_by="Ann Example",
-                gate_confirmed_on=date(2026, 11, 2),
-                gate_area_ids=[scale.id],
+                track_id=track.id, name="25 sign-ups per rep", goal_id=signups.id,
+                gate_threshold=Decimal(25), gate_confirmed_by="Ann Example",
+                gate_confirmed_on=date(2026, 11, 2), gate_area_ids=[scale.id],
             )
         )  # fmt: skip
         m2 = await seed.add(
             TrackMilestone(
-                track_id=track.id, name="50 sign-ups per rep", gate_goal_id=signups.id,
-                gate_threshold=Decimal(50), gate_reading=Decimal(31), gate_status="at_risk",
-                gate_days=[27, 28, 29, 29, 30, 30, 31], gate_area_ids=[scale.id, onboard.id],
-                gate_after_ids=[m1.id],
+                track_id=track.id, name="50 sign-ups per rep", goal_id=signups.id,
+                gate_threshold=Decimal(50), gate_confirmed_by="Ann Example",
+                gate_confirmed_on=date(2026, 11, 2), gate_area_ids=[scale.id, onboard.id],
+                waits_on_ids=[m1.id],
             )
         )  # fmt: skip
         m3 = await seed.add(
             TrackMilestone(
-                track_id=track.id, name="$12k revenue per day", gate_goal_id=revenue.id,
-                gate_threshold=Decimal(12000), gate_area_ids=[onboard.id],
-                gate_after_ids=[m2.id],
+                track_id=track.id, name="$12k revenue per day", goal_id=revenue.id,
+                gate_threshold=Decimal(12000), gate_confirmed_by="Ann Example",
+                gate_confirmed_on=date(2026, 11, 2), gate_area_ids=[onboard.id],
+                waits_on_ids=[m2.id],
             )
         )  # fmt: skip
         f1 = await seed.item(rv, pv, "one-tap-link", title="One-tap sign-up link")
         f2 = await seed.item(rv, pv, "guided-week", title="Guided first week", position=1)
+        f3 = await seed.item(rv, pv, "rep-leaderboard", title="Rep leaderboard", position=2)
         s.add(MilestoneFeature(milestone_id=m1.id, item_id=f1.id, area_id=scale.id,
                                expected="+6 a day", confidence="high", released=True,
                                measured="+8 a day", lift="helping"))  # fmt: skip
@@ -130,7 +131,7 @@ async def world() -> tuple[Ctx, dict[str, str]]:
             "signups": str(signups.id), "conv": str(conv.id), "revenue": str(revenue.id),
             "scale": str(scale.id), "onboard": str(onboard.id), "m1": str(m1.id),
             "m2": str(m2.id), "m3": str(m3.id), "f1": str(f1.id), "f2": str(f2.id),
-            "track": str(track.id),
+            "f3": str(f3.id), "track": str(track.id),
         }  # fmt: skip
     return ctx, ids
 
@@ -165,7 +166,7 @@ async def test_map_reads_goals_guardrail_areas_milestones_features(client, role)
     ms = {m["id"]: m for m in body["milestones"]}
     m1 = ms[ids["m1"]]
     assert m1["threshold"] == 25 and m1["current"] == 31 and m1["status"] == "met"
-    assert m1["days"] == [30, 29, 31, 30, 31, 30, 31] and m1["confirmed"] == "Ann Example"
+    assert m1["days"] == [25, 26, 27, 28, 29, 30, 31] and m1["confirmed"] == "Ann Example"
     assert m1["confirmed_on"] == "Nov 2" and m1["due"] is None
     assert m1["goal"] == ids["signups"] and m1["areas"] == [ids["scale"]]
     assert m1["measure"] == "sign-ups per rep per day" and m1["proposed"] is False
@@ -189,8 +190,6 @@ async def test_milestone_status_follows_its_gate(client):
     async with tenant_session(ctx.tenant_id) as s:
         m2 = await s.get(TrackMilestone, uuid.UUID(ids["m2"]))
         m2.target_date, m2.basis_ids = date(2026, 10, 31), [uuid.uuid4()]
-        m1 = await s.get(TrackMilestone, uuid.UUID(ids["m1"]))
-        m1.gate_status = "at_risk"  # the readings say met
         await s.commit()
     ms = {m["id"]: m for m in (await read(client, ctx))["milestones"]}
     assert ms[ids["m1"]]["status"] == "met"
@@ -255,7 +254,7 @@ async def test_propose_a_milestone(client):
     assert await _count(ctx) == before + 1
     async with tenant_session(ctx.tenant_id) as s:
         row = await s.get(TrackMilestone, uuid.UUID(m["id"]))
-        assert str(row.track_id) == ids["track"] and row.gate_proposed is True
+        assert str(row.track_id) == ids["track"] and row.gate_confirmed_by is None
     dup = await client.post(
         f"{URL}/milestones",
         json={"name": "40 sign-ups per rep", "goal": ids["signups"], "threshold": 40,
@@ -265,6 +264,81 @@ async def test_propose_a_milestone(client):
     assert dup.status_code == 409
 
 
+async def test_gate_reading_follows_the_goal(client, monkeypatch):
+    """The reading, the 7 days and met come from the goal's measurements, never a copy
+    taken when the milestone was proposed."""
+    ctx, ids = await world()
+    r = await client.post(
+        f"{URL}/milestones",
+        json={"name": "40 sign-ups per rep", "goal": ids["signups"], "threshold": 40},
+        headers=ctx.as_("owner"),
+    )
+    m = next(x for x in r.json()["milestones"] if x["name"] == "40 sign-ups per rep")
+    assert m["current"] == 31 and m["status"] == "on_track"
+    later = NOW + timedelta(days=7)
+    monkeypatch.setattr(company_time, "now", lambda: later)
+    async with tenant_session(ctx.tenant_id) as s:
+        for i in range(7):
+            on = TODAY + timedelta(days=1 + i)
+            s.add(GoalMeasurement(entity_id=uuid.UUID(ids["signups"]), measured_on=on,
+                                  value=Decimal(45)))  # fmt: skip
+        await s.commit()
+    ms = {x["id"]: x for x in (await read(client, ctx))["milestones"]}
+    assert ms[m["id"]]["current"] == 45 and ms[m["id"]]["days"] == [45] * 7
+    assert ms[m["id"]]["status"] == "met"
+    assert ms[ids["m2"]]["current"] == 45 and ms[ids["m2"]]["status"] == "on_track"
+
+
+async def test_readings_load_only_the_last_7_days_and_the_latest():
+    ctx, ids = await world()
+    signups = uuid.UUID(ids["signups"])
+    async with tenant_session(ctx.tenant_id) as s:
+        for i in range(30):
+            on = TODAY - timedelta(days=40 + i)
+            s.add(GoalMeasurement(entity_id=signups, measured_on=on, value=Decimal(1)))
+        await s.commit()
+        fetched: list[int] = []
+        conn = await s.connection()
+
+        def count(_conn, cursor, *_args):
+            if cursor.description is not None:
+                fetched.append(cursor.rowcount)
+
+        event.listen(conn.sync_connection, "after_cursor_execute", count)
+        try:
+            out = await goal_map._readings(s, [signups], TODAY)
+        finally:
+            event.remove(conn.sync_connection, "after_cursor_execute", count)
+    assert out[signups] == ([25, 26, 27, 28, 29, 30, 31], 31)
+    assert sum(fetched) <= 8
+
+
+async def test_set_and_confirm_a_gate(client):
+    ctx, ids = await world()
+    async with tenant_session(ctx.tenant_id) as s:
+        (await s.merge(ctx.users["approver"])).name = "Abe Approver"
+        await s.commit()
+    r = await client.post(
+        f"{URL}/milestones",
+        json={"name": "40 sign-ups per rep", "goal": ids["signups"], "threshold": 40},
+        headers=ctx.as_("owner"),
+    )
+    m = next(x for x in r.json()["milestones"] if x["name"] == "40 sign-ups per rep")
+    assert m["proposed"] is True and m["confirmed"] is None
+    r = await client.patch(
+        f"{URL}/milestones/{m['id']}", json={"threshold": 30, "confirm": True},
+        headers=ctx.as_("approver"),
+    )  # fmt: skip
+    assert r.status_code == 200, r.text
+    got = next(x for x in r.json()["milestones"] if x["id"] == m["id"])
+    assert got["threshold"] == 30 and got["proposed"] is False
+    assert got["confirmed"] == "Abe Approver" and got["confirmed_on"] == "Nov 3"
+    bad = await client.patch(
+        f"{URL}/milestones/{uuid.uuid4()}", json={"confirm": True}, headers=ctx.as_("owner")
+    )
+    assert bad.status_code == 404
+
+
 async def _count(ctx: Ctx) -> int:
     async with tenant_session(ctx.tenant_id) as s:
         return await s.scalar(select(func.count()).select_from(TrackMilestone))
@@ -272,17 +346,47 @@ async def _count(ctx: Ctx) -> int:
 
 async def test_attach_a_feature(client):
     ctx, ids = await world()
-    body = {"feature": ids["f1"], "milestone": ids["m2"]}
+    body = {"feature": ids["f1"], "milestone": ids["m2"], "area": ids["onboard"]}
     r = await client.post(f"{URL}/links", json=body, headers=ctx.as_("owner"))
     assert r.status_code == 200, r.text
     feats = [f for f in r.json()["features"] if f["id"] == ids["f1"]]
     assert len(feats) == 1 and sorted(feats[0]["milestones"]) == sorted([ids["m1"], ids["m2"]])
+    # It already had an area: the one it is filed under stays.
     assert feats[0]["area"] == ids["scale"]
     again = await client.post(f"{URL}/links", json=body, headers=ctx.as_("owner"))
     assert again.status_code == 200
     async with tenant_session(ctx.tenant_id) as s:
         n = await s.scalar(select(func.count()).select_from(MilestoneFeature))
     assert n == 4
+
+
+async def test_attach_a_feature_not_yet_on_the_map_to_its_cell(client):
+    """A roadmap item with no link yet reaches the map, filed under the cell's area (not
+    the milestone's first area)."""
+    ctx, ids = await world()
+    body = {"feature": ids["f3"], "milestone": ids["m2"], "area": ids["onboard"]}
+    r = await client.post(f"{URL}/links", json=body, headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    f3 = next(f for f in r.json()["features"] if f["id"] == ids["f3"])
+    assert f3["name"] == "Rep leaderboard" and f3["milestones"] == [ids["m2"]]
+    assert f3["area"] == ids["onboard"] and f3["lever"] == "Value per conversion"
+    bad = await client.post(
+        f"{URL}/links", json={**body, "area": str(uuid.uuid4())}, headers=ctx.as_("owner")
+    )
+    assert bad.status_code == 422
+
+
+async def test_each_link_keeps_its_own_expected_lift(client):
+    ctx, ids = await world()
+    body = {"feature": ids["f1"], "milestone": ids["m2"], "area": ids["scale"],
+            "expected": "+2 a day", "confidence": "low"}  # fmt: skip
+    r = await client.post(f"{URL}/links", json=body, headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    f1 = next(f for f in r.json()["features"] if f["id"] == ids["f1"])
+    links = {x["milestone"]: x for x in f1["links"]}
+    assert links[ids["m1"]]["expected"] == "+6 a day" and links[ids["m1"]]["confidence"] == "High"
+    assert links[ids["m2"]]["expected"] == "+2 a day" and links[ids["m2"]]["confidence"] == "Low"
+    assert links[ids["m2"]]["measured"] is None and links[ids["m2"]]["lift"] == "not_measured"
 
 
 @pytest.mark.parametrize("role", ["commenter", "viewer"])
@@ -295,7 +399,9 @@ async def test_edits_need_approver(client, role):
         client.patch(f"{URL}/goals/{ids['conv']}", json={"target": 12}, headers=h),
         client.post(f"{URL}/milestones", json={"name": "Y", "goal": ids["conv"], "threshold": 1,
                                                "areas": [], "after": None}, headers=h),
-        client.post(f"{URL}/links", json={"feature": ids["f1"], "milestone": ids["m2"]}, headers=h),
+        client.post(f"{URL}/links", json={"feature": ids["f1"], "milestone": ids["m2"],
+                                          "area": ids["scale"]}, headers=h),
+        client.patch(f"{URL}/milestones/{ids['m2']}", json={"confirm": True}, headers=h),
     ]  # fmt: skip
     for call in calls:
         assert (await call).status_code == 403
