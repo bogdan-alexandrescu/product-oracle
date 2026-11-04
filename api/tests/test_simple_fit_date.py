@@ -91,7 +91,7 @@ def test_ranked_by_days_saved_for_least_harm():
     a = fd.answer(plan())
     pickable = [c for c in a.changes if c.pickable]
     assert [c.days for c in pickable] == sorted((c.days for c in pickable), reverse=True)
-    for x, y in zip(pickable, pickable[1:]):
+    for x, y in zip(pickable, pickable[1:], strict=False):
         if x.days == y.days:
             assert fd.HARM[x.cost_kind] <= fd.HARM[y.cost_kind]
     assert a.changes[-1].item == "Reply drafts in the inbox"
