@@ -21,7 +21,7 @@ Test cards (protects / fails_when / no_claim):
 
 from datetime import date
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 
 from oracle.roadmap.models import RoadmapItem
 from oracle.tenancy import tenant_session
@@ -158,3 +158,118 @@ async def test_own_owner_and_milestone_read_back_on_the_item(client):
     r = await post(client, ctx, "decider", "set_milestone", {"item_id": a}, {"milestone": seen},
                    {"milestone": None})  # fmt: skip
     assert r.status_code == 201, r.text
+
+
+async def _goals_for(ctx, item_id: str) -> tuple[str, str]:
+    """Two confirmed goals; the item's feature supports the first (Oracle's goal)."""
+    import uuid
+
+    from oracle.baseline.models import Edge, Entity
+
+    async with tenant_session(ctx.tenant_id) as s:
+        feature = Entity(type="feature", key="fp-feature", title="Alert digest", status="confirmed",
+                         origin="user")  # fmt: skip
+        grow = Entity(type="goal", key="grow", title="Grow retention", status="confirmed",
+                      origin="user", attrs={"metric": "Teams active after 90 days"})  # fmt: skip
+        reply = Entity(type="goal", key="reply", title="Cut time to first response",
+                       status="confirmed", origin="user")  # fmt: skip
+        s.add_all([feature, grow, reply])
+        await s.flush()
+        s.add(Edge(src_id=feature.id, dst_id=grow.id, type="supports", status="confirmed",
+                   origin="user"))  # fmt: skip
+        await s.execute(
+            update(RoadmapItem)
+            .where(RoadmapItem.id == uuid.UUID(item_id))
+            .values(feature_id=feature.id)
+        )
+        await s.commit()
+        return str(grow.id), str(reply.id)
+
+
+async def test_own_goal_wins_over_oracles_and_restores(client):
+    """build-feature-panel review 2: the panel's Serves and Measure fields. protects=``set_goal``
+    gives the item its own goal (``goal_ids``) and measure, which win over the goal its feature
+    supports (Oracle's); ``goal_set`` names Oracle's goal and who set the item's;
+    ``restore_goal`` puts Oracle's back; viewers get 403; fails_when=the baseline goal still
+    wins, the setter or Oracle's goal is lost, or Restore leaves the person's goal;
+    no_claim=Goal buckets' drops (S7)."""
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, ops=["fp"])
+    a = w.ids["fp-a"]
+    grow, reply = await _goals_for(ctx, a)
+    it = await item_of(client, ctx, "decider", a)
+    assert it["goal"]["id"] == grow and it["goal_set"] is None
+    r = await post(client, ctx, "viewer", "set_goal", {"item_id": a}, {"goal_ids": []},
+                   {"goal_ids": [reply]})  # fmt: skip
+    assert r.status_code == 403, r.text
+    r = await post(client, ctx, "decider", "set_goal", {"item_id": a}, {"goal_ids": []},
+                   {"goal_ids": [reply], "measure": "Median minutes to first reply"})  # fmt: skip
+    assert r.status_code == 201, r.text
+    it = await item_of(client, ctx, "decider", a)
+    assert it["goal"]["id"] == reply and it["goal_ids"] == [reply]
+    gs = it["goal_set"]
+    assert (gs["oracle"]["id"], gs["oracle"]["title"], gs["by"], gs["measure"]) == (
+        grow, "Grow retention", "Dee Cider", "Median minutes to first reply",
+    )  # fmt: skip
+    # Not a goal: refused.
+    r = await post(client, ctx, "decider", "set_goal", {"item_id": a}, {"goal_ids": [reply]},
+                   {"goal_ids": [a]})  # fmt: skip
+    assert r.status_code == 422, r.text
+    r = await post(client, ctx, "decider", "restore_goal", {"item_id": a}, {"goal_ids": [reply]})
+    assert r.status_code == 201, r.text
+    it = await item_of(client, ctx, "decider", a)
+    assert it["goal"]["id"] == grow and it["goal_set"] is None and it["goal_ids"] == []
+    r = await post(client, ctx, "decider", "restore_goal", {"item_id": a}, {"goal_ids": []})
+    assert r.status_code == 422, r.text
+
+
+async def test_engine_written_milestone_renames(client):
+    """build-feature-panel review 2: protects=``set_milestone`` checks ``before`` by the
+    milestone's name and date as the item reads them, so a milestone the date engine wrote
+    (an estimate's ``date_source``, ``basis_ids``, a refused date) is renamed from the panel;
+    fails_when=the panel's ``before`` must repeat fields it never sees (409);
+    no_claim=a changed name or date is still a 409."""
+    import uuid
+
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, ops=["fp"])
+    a = w.ids["fp-a"]
+    stored = {"name": None, "date": "2026-12-18", "date_source": "estimate:eng-1",
+              "basis_ids": [str(uuid.uuid4())], "refused_date": "2026-12-01",
+              "refused": True}  # fmt: skip
+    async with tenant_session(ctx.tenant_id) as s:
+        await s.execute(
+            update(RoadmapItem).where(RoadmapItem.id == uuid.UUID(a)).values(milestone=stored)
+        )
+        await s.commit()
+    it = await item_of(client, ctx, "decider", a)
+    m = it["milestone"]
+    assert (m["name"], m["date"], m["source"]) == (None, "2026-12-18", "item")
+    seen = {"name": m["name"], "date": m["date"]}
+    r = await post(client, ctx, "decider", "set_milestone", {"item_id": a},
+                   {"milestone": {**seen, "date": "2026-12-19"}},
+                   {"milestone": {"name": "Pilot", "date": "2026-12-18"}})  # fmt: skip
+    assert r.status_code == 409, r.text
+    r = await post(client, ctx, "decider", "set_milestone", {"item_id": a}, {"milestone": seen},
+                   {"milestone": {"name": "Pilot", "date": "2026-12-18"}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    it = await item_of(client, ctx, "decider", a)
+    assert (it["milestone"]["name"], it["milestone"]["date"]) == ("Pilot", "2026-12-18")
+
+
+async def test_owner_back_to_track_when_from_track_records_nothing(client):
+    """build-feature-panel review 2: protects=``set_owner`` null on an item whose owner is
+    its track's already is refused (422, nothing recorded); fails_when=a no-op change is
+    written; no_claim=the panel's own check (its spec)."""
+    from oracle.simple.models import SimpleChange
+
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, track_owner="approver", ops=["fp"])
+    a = w.ids["fp-a"]
+    r = await post(client, ctx, "decider", "set_owner", {"item_id": a}, {"owner_id": None},
+                   {"owner_id": None})  # fmt: skip
+    assert r.status_code == 422, r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        assert (
+            await s.scalars(select(SimpleChange).where(SimpleChange.op == "set_owner"))
+        ).all() == []
