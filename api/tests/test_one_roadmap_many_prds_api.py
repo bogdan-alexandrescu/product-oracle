@@ -8,6 +8,7 @@ that replace it and its items no longer feed the roadmap. Against Postgres. Inve
 """
 
 import hashlib
+import uuid
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
@@ -488,15 +489,65 @@ async def test_a_run_item_that_names_a_milestone_takes_that_milestones_place(cli
         await s.commit()
         rows = await company.run_queue(s, ids["safety"])
     queued = company.with_run_items(rows, MILESTONE_ITEMS)
-    # Block list is in Later, but it names Beta: it goes where Beta is in the queue (with
-    # read replicas, before every item without a milestone), not after Later's items.
-    assert [r["key"] for r in queued] == ["read-replicas", "block-list", "report-button",
+    # Block list is in Later, but it names Beta: it goes where Beta is in the queue (before
+    # every item without a milestone), not after Later's items. Landing puts the run's items
+    # first (block list at 1, read replicas after it at 2), so Beta's place is block list's.
+    assert [r["key"] for r in queued] == ["block-list", "read-replicas", "report-button",
                                           "sharding"]  # fmt: skip
     by = {r["key"]: r for r in queued}
     week = timedelta(days=7)
-    assert by["block-list"]["start"] == (TODAY + week).isoformat()
-    assert by["block-list"]["end"] == (TODAY + 2 * week).isoformat()
+    assert by["block-list"]["start"] == TODAY.isoformat()
+    assert by["block-list"]["end"] == (TODAY + week).isoformat()
     assert by["sharding"]["end"] == (TODAY + 4 * week).isoformat()
+    # The plan tables a person approves are the queue once the file lands.
+    assert await _landed(ctx, ids, MILESTONE_ITEMS) == _planned(queued)
+
+
+async def _landed(ctx: Ctx, ids: dict, text: str) -> list[tuple[str, str, str]]:
+    """The company queue once the run's items file lands as the roadmap's next version."""
+    from oracle.roadmap import company
+
+    async with tenant_session(ctx.tenant_id) as s:
+        v2 = await _version(s, ids, 2, ids["sv"])
+        await roadmap_items.import_items(s, v2, text)
+        await s.commit()
+        _, rows = await company.queue(s)
+    return [(q.item.item_key, q.start.isoformat(), q.end.isoformat()) for q in rows]
+
+
+def _planned(queued: list[dict]) -> list[tuple[str, str, str]]:
+    return [(r["key"], r["start"], r["end"]) for r in queued]
+
+
+FIRST_ITEMS = """\
+version: 1
+prd: {document: user-safety, version: 1}
+items:
+  - id: block-list
+    title: Block list
+    outcome: People block whoever they choose
+    horizon: now
+  - id: no-title
+    outcome: Left out when the file lands
+    horizon: now
+  - id: report-button
+    title: Report button for every post
+    outcome: People report harm in one tap
+    horizon: now
+"""
+
+
+async def test_a_run_items_place_in_its_horizon_is_the_one_landing_gives_it(client):
+    from oracle.roadmap import company
+
+    ctx, ids = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        rows = await company.run_queue(s, ids["safety"])
+    queued = company.with_run_items(rows, FIRST_ITEMS)
+    # The run's file lands first, in file order (the item without a title left out), then
+    # the other PRDs' items: the new block list comes before read replicas in Now.
+    assert [r["key"] for r in queued] == ["block-list", "report-button", "read-replicas"]
+    assert await _landed(ctx, ids, FIRST_ITEMS) == _planned(queued)
 
 
 REPORT_ITEMS = """\
@@ -620,3 +671,51 @@ async def test_a_milestone_keeps_no_place_only_a_dropped_item_gave_it(client):
     # The run drops the report button, which put Beta in Now: Beta is where sharding puts it
     # (Later), after Alpha (Next).
     assert [r["key"] for r in queued] == ["read-replicas", "sharding", "block-list"]
+
+
+async def test_a_runs_queue_is_frozen_when_its_prompt_is_first_built(client):
+    """Runs onto the one roadmap go in parallel: another PRD's items land and the team's
+    capacity changes before a run's check; the prompt, every rewrite and the check read the
+    queue the run froze when its prompt was first built."""
+    from oracle.roadmap import company
+    from oracle.runs import plan_tables, service
+    from oracle.runs.models import Run, RunSegment
+
+    ctx = await make_ctx()
+    rm = await _company(client, ctx)
+    ids = {"company": uuid.UUID(rm["id"])}
+    started = datetime.now(UTC)
+    day = company_time.day(started, company_time.DEFAULT_ZONE)
+    async with tenant_session(ctx.tenant_id) as s:
+        _, sv = await _prd(s, "user-safety", "User Safety")
+        _, cv = await _prd(s, "scale", "Scale")
+        run = await _add(s, Run(flow="prd_to_roadmap", status="running", created_at=started,
+                                knobs={"source_version_id": str(sv.id)}))  # fmt: skip
+        s.add(RunSegment(run_id=run.id, seq=1, name="roadmap_items", status="succeeded",
+                         artifacts={"files": {plan_tables.ITEMS_FILE: REPORT_ITEMS}}))  # fmt: skip
+        await s.commit()
+        run_id, sv_id = run.id, sv.id
+        source = await service._source_context(s, run)
+        await s.commit()
+    # The roadmap is still empty: the run's own item is dated from the team's capacity.
+    queued = company.with_run_items(source.company_queue, REPORT_ITEMS, **source.company_plan)
+    plan = plan_tables.engineering_plan(REPORT_ITEMS, [], others=queued)
+    assert [(r.key, r.end, r.basis) for r in plan.items] == [
+        ("report-button", day + timedelta(days=7), "team queue")
+    ]
+    written = plan_tables.markdown(plan)
+    # Another PRD's run lands first and the team's capacity changes.
+    async with tenant_session(ctx.tenant_id) as s:
+        await roadmap_items.import_items(s, await _version(s, ids, 1, cv.id), SCALE_ITEMS)
+        await s.commit()
+    r = await client.put("/v1/settings/team_capacity", headers=ctx.as_("owner"),
+                         json={"value": {"team_size": 2, "focus": 0.5}})  # fmt: skip
+    assert r.status_code == 200, r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        run = await s.get(Run, run_id)
+        # A rewrite after a refusal reads the same queue.
+        again = await service._source_context(s, run)
+        assert (again.company_queue, again.company_plan) == (
+            source.company_queue, source.company_plan)  # fmt: skip
+        problems = await service._plan_table_problems(s, run, written, sv_id)
+    assert not problems, [p.message for p in problems]
