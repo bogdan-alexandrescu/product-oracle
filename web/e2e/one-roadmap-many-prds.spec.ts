@@ -40,8 +40,10 @@ for (const [name, device] of [["desktop", DESKTOP], ["phone", PHONE]] as const) 
       await expect(page.getByTestId("simple-roadmap")).toBeVisible();
       for (const title of [...SAFETY, ...SCALE]) await expect(shown(page, title)).toBeVisible();
 
+      // A phone keeps the filters behind its Filters button.
+      if (name === "phone") await page.getByTestId("filters-toggle").click();
       const prd = filter(page, "PRD");
-      await expect(prd.locator("option")).toHaveText(["All", "Scale", "User Safety"]);
+      await expect(prd.locator("option")).toHaveText(["All", "User Safety", "Scale"]);
       await prd.selectOption({ label: "Scale" });
       for (const title of SCALE) await expect(shown(page, title)).toBeVisible();
       for (const title of SAFETY) await expect(shown(page, title)).toHaveCount(0);
@@ -62,12 +64,13 @@ for (const [name, device] of [["desktop", DESKTOP], ["phone", PHONE]] as const) 
     test("a replaced PRD shows its Replaced by line", async ({ page }) => {
       await open(page);
       await page.goto("/documents/trust-plan");
-      const line = page.getByTestId("replaced-by");
+      const line = page.getByTestId("replaced-by").filter({ visible: true });
       await expect(line).toHaveText("Replaced by User Safety and Scale. Read-only: its items no longer feed the roadmap.");
       await expect(page.getByRole("button", { name: /Build roadmap/ })).toHaveCount(0);
       await line.getByRole("link", { name: "Scale" }).click();
       await expect(page).toHaveURL(/\/documents\/scale$/);
-      await expect(page.getByTestId("replaced-by")).toHaveCount(0);
+      await expect(page.getByRole("heading", { level: 1 }).filter({ visible: true })).toContainText("Scale");
+      await expect(page.getByTestId("replaced-by").filter({ visible: true })).toHaveCount(0);
     });
   });
 }
