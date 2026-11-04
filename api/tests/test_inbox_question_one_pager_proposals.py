@@ -62,6 +62,7 @@ async def test_a_proposed_question_answer_waits_named_by_its_question(client, op
     assert row["document_id"] == q3["prd"]["id"]
     assert row["question_id"] == q3["id"]
     assert row["subject"] == f"Q3 {q3['title']}"
+    assert f"Q3 {q3['title']}" in row["asked"]
     assert row["item_id"] is None
     assert row["can_decide"] is True
     assert inbox["total"] == before + 1
