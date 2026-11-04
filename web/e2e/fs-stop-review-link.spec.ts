@@ -40,5 +40,8 @@ test("Review feature set on the checkpoint opens this run's feature list, not th
   await expect(rows.filter({ hasText: "Bulk address edit" })).toContainText("2 of 2 kept");
   // The left-out ones, with why.
   await page.getByRole("button", { name: /^Left out/ }).click();
-  await expect(rows.filter({ hasText: "Shared address book export" })).toContainText("Serves no confirmed goal");
+  const out = rows.filter({ hasText: "Shared address book export" });
+  await expect(out).toContainText("Left out");
+  await out.getByTestId("feature-title").click();
+  await expect(page.getByTestId("scope-inspector")).toContainText("Serves no confirmed goal");
 });
