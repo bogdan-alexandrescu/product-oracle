@@ -1,4 +1,3 @@
-import { betSubject } from "../lib/api/mock/simple-visuals";
 import { login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
@@ -15,9 +14,10 @@ import { expect, test, type Locator, type Page } from "./test";
  *   opens.") and the opened flow's steps read as words, and the line's Sources read the PRD's
  *   section without its "[c:c1]"; fails_when=any "[c:" shows; no_claim=the API's flows
  *   (test_raw_tokens_everywhere.py).
- * - "the mock's generated texts carry no raw tokens": protects=the routes the one-pager and its
- *   flows read answer with no "[c:", "[l:" or "[s:" outside a PRD section's own Markdown (which
- *   the page renders with its footnote links); fails_when=a route serves one.
+ * - "the mock's generated texts carry no raw tokens": protects=every mock route that serves
+ *   generated text (each one-pager, each visual subject and version, the notifications, each
+ *   document version and its sections) answers with no "[c:", "[l:" or "[s:", a section's own
+ *   Markdown only with "[c:id]" (the page renders its chips); fails_when=a route serves one.
  */
 
 const RAW = /\[[cls]:/;
@@ -75,21 +75,55 @@ for (const phone of [false, true]) {
       await login(page);
       await page.goto("/simple/one-pagers/guided-setup");
       await expect(page.getByTestId("one-pager")).toBeVisible();
-      const bet = betSubject("bets-1");
-      const found = await scan(page, ["/v1/simple/one-pagers/guided-setup", `/v1/simple/visuals/one_pager_line/${bet}`, `/v1/simple/visuals/one_pager_line/${bet}/versions/1`]);
+      const found = await scan(page, await mockRoutes(page));
       expect(found).toEqual([]);
     });
   });
 }
 
-/** Every string a route answers with that carries a raw token, outside a section's own Markdown. */
+/**
+ * Every mock route that serves generated text people see: each one-pager, each visual subject
+ * (and each of its versions), the notifications, and each document version with its sections.
+ */
+async function mockRoutes(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    type Db = {
+      simple_one_pager?: { doc: { slug: string } };
+      simple_one_pagers?: Record<string, { doc: { slug: string } }>;
+      simple_visuals?: { visuals: Record<string, { kind: string; id: string; versions: { version: number }[] }> };
+      documents: { id: string; slug: string }[];
+      versions: { document_id: string; number: number }[];
+    };
+    const write = (globalThis as { __poMockWrite?: <T>(change: (db: Db) => T) => Promise<T> }).__poMockWrite!;
+    return write((db) => {
+      const out = ["/v1/me/notifications"];
+      for (const op of [db.simple_one_pager, ...Object.values(db.simple_one_pagers ?? {})]) if (op) out.push(`/v1/simple/one-pagers/${op.doc.slug}`);
+      for (const v of Object.values(db.simple_visuals?.visuals ?? {})) {
+        const at = `/v1/simple/visuals/${v.kind}/${encodeURIComponent(v.id)}`;
+        out.push(at, ...v.versions.map((f) => `${at}/versions/${f.version}`));
+      }
+      for (const d of db.documents) {
+        for (const v of db.versions.filter((x) => x.document_id === d.id)) out.push(`/v1/documents/${d.slug}/versions/${v.number}`);
+      }
+      return out;
+    });
+  });
+}
+
+/**
+ * Every string a route answers with that carries a raw token. A section's own Markdown may cite
+ * with "[c:id]" (the page renders its chips) but carries no "[l:" or "[s:", except the one section
+ * seeded with them for the renderer's spec (document-section-raw-tokens.spec.ts).
+ */
 async function scan(page: Page, paths: string[]): Promise<string[]> {
   return page.evaluate(async (paths) => {
     const fetcher = (globalThis as { __poMockFetch?: (r: Request) => Promise<Response> }).__poMockFetch!;
     const out: string[] = [];
     const walk = (v: unknown, at: string, key: string) => {
       if (typeof v === "string") {
-        if (/\[[cls]:/.test(v) && !["body", "body_md", "markdown"].includes(key)) out.push(`${at}: ${v}`);
+        const markdown = ["body", "body_md", "markdown"].includes(key);
+        const seeded = at.startsWith("/v1/documents/visit-reminders/") && v.includes("[s:rebook]");
+        if ((markdown ? /\[[ls]:/ : /\[[cls]:/).test(v) && !seeded) out.push(`${at}: ${v}`);
       } else if (Array.isArray(v)) v.forEach((x, i) => walk(x, `${at}[${i}]`, key));
       else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) walk(x, `${at}.${k}`, k);
     };
