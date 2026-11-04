@@ -148,7 +148,8 @@ def engineering_plan(items_text: str | None, bases: Iterable[dict[str, Any]]) ->
             m.gates.append(row.title)
             if backing and m.date is None:
                 m.date = ms_day
-            for gate in raw.get("validation_gates") or []:
+            gates = raw.get("validation_gates")
+            for gate in gates if isinstance(gates, list) else []:
                 criterion = _text(gate.get("criterion")) if isinstance(gate, dict) else ""
                 if criterion and criterion not in m.counts:
                     m.counts.append(criterion)
