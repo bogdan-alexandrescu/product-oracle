@@ -230,7 +230,8 @@ test.describe("one feature panel, desktop", () => {
 
   test("Home opens the same panel from a feature's name", async ({ page }) => {
     await go(page, "/simple");
-    const name = page.locator("button[data-feature]").first();
+    // A roadmap item's name (by its id), not a feature a question blocks (by its code).
+    const name = page.locator("button[data-feature]:not([data-feature^='F-'])").first();
     await expect(name).toBeVisible();
     const title = (await name.innerText()).trim();
     await name.click();
@@ -350,7 +351,7 @@ test.describe("one feature panel, Decisions and one-pagers (review 2)", () => {
 
   test("a PRD's one-pager opens the same panel from a bet of What we will build", async ({ page }) => {
     await go(page, "/simple/one-pagers/guided-setup");
-    await page.getByRole("button", { name: "Open the feature A setup checklist that shows the next step" }).click();
+    await page.getByRole("button", { name: /^Open the feature “A setup checklist/ }).click();
     const panel = page.getByRole("dialog", { name: "Setup checklist" });
     await expect(panel.getByTestId("fp-details")).toBeVisible();
     await expect(panel.getByTestId("fp-list-depends")).toBeVisible();
