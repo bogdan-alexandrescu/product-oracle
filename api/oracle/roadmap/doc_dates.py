@@ -29,8 +29,9 @@ and other compatibility forms (``２０２６``) fold to ASCII (NFKC). The forms
   (the plan tables' date columns keep the first reading).
 
 A Counts when, evidence or sources column (its whole header) or labelled sentence (up to
-its ``.`` or ``;``) is not a schedule place for a past or year-less day; a written future
-day there (``Dec 20, 2026``) is still a claim.
+its ``.``, ``;`` or line break) is not a schedule place for a past day (a year-less one
+when its most recent past occurrence is within 60 days before the version's day); a
+future day there, with a year or without (``Dec 20, 2026``, ``Dec 20``), is still a claim.
 
 Month and quarter phrases (``November 2026``, ``Q4``) are horizons, not dates.
 
@@ -857,14 +858,14 @@ def _found_in(
         if not _claim(rendered.text[block_start:a]):
             continue
         cell = next((c for c in blk.cells if c[0] <= a < c[1]), None) if blk else None
-        past_day = hit.past is not None or all(day <= ref for day in hit.days)
+        past_day = _past_day(hit, ref)
         if cell and past_day and _NOT_SCHEDULE.fullmatch(cell[2]):
-            continue  # a Counts when, evidence or sources cell (a written future day warns)
+            continue  # a Counts when, evidence or sources cell (a future day warns)
         lo, hi = cell[:2] if cell else (block_start, blk.end if blk else len(rendered.text))
         label_at = lo
         for m in _LABEL_END.finditer(rendered.text, lo, a):
             label_at = m.end()
-        if past_day and _NOT_SCHEDULE_LABEL.match(rendered.text[label_at:a].lstrip()):
+        if past_day and _labelled(rendered, source, label_at, a, start):
             continue  # "Counts when: ...", "Evidence: ..." sentence
         plan_cell = cell is not None and _DATE_COLUMN.search(cell[2])
         s_lo, s_hi = _sentence(rendered.text, lo, hi, a, b)
@@ -918,9 +919,11 @@ _SENTENCE_END = re.compile(r"[.;!?](?:\s|$)")
 
 
 # date-past (production, Nov 4): where a date is no schedule date. A Counts when, evidence
-# or sources column (its whole header) or labelled sentence (up to its '.' or ';') says how
-# a thing counts or what shows it, so a past or year-less day there is skipped; a written
-# future day ("ships Dec 20, 2026") still warns. The plan tables' own date columns (Date,
+# or sources column (its whole header) or labelled sentence (up to its '.', ';' or line
+# break) says how a thing counts or what shows it, so a past day there is skipped: one with
+# a year on or before the version's day, a year-less one when its most recent past
+# occurrence is recent ("closed on Oct 27"). A future day, with a year or without
+# ("ships Dec 20", "by Jan 9"), still warns (owner, Nov 4). The plan tables' own date columns (Date,
 # When, Planned date, Deadline, ETA, ...) keep the usual reading. A year-less date
 # reported as done ("closed on Oct 27") in a sentence with no plan words is a done thing's
 # day when its most recent past occurrence is recent (_RECENT before the version's day).
@@ -933,7 +936,7 @@ _NOT_SCHEDULE_LABEL = re.compile(
     r"(?:[*_]+\s*)?(?:counts? when|evidence|sources?|proofs?|measured (?:by|when))\s*[*_]*\s*:",
     re.IGNORECASE,
 )
-_LABEL_END = re.compile(r"[.;!?](?:\s|$)")
+_LABEL_END = re.compile(r"[.;!?](?:\s|$)|\n")
 _DATE_COLUMN = re.compile(
     r"^[*_\s]*(?:(?:start|end|due|target|delivery|ship|launch|release|planned)\s+)?"
     r"(?:dates?|day|start|end|due|target|delivery|eta|when|deadline)[*_\s]*$",
@@ -958,6 +961,25 @@ _PLANNED = re.compile(
 )
 
 
+def _labelled(rendered: _Rendered, source: str, label_at: int, a: int, start: int) -> bool:
+    """Whether the part from ``label_at`` to a date (at ``a`` in the rendered text, at
+    ``start`` in ``source``) starts with a Counts when, evidence or sources label on the
+    date's own line (a soft break renders as a space: the source shows the line break)."""
+    part = rendered.text[label_at:a]
+    if not _NOT_SCHEDULE_LABEL.match(part.lstrip()):
+        return False
+    k = label_at + len(part) - len(part.lstrip())
+    return rendered.src_start[k] < 0 or source.find("\n", rendered.src_start[k], start) < 0
+
+
+def _past_day(hit: Hit, ref: date) -> bool:
+    """Whether a date reads as a past day: on or before the version's day, a year-less one
+    as its most recent past occurrence within _RECENT of that day."""
+    if hit.past is not None:
+        return ref - _RECENT <= hit.past <= ref
+    return all(day <= ref for day in hit.days)
+
+
 def _done(hit: Hit, sentence: str, at: int, ref: date) -> bool:
     """Whether a date (at ``at`` in ``sentence``, the sentence or cell it is in) is a done
     thing's day: right after a report word, no plan word in the sentence, and on or before
@@ -965,9 +987,7 @@ def _done(hit: Hit, sentence: str, at: int, ref: date) -> bool:
     within _RECENT of that day)."""
     if not _PAST.search(sentence[max(0, at - 80) : at]) or _PLANNED.search(sentence):
         return False
-    if hit.past is not None:
-        return ref - _RECENT <= hit.past <= ref
-    return all(day <= ref for day in hit.days)
+    return _past_day(hit, ref)
 
 
 def _role(key: str, heading: str) -> str:
