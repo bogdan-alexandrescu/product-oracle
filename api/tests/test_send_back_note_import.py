@@ -11,7 +11,7 @@ import pytest
 
 from oracle.docs.parser import parse_draft
 from tests.fixtures import draft, import_draft, seed_auth
-from tests.test_retry_draft_import import OLDER, _decide, _rejected, owner, runtime  # noqa: F401
+from tests.test_retry_draft_import import _decide, _rejected, owner, runtime  # noqa: F401
 from tests.test_runs import get, pending
 
 V1 = draft("prd_v1.md")
@@ -81,10 +81,9 @@ async def test_send_back_to_writer_with_no_note_sends_the_import_problems(
     assert resp.status_code == 200, resp.text
     run = resp.json()
     assert run["status"] == "running"
-    assert run["segments"][4]["status"] in ("queued", "running")
-    prompt = runtime.submitted[-1].steps[-1].prompt
-    assert OLDER in prompt
-    assert "was refused at import" in prompt
+    prompt = "\n".join(step.prompt for step in runtime.submitted[-1].steps)
+    assert "Oracle's check found these problems in prd.md" in prompt
+    assert "1 citation is invalid (source)" in prompt
 
 
 async def test_the_stop_names_the_import_problem_in_plain_words(
@@ -96,8 +95,10 @@ async def test_the_stop_names_the_import_problem_in_plain_words(
     _, auth = owner
     run = await _rejected(client, auth, runtime, monkeypatch)
     blocked = pending(run)["cannot_approve"]
-    assert blocked.startswith("Oracle refused prd.md: 1 citation is invalid (source)."), blocked
-    assert blocked.endswith("Retry import, or send it back to the writer.")
+    assert blocked == (
+        "the draft was not imported: 1 citation is invalid (source); retry import, or send "
+        "it back to the writer"
+    )
     resp = await _decide(client, auth, run)
     assert resp.status_code == 409 and resp.json()["detail"] == blocked
     run = await get(client, auth, run["id"])
@@ -118,3 +119,18 @@ def test_a_refused_resolution_reads_in_plain_words(message, plain):
         "roadmap.md", [ImportProblem(code="invalid_resolution", message=message)]
     )
     assert text == f"Oracle refused roadmap.md: {plain}."
+
+
+def test_the_writer_is_told_how_to_answer_a_note_only_send_back():
+    from types import SimpleNamespace
+
+    from oracle.runs import review_file
+
+    cp = SimpleNamespace(kind="roadmap_review", run_id="r1", payload={"segment": "roadmap"})
+    review = review_file.document_review(cp, "roadmap.md", [], [], "Shorten the horizons")
+    text = review_file.change_request(review)
+    assert "kind: note" in text and "no feedback_id" in text
+    # A review with entries keeps its own instruction.
+    entry = {"id": "f1", "action": "change", "summary": "Fix the date"}
+    review = review_file.document_review(cp, "roadmap.md", [entry], [], None)
+    assert "kind: note" not in review_file.change_request(review)

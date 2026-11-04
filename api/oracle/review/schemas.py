@@ -1,8 +1,8 @@
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from oracle.docs.schemas import (
     DateMarkOut,
@@ -157,6 +157,30 @@ class Resolution(BaseModel):
     feedback_id: uuid.UUID
     status: Literal["addressed", "declined"]
     note: str | None = None
+
+
+class NoteResolution(BaseModel):
+    """An answer to one point of a send-back's note (Nov 3): an entry of the draft's
+    ``resolutions`` with no ``feedback_id`` (``kind: note``, an ``id`` such as ``note-1``),
+    recorded against the note: no feedback item stands for it, so it closes none."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = Field(min_length=1, max_length=100)
+    kind: Literal["note"] = "note"
+    status: Literal["addressed", "declined"]
+    note: str | None = Field(default=None, max_length=10_000)
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def _id_as_text(cls, value: Any) -> Any:
+        return str(value) if isinstance(value, int) else value
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _done_is_addressed(cls, value: Any) -> Any:
+        # The review file's own word (review_file.resolutions_instruction).
+        return "addressed" if value == "done" else value
 
 
 class FeedbackPackage(BaseModel):

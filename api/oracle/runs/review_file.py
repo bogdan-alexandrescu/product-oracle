@@ -315,6 +315,18 @@ def resolutions_instruction(file: str) -> str:
     )
 
 
+def note_only_instruction(file: str | None) -> str:
+    """How the agents answer a send-back with a note and no entries (Nov 3): one
+    resolution per point of the note, recorded against the note, never a feedback item."""
+    where = f"the front matter of {file}" if file else "your output"
+    return (
+        "This review has no entries, only a general note: answer each point of the note "
+        f"in {where} under `resolutions`, one entry per point, as `{{id: note-1, kind: note, "
+        "status: addressed | declined, note}`, with no feedback_id (no feedback item stands "
+        "for a point of the note). Declining is allowed with a reason in `note`."
+    )
+
+
 def change_request(
     review: dict[str, Any], sent_on: datetime | None = None, zone: str = company_time.DEFAULT_ZONE
 ) -> str:
@@ -322,6 +334,8 @@ def change_request(
     (the same file the run page serves)."""
     what = _what(review)
     answer = f" {resolutions_instruction(review['file'])}" if review.get("file") else ""
+    if not review.get("items") and review.get("general_note"):
+        answer = f" {note_only_instruction(review.get('file'))}"
     note = look_again_note(review)
     return (note + "\n" if note else "") + (
         f"The reviewer sent {what} back with a structured review (review.yaml, below). "

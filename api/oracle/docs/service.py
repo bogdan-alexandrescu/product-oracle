@@ -1190,6 +1190,24 @@ async def import_draft(
                 section_keys=sorted(held),
             )
         )
+    for message in draft.dropped_resolutions:
+        # A malformed resolution is dropped, never a refusal of the draft (Nov 3).
+        warnings.append(VersionWarning(code="resolution_dropped", message=message))
+    if draft.note_resolutions:
+        # A send-back's note answered point by point: recorded against the note (the
+        # version keeps the entries in its front matter); no feedback item is closed.
+        answers = draft.note_resolutions
+        declined = sum(1 for a in answers if a.status == "declined")
+        n = len(answers)
+        warnings.append(
+            VersionWarning(
+                code="note_answered",
+                message=f"the draft answers the send-back note: {n} "
+                f"{'point' if n == 1 else 'points'} ({n - declined} addressed, "
+                f"{declined} declined)",
+                refs={"note_points": [a.id for a in answers]},
+            )
+        )
     resolutions = draft.resolutions
     if origin == "run" and previous is not None and resolutions:
         resolutions, skipped = await _run_resolutions(db, document, previous, draft, revisions)

@@ -176,10 +176,6 @@ def test_setext_heading_needs_id_too():
             ),
             "duplicate_citation",
         ),
-        (
-            _draft("# T {#t}\n", "resolutions:\n  - feedback_id: nope\n    status: addressed\n"),
-            "invalid_resolution",
-        ),
     ],
 )
 def test_front_matter_and_structure_problems(text, code):
@@ -388,3 +384,13 @@ def test_an_odd_ref_in_a_draft_is_an_invalid_citation(ref):
 )
 def test_a_plain_ref_still_parses(ref):
     assert CitationIn(id="c1", source="web", ref=ref).ref == ref
+
+
+def test_a_malformed_resolution_is_dropped_not_refused():
+    # Nov 3: a resolution never refuses the draft; it is dropped with why.
+    text = _draft("# T {#t}\n", "resolutions:\n  - feedback_id: nope\n    status: addressed\n")
+    parsed = parse_draft(text)
+    assert parsed.resolutions == []
+    assert parsed.dropped_resolutions == [
+        "resolution #1 was dropped: its feedback_id names no feedback item"
+    ]

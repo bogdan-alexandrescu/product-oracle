@@ -38,7 +38,7 @@ from oracle.docs.schemas import (
     CitationSource,
     ImportProblem,
 )
-from oracle.review.schemas import Resolution
+from oracle.review.schemas import NoteResolution, Resolution
 
 # Levels 1-3 start a section; deeper headings are part of the section body.
 SECTION_LEVELS = (1, 2, 3)
@@ -270,6 +270,10 @@ class ParsedDraft:
     # O1f: the front matter's ``brief: [section ids]``; None when the draft has none.
     brief: list[str] | None = None
     problems: list[ImportProblem] = field(default_factory=list)
+    # The answers to a send-back's note (no feedback item stands for them), and why each
+    # malformed resolution was dropped: a resolution never refuses the draft (Nov 3).
+    note_resolutions: list[NoteResolution] = field(default_factory=list)
+    dropped_resolutions: list[str] = field(default_factory=list)
 
 
 def sha256(text: str) -> str:
@@ -525,28 +529,46 @@ def _parse_citations(raw: Any, problems: list[ImportProblem]) -> list[CitationIn
     return citations
 
 
-def _parse_resolutions(raw: Any, problems: list[ImportProblem]) -> list[Resolution]:
+def _is_note_answer(item: Any) -> bool:
+    """A resolution that answers a send-back's note: no ``feedback_id``, and ``kind:
+    note`` or an ``id`` of its own (``note-1``)."""
+    return (
+        isinstance(item, dict)
+        and item.get("feedback_id") is None
+        and (item.get("kind") == "note" or item.get("id") is not None)
+    )
+
+
+def _dropped(i: int, exc: ValidationError) -> str:
+    fields = sorted({".".join(map(str, e["loc"])) for e in exc.errors()})
+    if "feedback_id" in fields:
+        return f"resolution #{i + 1} was dropped: its feedback_id names no feedback item"
+    return f"resolution #{i + 1} was dropped: {', '.join(fields) or 'it'} is not valid"
+
+
+def _parse_resolutions(
+    raw: Any, dropped: list[str]
+) -> tuple[list[Resolution], list[NoteResolution]]:
+    """The draft's resolutions: those that close feedback items, and those that answer a
+    send-back's note. A malformed one is dropped with why in ``dropped``, never a problem:
+    the draft's content is still imported (Nov 3)."""
     if raw is None:
-        return []
+        return [], []
     if not isinstance(raw, list):
-        problems.append(
-            ImportProblem(code="invalid_resolution", message="'resolutions' must be a list")
-        )
-        return []
+        dropped.append("the resolutions were dropped: 'resolutions' must be a list")
+        return [], []
     resolutions: list[Resolution] = []
+    notes: list[NoteResolution] = []
     for i, item in enumerate(raw):
         parse_budget.check()
         try:
-            resolutions.append(Resolution.model_validate(item))
+            if _is_note_answer(item):
+                notes.append(NoteResolution.model_validate(item))
+            else:
+                resolutions.append(Resolution.model_validate(item))
         except ValidationError as exc:
-            fields = ", ".join(".".join(map(str, e["loc"])) for e in exc.errors())
-            problems.append(
-                ImportProblem(
-                    code="invalid_resolution",
-                    message=f"resolution #{i + 1} is invalid: {fields}",
-                )
-            )
-    return resolutions
+            dropped.append(_dropped(i, exc))
+    return resolutions, notes
 
 
 def _parse_sections(
@@ -734,7 +756,8 @@ def _parse_draft(markdown: str) -> ParsedDraft:
     yaml_text, body, offset = split_front_matter(text)
     fm = _parse_front_matter(yaml_text, problems)
     citations = _parse_citations(fm.get("citations"), problems)
-    resolutions = _parse_resolutions(fm.get("resolutions"), problems)
+    dropped: list[str] = []
+    resolutions, note_resolutions = _parse_resolutions(fm.get("resolutions"), dropped)
     sections = _parse_sections(body, offset, problems)
     _check_citations(sections, citations, problems)
     for code, message, key in layers.brief_problems(
@@ -769,6 +792,8 @@ def _parse_draft(markdown: str) -> ParsedDraft:
         markdown=text,
         content_hash=sha256(text),
         brief=layers.marked_brief(fm),
+        note_resolutions=note_resolutions,
+        dropped_resolutions=dropped,
     )
 
 

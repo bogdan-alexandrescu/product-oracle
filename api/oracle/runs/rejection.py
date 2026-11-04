@@ -51,6 +51,15 @@ _PHRASES: dict[str, tuple[str, str]] = {
         "1 citation id is defined more than once",
         "{n} citation ids are defined more than once",
     ),
+    # Refused before Nov 3 (a resolution is now dropped with a warning instead).
+    "invalid_resolution": (
+        "1 resolution names no feedback item",
+        "{n} resolutions name no feedback item",
+    ),
+    "unknown_feedback_item": (
+        "1 resolution names a feedback item the document doesn't have",
+        "{n} resolutions name feedback items the document doesn't have",
+    ),
 }
 
 
@@ -153,11 +162,22 @@ def summary(name: str, problems: Sequence[ImportProblem]) -> str:
     the run's agents did not write it."."""
     if problems and all(p.code == MISSING_DRAFT for p in problems):
         return f"Oracle could not import {name}: the run's agents did not write it."
-    causes, knock_on = _causes(problems)
+    said = causes(problems)
+    if not said:
+        return f"Oracle refused {name}."
+    return f"Oracle refused {name}: " + ". ".join(said) + "."
+
+
+def causes(problems: Sequence[ImportProblem]) -> list[str]:
+    """What is wrong with a refused draft, one plain sentence per cause (no full stop),
+    largest group first: :func:`summary`'s, and the review stop's (Nov 3)."""
+    if problems and all(p.code == MISSING_DRAFT for p in problems):
+        return ["the run's agents did not write it"]
+    found, knock_on = _causes(problems)
     groups: dict[tuple[str, str | None], _Group] = {}
     # Every invalid citation of an id, in order: its knock-ons count against the first.
     rejected: dict[str, list[_Group]] = {}
-    for p in causes:
+    for p in found:
         what = _what(p)
         for i, field in enumerate(_fields(what) if what is not None else [None]):
             group = groups.setdefault((p.code, field), _Group(len(groups), [], field))
@@ -168,9 +188,7 @@ def summary(name: str, problems: Sequence[ImportProblem]) -> str:
     for key, n in knock_on.items():
         rejected[key][0].knock_on += n
     ordered = sorted(groups.values(), key=lambda g: (-g.size, g.order))
-    if not ordered:
-        return f"Oracle refused {name}."
-    return f"Oracle refused {name}: " + ". ".join(g.sentence() for g in ordered) + "."
+    return [g.sentence() for g in ordered]
 
 
 # A refused draft goes back to the writer before a person is asked (owner, 2026-10-20):
