@@ -113,6 +113,8 @@ export const DATE_BASES_SCENARIO = "date-bases";
  * Mar 4 only, so the date waits for a source for Apr 3.
  */
 export const TWO_WAY_DATES_SCENARIO = "two-way-dates";
+/** date-warnings-honest review: "date-bases" with the unbacked GA date (Dec 15) written for a second item too. */
+export const SHARED_DATE_SCENARIO = "shared-date";
 /** The GA date as the "two-way-dates" scenario writes it, and the reading ENG-413 backs. */
 export const TWO_WAY_GA = { written: "03/04/2027", backed: "2027-03-04" } as const;
 /** walkb-roadmap review 5e: a verified basis on the Simple roadmap's "alert-rules" item, as an engineering dates run records one for a roadmap built from a PRD. */
@@ -219,7 +221,7 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
   const withItems = scenario === ITEMS_SCENARIO;
   const withDiff = scenario === DIFF_SCENARIO;
   const twoWay = scenario === TWO_WAY_DATES_SCENARIO;
-  const noGaBasis = scenario === DATE_BASES_SCENARIO || scenario === VERSION_WARNINGS_SCENARIO || twoWay;
+  const noGaBasis = scenario === DATE_BASES_SCENARIO || scenario === SHARED_DATE_SCENARIO || scenario === VERSION_WARNINGS_SCENARIO || twoWay;
   const planStale = scenario === PLAN_STALE_SCENARIO;
   const simpleItemBasis = scenario === SIMPLE_ITEM_BASIS_SCENARIO;
   const key = withItems || withDiff || noGaBasis || planStale || simpleItemBasis ? `roadmap:${scenario}` : "roadmap";
@@ -1234,7 +1236,8 @@ export function dateWarnings(
   const groups = new Map<string, { mark: Schemas["DateMarkOut"]; item: string | null; times: number }>();
   for (const m of marks) {
     if (m.status === "verified") continue;
-    const item = ITEM_ANCHOR.exec(m.section_key)?.[1] ?? null;
+    // The item that owns the date's section, as dateMarks reads it (the API's row or line owner).
+    const item = ITEM_ANCHOR.exec(m.section_key)?.[1] ?? (NOT_ITEMS.has(m.section_key) ? null : m.section_key);
     const key = `${(m.days ?? [m.date]).join("|")}|${item ?? ""}`;
     const had = groups.get(key);
     if (!had) groups.set(key, { mark: m, item, times: 1 });

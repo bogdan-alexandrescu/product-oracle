@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { DATE_BASES_SCENARIO } from "../lib/api/mock/roadmap";
+import { DATE_BASES_SCENARIO, SHARED_DATE_SCENARIO } from "../lib/api/mock/roadmap";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
@@ -96,4 +96,19 @@ test("Plan › Dates looks up its people once, not again and again", async ({ pa
   await steady();
   await page.goto("/plan/dates");
   await steady();
+});
+
+test("one date written for two items warns for each item but counts as one date", async ({ page }) => {
+  // protects=date-warnings-honest review minors (the header counted date-and-item pairs; the
+  // mock took a warning's item from the section key only); fails_when=the header reads
+  // "2 dates lack a basis" for one date, or the two items share one warning;
+  // no_claim=the API's grouping (api/tests/test_date_warnings_honest.py).
+  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, SHARED_DATE_SCENARIO]);
+  await login(page, LEAD);
+  await page.goto("/documents/usage-alerts-roadmap/v/1");
+  await expect(dateWarnings(page)).toHaveCount(2);
+  await expect(lacking(page)).toHaveText("1 date lacks a basis");
+  await lacking(page).click();
+  await expect(page).toHaveURL(/\/plan\/dates\?prd=[^&]+&dates=2026-12-15$/);
+  await expect(page.getByTestId("dates-lacking-filter")).toContainText("1 date needs a basis: Dec 15.");
 });
