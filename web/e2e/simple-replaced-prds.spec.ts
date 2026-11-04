@@ -19,6 +19,16 @@ async function open(page: Page, email?: string) {
   await login(page, email);
 }
 
+/** The mode switch: the rail's on a desktop, Detailed's More sheet on a phone. */
+async function toSimple(page: Page, phone: boolean) {
+  if (phone) {
+    await page.getByTestId("tab-more").click();
+    await page.getByTestId("mode-simple-sheet").click();
+  } else {
+    await page.getByRole("radiogroup", { name: "Mode" }).filter({ visible: true }).getByRole("radio", { name: "Simple" }).click();
+  }
+}
+
 const optionTexts = async (select: Locator) => (await select.locator("option").allTextContents()).map((t) => t.trim());
 
 for (const [name, viewport] of [["desktop", { width: 1440, height: 900 }], ["phone", { width: 390, height: 844 }]] as const) {
@@ -77,6 +87,34 @@ for (const [name, viewport] of [["desktop", { width: 1440, height: 900 }], ["pho
       // Detailed keeps it as history.
       await page.goto(`/documents/${OLD_PRD[0]}`);
       await expect(page.getByText(/Replaced by/).first()).toBeVisible();
+    });
+
+    /**
+     * protects = the Mode switch on the replaced PRD's page opens One-pagers, never its
+     * one-pager, and its one-pager's address names only the PRDs that replaced it, each linking
+     * its own one-pager; fails_when = the replaced PRD's one-pager (Start a review meeting,
+     * Export PDF) is shown; no_claim = Detailed's page of it.
+     */
+    test("switching to Simple from the replaced PRD shows no one-pager of it", async ({ page }) => {
+      await open(page);
+      await page.goto(`/documents/${OLD_PRD[0]}`);
+      await expect(page.getByText(/Replaced by/).first()).toBeVisible();
+      await toSimple(page, name === "phone");
+      await expect(page).toHaveURL(/\/simple\/one-pagers$/);
+      const list = page.getByTestId("simple-one-pagers");
+      await expect(list.getByRole("link", { name: AREAS[0], exact: true })).toBeVisible();
+      await expect(list.getByRole("link", { name: OLD, exact: true })).toHaveCount(0);
+
+      // Its old address (a saved link) names the PRDs that replaced it, and nothing else.
+      await page.goto(`/simple/one-pagers/${OLD_PRD[0]}`);
+      const replaced = page.getByTestId("one-pager-replaced");
+      await expect(replaced).toHaveText(`Replaced by ${AREAS.join(", ")}`);
+      await expect(page.getByRole("button", { name: /Start a review meeting/ })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /Export PDF/ })).toHaveCount(0);
+      await expect(page.getByRole("link", { name: /Export PDF/ })).toHaveCount(0);
+      await replaced.getByRole("link", { name: AREAS[1], exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`/simple/one-pagers/${AREA_PRDS[1][0]}$`));
+      await expect(page.getByTestId("one-pager-replaced")).toHaveCount(0);
     });
   });
 }

@@ -3946,9 +3946,12 @@ export function resetMockData() {
 
 /** A document as GET /v1/documents/{doc} returns it (DocumentOut). */
 function documentOut(db: Db, doc: DocumentRow): Schemas["DocumentOut"] {
-  // one-roadmap-many-prds: the PRDs that replace it, by name (oracle.roadmap.company.refs).
-  const replacedBy = (doc.replaced_by ?? []).flatMap((id) => db.documents.filter((x) => x.id === id).map((x) => ({ id: x.id, slug: x.slug, title: x.title })));
-  return { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary), replaced_by: replacedBy, changes_in_review: 0 };
+  return { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary), replaced_by: replacedByRefs(db, doc), changes_in_review: 0 };
+}
+
+/** one-roadmap-many-prds: the PRDs that replace `doc`, by name (oracle.roadmap.company.refs). */
+function replacedByRefs(db: Db, doc: DocumentRow | undefined): Schemas["PrdRef"][] {
+  return (doc?.replaced_by ?? []).flatMap((id) => db.documents.filter((x) => x.id === id).map((x) => ({ id: x.id, slug: x.slug, title: x.title })));
 }
 
 /**
@@ -6457,6 +6460,7 @@ async function route(db: Db, req: Request): Promise<Response> {
           ? planMilestones().map((m) => `${m.code} ${m.name}`)
           : undefined,
         overflowPages: localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-overflow" ? 2 : undefined,
+        replacedBy: replacedByRefs(db, db.documents.find((x) => x.kind === "prd" && (x.id === onePagerDb.doc.id || x.slug === onePagerDb.doc.slug))),
       },
       r,
       p,
@@ -6493,7 +6497,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     const simpleRes = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, r, p, q);
     if (simpleRes) return simpleRes;
     const companyGoals = db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title }));
-    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals }, r, p, q);
+    // simple-replaced-prds: the PRDs marked replaced (their drafts are left out, as drafts.listing).
+    const replaced = db.documents.filter((d) => d.kind === "prd" && d.replaced_by?.length).flatMap((d) => [d.id, d.slug]);
+    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, replaced }, r, p, q);
   };
   // Simple S8: review meetings, the Decisions page, and changes made through a meeting.
   // Seeded on the first meetings or Decisions read, so the other Simple screens keep their data.
@@ -6505,7 +6511,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       roadmap: db.simple_roadmap,
       onePager: db.simple_one_pager,
       rituals: ensureRituals(db, me),
-      documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title, replaced: !!d.replaced_by?.length })),
+      documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title, replaced_by: replacedByRefs(db, d) })),
       // home-honest-loading: every document of a kind in Trash (trash.only_in_trash).
       onlyInTrash: (kind) =>
         !db.documents.some((d) => d.kind === kind) && (db.trash?.entries ?? []).some((e) => (e.documents as { kind?: string }[]).some((d) => d.kind === kind)),
@@ -6560,7 +6566,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         roadmap: roadmapDb,
         onePager: onePagerDb,
         rituals: ensureRituals(db, me),
-        documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title, replaced: !!d.replaced_by?.length })),
+        documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title, replaced_by: replacedByRefs(db, d) })),
       });
       return { db: ensureMeetings(db, ctx), ctx };
     });

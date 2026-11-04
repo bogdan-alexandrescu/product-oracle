@@ -77,6 +77,8 @@ export interface SimpleChangesCtx {
   roles?: Record<string, Role>;
   /** The company's confirmed goals (the baseline's), as the API lists them for suggestions (qa4-simple-home-4). */
   companyGoals?: { id: string; key: string; title: string }[];
+  /** simple-replaced-prds: the slugs and ids of the PRDs marked replaced (their open drafts are never listed in Simple). */
+  replaced?: string[];
 }
 
 const IDLE_MS = 30 * 60_000;
@@ -425,7 +427,9 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
   const rm = asked ? readableRoadmap(asked, ctx.role) : undefined;
   if (asked && !rm && !p[3]) return json(404, { detail: "No such roadmap" });
   const open = (db.drafts ?? []).filter((d) => ["working", "submitted"].includes(d.out.status) && (!rm || d.roadmap === rm));
-  if (!p[3] && m === "GET") return json(200, open.filter((d) => seesDraft(d, ctx, db)).map((d) => draftOut(db, ctx, d)));
+  // simple-replaced-prds (as drafts.listing): a replaced PRD's open draft is history.
+  const current = (d: MockDraft) => !ctx.replaced?.some((r) => r === d.out.document.slug || r === d.out.document.id);
+  if (!p[3] && m === "GET") return json(200, open.filter((d) => current(d) && seesDraft(d, ctx, db)).map((d) => draftOut(db, ctx, d)));
   const d = (db.drafts ?? []).find((x) => x.out.id === p[3] && seesDraft(x, ctx, db));
   if (!d) return json(404, { detail: "No such draft" });
   if (!p[4] && m === "GET") return json(200, draftOut(db, ctx, d));

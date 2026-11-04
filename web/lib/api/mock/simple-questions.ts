@@ -26,6 +26,8 @@ type Change = Schemas["SimpleChangeOut"];
 export interface QuestionsCtx {
   me: { id: string; role: Role };
   members: { id: string; name: string; role: Role; email: string }[];
+  /** simple-replaced-prds: the PRD documents; one marked replaced (`replaced_by`) has its questions left out of Simple. */
+  documents?: () => { id: string; slug: string; replaced_by?: unknown[] }[];
 }
 
 interface Q {
@@ -166,6 +168,8 @@ function out(ctx: QuestionsCtx, q: Q): Question {
 /** Open first, soonest due first; decided after, newest first (as the API). */
 export function questionsOut(ctx: QuestionsCtx, db: QuestionsDb, prd?: string | null): Question[] {
   if (prd && prd !== QUESTIONS_PRD.slug && prd !== QUESTIONS_PRD.id) return [];
+  // simple-replaced-prds (as questions._readable): a replaced PRD's questions are history, never in Simple.
+  if (ctx.documents?.().some((d) => (d.slug === QUESTIONS_PRD.slug || d.id === QUESTIONS_PRD.id) && d.replaced_by?.length)) return [];
   const all = db.questions.map((q) => [q, out(ctx, q)] as const);
   const open = all.filter(([q]) => !decided(q)).sort(([a], [b]) => a.due - b.due || a.n - b.n);
   const done = all.filter(([q]) => decided(q)).sort(([a], [b]) => (b.decided_at ?? "").localeCompare(a.decided_at ?? ""));
