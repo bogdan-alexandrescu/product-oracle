@@ -207,6 +207,7 @@ const ANSWERS: { k: Schemas["FeatureAnswerIn"]["answer"]; label: string; variant
 /** Current state: one table of what runs today, old proof first, with Check again in place. */
 export function ProofTable({ data, phone, onChanged }: { data: FeatureStates; phone: boolean; onChanged: (f: FeatureState) => void }) {
   const day = useDay();
+  const zone = useCompanyZone();
   const [open, setOpen] = useState<string | null>(null);
   const [checked, setChecked] = useState<FeatureState | null>(null);
   const [checking, setChecking] = useState(false);
@@ -306,7 +307,7 @@ export function ProofTable({ data, phone, onChanged }: { data: FeatureStates; ph
                   <Line ok={ok(measured)}>
                     Measured value: {measured?.value ?? "none yet"}
                     {measured?.period ? ` (${measured.period})` : ""}
-                    {measured?.note && checked && !checking ? `. ${thisMonth()} not read yet` : ""}
+                    {measured?.note && checked && !checking ? `. ${formatInZone(new Date().toISOString(), zone, { month: "long" })} not read yet` : ""}
                   </Line>
                 </ul>
                 {error && <p className="mb-2 text-[13px] text-fail">{error}</p>}
@@ -326,7 +327,6 @@ export function ProofTable({ data, phone, onChanged }: { data: FeatureStates; ph
   );
 }
 
-const thisMonth = () => new Date().toLocaleString("en-US", { month: "long" });
 
 /** The top of Current state: how many run, how many have old proof, how many are being built. */
 export function CurrentSummary({ data }: { data: FeatureStates }) {
