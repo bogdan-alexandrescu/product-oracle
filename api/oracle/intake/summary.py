@@ -91,6 +91,11 @@ async def intake_out(
     out.theme = intake.draft_theme
     out.prd_answers = PrdAnswers.model_validate(intake.prd_answers) if intake.prd_answers else None
     out.run_ids = await run_ids(db, intake.id)
+    if intake.replaces:
+        from oracle.intake import carried
+
+        got = await carried.of_replaces(db, intake.replaces)
+        out.carried = got.carried if got is not None else None
     return out
 
 

@@ -27223,6 +27223,73 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/intakes/replaces/{document_id}/carried": {
+      "get": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Get Replaced Prd Carried",
+        "description": "What a new PRD replacing this approved PRD carries, as New PRD shows it before\nStart: the PRD's items, its standing decided decisions (and those left out) and its\nverified estimates and commitments for the items named in ``item_keys``.",
+        "operationId": "get_replaced_prd_carried",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Document Id"
+            }
+          },
+          {
+            "name": "item_keys",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 100,
+              "default": [],
+              "title": "Item Keys"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Carried"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
     "/v1/intakes/{intake_id}/summary": {
       "get": {
         "tags": [
@@ -57715,6 +57782,193 @@
         "title": "Capabilities",
         "description": "#370: what the caller's role may do, per API operation (operationId)."
       },
+      "Carried": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "area_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area Name"
+          },
+          "area_scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area Scope"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CarriedItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/CarriedDecision"
+            },
+            "type": "array",
+            "title": "Decisions",
+            "default": []
+          },
+          "left_out": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Left Out",
+            "default": []
+          },
+          "bases": {
+            "items": {
+              "$ref": "#/components/schemas/CarriedBasis"
+            },
+            "type": "array",
+            "title": "Bases",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "slug",
+          "title",
+          "version"
+        ],
+        "title": "Carried",
+        "description": "What a new PRD carries from the PRD it replaces, as the New PRD form shows it\nbefore Start and the brief shows it after."
+      },
+      "CarriedBasis": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "reference": {
+            "type": "string",
+            "title": "Reference"
+          },
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "supports_date": {
+            "type": "string",
+            "title": "Supports Date"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "reference",
+          "item_key",
+          "supports_date"
+        ],
+        "title": "CarriedBasis"
+      },
+      "CarriedDecision": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "chosen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chosen"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "title"
+        ],
+        "title": "CarriedDecision"
+      },
+      "CarriedItem": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "in_area": {
+            "type": "boolean",
+            "title": "In Area",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title"
+        ],
+        "title": "CarriedItem"
+      },
       "CatalogModuleDetail": {
         "properties": {
           "key": {
@@ -82269,6 +82523,16 @@
             "maxItems": 50,
             "title": "Request Ids",
             "default": []
+          },
+          "replaces": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReplacesIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -82420,6 +82684,16 @@
             "type": "array",
             "title": "Run Ids",
             "default": []
+          },
+          "carried": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Carried"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -101558,6 +101832,44 @@
         ],
         "title": "ReorderChange",
         "description": "Put an item at ``position`` (0 first) within its horizon."
+      },
+      "ReplacesIn": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "area_name": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Area Name"
+          },
+          "area_scope": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Area Scope"
+          },
+          "item_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Item Keys",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "area_name",
+          "area_scope"
+        ],
+        "title": "ReplacesIn",
+        "description": "The approved PRD a new PRD replaces, and the area of it the new PRD covers\n(oracle.intake.carried): its decisions and verified estimates are the run's inputs."
       },
       "ReplyCounts": {
         "properties": {

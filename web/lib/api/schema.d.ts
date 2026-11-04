@@ -7667,6 +7667,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/intakes/replaces/{document_id}/carried": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Replaced Prd Carried
+         * @description What a new PRD replacing this approved PRD carries, as New PRD shows it before
+         *     Start: the PRD's items, its standing decided decisions (and those left out) and its
+         *     verified estimates and commitments for the items named in ``item_keys``.
+         */
+        get: operations["get_replaced_prd_carried"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/intakes/{intake_id}/summary": {
         parameters: {
             query?: never;
@@ -17373,6 +17395,92 @@ export interface components {
              */
             default_experience: "simple" | "detailed";
         };
+        /**
+         * Carried
+         * @description What a new PRD carries from the PRD it replaces, as the New PRD form shows it
+         *     before Start and the brief shows it after.
+         */
+        Carried: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
+            /** Area Name */
+            area_name?: string | null;
+            /** Area Scope */
+            area_scope?: string | null;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["CarriedItem"][];
+            /**
+             * Decisions
+             * @default []
+             */
+            decisions: components["schemas"]["CarriedDecision"][];
+            /**
+             * Left Out
+             * @default []
+             */
+            left_out: string[];
+            /**
+             * Bases
+             * @default []
+             */
+            bases: components["schemas"]["CarriedBasis"][];
+        };
+        /** CarriedBasis */
+        CarriedBasis: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Reference */
+            reference: string;
+            /** Item Key */
+            item_key: string;
+            /** Supports Date */
+            supports_date: string;
+            /** Detail */
+            detail?: string | null;
+        };
+        /** CarriedDecision */
+        CarriedDecision: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
+            /** Chosen */
+            chosen?: string | null;
+        };
+        /** CarriedItem */
+        CarriedItem: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /**
+             * In Area
+             * @default false
+             */
+            in_area: boolean;
+        };
         /** CatalogModuleDetail */
         CatalogModuleDetail: {
             /** Key */
@@ -26494,6 +26602,7 @@ export interface components {
              * @default []
              */
             request_ids: string[];
+            replaces?: components["schemas"]["ReplacesIn"] | null;
         };
         /** IntakeOut */
         IntakeOut: {
@@ -26555,6 +26664,7 @@ export interface components {
              * @default []
              */
             run_ids: string[];
+            carried?: components["schemas"]["Carried"] | null;
         };
         /** IntakePatch */
         IntakePatch: {
@@ -33418,6 +33528,27 @@ export interface components {
             key: string;
             /** Position */
             position: number;
+        };
+        /**
+         * ReplacesIn
+         * @description The approved PRD a new PRD replaces, and the area of it the new PRD covers
+         *     (oracle.intake.carried): its decisions and verified estimates are the run's inputs.
+         */
+        ReplacesIn: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Area Name */
+            area_name: string;
+            /** Area Scope */
+            area_scope: string;
+            /**
+             * Item Keys
+             * @default []
+             */
+            item_keys: string[];
         };
         /** ReplyCounts */
         ReplyCounts: {
@@ -61664,6 +61795,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ArtifactReviewEventOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_replaced_prd_carried: {
+        parameters: {
+            query?: {
+                item_keys?: string[];
+            };
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Carried"];
                 };
             };
             /** @description Validation Error */

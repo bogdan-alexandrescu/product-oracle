@@ -2981,6 +2981,7 @@ async def _prompt_context(
             ),
             *await eng_dates.prompt_lines(db, run, segment.name),
             *_regenerate_note(run, hidden),
+            *await _carried_lines(db, run, segment.name),
         ],
         intake_id=run.knobs.get("intake_id"),
         intake_gap_ids=list(run.knobs.get("intake_gap_ids") or []),
@@ -2994,6 +2995,16 @@ async def _prompt_context(
         if (reused := run.knobs.get("reuse_baseline")) and segment.name != "baseline"
         else None,
     )
+
+
+async def _carried_lines(db: AsyncSession, run: Run, segment: str) -> list[str]:
+    """The PRD writer's carried inputs, when the run's brief replaces a PRD."""
+    if segment != "prd_draft":
+        return []
+    from oracle.intake import carried
+
+    got = await carried.of_run(db, run)
+    return carried.prompt_lines(got) if got is not None else []
 
 
 # #562 review: what a member-view run's prompt says instead of a person's note that names

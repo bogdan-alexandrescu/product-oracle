@@ -1202,6 +1202,11 @@ async def import_draft(
         draft.template, draft.template_version = template
     if run_id is not None:
         await check_member_draft(db, run_id, markdown)
+        # new-prd-from-replaced-prd: the critic's check against what the draft carries.
+        from oracle.intake.carried import run_draft_problems
+
+        if carried_problems := await run_draft_problems(db, run_id, markdown):
+            raise DraftError(carried_problems)
     held: dict[str, HeldSection] = {}
 
     document = await find_document(db, doc, for_update=True)
