@@ -12315,6 +12315,126 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/goal-buckets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Goal Buckets
+         * @description The goals in order and each feature's goal links.
+         */
+        get: operations["list_goal_buckets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-buckets/goals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Bucket Goal
+         * @description A new goal, after the others.
+         */
+        post: operations["create_bucket_goal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-buckets/goals/{goal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Bucket Goal
+         * @description Edit a goal's name, measure, target and date (its order stays Baseline's).
+         */
+        patch: operations["update_bucket_goal"];
+        trace?: never;
+    };
+    "/v1/simple/goal-buckets/goals/{goal_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive Bucket Goal
+         * @description Archive a goal and move its features' links in one step.
+         */
+        post: operations["archive_bucket_goal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-buckets/features/{feature_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move Bucket Feature
+         * @description The feature's first goal link becomes the goal it was dropped on.
+         */
+        post: operations["move_bucket_feature"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-buckets/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo Goal Buckets
+         * @description Puts back every goal and link a write changed.
+         */
+        post: operations["undo_goal_buckets"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/sessions": {
         parameters: {
             query?: never;
@@ -15703,6 +15823,11 @@ export interface components {
              */
             document_status: "draft" | "in_review" | "approved";
             version: components["schemas"]["VersionSummary"];
+        };
+        /** ArchiveIn */
+        ArchiveIn: {
+            /** To Goal Id */
+            to_goal_id?: string | null;
         };
         /** ArtifactDependencyOut */
         ArtifactDependencyOut: {
@@ -23384,6 +23509,16 @@ export interface components {
             /** Message */
             message: string;
         };
+        /** FeatureSnap */
+        FeatureSnap: {
+            /**
+             * Feature Id
+             * Format: uuid
+             */
+            feature_id: string;
+            /** Links */
+            links: components["schemas"]["GoalLinkSnap"][];
+        };
         /**
          * FeatureTrace
          * @description A feature the intake touches: from the baseline (``key``) or the brief.
@@ -24219,6 +24354,69 @@ export interface components {
             /** Sso Hint */
             sso_hint?: string | null;
         };
+        /** GoalBucketFeature */
+        GoalBucketFeature: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Goal Ids */
+            goal_ids?: string[];
+        };
+        /** GoalBucketGoal */
+        GoalBucketGoal: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Order */
+            order: number;
+            /** Measure */
+            measure?: string | null;
+            /** Target */
+            target?: string | null;
+            /** Due */
+            due?: string | null;
+            /**
+             * Can Edit
+             * @default false
+             */
+            can_edit: boolean;
+        };
+        /** GoalBucketWrite */
+        GoalBucketWrite: {
+            goal?: components["schemas"]["GoalBucketGoal"] | null;
+            undo: components["schemas"]["GoalBucketsUndo"];
+        };
+        /** GoalBucketsOut */
+        GoalBucketsOut: {
+            /** Can Edit */
+            can_edit: boolean;
+            /** Goals */
+            goals: components["schemas"]["GoalBucketGoal"][];
+            /** Features */
+            features: components["schemas"]["GoalBucketFeature"][];
+        };
+        /**
+         * GoalBucketsUndo
+         * @description What a write changed, as it was before: Undo puts exactly this back.
+         */
+        GoalBucketsUndo: {
+            /** Goals */
+            goals?: components["schemas"]["GoalSnap"][];
+            /** Features */
+            features?: components["schemas"]["FeatureSnap"][];
+            /** Added Goal Id */
+            added_goal_id?: string | null;
+        };
         /** GoalCalibration */
         GoalCalibration: {
             /** N */
@@ -24260,6 +24458,20 @@ export interface components {
                 [key: string]: number;
             } | null;
         };
+        /** GoalIn */
+        GoalIn: {
+            /** Title */
+            title: string;
+            /** Measure */
+            measure: string;
+            /** Target */
+            target: string;
+            /**
+             * Due
+             * Format: date
+             */
+            due: string;
+        };
         /** GoalInterviewOut */
         GoalInterviewOut: {
             /**
@@ -24293,6 +24505,16 @@ export interface components {
              * @enum {string}
              */
             matched_on: "brief" | "feature";
+        };
+        /** GoalLinkSnap */
+        GoalLinkSnap: {
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+            /** Contribution */
+            contribution?: number | null;
         };
         /** GoalMeasurePushback */
         GoalMeasurePushback: {
@@ -24329,6 +24551,22 @@ export interface components {
              * @default 0
              */
             subgoals: number;
+        };
+        /** GoalSnap */
+        GoalSnap: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /** Attrs */
+            attrs: {
+                [key: string]: unknown;
+            };
         };
         /** GoalTerm */
         GoalTerm: {
@@ -29291,6 +29529,16 @@ export interface components {
              * @enum {string}
              */
             horizon: "now" | "next" | "later";
+        };
+        /** MoveIn */
+        MoveIn: {
+            /** From Goal Id */
+            from_goal_id?: string | null;
+            /**
+             * To Goal Id
+             * Format: uuid
+             */
+            to_goal_id: string;
         };
         /**
          * MyAccountOut
@@ -70096,6 +70344,197 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimplePlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_goal_buckets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalBucketsOut"];
+                };
+            };
+        };
+    };
+    create_bucket_goal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalBucketWrite"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_bucket_goal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalBucketWrite"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_bucket_goal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalBucketWrite"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_bucket_feature: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feature_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalBucketWrite"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_goal_buckets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalBucketsUndo"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalBucketsOut"];
                 };
             };
             /** @description Validation Error */
