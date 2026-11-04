@@ -225,9 +225,19 @@ test("qa4-simple-home-22: on a phone the More badge for meetings coming up is gr
   const railCount = page.getByTestId("simple-nav-meetings-count");
   await expect(railCount).toBeVisible();
   const quiet = ((await railCount.getAttribute("class")) ?? "").includes("simple-count-quiet");
+  // inbox-meeting-proposals fix: More also counts what waits in the Inbox beyond Roadmap's count; then it needs you.
+  const num = async (id: string) => {
+    const c = page.getByTestId("simple-nav").getByTestId(id);
+    return (await c.count()) ? Number((await c.textContent())!.trim()) : 0;
+  };
+  const inboxRest = Math.max(0, (await num("simple-nav-inbox-count")) - (await num("simple-nav-roadmap-count")));
   await page.setViewportSize(PHONE);
   const more = page.getByTestId("simple-tab-more-count");
   await expect(more).toBeVisible();
+  if (inboxRest > 0) {
+    await expect(more).not.toHaveClass(/simple-count-quiet/);
+    return;
+  }
   if (quiet) await expect(more).toHaveClass(/simple-count-quiet/);
   const bg = (l: Locator) => l.evaluate((el) => getComputedStyle(el).backgroundColor);
   await page.setViewportSize(DESKTOP);

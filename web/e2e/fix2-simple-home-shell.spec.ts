@@ -110,7 +110,7 @@ test("qa-simple-home-29: the phone's tabs and More sheet show the rail's counts"
   const rail = page.getByTestId("simple-nav");
   await expect(rail.getByTestId("simple-nav-roadmap-count")).toBeVisible();
   const counts: Record<string, string> = {};
-  for (const d of ["roadmap", "decisions", "meetings"]) {
+  for (const d of ["roadmap", "decisions", "meetings", "inbox"]) {
     const c = rail.getByTestId(`simple-nav-${d}-count`);
     if (await c.count()) counts[d] = (await c.textContent())!.trim();
   }
@@ -129,8 +129,10 @@ test("qa-simple-home-29: the phone's tabs and More sheet show the rail's counts"
       await expect(tab).toHaveAccessibleDescription(/waiting on you/);
     } else await expect(badge).toHaveCount(0);
   }
+  // inbox-meeting-proposals fix: More sums Meetings and what waits in the Inbox beyond Roadmap's own count.
+  const more = Number(counts.meetings ?? 0) + Math.max(0, Number(counts.inbox ?? 0) - Number(counts.roadmap ?? 0));
+  if (more) await expect(page.getByTestId("simple-tab-more-count")).toHaveText(String(more));
   if (counts.meetings) {
-    await expect(page.getByTestId("simple-tab-more-count")).toHaveText(counts.meetings);
     await page.getByTestId("simple-tab-more").click();
     const sheet = page.getByRole("dialog", { name: "More" });
     await expect(sheet.getByTestId("simple-more-meetings-count")).toHaveText(counts.meetings);
