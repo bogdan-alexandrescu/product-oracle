@@ -176,12 +176,22 @@ def table_lines(plan: EngineeringPlan) -> list[str]:
     return lines
 
 
+def markdown(plan: EngineeringPlan) -> str:
+    """The Plan and Milestones sections as a draft carries them."""
+    lines = table_lines(plan)
+    cut = lines.index("")
+    return "\n".join(
+        ["## Plan {#plan}", "", *lines[:cut], "", "## Milestones {#plan-milestones}", "",
+         *lines[cut + 1 :], "", ""]
+    )  # fmt: skip
+
+
 def prompt_lines(plan: EngineeringPlan, *, critic: bool) -> list[str]:
     """What the roadmap draft's writer and critic read about the plan tables."""
     lines = [
         "",
         "Plan tables (approving this version applies them to Simple's plan): put a "
-        "'## Plan {#plan}' section with the items table and a '## Milestones {#milestones}' "
+        "'## Plan {#plan}' section with the items table and a '## Milestones {#plan-milestones}' "
         "section with the milestones table under Full version, before Sources and data "
         "points. Copy the rows below as they are: every item of roadmap_items.yaml and no "
         "other, each date exactly the engineering date, month first (Nov 30, 2026), and an "

@@ -147,10 +147,10 @@ async def test_the_prd_draft_prompt_names_the_template_and_pastes_the_skeleton(c
 # (oracle.runs.plan_tables.prompt_lines) in a draft with a source PRD;
 # ROADMAP_PINS_BEFORE_PLAN_TABLES proves nothing else moved.
 ROADMAP_PINS = {
-    (True, "roadmap-board", False): ["d72ea6b2810fc8c7", "0d0d5727d8fa8ab8"],
-    (True, "roadmap-board", True): ["d1cfcc1475966e90", "b09c2ab050b548a4"],
-    (True, None, False): ["5d944c7dd968ba4a", "c1d993e73def8dfd"],
-    (True, None, True): ["5fd4e03dc402017f", "6122dda85439b71d"],
+    (True, "roadmap-board", False): ["b6fef916d0fc1882", "00bda3413a2131a5"],
+    (True, "roadmap-board", True): ["8df38891d3baf31b", "1be06680dcf7a4b1"],
+    (True, None, False): ["244006be6bb95887", "c14441eac166f49c"],
+    (True, None, True): ["ca038737bcaabf98", "64075637b758d3c5"],
     (False, "roadmap-board", False): ["c4cae288ba0a5f7b", "b7500f7de560911b"],
     (False, "roadmap-board", True): ["c4cae288ba0a5f7b", "b7500f7de560911b"],
     (False, None, False): ["2e25bae37d8aa957", "36b2abd791eb6c40"],

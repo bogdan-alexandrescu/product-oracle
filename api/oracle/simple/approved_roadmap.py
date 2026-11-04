@@ -11,7 +11,8 @@ approved version says, not the estimates its items were carried forward with.
   "founder commitment", "set by Pat Example"); ``Status`` ``shipped`` (or ``done``) and
   ``next PRD`` take the item off the plan;
 - milestones: a table whose header names ``Milestone`` and ``Date`` (optionally ``Gates``:
-  item keys or titles, comma separated, and ``Counts when``).
+  item keys or titles, comma separated, and ``Counts when``); one with ``Gates`` wins over
+  a template's own milestones table before it.
 
 A version with neither table changes nothing but an earlier version's mark carried on its
 items (so Simple never says it matches that one).
@@ -148,11 +149,12 @@ def _col(header: list[str], *names: str) -> int | None:
 
 
 def parse(markdown: str, today: date) -> Plan:
-    """The version's items and milestones tables (the first of each)."""
+    """The version's items and milestones tables (the first of each; for milestones, the
+    first with a Gates column if any)."""
     plan = Plan()
     lines = markdown.splitlines()
     i = 0
-    seen_items = seen_milestones = False
+    seen_items = seen_milestones = gated = False
     while i < len(lines):
         line = lines[i]
         if not line.lstrip().startswith("|") or i + 1 >= len(lines):
@@ -185,8 +187,15 @@ def parse(markdown: str, today: date) -> Plan:
                     basis=(r[basis] or None) if basis is not None else None,
                     state=_state(r[state]) if state is not None else None,
                 ))  # fmt: skip
-        elif not seen_milestones and "milestone" in low and "date" in low:
+        elif (
+            "milestone" in low
+            and "date" in low
+            and (not seen_milestones or ("gates" in low and not gated))
+        ):
+            # A template's own milestones table (no Gates) gives way to the plan's.
             seen_milestones = plan.has_milestones_table = True
+            gated = "gates" in low
+            plan.milestones = []
             name, day = _col(header, "milestone"), _col(header, "date")
             gates, counts = _col(header, "gates"), _col(header, "counts when", "counts")
             for r in rows:

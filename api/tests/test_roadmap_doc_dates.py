@@ -12,6 +12,7 @@ from oracle.roadmap import doc_dates
 from oracle.swarm import Outcome
 from tests.fixtures import import_draft
 from tests.test_roadmap import (  # noqa: F401 - fixtures
+    PLAN_TABLES,
     PRD,
     ROADMAP,
     ROADMAP_MD,
@@ -28,6 +29,8 @@ from tests.test_tracks import track_of
 
 VERSIONS = f"/v1/documents/{ROADMAP}/versions"
 BETA = "Beta by 2026-11-30."
+# A person's own roadmap: no plan tables (roadmap-plan-tables checks a run's draft).
+WITHOUT_PLAN = ROADMAP_MD.replace(PLAN_TABLES, "")
 
 
 def with_line(line: str, section: str = "now-payment-step", md: str = ROADMAP_MD) -> str:
@@ -75,7 +78,7 @@ def test_dates_are_found_in_the_text_not_in_sources_links_or_horizons():
         # Round 4: a date a reader sees is a date, even after a key and a hyphen.
         ("2026-11-30", date(2026, 11, 30)),
     ]
-    md = with_line("See [the plan](https://example.com/2026-12-01/plan).")
+    md = with_line("See [the plan](https://example.com/2026-12-01/plan).", md=WITHOUT_PLAN)
     md = md.replace("- Beta date: ENG-412 estimate [c:c1]", "- Retrieved 2026-10-01 [c:c1]")
     from oracle.docs.parser import parse_draft
 
@@ -127,7 +130,7 @@ async def test_a_person_s_import_refuses_an_unverified_date(client, owner, runti
 
 async def test_a_manual_roadmap_without_a_prd_refuses_any_date(client, owner):  # noqa: F811
     _, auth = owner
-    md = ROADMAP_MD.replace("document: checkout-redesign-roadmap", "document: loose-roadmap")
+    md = WITHOUT_PLAN.replace("document: checkout-redesign-roadmap", "document: loose-roadmap")
     # No PRD of its own (no provenance, no track, no ``prd:``): a PRD its text links to
     # is not its PRD.
     md = md.replace("prd: {document: checkout-redesign, version: 1}\n", "")
@@ -164,7 +167,11 @@ async def test_a_run_s_import_marks_an_unverified_date(client, owner, runtime): 
     assert len(warnings) == 1 and "Dec 15, 2026" in warnings[0]["message"]
     assert warnings[0]["section_keys"] == ["now-payment-step"]
     marks = {(m["text"], m["status"], m["label"]) for m in version["date_marks"]}
-    assert marks == {("2026-11-30", "verified", None), ("2026-12-15", "unverified", "unverified")}
+    assert marks == {
+        ("2026-11-30", "verified", None),
+        ("2026-12-15", "unverified", "unverified"),
+        ("Nov 30, 2026", "verified", None),  # the plan tables
+    }
     # The text is stored as written; the markdown carries a comment after the date.
     md = (await client.get(f"{VERSIONS}/1/markdown", headers=auth)).text
     assert "GA on 2026-12-15 <!-- oracle: date unverified -->." in md
@@ -180,7 +187,9 @@ async def test_a_withdrawn_basis_marks_the_approved_version_s_dates(client, owne
     await built_roadmap(client, auth, runtime)
     before = (await client.get(f"{VERSIONS}/1/markdown", headers=auth)).text
     version = (await client.get(f"{VERSIONS}/1", headers=auth)).json()
-    assert [(m["text"], m["status"]) for m in version["date_marks"]] == [("2026-11-30", "verified")]
+    # The body's date and the plan tables' two.
+    marks = [(m["text"], m["status"]) for m in version["date_marks"]]
+    assert marks == [("2026-11-30", "verified")] + [("Nov 30, 2026", "verified")] * 2
 
     (eng,) = [
         b
@@ -194,7 +203,8 @@ async def test_a_withdrawn_basis_marks_the_approved_version_s_dates(client, owne
 
     # The document view.
     version = (await client.get(f"{VERSIONS}/1", headers=auth)).json()
-    assert version["date_marks"] == [
+    assert [m["status"] for m in version["date_marks"]] == ["withdrawn"] * 3
+    assert version["date_marks"][:1] == [
         {"section_key": "now-payment-step", "text": "2026-11-30", "date": "2026-11-30",
          "status": "withdrawn", "label": "date withdrawn", "bases": ["ENG-412"],
          "where": "body", "days": ["2026-11-30"], "missing": ["2026-11-30"]}
@@ -202,7 +212,9 @@ async def test_a_withdrawn_basis_marks_the_approved_version_s_dates(client, owne
     # The approved text is not rewritten: the markdown carries a comment after the date,
     # which an import drops.
     after = (await client.get(f"{VERSIONS}/1/markdown", headers=auth)).text
-    assert after == before.replace("2026-11-30.", "2026-11-30 <!-- oracle: date withdrawn -->.")
+    assert after == before.replace(
+        "2026-11-30.", "2026-11-30 <!-- oracle: date withdrawn -->."
+    ).replace("Nov 30, 2026 |", "Nov 30, 2026 <!-- oracle: date withdrawn --> |")
     assert BETA in before
     # Exports: HTML (and the PDF built from it), the themed full and brief layers.
     url = f"{VERSIONS}/1/export"
@@ -223,7 +235,7 @@ async def test_a_withdrawn_basis_marks_the_approved_version_s_dates(client, owne
     # A new verified basis for the date: the marker goes.
     await record(client, auth, "ENG-412", "2026-11-30")
     version = (await client.get(f"{VERSIONS}/1", headers=auth)).json()
-    assert [m["status"] for m in version["date_marks"]] == ["verified"]
+    assert [m["status"] for m in version["date_marks"]] == ["verified"] * 3
 
 
 # roadmap-draft-wording review: a template whose items have no section of their own
@@ -266,10 +278,10 @@ The payment step reaches beta on Dec 15, 2026.
 |---|---|---|
 | Payment step beta | Dec 15, 2026 | estimate |
 
-## Sources and data points {#sources}
+{PLAN_TABLES}## Sources and data points {#sources}
 
 - Payment step: EST-PAY estimate
-"""
+""".replace("{PLAN_TABLES}", PLAN_TABLES)
 
 
 async def test_an_accepted_item_estimate_backs_a_timeline_roadmap_s_dates(
@@ -307,6 +319,9 @@ async def test_an_accepted_item_estimate_backs_a_timeline_roadmap_s_dates(
         ("lane-payments", "Nov 2, 2026", "unverified"),
         ("lane-payments", "Dec 15, 2026", "verified"),
         ("milestones", "Dec 15, 2026", "verified"),
+        # The plan tables: Beta rests on ENG-412 (the items file's milestone).
+        ("plan", "Nov 30, 2026", "verified"),
+        ("plan-milestones", "Nov 30, 2026", "verified"),
     }
     md = (await client.get(f"{VERSIONS}/1/markdown", headers=auth)).text
     assert md.count("<!-- oracle: date unverified -->") == 1

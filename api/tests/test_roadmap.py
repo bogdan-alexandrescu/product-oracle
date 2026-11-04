@@ -58,7 +58,7 @@ PLAN_TABLES = """\
 | payment-step | Payment step |  | Nov 30, 2026 | estimate | planned |
 | shipping-step | Shipping step |  |  | no date yet | planned |
 
-## Milestones {#milestones}
+## Milestones {#plan-milestones}
 
 | Milestone | Date | Gates | Counts when |
 |---|---|---|---|
@@ -66,6 +66,14 @@ PLAN_TABLES = """\
 | Shipping estimate up front |  | Shipping step |  |
 
 """
+
+
+def with_plan(md: str, items: str, bases: tuple = ()) -> str:
+    """``md`` (ROADMAP_MD) with the plan tables of another items file and bases."""
+    from oracle.runs import plan_tables
+
+    return md.replace(PLAN_TABLES, plan_tables.markdown(plan_tables.engineering_plan(items, bases)))
+
 
 ROADMAP_MD = """\
 ---
