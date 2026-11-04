@@ -597,3 +597,52 @@ async def test_review_choice_labels_are_oracles_words(client):
     assert labels[-1] == "Neither"
     assert all(x.startswith("Move Alert digest to ") for x in labels[:2])
     assert labels[0] != labels[1]
+
+
+async def test_a_long_change_request_is_taken_up_to_4000_characters(client):
+    # protects (ask-length-limit): a long change request pasted into Ask Oracle (1,622
+    # characters was refused) is taken up to 4,000 characters, and past it the refusal names
+    # the limit; fails_when: the text limit is still 1,000.
+    ctx = await make_people()
+    await World(ctx).build()
+    line = "Please move the ledger work out a quarter and explain why. "
+    long = (line * (4000 // len(line) + 1))[:4000]
+    await post(client, ctx, "owner", long)
+    assert (await last(client, ctx, "owner"))["body"]
+    r = await client.post("/v1/simple/chat/messages", json={"text": long + "x"},
+                          headers=ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 422
+    assert "4000" in r.text
+
+
+async def test_a_partly_read_request_lists_every_part_it_did_not_use(client):
+    # protects (ask-length-limit): a change request Oracle only partly understands lists every
+    # part it did not use (all the skipped parts, each change past the fifth by name), and
+    # capacity, dates and an item off the gate but still in Now are said to be not yet
+    # supported, with where to change them; fails_when: only three skipped parts are said,
+    # "say the rest again" names nothing, or a capacity part reads "I did not understand".
+    ctx = await make_people()
+    w = await World(ctx).build()
+    await post(client, ctx, "owner", "a long list of changes")
+    answer = actions(*[act("move_dates", item=w.ids["Ledger v2"], shift="1 quarter")] * 5,
+                     act("move_dates", item=w.ids["Bulk import"], shift="1 month"),
+                     act("cut", item=w.ids["Alert digest"]))  # fmt: skip
+    answer["skipped"] = ["make it nicer", "tidy the copy", "fix the tone", "be bolder",
+                         "raise our capacity to 12 engineer-weeks",
+                         "the launch date should be March 3",
+                         "Alert export is off the gate but still in Now"]  # fmt: skip
+    await read(ctx, answer)
+    m = await last(client, ctx, "owner")
+    assert len(m["cards"]) == 5
+    body = m["body"]
+    for p in ("make it nicer", "tidy the copy", "fix the tone", "be bolder"):
+        assert f"I did not understand: “{p}”." in body, body
+    assert "say the rest again" not in body
+    assert "I did not use these changes yet; say them again: " in body, body
+    assert "Bulk import" in body and "Alert digest" in body, body
+    assert "I did not understand: “raise our capacity" not in body
+    assert "I can't change capacity from a chat yet (“raise our capacity" in body, body
+    assert "I can't change dates from a chat yet (“the launch date" in body, body
+    assert "I can't change an item that is off the gate but still in Now from a chat yet" in body
+    assert m["links"] == [{"label": "Priorities", "href": "/simple/priorities"},
+                          {"label": "Roadmap", "href": "/simple/roadmap"}], m["links"]  # fmt: skip
