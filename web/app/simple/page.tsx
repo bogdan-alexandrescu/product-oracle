@@ -33,8 +33,7 @@ import {
   OP_WORDS,
   opWords,
   planByMonth,
-  planInputs,
-  prdInPlay,
+  planInput,
   waitSentence,
   type BrokenLink,
   type GoalTile,
@@ -275,18 +274,12 @@ export default function SimpleHome() {
   // A new company (no goals yet) leads with its setup; an established company's Simple Home keeps
   // its picked design (Detailed Home keeps the checklist behind its Set up chip).
   const setupFirst = !!setup && tiles !== undefined && tiles.length === 0;
-  // The plan this quarter: the PRD in play (the top PRD by priority when several) by month.
-  const priorities = useQuery(k("priorities"), () => unwrap(api.GET("/v1/simple/priorities")), { keepPrevious: true });
-  // With several PRDs in play, chosen once the ranking answered (or failed), so the strip never
-  // switches PRDs under the reader; with one, at once (undefined: waiting on the ranking).
-  const ranked = priorities.data !== undefined || !!priorities.error;
-  const planPrd = useMemo(
-    () => prdInPlay(roadmap.data, ranked ? (priorities.data?.rows ?? []).map((r) => r.item_id) : null),
-    [ranked, roadmap.data, priorities.data],
-  );
+  // home-waiting-one-list: the plan is the company roadmap's (GET /v1/simple/roadmap reads only
+  // it once there is one: oracle.roadmap.company feeding_ids), every PRD's items in the
+  // roadmap's own milestones by name, never one PRD's plan milestones.
   const plan = useMemo(
-    () => (roadmap.data && planPrd ? planByMonth(roadmap.data.items.filter((i) => i.prd?.id === planPrd.id && i.status !== "cut").flatMap(planInputs), roadmap.data.today, roadmap.data.windows.now.end) : null),
-    [roadmap.data, planPrd],
+    () => (roadmap.data ? planByMonth(roadmap.data.items.filter((i) => i.status !== "cut").map(planInput), roadmap.data.today, roadmap.data.windows.now.end) : null),
+    [roadmap.data],
   );
   // qa4-simple-home-12: every working draft of mine, each with its own count (one roadmap's draft never hides another's).
   const myDrafts = (drafts.data ?? []).filter((d) => d.status === "working" && d.changes > 0 && (d.created_by === myId || d.participant_ids.includes(myId)));
@@ -1020,10 +1013,8 @@ export default function SimpleHome() {
                     : `${r.changes_in_review} changes are not approved yet. You see the published plan until they are.`}
                 </p>
               )}
-              {planPrd === undefined ? (
-                <SkeletonRows />
-              ) : plan && planPrd ? (
-                <PlanByMonth plan={plan} prd={planPrd} testId="home-strip" named />
+              {plan ? (
+                <PlanByMonth plan={plan} testId="home-strip" named />
               ) : (
                 <p className="simple-small" data-testid="home-plan-empty">
                   Nothing planned this quarter yet.

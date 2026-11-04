@@ -14,7 +14,7 @@ import { setPanelOpen, usePanelOpen } from "@/components/hop/open-state";
 import { SIMPLE_HOME, switchTarget } from "@/lib/experience";
 import { useMe } from "@/lib/me";
 import { api, unwrap } from "@/lib/api/client";
-import { loadInbox, onWaitingChanged } from "@/lib/waiting";
+import { loadWaiting, onWaitingChanged } from "@/lib/waiting";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string };
 
@@ -43,31 +43,31 @@ function isActive(pathname: string, d: Dest): boolean {
 }
 
 /**
- * The rail's yellow counts (S1 restyle, the owner's pick): only where something waits on the
- * signed-in person: Decisions (the product decisions waiting for them, GET
- * /v1/simple/decisions/waiting, run approvals never), from the Inbox Roadmap (proposals they
- * decide and drafts waiting for their approval); Meetings counts what its page lists (the
- * production walk): the live meetings and the upcoming reviews not started yet, read when the
- * rail mounts, when something waiting changes and on the Meetings pages, not on every other
- * route change (review).
+ * The rail's yellow counts (S1 restyle, the owner's pick): only what waits on the signed-in
+ * person, from the one list Home and Decisions read (home-waiting-one-list, GET
+ * /v1/simple/decisions/waiting `items`), so a count always matches its page: Decisions counts
+ * everything in it (its "Waiting for you"); Roadmap the roadmap's part (items with a broken
+ * link, dates to confirm, proposals on my items, drafts for my approval); Meetings only a
+ * meeting live now (an upcoming one waits on nobody). Read when the rail mounts, on a route
+ * change and whenever something waiting changes.
  */
 function useSimpleCounts(enabled: boolean): Record<string, number> | null {
   const pathname = usePathname();
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
-  const [meetings, setMeetings] = useState<number | null>(null);
   const [live, setLive] = useState(0);
   const [changes, setChanges] = useState(0);
   useEffect(() => onWaitingChanged(() => setChanges((c) => c + 1)), []);
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
-    // prd-questions: Decisions counts the product decisions waiting for me (Oracle's run approvals never).
-    Promise.all([loadInbox(), unwrap(api.GET("/v1/simple/decisions/waiting"))])
-      .then(([inbox, waiting]) => {
+    loadWaiting()
+      .then((waiting) => {
         if (!alive) return;
+        const items = waiting.items;
+        const broken = new Set(items.filter((i) => i.kind === "broken_link").map((i) => i.ref_id));
         setCounts({
-          Decisions: waiting.count,
-          Roadmap: inbox.simple_proposals.length + inbox.simple_approvals.length,
+          Decisions: items.length,
+          Roadmap: broken.size + items.filter((i) => i.kind === "date" || i.kind === "proposal" || i.kind === "draft").length,
         });
       })
       .catch(() => undefined);
@@ -80,25 +80,20 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
     if (!enabled) return;
     let alive = true;
     unwrap(api.GET("/v1/simple/meetings"))
-      .then((m) => {
-        if (!alive) return;
-        setMeetings(m.live.length + m.upcoming.filter((o) => !o.meeting_id).length);
-        setLive(m.live.length);
-      })
+      .then((m) => alive && setLive(m.live.length))
       .catch(() => undefined);
     return () => {
       alive = false;
     };
   }, [enabled, changes, meetingsPath]);
-  // qa-simple-decide-51: "Meetings live": the yellow count only when one is on now (else the count is neutral).
-  return counts && { ...counts, Meetings: meetings ?? 0, "Meetings live": live };
+  // qa-simple-decide-51: "Meetings live": the yellow count only when one is on now.
+  return counts && { ...counts, Meetings: live, "Meetings live": live };
 }
 
-/** What a rail count counts, said in words (its label and tooltip). */
+/** What a rail count counts, said in words (its accessible name and tooltip). */
 function countWords(label: string, n: number): string {
-  if (label === "Meetings") return `${n} ${n === 1 ? "review" : "reviews"} live or coming up`;
-  // qa4-simple-roadmap-9: Roadmap counts changes and drafts sent to you, not the page's "Needs a decision".
-  if (label === "Roadmap") return `${n} ${n === 1 ? "change or draft" : "changes or drafts"} waiting on you`;
+  if (label === "Meetings") return `${n} ${n === 1 ? "meeting" : "meetings"} live now`;
+  if (label === "Roadmap") return `${n} on the roadmap waiting on you: broken links, dates, proposals and drafts`;
   return `${n} waiting on you`;
 }
 
