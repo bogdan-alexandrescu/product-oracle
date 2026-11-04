@@ -66,6 +66,8 @@ class Milestone:
 class EngineeringPlan:
     items: list[Row] = field(default_factory=list)
     milestones: list[Milestone] = field(default_factory=list)
+    # one-roadmap-many-prds: how many rows are other PRDs' items on the company roadmap.
+    others: int = 0
 
     def item(self, key: str | None, title: str) -> Row | None:
         for r in self.items:
@@ -118,6 +120,7 @@ def engineering_plan(
     for o in others:
         if o["key"] not in own:
             end = as_date(o.get("end"))
+            plan.others += 1
             plan.items.append(
                 Row(
                     key=o["key"],
@@ -220,9 +223,9 @@ def prompt_lines(plan: EngineeringPlan, *, critic: bool) -> list[str]:
         "Plan tables (approving this version applies them to Simple's plan): put a "
         "'## Plan {#plan}' section with the items table and a '## Milestones {#plan-milestones}' "
         "section with the milestones table under Full version, before Sources and data "
-        "points. Copy the rows below as they are: every item of roadmap_items.yaml and the "
-        "company roadmap's other items listed, and no other, each date exactly the "
-        "engineering date, month first (Nov 30, 2026), and an "
+        "points. Copy the rows below as they are: every item of roadmap_items.yaml and "
+        + ("the company roadmap's other items listed, and " if plan.others else "")
+        + "no other, each date exactly the engineering date, month first (Nov 30, 2026), and an "
         "empty cell where it is empty below (the engineering dates give no start: Simple "
         "estimates it). Dates from says what the end rests on: estimate, team queue or "
         "commitment. You may word Counts when (how the milestone counts) where it is empty. "
