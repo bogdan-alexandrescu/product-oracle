@@ -84,6 +84,35 @@ test.describe("one feature panel, desktop", () => {
     await expect(panel.getByTestId("fp-delivery")).toHaveText(oracle);
   });
 
+  test("the owner is changed in place: pick a person, Save, and the panel names them", async ({ page }) => {
+    const panel = await openOnRoadmap(page, "alert-mobile");
+    await panel.getByRole("button", { name: "Change Owner" }).click();
+    const edit = panel.getByTestId("fp-edit");
+    const pick = edit.getByRole("combobox", { name: "Owner" });
+    await expect(pick.locator("option").nth(2)).toBeAttached();
+    const was = await pick.inputValue();
+    const options = await pick.locator("option").evaluateAll((os) => os.map((o) => ({ value: (o as HTMLOptionElement).value, label: o.textContent ?? "" })));
+    const next = options.find((o) => o.value && o.value !== was)!;
+    await pick.selectOption(next.value);
+    await edit.getByRole("button", { name: "Save" }).click();
+    await expect(edit).toBeHidden();
+    await expect(panel.getByTestId("fp-owner")).toHaveText(next.label);
+  });
+
+  test("the milestone is changed in place: a name and a day, Save, and the panel shows them", async ({ page }) => {
+    const panel = await openOnRoadmap(page, "alert-mobile");
+    await panel.getByRole("button", { name: "Change Milestone" }).click();
+    const edit = panel.getByTestId("fp-edit");
+    await edit.getByRole("textbox", { name: "Milestone name" }).fill("Beta for the pilot");
+    await edit.getByRole("textbox", { name: "Milestone day" }).fill("bad day");
+    await edit.getByRole("button", { name: "Save" }).click();
+    await expect(edit.getByRole("alert")).toHaveText("Type the day as Nov 27");
+    await edit.getByRole("textbox", { name: "Milestone day" }).fill("Dec 18");
+    await edit.getByRole("button", { name: "Save" }).click();
+    await expect(edit).toBeHidden();
+    await expect(panel.getByTestId("fp-milestone")).toHaveText("Beta for the pilot · Dec 18");
+  });
+
   test("Cancel leaves a field as it was", async ({ page }) => {
     const panel = await openOnRoadmap(page, "alert-mobile");
     const before = await panel.getByTestId("fp-delivery").innerText();
