@@ -51,8 +51,10 @@ async function removeAndUndo(box: Locator, line: string) {
   await say(box, line);
   await expect(last(box).getByTestId("chat-message-body")).toContainText(`does not depend on`);
   await expect(last(box).getByTestId("chat-card")).toHaveCount(0);
-  await tap(card.getByRole("button", { name: "Undo" }));
-  await expect(card).toHaveAttribute("data-status", "undone");
+  const applied = box.locator('[data-testid="chat-card"][data-status="applied"]');
+  await expect(applied).toHaveCount(1);
+  await tap(applied.getByRole("button", { name: "Undo" }));
+  await expect(box.locator('[data-testid="chat-card"][data-status="undone"]')).toHaveCount(1);
   await say(box, line);
   await expect(last(box).getByTestId("chat-card").getByTestId("chat-card-summary")).toHaveText(SUMMARY);
 }
