@@ -367,19 +367,20 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onRe
   const approvable = working.filter((d) => d.status === "submitted" && d.can_approve);
   return (
     <section data-testid="draft-banner" className="rounded-xl border border-accent-mid bg-accent-soft px-4 py-2.5 text-accent-ink">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 max-[640px]:gap-x-1.5">
         {/* fix4 qa-simple-roadmap-19: on a phone the sentence takes its own line(s), the three buttons a row under it. */}
         <p className="min-w-0 flex-1 text-[15px] max-[640px]:basis-full" data-testid="draft-words">
           <b>Your working draft</b> · <span data-testid="draft-count">{changes}</span> {changes === 1 ? "change" : "changes"} since {time(since)} · <span data-testid="draft-next">{next.words}</span>
         </p>
-        <Button variant="ghost" disabled={!last} onClick={() => last && onUndo(last.id)}>
+        {/* roadmap-decide: a hair tighter on a phone, so Approve and publish keeps the row. */}
+        <Button variant="ghost" className="max-[640px]:px-1.5" disabled={!last} onClick={() => last && onUndo(last.id)}>
           Undo
         </Button>
-        <Button variant="ghost" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Button variant="ghost" className="max-[640px]:px-1.5" aria-expanded={open} onClick={() => setOpen(!open)}>
           See changes
         </Button>
         {publishable.length > 0 ? (
-          <Button variant="solid" data-testid="draft-publish" onClick={() => onApprove(publishable)}>
+          <Button variant="solid" className="max-[640px]:px-2.5" data-testid="draft-publish" onClick={() => onApprove(publishable)}>
             Approve and publish
           </Button>
         ) : (
