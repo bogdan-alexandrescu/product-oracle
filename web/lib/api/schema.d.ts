@@ -12293,6 +12293,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/goal-map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Goal Map */
+        get: operations["get_goal_map"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-map/areas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Area */
+        post: operations["add_area"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-map/areas/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Order Areas */
+        put: operations["order_areas"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-map/goals/{goal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit Goal */
+        patch: operations["edit_goal"];
+        trace?: never;
+    };
+    "/v1/simple/goal-map/milestones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Propose Milestone */
+        post: operations["propose_milestone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-map/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Attach Feature */
+        post: operations["attach_feature"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/sessions": {
         parameters: {
             query?: never;
@@ -15682,6 +15784,21 @@ export interface components {
             document_status: "draft" | "in_review" | "approved";
             version: components["schemas"]["VersionSummary"];
         };
+        /** AreaIn */
+        AreaIn: {
+            /** Name */
+            name: string;
+            /**
+             * Lever
+             * @default
+             */
+            lever: string;
+        };
+        /** AreaOrderIn */
+        AreaOrderIn: {
+            /** Ids */
+            ids: string[];
+        };
         /** ArtifactDependencyOut */
         ArtifactDependencyOut: {
             /**
@@ -16016,6 +16133,19 @@ export interface components {
             reasons: {
                 [key: string]: string;
             }[];
+        };
+        /** AttachIn */
+        AttachIn: {
+            /**
+             * Feature
+             * Format: uuid
+             */
+            feature: string;
+            /**
+             * Milestone
+             * Format: uuid
+             */
+            milestone: string;
         };
         /**
          * AudienceOut
@@ -24184,6 +24314,141 @@ export interface components {
             /** Sso Hint */
             sso_hint?: string | null;
         };
+        /** GmArea */
+        GmArea: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Lever */
+            lever: string;
+        };
+        /** GmFeature */
+        GmFeature: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Area */
+            area: string | null;
+            /** Milestones */
+            milestones: string[];
+            /** Lever */
+            lever: string;
+            /** Expected */
+            expected: string;
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "High" | "Medium" | "Low";
+            /** Released */
+            released: boolean;
+            /** Measured */
+            measured: string | null;
+            /**
+             * Lift
+             * @enum {string}
+             */
+            lift: "helping" | "not_helping" | "not_measured";
+        };
+        /** GmGoal */
+        GmGoal: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Measure */
+            measure: string;
+            /** Target */
+            target: number;
+            /** Current */
+            current: number | null;
+            /** Unit */
+            unit: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "met" | "on_track" | "at_risk" | "missed" | "not_measured";
+            /** Math */
+            math: string;
+            /** Builds On */
+            builds_on: string[];
+            /** History */
+            history: components["schemas"]["GmHistory"][];
+        };
+        /** GmGuardrail */
+        GmGuardrail: {
+            /** Name */
+            name: string;
+            /** Rule */
+            rule: string;
+            /** Current */
+            current: number | null;
+            /** Days */
+            days: (number | null)[];
+            /** Held */
+            held: boolean;
+        };
+        /** GmHistory */
+        GmHistory: {
+            /** Date */
+            date: string;
+            /** Text */
+            text: string;
+            /** By */
+            by: string;
+        };
+        /** GmMilestone */
+        GmMilestone: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Goal
+             * Format: uuid
+             */
+            goal: string;
+            /** Measure */
+            measure: string;
+            /** Threshold */
+            threshold: number;
+            /** Unit */
+            unit: string;
+            /** Current */
+            current: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "met" | "on_track" | "at_risk" | "missed" | "not_measured";
+            /** Areas */
+            areas: string[];
+            /** Depends */
+            depends: string[];
+            /** Month */
+            month: string;
+            /** Days */
+            days: (number | null)[];
+            /** Confirmed */
+            confirmed: string | null;
+            /** Proposed */
+            proposed: boolean;
+        };
         /** GoalCalibration */
         GoalCalibration: {
             /** N */
@@ -24259,6 +24524,26 @@ export interface components {
              */
             matched_on: "brief" | "feature";
         };
+        /** GoalMapOut */
+        GoalMapOut: {
+            /** Goals */
+            goals: components["schemas"]["GmGoal"][];
+            /** Areas */
+            areas: components["schemas"]["GmArea"][];
+            guardrail: components["schemas"]["GmGuardrail"] | null;
+            /** Milestones */
+            milestones: components["schemas"]["GmMilestone"][];
+            /** Features */
+            features: components["schemas"]["GmFeature"][];
+            /** Today */
+            today: string;
+            /** Reps */
+            reps: number | null;
+            /** Approver */
+            approver: string | null;
+            /** Can Edit */
+            can_edit: boolean;
+        };
         /** GoalMeasurePushback */
         GoalMeasurePushback: {
             /** Detail */
@@ -24294,6 +24579,11 @@ export interface components {
              * @default 0
              */
             subgoals: number;
+        };
+        /** GoalTargetIn */
+        GoalTargetIn: {
+            /** Target */
+            target: number;
         };
         /** GoalTerm */
         GoalTerm: {
@@ -32067,6 +32357,25 @@ export interface components {
             created_at: string;
             /** Source Title */
             source_title?: string | null;
+        };
+        /** ProposeIn */
+        ProposeIn: {
+            /** Name */
+            name: string;
+            /**
+             * Goal
+             * Format: uuid
+             */
+            goal: string;
+            /** Threshold */
+            threshold: number;
+            /**
+             * Areas
+             * @default []
+             */
+            areas: string[];
+            /** After */
+            after?: string | null;
         };
         /**
          * ProposedAssessment
@@ -69948,6 +70257,193 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimplePlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_goal_map: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
+                };
+            };
+        };
+    };
+    add_area: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AreaIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    order_areas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AreaOrderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_goal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalTargetIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propose_milestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_feature: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttachIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
                 };
             };
             /** @description Validation Error */

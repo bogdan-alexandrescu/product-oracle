@@ -65,7 +65,9 @@ async def world() -> tuple[Ctx, dict[str, str]]:
         signups = await seed.entity(
             "goal", "signups", metric="sign-ups per rep per day", target=40, unit="",
             math="Each rep's daily sign-ups",
-            target_history=[{"date": "Oct 30, 2026", "text": "Target 30 → 40", "by": "Ann Example"}],
+            target_history=[
+                {"date": "Oct 30, 2026", "text": "Target 30 → 40", "by": "Ann Example"}
+            ],
         )  # fmt: skip
         conv = await seed.entity(
             "goal", "conversions", metric="paid conversions per rep per day", target=10,
