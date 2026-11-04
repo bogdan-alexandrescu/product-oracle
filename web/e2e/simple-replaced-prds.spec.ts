@@ -114,7 +114,9 @@ for (const [name, viewport] of [["desktop", { width: 1440, height: 900 }], ["pho
       await expect(page.getByRole("link", { name: /Export PDF/ })).toHaveCount(0);
       await replaced.getByRole("link", { name: AREAS[1], exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`/simple/one-pagers/${AREA_PRDS[1][0]}$`));
-      await expect(page.getByTestId("one-pager-replaced")).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: AREAS[1], level: 1 })).toBeVisible();
+      // (The page left may stay mounted, hidden, in the router's cache.)
+      await expect(page.getByTestId("one-pager-replaced")).toBeHidden();
     });
   });
 }
