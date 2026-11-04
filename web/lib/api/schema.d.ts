@@ -6070,6 +6070,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/rebuilds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Rebuilds
+         * @description The rebuild sign: the runs that will make a new version of a document the caller
+         *     may read (scheduled, running, waiting, stopped, or landed and not approved yet).
+         */
+        get: operations["list_rebuilds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{run_id}/decisions": {
         parameters: {
             query?: never;
@@ -19341,6 +19362,18 @@ export interface components {
             slug: string;
             /** Title */
             title: string;
+        };
+        /**
+         * CompanyRoadmapRebuilds
+         * @description The company roadmap every PRD feeds: a PRD's rebuild changes it too.
+         */
+        CompanyRoadmapRebuilds: {
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Prds */
+            prds: number;
         };
         /** CompareCheckpoint */
         CompareCheckpoint: {
@@ -33598,6 +33631,72 @@ export interface components {
             approver_id: string;
             /** Reason */
             reason: string;
+        };
+        /**
+         * Rebuild
+         * @description The rebuild sign (owner's pick A): a run that will make a new version of a document,
+         *     as the chip beside its version pill says it (``oracle.runs.rebuilds``).
+         */
+        Rebuild: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Flow
+             * @enum {string}
+             */
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest" | "discussion_research" | "intake_analysis";
+            /** Flow Title */
+            flow_title: string;
+            /** Document Slug */
+            document_slug: string;
+            /** Document Title */
+            document_title?: string | null;
+            /** Document Kind */
+            document_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing") | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "scheduled" | "running" | "waiting" | "failed" | "done";
+            /** Steps */
+            steps: string[];
+            /** Step */
+            step: number;
+            /** From Version */
+            from_version?: number | null;
+            /** To Version */
+            to_version: number;
+            /** Started By */
+            started_by?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Scheduled For */
+            scheduled_for?: string | null;
+            /** Minutes Left */
+            minutes_left?: number | null;
+            /** Next Stop */
+            next_stop?: string | null;
+            /** Next Stop Who */
+            next_stop_who?: string | null;
+            /** Next Stop Action */
+            next_stop_action?: string | null;
+            /** Waits On */
+            waits_on?: string | null;
+            /** Waits On Action */
+            waits_on_action?: string | null;
+            /** Review Link */
+            review_link?: string | null;
+            /** Error */
+            error?: string | null;
+        };
+        /** RebuildsOut */
+        RebuildsOut: {
+            /** Rebuilds */
+            rebuilds: components["schemas"]["Rebuild"][];
+            company_roadmap?: components["schemas"]["CompanyRoadmapRebuilds"] | null;
         };
         /** RecommendIn */
         RecommendIn: {
@@ -59540,6 +59639,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_rebuilds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RebuildsOut"];
                 };
             };
         };
