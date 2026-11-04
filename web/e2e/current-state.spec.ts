@@ -1,5 +1,5 @@
 import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { expect, test, type Locator, type Page } from "./test";
 
 /**
  * Current state beside Desired state (the owner's picks: Proof table, Word pill, Owner confirms
@@ -9,6 +9,14 @@ import { expect, test, type Page } from "./test";
  */
 
 const PHONE = { width: 390, height: 844 };
+
+/** The pill follows the name, as chips do (owner, Nov 4): to its right on the same line, or on a line under it. */
+async function pillAfter(name: Locator, pill: Locator) {
+  const n = (await name.boundingBox())!;
+  const p = (await pill.boundingBox())!;
+  const sameLine = p.y < n.y + n.height && n.y < p.y + p.height;
+  expect(sameLine ? p.x >= n.x + n.width - 1 : p.y >= n.y + n.height - 1, "the pill comes after the name").toBe(true);
+}
 
 for (const size of ["desktop", "phone"] as const) {
   test.describe(size, () => {
@@ -95,9 +103,12 @@ for (const size of ["desktop", "phone"] as const) {
       const fresh = total - 7;
       await expect(legend.getByRole("button", { name: `New ${fresh}` })).toBeVisible();
       await expect(rows.locator('[data-mark="exists_old"]')).toHaveText("Exists · proof old");
-      // A pill says what it means and its proof.
+      // The pill follows the title, so every title starts at one x.
+      for (const row of (await rows.all()).slice(0, 3)) await pillAfter(row.getByTestId("prio-title"), row.getByTestId("cs-mark"));
+      // A pill says what it means and its proof; its card names the feature, then its pill.
       await rows.first().getByRole("button", { name: "What In progress means" }).click();
       const card = page.getByTestId("cs-mark-card");
+      await pillAfter(card.locator("span.font-semibold").first(), card.getByTestId("cs-mark"));
       await expect(card).toContainText("Being built");
       await expect(card).toContainText("4 merged pull requests");
       await expect(card).toContainText("7 of 7 tracker tasks done");
@@ -117,6 +128,19 @@ for (const size of ["desktop", "phone"] as const) {
       const label = (title: string) => page.getByTestId("label-title").filter({ hasText: title }).locator("xpath=..");
       await expect(label("Setup checklist").getByTestId("cs-mark")).toHaveText("In progress");
       await expect(label("Weekly alert digest").getByTestId("cs-mark")).toHaveText("Exists");
+      // The pill follows the name; the names start at one x and wrap whole, never cut.
+      await pillAfter(label("Setup checklist").getByTestId("label-title"), label("Setup checklist").getByTestId("cs-mark"));
+      const names = page.getByTestId("label-title");
+      const xs = await names.evaluateAll((els) => els.filter((e) => !e.parentElement?.querySelector('[data-testid="return-place"]')).map((e) => Math.round(e.getBoundingClientRect().x)));
+      expect(new Set(xs).size).toBe(1);
+      for (const n of await names.all()) {
+        const whole = await n.evaluate((el) => {
+          const row = el.closest("button")!.getBoundingClientRect();
+          const r = el.getBoundingClientRect();
+          return el.scrollHeight <= el.clientHeight + 1 && r.top >= row.top - 1 && r.bottom <= row.bottom + 1;
+        });
+        expect(whole, `${await n.textContent()} is whole, inside its row`).toBe(true);
+      }
       await expect(page.locator('[data-testid="cs-mark"][data-mark="exists_old"]').first()).toBeVisible();
     });
   });
