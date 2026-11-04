@@ -39,7 +39,7 @@
       },
       {
        "file": "fp1-a-added.html",
-       "caption": "Mobile alert push added as a link: Links grows to two, the new clash box sits under them, and the chart stays in view."
+       "caption": "Then Mobile alert push added as a link: the saved delivery still reads Nov 27 with its override line and the bar Oct 31 – Nov 27; Links grows to two, the clash box under them names both, and the banner behind counts 2 broken links."
       },
       {
        "file": "fp1-a-hard-1512.html",
@@ -93,7 +93,7 @@
       },
       {
        "file": "fp1-b-added.html",
-       "caption": "Mobile alert push added as a link, with the clash box; the chart it was picked for stays dimmed."
+       "caption": "Then Mobile alert push added as a link: the delivery stays Nov 27 as saved, the clash box names both links; the chart behind, dimmed, counts 2 broken links."
       },
       {
        "file": "fp1-b-hard-1512.html",
@@ -147,7 +147,7 @@
       },
       {
        "file": "fp1-c-added.html",
-       "caption": "Mobile alert push added as a link: the clash box in the left column; the chart is hidden."
+       "caption": "Then Mobile alert push added as a link: the delivery stays Nov 27 as saved; the clash box, naming both links, sits in the left column; the chart is hidden."
       },
       {
        "file": "fp1-c-hard-1512.html",
@@ -197,7 +197,7 @@
       },
       {
        "file": "fp1-d-added.html",
-       "caption": "Mobile alert push added as a link: the card scrolls to Links and the clash box fills most of it."
+       "caption": "Then Mobile alert push added as a link: the bar behind keeps the saved Oct 31 – Nov 27 and the banner counts 2 broken links; the card scrolls to Links and the clash box fills most of it."
       },
       {
        "file": "fp1-d-hard-1512.html",
@@ -383,15 +383,15 @@
       },
       {
        "file": "fp3-a-added.html",
-       "caption": "Mobile alert push added: the clash box offers Move the dependents: Dec 21 – Jan 30, 2027."
+       "caption": "Mobile alert push added after the Nov 27 delivery was saved: the clash box names both links and offers Move the dependents: Dec 21 – Jan 17, 2027, the saved 27 days moved after Dec 20; the banner counts 2 broken links."
       },
       {
        "file": "fp3-a-done.html",
-       "caption": "Move the dependents picked: back on the Timeline the bar now runs Dec 21 – Jan 30, 2027."
+       "caption": "Move the dependents picked: back on the Timeline the bar now runs Dec 21 – Jan 17, 2027 and no links are broken."
       },
       {
        "file": "fp3-a-hard-1512.html",
-       "caption": "The hard case at 1512, scrolled to Links: 8 items it depends on, Single sign-on for admins flagged as ending after this starts, each with an ×."
+       "caption": "The hard case at 1512, scrolled to Links: 8 items it depends on, each with an ×; the 4 that end after its Jan 18, 2027 start are flagged, as the clash box above names them: Single sign-on for admins and 3 more."
       },
       {
        "file": "fp3-a-goals-mid.html",
@@ -429,23 +429,23 @@
       },
       {
        "file": "fp3-b-added.html",
-       "caption": "Mobile alert push picked: a red line on the chart joins it to Weekly alert digest, and the clash box shows in the panel."
+       "caption": "Mobile alert push picked: a dashed red line on the chart runs from the end of its bar (Dec 20) back to the start of Weekly alert digest's saved bar (Oct 31 – Nov 27); the clash box shows in the panel and the banner counts 2 broken links."
       },
       {
        "file": "fp3-b-done.html",
-       "caption": "Move the dependents picked: the bar moves to Dec 21 – Jan 30, 2027 and the line stays."
+       "caption": "Move the dependents picked: the bar moves to Dec 21 – Jan 17, 2027, just after Mobile alert push ends, and the line between the two bars turns plain blue now the clash is fixed."
       },
       {
        "file": "fp3-b-hard-1512.html",
-       "caption": "The hard case at 1512, picking: of its 8 links only Alert rules engine is on this Timeline, so one line is drawn to its bar; a tag by the bar and the panel say the other 7 are on other roadmaps and are not drawn."
+       "caption": "The hard case at 1512, picking: of its 8 links only Alert rules engine is on this Timeline, so 1 of its 8 links is drawn, to its bar; a tag by the bar and the panel say the other 7 are not on this Timeline and are not drawn."
       },
       {
        "file": "fp3-b-goals-mid.html",
-       "caption": "On Goal buckets there is no chart: the panel says to type the name, with nothing to stop."
+       "caption": "On Goal buckets there is no chart: the panel says to type the name, and the results for the typed 'push' show under it, as in FP3 A."
       },
       {
        "file": "fp3-b-mid-390.html",
-       "caption": "Phone 390: no picking, only typing."
+       "caption": "Phone 390: no picking, only typing, with the results for 'push'."
       },
       {
        "file": "fp3-b-mid-390-dark.html",
@@ -475,15 +475,15 @@
       },
       {
        "file": "fp3-c-added.html",
-       "caption": "Mobile alert push added at left with a red line; the clash box under the map."
+       "caption": "Mobile alert push added at left with a red line; the centre keeps the saved Oct 31 – Nov 27; the clash box under the map offers Move the dependents: Dec 21 – Jan 17, 2027."
       },
       {
        "file": "fp3-c-done.html",
-       "caption": "Back on the Timeline: the bar runs Dec 21 – Jan 30, 2027."
+       "caption": "Back on the Timeline: the bar runs Dec 21 – Jan 17, 2027 and no links are broken."
       },
       {
        "file": "fp3-c-hard-1512.html",
-       "caption": "The hard case at 1512: 8 items squeeze into the left column, which scrolls; names are cut short."
+       "caption": "The hard case at 1512: 8 items squeeze into the left column, which scrolls; names are cut short; the 4 that end after its start are red."
       },
       {
        "file": "fp3-c-goals-mid.html",
