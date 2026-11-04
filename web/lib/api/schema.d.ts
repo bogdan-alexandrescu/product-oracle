@@ -21081,6 +21081,35 @@ export interface components {
             /** Sections */
             sections: components["schemas"]["SectionDiff"][];
         };
+        /**
+         * DiscoveryWork
+         * @description An answer that says the thing is unknown and finding it out is part of this work
+         *     (walk 2 problem 19): a requirement in the PRD and an early discovery item on the
+         *     plan, cited to the answer (``cite_ref``), never a blocker.
+         */
+        DiscoveryWork: {
+            /**
+             * Gap Id
+             * Format: uuid
+             */
+            gap_id: string;
+            /**
+             * Question Id
+             * Format: uuid
+             */
+            question_id: string;
+            /**
+             * Answer Id
+             * Format: uuid
+             */
+            answer_id: string;
+            /** Requirement */
+            requirement: string;
+            /** Answer */
+            answer: string;
+            /** Cite Ref */
+            cite_ref: string;
+        };
         /** DiscussionChangeCounts */
         DiscussionChangeCounts: {
             /**
@@ -26727,6 +26756,11 @@ export interface components {
             /** Draft Version */
             draft_version?: number | null;
             ai_read?: components["schemas"]["AiReadOut"] | null;
+            /**
+             * Work
+             * @default []
+             */
+            work: components["schemas"]["DiscoveryWork"][];
         };
         /** InterviewCreate */
         InterviewCreate: {

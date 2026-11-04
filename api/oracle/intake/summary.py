@@ -22,7 +22,7 @@ from oracle.baseline import conflicts as baseline_conflicts
 from oracle.baseline import scoring
 from oracle.baseline import trace as baseline_trace
 from oracle.baseline.models import Conflict, Entity
-from oracle.intake import autoask, drafting, engine, sharing
+from oracle.intake import autoask, discovery, drafting, engine, sharing
 from oracle.intake import categories as cats
 from oracle.intake import evidence as ev
 from oracle.intake.answers import next_actions
@@ -34,6 +34,7 @@ from oracle.intake.schemas import (
     ConflictRecommendation,
     ConflictView,
     Coverage,
+    DiscoveryWork,
     EvidenceRef,
     ExtractedItem,
     FeatureTrace,
@@ -664,8 +665,33 @@ async def build(
         proposals=await proposals_of(db, intake, principal),
         shared_counts=[FindingCount(**c) for c in sharing.counts(view.reg, view.v)],
         is_author=view.v.is_author,
+        work=await _work(db, view, ranked, principal),
         **await _drafting(db, intake, view),
     )
+
+
+async def _work(
+    db: AsyncSession, view: "View", ranked: list, principal: Principal | None
+) -> list[DiscoveryWork]:
+    """The answers that became work, on the gaps the reader sees (a run: of its pinned
+    answers, C5)."""
+    seen = {g.id for g in ranked}
+    gaps = {g.id: g for g in view.raw.values() if g.id in seen}
+    pin = await drafting.pin_of(db, principal)
+    keep = set(pin.answer_ids) if pin is not None and pin.intake_id == view.intake.id else None
+    order = {g.id: i for i, g in enumerate(ranked)}
+    work = await discovery.work_of(db, view.questions, gaps, keep)
+    return [
+        DiscoveryWork(
+            gap_id=w.gap_id,
+            question_id=w.question_id,
+            answer_id=w.answer_id,
+            requirement=w.requirement,
+            answer=w.answer,
+            cite_ref=w.cite_ref,
+        )  # fmt: skip
+        for w in sorted(work, key=lambda w: order[w.gap_id])
+    ]
 
 
 async def _drafting(db: AsyncSession, intake: ProductIntake, view: "View") -> dict[str, Any]:

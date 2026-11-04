@@ -4720,6 +4720,19 @@ async def _prd_links(db: AsyncSession, markdown: str, source: VersionSource) -> 
     return {"resolved": resolved, "unresolved": unresolved}
 
 
+async def _work_problems(db: AsyncSession, run: Run, markdown: str) -> list[ImportProblem]:
+    """A PRD draft's problems with the work its brief's answers made (an answer saying
+    finding out is part of this work: a requirement cited to it, never a blocker)."""
+    from oracle.intake import discovery, drafting
+
+    intake_id = drafting._intake_id(run)
+    pinned = (run.knobs or {}).get(drafting.ANSWER_IDS)
+    if intake_id is None or not isinstance(pinned, list) or (run.knobs or {}).get("intake_gap_ids"):
+        return []
+    keep = {uuid.UUID(str(i)) for i in pinned}
+    return discovery.draft_problems(markdown, await discovery.run_work(db, intake_id, keep))
+
+
 async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) -> dict[str, Any]:
     """Import the draft as the next version of the run's document (of ``kind``, with
     the run's provenance), in its own transaction."""
@@ -4741,6 +4754,9 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
         if knobs.get("template") and knobs.get("template_version")
         else None
     )
+    if kind == "prd" and (problems := await _work_problems(db, run, markdown)):
+        # Walk 2 problem 19: what the brief's answers made work is never a blocker.
+        return rejection.refused(name, problems)
     async with tenant_session(tenant_id) as s:
         try:
             result = await docs_service.import_draft(
