@@ -66,6 +66,16 @@ async function openInboxFromRail(page: Page, phone: boolean): Promise<number> {
   return n;
 }
 
+/** The owner reads the roadmap, Decisions and the one-pager first (Oracle's dates and goal suggestions are made as the roadmap is first read). */
+async function readPages(page: Page) {
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await page.goto("/simple/decisions");
+  await expect(page.getByTestId("questions-mine")).toBeVisible();
+  await page.goto("/simple/one-pagers/guided-setup");
+  await expect(page.getByTestId("one-pager")).toBeVisible();
+}
+
 const QUESTION = "Q6 Invite limit on the free plan";
 const LINE = "Invite suggestions from the admin's";
 
@@ -86,6 +96,7 @@ for (const phone of [false, true]) {
       await expect(page.getByText("Sent to Avery Stone to decide")).toBeVisible();
 
       await as(page, undefined, size);
+      await readPages(page);
       const n = await openInboxFromRail(page, phone);
       expect(await waiting(page)).toBe(n);
       const row = page.getByRole("row").filter({ hasText: QUESTION }).first();
@@ -120,6 +131,7 @@ for (const phone of [false, true]) {
       await expect(page.locator('[data-line="bets-2"]')).toHaveAttribute("data-state", "proposal");
 
       await as(page, undefined, size);
+      await readPages(page);
       if (phone) {
         await page.goto("/simple");
         await expect(page.getByTestId("simple-tab-more-count")).toBeVisible();
