@@ -124,6 +124,20 @@ def test_queue_dates_said_to_come_from_the_items_own_estimate_are_flagged():
         assert "own effort" in warnings[0].message
 
 
+def test_a_sentence_that_denies_the_dates_are_estimates_is_not_sent_back():
+    """protects=a writer following the prompt ('never write that it comes from the item's
+    own estimate') may say so; fails_when=the denial is read as the claim."""
+    for text in (
+        "These dates are not from each item's own estimate: they are its place in the queue.",
+        "An end date never comes from the item's own estimate.",
+        "The dates don't come from each item's own engineering estimate.",
+    ):
+        warnings = draft_words.check(
+            parse_draft(f"{HEAD}# R {{#r}}\n\n## T {{#t}}\n\n{text}\n").sections
+        )
+        assert warnings == [], text
+
+
 def test_the_writer_never_marks_a_date_unverified_itself():
     for text in (
         "Ends Nov 30, 2026 (date unverified).",
@@ -330,7 +344,7 @@ async def test_an_export_says_a_capacity_date_is_the_items_place_in_the_queue(cl
         EXPORT, params={"format": "html", "audience": "engineering"}, headers=ctx.as_("viewer")
     )
     assert resp.status_code == 200, resp.text
-    assert (
-        "Milestone: Pilot, ends Feb 12, 2027: its place in the team's queue; its own effort: 2"
-        in html.unescape(_text(resp.text))
-    )
+    text = html.unescape(_text(resp.text))
+    assert "Milestone: Pilot, ends Feb 12, 2027: its place in the team's queue" in text
+    # roadmap-draft-wording review: an effort with no unit (2) says nothing on its own.
+    assert "its own effort: 2" not in text
