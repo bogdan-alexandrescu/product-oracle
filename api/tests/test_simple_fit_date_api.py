@@ -295,9 +295,10 @@ HARD = BODY.replace("| 30 Nov 2026 | 25 Dec 2026 |", "| 30 Nov 2026 | 21 Dec 202
 async def _activation(client, ctx, target=55):
     from tests.baseline_helpers import entity
 
+    attrs = {"metric": "new teams that finish setup", "unit": "%", "comparison": "at_least",
+             "target": target, "start": 40}  # fmt: skip
     return await entity(client, ctx, type="goal", key="activation", title="Activation",
-                        attrs={"metric": "new teams that finish setup", "unit": "%",
-                               "comparison": "at_least", "target": target, "start": 40})  # fmt: skip
+                        attrs=attrs)  # fmt: skip
 
 
 async def test_answer_ties_its_baseline_goal(client):

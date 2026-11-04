@@ -75838,6 +75838,16 @@
                 "type": "null"
               }
             ]
+          },
+          "baseline_goal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FitBaselineGoalOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -76007,6 +76017,103 @@
           "needs_estimate"
         ],
         "title": "FitApprovedOut"
+      },
+      "FitBaselineGoalOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "comparison": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparison"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
+          },
+          "plan_target": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Target"
+          },
+          "smaller": {
+            "type": "boolean",
+            "title": "Smaller",
+            "default": false
+          },
+          "can_edit": {
+            "type": "boolean",
+            "title": "Can Edit",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "FitBaselineGoalOut",
+        "description": "The Baseline goal the milestone's gate counts toward (the milestone's first target's\ngoal, by name): what \"Keep the date with a smaller goal\" opens and saves through\n``PATCH /v1/baseline/entities/{id}``. ``plan_target``: the number the PRD's milestone\ntarget names; ``smaller``: the goal's target is below it, so the answer counts the\ngoal's own work in the milestone in proportion (:func:`_scale`)."
       },
       "FitChangeOut": {
         "properties": {

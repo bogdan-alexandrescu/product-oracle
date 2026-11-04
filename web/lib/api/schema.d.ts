@@ -23836,6 +23836,7 @@ export interface components {
             /** Locked */
             locked: components["schemas"]["FitLockedOut"][];
             hire?: components["schemas"]["FitHireOut"] | null;
+            baseline_goal?: components["schemas"]["FitBaselineGoalOut"] | null;
         };
         /**
          * FitApprovalOut
@@ -23913,6 +23914,45 @@ export interface components {
             roadmap_live: boolean;
             /** Roadmap Decider */
             roadmap_decider?: string | null;
+        };
+        /**
+         * FitBaselineGoalOut
+         * @description The Baseline goal the milestone's gate counts toward (the milestone's first target's
+         *     goal, by name): what "Keep the date with a smaller goal" opens and saves through
+         *     ``PATCH /v1/baseline/entities/{id}``. ``plan_target``: the number the PRD's milestone
+         *     target names; ``smaller``: the goal's target is below it, so the answer counts the
+         *     goal's own work in the milestone in proportion (:func:`_scale`).
+         */
+        FitBaselineGoalOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Target */
+            target?: number | null;
+            /** Unit */
+            unit?: string | null;
+            /** Comparison */
+            comparison?: string | null;
+            /** Start */
+            start?: number | null;
+            /** Due */
+            due?: string | null;
+            /** Plan Target */
+            plan_target?: number | null;
+            /**
+             * Smaller
+             * @default false
+             */
+            smaller: boolean;
+            /**
+             * Can Edit
+             * @default false
+             */
+            can_edit: boolean;
         };
         /** FitChangeOut */
         FitChangeOut: {
