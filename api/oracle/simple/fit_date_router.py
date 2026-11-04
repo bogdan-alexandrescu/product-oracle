@@ -72,6 +72,8 @@ class FitChangeOut(BaseModel):
     cost_kind: Literal["none", "risk", "gate", "goal", "must"]
     cost: str
     pickable: bool
+    # What the change does, in one line ("Moves to M3 Team inbox: lands Mar 19").
+    effect: str
     moves: list[FitMove]
 
 
@@ -404,6 +406,35 @@ async def list_fit_dates(principal: Reader, db: TenantDB) -> list[FitGoalOut]:
     return sorted(out, key=lambda g: (-g.late_days, g.prd.title, g.milestone))
 
 
+def _day(d: dt.date | None) -> str:
+    return f"{d:%b} {d.day}" if d else "not dated"
+
+
+def _effect(p: fd.Plan, c: fd.Change) -> str:
+    """The change in one line, from the plan with it applied."""
+    names = {m.code: m.name for m in p.milestones}
+    item = next((i for i in p.items if i.id == c.id), None)
+    after = fd.schedule(fd.apply(p, [c.id]))
+    nxt = fd._next_code(p, p.milestone)
+    if c.lever == "move" and item:
+        if c.cost_kind == "must":
+            return "Must-include for this goal"
+        lands = _day(after.items.get(c.id))
+        return f"Moves to {names.get(nxt or '', 'later')}: lands {lands}"
+    if c.lever == "ungate":
+        lands = _day(after.items.get(c.id))
+        return f"Still built, lands {lands}; {p.milestone} no longer waits for it"
+    if c.lever == "next_prd":
+        return "Leaves this PRD; waits for the next one"
+    if c.lever == "slice" and item:
+        return f"{item.pw:g} person-weeks down to {item.slice_pw or item.pw:g}"
+    if c.lever == "split" and item:
+        return f"Slice 1 lands {_day(after.items.get(c.id))}; slice 2 after {p.milestone}"
+    if c.lever == "overlap":
+        return f"{p.milestone} work starts during the wait, not after it"
+    return f"Every bar is shorter at {round((p.focus_raise or p.focus) * 100)}% focus"
+
+
 @router.get("/prds/{prd}/fit-date", response_model=FitAnswerOut)
 async def get_fit_date(
     prd: str, principal: Reader, db: TenantDB, milestone: Annotated[str, Query()]
@@ -416,7 +447,7 @@ async def get_fit_date(
         changes=[
             FitChangeOut(id=c.id, lever=c.lever, item=c.item, title=c.title, days=c.days,
                          pw_saved=c.pw_saved, cost_kind=c.cost_kind, cost=c.cost,
-                         pickable=c.pickable,
+                         pickable=c.pickable, effect=_effect(p, c),
                          moves=[FitMove(what=w, before=b, after=x) for w, b, x in c.moves])
             for c in a.changes
         ],

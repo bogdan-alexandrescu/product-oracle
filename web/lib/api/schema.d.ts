@@ -23927,6 +23927,8 @@ export interface components {
             cost: string;
             /** Pickable */
             pickable: boolean;
+            /** Effect */
+            effect: string;
             /** Moves */
             moves: components["schemas"]["FitMove"][];
         };

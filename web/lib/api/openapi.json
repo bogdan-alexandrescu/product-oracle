@@ -76019,6 +76019,10 @@
             "type": "boolean",
             "title": "Pickable"
           },
+          "effect": {
+            "type": "string",
+            "title": "Effect"
+          },
           "moves": {
             "items": {
               "$ref": "#/components/schemas/FitMove"
@@ -76038,6 +76042,7 @@
           "cost_kind",
           "cost",
           "pickable",
+          "effect",
           "moves"
         ],
         "title": "FitChangeOut"

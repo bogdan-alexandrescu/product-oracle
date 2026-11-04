@@ -53,6 +53,8 @@ async def test_answer_reads_the_approved_plan(client):
     assert a["changes"][0]["id"] == "F-03b" and "F-06" in [c["id"] for c in a["changes"]]
     assert {c["lever"] for c in a["changes"]} >= {"ungate", "slice", "capacity"}
     assert all(c["id"] != "F-01" for c in a["changes"])
+    f06 = next(c for c in a["changes"] if c["id"] == "F-06")
+    assert f06["effect"] == "4 person-weeks down to 2"
     assert [x["item"] for x in a["locked"]] == []  # F-01 is M1's, not the asked milestone's
     m1 = await client.get(URL, params={"milestone": "M1"}, headers=ctx.as_("viewer"))
     assert [x["item"] for x in m1.json()["locked"]] == ["Setup checklist"]
