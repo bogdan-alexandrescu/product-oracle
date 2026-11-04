@@ -1583,8 +1583,18 @@ def plain(text: str) -> str:
     return _ISO_DAY.sub(day, _TOKEN.sub("", text))
 
 
+# A sentence (or clause after ":" or ";") whose subject is the item: "It ends ...", "Got it:
+# this already runs ...". "it" or "this" elsewhere ("Got it! Why did ...") is not.
 _ABOUT_IT = re.compile(
-    r"\b(?:it|its|it's|this|this item|this feature|the item|the feature)\b", re.I
+    r"(?:^|[.!?]\s+|[:;]\s*)(?:it|its|it's|this|this item|this feature|the item|the feature)\b",
+    re.I,
+)
+# ... and it speaks of the item's plan: its dates, state, owner, milestone, goal or tasks.
+_ITS_PLAN = re.compile(
+    r"\b(?:ship(?:s|ped)?|live|launch(?:es|ed)?|release[sd]?|runs?|running|built|done|planned|"
+    r"plan|dates?|starts?|started|ends?|ended|due|late|milestones?|goals?|tasks?|owners?|owns|"
+    r"owned|status|scope|prd|roadmap|slices?|risks?|blocked|depends|cut)\b",
+    re.I,
 )
 
 
@@ -1602,9 +1612,10 @@ def _grounded(c: Ctx, said: str) -> bool:
                               e.prd.title if e.prd is not None else None) if x]  # fmt: skip
         if e.milestone is not None and e.milestone.name:
             names.append(e.milestone.name.split()[0])
-        if _ABOUT_IT.search(said):
-            # item-chat-understands: the talk's context is the item, so an answer about "it"
-            # is about this item, its name repeated or not.
+        if _ABOUT_IT.search(said.strip()) and _ITS_PLAN.search(said):
+            # item-chat-understands: the talk's context is the item, so an answer whose
+            # subject is "it" and that speaks of its plan is about this item, its name
+            # repeated or not (review: a stray "it" or "this" alone is not).
             return True
     return any(len(n) >= 3 and n.lower() in t for n in names)
 

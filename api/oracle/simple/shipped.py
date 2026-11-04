@@ -32,6 +32,9 @@ SAID = re.compile(
     r"(?:partly|partially) (?:done|shipped|built|live))\b",
     re.I,
 )
+# A line that asks ("Is this already live?") or says the opposite ("this isn't already
+# live"): not a mark (review); a question goes to the reader.
+NOT_SAID = re.compile(r"\?\s*$|\b(?:not|never|\w+n['’]t|isnt|arent|hasnt|havent)\b", re.I)
 # A line that may mean it (a choice to offer, not a card).
 HINT = re.compile(
     r"\b(?:already|shipped|live|launched|released|exists?|in use|using|used|been out|"
@@ -54,7 +57,7 @@ def where_of(text: str) -> str | None:
 
 def phrase(c: Any, t: str) -> tuple[str, dict[str, Any]] | None:
     """In an item's talk, a line saying the item already exists: mark_shipped on it."""
-    if c.item is None or not SAID.search(t):
+    if c.item is None or not SAID.search(t) or NOT_SAID.search(t):
         return None
     args: dict[str, Any] = {"item": str(c.item.row.id), "where": where_of(t)}
     if IMPROVE.search(t):
@@ -134,7 +137,10 @@ def choices(c: Any, line: str | None) -> chat.Reply | None:
     words = " ".join(line.split())
     item = str(e.row.id)
     out: list[dict[str, Any]] = []
-    if HINT.search(words) and not e.row.shipped and not e.row.cut:
+    # Only an owner applies it (bar), so no one else is offered it (review).
+    owner = has_role(c.principal.role, "owner")
+    if owner and HINT.search(words) and not NOT_SAID.search(words) and not e.row.shipped \
+            and not e.row.cut:  # fmt: skip
         args = {"item": item, "where": where_of(words)} if where_of(words) else {
             "item": item, "said": words[:NOTE_MAX]}  # fmt: skip
         out.append({"label": "Mark it as already shipped?", "op": OP, "args": args})
