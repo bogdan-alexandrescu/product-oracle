@@ -80,31 +80,67 @@ test("Home says nothing about what waits until it knows, and New PRD never moves
   await expect(page.getByRole("dialog")).toBeVisible();
 });
 
-/** Deletes every row of a list through its Actions menu (Delete…, then Move to Trash). */
-async function trashEvery(page: Page, rows: Locator) {
-  for (let n = 0; n < 12 && (await rows.count()) > 0; n++) {
-    const row = rows.first();
-    const title = ((await row.getByRole("button", { name: /^Actions for / }).getAttribute("aria-label")) ?? "").replace(/^Actions for /, "");
+/**
+ * Deletes every row of a list through its Actions menu (Delete…, then Move to Trash); a row
+ * whose run has not finished cannot go (Trash says to cancel the run first) and stays.
+ * Returns how many stayed.
+ */
+async function trashEvery(page: Page, rows: Locator): Promise<number> {
+  await expect(rows.first()).toBeVisible();
+  const kept: string[] = [];
+  for (let n = 0; n < 15 && kept.length < (await rows.count()); n++) {
+    const menu = rows.nth(kept.length).getByRole("button", { name: /^Actions for / });
+    const title = ((await menu.getAttribute("aria-label")) ?? "").replace(/^Actions for /, "");
+    const row = rows.nth(kept.length);
     await expect(async () => {
       await row.evaluate((el) => el.scrollIntoView({ block: "center" }));
       if (!(await page.getByRole("menuitem", { name: "Delete…" }).isVisible())) await row.getByRole("button", { name: `Actions for ${title}` }).click();
       await page.getByRole("menuitem", { name: "Delete…" }).click({ timeout: 2_000 });
     }).toPass({ timeout: 20_000 });
     const dialog = page.getByRole("dialog", { name: `Delete ${title}` });
+    const blocked = dialog.getByText("Cancel the run first");
     const second = dialog.getByLabel("Delete it here; the external copy stays where it is");
+    // The dialog reads what goes with it first: then it can go, asks once more, or cannot go.
+    await expect(blocked.or(second).or(dialog.getByRole("button", { name: "Move to Trash", disabled: false }))).toBeVisible();
+    if (await blocked.isVisible()) {
+      kept.push(title);
+      await dialog.getByRole("button", { name: "Cancel" }).click();
+      await expect(dialog).toHaveCount(0);
+      continue;
+    }
     if (await second.isVisible()) await second.check();
     await dialog.getByRole("button", { name: "Move to Trash" }).click();
     await expect(dialog).toHaveCount(0);
-    await expect(rows.filter({ hasText: title })).toHaveCount(0);
+    await expect(rows.getByRole("button", { name: `Actions for ${title}`, exact: true })).toHaveCount(0);
   }
-  await expect(rows).toHaveCount(0);
+  return kept.length;
+}
+
+/** Pauses every ritual but the monthly roadmap refresh (Company › Rituals), so it is Home's next review. */
+async function onlyTheRoadmapRefresh(page: Page) {
+  await page.goto("/company/rituals");
+  const on = page
+    .getByTestId("rituals-table")
+    .getByRole("row")
+    .filter({ has: page.getByTestId("ritual-state").filter({ hasText: /^On$/ }) })
+    .filter({ hasNotText: "Monthly roadmap refresh" });
+  await expect(on.first()).toBeVisible();
+  for (let n = 0; n < 15 && (await on.count()) > 0; n++) {
+    const before = await on.count();
+    await on.first().getByRole("gridcell").first().click();
+    await page.getByRole("button", { name: "Pause", exact: true }).click();
+    await expect(on).toHaveCount(before - 1);
+  }
+  await expect(on).toHaveCount(0);
 }
 
 test("with every roadmap and PRD in Trash, Home's sections load and the roadmap review says so", async ({ page }) => {
   await signIn(page);
+  await onlyTheRoadmapRefresh(page);
   await page.goto("/plan/documents");
   await expect(page.getByTestId("roadmaps-table")).toBeVisible();
-  await trashEvery(page, page.getByTestId("roadmap-row"));
+  expect(await trashEvery(page, page.getByTestId("roadmap-row"))).toBe(0);
+  await expect(page.getByTestId("roadmap-row")).toHaveCount(0);
   await page.goto("/documents");
   await expect(page.getByTestId("documents-table")).toBeVisible();
   await trashEvery(page, page.getByTestId("document-row"));
@@ -112,16 +148,14 @@ test("with every roadmap and PRD in Trash, Home's sections load and the roadmap 
   await page.goto("/simple");
   const home = simple(page);
   await expect(home.getByTestId("home-sentence")).not.toHaveText("Checking what waits on you…", { timeout: 15_000 });
-  for (const title of ["Decisions waiting for you", "Since your last visit"]) {
-    const card = home.locator("section").filter({ has: page.getByRole("heading", { name: title }) }).first();
-    await expect(card).toBeVisible();
-    await expect(card).not.toContainText("could not load");
-  }
+  // Every section read (an empty "Decisions waiting for you" is not drawn; the PRDs' questions wait in their own cards).
+  await expect(home.getByTestId("home-since")).toBeVisible();
+  await expect(home.getByText("Oracle could not load this part")).toHaveCount(0);
   const meeting = home.getByTestId("home-meeting-next");
   await expect(meeting).toContainText("Monthly roadmap refresh");
   const line = meeting.getByTestId("home-meeting-trash");
   await expect(line).toHaveText("Reviews a roadmap in Trash · Ritual settings");
   await line.getByRole("link", { name: "Ritual settings" }).click();
   await expect(page).toHaveURL(/\/company\/rituals\?ritual=/);
-  await expect(page.getByText("Monthly roadmap refresh").first()).toBeVisible();
+  await expect(page.getByTestId("rituals-table").getByRole("row", { selected: true })).toContainText("Monthly roadmap refresh");
 });
