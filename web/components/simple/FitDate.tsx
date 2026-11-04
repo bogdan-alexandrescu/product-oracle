@@ -317,7 +317,7 @@ function LaneCard({ m, was, before, open }: { m: Lane; was?: string | null; befo
         )}
       </div>
       <ul className="flex flex-col divide-y divide-line">
-        {m.items.map((it) => {
+        {[...m.items].sort((x, y) => (x.date ?? "9999").localeCompare(y.date ?? "9999")).map((it) => {
           const prior = old.get(it.id);
           return (
             <li key={it.id} className="flex items-start justify-between gap-3 py-2">
