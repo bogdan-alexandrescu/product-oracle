@@ -122,9 +122,17 @@ export function DecisionInspector({
       }
       head={
         // qa-company-31: where it came from is a line of meta, not a chip beside the state.
-        <p data-testid="decision-origin" className="mt-2.5 text-sm text-hero-text2">
-          {d.origin === "manual" ? `Added by ${named(d.created_by) ?? "a member"}` : ORIGIN_LABEL[d.origin]}
-        </p>
+        <>
+          <p data-testid="decision-origin" className="mt-2.5 text-sm text-hero-text2">
+            {d.origin === "manual" ? `Added by ${named(d.created_by) ?? "a member"}` : ORIGIN_LABEL[d.origin]}
+          </p>
+          {/* decisions-reversed-or-trashed: drafts no longer cite it. */}
+          {d.trash_note && (
+            <p data-testid="decision-trash-note" className="mt-1 text-sm text-hero-text2">
+              {d.trash_note}. Drafts no longer cite it.
+            </p>
+          )}
+        </>
       }
       action={
         checkpoint && d.run_id ? (

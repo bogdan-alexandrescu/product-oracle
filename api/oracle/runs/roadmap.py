@@ -266,7 +266,53 @@ def check_items(
                     f"item {item['id']} is in {mine} but depends on {dep} in {theirs}",
                     item["id"],
                 )
+    _check_slices(out)
     return out
+
+
+def _names(text: str, item: dict[str, Any]) -> bool:
+    """``text`` names the item: its id or its title, as whole words."""
+    names = {str(item["id"]), _text(item.get("title")) or ""} - {""}
+    return any(re.search(rf"(?<![\w-]){re.escape(n)}(?![\w-])", text, re.I) for n in names)
+
+
+def later_slices(items: list[dict[str, Any]]) -> list[tuple[str, str, str, str]]:
+    """roadmap-draft-wording review: (item, dependency, slice, feature) for each item that
+    waits on a later slice of a feature than the slice its estimate (the milestone's name
+    and date_source) names. A feature's slices are the items sharing its ``feature``, in
+    list order."""
+    index = {i["id"]: n for n, i in enumerate(items)}
+    slices: dict[str, list[str]] = {}
+    for i in items:
+        if feature := _text(i.get("feature")):
+            slices.setdefault(feature, []).append(i["id"])
+    out: list[tuple[str, str, str, str]] = []
+    for item in items:
+        milestone = item.get("milestone")
+        if not isinstance(milestone, dict):
+            continue
+        estimate = " ".join(
+            t for t in (_text(milestone.get("name")), _text(milestone.get("date_source"))) if t
+        )
+        for dep in item.get("depends_on") or []:
+            feature = _text(items[index[dep]].get("feature")) if dep in index else None
+            group = slices.get(feature or "", [])
+            if len(group) < 2 or _names(estimate, items[index[dep]]):
+                continue
+            earlier = [s for s in group[: group.index(dep)] if _names(estimate, items[index[s]])]
+            if earlier and feature:
+                out.append((item["id"], dep, earlier[0], feature))
+    return out
+
+
+def _check_slices(out: ItemsCheck) -> None:
+    for item, dep, named, feature in later_slices(out.items):
+        out.add(
+            "later_slice",
+            f"item {item} waits on {dep}, a later slice of {feature} than the {named} slice "
+            f"its estimate names: wait on {named}",
+            item,
+        )
 
 
 class _Checks:

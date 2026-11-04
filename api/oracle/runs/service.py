@@ -142,7 +142,7 @@ from oracle.baseline.goals import target_words
 from oracle.baseline.models import Edge, Entity, Proposal
 from oracle.claude_accounts.pool import readable_refusal
 from oracle.decisions import capture as decisions_capture
-from oracle.docs import named_codes, visibility, written
+from oracle.docs import draft_checks, visibility, written
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, is_uuid
@@ -4798,9 +4798,11 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
             "created": result.created,
             "warnings": [w.code for w in result.version.warnings],
         }
-        # #306: codes the draft uses without their names, in the warning's plain words;
-        # a run sends such a draft back to the writer before a person reviews it.
-        code_names = [w.message for w in result.version.warnings if w.code in named_codes.CODES]
+        # #306: codes the draft uses without their names (and a roadmap's date words), in
+        # the warning's plain words; a run sends such a draft back to the writer before a
+        # person reviews it.
+        sent_back = draft_checks.SENT_BACK
+        code_names = [w.message for w in result.version.warnings if w.code in sent_back]
         if code_names:
             out["code_names"] = code_names
         source = result.version.source
@@ -8342,7 +8344,15 @@ async def decide_checkpoint(
     document_review = (
         await review_link.review_file(db, cp, note) if decision == "changes_requested" else None
     )
-    if decision == "changes_requested" and not note and document_review is None:
+    # A refused draft goes back to its writer with the import's problems (Nov 3): no note
+    # is needed for that (Send back to writer on the run page).
+    refused_draft = bool(((cp.payload or {}).get("import") or {}).get("error"))
+    if (
+        decision == "changes_requested"
+        and not note
+        and document_review is None
+        and not refused_draft
+    ):
         if not send_back:
             raise Invalid("say what to change: a note is required to request changes")
         sent = select(func.count()).where(
@@ -8703,6 +8713,10 @@ async def _continue_decided(
 
         zone = await company_time.company_time_zone(db)
         review = review_file.change_request(cp.review, cp.decided_at, zone)
+        # A refused draft's import problems go with it (the workflow's revise step gets
+        # them as findings, _send_back_findings): the writer fixes what Oracle refused.
+        if problems := await _problem_findings(db, run, cp):
+            review += "\n" + "\n".join(problems) + "\n"
     await _submit(db, run, target, segments, change_request=note, review=review)
 
 
@@ -10181,7 +10195,7 @@ async def _hold_console_approval(
 
 # Approving a review is refused while its draft is not imported (owner, 2026-10-20): a
 # run approved past a refused draft finished with no document.
-NOT_IMPORTED = "the draft was not imported: retry import, or request changes"
+NOT_IMPORTED = "the draft was not imported: retry import, or send it back to the writer"
 
 
 def _cannot_approve(cp: Checkpoint) -> str | None:
@@ -10191,8 +10205,25 @@ def _cannot_approve(cp: Checkpoint) -> str | None:
     approve gate's (D3, oracle.runs.gate)."""
     imp = (cp.payload or {}).get("import")
     if cp.status == "pending" and isinstance(imp, dict) and imp.get("error"):
-        return NOT_IMPORTED
+        return not_imported(imp)
     return None
+
+
+def not_imported(imp: dict[str, Any]) -> str:
+    """The stop's refusal of a draft not imported, naming what is wrong with it in plain
+    words (Nov 3): "the draft was not imported: 1 resolution isn't valid;
+    retry import, or send it back to the writer"."""
+    problems = []
+    for raw in imp.get("problems") or []:
+        try:
+            problems.append(ImportProblem.model_validate(raw))
+        except ValueError:
+            continue
+    said = "; ".join(rejection.causes(problems)) if problems else ""
+    if not said:
+        return NOT_IMPORTED
+    head, _, tail = NOT_IMPORTED.partition(": ")
+    return f"{head}: {said}; {tail}"
 
 
 def _run_version(segments: list[RunSegment], checkpoints: list[Checkpoint]) -> str | None:

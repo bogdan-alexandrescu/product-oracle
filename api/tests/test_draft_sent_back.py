@@ -36,7 +36,12 @@ from tests.test_runs import decide, get, pending, started, tick
 # The same environment as test_adapter_v2 (Oracle's public URL, default timings).
 settings = _v2_settings
 
-NOT_IMPORTED = "the draft was not imported: retry import, or request changes"
+# The stop names what is wrong with the draft in plain words (Nov 3).
+NOT_IMPORTED = (
+    "the draft was not imported: 1 citation uses source 'jira', which isn't accepted; 1 "
+    "reference fails because of it; 1 reference cites a citation that isn't defined; retry "
+    "import, or send it back to the writer"
+)
 # Refused at import: a citation source Oracle does not know, and a chip with no citation.
 BAD_PRD = (
     "---\n"

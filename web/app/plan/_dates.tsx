@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   Basis,
@@ -48,7 +50,13 @@ export function DatesTab() {
   const [dialog, setDialog] = useState<{ kind: "record" } | { kind: "withdraw" | "reject"; basis: Basis } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const rows = bases.data;
+  // date-warnings-honest: a roadmap's "dates lack a basis" opens this tab filtered to its
+  // PRD, with the dates that need one named.
+  const params = useSearchParams();
+  const wantedPrd = params.get("prd");
+  const lacking = (params.get("dates") ?? "").split(",").filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
+  // Memoised: a new array each render would re-run the people lookup below without end.
+  const rows = useMemo(() => bases.data?.filter((b) => !wantedPrd || b.prd_document_id === wantedPrd), [bases.data, wantedPrd]);
   useEffect(() => {
     if (!rows) return;
     const ids = rows.flatMap((b) => [b.proposed_by, b.verified_by, b.withdrawn_by, b.rejected_by]);
@@ -214,6 +222,19 @@ export function DatesTab() {
           ]}
         />
       </div>
+      {(wantedPrd || lacking.length > 0) && (
+        <p role="status" data-testid="dates-lacking-filter" className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn">
+          <span className="min-w-0 flex-1 font-medium">
+            {lacking.length > 0
+              ? `${lacking.length} date${lacking.length === 1 ? " needs" : "s need"} a basis: ${lacking.map(formatDay).join(", ")}. Add a date source for ${lacking.length === 1 ? "it" : "each"}, or take ${lacking.length === 1 ? "it" : "them"} out of the roadmap.`
+              : ""}
+            {wantedPrd && `${lacking.length > 0 ? " " : ""}Showing the date sources of ${prdTitle(wantedPrd)}.`}
+          </span>
+          <Link href="/plan/dates" className="font-medium underline underline-offset-2">
+            Show every date source
+          </Link>
+        </p>
+      )}
       {error && <Notice tone="error">{error}</Notice>}
       {bases.error && <Notice tone="error">{bases.error}</Notice>}
       <DataTable<Basis>

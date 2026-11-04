@@ -817,6 +817,7 @@ async def outs(
                 and me is not None
                 and (me == d.created_by or _approver_of(principal, d, w)),
                 from_prds=sources.get(d.id, []),
+                decision_notes=[str(x.get("text")) for x in d.decision_notes or []],
             )
         )
     return out

@@ -58,6 +58,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Literal
 
+from oracle.docs import named_codes
 from oracle.docs.models import Section
 
 Audience = Literal["board", "team", "engineering", "public"]
@@ -202,6 +203,10 @@ class ItemView:
     # ("No goal"); and that goal's place in the order (0 = first), which orders the groups.
     group: str | None = None
     group_rank: int | None = None
+    # The kind of the verified basis its milestone date rests on (estimate, capacity or
+    # commitment; oracle.roadmap.schedule), or None: a capacity date is the item's place
+    # in the team's queue, not how long the item takes (roadmap-draft-wording).
+    date_kind: str | None = None
 
 
 def render_key(items: list[ItemView]) -> tuple:
@@ -593,11 +598,28 @@ def _shown_day(value: Any) -> str:
     return shown_day(day)
 
 
+def _own_effort(item: ItemView) -> str | None:
+    """The item's own effort as written in its economics ("1 week"), or None. A number
+    with no unit (2) says nothing on its own: None (the card's Effort line shows it)."""
+    for k, v in item.economics.items():
+        if str(k).lower() == "effort" and isinstance(v, str) and re.search(r"[^\W\d_]", v):
+            return v.strip()
+    return None
+
+
 def _milestone(item: ItemView) -> str | None:
+    """An item's milestone as people read it. A date from the team's queue (a capacity
+    basis) says so, with the item's own effort: a 1-week item may end months out."""
     m = item.milestone or {}
     if not m.get("name"):
         return None
-    return f"{m['name']}, {_shown_day(m['date'])}" if m.get("date") else str(m["name"])
+    if not m.get("date"):
+        return str(m["name"])
+    if item.date_kind != "capacity":
+        return f"{m['name']}, {_shown_day(m['date'])}"
+    out = f"{m['name']}, ends {_shown_day(m['date'])}: its place in the team's queue"
+    effort = _own_effort(item)
+    return f"{out}; its own effort: {effort}" if effort else out
 
 
 def _tracker_links(item: ItemView) -> str:
@@ -865,7 +887,15 @@ def _table(
                 cells.append(f"\u2691 {title}" if item.no_goal and "\u2691" not in title else title)
             elif n == goal_col:
                 named = ", ".join(goal_names(item, variant))
-                cells.append(_keep_links(row[n], known) if row else _cell(named))
+                # roadmap-draft-wording: a written cell of bare codes names the item's
+                # goal, when it has one: one code with it ("G1 Activation"), several
+                # ("G-B, G-C") by the name alone.
+                if row and not (named and named_codes.only_codes(row[n])):
+                    cells.append(_keep_links(row[n], known))
+                elif row and len(named_codes.codes_in(row[n])) == 1:
+                    cells.append(_cell(f"{row[n].strip()} {named}"))
+                else:
+                    cells.append(_cell(named))
             elif n == outcome_col:
                 cells.append(_cell(item.outcome))
             else:

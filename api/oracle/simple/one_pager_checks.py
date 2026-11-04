@@ -65,7 +65,8 @@ _CUT_CITE = re.compile(r"[ \t]*\[c(?:(?=…$)|:[^\]\s…]*(?=…?$))")
 def resolved(text: str) -> str:
     """``text`` as the PRD's PDF reads it: no ``[c:id]`` marker left (the export's resolver,
     oracle.docs.parser.strip_citations), and none an older quick read cut at its end."""
-    return _CUT_CITE.sub("", strip_citations(text or ""))
+    # A cut marker goes first: strip_citations would drop its "[c:" opener and leave "c4…".
+    return strip_citations(_CUT_CITE.sub("", text or ""))
 
 
 def _plain(text: str, cites: bool = False) -> str:

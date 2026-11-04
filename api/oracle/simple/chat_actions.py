@@ -40,13 +40,13 @@ from oracle.authz import has_role
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document
 from oracle.members.names import display_name
-from oracle.simple import changes, chat
+from oracle.simple import changes, chat, shipped
 from oracle.simple.models import SimpleChatCard
 from oracle.simple.schemas import SimpleChangeIn
 
 ENGINE_OPS = ("set_owner", "set_decider")
 DIRECT_OPS = ("record_decision", "minutes_note", "open_question", "agenda_next", "agenda_skip",
-              "suggest_feature")  # fmt: skip
+              "suggest_feature", shipped.OP)  # fmt: skip
 MEETING_ONLY = ("minutes_note", "open_question", "agenda_next", "agenda_skip")
 UNDERSTOOD = "I understood one change:"
 MEETING_NOTE = "Minutes notes, open questions and agenda changes belong to a meeting."
@@ -303,6 +303,8 @@ def bar(principal: Any, card: SimpleChatCard, rules: Any) -> str | None:
         if card.op == "suggest_feature":
             return "Viewers read; commenters and up suggest"
         return "Viewers read the plan; they don't record decisions"
+    if card.op == shipped.OP:
+        return shipped.bar(principal, card)
     return None
 
 
@@ -525,6 +527,8 @@ async def undo(db: AsyncSession, principal: Any, card: SimpleChatCard, rules: An
                 await chat._reverse(db, principal, card.decision_id, f"Undone {where}")
         elif card.op == "suggest_feature":
             await _unsuggest(db, card)
+        elif card.op == shipped.OP:
+            await shipped.undo(db, principal, card)
         elif card.op in ("minutes_note", "open_question"):
             await meetings.remove_note(db, uuid.UUID(card.target["meeting_id"]),
                                        str(card.target.get("note_id")))  # fmt: skip
@@ -577,6 +581,9 @@ ACTIONS: list[dict[str, Any]] = [
     {"op": "suggest_feature", "describe": "Suggest a feature for a goal (filed as the person's)",
      "args": {"goal": "the goal (its title or key)", "text": "the feature: what it does, for whom"},
      "build": build_suggest_feature, "apply": apply_suggest_feature},
+    # item-chat-understands: "this already exists" in an item's talk.
+    {"op": shipped.OP, "describe": shipped.DESCRIBE, "args": shipped.ARGS, "build": shipped.build,
+     "apply": shipped.apply},
 ]  # fmt: skip
 
 # chat-join: the reader offers these ops and chat.apply applies their cards.

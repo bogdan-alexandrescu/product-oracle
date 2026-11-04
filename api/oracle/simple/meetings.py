@@ -83,6 +83,7 @@ from oracle.simple.schemas import (
     SimpleDocRef,
     SimpleEmailDelivery,
     SimpleFilterOption,
+    SimpleLeftOut,
     SimpleMeetingBrief,
     SimpleMeetingCan,
     SimpleMeetingDecision,
@@ -1427,6 +1428,10 @@ async def _upcoming(
     trashed: dict[str, bool] = {}
     for kind in {REVIEWS[r.kind] for _, r in rows if r.kind in REVIEWS}:
         trashed[kind] = await trash_service.only_in_trash(db, kind)
+    # home-deleted-roadmap: and one whose documents were all deleted for good says that.
+    deleted: dict[str, bool] = {}
+    for kind in {REVIEWS[r.kind] for _, r in rows if r.kind in REVIEWS}:
+        deleted[kind] = await trash_service.deleted_for_good(db, kind)
     out = []
     for o, r in rows:
         due = o.due_at if o is not None else r.next_due_at
@@ -1445,6 +1450,7 @@ async def _upcoming(
             pre_read_ready=o is not None and o.status == "ready",
             can_start=may_start_ritual(principal, r),
             reviews_in_trash=REVIEWS[r.kind] if trashed.get(REVIEWS.get(r.kind, "")) else None,
+            reviews_deleted=REVIEWS[r.kind] if deleted.get(REVIEWS.get(r.kind, "")) else None,
         ))  # fmt: skip
     return out
 
@@ -2162,21 +2168,31 @@ async def titles_by_session(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.
 
 
 async def decided_in(
-    db: AsyncSession, subjects: list[dict]
+    db: AsyncSession, subjects: list[dict], left: list | None = None
 ) -> dict[tuple[str, str, str | None], list[SimpleDecidedRef]]:
     """The decided decisions naming each subject ``(kind, id, ref)``, newest first, with
-    who decided, when and the meeting's minutes (decided_refs)."""
+    who decided, when and the meeting's minutes (decided_refs). Those no longer standing
+    are left out and, given ``left``, added to it (standing.LeftOut) for the sources."""
     out: dict[tuple[str, str, str | None], list[Decision]] = {}
     if not subjects:
         return out
     wanted = {(s["kind"], s["id"], s.get("ref")) for s in subjects}
+    from oracle.decisions import standing
+
+    # Lapsed ones (reversed, withdrawn, replaced) are read too, so standing.split names them
+    # in the left-out line; only decided ones are kept.
     rows = await db.scalars(
         select(Decision)
-        .where(Decision.status == "decided")
+        .where(Decision.status.in_(("decided", *standing.LAPSED)))
         .where(or_(*[Decision.subjects.contains([{"kind": k, "id": i}]) for k, i, _ in wanted]))
         .order_by(Decision.number.desc())
     )
-    for d in rows:
+
+    # None about something in Trash (decisions-reversed-or-trashed).
+    kept, gone = await standing.split(db, list(rows))
+    if left is not None:
+        left.extend(x for x in gone if all(y.decision.id != x.decision.id for y in left))
+    for d in kept:
         for s in d.subjects or []:
             for key in (
                 (s.get("kind"), s.get("id"), s.get("ref")),
@@ -2189,6 +2205,14 @@ async def decided_in(
     decisions = {d.id: d for lst in out.values() for d in lst}  # type: ignore[union-attr]
     refs = await decided_refs(db, list(decisions.values()))  # type: ignore[arg-type]
     return {k: [refs[d.id] for d in lst] for k, lst in out.items()}
+
+
+def left_out_entry(left: list) -> SimpleLeftOut | None:
+    """A read's sources entry for the decisions decided_in left out, if any."""
+    from oracle.decisions import standing
+
+    entry = standing.sources_entry(left)
+    return SimpleLeftOut(**entry) if entry else None
 
 
 async def decided_refs(db: AsyncSession, ds: list[Decision]) -> dict[uuid.UUID, SimpleDecidedRef]:

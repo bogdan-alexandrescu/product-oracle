@@ -142,7 +142,7 @@ import {
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
-import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, NOT_CLAIMS_LINE, NOT_CLAIMS_SCENARIO, SHARED_DATE_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, dateWarnings, versionWarnings, inboxTracks, planEntityTitle, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecPerson, type SpecsDb } from "./specs";
 import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { seedImpact } from "./impact";
@@ -170,7 +170,8 @@ import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
-import { approvedPrdToDraft, itemSubjectName, knowCompanyGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
+import { appliedVersionOf, approvedPrdToDraft, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -1179,6 +1180,37 @@ function seedSimplePlanTwoScenario(): Db {
  * with a weight and a metric path; two proposals the commenter made (routed to the owners);
  * the approver's decision on usage caps waits as in every company. Invented data.
  */
+/**
+ * approved-roadmap-to-simple ("approved-roadmap", ./approved-roadmap.ts): the default company
+ * plus the roadmap Example trails, built from the PRD Trail maps (approved): version 2 approved
+ * with its items on Simple on the old engineering estimates, version 3 in review with the
+ * re-planned dates, a shipped item, a new one, one moved to the next PRD and two milestones.
+ * Their dates rest on verified bases (./roadmap.ts seedRoadmap), so version 3 may be approved.
+ */
+function seedApprovedRoadmapScenario(): Db {
+  const db = seed();
+  const doc = (slug: string, title: string, kind: "prd" | "roadmap", at: string): DocumentRow => {
+    const row: DocumentRow = { id: uuid(), slug, title, status: "approved", kind, template: null, template_version: null, theme: null, created_at: at, updated_at: at };
+    db.documents.push(row);
+    return row;
+  };
+  const prd = doc(TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, "prd", "2026-09-01T09:00:00Z");
+  const p1 = buildVersion(prd, { number: 1, created_at: "2026-09-01T09:00:00Z", sections: TRAILS_PRD_SECTIONS, citations: [] });
+  p1.approved_at = "2026-09-02T09:00:00Z";
+  db.versions.push(p1);
+  const roadmap = doc(TRAILS_SLUG, TRAILS_TITLE, "roadmap", "2026-09-10T09:00:00Z");
+  roadmap.status = "in_review";
+  for (const [n, at] of [[1, "2026-09-10T09:00:00Z"], [2, "2026-09-24T09:00:00Z"], [3, "2026-10-20T09:00:00Z"]] as const) {
+    const v = buildVersion(roadmap, { number: n, created_at: at, sections: trailSections(n === 3 ? 3 : 2), citations: [] });
+    if (n < 3) v.approved_at = at;
+    v.source = versionSource(prd, p1);
+    db.versions.push(v);
+  }
+  roadmap.updated_at = "2026-10-20T09:00:00Z";
+  db.simple_roadmap = seedTrails(seedSimpleRoadmap());
+  return db;
+}
+
 function seedSimpleHomeScenario(): Db {
   const db = seed();
   db.simple_roadmap = seedSimpleRoadmap();
@@ -2447,6 +2479,21 @@ function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
         : null;
     },
     outcomeStatus: (id) => db.quality?.outcomes.find((o) => o.id === id)?.status ?? null,
+    // decisions-reversed-or-trashed: a decision naming a document (or one of its versions or
+    // lines) now in Trash is marked so.
+    trashedAbout: (subjects) => {
+      const entries = db.trash?.entries ?? [];
+      const docs = entries.flatMap((e) => e.documents as { id: string; kind: string }[]);
+      const versions = entries.flatMap((e) => e.versions as { id: string; document_id: string }[]);
+      const kinds = (subjects ?? []).flatMap((s) => {
+        const kind = String(s.kind);
+        const ref = String(s.id);
+        const id = kind === "document_version" ? versions.find((v) => v.id === ref)?.document_id : ["document", "section"].includes(kind) ? ref : undefined;
+        const doc = id ? docs.find((d) => d.id === id) : undefined;
+        return doc ? [doc.kind] : [];
+      });
+      return kinds.length ? (kinds.includes("roadmap") ? "roadmap" : kinds[0]) : null;
+    },
     outcomeCheckDue: (id) => {
       const o = db.quality?.outcomes.find((x) => x.id === id);
       return o?.status === "tracking" && !!o.proposed_assessment;
@@ -3030,6 +3077,7 @@ function load(): Db {
     try {
       const db = JSON.parse(raw) as Db;
       knowManyPlans(db.simple_roadmap);
+      knowExtraRoadmaps(db.simple_roadmap);
       return db;
     } catch {
       // fall through to a fresh seed
@@ -3050,7 +3098,7 @@ function load(): Db {
             ? seedSimpleWaits
           : scenario === "scope-review" || scenario === "scope-review-kept" || scenario === "scope-review-questions"
             ? () => seedScopeReview(scenario === "scope-review-kept", scenario === "scope-review-questions")
-          : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO || scenario === TWO_WAY_DATES_SCENARIO
+          : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO || scenario === SHARED_DATE_SCENARIO || scenario === NOT_CLAIMS_SCENARIO || scenario === TWO_WAY_DATES_SCENARIO
             ? seedEngReview
           : scenario === "eng-check"
             ? seedEngCheck
@@ -3198,7 +3246,7 @@ function load(): Db {
                     db.simple_roadmap!.plan!.goalless = true;
                     return db;
                   }
-              : scenario === "simple-chat" || scenario === "simple-chat-stray" || scenario === "meet-chat-right-prd" || scenario === "roadmap-talk" || scenario === "roadmap-talk-own-decider"
+              : scenario === "simple-chat" || scenario === "simple-chat-stray" || scenario === "meet-chat-right-prd" || scenario === "roadmap-talk" || scenario === "roadmap-talk-own-decider" || scenario === "roadmap-talk-tracker-done"
                 ? () => {
                     const db = seedSimpleHomeScenario();
                     db.simple_chat = seedSimpleChat(db.members);
@@ -3206,6 +3254,8 @@ function load(): Db {
                     if (db.simple_roadmap) seedReaderItems(db.simple_roadmap);
                     // roadmap-talk: F-16 Adaptive pacing, F-17 Sign-up work, F-18 Reliability work and the M1–M3 milestones.
                     if (!["simple-chat", "simple-chat-stray", "meet-chat-right-prd"].includes(scenario) && db.simple_roadmap) seedTalkItems(db.simple_roadmap);
+                    // item-chat-understands review: Adaptive pacing reads Done because of its tracker, with no shipped mark of its own.
+                    if (scenario === "roadmap-talk-tracker-done" && db.simple_roadmap) db.simple_roadmap.items.find((x) => x.key === "adaptive-pacing")!.status = "done";
                     // meet-chat-right-prd: the meeting reviews Guided setup, its features on its draft roadmap.
                     if (scenario === "meet-chat-right-prd" && db.simple_roadmap) seedRightPrd(db.simple_roadmap, db.simple_chat);
                     // meet-chat-kind: the meeting chat already holds an earlier build's discussion reply.
@@ -3222,6 +3272,8 @@ function load(): Db {
                     }
                     return db;
                   }
+              : scenario === APPROVED_ROADMAP_SCENARIO
+                ? seedApprovedRoadmapScenario
               : scenario === "simple-500"
                 ? () => ({ ...seed(), simple_roadmap: seedSimpleMany() })
                 : scenario === "strategy" || scenario === "strategy-no-vision"
@@ -3234,6 +3286,7 @@ function load(): Db {
   );
   // The 500-item scenario's plans, known only while its items are the roadmap's.
   knowManyPlans(db.simple_roadmap);
+  knowExtraRoadmaps(db.simple_roadmap);
   // Revokes a disable could not make: none, unless a spec asks for them.
   db.revoke_failures = scenario === "revoke-failures" ? seedRevokeFailures() : [];
   db.access_failures = scenario === "access-failures" ? seedAccessFailures() : [];
@@ -3247,7 +3300,7 @@ function load(): Db {
   // "outcomes" tracks outcomes of its items, "alerts-approved" is the approved plan alone, and
   // the "track-alerts" scenarios watch its milestones (an accepted slip moves an approved item).
   const approvedPlan = [
-    "launches", "plan-decider", "strategy-plan", "outcomes", DATE_BASES_SCENARIO, ALERTS_APPROVED_SCENARIO,
+    "launches", "plan-decider", "strategy-plan", "outcomes", DATE_BASES_SCENARIO, SHARED_DATE_SCENARIO, NOT_CLAIMS_SCENARIO, ALERTS_APPROVED_SCENARIO,
     "track-alerts", "track-alerts-many", "track-alerts-actions", "track-alerts-history",
   ];
   if (approvedPlan.includes(scenario ?? "")) {
@@ -3263,6 +3316,22 @@ function load(): Db {
     const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
     for (const v of db.versions.filter((x) => x.document_id === roadmap?.id && x.number === 1))
       for (const x of v.sections) x.body_md = x.body_md.replace("GA by 2026-12-15", `GA by ${TWO_WAY_GA.written}`);
+  }
+  // "shared-date": the GA date (Dec 15, no basis) is written for the first Next item too.
+  if (scenario === SHARED_DATE_SCENARIO) {
+    const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
+    for (const v of db.versions.filter((x) => x.document_id === roadmap?.id && x.number === 1)) {
+      const nextItem = v.sections[v.sections.findIndex((x) => x.section_key === "next") + 1];
+      if (nextItem) nextItem.body_md = `GA by 2026-12-15. ${nextItem.body_md}`;
+    }
+  }
+  // "not-claims": the summary also writes dates that are not schedule claims.
+  if (scenario === NOT_CLAIMS_SCENARIO) {
+    const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
+    for (const v of db.versions.filter((x) => x.document_id === roadmap?.id && x.number === 1)) {
+      const summary = v.sections.find((x) => x.section_key === "summary");
+      if (summary) summary.body_md = `${NOT_CLAIMS_LINE}\n\n${summary.body_md}`;
+    }
   }
   // H9 Pricing input: a second owner, two pricing memos and made-up deals in the "pricing" scenario.
   if (scenario === "pricing") seedPricingScenario(db);
@@ -4930,6 +4999,16 @@ function ensureDecisions(db: Db, ctx: DecisionsContext): DecisionsDb {
     const log = seedDecisions(ctx);
     if (localStorage.getItem(MOCK_SCENARIO_KEY) === "large") enlargeDecisions(ctx, log, 250);
     if (localStorage.getItem(MOCK_SCENARIO_KEY) === "pricing") seedPricingDecisions(db, ctx, log);
+    // decisions-reversed-or-trashed: a cut decided in a review of usage-alerts' roadmap, which
+    // deleting usage-alerts takes to Trash.
+    const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
+    const owner = db.members.find((m) => m.role === "owner");
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "trash-family" && roadmap && owner) {
+      logMeetingDecision(ctx, log, {
+        id: uuid(), title: "Cut bulk export from the first release", at: "2026-10-20T17:00:00Z", approver_id: owner.id,
+        subjects: [{ kind: "document", id: roadmap.id, ref: roadmap.slug }], chosen: "cut", meeting_title: "Review: Usage alerts roadmap",
+      });
+    }
     return log;
   });
   return db.decisions;
@@ -6129,6 +6208,19 @@ async function route(db: Db, req: Request): Promise<Response> {
       p,
     );
     if (planRes) return planRes;
+    // approved-roadmap-to-simple: POST /v1/simple/roadmap/apply-approved?roadmap= (approver and up).
+    if (p[3] === "apply-approved" && r.method === "POST") {
+      if (!atLeast(me.role, "approver")) return json(403, { detail: "Requires the approver role" });
+      const asked = q.get("roadmap") ?? "";
+      const known = Object.keys(db.simple_roadmap!.extra_roadmaps ?? {});
+      const slug = known.find((k) => k === asked || stableUuid(`simple-doc/${k}`) === asked);
+      const doc = slug ? db.documents.find((d) => d.kind === "roadmap" && d.slug === slug) : undefined;
+      const latest = doc ? docVersions(db, doc).filter((x) => x.approved_at).pop() : undefined;
+      if (!doc || !latest) return json(404, { detail: "No approved version of this roadmap" });
+      if (!applyRoadmapVersion(db, doc, latest)) return json(409, { detail: "This roadmap's approved version has no plan table" });
+      const out = appliedVersionOf(db.simple_roadmap!, doc.slug, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames });
+      return out ? json(200, out) : json(404, { detail: "No such roadmap" });
+    }
     const simpleRes = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, r, p, q);
     if (simpleRes) return simpleRes;
     const companyGoals = db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title }));
@@ -6148,6 +6240,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       // home-honest-loading: every document of a kind in Trash (trash.only_in_trash).
       onlyInTrash: (kind) =>
         !db.documents.some((d) => d.kind === kind) && (db.trash?.entries ?? []).some((e) => (e.documents as { kind?: string }[]).some((d) => d.kind === kind)),
+      // home-deleted-roadmap: none of a kind left, live or in Trash, and one purged (trash.deleted_for_good).
+      deletedForGood: (kind) =>
+        !db.documents.some((d) => d.kind === kind) &&
+        !(db.trash?.entries ?? []).some((e) => (e.documents as { kind?: string }[]).some((d) => d.kind === kind)) &&
+        (db.trash?.purged ?? []).includes(kind),
       chatLines: (id) =>
         Object.values(db.simple_chat?.threads ?? {})
           .filter((t) => t.meeting_id === id)
@@ -6463,7 +6560,13 @@ async function route(db: Db, req: Request): Promise<Response> {
         : doc.kind === "update"
           ? updateDateMarks(db.roadmap, v.sections)
           : [];
-    return json(200, { ...versionOut(db, v), date_marks: marks });
+    const out = versionOut(db, v);
+    if (doc.kind === "roadmap" && db.roadmap) {
+      // date-warnings-honest: the date warnings follow the bases as they stand, as the API's.
+      const prd = db.documents.find((d) => d.id === v.source?.document_id);
+      out.warnings = dateWarnings(out.warnings ?? [], marks, v.sections, prd ? { title: prd.title, slug: prd.slug } : null);
+    }
+    return json(200, { ...out, date_marks: marks });
   }
   if (sub === "markdown") {
     return new Response(versionMarkdown(doc, v), { headers: { "content-type": "text/markdown" } });
@@ -6616,6 +6719,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     doc.updated_at = v.approved_at;
     // D10: publishing the version approves its run review.
     followRunReview(db, doc, v, true, me.id);
+    // approved-roadmap-to-simple: a roadmap version's plan table goes on its Simple items.
+    if (doc.kind === "roadmap" && db.simple_roadmap?.extra_roadmaps?.[doc.slug]) applyRoadmapVersion(db, doc, v);
     // approved-prd-roadmap: its dated items and milestones go on its roadmap's working draft.
     if (doc.kind === "prd") {
       const row = draftDb(db).rows.find(
@@ -6661,6 +6766,16 @@ async function route(db: Db, req: Request): Promise<Response> {
   const refused = audienceRefusal(audience, doc.kind, me.role, sub === "export" ? (q.get("format") ?? "html") : "html");
   if (refused) return json(refused.status, refused.body);
   return exportRoute(db, doc, isAudience(audience) ? { ...v, sections: audienceSections(v.sections, audience, boardItems(db, v)) } : v, sub, q, audience);
+}
+
+/** approved-roadmap-to-simple: applies a roadmap version's plan and milestones to its Simple items. */
+function applyRoadmapVersion(db: Db, doc: DocumentRow, v: VersionRow): boolean {
+  return applyApprovedRoadmap((db.simple_roadmap ??= seedSimpleRoadmap()), doc.slug, {
+    number: v.number,
+    approved_at: v.approved_at!,
+    markdown: v.sections.map((x) => x.body_md).join("\n\n"),
+    href: `/documents/${doc.slug}/v/${v.number}`,
+  });
 }
 
 /**

@@ -106,6 +106,8 @@ interface StoredMessage {
   choice_drafts?: (Draft | null)[];
   /** roadmap-talk: where Oracle's answer comes from ("From the PRD · F-16 Adaptive pacing"). */
   source?: string | null;
+  /** ask-length-limit: where the parts Oracle cannot change yet are changed. */
+  links?: { label: string; href: string }[];
   /** Private: the reader's job for a pending (or failed) line. */
   reading?: { text: string; role: Role; meeting_id: string | null; attempts: number; ask: boolean; document_id?: string | null };
 }
@@ -350,7 +352,7 @@ const EXAMPLES = "Try “move Weekly alert digest to Q2”, “rename Setup chec
 
 type Draft = Omit<StoredCard, "id" | "message_id" | "thread" | "meeting_id" | "status" | "change_id" | "decided_by_name" | "decided_at" | "decision_id">;
 /** `understood: false`: a line the plan reader does not know (the Ask panel's one box sends it to Oracle's Ask); `missing`: no item has that name. */
-type Reply = { kind: StoredMessage["kind"]; body: string; cards: Draft[]; source?: string | null; understood?: boolean; missing?: boolean; hits?: Item[]; choices?: { label: string; draft: Draft | null }[] };
+type Reply = { kind: StoredMessage["kind"]; body: string; cards: Draft[]; source?: string | null; links?: { label: string; href: string }[]; understood?: boolean; missing?: boolean; hits?: Item[]; choices?: { label: string; draft: Draft | null }[] };
 
 /** An ambiguous item's question gains one choice per item (its card) and "Neither". */
 function withChoices(r: Reply, build: (i: Item) => Reply): Reply {
@@ -885,8 +887,40 @@ function clauses(text: string, skipped: string[] = []): Clause[] {
   return out;
 }
 
-/** qa-simple-decide-24: the parts of a line the reader could not read, said back (as chat.interpret's `skipped`). */
-const unread = (skipped: string[]) => skipped.slice(0, 3).map((p) => `I did not understand: “${p.slice(0, 120)}”.`);
+/** ask-length-limit: the most a chat message holds (the API's ChatIn). */
+const CHAT_TEXT_MAX = 4000;
+
+/** Tests set this localStorage key to a number to make the server's chat limit stricter than the browser's. */
+export const MOCK_CHAT_TEXT_MAX_KEY = "po-mock-chat-text-max";
+const chatTextMax = () => Number(localStorage.getItem(MOCK_CHAT_TEXT_MAX_KEY)) || CHAT_TEXT_MAX;
+
+/** ask-length-limit: ChatIn's 422 for an empty or too long text, shaped as FastAPI's. */
+const textRefused = (text: string) => ({
+  detail: [
+    text
+      ? { type: "string_too_long", loc: ["body", "text"], msg: `String should have at most ${chatTextMax()} characters`, input: text, ctx: { max_length: chatTextMax() } }
+      : { type: "string_too_short", loc: ["body", "text"], msg: "String should have at least 1 character", input: text, ctx: { min_length: 1 } },
+  ],
+});
+
+/** ask-length-limit: parts no chat change does yet, said as such with where they are changed (as chat.NOT_YET). */
+const NOT_YET: [RegExp, string, string, string][] = [
+  [/\bgate\b/i, "I can't change an item that is off the gate but still in Now from a chat yet", "Roadmap", "/simple/roadmap"],
+  [/\bcapacity\b|\bheadcount\b|\bengineer[- ]weeks?\b/i, "I can't change capacity from a chat yet", "Priorities", "/simple/priorities"],
+  [/\bdates?\b|\bdeadlines?\b/i, "I can't change dates from a chat yet", "Roadmap", "/simple/roadmap"],
+];
+
+/** qa-simple-decide-24: every part of a line the reader could not read, said back (as chat._unread): capacity, dates
+ * and the gate are not yet supported, with where to change them (into `links`, once each). */
+function unread(skipped: string[], links: { label: string; href: string }[] = []): string[] {
+  return skipped.map((raw) => {
+    const p = raw.split(/\s+/).filter(Boolean).join(" ").slice(0, 120);
+    const hit = NOT_YET.find(([re]) => re.test(p));
+    if (!hit) return `I did not understand: “${p}”.`;
+    if (!links.some((l) => l.href === hit[3])) links.push({ label: hit[2], href: hit[3] });
+    return `${hit[1]} (“${p}”); change it on ${hit[2]}.`;
+  });
+}
 
 const QUESTION = /^(why|how|what|who|when|where|which|should|is|are|does|do)\b/i;
 const SAY_AGAIN = "I could not tell what to change. Say it another way.";
@@ -915,7 +949,7 @@ function readLine(db: SimpleDb, ctx: ChatCtx, r: NonNullable<StoredMessage["read
   const refusals: string[] = [];
   let last: Item | null = null;
   const documentId = r.document_id ?? null;
-  for (const c of cs) {
+  for (const c of cs.slice(0, 5)) {
     const build = mockReaderOps[c.op];
     let item: Item | null;
     if (ITEMLESS.has(c.op)) item = null;
@@ -939,11 +973,27 @@ function readLine(db: SimpleDb, ctx: ChatCtx, r: NonNullable<StoredMessage["read
     if ("card" in o) drafts.push(o.card);
     else refusals.push(o.refusal);
   }
-  if (!drafts.length) return { kind: "note", body: [refusals.length ? `I can't do that here: ${refusals.join(" ")}` : SAY_AGAIN, ...unread(skipped)].join(" "), cards: [] };
+  const links: { label: string; href: string }[] = [];
+  const said = unread(skipped, links);
+  if (cs.length > 5) said.push(unused(db, ctx, cs.slice(5), items, last, meeting, documentId));
+  if (!drafts.length) return { kind: "note", body: [refusals.length ? `I can't do that here: ${refusals.join(" ")}` : SAY_AGAIN, ...said].join(" "), cards: [], links };
   const n = drafts.length;
   // The valid cards stay; the line says which ones it cannot do and what it did not read.
   const cant = refusals.length ? [`${["One", "Two", "Three"][refusals.length - 1] ?? refusals.length} I can't do: ${refusals.join(" ")}`] : [];
-  return { kind: "cards", body: [...cant, ...unread(skipped), `I understood ${n === 1 ? "one change" : n === 2 ? "two changes" : `${n} changes`}:`].join(" "), cards: drafts };
+  return { kind: "cards", body: [...cant, ...said, `I understood ${n === 1 ? "one change" : n === 2 ? "two changes" : `${n} changes`}:`].join(" "), cards: drafts, links };
+}
+
+/** ask-length-limit: the changes past the fifth, each named, for the person to say again (as chat._unused). */
+function unused(db: SimpleDb, ctx: ChatCtx, cs: Clause[], items: Item[], last: Item | null, meeting: Meeting | null, documentId: string | null): string {
+  const names: string[] = [];
+  for (const c of cs) {
+    const build = mockReaderOps[c.op];
+    const hits = ITEMLESS.has(c.op) ? [] : /^(it|that)$/i.test(c.x.trim()) && last ? [last] : named(items, c.x);
+    if (!build || (!ITEMLESS.has(c.op) && hits.length !== 1)) continue;
+    const o = build({ db, ctx, item: hits[0] ?? null, months: c.months, period: c.period, rest: c.rest, meeting, documentId });
+    if ("card" in o && o.card.summary) names.push(`“${o.card.summary}”`);
+  }
+  return names.length ? `I did not use these changes yet; say them again: ${names.join("; ")}.` : "I read the first five changes; say the rest again.";
 }
 
 let readerWrote = false;
@@ -973,7 +1023,7 @@ function resolvePending(db: SimpleDb, chat: ChatDb, key: string, ctx: ChatCtx, s
     const meeting = r.meeting_id ? (chat.meetings[r.meeting_id] ?? null) : null;
     const reply = readLine(db, { ...ctx, role: r.role }, r, itemsFor(db, ctx, meeting), meeting);
     Object.assign(msg, {
-      kind: reply.kind, body: reply.body, retry: false, at: now(),
+      kind: reply.kind, body: reply.body, retry: false, at: now(), links: reply.links ?? [],
       card_ids: storeCards(db, chat, reply.cards, msg.id, key, meeting),
       choices: (reply.choices ?? []).map((c, index) => ({ index, label: c.label })),
       choice_drafts: (reply.choices ?? []).map((c) => c.draft),
@@ -1084,6 +1134,43 @@ function buildAdd(title: string, goal: string | null, milestone: string | null, 
 const NUMBERS: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
 const countOf = (x: string) => NUMBERS[x.toLowerCase()] ?? Number(x);
 
+/** item-chat-understands (shipped.SAID / HINT / WHERE / IMPROVE): a line saying the item already exists, one that may mean it, where it runs, "will keep improving it". */
+const SHIPPED_SAID = /\b(?:already (?:happening|shipped|live|out|built|done|running|in use|available|exists?|there|have (?:it|this)|ha(?:s|ve) (?:it|this))|(?:is|it's|its|has been|was) (?:shipped|live|launched|released)|(?:has|have|we) shipped|(?:partly|partially) (?:done|shipped|built|live))\b/i;
+const SHIPPED_HINT = /\b(?:already|shipped|live|launched|released|exists?|in use|using|used|been out|for a while|for months|for years|we have (?:it|this)|built)\b/i;
+const SHIPPED_WHERE = /\b(?:in|on|inside|within|as part of) ((?:our|the|their|its|my|your) [^.,;!?]+?)(?=[.,;!?]|$| and | but | so )/i;
+/** shipped.NOT_SAID: a line that asks or says the opposite ("this isn't already live") is no mark. */
+const SHIPPED_NOT = /\?\s*$|\b(?:not|never|\w+n['’]t|isnt|arent|hasnt|havent)\b/i;
+const SHIPPED_IMPROVE = /\b(?:keep|continue|will|going to)\b[^.]*?\b(?:improv|iterat|polish|work on|grow)/i;
+
+/** The "Mark as already shipped" card (shipped.build): its evidence note says where it runs, in the person's words. */
+function shippedDraft(i: Item, said: string): Draft {
+  const where = SHIPPED_WHERE.exec(said)?.[1]?.trim();
+  const note = (where ? `Runs in ${where}` : `Said in its talk: “${said.slice(0, 200)}”`).slice(0, 200);
+  return {
+    op: "mark_shipped", target: { item_id: i.id }, before: { shipped: null }, after: { shipped: { note, on: today() } },
+    summary: `Mark as already shipped: ${i.title}`, item_id: i.id, item_title: i.title, preview: null, flow: null, fixes: [], change_words: { before: "Planned work", after: `Already shipped · ${note}` }, correct: null,
+  };
+}
+
+/** A line with no change read in an item's talk (shipped.choices): a short question with choices drawn from it, "Neither" last. */
+function talkChoices(i: Item, said: string, shipped: boolean, owner: boolean): Reply {
+  const choices: { label: string; draft: Draft | null }[] = [];
+  // As the API: only an owner applies it, so no one else is offered it; the item's own mark, not a Done its tracker gives it.
+  if (owner && SHIPPED_HINT.test(said) && !SHIPPED_NOT.test(said) && !shipped && i.status !== "cut") choices.push({ label: "Mark it as already shipped?", draft: shippedDraft(i, said) });
+  const title = said.slice(0, 120).replace(/\.$/, "");
+  choices.push({
+    label: "Add this as a task?",
+    draft: { op: "add_item_task", target: { item_id: i.id }, before: {}, after: { title, owner_name: null, due_date: null }, summary: `Add the task “${title}” to ${i.title}`, item_id: i.id, item_title: i.title, preview: null, flow: null, fixes: [] },
+  });
+  if (choices.length < 2) {
+    choices.push({
+      label: "Add it as a feature ask?",
+      draft: { op: "add_feature_ask", target: {}, before: {}, after: { title, requester_name: null, requester_kind: "unknown" }, summary: `New feature ask: ${title}`, item_id: null, item_title: null, preview: null, flow: null, fixes: [] },
+    });
+  }
+  return { kind: "question", body: "What should I do with that?", cards: [], choices: [...choices, { label: "Neither", draft: null }] };
+}
+
 /** Oracle in an item's own talk: "it" and "this" mean the item (deterministic, the demo's sentences). */
 function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, text: string): Reply {
   const i = items.find((x) => x.id === itemId);
@@ -1101,6 +1188,22 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
   if (ctx.role === "viewer") return { kind: "note", body: "Viewers ask questions here; changes need a commenter or above.", cards: [] };
   const one = (d: Draft): Reply => ({ kind: "cards", body: `I understood: ${d.summary.replace(/^./, (c) => c.toLowerCase())}.`, cards: [d] });
   let m: RegExpExecArray | null;
+  const seed = db.items.find((x) => db.ids[x.key] === i.id);
+  if (SHIPPED_SAID.test(t) && !SHIPPED_NOT.test(t)) {
+    // item-chat-understands (shipped.build): "this already exists" marks it shipped; "will keep improving it" leaves a smaller item.
+    if (i.status === "cut") return { kind: "note", body: `${i.title} is cut already.`, cards: [] };
+    if (seed?.shipped) return { kind: "note", body: `${i.title} is marked as shipped already.`, cards: [] };
+    const ship = shippedDraft(i, t);
+    if (!SHIPPED_IMPROVE.test(t)) return one(ship);
+    const title = `Improve ${i.title}`;
+    const keep: Draft = {
+      op: "add_item", target: { where: { kind: "horizon", value: "next" } }, before: {}, after: { title, outcome: null, start_date: null, end_date: null, milestone: null },
+      summary: `Keep improving it: add ${title} to Next`, item_id: null, item_title: null, preview: null, flow: null, fixes: [],
+      change_words: null, correct: { fields: ["title", "goal", "milestone", "start_date", "end_date"], values: { title, goal: null, milestone: null, start_date: null, end_date: null } },
+    };
+    const note = String((ship.after.shipped as { note: string }).note);
+    return { kind: "cards", body: `I understood: ${i.title} already runs. ${note}.`, cards: [ship, keep] };
+  }
   if ((m = new RegExp(`^(?:move|push|shift|slip) ${it}(?: by)? (a|an|one|two|three|four|five|six|\\d+) (day|week|month|quarter)s? (later|earlier|out|back|sooner)$`, "i").exec(t))) {
     // As the API's roadmap_talk._move_kw: a shift of (months, days), as chat.parse_shift.
     const count = countOf(m[1]);
@@ -1156,7 +1259,8 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
     const o = addItemDraft(db, ctx, add[1], add[2] ?? i.milestone?.name ?? "M1", add[3] ?? (i.goal ? i.goal.title : ""));
     return "card" in o ? one(o.card) : { kind: "note", body: o.refusal, cards: [] };
   }
-  return { kind: "note", body: `I could not tell what to change. Try “move it two weeks later”, “move it to M2”, “rename it to …” or ask a question about ${i.title}.`, cards: [] };
+  // item-chat-understands: never "say it another way" alone; a short question with choices drawn from the line.
+  return talkChoices(i, t, !!seed?.shipped, ctx.role === "owner");
 }
 
 /** Apply with `values` (Correct): the card rebuilt from the corrected values; Correct's values win. A refusal's words, else null. */
@@ -1344,6 +1448,8 @@ function mayOf(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): { may: 
   if (bar) return { may: null, why_not: bar };
   // As the API (chat_actions.proposes): on Ask, approvers and owners record decisions; a commenter proposes one.
   if (!m && c.op === "record_decision" && ctx.role === "commenter") return { may: "propose", why_not: null };
+  // item-chat-understands (shipped.bar): only an owner marks an item as already shipped.
+  if (c.op === "mark_shipped") return ctx.role === "owner" ? { may: "apply", why_not: null } : { may: null, why_not: "Only an owner marks an item as already shipped" };
   const item = c.item_id ? itemsFor(db, ctx, null, true).find((i) => i.id === c.item_id) : undefined;
   // Filing a feature ask is every commenter's right (Requests), as are a meeting's notes, agenda
   // and decisions (the meeting's rules came first) and a decision on Ask; else the item's rule.
@@ -1430,7 +1536,7 @@ function threadOut(db: SimpleDb, chat: ChatDb, t: Thread | null, ctx: ChatCtx, m
       void _reading;
       // meet-chat-kind: as the API's thread(), a line that is not a chat kind reads as an answer.
       const kind = (KINDS.includes(msg.kind) ? msg.kind : "answer") as ChatKind;
-      return { source: null, ...msg, kind, cards: card_ids.map((id) => cardOut(db, chat, chat.cards[id], ctx)) };
+      return { source: null, links: [], ...msg, kind, cards: card_ids.map((id) => cardOut(db, chat, chat.cards[id], ctx)) };
     }),
     rules: meeting ? rulesOut(meeting, ctx) : null,
     ask_id: t?.ask_id ?? null,
@@ -1494,7 +1600,7 @@ function say(db: SimpleDb, chat: ChatDb, key: string, meeting: Meeting | null, c
     return true;
   }
   t.messages.push({
-    ...base, body: reply.body, kind: reply.kind, source: reply.source ?? null, card_ids: storeCards(db, chat, reply.cards, id, key, meeting),
+    ...base, body: reply.body, kind: reply.kind, source: reply.source ?? null, links: reply.links ?? [], card_ids: storeCards(db, chat, reply.cards, id, key, meeting),
     choices: (reply.choices ?? []).map((c, index) => ({ index, label: c.label })), choice_drafts: (reply.choices ?? []).map((c) => c.draft),
   });
   return true;
@@ -1524,6 +1630,18 @@ async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx,
     if ("detail" in r) return json(r.status, { detail: r.detail });
     c.target = { ...c.target, suggestion_id: r.id };
     const result = applyLocal(c, null, ctx, s8);
+    return { card: cardOut(db, chat, c, ctx), result };
+  }
+  if (c.op === "mark_shipped") {
+    // item-chat-understands (shipped.apply): the item reads done, out of planned work; Undo puts its status back.
+    const s = db.items.find((x) => db.ids[x.key] === c.item_id);
+    if (!s) return json(404, { detail: "No such roadmap item" });
+    if (s.shipped) return json(409, { detail: `${s.title} is marked as shipped already` });
+    const was = s.status ?? null;
+    s.shipped = (c.after.shipped as { note: string; on: string } | null) ?? { note: "Already shipped", on: today() };
+    s.status = "done";
+    const result = applyLocal(c, null, ctx, s8);
+    c.undo = { status: was };
     return { card: cardOut(db, chat, c, ctx), result };
   }
   if (LOCAL_OPS.has(c.op)) {
@@ -1848,7 +1966,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
   if (p[2] === "chat" && p[3] === "messages" && !p[4] && m === "POST") {
     const b = await body();
     const text = String(b.text ?? "").trim();
-    if (!text || text.length > 2000) return json(422, { detail: "text: 1 to 2000 characters" });
+    if (!text || text.length > chatTextMax()) return json(422, textRefused(text));
     // ask-fresh: continue the caller's own chat `chat_id`; `new_chat` starts a new one about the page.
     const own = typeof b.chat_id === "string" ? ownChat(chat, ctx, b.chat_id) : null;
     if (typeof b.chat_id === "string" && !own) return json(404, { detail: "No such chat" });
@@ -1893,7 +2011,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     }
     if (p[5] === "messages" && m === "POST") {
       const text = String((await body()).text ?? "").trim();
-      if (!text || text.length > 2000) return json(422, { detail: "text: 1 to 2000 characters" });
+      if (!text || text.length > chatTextMax()) return json(422, textRefused(text));
       const understood = say(db, chat, key, meeting, ctx, text);
       return json(200, { ...threadOut(db, chat, chat.threads[key], ctx, meeting), understood });
     }
@@ -1931,6 +2049,11 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
       const meeting = meetingOf(chat, c);
       if (c.op === "suggest_feature") {
         if (!unfileSuggestion(db, String(c.target.suggestion_id ?? ""))) return json(409, { detail: "The decider has decided this suggestion already" });
+      } else if (c.op === "mark_shipped") {
+        const s = db.items.find((x) => db.ids[x.key] === c.item_id);
+        if (!s || !s.shipped) return json(409, { detail: "This item is not marked as shipped now" });
+        s.shipped = null;
+        s.status = (c.undo?.status as typeof s.status | null) ?? undefined;
       } else if (LOCAL_OPS.has(c.op)) {
         if (meeting?.ended) return json(409, { detail: "The meeting has ended" });
         unapplyLocal(c, meeting, s8);

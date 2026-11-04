@@ -169,12 +169,18 @@ def import_findings(
 
 def code_name_trouble(warnings: list[str]) -> str:
     """What a draft does wrong with its codes, in plain words, by the import's warning
-    codes (oracle.docs.named_codes.CODES)."""
+    codes (oracle.docs.draft_checks.SENT_BACK)."""
     parts = []
     if "unnamed_code" in warnings:
         parts.append("uses codes without their names")
     if "codes_not_listed" in warnings:
         parts.append("writes three or more codes in a row instead of a list")
+    # roadmap-draft-wording (oracle.roadmap.draft_words).
+    if "queue_said_as_estimate" in warnings:
+        parts.append("says an end date comes from the item's own estimate, not its place in "
+                     "the team's queue")  # fmt: skip
+    if "unverified_written" in warnings:
+        parts.append("calls a date unverified itself")
     return " and ".join(parts) or "uses codes without their names"
 
 

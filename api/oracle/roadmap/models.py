@@ -176,6 +176,12 @@ class TrackMilestone(TenantScoped, Base):
         Text, nullable=False, default="planned", server_default="planned"
     )
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # approved-roadmap-to-simple: a milestone an approved roadmap version wrote (replaced
+    # when a later one is applied) and how it counts ("50 hikers use it each week").
+    roadmap_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("document_versions.id", ondelete="CASCADE")
+    )
+    counts: Mapped[str | None] = mapped_column(Text)
     lock_version: Mapped[int] = _lock_version()
     __mapper_args__ = {"version_id_col": lock_version}
     updated_at: Mapped[datetime] = _updated_at()
@@ -265,7 +271,9 @@ class RoadmapItem(TenantScoped, Base):
     one owner each.
 
     Rows of an approved roadmap version are never rewritten; only their freshness
-    columns move (as ``artifact_dependencies`` do, §11.5).
+    columns move (as ``artifact_dependencies`` do, §11.5), and approving the version
+    applies its own plan to them once (oracle.simple.approved_roadmap: dates, plan state,
+    added items).
     """
 
     __tablename__ = "roadmap_items"
@@ -364,6 +372,15 @@ class RoadmapItem(TenantScoped, Base):
     merged_into: Mapped[str | None] = mapped_column(Text)
     kept_both: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,
                                             server_default=false())  # fmt: skip
+    # item-chat-understands: marked as already shipped from its talk ({"note", "on", "by"},
+    # the note saying where it runs); it reads done. Undo clears it.
+    shipped: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # approved-roadmap-to-simple (oracle.simple.approved_roadmap): the words an applied
+    # roadmap version gives for the dates; "shipped" or "next_prd" when it takes the item
+    # off the plan; what it wrote ({version, start, end}).
+    date_basis: Mapped[str | None] = mapped_column(Text)
+    plan_state: Mapped[str | None] = mapped_column(Text)
+    applied: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     updated_at: Mapped[datetime] = _updated_at()
 
 

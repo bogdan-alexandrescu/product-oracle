@@ -26,6 +26,7 @@ capacity plan or commitment and the date it supports) or a reason for none, per 
   (``items.recheck_date``) and its items check loses the date problems of the dated items.
 """
 
+import re
 import uuid
 from collections.abc import Iterable
 from datetime import date
@@ -360,6 +361,21 @@ def validate(
 # --------------------------------------------------------------------------- approve
 
 
+# roadmap-draft-wording review: a proposal that says its date is the item's place in the
+# team's queue is a capacity date, whatever kind it was proposed as.
+_QUEUE = re.compile(r"\b(?:queue|team size|milestone order)\b", re.I)
+
+
+def _accepted(item: dict[str, Any]) -> dict[str, Any]:
+    """The proposed estimate as accepted: kind capacity when its reference or assumptions
+    place the item in the team's queue."""
+    est = dict(item["proposed"])
+    words = [str(est.get("reference") or ""), *(str(a) for a in item.get("assumptions") or [])]
+    if est.get("kind") == "estimate" and any(_QUEUE.search(w) for w in words):
+        est["kind"] = "capacity"
+    return est
+
+
 def decisions(cp: Checkpoint, actions: Iterable[Action]) -> dict[str, dict[str, Any]]:
     chosen = choices(actions)
     out: dict[str, dict[str, Any]] = {}
@@ -370,7 +386,7 @@ def decisions(cp: Checkpoint, actions: Iterable[Action]) -> dict[str, dict[str, 
                 out[i["key"]] = {"decision": "no_date", "reason": i["no_date_reason"]}
             continue
         if a.kind == "accept":
-            out[i["key"]] = {"decision": "accepted", "estimate": i["proposed"]}
+            out[i["key"]] = {"decision": "accepted", "estimate": _accepted(i)}
         elif a.field == "estimate":
             out[i["key"]] = {"decision": "changed", "estimate": _estimate(a.value)}
         else:

@@ -401,7 +401,8 @@ async def plan_roadmap(
     owner_id: uuid.UUID | None,
 ) -> list[Launch]:
     """Plan one launch per item in Now of an approved roadmap version, owned by the
-    approver. Items with a live launch get none (approving again plans nothing)."""
+    approver. Items with a live launch get none (approving again plans nothing), nor items
+    the applied plan took off (shipped, next PRD)."""
     if version.approved_at is None:
         return []
     document = await db.get(Document, version.document_id)
@@ -414,6 +415,8 @@ async def plan_roadmap(
     )
     planned = []
     for item in list(items):
+        if item.plan_state is not None:
+            continue  # approved-roadmap-to-simple: shipped or moved to the next PRD
         track_id = item.track_id
         if track_id is None and item.prd_document_id is not None:
             from oracle.roadmap.tracks import track_of_prd

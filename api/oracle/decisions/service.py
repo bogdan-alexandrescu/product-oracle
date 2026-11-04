@@ -29,6 +29,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline import service as baseline
 from oracle.baseline.models import Entity, Evidence
+from oracle.decisions import standing
 from oracle.decisions.models import CAPTURED_ORIGINS, Decision, DecisionReview
 from oracle.decisions.schemas import (
     DecideIn,
@@ -205,6 +206,8 @@ async def out(db: AsyncSession, principal: Principal | None, d: Decision) -> Dec
     revisit = await _revisit_of(db, d)
     withdrawn = await _withdrawn(db, d)
     base = summary(d, emails, await company_today(db)).model_dump(by_alias=False)
+    trashed = (await standing.trashed_about(db, [d])).get(d.id)
+    base["trash_note"] = standing.trash_label(trashed) if trashed else None
     can = _abilities(principal, d)
     return DecisionOut(
         **base,
@@ -404,7 +407,13 @@ async def list_decisions(
     query = query.order_by(Decision.number.desc()).limit(f.limit).offset(f.offset)
     rows = list(await db.scalars(query))
     emails = await _emails(db, {d.approver_id for d in rows})
-    return [summary(d, emails, day) for d in rows]
+    trashed = await standing.trashed_about(db, rows)
+    return [
+        summary(d, emails, day).model_copy(
+            update={"trash_note": standing.trash_label(trashed[d.id]) if d.id in trashed else None}
+        )
+        for d in rows
+    ]
 
 
 async def people(db: AsyncSession) -> list[User]:
@@ -994,6 +1003,8 @@ async def review(db: AsyncSession, principal: Principal, d: Decision, body: Revi
     await flush_or_conflict(db)
     if body.verdict == "reversed":
         await reject_entity(db, principal, d, f"reversed: {note}")
+        # Open drafts that cited it carry a note on their next draft.
+        await standing.note_reversed(db, d, note)
         if d.origin == "request_decline":
             # H10: reversing a no reopens the request, once (no second reversal).
             from oracle.requests import service as requests_service

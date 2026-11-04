@@ -28,7 +28,7 @@ import {
   quarterValue,
   scale,
   shortDay,
-  sourceWord,
+  datesFrom,
   spanWords,
   type Format,
   type GanttUnit,
@@ -652,7 +652,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
   };
   const openY = open ? l.y.get(open) : undefined;
   return (
-    <div className="flex border border-line bg-surface" data-testid="simple-chart" data-format={format} data-unit={format === "gantt" ? unit : undefined} data-weeks={weeks ? "true" : undefined}>
+    <div className="isolate flex border border-line bg-surface" data-testid="simple-chart" data-format={format} data-unit={format === "gantt" ? unit : undefined} data-weeks={weeks ? "true" : undefined}>
       <div className="min-w-0 flex-none border-r border-line" style={{ width: l.labelW }} data-testid="chart-labels">
         {/* fix4 qa-simple-roadmap-34: the grouping as the Group by names it ("PRD", "Goal"), not in capitals. */}
         <div style={{ height: l.top }} className="flex items-end px-3 pb-1.5 text-xs font-semibold text-text2">
@@ -1112,7 +1112,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
   const sliced = !phased && planned(item);
   const fixed = closedItem(item) || planned(item);
   // qa4-simple-roadmap-30: each red flag in its own words ("ends Jun 8, after its milestone 'Beta'"), as Now / Next / Later says it.
-  const label = `${item.title}: ${yearSpan(start, end, " to ")}, ${item.estimated ? "Estimated by Oracle" : sourceWord(item.source)}${phaseWords}${red ? `, ${broken(item).map((f) => f.reason).join("; ")}` : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && planned(item) && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? (phased ? ". Arrows move the whole item" : ". Arrows move it, Shift+arrows its end") + ", sent when you pause; Escape cancels" : ""}`;
+  const label = `${item.title}: ${yearSpan(start, end, " to ")}, ${item.estimated ? "Estimated by Oracle" : datesFrom(item)}${phaseWords}${red ? `, ${broken(item).map((f) => f.reason).join("; ")}` : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && planned(item) && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? (phased ? ". Arrows move the whole item" : ". Arrows move it, Shift+arrows its end") + ", sent when you pause; Escape cancels" : ""}`;
   // finding 49: the suggestion's dashed outline is clamped to the chart's own width (its dates
   // can run past the chart's span); a small arrow says it continues past the edge.
   const sx = sc.x(s?.start_date ?? start);

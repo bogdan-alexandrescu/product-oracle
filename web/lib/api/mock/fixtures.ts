@@ -311,10 +311,36 @@ const DEPOSITS_V2: SectionSeed[] = [
 const DEPOSITS_V3: SectionSeed[] = DEPOSITS_V2.map((s) =>
   s.key === "metrics" ? { ...s, body: "No-show rate under 5% within two months of launch; refunds within one working day." } : s,
 );
+const REMINDERS_CITATIONS: CitationSeed[] = [
+  {
+    id: "r1",
+    source: "web",
+    ref: "https://example.com/research/missed-visits",
+    title: "Missed visits study",
+    excerpt: "One visit in eight is missed when no reminder is sent.",
+    retrieved_at: "2026-10-10T09:00:00Z",
+  },
+  {
+    id: "r2",
+    source: "gdocs",
+    ref: "https://docs.google.com/document/d/example-front-desk-survey",
+    title: "Front desk survey",
+    excerpt: "Front desks spend about an hour each morning on reminder calls.",
+    retrieved_at: "2026-10-10T09:30:00Z",
+  },
+];
+
 const REMINDERS_V1: SectionSeed[] = [
   { key: "title", level: 1, heading: "Visit reminders", body: "A text and an email the day before each visit, with one-tap confirm or rebook." },
   { key: "problem", level: 2, heading: "1. Problem", body: "Patients forget visits booked weeks ahead; front desks spend mornings on reminder calls." },
-  { key: "solution", level: 2, heading: "2. Solution", body: "Send reminders 24 hours ahead; a reply of C confirms, R opens the rebook page." },
+  // raw-tokens-everywhere: the writer's markers as left in the section (a citation of two
+  // sources, a spaced one, a live read, a source id, one that points to nothing).
+  {
+    key: "solution",
+    level: 2,
+    heading: "2. Solution",
+    body: "Send reminders 24 hours ahead [c:r1, r2]; a reply of C confirms [l:2], R opens the rebook page [s:rebook]. Front desks see who confirmed [c:front desk notes] [c:r9].",
+  },
   { key: "metrics", level: 2, heading: "3. Success metrics", body: "Reminder calls down by half; confirmations from 60% of patients." },
 ];
 
@@ -760,7 +786,7 @@ export const DOCUMENTS: DocumentSeed[] = [
     title: "Visit reminders",
     template: "oracle-default",
     template_version: "1",
-    versions: [{ number: 1, created_at: "2026-10-11T09:00:00Z", sections: REMINDERS_V1, citations: [] }],
+    versions: [{ number: 1, created_at: "2026-10-11T09:00:00Z", sections: REMINDERS_V1, citations: REMINDERS_CITATIONS }],
   },
   // E1: a technical brief; version 2 is an edit that added sections and a source.
   {

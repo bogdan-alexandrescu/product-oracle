@@ -249,14 +249,16 @@ export function ZoomTimeline(props: TimelineProps) {
         </div>
         <ConflictPanel {...props} onShow={onOpen} />
         <div className={side ? "flex items-start gap-3" : ""}>
-          <div className="min-w-0 flex-1">
+          {/* The chart's bars, date words and today line stack inside its own context (isolate),
+           * so they never paint over the item's panel, nor its talk widened over the chart. */}
+          <div className="isolate min-w-0 flex-1">
             {phone ? <QuarterList {...props} /> : <DayChart {...props} />}
           </div>
           {side && openItem && (
             <aside
               data-testid="item-panel"
               aria-label={openItem.title}
-              className="sticky top-3 max-h-[calc(100dvh-24px)] w-[400px] flex-none overflow-y-auto rounded-xl border border-line bg-surface shadow-tip"
+              className="sticky top-3 z-30 max-h-[calc(100dvh-24px)] w-[400px] flex-none overflow-y-auto rounded-xl border border-line bg-surface shadow-tip"
             >
               {props.card(
                 openItem,
@@ -678,6 +680,26 @@ function DayChart(props: TimelineProps) {
           >
             Today
           </span>
+          {/* approved-roadmap-to-simple: the roadmap's milestones (an approved version's too),
+           * each a dashed line on its day with its name, as the Gantt marks them. */}
+          {(data.milestones ?? [])
+            .filter((m) => m.date && m.status !== "dropped" && m.date >= t0 && m.date <= t1)
+            .map((m) => (
+              <div key={m.id}>
+                <div
+                  className="pointer-events-none absolute top-11 bottom-0 z-10 border-l-2 border-dashed border-text2"
+                  style={{ left: labelW + x(m.date as string) }}
+                />
+                <span
+                  data-testid="timeline-milestone"
+                  title={`${m.name}, ${shortDay(m.date as string)}${m.done_when.length ? `: counts when ${m.done_when.join("; ")}` : ""}`}
+                  className="absolute top-[21px] z-20 rounded-full border border-line bg-surface px-2 text-xs leading-4 whitespace-nowrap text-text"
+                  style={{ left: labelW + x(m.date as string) + 4 }}
+                >
+                  ◆ {m.name} · {shortDay(m.date as string)}
+                </span>
+              </div>
+            ))}
           {/* Quick add's drop targets: a quarter's columns (transparent, under the rows). */}
           {props.canChange &&
             quarters(t0, t1).map((q) => (
@@ -1002,6 +1024,19 @@ function QuarterList(props: TimelineProps) {
                 </span>
               )}
             </h3>
+            {/* approved-roadmap-to-simple: the quarter's milestones, as the desktop's dashed lines. */}
+            {(data.milestones ?? [])
+              .filter((m) => m.date && m.status !== "dropped" && q.start <= m.date && m.date <= q.end)
+              .map((m) => (
+                <p
+                  key={m.id}
+                  data-testid="timeline-milestone"
+                  className="border-b border-line/60 px-3 py-1 text-xs text-text2"
+                >
+                  ◆ {m.name} · {shortDay(m.date as string)}
+                  {m.done_when.length > 0 && ` · counts when ${m.done_when.join("; ")}`}
+                </p>
+              ))}
             <ul className="divide-y divide-line/60">
               {items.map((i) => {
                 const lk = lookOf(i);

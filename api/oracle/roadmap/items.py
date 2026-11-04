@@ -585,6 +585,11 @@ COPIED = (
     "date_source",
     "accepted_risks",
     "draft",
+    # approved-roadmap-to-simple: an applied version's words, plan state and dates stay
+    # on the next version, so Simple still tells what a person changed since.
+    "date_basis",
+    "plan_state",
+    "applied",
 )
 
 

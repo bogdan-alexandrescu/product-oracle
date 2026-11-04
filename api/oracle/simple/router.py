@@ -23,12 +23,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
-from oracle.simple import changes, drafts, service, suggestions
+from oracle.simple import approved_roadmap, changes, drafts, service, suggestions
 from oracle.simple.schemas import (
     DateSuggestionEdit,
     DateSuggestionOut,
     RefreshOut,
     RoadmapGroup,
+    SimpleAppliedVersion,
     SimpleChangeResult,
     SimpleRoadmapOut,
 )
@@ -88,6 +89,51 @@ async def list_date_suggestions(
         for s, e, may in await suggestions.visible(db, principal)
         if s.status == status_
     ]
+
+
+@router.post("/apply-approved", response_model=SimpleAppliedVersion)
+async def apply_approved_roadmap(
+    principal: Approver, db: TenantDB, roadmap: Annotated[str, Query(max_length=200)]
+) -> SimpleAppliedVersion:
+    """approved-roadmap-to-simple: apply the roadmap's latest approved version to its items
+    again (its dates, shipped and new items, milestones), approvers and up. 404: no such
+    roadmap, or none approved; 409: the version has no plan to apply."""
+    from sqlalchemy import or_, select
+
+    from oracle.docs.models import Document
+
+    key = uuid.UUID(roadmap) if _is_uuid(roadmap) else None
+    doc = await db.scalar(
+        select(Document).where(
+            Document.kind == "roadmap",
+            or_(Document.slug == roadmap, Document.id == key) if key else Document.slug == roadmap,
+        )
+    )
+    if doc is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such roadmap")
+    version = await approved_roadmap.latest_approved(db, doc.id)
+    if version is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This roadmap has no approved version yet")
+    if not await approved_roadmap.apply(db, principal, doc, version):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, f"Version {version.number} has no plan table to apply"
+        )
+    await db.commit()
+    out = await service.build(db, principal, roadmap=str(doc.id))
+    [line] = [x for x in out.applied_versions if x.roadmap.id == doc.id] or [None]
+    if line is None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, f"Version {version.number} has no items to apply it to"
+        )
+    return line
+
+
+def _is_uuid(text: str) -> bool:
+    try:
+        uuid.UUID(text)
+    except ValueError:
+        return False
+    return True
 
 
 @router.post("/date-suggestions/refresh", response_model=RefreshOut)

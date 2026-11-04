@@ -39,6 +39,7 @@ from oracle.authz import has_role
 from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.jobs.models import LlmJob
+from oracle.raw_tokens import strip_opt, strip_raw_tokens
 from oracle.simple.models import (
     VISUAL_SUBJECT_KINDS,
     SimpleChange,
@@ -278,25 +279,40 @@ async def may_revise(db: AsyncSession, principal: Any, v: SimpleVisual) -> bool:
 
 
 def _flow(v: SimpleVisual, ver: SimpleVisualVersion, count: int) -> SimpleFlow:
+    """A drawing as people read it: its words (steps, storyboard cards, screen, notes, the
+    SVG's and wireframe's text) without a writer's raw citation tokens ("[c:id]")."""
     screen = ver.screen or None
-    steps = [SimpleFlowStep(**s) for s in ver.steps]
+    steps = [
+        SimpleFlowStep(
+            **{
+                **s,
+                "label": strip_raw_tokens(s["label"]),
+                "actor": strip_opt(s.get("actor")),
+                "yes": strip_opt(s.get("yes")),
+                "no": strip_opt(s.get("no")),
+            }
+        )
+        for s in ver.steps
+    ]
     return SimpleFlow(
-        title=ver.title,
+        title=strip_raw_tokens(ver.title),
         steps=[s.label for s in steps],
         screen=SimpleFlowScreen(
-            title=screen["title"] if screen else "No screen",
-            regions=list(screen["regions"]) if screen else [],
+            title=strip_raw_tokens(screen["title"]) if screen else "No screen",
+            regions=[strip_raw_tokens(r) for r in screen["regions"]] if screen else [],
         ),
         subject_kind=v.subject_kind,
         subject_id=v.subject_id,
         version=ver.number,
         versions=count,
-        goal=ver.goal,
+        goal=strip_opt(ver.goal),
         nodes=steps,
-        svg=ver.flow_svg,
-        wireframe=ver.wireframe_html,
+        svg=strip_opt(ver.flow_svg),
+        wireframe=strip_opt(ver.wireframe_html),
         touches_screen=screen is not None,
-        annotations=[SimpleFlowNote(**a) for a in ver.annotations],
+        annotations=[
+            SimpleFlowNote(**{**a, "note": strip_raw_tokens(a["note"])}) for a in ver.annotations
+        ],
         made_at=ver.created_at,
     )
 

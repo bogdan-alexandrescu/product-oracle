@@ -254,6 +254,13 @@ CATALOGUE: dict[str, Entry] = {
     "order_breaks_dependency": Entry(
         BLOCKING, "Listed before what it needs", "It is listed before {dep_title}.", "Fix order"
     ),
+    "later_slice": Entry(
+        BLOCKING,
+        "Waits on a later slice",
+        "Its estimate names {slice_title}; it waits on {dep_title}, a later slice of the "
+        "same feature.",
+        "Wait on {slice_title}",
+    ),
     "unknown_dependency": Entry(
         BLOCKING,
         "Depends on an unknown item",
@@ -450,6 +457,17 @@ def _blocking(
             ],
             data,
         )
+    if code == "later_slice":
+        found = next((x for x in roadmap.later_slices(list(by_id.values())) if x[0] == key), None)
+        if found is not None:
+            _, dep, named, _ = found
+            dep_title = roadmap._text(by_id[dep].get("title")) or dep
+            slice_title = roadmap._text(by_id[named].get("title")) or named
+            return r(
+                CATALOGUE[code].sentence.format(slice_title=slice_title, dep_title=dep_title),
+                [remove_dependency(key, dep)],
+                {"dependency": dep, "slice": named},
+            )
     if code == "unknown_prd_section":
         section = roadmap._text(item.get("prd_section")) or ""
         return r(
