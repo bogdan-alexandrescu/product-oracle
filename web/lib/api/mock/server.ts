@@ -2436,6 +2436,19 @@ function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
         : null;
     },
     outcomeStatus: (id) => db.quality?.outcomes.find((o) => o.id === id)?.status ?? null,
+    // decisions-reversed-or-trashed: a decision naming a document (or one of its versions or
+    // lines) now in Trash is marked so.
+    trashedAbout: (subjects) => {
+      const entries = db.trash?.entries ?? [];
+      const docs = entries.flatMap((e) => e.documents as { id: string; kind: string }[]);
+      const versions = entries.flatMap((e) => e.versions as { id: string; document_id: string }[]);
+      const kinds = (subjects ?? []).flatMap((s) => {
+        const id = s.kind === "document_version" ? versions.find((v) => v.id === s.id)?.document_id : ["document", "section"].includes(s.kind) ? s.id : undefined;
+        const doc = id ? docs.find((d) => d.id === id) : undefined;
+        return doc ? [doc.kind] : [];
+      });
+      return kinds.length ? (kinds.includes("roadmap") ? "roadmap" : kinds[0]) : null;
+    },
     outcomeCheckDue: (id) => {
       const o = db.quality?.outcomes.find((x) => x.id === id);
       return o?.status === "tracking" && !!o.proposed_assessment;
@@ -4917,6 +4930,16 @@ function ensureDecisions(db: Db, ctx: DecisionsContext): DecisionsDb {
     const log = seedDecisions(ctx);
     if (localStorage.getItem(MOCK_SCENARIO_KEY) === "large") enlargeDecisions(ctx, log, 250);
     if (localStorage.getItem(MOCK_SCENARIO_KEY) === "pricing") seedPricingDecisions(db, ctx, log);
+    // decisions-reversed-or-trashed: a cut decided in a review of usage-alerts' roadmap, which
+    // deleting usage-alerts takes to Trash.
+    const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
+    const owner = db.members.find((m) => m.role === "owner");
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "trash-family" && roadmap && owner) {
+      logMeetingDecision(ctx, log, {
+        id: uuid(), title: "Cut bulk export from the first release", at: "2026-10-20T17:00:00Z", approver_id: owner.id,
+        subjects: [{ kind: "document", id: roadmap.id, ref: roadmap.slug }], chosen: "cut", meeting_title: "Review: Usage alerts roadmap",
+      });
+    }
     return log;
   });
   return db.decisions;
