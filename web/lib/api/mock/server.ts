@@ -25,7 +25,7 @@ import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
-import { routeFitDate } from "./fit-date";
+import { fitDateGoal, routeFitDate } from "./fit-date";
 import { generalReply } from "./general-chat";
 import { afterAccept, goalInterviewReply, proposeVersion, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
 import { goalCheck } from "./goals";
@@ -3224,11 +3224,14 @@ function load(): Db {
                     }
                     return db;
                   }
-              : scenario === "fit-date" || scenario === "fit-date-hard"
+              : scenario === "fit-date" || scenario === "fit-date-hard" || scenario === "fit-date-hard-no-goal"
                 ? () => {
-                    // Bring a date in (./fit-date.ts): its PRD's items on the Help desk roadmap.
+                    // Bring a date in (./fit-date.ts): its PRD's items on the Help desk roadmap and
+                    // the Baseline goal its M2 gate counts toward.
                     const db = seed();
                     seedFitDateRoadmap((db.simple_roadmap ??= seedSimpleRoadmap()));
+                    const goal = fitDateGoal(scenario, db.baseline.entities.find((e) => e.type === "goal")!);
+                    if (goal) db.baseline.entities.push(goal);
                     return db;
                   }
               : scenario === "simple-500"
@@ -6126,7 +6129,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     );
     if (onePagerRes) return onePagerRes;
     // Bring a date in (oracle.simple.fit_date_router), under the fit-date scenarios.
-    const fitRes = await routeFitDate(localStorage.getItem(MOCK_SCENARIO_KEY), me.role, r, p);
+    const fitRes = await routeFitDate(localStorage.getItem(MOCK_SCENARIO_KEY), me.role, r, p, db.baseline.entities);
     // An approved re-plan moves the PRD's items on the Help desk roadmap (fitDateApproved).
     applyFitDate(db.simple_roadmap);
     if (fitRes) return fitRes;

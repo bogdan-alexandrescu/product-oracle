@@ -1,7 +1,9 @@
 // Bring a date in (Simple, oracle.simple.fit_date_router): one invented PRD's goal milestone that
 // misses its target, Oracle's ranked changes, the live date of a picked set, the drafted re-plan and
 // its approval. Invented company (Larkspur Help Desk), goals, items and engineers only. Served under
-// the "fit-date" mock scenario (and "fit-date-hard": the target is Jan 8, which no set reaches).
+// the "fit-date" mock scenario (and "fit-date-hard": the target is Jan 8, which no set reaches;
+// "fit-date-hard-no-goal": the same with no Baseline goal by the goal's name). The goal is a Baseline
+// goal (fitDateGoal); lowering its target shrinks the goal's own work, as the API's _scale.
 
 import type { Schemas } from "@/lib/api/client";
 import { MOCK_NOW } from "./clock";
@@ -13,7 +15,26 @@ type Answer = Schemas["FitAnswerOut"];
 type Change = Schemas["FitChangeOut"];
 type Draft = Schemas["FitDraftOut"];
 
-export const FIT_SCENARIOS = ["fit-date", "fit-date-hard"] as const;
+export const FIT_SCENARIOS = ["fit-date", "fit-date-hard", "fit-date-hard-no-goal"] as const;
+const isHard = (scenario: string | null) => scenario === "fit-date-hard" || scenario === "fit-date-hard-no-goal";
+
+// The Baseline goal the M2 gate counts toward: the PRD's milestone target names 40.
+export const FIT_GOAL_ID = stableUuid("fit-date/goal");
+const GOAL_TITLE = "40 replied threads per agent per day";
+const PLAN_TARGET = 40;
+// The goal's own unlocked work in M2 (Reply drafts in the inbox), in days on the plan.
+const GOAL_DAYS = 18;
+type GoalRow = { id: string; type: string; title: string; status: string; attrs?: Record<string, unknown> | null };
+
+/** The fit-date scenarios' Baseline goal (none under "fit-date-hard-no-goal"). */
+export function fitDateGoal<T extends GoalRow>(scenario: string | null, template: T): T | null {
+  if (scenario === "fit-date-hard-no-goal") return null;
+  return {
+    ...template, id: FIT_GOAL_ID, key: "replied-threads", type: "goal", title: GOAL_TITLE, body: null, status: "confirmed",
+    locked: false, locked_by: null, locked_at: null,
+    attrs: { metric: "replied threads per agent per day", unit: "threads", comparison: "at_least", start: 20, target: PLAN_TARGET, horizon: "short" },
+  };
+}
 
 const PRD = { id: stableUuid("fit-date/prd"), slug: "reply-faster", title: "Reply faster in the shared inbox" };
 const ROADMAP = { id: stableUuid("fit-date/roadmap"), slug: "help-desk-roadmap", title: "Help desk roadmap" };
@@ -93,17 +114,47 @@ function fresh(hard: boolean): State {
   return { version: 3, roadmapVersion: 6, approved: null, picks: [], target: hard ? HARD_TARGET : TARGET };
 }
 
+let goals: GoalRow[] = [];
+
+/** The Baseline goal by the goal's name, as the API's _baseline_goal: confirmed first, never rejected. */
+function baselineGoal(role: string): Schemas["FitBaselineGoalOut"] | null {
+  const found = goals.filter((g) => g.type === "goal" && g.title.trim().toLowerCase() === GOAL_TITLE.toLowerCase() && g.status !== "rejected");
+  const g = found.find((x) => x.status === "confirmed") ?? found[0];
+  if (!g) return null;
+  const a = g.attrs ?? {};
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const out: Schemas["FitBaselineGoalOut"] = {
+    id: g.id, title: g.title, target: num(a.target), unit: typeof a.unit === "string" ? a.unit : null,
+    comparison: typeof a.comparison === "string" ? a.comparison : null, start: num(a.start),
+    due: typeof a.due === "string" ? a.due : null, plan_target: PLAN_TARGET, smaller: false, can_edit: APPROVERS.has(role),
+  };
+  out.smaller = scale(out) < 1;
+  return out;
+}
+
+/** The share of the goal's own work a smaller goal still needs (the API's _scale). */
+function scale(g: Schemas["FitBaselineGoalOut"] | null): number {
+  if (!g || g.target == null || g.plan_target == null || !["at_least", "above"].includes(g.comparison ?? "")) return 1;
+  const base = g.start != null && g.start < g.plan_target ? g.start : 0;
+  if (g.target >= g.plan_target || g.plan_target <= base) return 1;
+  return Math.max(0.1, Math.min(1, (g.target - base) / (g.plan_target - base)));
+}
+
+/** Days the smaller goal takes off M2 (its own work counted in proportion). */
+const goalDays = () => Math.round(GOAL_DAYS * (1 - scale(baselineGoal("viewer"))));
+const at = (picks: string[]) => shift(PROJECTED, saved(picks).days + goalDays());
+
 const byId = (ids: string[]) => CHANGES.filter((c) => c.pickable && ids.includes(c.id));
 const saved = (ids: string[]) => byId(ids).reduce((s, c) => ({ days: s.days + c.days, pw: s.pw + c.pw_saved }), { days: 0, pw: 0 });
 
 /** The lanes after the picks: kept M2 items end by M2's new date; moved ones go where the change says. */
 function lanes(picks: string[]): Schemas["FitLane"][] {
-  const date = shift(PROJECTED, saved(picks).days);
+  const date = at(picks);
   const on = (id: string) => picks.includes(id);
   const lane = (items: Item[]) => items.map((i) => ({ id: i.id, title: i.title, date: i.end, locked: !!i.locked, needs_estimate: false }));
   if (picks.length === 0)
     return [
-      { code: "M2", name: "M2 Agent reply flow", date: PROJECTED, items: lane(M2) },
+      { code: "M2", name: "M2 Agent reply flow", date, items: lane(M2) },
       { code: "M1", name: "M1 Inbox basics", date: "2026-12-04", items: lane(M1) },
       { code: "M3", name: "M3 Team inbox", date: "2027-04-02", items: lane(M3) },
     ];
@@ -123,7 +174,7 @@ function lanes(picks: string[]): Schemas["FitLane"][] {
 }
 
 function goal(s: State): Goal {
-  const today = shift(PROJECTED, saved(s.picks).days);
+  const today = at(s.picks);
   return {
     prd: PRD, prd_version: s.version, roadmap: ROADMAP, roadmap_version: s.roadmapVersion,
     goal: "40 replied threads per agent per day", goal_now: "26 replied threads per agent today",
@@ -132,20 +183,24 @@ function goal(s: State): Goal {
   };
 }
 
-function answer(s: State): Answer {
+function answer(s: State, role: string): Answer {
   const all = CHANGES.filter((c) => c.pickable).map((c) => c.id);
-  const best = shift(PROJECTED, saved(all).days);
+  const best = at(all);
   const reachable = gap(best, s.target) <= 0;
-  const pick = reachable ? PICK : all;
+  // Oracle's own pick, else (a smaller goal) down the ranked list until the date reaches the target.
+  const greedy: string[] = [];
+  for (const id of all) if (gap(at(greedy), s.target) > 0) greedy.push(id);
+  const pick = !reachable ? all : gap(at(PICK), s.target) <= 0 ? PICK : greedy;
   return {
-    ...goal(s), changes: CHANGES, pick, pick_date: shift(PROJECTED, saved(pick).days), best_date: best, reachable,
+    ...goal(s), changes: CHANGES, pick, pick_date: at(pick), best_date: best, reachable,
     locked: LOCKED.map((l) => ({ ...l, would_reach: !reachable && l.pw === 3 })),
     hire: reachable ? null : { start_weeks: 3, date: shift(HARD_TARGET, -6), reaches: false },
+    baseline_goal: baselineGoal(role),
   };
 }
 
 function draft(s: State, picks: string[]): Draft {
-  const date = shift(PROJECTED, saved(picks).days);
+  const date = at(picks);
   const newTarget = gap(date, s.target) > 0 ? date : null;
   const on = (id: string) => picks.includes(id);
   const prdWords: Record<string, [string, string]> = {
@@ -191,21 +246,22 @@ const DECIDER = "Noor Hale";
 const APPROVERS = new Set(["owner", "decider", "approver"]);
 
 /** GET /v1/simple/fit-date, GET|POST /v1/simple/prds/{prd}/fit-date[/live|/draft|/approve]. */
-export async function routeFitDate(scenario: string | null, role: string, req: Request, p: string[]): Promise<Response | null> {
+export async function routeFitDate(scenario: string | null, role: string, req: Request, p: string[], baseline: GoalRow[] = []): Promise<Response | null> {
+  goals = baseline;
   if (p[1] !== "simple") return null;
   const list = p[2] === "fit-date" && p.length === 3;
   const one = p[2] === "prds" && p[4] === "fit-date";
   if (!list && !one) return null;
   const on = (FIT_SCENARIOS as readonly string[]).includes(scenario ?? "");
-  if (list) return json(200, on ? [goal((state ??= fresh(scenario === "fit-date-hard")))] : []);
+  if (list) return json(200, on ? [goal((state ??= fresh(isHard(scenario))))] : []);
   if (!on || (p[3] !== PRD.slug && p[3] !== PRD.id)) return json(404, { detail: "No such PRD" });
-  const s = (state ??= fresh(scenario === "fit-date-hard"));
-  if (req.method === "GET" && p.length === 5) return json(200, answer(s));
+  const s = (state ??= fresh(isHard(scenario)));
+  if (req.method === "GET" && p.length === 5) return json(200, answer(s, role));
   if (req.method !== "POST") return null;
   const body = JSON.parse((await req.text()) || "{}") as Schemas["FitPicksIn"];
   const picks = body.picks.filter((id) => byId([id]).length > 0);
   if (p[5] === "live") {
-    const date = shift(PROJECTED, saved(picks).days);
+    const date = at(picks);
     return json(200, { date, target: s.target, over_days: gap(date, s.target), pw_saved: saved(picks).pw, picks: body.picks });
   }
   if (!APPROVERS.has(role)) return json(403, { detail: "Only approvers can change the plan." });
@@ -216,7 +272,7 @@ export async function routeFitDate(scenario: string | null, role: string, req: R
     // The roadmap's version is live when the approver decides the roadmap (an owner or its
     // decider), else it waits in review with its decider, as the API's _roadmap_follows.
     const live = role !== "approver";
-    const was = shift(PROJECTED, saved(s.picks).days);
+    const was = at(s.picks);
     s.version += 1;
     s.roadmapVersion += 1;
     s.picks = picks;

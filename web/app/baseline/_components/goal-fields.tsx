@@ -349,14 +349,74 @@ export function GoalFields({
   onChange,
   problems,
   horizons,
+  targetOnly = false,
 }: {
   draft: GoalDraft;
   onChange: (d: GoalDraft) => void;
   problems: GoalProblem[];
   /** The company's horizons, from the goal's goal_check. */
   horizons?: PlanningHorizons | null;
+  /** Only the target and its due date, the target's value focused (Simple's "Keep the date with a smaller goal"). */
+  targetOnly?: boolean;
 }) {
   const set = (patch: Partial<GoalDraft>) => onChange({ ...draft, ...patch });
+  const due = (
+    <label className={`${LABEL} min-w-[9rem] flex-1`}>
+      Due
+      <input className={INPUT} type="date" value={draft.due} onChange={(e) => set({ due: e.target.value })} />
+      <FieldError field="due" problems={problems} />
+    </label>
+  );
+  const target = (
+    <fieldset className="flex min-w-0 flex-col gap-1">
+      <legend className="mb-1 text-[13px] font-semibold tracking-[0.02em] text-text2">Target</legend>
+      <div className="grid min-w-0 grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2">
+        <label className={LABEL}>
+          Comparison
+          <select className={INPUT} value={draft.comparison} onChange={(e) => set({ comparison: e.target.value })}>
+            <option value="">—</option>
+            {COMPARISONS.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={LABEL}>
+          Value
+          <input className={INPUT} inputMode="decimal" value={draft.target} data-autofocus={targetOnly || undefined} onChange={(e) => set({ target: e.target.value })} />
+        </label>
+        <label className={LABEL}>
+          Unit
+          <select className={INPUT} value={draft.unit} onChange={(e) => set({ unit: e.target.value })}>
+            <option value="">—</option>
+            {UNITS.map((u) => (
+              <option key={u.value} value={u.value}>
+                {u.label}
+              </option>
+            ))}
+            <option value={COUNT}>Count of…</option>
+          </select>
+        </label>
+      </div>
+      {draft.unit === COUNT && (
+        <label className={LABEL}>
+          Counted noun
+          <input className={INPUT} value={draft.noun} placeholder="e.g. teams, clinics" onChange={(e) => set({ noun: e.target.value })} />
+        </label>
+      )}
+      <FieldError field="target" problems={problems} />
+      <FieldError field="comparison" problems={problems} />
+      <FieldError field="unit" problems={problems} />
+    </fieldset>
+  );
+  if (targetOnly)
+    return (
+      <>
+        {target}
+        {due}
+      </>
+    );
   return (
     <>
       <label className={LABEL}>
@@ -369,47 +429,7 @@ export function GoalFields({
         />
         <FieldError field="metric" problems={problems} />
       </label>
-      <fieldset className="flex min-w-0 flex-col gap-1">
-        <legend className="mb-1 text-[13px] font-semibold tracking-[0.02em] text-text2">Target</legend>
-        <div className="grid min-w-0 grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2">
-          <label className={LABEL}>
-            Comparison
-            <select className={INPUT} value={draft.comparison} onChange={(e) => set({ comparison: e.target.value })}>
-              <option value="">—</option>
-              {COMPARISONS.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={LABEL}>
-            Value
-            <input className={INPUT} inputMode="decimal" value={draft.target} onChange={(e) => set({ target: e.target.value })} />
-          </label>
-          <label className={LABEL}>
-            Unit
-            <select className={INPUT} value={draft.unit} onChange={(e) => set({ unit: e.target.value })}>
-              <option value="">—</option>
-              {UNITS.map((u) => (
-                <option key={u.value} value={u.value}>
-                  {u.label}
-                </option>
-              ))}
-              <option value={COUNT}>Count of…</option>
-            </select>
-          </label>
-        </div>
-        {draft.unit === COUNT && (
-          <label className={LABEL}>
-            Counted noun
-            <input className={INPUT} value={draft.noun} placeholder="e.g. teams, clinics" onChange={(e) => set({ noun: e.target.value })} />
-          </label>
-        )}
-        <FieldError field="target" problems={problems} />
-        <FieldError field="comparison" problems={problems} />
-        <FieldError field="unit" problems={problems} />
-      </fieldset>
+      {target}
       <label className={LABEL}>
         Start value
         <input className={INPUT} inputMode="decimal" value={draft.start} onChange={(e) => set({ start: e.target.value })} />
@@ -429,11 +449,7 @@ export function GoalFields({
           />
           <FieldError field="horizon" problems={problems} />
         </div>
-        <label className={`${LABEL} min-w-[9rem] flex-1`}>
-          Due
-          <input className={INPUT} type="date" value={draft.due} onChange={(e) => set({ due: e.target.value })} />
-          <FieldError field="due" problems={problems} />
-        </label>
+        {due}
       </div>
       <div className={LABEL}>
         <span>Owner</span>

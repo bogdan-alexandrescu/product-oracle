@@ -6,11 +6,15 @@
  * its date on today's plan; when the plan misses the target, "Bring this date in" opens Oracle's
  * answer in a side panel over the roadmap (a sheet on a phone): one list of changes ranked by days
  * saved, a tick box each, a meter with the live date (oracle.simple.fit_date: the capacity queue,
- * no model call), the items Oracle will not cut, then the drafted re-plan to approve.
+ * no model call), the items Oracle will not cut, then the drafted re-plan to approve. When no set
+ * reaches the target, "Keep <date> with a smaller goal" opens the Baseline goal the milestone's
+ * gate counts toward in a sheet over the panel (its target and due date, the target focused); it
+ * saves through PATCH /v1/baseline/entities/{id} and the answer reloads against the new target.
  */
 
 import { useEffect, useRef, useState } from "react";
 
+import { GoalFields, goalDraft, goalPatch, problemsOf, typedTarget, type GoalDraft, type GoalProblem } from "@/app/baseline/_components/goal-fields";
 import { Icon } from "@/components/ds/Icon";
 import { Sheet } from "@/components/ds/Sheet";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -23,6 +27,7 @@ type Answer = Schemas["FitAnswerOut"];
 type Change = Schemas["FitChangeOut"];
 type Draft = Schemas["FitDraftOut"];
 type Lane = Schemas["FitLane"];
+type BaselineGoal = Schemas["FitBaselineGoalOut"];
 
 const day = (d: string | null | undefined) => (d ? calendarDay(d) : "Not dated");
 const gap = (a: string, b: string) => Math.round((Date.parse(a) - Date.parse(b)) / 86400000);
@@ -217,8 +222,78 @@ function Diff({ a, d }: { a: Answer; d: Draft }) {
   );
 }
 
+/** The goal's target in words ("At least 30 threads"); the plain number when it is not typed. */
+function targetWords(g: BaselineGoal, value = g.target): string {
+  const t = typedTarget({ target: value, unit: g.unit, comparison: g.comparison });
+  return t ? t.words : `${value ?? "no target"}`;
+}
+
+/** The Baseline goal's edit form (target and due date, the target focused) in a sheet over the panel. */
+function GoalSheet({ goal, onClose, onSaved }: { goal: BaselineGoal; onClose: () => void; onSaved: () => void }) {
+  const entity = useQuery(`baseline-entity:${goal.id}`, () => unwrap(api.GET("/v1/baseline/entities/{entity_id}", { params: { path: { entity_id: goal.id } } })));
+  const [draft, setDraft] = useState<GoalDraft | null>(null);
+  const [problems, setProblems] = useState<GoalProblem[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const attrs = entity.data?.attrs ?? null;
+  const d = draft ?? (attrs ? goalDraft(attrs) : null);
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!d || !attrs) return;
+    if (d.target.trim() && !Number.isFinite(Number(d.target))) {
+      setError("The target value must be a number.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await api.PATCH("/v1/baseline/entities/{entity_id}", { params: { path: { entity_id: goal.id } }, body: { attrs: goalPatch(d, attrs), origin: "user" } });
+      const refused = res.response.status === 422 ? problemsOf(res.error) : null;
+      if (refused) {
+        setProblems(refused);
+        return;
+      }
+      if (res.response.status === 202) {
+        setError("The goal is locked, so your change was saved as a proposal for an approver. The answer keeps the current target until it is accepted.");
+        return;
+      }
+      await unwrap(Promise.resolve(res));
+      onSaved();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Sheet open title={`Goal: ${goal.title}`} onClose={onClose} dialog testId="fit-goal-sheet">
+      <form className="flex flex-col gap-3 px-4 pt-3 pb-4" onSubmit={(e) => void save(e)} aria-label="Edit the goal" noValidate>
+        <p className="simple-small">
+          The PRD asks for {targetWords(goal, goal.plan_target)}. A smaller target needs less of the goal&rsquo;s own work before the milestone, so Oracle works out the date again.
+        </p>
+        {entity.error && <p className="simple-small text-crit">{entity.error}</p>}
+        {!d && !entity.error && <p className="simple-small">Opening the goal…</p>}
+        {d && <GoalFields draft={d} onChange={setDraft} problems={problems} targetOnly />}
+        {error && (
+          <p role="alert" className="simple-small text-crit">
+            {error}
+          </p>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <button type="submit" className="simple-button simple-button-primary" disabled={!d || busy}>
+            {busy ? "Saving…" : "Save"}
+          </button>
+          <button type="button" className="simple-button" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Sheet>
+  );
+}
+
 /** The panel Oracle answers in: the picks, then the drafted re-plan to approve. */
-export function FitPanel({ goal, onClose, onApproved }: { goal: Goal; onClose: () => void; onApproved: (before: Lane[]) => void }) {
+export function FitPanel({ goal, onClose, onApproved, onGoalSaved }: { goal: Goal; onClose: () => void; onApproved: (before: Lane[]) => void; onGoalSaved?: () => void }) {
   const { can } = useMe();
   const answer = useQuery(`simple-fit-answer:${goal.prd.slug}:${goal.milestone}`, () =>
     unwrap(api.GET("/v1/simple/prds/{prd}/fit-date", { params: { path: { prd: goal.prd.slug }, query: { milestone: goal.milestone } } })),
@@ -229,6 +304,7 @@ export function FitPanel({ goal, onClose, onApproved }: { goal: Goal; onClose: (
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editGoal, setEditGoal] = useState(false);
   const asked = useRef(0);
   const chosen = picks ?? a?.pick ?? [];
   useEffect(() => {
@@ -240,6 +316,14 @@ export function FitPanel({ goal, onClose, onApproved }: { goal: Goal; onClose: (
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [a, chosen.join(",")]);
   const hard = !!a && !a.reachable;
+  const bg = a?.baseline_goal ?? null;
+  const goalSaved = () => {
+    setEditGoal(false);
+    setPicks(null);
+    setDraft(null);
+    void answer.reload();
+    onGoalSaved?.();
+  };
   const title = draft ? "Check the new drafts" : `Bring ${goal.milestone_name} in`;
   const mayDraft = can("fit_date_draft");
   const runDraft = async () => {
@@ -289,24 +373,58 @@ export function FitPanel({ goal, onClose, onApproved }: { goal: Goal; onClose: (
       </div>
     </div>
   );
+  // The goal's sheet sits beside the panel, not inside it: Escape closes the top one only.
   return (
-    <Sheet open title={title} onClose={onClose} side tall testId="fit-panel">
-      <div className="flex flex-col gap-4 px-4 pt-3">
-        <p className="simple-small">
-          Goal: <span className="font-medium text-text">{goal.goal ?? goal.milestone_name}</span>. Target {day(goal.target)}; on today&rsquo;s plan {day(goal.today)}. {goal.team.engineers}{" "}
-          {goal.team.engineers === 1 ? "engineer" : "engineers"} at {Math.round(goal.team.focus * 100)}% focus.
-        </p>
-        {answer.error && <p className="simple-small text-crit">{answer.error}</p>}
-        {!a && !answer.error && <p className="simple-small">Working out the changes…</p>}
-        {a && (draft ? <Diff a={a} d={draft} /> : <RankedList a={a} picks={chosen} setPicks={setPicks} live={live} />)}
-        {error && (
-          <p role="alert" className="simple-small text-crit">
-            {error}
+    <>
+      <Sheet open title={title} onClose={onClose} side tall testId="fit-panel">
+        <div className="flex flex-col gap-4 px-4 pt-3">
+          <p className="simple-small">
+            Goal: <span className="font-medium text-text">{goal.goal ?? goal.milestone_name}</span>. Target {day(goal.target)}; on today&rsquo;s plan {day(goal.today)}. {goal.team.engineers}{" "}
+            {goal.team.engineers === 1 ? "engineer" : "engineers"} at {Math.round(goal.team.focus * 100)}% focus.
           </p>
-        )}
-        <div className="sticky bottom-0 z-30 -mx-4 border-t border-line bg-surface px-4 py-3">{foot}</div>
-      </div>
-    </Sheet>
+          {answer.error && <p className="simple-small text-crit">{answer.error}</p>}
+          {!a && !answer.error && <p className="simple-small">Working out the changes…</p>}
+          {a && bg?.smaller && (
+            <p className="simple-small rounded-xl border border-line bg-surface2 p-3" data-testid="fit-smaller" aria-live="polite">
+              Counted against the smaller goal: <span className="font-medium text-text">{targetWords(bg)}</span> (the PRD asks for {targetWords(bg, bg.plan_target)}).{" "}
+              <span className={`font-semibold ${a.reachable ? "text-pass" : "text-warn"}`}>
+                {a.reachable ? `${a.milestone_name} now reaches ${day(a.target)}.` : `${a.milestone_name} still lands after ${day(a.target)}.`}
+              </span>
+            </p>
+          )}
+          {a && (draft ? <Diff a={a} d={draft} /> : <RankedList a={a} picks={chosen} setPicks={setPicks} live={live} />)}
+          {a && hard && !draft && (
+            <div className="flex flex-col gap-2 rounded-xl border border-line p-3" data-testid="fit-keep-date">
+              {!bg ? (
+                <p className="simple-small">
+                  Oracle finds no Baseline goal named &ldquo;{goal.goal ?? goal.milestone_name}&rdquo;, so it cannot offer to keep {day(a.target)} with a smaller goal.
+                </p>
+              ) : (
+                <>
+                  <p className="simple-small">
+                    Or keep {day(a.target)} and ask for less: the goal is {targetWords(bg)}.{!bg.can_edit && " Only an owner or approver can change it."}
+                  </p>
+                  {bg.can_edit && (
+                    <div>
+                      <button type="button" className="simple-button" onClick={() => setEditGoal(true)}>
+                        Keep {day(a.target)} with a smaller goal
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+          {error && (
+            <p role="alert" className="simple-small text-crit">
+              {error}
+            </p>
+          )}
+          <div className="sticky bottom-0 z-30 -mx-4 border-t border-line bg-surface px-4 py-3">{foot}</div>
+        </div>
+      </Sheet>
+      {editGoal && bg && <GoalSheet goal={bg} onClose={() => setEditGoal(false)} onSaved={goalSaved} />}
+    </>
   );
 }
 
@@ -416,6 +534,7 @@ export function FitRoadmap({ roadmapId, itemOf, onItem }: { roadmapId?: string |
         <FitPanel
           goal={g}
           onClose={() => setOpen(false)}
+          onGoalSaved={() => void goals.reload()}
           onApproved={(lanes) => {
             setBefore(lanes);
             setOpen(false);
