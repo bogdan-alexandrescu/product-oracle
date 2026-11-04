@@ -377,7 +377,7 @@ function intoDrafts(db: SimpleDb, c: Change, session: Session, undo = false): st
         out: {
           id: crypto.randomUUID(), document: { id: stableUuid(`simple-doc/${rm}`), slug: rm, title: rm.replace(/-/g, " ").replace(/^./, (x) => x.toUpperCase()) },
           status: "working", base_version: 1, version: null, created_by: session.started_by, created_at: iso(mockNowMs()), participant_ids: [session.started_by],
-          submitted_at: null, submitted_by: null, decider_approved: false, waiting_on: [], approved_at: null, blocked_by: [],
+          submitted_at: null, submitted_by: null, decider_approved: false, waiting_on: [], approved_at: null, blocked_by: [], decision_notes: [],
         },
       };
       drafts.push(d);

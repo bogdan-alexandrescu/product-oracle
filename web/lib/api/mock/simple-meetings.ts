@@ -457,7 +457,7 @@ function meetingDrafts(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): Sc
   if (!made.length) return [];
   return [{
     id: stableUuid(`simple-meeting-draft/${m.id}`), document: docRef(p), status: m.approved ? (held(m) ? "submitted" : "approved") : "working",
-    base_version: p.slug === ctx.onePager.doc.slug ? ctx.onePager.version : 1, version: null, from_prds: [], created_by: m.presenter_id, created_at: made[made.length - 1].at,
+    base_version: p.slug === ctx.onePager.doc.slug ? ctx.onePager.version : 1, version: null, from_prds: [], decision_notes: [], created_by: m.presenter_id, created_at: made[made.length - 1].at,
     participant_ids: [...new Set(made.map((d) => d.approver_id).filter((x): x is string => !!x))], changes: made.length,
     submitted_at: m.approved?.at ?? null, submitted_by: m.approved ? m.presenter_id : null, decider_approved: !!m.approved,
     waiting_on: m.approved?.waiting_on ?? [], approved_at: m.approved && !held(m) ? m.approved.at : null, blocked_by: m.approved?.blocked_by ?? [],

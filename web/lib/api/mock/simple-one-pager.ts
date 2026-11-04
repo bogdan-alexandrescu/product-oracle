@@ -601,7 +601,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
           // build-review: who approves once sent (the PRD's required reviewers), on a working draft.
           reviewers: (db.draft.status ?? "working") === "working" ? ctx.reviewers.map((i) => ({ id: i, name: ctx.names[i] ?? "someone" })) : [],
           can_submit: (db.draft.status ?? "working") === "working" && decides(ctx) && liveChanges(db).length > 0,
-          reminded_at: remindedAt(db), can_remind: mayRemind(ctx) && dueReminders(db).length > 0,
+          reminded_at: remindedAt(db), can_remind: mayRemind(ctx) && dueReminders(db).length > 0, decision_notes: [],
         }
       : null,
     changes_in_review: hiddenDraft + (proposals.length - shown.length),

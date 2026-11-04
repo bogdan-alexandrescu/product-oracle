@@ -1210,6 +1210,7 @@ export function approvedPrdToDraft(
         created_by: me,
         created_at: new Date(mockNowMs()).toISOString(),
         participant_ids: [me],
+        decision_notes: [],
         submitted_at: null,
         submitted_by: null,
         decider_approved: false,

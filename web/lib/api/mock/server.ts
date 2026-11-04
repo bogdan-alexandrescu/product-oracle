@@ -2443,7 +2443,9 @@ function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
       const docs = entries.flatMap((e) => e.documents as { id: string; kind: string }[]);
       const versions = entries.flatMap((e) => e.versions as { id: string; document_id: string }[]);
       const kinds = (subjects ?? []).flatMap((s) => {
-        const id = s.kind === "document_version" ? versions.find((v) => v.id === s.id)?.document_id : ["document", "section"].includes(s.kind) ? s.id : undefined;
+        const kind = String(s.kind);
+        const ref = String(s.id);
+        const id = kind === "document_version" ? versions.find((v) => v.id === ref)?.document_id : ["document", "section"].includes(kind) ? ref : undefined;
         const doc = id ? docs.find((d) => d.id === id) : undefined;
         return doc ? [doc.kind] : [];
       });
