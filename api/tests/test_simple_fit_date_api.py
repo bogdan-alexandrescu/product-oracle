@@ -14,6 +14,12 @@ Test cards (protects / fails_when / no_claim):
   fails_when=the approved version is edited in place, or the next answer still reads the
   old dates; no_claim=the roadmap's Simple draft (prd_roadmap's own tests).
 - test_viewer_cannot_draft_or_approve: protects=only approvers draft and approve.
+- test_approve_makes_the_roadmap_follow (review blocker): protects=approving the re-plan
+  writes the roadmap's next version with the PRD's items at their re-planned dates, approved
+  by the roadmap's decider, so the board, the Gantt, Priorities and Home read them;
+  fails_when=only the PRD's version changes and the roadmap keeps the old dates.
+- test_draft_claims_no_run (review): protects=the draft, computed from the capacity queue,
+  claims no run time or cost; fails_when=a fixed "40 seconds, $0.20" is sent.
 """
 
 import re
@@ -21,7 +27,8 @@ import re
 import pytest
 from sqlalchemy import select
 
-from oracle.docs.models import DocumentVersion
+from oracle.docs.models import Document, DocumentVersion
+from oracle.roadmap.models import RoadmapItem
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
 from tests.test_simple_plan_api import FIXTURE, clock, seed  # noqa: F401
@@ -113,3 +120,38 @@ async def test_viewer_cannot_draft_or_approve(client, route):
     r = await client.post(f"{URL}/{route}", json={"milestone": "M2", "picks": ["F-06"]},
                           headers=ctx.as_("viewer"))  # fmt: skip
     assert r.status_code == 403, r.text
+
+
+async def test_approve_makes_the_roadmap_follow(client):
+    ctx = await make_ctx()
+    await seed(ctx, BODY, items=("f-06", "f-03"))
+    h = ctx.as_("decider")
+    picks = {"milestone": "M2", "picks": ["F-03b", "F-06", "focus"]}
+    r = await client.post(f"{URL}/approve", json=picks, headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["roadmap_version"] == 2
+    again = (await client.get(URL, params={"milestone": "M2"}, headers=h)).json()
+    planned = {i["id"]: i["date"] for lane in again["lanes"] for i in lane["items"]}
+    async with tenant_session(ctx.tenant_id) as s:
+        rm = await s.scalar(select(Document).where(Document.slug == "setup-roadmap"))
+        vs = list(await s.scalars(select(DocumentVersion).where(
+            DocumentVersion.document_id == rm.id).order_by(DocumentVersion.number)))  # fmt: skip
+        assert [v.approved_at is not None for v in vs] == [True, True]
+        rows = {r.item_key: r for r in await s.scalars(
+            select(RoadmapItem).where(RoadmapItem.roadmap_version_id == vs[1].id))}  # fmt: skip
+    assert set(rows) == {"f-06", "f-03"}
+    assert rows["f-06"].end_date.isoformat() == planned["F-06"]
+    assert rows["f-03"].end_date.isoformat() == max(
+        d for k, d in planned.items() if k.startswith("F-03") and d
+    )
+
+
+async def test_draft_claims_no_run(client):
+    ctx = await make_ctx()
+    await seed(ctx, BODY)
+    d = await client.post(f"{URL}/draft", json={"milestone": "M2", "picks": ["F-06"]},
+                          headers=ctx.as_("owner"))  # fmt: skip
+    assert d.status_code == 200, d.text
+    assert "run_seconds" not in d.json() and "run_usd" not in d.json()
+    a = await client.get(URL, params={"milestone": "M2"}, headers=ctx.as_("owner"))
+    assert "run_seconds" not in a.json() and "run_usd" not in a.json()
