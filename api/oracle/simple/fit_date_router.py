@@ -577,7 +577,9 @@ async def list_fit_dates(principal: Reader, db: TenantDB) -> list[FitGoalOut]:
         for ms in view.milestones:
             if not ms.targets or ms.end_date is None:
                 continue
-            p = build_plan(v.markdown, view, ms.code, await company_time.company_today(db))
+            goal = await _baseline_goal(db, principal, view, ms.code)
+            today = await company_time.company_today(db)
+            p = build_plan(v.markdown, view, ms.code, today, _scale(goal))
             if p is not None:
                 out.append(await _goal_of(db, principal, d, v, view, p))
     return sorted(out, key=lambda g: (-g.late_days, g.prd.title, g.milestone))
