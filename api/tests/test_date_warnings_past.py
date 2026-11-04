@@ -11,13 +11,18 @@ sources columns (the whole header) and labelled sentences are not where a schedu
 written; (3) the plan tables' own date cells keep the usual reading, so a milestone date
 with no basis still warns."""
 
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
+from sqlalchemy import select, update
 
+from oracle import company_time
+from oracle.docs.models import Document, DocumentVersion
+from oracle.tenancy import tenant_session
 from tests.test_date_warnings_honest import ITEMS, VERSIONS, _date_warnings, _run_roadmap, flagged
 from tests.test_roadmap import (  # noqa: F401 - fixtures
     PLAN_TABLES,
+    ROADMAP,
     ROADMAP_MD,
     approved_prd,
     owner,
@@ -120,6 +125,9 @@ def test_a_future_milestone_date_without_a_basis_still_warns():
         "Beta opened on Oct 27.",
         "Work started on Oct 27.",
         "Work began on Oct 27.",
+        # "fixed" is set, not done.
+        "The launch is fixed on Nov 1.",
+        "The launch date was fixed on Oct 30.",
         # A report, but far back: the next Oct 2 is the reading.
         "Gift wrap shipped on Aug 2.",
     ],
@@ -153,9 +161,32 @@ def test_a_label_skips_only_its_own_sentence():
     assert flagged(f"## Notes {{#notes}}\n\n{line}\n\n" + ITEMS, ref=DAY) == [("notes", "Dec 10")]
     line = "Counts when: shop owners can reorder by Jan 9.\nGift notes ship on Dec 10."
     assert flagged(f"## Notes {{#notes}}\n\n{line}\n\n" + ITEMS, ref=DAY) == [("notes", "Dec 10")]
+    # A ';' ends the labelled part too.
+    line = "Evidence: issue closed; launch on Dec 20."
+    assert flagged(f"## Notes {{#notes}}\n\n{line}\n", bases=[], ref=DAY) == [("notes", "Dec 20")]
 
 
-@pytest.mark.parametrize("header", ["Start date", "Target date", "Delivery date", "ETA"])
+def test_an_evidence_place_still_warns_on_a_full_future_date():
+    # Only a past event's day is skipped there: a written future day is a claim.
+    table = "| Item | Evidence |\n|---|---|\n| [Gift notes](#now-gift-notes) | ships Dec 20, 2026 |"
+    assert flagged(f"## Notes {{#notes}}\n\n{table}\n", bases=[], ref=DAY) == [
+        ("notes", "Dec 20, 2026")
+    ]
+    line = "Evidence: gift notes ship Dec 20, 2026."
+    assert flagged(f"## Notes {{#notes}}\n\n{line}\n", bases=[], ref=DAY) == [
+        ("notes", "Dec 20, 2026")
+    ]
+    # A past written day there is still no schedule date.
+    table = (
+        "| Item | Evidence |\n|---|---|\n| [Gift notes](#now-gift-notes) | closed Oct 27, 2026 |"
+    )
+    assert flagged(f"## Notes {{#notes}}\n\n{table}\n", bases=[], ref=DAY) == []
+
+
+@pytest.mark.parametrize(
+    "header",
+    ["Start date", "Target date", "Delivery date", "ETA", "When", "Planned date", "Deadline"],
+)
 def test_a_named_date_column_keeps_the_usual_reading(header):
     table = f"| Milestone | {header} |\n|---|---|\n| Holiday shop | closed on Oct 27 |"
     assert flagged(f"## Notes {{#notes}}\n\n{table}\n\n" + ITEMS, ref=DAY) == [("notes", "Oct 27")]
@@ -163,40 +194,67 @@ def test_a_named_date_column_keeps_the_usual_reading(header):
 
 # --------------------------------------------------------------------------- the approval
 
+# The approval tests read year-less dates against the version's day: the clock and the
+# stored version's created_at are pinned to DAY (noon Pacific), so they pass on any day.
+PINNED = datetime(2026, 11, 4, 20, 0, tzinfo=UTC)
 
+
+@pytest.fixture
+def pinned(monkeypatch):
+    monkeypatch.setattr(company_time, "now", lambda: PINNED)
+
+
+async def _run_pinned(client, auth, tenant_id, runtime, markdown: str) -> dict:  # noqa: F811
+    """The run's roadmap version, made on DAY."""
+    await _run_roadmap(client, auth, runtime, markdown)
+    async with tenant_session(tenant_id) as s:
+        document = await s.scalar(select(Document).where(Document.slug == ROADMAP))
+        await s.execute(
+            update(DocumentVersion)
+            .where(DocumentVersion.document_id == document.id)
+            .values(created_at=PINNED)
+        )
+        await s.commit()
+    assert company_time.day(PINNED) == DAY
+    return (await client.get(f"{VERSIONS}/1", headers=auth)).json()
+
+
+@pytest.mark.usefixtures("pinned")
 async def test_the_production_cell_passes_approval(client, owner, runtime):  # noqa: F811
-    _, auth = owner
+    tenant_id, auth = owner
     await approved_prd(client, auth)
     beta = "| Beta | Nov 30, 2026 | Payment step |  |"
     assert beta in PLAN_TABLES
     md = ROADMAP_MD.replace(beta, f"| Beta | Nov 30, 2026 | Payment step | {CELL} |")
-    version = await _run_roadmap(client, auth, runtime, md)
+    version = await _run_pinned(client, auth, tenant_id, runtime, md)
     assert _date_warnings(version) == []
     resp = await client.post(f"{VERSIONS}/1/approve", headers=auth)
     assert resp.status_code == 200, resp.text
 
 
+@pytest.mark.usefixtures("pinned")
 async def test_a_future_milestone_date_without_a_basis_blocks_approval(client, owner, runtime):  # noqa: F811
-    _, auth = owner
+    tenant_id, auth = owner
     await approved_prd(client, auth)
     beta = "| Beta | Nov 30, 2026 | Payment step |  |"
     md = ROADMAP_MD.replace(beta, f"| Beta | Nov 30, 2026 | Payment step | {CELL} |")
     # The plan tables must give the engineering dates: the unbacked one is in prose.
     md = with_line("The holiday milestone lands on Dec 10.", "summary", md)
-    version = await _run_roadmap(client, auth, runtime, md)
+    version = await _run_pinned(client, auth, tenant_id, runtime, md)
     assert len(_date_warnings(version)) == 1
     resp = await client.post(f"{VERSIONS}/1/approve", headers=auth)
     assert resp.status_code == 409, resp.text
     assert "not backed by a confirmed schedule: Dec 10, 2026" in resp.json()["detail"]
 
 
+@pytest.mark.usefixtures("pinned")
 async def test_a_far_past_reading_blocks_approval(client, owner, runtime):  # noqa: F811
     # "done on Dec 10" in a Nov 4 version: Dec 10, 2025 is 11 months back, so it is the
     # next Dec 10, with no basis.
-    _, auth = owner
+    tenant_id, auth = owner
     await approved_prd(client, auth)
     md = with_line("M2: done on Dec 10.", "summary", ROADMAP_MD)
-    version = await _run_roadmap(client, auth, runtime, md)
+    version = await _run_pinned(client, auth, tenant_id, runtime, md)
     assert len(_date_warnings(version)) == 1
     resp = await client.post(f"{VERSIONS}/1/approve", headers=auth)
     assert resp.status_code == 409, resp.text
