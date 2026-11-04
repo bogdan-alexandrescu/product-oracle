@@ -348,3 +348,38 @@ async def test_an_export_says_a_capacity_date_is_the_items_place_in_the_queue(cl
     assert "Milestone: Pilot, ends Feb 12, 2027: its place in the team's queue" in text
     # roadmap-draft-wording review: an effort with no unit (2) says nothing on its own.
     assert "its own effort: 2" not in text
+
+
+# --- A queue date accepted as an estimate ------------------------------------------------
+
+
+def test_an_accepted_queue_date_proposed_as_an_estimate_is_recorded_as_capacity():
+    """protects=a date the proposal itself says is the item's place in the team's queue is
+    recorded as a capacity basis when the lead accepts it, so every rendering says so;
+    fails_when=it stays kind estimate and renders as a bare date."""
+    from types import SimpleNamespace
+
+    from oracle.engineering import dates
+
+    def item(key: str, assumptions: list[str]) -> dict:
+        return {"key": key, "assumptions": assumptions,
+                "proposed": {"kind": "estimate", "reference": f"est-{key}",
+                             "supports_date": "2027-02-12"}}  # fmt: skip
+
+    cp = SimpleNamespace(
+        payload={
+            dates.PAYLOAD_KEY: {
+                "items": [
+                    item("alert-rules", ["Own effort 1 week", "Its place in the team's queue"]),
+                    item("feed-parser", ["Two engineers for three weeks"]),
+                ]
+            }
+        }
+    )
+    accept = [
+        SimpleNamespace(state="staged", kind="accept", item_key=k, field=None, value=None)
+        for k in ("alert-rules", "feed-parser")
+    ]
+    out = dates.decisions(cp, accept)
+    assert out["alert-rules"]["estimate"]["kind"] == "capacity"
+    assert out["feed-parser"]["estimate"]["kind"] == "estimate"
