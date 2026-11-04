@@ -75,6 +75,7 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
       const name = m && typeof m === "object" ? quoted(m.name) : null;
       return name ? `set the milestone of ${x} to ${name}` : `set the milestone of ${x}`;
     }
+    case "set_goals": return `moved ${x} to another goal`;
     case "add_feature_ask": return title ? `filed the feature ask ${title}` : "filed a feature ask";
     case "set_owner": return `changed the owner of ${x}`;
     case "set_decider": return `changed the decider of ${x}`;

@@ -45,7 +45,8 @@ interface SeedItem {
   /** item-chat-understands (RoadmapItem.shipped): its own "already shipped" mark, apart from a status its tracker gives it. */
   shipped?: { note: string; on: string } | null;
   draft?: boolean;
-  milestone?: { name: string; day: number };
+  /** Its own milestone (RoadmapItem.milestone): its day from the horizon's start, null when it has no date. */
+  milestone?: { name: string; day: number | null };
   /** The track milestone record naming the item (its name), whatever its own text says. */
   record?: string;
   /** The roadmap item's validation gates (days from the window's start); one naming a
@@ -640,7 +641,7 @@ function recordOf(s: { record?: string; track?: string }): { record_id?: string;
  * every other phase keeps the 15/55/20/10 split of the bar, estimated. */
 function phases(start: string, end: string, s: SeedItem, w: [string, string]): Schemas["SimplePhase"][] {
   const named = new Map<string, string>();
-  for (const e of [...(s.milestone ? [{ phase: s.milestone.name, day: s.milestone.day }] : []), ...(s.gates ?? [])]) {
+  for (const e of [...(s.milestone?.day != null ? [{ phase: s.milestone.name, day: s.milestone.day }] : []), ...(s.gates ?? [])]) {
     const word = e.phase.trim().toLowerCase();
     if (PHASES.some(([k]) => k === word)) named.set(word, addDays(w[0], e.day));
   }
@@ -690,7 +691,7 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
     if (dep.r.end.date >= r.start.date)
       flag("dependency_order", dependencyLine(s.title, r.start.date, dep.s.title, dep.r.end.date), ["shift_dependents", "move_dependency", "accept_risk"], stableUuid(`simple-item/${key}`));
   }
-  if (s.milestone) {
+  if (s.milestone?.day != null) {
     const day = addDays(w[0], s.milestone.day);
     if (r.end.date > day) flag("outside_milestone", `‘${short(s.title)}’ ends ${word(r.end.date)}, after its milestone ‘${s.milestone.name}’ (${word(day)})`, ["accept_risk"], s.milestone.name);
   }
@@ -993,9 +994,12 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       source: r.end.estimated ? r.start.source : r.end.source,
       estimated: r.start.estimated && r.end.estimated,
       suggestion: suggestion ? { ...suggestion, can_decide: decides(s) } : null,
-      milestone: s.milestone
+      // service._milestone: its own dated milestone, else the track's record, else its own undated one.
+      milestone: s.milestone?.day != null
         ? { name: s.milestone.name, date: addDays(w[s.horizon][0], s.milestone.day), source: "item", ...recordOf(s) }
-        : s.record ? { name: s.record, date: null, source: "track", ...recordOf(s) } : null,
+        : s.milestone && !s.record
+          ? { name: s.milestone.name, date: null, source: "item" }
+          : s.record ? { name: s.record, date: null, source: "track", ...recordOf(s) } : null,
       phases: phases(r.start.date, r.end.date, s, w[s.horizon]),
       slices: sliced,
       milestones: [...new Set(sliced.map((x) => x.milestone))],

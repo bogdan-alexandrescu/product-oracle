@@ -93,6 +93,8 @@ const FIELDS: Record<string, string[]> = {
   accept_risk: ["risk"],
   // S6: a draft item confirmed (changes.py confirm_item).
   confirm_item: ["draft"],
+  // goal-buckets-tasks: the goals an item serves (changes.py set_goals).
+  set_goals: ["goal_ids"],
 };
 const FIXES = ["shift_dependents", "move_dependency"];
 /** fix5-cut-dependents: the item and everything waiting on it, cut as one change (changes.py CUT_ALL). */
@@ -267,6 +269,7 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "title") out[f] = s.title;
     else if (f === "outcome") out[f] = s.outcome ?? null;
     else if (f === "draft") out[f] = !!s.draft;
+    else if (f === "goal_ids") out[f] = [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])].map(goalId);
     else if (f === "risk") out[f] = (s.risks ?? []).find((r) => r.flag === target.flag && (r.subject ?? null) === (target.subject ?? null)) ?? null;
   }
   return out;
@@ -283,6 +286,11 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   if ("cut" in values) s.status = values.cut ? "cut" : "planned";
   if ("title" in values) s.title = String(values.title);
   if ("draft" in values) s.draft = !!values.draft;
+  if ("goal_ids" in values) {
+    const keys = (values.goal_ids as string[]).map((id) => Object.keys(GOALS).find((k) => goalId(k) === id)).filter((k): k is string => !!k);
+    s.goal = keys[0];
+    s.goals = keys.slice(1);
+  }
   if ("outcome" in values) s.outcome = (values.outcome as string | null) ?? null;
   if ("risk" in values) {
     const kept = (s.risks ?? []).filter((r) => !(r.flag === target.flag && (r.subject ?? null) === (target.subject ?? null)));
@@ -489,9 +497,13 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       ? { owner_id: itemOwnerId(db, keyOf(db, target.item_id)!) }
       : (body.op as string) === "set_decider"
         ? { decider_id: itemDeciderId(db, keyOf(db, target.item_id)!, ctx.roles) }
-        : spec.adds ? {} : Object.fromEntries(Object.keys(body.before).map((k) => [k, stored[k] ?? null]));
+        : body.op === "set_milestone"
+          ? { milestone: ownMilestone(db, keyOf(db, target.item_id)!) }
+          : spec.adds ? {} : Object.fromEntries(Object.keys(body.before).map((k) => [k, stored[k] ?? null]));
   const seen = ranking ? Object.fromEntries(Object.keys(before).map((k) => [k, body.before[k] ?? null])) : body.before;
-  if (!spec.adds && !same(before, seen)) return conflict(db, ctx, before, [id], "Changed since you saw it");
+  // changes._seen: an item's milestone is compared by its name and date (the read shows no date_source).
+  const seenAs = (v: Values) => (body.op === "set_milestone" ? { milestone: v.milestone ? { name: (v.milestone as Values).name ?? null, date: (v.milestone as Values).date ?? null } : null } : v);
+  if (!spec.adds && !same(seenAs(before), seenAs(seen))) return conflict(db, ctx, before, [id], "Changed since you saw it");
   if (body.op === "override_priority" && after.override === null && !before.override) return json(409, { detail: "It is at Oracle's rank already" });
   const change: Change = {
     id: crypto.randomUUID(), session_id: session?.id ?? null, document_id: target.item_id ? stableUuid(`simple-doc/${seed(db, keyOf(db, target.item_id)!).roadmap}`) : null,
@@ -522,9 +534,23 @@ function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false): voi
     const m = values.milestone as { name: string; date?: string | null } | null | undefined;
     if (s) {
       const w = simpleWindows(companyToday())[s.horizon][0];
-      s.milestone = m ? { name: m.name, day: m.date ? Math.round((Date.parse(`${m.date}T00:00:00Z`) - Date.parse(`${w}T00:00:00Z`)) / DAY) : 0 } : undefined;
+      s.milestone = m ? { name: m.name, day: m.date ? Math.round((Date.parse(`${m.date}T00:00:00Z`) - Date.parse(`${w}T00:00:00Z`)) / DAY) : null } : undefined;
     }
   }
+}
+
+/** A milestone's date as its day from the horizon's start (SeedItem.milestone), null with no date. */
+function dayIn(horizon: SeedItem["horizon"], date: unknown): number | null {
+  if (typeof date !== "string" || !date) return null;
+  return Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${simpleWindows(companyToday())[horizon][0]}T00:00:00Z`)) / DAY);
+}
+
+/** An item's own milestone as RoadmapItem.milestone stores it: {name, date, date_source}, or null. */
+function ownMilestone(db: SimpleDb, key: string): Values | null {
+  const s = db.items.find((x) => x.key === key);
+  if (!s?.milestone) return null;
+  const date = s.milestone.day == null ? null : addDays(simpleWindows(companyToday())[s.horizon][0], s.milestone.day);
+  return { name: s.milestone.name, date, date_source: date ? "typed" : null };
 }
 
 /** The new [start, end] of every item a fix moves (changes._fix_plan). */
@@ -744,7 +770,17 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       if (!title) return json(422, { detail: "after.title: 1 to 200 characters" });
       after = { title };
     } else if (body.op === "edit_outcome") after = { outcome: a.outcome ?? null };
-    else {
+    else if (body.op === "set_goals") {
+      // A goal by its id: the roadmap's, or the goal buckets' of the same name (as add_item reads it).
+      const raw = Array.isArray(a.goal_ids) ? (a.goal_ids as unknown[]).map(String) : [];
+      const keys = raw.map((v) => {
+        const bucket = db.goal_buckets?.goals.find((g) => g.id === v)?.title;
+        return Object.keys(GOALS).find((k) => goalId(k) === v || (!!bucket && GOALS[k] === bucket));
+      });
+      if (!raw.length) return json(422, { detail: "after.goal_ids: one goal or more" });
+      if (keys.some((k) => !k)) return json(422, { detail: "after.goal_ids: goals of this company" });
+      after = { goal_ids: [...new Set(keys.map((k) => goalId(k!)))] };
+    } else {
       const note = String((a.risk as Values | undefined)?.note ?? "").trim();
       if (!note) return json(422, { detail: "after.risk.note: 1 to 500 characters" });
       target.subject = target.subject ?? null;
@@ -1161,7 +1197,7 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
       key, title: String(a.title), horizon: a.horizon as SeedItem["horizon"], roadmap, goal: goalKey,
       track: db.items.find((x) => x.roadmap === roadmap && x.track)?.track, draft: true, outcome: typeof a.outcome === "string" ? a.outcome : null,
       drafting_until: mockNowMs() + DRAFTING_MS, quarter: (a.quarter as { start: string; end: string } | undefined) ?? undefined,
-      ...(a.milestone ? { milestone: { name: String((a.milestone as Values).name), day: 0 } } : {}),
+      ...(a.milestone ? { milestone: { name: String((a.milestone as Values).name), day: dayIn(a.horizon as SeedItem["horizon"], (a.milestone as Values).date) } } : {}),
       looks_like: lookalikes(db, String(a.title), roadmap),
     });
     return;
