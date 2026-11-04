@@ -34,6 +34,7 @@ export function answerWords(text: string, live = false): string {
     .map((part, i) => (i % 2 ? part : noRawTokens(part.replace(/\[l:(\d{1,4})\]/g, "[c:l.$1]"))))
     .join("");
 }
+
 /** One marker with the space before it ("appears [c:c1]." → "appears."). A match starts only at
  * the head of a space run, so a long run is scanned once. */
 const MARKER = /(?<![ \t])[ \t]*\[[cls]:[^[\]\n]*\]/g;
