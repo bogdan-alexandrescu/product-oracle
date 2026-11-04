@@ -22,7 +22,7 @@ import uuid
 
 import pytest
 
-from oracle.intake import discovery
+from oracle.intake import discovery, drafting
 from oracle.runs import flows
 from oracle.runs import service as runs_service
 from oracle.runs.models import Run
@@ -53,6 +53,7 @@ def runtime():
         "Not sure yet; we will find out as part of the work.",
         "TBD — we'll find out during the build, it's part of this work.",
         "No idea yet, so an early discovery step finds them.",
+        "Finding out the platform's limits is part of this work.",
     ],
 )
 def test_recognises_unknown_that_is_part_of_the_work(text):
@@ -70,6 +71,9 @@ def test_recognises_unknown_that_is_part_of_the_work(text):
         "Part of this work is the checkout page.",
         "Unknown, and finding out is not part of this work.",
         "Unknown; that is outside this work.",
+        # A known fact: testing it is part of the work, but nothing is unknown.
+        "The platform allows 500 requests a minute; testing that is part of this work.",
+        "We checked: 500 a minute. Load testing is part of the project.",
     ],
 )
 def test_other_answers_are_not_work(text):
@@ -151,6 +155,20 @@ async def test_a_bare_unknown_still_holds_the_draft(client):
     assert shown["work"] == []
 
 
+async def test_a_known_fact_with_testing_planned_is_not_work(client):
+    ctx = await company()
+    out = await intake_with_source(client, ctx)
+    intake_id = out["intake"]["id"]
+    gap = await _platform_gap(client, ctx, intake_id)
+    question = await _question_of(client, ctx, intake_id, gap["id"])
+    body = "The platform allows 500 requests a minute; testing that is part of this work."
+    given = await answer(client, ctx, question["id"], kind="answer", body=body)
+    assert given["answer"]["knowledge_state"] != "unknown"
+    shown = await read_summary(client, ctx, intake_id)
+    assert shown["work"] == []
+    assert shown["readiness"]["gate"] != "clear"
+
+
 def _draft(answer_id: str, body: list[str], blockers: list[str] | None = None) -> str:
     front = [
         "---",
@@ -225,6 +243,17 @@ def test_the_check_refuses_a_draft_that_blocks_on_it(body):
     assert problems[0].refs == {"answer_id": a}
 
 
+def test_the_check_takes_a_requirement_that_mentions_blocking_something_else():
+    a = str(uuid.uuid4())
+    body = [
+        "## Requirements {#requirements}",
+        "",
+        "- R1 Find out the platform's policy and API limits before blocking traffic [c:a1].",
+        "- R2 Find out the limits first; the sync item waits on it [c:a1].",
+    ]
+    assert discovery.draft_problems(_draft(a, body), _work(a)) == []
+
+
 def test_the_check_refuses_a_front_matter_blocker():
     a = str(uuid.uuid4())
     problems = discovery.draft_problems(_draft(a, PLANNED, blockers=["a1"]), _work(a))
@@ -257,6 +286,18 @@ async def test_a_draft_that_blocks_on_it_is_refused(client, runtime):
         out = await runs_service._import_draft(s, run, "prd", _draft(answer_id, AS_BLOCKER))
     assert out["error"].startswith("prd.md was rejected: [discovery_as_blocker]")
     assert [p["code"] for p in out["problems"]] == ["discovery_as_blocker"]
+
+
+async def test_a_malformed_pinned_answer_id_is_skipped(client, runtime):
+    ctx = await company()
+    intake_id, _gap, _question, given = await _brief_with_work(client, ctx)
+    run_id = (await _create_run(client, ctx, intake_id)).json()["id"]
+    answer_id = given["answer"]["id"]
+    async with tenant_session(ctx.tenant_id) as s:
+        run = await s.get(Run, uuid.UUID(run_id))
+        run.knobs = {**run.knobs, drafting.ANSWER_IDS: ["not-an-id", answer_id]}
+        problems = await runs_service._work_problems(s, run, _draft(answer_id, AS_BLOCKER))
+    assert [p.code for p in problems] == ["discovery_as_blocker"]
 
 
 async def test_the_writer_is_told_unknowns_are_work(client, runtime):
