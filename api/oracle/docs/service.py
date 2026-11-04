@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, changes, company_time, safe_yaml, webhooks, wording
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
-from oracle.docs import layers, named_codes
+from oracle.docs import draft_checks, layers
 from oracle.docs.diff import diff_sections
 from oracle.docs.models import DOCUMENT_KINDS, Citation, Document, DocumentVersion, Section
 from oracle.docs.parser import (
@@ -753,7 +753,10 @@ async def _check_document_dates(
     else:
         prd_id = await doc_dates.prd_of(db, document.id, source_version_id, draft.front_matter)
         prds = [prd_id] if prd_id is not None else []
-    marks = await doc_dates.check(db, found, prds, exempt=exempt)
+    # A roadmap whose items have no section of their own: the run's items scope its dates.
+    sectionless = document.kind == "roadmap" and any(not f.items for f in found)
+    items = await doc_dates.own_items(db, document) if sectionless else None
+    marks = await doc_dates.check(db, found, prds, exempt=exempt, items=items or frozenset())
     bad = [
         m
         for m in doc_dates.flagged(marks)
@@ -1311,9 +1314,10 @@ async def import_draft(
         except DraftError:
             await db.rollback()
             raise
-    if origin == "run" and document.kind == "prd":
-        # #306: an agent names the codes it writes; a draft that does not is flagged.
-        warnings += named_codes.check(draft.sections)
+    if origin == "run":
+        # #306: an agent names the codes it writes; a draft that does not is flagged. A
+        # roadmap's date words too (roadmap-draft-wording).
+        warnings += draft_checks.run_warnings(document.kind, draft.sections)
     if previous is not None:
         locked = await review_service.locked_section_keys(db, previous.id)
         if locked:

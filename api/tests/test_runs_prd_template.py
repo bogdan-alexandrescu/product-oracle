@@ -140,7 +140,20 @@ async def test_the_prd_draft_prompt_names_the_template_and_pastes_the_skeleton(c
 # once for G5 (#189), whose only change is the tool list line
 # "- get_run_discussions: summaries and staged changes from the people's discussions about
 # this run" (G5 §3.4); ROADMAP_PINS_BEFORE_G5 proves nothing else moved.
+# Refreshed for roadmap-draft-wording, whose only changes are flows.ROADMAP_WORDS in the
+# task and the named-code rules (flows.NAMED_CODES) line; ROADMAP_PINS_BEFORE_WORDING
+# proves nothing else moved.
 ROADMAP_PINS = {
+    (True, "roadmap-board", False): ["c1822234fcbf6ed6", "d629969c71f442c7"],
+    (True, "roadmap-board", True): ["fad4e7a40af88bf5", "362224006ca4045c"],
+    (True, None, False): ["0feea63605c8ac58", "4e17458e6584d1ca"],
+    (True, None, True): ["f7f515b2e1838d52", "8cd76244dc0e640d"],
+    (False, "roadmap-board", False): ["c4cae288ba0a5f7b", "b7500f7de560911b"],
+    (False, "roadmap-board", True): ["c4cae288ba0a5f7b", "b7500f7de560911b"],
+    (False, None, False): ["2e25bae37d8aa957", "36b2abd791eb6c40"],
+    (False, None, True): ["2e25bae37d8aa957", "36b2abd791eb6c40"],
+}
+ROADMAP_PINS_BEFORE_WORDING = {
     (True, "roadmap-board", False): ["497efdbb4d7b4e2e", "c6d17cd2b337ff49"],
     (True, "roadmap-board", True): ["438a572f4e58cc8d", "14613bde4e3cb8b9"],
     (True, None, False): ["ee0177925d74c55c", "67c7379394daf2e7"],
@@ -232,8 +245,16 @@ def test_the_roadmap_draft_prompt_is_byte_for_byte_unchanged(case):
     digests = [hashlib.sha256(s[2].encode()).hexdigest()[:16] for s in steps]
     assert digests == ROADMAP_PINS[case]
     for s in steps:
-        assert s[2].count(G5_TOOL_LINE) == 1 and s[2].count(REF_RULE) == 1
-    texts = [s[2].replace(REF_RULE, "") for s in steps]
+        assert s[2].count(flows.ROADMAP_WORDS) == 1 and s[2].count(flows.NAMED_CODES) == 1
+    plain = [
+        s[2].replace(flows.ROADMAP_WORDS, "").replace("\n" + flows.NAMED_CODES, "") for s in steps
+    ]
+    assert [hashlib.sha256(t.encode()).hexdigest()[:16] for t in plain] == (
+        ROADMAP_PINS_BEFORE_WORDING[case]
+    )
+    for t in plain:
+        assert t.count(G5_TOOL_LINE) == 1 and t.count(REF_RULE) == 1
+    texts = [t.replace(REF_RULE, "") for t in plain]
     assert [hashlib.sha256(t.encode()).hexdigest()[:16] for t in texts] == (
         ROADMAP_PINS_BEFORE_REF_RULE[case]
     )

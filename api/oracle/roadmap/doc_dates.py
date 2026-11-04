@@ -40,7 +40,10 @@ matched to (``tracker_key``), supports a date only where that item owns the date
 item's own section (``{#now-<key>}``), or a table row, list item or paragraph whose
 first item link is that item's (``[Payment](#now-payment-step)``). A mention of the
 key elsewhere does not count. A tracker basis also supports a date in a block that
-names the tracker key.
+names the tracker key. A date outside every item (a summary, a lane, a milestones
+table) is supported by the basis of one of the roadmap's own items: those with a section,
+else, when the template gives items no section of their own (quarterly-timeline,
+release-plan), the run's items (:func:`own_items`).
 
 On import (oracle.docs.service.import_draft):
 
@@ -1533,20 +1536,49 @@ def check_found(
     return out
 
 
+async def own_items(db: AsyncSession, document: Any, version: Any = None) -> frozenset[str]:
+    """The roadmap's own item keys, lowercased (roadmap-draft-wording review): a stored
+    version's items, else (a draft being imported) the items file of the run writing
+    it. A roadmap whose items have no section of their own names them nowhere else."""
+    from oracle.roadmap import items as items_mod
+    from oracle.roadmap.models import RoadmapItem
+    from oracle.runs import roadmap as items_file
+
+    if version is not None:
+        keys = await db.scalars(
+            select(RoadmapItem.item_key).where(RoadmapItem.roadmap_version_id == version.id)
+        )
+        return frozenset(k.lower() for k in keys)
+    if document is None or getattr(document, "id", None) is None:
+        return frozenset()
+    run_file = await items_mod.run_items_file(db, document)
+    if run_file is None:
+        return frozenset()
+    parsed = await items_file.check_items_async(run_file[0])
+    return frozenset(str(i["id"]).lower() for i in parsed.items)
+
+
 async def check(
     db: AsyncSession,
     found: Sequence[Found],
     prd_document_id: uuid.UUID | Sequence[uuid.UUID] | None,
     *,
     exempt: Iterable[tuple[str, str]] | None = None,
+    items: frozenset[str] = frozenset(),
 ) -> list[Mark]:
     """Every date the roadmap writes (``found``: :func:`found_for_version` or
     :func:`found_for_draft`) with its status against the PRD's bases now: verified,
     withdrawn (only a withdrawn basis supported it) or unverified. Every occurrence.
     ``exempt``: (section key, date as written) pairs the company's template writes
-    (:func:`template_dates`), which are not schedule claims and are left out."""
+    (:func:`template_dates`), which are not schedule claims and are left out.
+    ``items``: the roadmap's own item keys (:func:`own_items`), for a roadmap whose items
+    have no section of their own."""
     skip = set(exempt or ())
-    found = [f for f in found if (f.section_key, f.text) not in skip]
+    found = [
+        f if f.items or not items else replace(f, items=items)
+        for f in found
+        if (f.section_key, f.text) not in skip
+    ]
     if not found:
         return []
     prds = (
@@ -1681,7 +1713,8 @@ async def occurrences_for_version(
         )
     )
     exempt = await version_template_dates(db, version, version_day(version, zone))
-    return await check(db, found, prds, exempt=exempt)
+    items = await own_items(db, None, version) if any(not f.items for f in found) else None
+    return await check(db, found, prds, exempt=exempt, items=items or frozenset())
 
 
 async def version_template_dates(

@@ -15,11 +15,14 @@ from dataclasses import dataclass, field
 from oracle.docs.parser import ParsedSection
 from oracle.docs.schemas import VersionWarning
 
-# A code: one to three capitals, a dash, digits (F-28, REQ-4, D-12), or one capital and
-# digits without a dash (G1 a goal, R1 a requirement, M1 a milestone).
-_CODE = re.compile(r"(?<![\w-])([A-Z]{1,3}-\d{1,5}|[A-Z]\d{1,4})(?![\w-])")
+# A code: one to three capitals, a dash, digits (F-28, REQ-4, D-12), one capital and
+# digits without a dash (G1 a goal, R1 a requirement, M1 a milestone), or one capital, a
+# dash and a capital with optional digits (G-B, G-A1: lettered goals).
+_CODE = re.compile(r"(?<![\w-])([A-Z]{1,3}-\d{1,5}|[A-Z]\d{1,4}|[A-Z]-[A-Z]\d{0,3})(?![\w-])")
 # Standards, quarters, halves and versions that look like codes and are not ones.
 _NOT_CODES = {"UTF", "SHA", "ISO", "MD", "TLS", "SSL", "RFC", "Q", "H", "V"}
+# Lettered pairs that are words, not codes ("an A-B test", "the X-Y axis").
+_NOT_LETTERED = {"A-B", "X-Y"}
 # What may stand between two codes of a run: a comma, a slash, "and" or "or".
 _JOINER = re.compile(r"[ \t]*(?:,|/|&|,?[ \t]+(?:and|or))[ \t]*")
 # A name after a code: an optional separator, then a capital.
@@ -46,7 +49,32 @@ class Findings:
 
 
 def _codes(text: str) -> list[re.Match[str]]:
-    return [m for m in _CODE.finditer(text) if _prefix(m.group(1)) not in _NOT_CODES]
+    return [
+        m
+        for m in _CODE.finditer(text)
+        if _prefix(m.group(1)) not in _NOT_CODES and m.group(1) not in _NOT_LETTERED
+    ]
+
+
+def codes_in(text: str) -> list[str]:
+    """The codes ``text`` writes, in order."""
+    return [m.group(1) for m in _codes(text)]
+
+
+def only_codes(text: str) -> bool:
+    """Whether ``text`` is codes alone, with no name ("G-B, G-C, G-A1"): a table cell a
+    renderer replaces with the names it knows."""
+    codes = _codes(text)
+    if not codes:
+        return False
+    rest = _CODE.sub("", text)
+    return not re.sub(r"(?:,|/|&|\band\b|\bor\b|\s)+", "", rest)
+
+
+def _in_table(text: str, at: int) -> bool:
+    """Whether ``at`` is on a table row: a cell cannot hold a list, so each code in it
+    needs its name (a roadmap's Goal column, "G-B, G-C, G-A1")."""
+    return text[text.rfind("\n", 0, at) + 1 :].lstrip().startswith("|")
 
 
 def _prefix(code: str) -> str:
@@ -69,7 +97,7 @@ def findings(body: str, heading: str = "") -> Findings:
         else:
             groups.append([m])
     for group in groups:
-        if len(group) >= RUN:
+        if len(group) >= RUN and not _in_table(body, group[0].start()):
             out.runs.append([m.group(1) for m in group])
             named.update(m.group(1) for m in group)
             continue

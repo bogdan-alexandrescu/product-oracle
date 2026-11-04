@@ -224,3 +224,90 @@ async def test_a_withdrawn_basis_marks_the_approved_version_s_dates(client, owne
     await record(client, auth, "ENG-412", "2026-11-30")
     version = (await client.get(f"{VERSIONS}/1", headers=auth)).json()
     assert [m["status"] for m in version["date_marks"]] == ["verified"]
+
+
+# roadmap-draft-wording review: a template whose items have no section of their own
+# (quarterly-timeline: lanes and a Key milestones table; release-plan: releases).
+TIMELINE_MD = """\
+---
+document: checkout-redesign-roadmap
+title: Checkout roadmap
+kind: roadmap
+prd: {document: checkout-redesign, version: 1}
+template: quarterly-timeline
+template_version: "1"
+theme: roadmap-board
+brief: [summary, brief-items]
+---
+
+# Checkout roadmap {#roadmap}
+
+## Summary {#summary}
+
+The payment step reaches beta on Dec 15, 2026.
+
+## Items by quarter {#brief-items}
+
+| Quarter | Item | Outcome |
+|---|---|---|
+| [Q4](#timeline) | [Payment step](#lane-payments) | Buyers pay without re-entering their card |
+
+# Full version {#full}
+
+## Timeline {#timeline}
+
+### Payments {#lane-payments}
+
+- Payment step: Nov 2, 2026 to Dec 15, 2026 (estimate EST-PAY).
+
+## Key milestones {#milestones}
+
+| Milestone | Date | Kind |
+|---|---|---|
+| Payment step beta | Dec 15, 2026 | estimate |
+
+## Sources and data points {#sources}
+
+- Payment step: EST-PAY estimate
+"""
+
+
+async def test_an_accepted_item_estimate_backs_a_timeline_roadmap_s_dates(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    """An accepted Engineering dates estimate is a verified basis scoped to its item
+    (oracle.engineering.dates.on_approved). A run's roadmap in a template whose items
+    have no section of their own writes that date in its summary, lane and milestones
+    table: none of them is marked unverified. The start date, which no basis supports,
+    still is."""
+    _, auth = owner
+    await approved_prd(client, auth)
+    await record(client, auth, "EST-PAY", "2026-12-15", item_key="payment-step")
+    from tests.test_roadmap import ITEMS
+
+    runtime.script["roadmap_items"] = [Outcome(artifacts={"roadmap_items.yaml": ITEMS})]
+    runtime.script["roadmap_draft"] = [Outcome(artifacts={"roadmap.md": TIMELINE_MD})]
+    off = {"roadmap_items": False, "roadmap_review": False}
+    run = await start(
+        client, auth, await create(client, auth, source=PRD, knobs={"checkpoints": off})
+    )
+    await tick(client, auth)
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "succeeded", run
+    version = (await client.get(f"{VERSIONS}/1", headers=auth)).json()
+    warnings = [w for w in version["warnings"] if w["code"] == "unverified_date"]
+    assert [w["section_keys"] for w in warnings] == [["lane-payments"]], warnings
+    assert "Nov 2, 2026" in warnings[0]["message"]
+    marks = {(m["section_key"], m["text"], m["status"]) for m in version["date_marks"]}
+    assert marks == {
+        ("summary", "Dec 15, 2026", "verified"),
+        ("lane-payments", "Nov 2, 2026", "unverified"),
+        ("lane-payments", "Dec 15, 2026", "verified"),
+        ("milestones", "Dec 15, 2026", "verified"),
+    }
+    md = (await client.get(f"{VERSIONS}/1/markdown", headers=auth)).text
+    assert md.count("<!-- oracle: date unverified -->") == 1
+    assert "Nov 2, 2026 <!-- oracle: date unverified -->" in md

@@ -142,7 +142,7 @@ from oracle.baseline.goals import target_words
 from oracle.baseline.models import Edge, Entity, Proposal
 from oracle.claude_accounts.pool import readable_refusal
 from oracle.decisions import capture as decisions_capture
-from oracle.docs import named_codes, visibility, written
+from oracle.docs import draft_checks, visibility, written
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, is_uuid
@@ -4798,9 +4798,11 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
             "created": result.created,
             "warnings": [w.code for w in result.version.warnings],
         }
-        # #306: codes the draft uses without their names, in the warning's plain words;
-        # a run sends such a draft back to the writer before a person reviews it.
-        code_names = [w.message for w in result.version.warnings if w.code in named_codes.CODES]
+        # #306: codes the draft uses without their names (and a roadmap's date words), in
+        # the warning's plain words; a run sends such a draft back to the writer before a
+        # person reviews it.
+        sent_back = draft_checks.SENT_BACK
+        code_names = [w.message for w in result.version.warnings if w.code in sent_back]
         if code_names:
             out["code_names"] = code_names
         source = result.version.source
