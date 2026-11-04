@@ -26,6 +26,8 @@ async function open(page: Page, scenario?: string) {
 
 // The phone list sits in the page too (hidden past 600px): desktop checks read the ladder only.
 const ladder = (page: Page) => page.getByTestId("gm-ladder");
+// A gate by its own name (its title), not by the name of the one it comes after.
+const gateNamed = (page: Page, name: string) => ladder(page).getByTestId("gm-gate").filter({ has: page.getByTestId("gm-edit-gate").filter({ hasText: name }) });
 const lanes = (page: Page) => page.getByTestId("gm-lane").locator("span.font-semibold");
 
 test.describe("desktop", () => {
@@ -175,6 +177,90 @@ test.describe("desktop", () => {
     expect(cy).toBeLessThan(top.y + top.height);
   });
 
+  test("Comes after: defaults to the goal's previous milestone, a different pick orders the steps", async ({ page }) => {
+    // protects=the propose form's Comes after picker starts on the goal's last milestone and follows
+    // the goal; a different pick is saved; the gate edit changes it and the steps follow;
+    // fails_when=the picker is missing, read-only, starts empty or the order ignores it; no_claim=the API.
+    await open(page);
+    await page.getByTestId("gm-propose").click();
+    let ed = page.getByTestId("gm-editor");
+    const after = ed.getByLabel("Comes after");
+    await expect(after.locator("option:checked")).toHaveText("50 sign-ups per rep");
+    await ed.getByLabel("Goal it moves").selectOption({ index: 2 });
+    await expect(after.locator("option:checked")).toHaveText("$20k revenue per day");
+    await ed.getByLabel("Goal it moves").selectOption({ index: 0 });
+    await ed.getByLabel("Name").fill("40 sign-ups per rep");
+    await ed.getByLabel("Met when the reading is at least").fill("40");
+    await after.selectOption({ label: "25 sign-ups per rep" });
+    await ed.getByTestId("gm-save").click();
+    const fresh = ladder(page).locator('[data-testid="gm-gate"][data-proposed="1"]');
+    await expect(fresh).toContainText("Step 2");
+    await expect(fresh).toContainText("After 25 sign-ups per rep");
+    const fifty = gateNamed(page, "50 sign-ups per rep");
+    await expect(fifty).toContainText("Step 2");
+    await fifty.getByTestId("gm-edit-gate").click();
+    ed = page.getByTestId("gm-editor");
+    await expect(ed.getByLabel("Comes after").locator("option:checked")).toHaveText("25 sign-ups per rep");
+    await ed.getByLabel("Comes after").selectOption({ label: "40 sign-ups per rep" });
+    await ed.getByTestId("gm-save").click();
+    await expect(fifty).toContainText("Step 3");
+    await expect(fifty).toContainText("After 40 sign-ups per rep");
+  });
+
+  test("a milestone with no gate yet reads No gate yet until its threshold is set", async ({ page }) => {
+    // protects=a goal milestone added on the roadmap without a threshold shows No gate yet, never Met,
+    // Proposed or "31 of 0"; setting the threshold gates it; fails_when=it reads met or "of 0";
+    // no_claim=the roadmap's own milestone panel.
+    await open(page, "goal-map-no-gate");
+    const gate = ladder(page).getByTestId("gm-gate").filter({ hasText: "Sign-ups at every rep" });
+    await expect(gate).toContainText("No gate yet");
+    await expect(gate).toContainText("31 now · no gate yet");
+    await expect(gate).not.toContainText("Met");
+    await expect(gate).not.toContainText("Proposed");
+    await expect(gate).not.toContainText(" of 0");
+    await gate.getByTestId("gm-edit-gate").click();
+    const ed = page.getByTestId("gm-editor");
+    await expect(ed.getByTestId("gm-save")).toBeDisabled();
+    await ed.getByLabel("At least").fill("60");
+    await ed.getByLabel("Confirm this gate").check();
+    await ed.getByTestId("gm-save").click();
+    await expect(gate).toContainText("31 of 60");
+    await expect(gate).not.toContainText("No gate yet");
+  });
+
+  test("a feature card shows what it is expected to do for the milestone of its cell", async ({ page }) => {
+    // protects=a feature serving two milestones with different expected lifts shows, under each,
+    // that milestone's own; fails_when=the card shows another milestone's lift; no_claim=measuring.
+    await open(page);
+    const card = ladder(page).getByTestId("gm-feature").filter({ hasText: "Annual plan offer" });
+    await expect(card).toHaveCount(1);
+    await expect(card).toContainText("Expects +$90 each (medium confidence)");
+    await expect(card).not.toContainText("+$60");
+  });
+
+  test("attached from another area's cell, a feature moves there and the drawer says so", async ({ page }) => {
+    // protects=a feature filed under one area, attached from another area's cell, is told to move and
+    // then sits in the new area; fails_when=the drawer shows the new area while it stays in the old;
+    // no_claim=lift.
+    await open(page);
+    await page.getByTestId("gm-attach").first().click();
+    let ed = page.getByTestId("gm-editor");
+    await ed.getByLabel("Milestone").selectOption({ label: "10 paid conversions per rep" });
+    await ed.getByLabel("Area").selectOption({ label: "Onboarding & revenue" });
+    await ed.getByLabel("Feature").fill("trial");
+    await ed.getByRole("button", { name: /Trial reminder texts/ }).click();
+    await expect(ed.getByTestId("gm-attach-moves")).toHaveText(
+      "Trial reminder texts is filed under Conversions (incl. new channels): attached here, it moves to Onboarding & revenue.",
+    );
+    await ed.getByTestId("gm-save").click();
+    await expect(page.getByTestId("gm-flash")).toContainText("Attached: Trial reminder texts");
+    await page.getByTestId("gm-attach").first().click();
+    ed = page.getByTestId("gm-editor");
+    await ed.getByLabel("Milestone").selectOption({ label: "25 sign-ups per rep" });
+    await ed.getByLabel("Feature").fill("trial");
+    await expect(ed.getByRole("button", { name: /Trial reminder texts/ })).toContainText("Onboarding & revenue · serves");
+  });
+
   test("sets and confirms a proposed milestone's gate", async ({ page }) => {
     // protects=a proposed gate's threshold is set and confirmed in the map (it is no longer only
     // proposed and names who confirmed it); fails_when=there is no way to set or confirm it;
@@ -185,7 +271,7 @@ test.describe("desktop", () => {
     await ed.getByLabel("Name").fill("40 sign-ups per rep");
     await ed.getByLabel("Met when the reading is at least").fill("40");
     await ed.getByTestId("gm-save").click();
-    const gate = ladder(page).locator('[data-testid="gm-gate"]').filter({ hasText: "40 sign-ups per rep" }).filter({ hasNotText: "50 sign-ups" });
+    const gate = gateNamed(page, "40 sign-ups per rep");
     await expect(gate).toContainText("Proposed");
     await gate.getByTestId("gm-edit-gate").click();
     ed = page.getByTestId("gm-editor");
@@ -277,9 +363,12 @@ test.describe("phone", () => {
     const ed = page.getByTestId("gm-editor");
     await ed.getByLabel("Name").fill("40 sign-ups per rep");
     await ed.getByLabel("Met when the reading is at least").fill("40");
+    await expect(ed.getByLabel("Comes after").locator("option:checked")).toHaveText("50 sign-ups per rep");
+    await ed.getByLabel("Comes after").selectOption({ label: "25 sign-ups per rep" });
     await ed.getByTestId("gm-save").click();
     await expect(page.getByTestId("gm-flash")).toContainText("Proposed: 40 sign-ups per rep.");
     await expect(list.locator(".simple-card")).toHaveCount(8);
+    await expect(list.locator(".simple-card").filter({ hasText: "40 sign-ups per rep" })).toContainText("After 25 sign-ups per rep");
   });
 
   test("edits a goal and opens a feature on a phone", async ({ page }) => {
