@@ -104,10 +104,10 @@ test.describe("desktop", () => {
       // the Timeline's side panel dims nothing, so this is the Gantt's floating card.
       await openGanttItem(page, "alert-rules");
       await expect(page.getByTestId("floating-card")).toBeVisible();
-      await expect(page.getByTestId("floating-card-backdrop")).toBeVisible();
+      await expect(page.getByTestId("feature-panel-backdrop")).toBeVisible();
       const box = (await rail.boundingBox())!;
       const top = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.getAttribute("data-testid") ?? null, [box.x + box.width / 2, box.y + box.height / 2] as const);
-      expect(top).toBe("floating-card-backdrop");
+      expect(top).toBe("feature-panel-backdrop");
     });
   }
 

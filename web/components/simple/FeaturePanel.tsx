@@ -144,6 +144,8 @@ function Clash({ c, late, lateMilestone, added }: { c: Ctx; late: Item[]; lateMi
     for (const d of late) await act(`Moved '${d.title}'`, { op: "move_dependency", target: { item_id: item.id, subject: d.id }, before: before([d]), after: {} });
   };
   const flags = item.flags.filter((f) => f.state === "red" && (f.kind === "dependency_order" || f.kind === "outside_milestone"));
+  // fix4 qa-simple-roadmap-18: one who may not decide the item (a commenter) only proposes the fix, and its button says so.
+  const say = (w: string) => (item.can_decide ? w : `Propose: ${w[0].toLowerCase()}${w.slice(1)}`);
   return (
     <div className="mt-2 rounded-lg border border-crit/40 bg-crit-bg px-3 py-2" data-testid="fp-clash">
       <p className="text-sm font-medium text-crit">{parts.join(" ")}</p>
@@ -151,11 +153,11 @@ function Clash({ c, late, lateMilestone, added }: { c: Ctx; late: Item[]; lateMi
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {last && movedStart && (
             <Button variant="solid" onClick={moveDependents}>
-              Move the dependents: {span(movedStart, addDays(movedStart, length))}
+              {say(`Move the dependents: ${span(movedStart, addDays(movedStart, length))}`)}
             </Button>
           )}
-          {late.length > 0 && <Button onClick={() => void moveDependencies()}>{late.length > 1 ? "Move the dependencies" : "Move the dependency"}</Button>}
-          {flags.length > 0 && <Button onClick={() => setNote("")}>Accept as risk</Button>}
+          {late.length > 0 && <Button onClick={() => void moveDependencies()}>{say(late.length > 1 ? "Move the dependencies" : "Move the dependency")}</Button>}
+          {flags.length > 0 && <Button onClick={() => setNote("")}>{say("Accept as risk")}</Button>}
           {added && (
             <Button onClick={() => void act(`Removed the link to '${added.title}'`, { op: "remove_link", target: { item_id: item.id, subject: added.id }, before: { depends_on: depKeys(item, c.items) }, after: {} })}>
               Remove the new link
@@ -413,10 +415,10 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
         </button>
       </div>
       <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text2">
-        <span className="rounded-full bg-accent-soft px-2 py-px font-medium text-accent-ink">{statusWord(item.status)}</span>
+        <span className="rounded-full bg-accent-soft px-2 py-px font-medium text-accent-ink" data-testid="fp-status">{statusWord(item.status)}</span>
         {item.owner && <span>Owner {item.owner.name}</span>}
         {item.owner && item.confidence && <span aria-hidden>·</span>}
-        {item.confidence && <span>{confidenceWord(item.confidence)} confidence</span>}
+        {item.confidence && <span data-testid="fp-confidence">{confidenceWord(item.confidence)} confidence</span>}
         {clash && <span className="rounded-full bg-crit-bg px-2 py-px font-medium text-crit" data-testid="fp-clash-flag">Dates clash</span>}
       </p>
       {!canChange && (
@@ -470,7 +472,7 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
     </div>
   );
   const backdrop = <div aria-hidden data-testid="feature-panel-backdrop" onClick={onClose} className="fixed inset-0 z-[55] bg-black/30" />;
-  const base = "fixed z-[60] flex flex-col border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip outline-none";
+  const base = "fixed z-[60] flex flex-col overflow-hidden border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip outline-none";
   if (phone)
     return (
       <>
