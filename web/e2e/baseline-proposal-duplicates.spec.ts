@@ -31,14 +31,14 @@ for (const [where, size] of [["desktop", null], ["phone", PHONE]] as const) {
     test("two values for Dark mode's status are one choice", async ({ page }) => {
       await openProposals(page);
       await expect(card(page, "Not committed to yet.")).toHaveCount(0);
-      const dark = card(page, "Mentioned as next up in the planning call.");
+      const dark = card(page, "Mentioned as next up in the planning call");
       const choice = dark.getByRole("group", { name: "Pick one" });
       await expect(choice).toContainText("Planned or Proposed");
       await expect(choice).toContainText("Critic suggests Proposed");
       await expect(dark.getByRole("button", { name: "Accept", exact: true })).toHaveCount(0);
       await choice.getByRole("button", { name: "Proposed", exact: true }).click();
       await expect(page.getByRole("status")).toContainText("Proposal accepted");
-      await expect(card(page, "Mentioned as next up in the planning call.")).toHaveCount(0);
+      await expect(card(page, "Mentioned as next up in the planning call")).toHaveCount(0);
       await expect(card(page, "Not committed to yet.")).toHaveCount(0);
     });
 

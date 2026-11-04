@@ -101,7 +101,8 @@ test.describe("desktop", () => {
     await openBaseline(page);
     await expect(goalsTable(page).getByTestId("goal-g.early-churn").locator('[data-attr="target"]')).toHaveText("< 8%");
     const ledger = page.getByRole("table", { name: "Feature × goal" });
-    await expect(ledger.getByTestId("ledger-target")).toHaveText(["≥ 45%", "≥ 12%", "< 8%"]);
+    // The ledger follows the one goal order (position, then creation, then title), not the goals' weights.
+    await expect(ledger.getByTestId("ledger-target")).toHaveText(["< 8%", "≥ 12%", "≥ 45%"]);
     await expect(ledger).not.toContainText("below 8%");
     const head = ledger.getByRole("columnheader", { name: "Feature", exact: true });
     expect((await head.boundingBox())!.height).toBeLessThanOrEqual(40);

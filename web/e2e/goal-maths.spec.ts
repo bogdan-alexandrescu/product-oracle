@@ -167,11 +167,11 @@ test.describe("formatFigure shows the current value in its own terms", () => {
   }
 });
 
-test("goals with the same weight sort by title, as the Baseline sorts them", () => {
+test("goals with no position keep one order (creation, then title), as every page sorts them", () => {
   const a = { ...goal({ weight: 0.5 }, "Beta"), id: "b" };
   const b = { ...goal({ weight: 0.5 }, "alpha"), id: "a" };
   const c = { ...goal({ weight: 0.9 }, "Zeta"), id: "z" };
-  expect(goalViews([a, b, c]).map((g) => g.title)).toEqual(["Zeta", "alpha", "Beta"]);
+  expect(goalViews([a, b, c]).map((g) => g.title)).toEqual(["alpha", "Beta", "Zeta"]);
 });
 
 // B5 Typed goal fields: Home reads the typed current, target, unit and comparison first;
