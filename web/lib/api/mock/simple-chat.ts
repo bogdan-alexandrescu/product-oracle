@@ -1088,6 +1088,8 @@ const countOf = (x: string) => NUMBERS[x.toLowerCase()] ?? Number(x);
 const SHIPPED_SAID = /\b(?:already (?:happening|shipped|live|out|built|done|running|in use|available|exists?|there|have (?:it|this)|ha(?:s|ve) (?:it|this))|(?:is|it's|its|has been|was) (?:shipped|live|launched|released)|(?:has|have|we) shipped|(?:partly|partially) (?:done|shipped|built|live))\b/i;
 const SHIPPED_HINT = /\b(?:already|shipped|live|launched|released|exists?|in use|using|used|been out|for a while|for months|for years|we have (?:it|this)|built)\b/i;
 const SHIPPED_WHERE = /\b(?:in|on|inside|within|as part of) ((?:our|the|their|its|my|your) [^.,;!?]+?)(?=[.,;!?]|$| and | but | so )/i;
+/** shipped.NOT_SAID: a line that asks or says the opposite ("this isn't already live") is no mark. */
+const SHIPPED_NOT = /\?\s*$|\b(?:not|never|\w+n['’]t|isnt|arent|hasnt|havent)\b/i;
 const SHIPPED_IMPROVE = /\b(?:keep|continue|will|going to)\b[^.]*?\b(?:improv|iterat|polish|work on|grow)/i;
 
 /** The "Mark as already shipped" card (shipped.build): its evidence note says where it runs, in the person's words. */
@@ -1101,9 +1103,10 @@ function shippedDraft(i: Item, said: string): Draft {
 }
 
 /** A line with no change read in an item's talk (shipped.choices): a short question with choices drawn from it, "Neither" last. */
-function talkChoices(i: Item, said: string): Reply {
+function talkChoices(i: Item, said: string, shipped: boolean, owner: boolean): Reply {
   const choices: { label: string; draft: Draft | null }[] = [];
-  if (SHIPPED_HINT.test(said) && i.status !== "done" && i.status !== "cut") choices.push({ label: "Mark it as already shipped?", draft: shippedDraft(i, said) });
+  // As the API: only an owner applies it, so no one else is offered it; the item's own mark, not a Done its tracker gives it.
+  if (owner && SHIPPED_HINT.test(said) && !SHIPPED_NOT.test(said) && !shipped && i.status !== "cut") choices.push({ label: "Mark it as already shipped?", draft: shippedDraft(i, said) });
   const title = said.slice(0, 120).replace(/\.$/, "");
   choices.push({
     label: "Add this as a task?",
@@ -1135,10 +1138,11 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
   if (ctx.role === "viewer") return { kind: "note", body: "Viewers ask questions here; changes need a commenter or above.", cards: [] };
   const one = (d: Draft): Reply => ({ kind: "cards", body: `I understood: ${d.summary.replace(/^./, (c) => c.toLowerCase())}.`, cards: [d] });
   let m: RegExpExecArray | null;
-  if (SHIPPED_SAID.test(t)) {
+  const seed = db.items.find((x) => db.ids[x.key] === i.id);
+  if (SHIPPED_SAID.test(t) && !SHIPPED_NOT.test(t)) {
     // item-chat-understands (shipped.build): "this already exists" marks it shipped; "will keep improving it" leaves a smaller item.
     if (i.status === "cut") return { kind: "note", body: `${i.title} is cut already.`, cards: [] };
-    if (i.status === "done") return { kind: "note", body: `${i.title} is marked as shipped already.`, cards: [] };
+    if (seed?.shipped) return { kind: "note", body: `${i.title} is marked as shipped already.`, cards: [] };
     const ship = shippedDraft(i, t);
     if (!SHIPPED_IMPROVE.test(t)) return one(ship);
     const title = `Improve ${i.title}`;
@@ -1206,7 +1210,7 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
     return "card" in o ? one(o.card) : { kind: "note", body: o.refusal, cards: [] };
   }
   // item-chat-understands: never "say it another way" alone; a short question with choices drawn from the line.
-  return talkChoices(i, t);
+  return talkChoices(i, t, !!seed?.shipped, ctx.role === "owner");
 }
 
 /** Apply with `values` (Correct): the card rebuilt from the corrected values; Correct's values win. A refusal's words, else null. */
@@ -1582,8 +1586,9 @@ async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx,
     // item-chat-understands (shipped.apply): the item reads done, out of planned work; Undo puts its status back.
     const s = db.items.find((x) => db.ids[x.key] === c.item_id);
     if (!s) return json(404, { detail: "No such roadmap item" });
-    if (s.status === "done") return json(409, { detail: `${s.title} is marked as shipped already` });
+    if (s.shipped) return json(409, { detail: `${s.title} is marked as shipped already` });
     const was = s.status ?? null;
+    s.shipped = (c.after.shipped as { note: string; on: string } | null) ?? { note: "Already shipped", on: today() };
     s.status = "done";
     const result = applyLocal(c, null, ctx, s8);
     c.undo = { status: was };
@@ -1996,7 +2001,8 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
         if (!unfileSuggestion(db, String(c.target.suggestion_id ?? ""))) return json(409, { detail: "The decider has decided this suggestion already" });
       } else if (c.op === "mark_shipped") {
         const s = db.items.find((x) => db.ids[x.key] === c.item_id);
-        if (!s || s.status !== "done") return json(409, { detail: "This item is not marked as shipped now" });
+        if (!s || !s.shipped) return json(409, { detail: "This item is not marked as shipped now" });
+        s.shipped = null;
         s.status = (c.undo?.status as typeof s.status | null) ?? undefined;
       } else if (LOCAL_OPS.has(c.op)) {
         if (meeting?.ended) return json(409, { detail: "The meeting has ended" });
