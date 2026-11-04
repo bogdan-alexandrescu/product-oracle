@@ -1566,7 +1566,7 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
                   <rect x={0} y={midY - 9} width={words + 4} height={18} rx={4} fill="var(--simple-paper)" />
                   <text y={midY} dominantBaseline="central" fill="var(--text)">
                     {num && (
-                      <tspan fontSize={12} fontWeight={700} fill="var(--text2)" dx={0} data-testid="goal-num">
+                      <tspan fontSize={12} fontWeight={700} fill="var(--text2)" dx={0} data-testid="order-num">
                         {num}
                       </tspan>
                     )}

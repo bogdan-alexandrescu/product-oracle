@@ -27,7 +27,7 @@ async function names(list: Locator): Promise<string[]> {
 /** Each card's number and name in `cards`, as "1 Grow retention". */
 async function numbered(cards: Locator, name: string): Promise<string[]> {
   const out: string[] = [];
-  for (const card of await cards.all()) out.push(`${await card.getByTestId("goal-num").first().innerText()} ${(await card.getByTestId(name).first().innerText()).replace(/^\s*\d+\s*/, "").trim()}`);
+  for (const card of await cards.all()) out.push(`${await card.getByTestId("order-num").first().innerText()} ${(await card.getByTestId(name).first().innerText()).replace(/^\s*\d+\s*/, "").trim()}`);
   return out;
 }
 
@@ -51,17 +51,17 @@ async function everyPageShows(page: Page, want: string[]) {
   expect(onCards).toEqual(want.filter((n) => onCards.includes(n)));
   for (const card of await cards.all()) {
     const name = (await names(card.locator("p:first-child")))[0];
-    if (want.includes(name)) await expect(card.getByTestId("goal-num")).toHaveText(String(want.indexOf(name) + 1));
+    if (want.includes(name)) await expect(card.getByTestId("order-num")).toHaveText(String(want.indexOf(name) + 1));
   }
   // The lane headers lead with the same number.
   const lane = page.getByTestId("chart-group").filter({ hasText: want[0] }).first();
-  if (await lane.count()) await expect(lane.getByTestId("goal-num")).toHaveText("1");
+  if (await lane.count()) await expect(lane.getByTestId("order-num")).toHaveText("1");
 
   await page.goto("/baseline");
   await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
   for (const [i, name] of want.entries()) {
     const row = page.locator('[data-testid^="goal-"]').filter({ has: page.getByRole("button", { name, exact: true }) }).first();
-    await expect(row.getByTestId("goal-num")).toHaveText(String(i + 1));
+    await expect(row.getByTestId("order-num")).toHaveText(String(i + 1));
   }
 }
 

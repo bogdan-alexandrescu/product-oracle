@@ -16,7 +16,7 @@ import { errorMessage } from "@/lib/use-query";
 export function GoalNum({ n }: { n: number | null | undefined }): ReactNode {
   if (!n) return null;
   return (
-    <span aria-label={`Goal ${n}`} className="goal-num tnum" data-testid="goal-num">
+    <span aria-label={`Goal ${n}`} className="goal-num tnum" data-testid="order-num">
       {n}
     </span>
   );
