@@ -620,6 +620,7 @@ async def build(
                 above_line=above(e, line),
                 end_date=e.resolved.end.date if e is not None else None,
                 end_estimated=e is not None and e.resolved.end.estimated,
+                estimate_pending=e is not None and e.row.estimate_pending,
                 no_goal=not f.serves_goal,
                 can_reorder=can_change and e is not None,
                 applies=e is not None and service.can_decide(principal, e, read_.deciders),

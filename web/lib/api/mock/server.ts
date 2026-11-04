@@ -26,6 +26,7 @@ import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { carriedFor, REPLACED_PRD_SCENARIO, seedReplacedBases } from "./replaced-prd";
 import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
+import { FIT_SCENARIOS, fitDateGoal, routeFitDate } from "./fit-date";
 import { generalReply } from "./general-chat";
 import { afterAccept, goalInterviewReply, proposeVersion, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
 import { goalCheck } from "./goals";
@@ -178,6 +179,7 @@ import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADM
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { appliedVersionOf, approvedPrdToDraft, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { applyFitDate, seedFitDateRoadmap } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
 import { routeGoalMap, type GoalMap } from "./goal-map";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
@@ -3480,6 +3482,16 @@ function load(): Db {
                     }
                     return db;
                   }
+              : (FIT_SCENARIOS as readonly string[]).includes(scenario ?? "")
+                ? () => {
+                    // Bring a date in (./fit-date.ts): its PRD's items on the Help desk roadmap and
+                    // the Baseline goal its M2 gate counts toward.
+                    const db = seed();
+                    seedFitDateRoadmap((db.simple_roadmap ??= seedSimpleRoadmap()));
+                    const goal = fitDateGoal(scenario, db.baseline.entities.find((e) => e.type === "goal")!);
+                    if (goal) db.baseline.entities.push(goal);
+                    return db;
+                  }
               : scenario === APPROVED_ROADMAP_SCENARIO
                 ? seedApprovedRoadmapScenario
               : scenario === ONE_ROADMAP_SCENARIO
@@ -6538,6 +6550,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       p,
     );
     if (onePagerRes) return onePagerRes;
+    // Bring a date in (oracle.simple.fit_date_router), under the fit-date scenarios.
+    const fitRes = await routeFitDate(localStorage.getItem(MOCK_SCENARIO_KEY), me.role, r, p, db.baseline.entities);
+    // An approved re-plan moves the PRD's items on the Help desk roadmap (fitDateApproved).
+    applyFitDate(db.simple_roadmap);
+    if (fitRes) return fitRes;
     // The plan-model lane: a PRD's plan (GET .../plan, owners' POST .../plan/read-again).
     const planRes = routeSimplePlan(
       db.simple_roadmap!.plan,

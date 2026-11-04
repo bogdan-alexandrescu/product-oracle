@@ -387,6 +387,11 @@ class RoadmapItem(TenantScoped, Base):
     caused_by_change_id: Mapped[uuid.UUID | None] = _fk("change_events", "SET NULL")
     stale_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     stale_reasons: Mapped[list[str]] = _texts()
+    # Bring a date in (oracle.simple.fit_date_router): the re-plan resized the item (sliced
+    # or split it), so its date waits on a new estimate from its owner.
+    estimate_pending: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
     reconciled_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     reconciled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # What a person confirmed the item still holds against (the PRD's approved version

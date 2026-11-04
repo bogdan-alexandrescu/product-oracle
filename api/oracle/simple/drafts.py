@@ -108,6 +108,8 @@ FIELDS = (
     # chat-actions: set_owner, set_decider.
     "owner_id",
     "decider_id",
+    # Bring a date in: a resized item's date waits on a new estimate.
+    "estimate_pending",
 )
 UUID_FIELDS = ("feature_id", "owner_id", "decider_id")
 DATES = ("start_date", "end_date")

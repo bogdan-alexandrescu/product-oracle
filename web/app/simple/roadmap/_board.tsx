@@ -398,6 +398,12 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
                 Draft
               </span>
             )}
+            {/* Bring a date in: a sliced or split item's date waits for its new estimate. */}
+            {item.estimate_pending && (
+              <span className="rounded-full bg-warn-bg px-1.5 text-xs text-warn" data-testid="estimate-pending">
+                Estimate pending
+              </span>
+            )}
             {item.confidence && <span>{item.confidence} confidence</span>}
             {item.owner && <span>{item.owner.name}</span>}
           </p>
