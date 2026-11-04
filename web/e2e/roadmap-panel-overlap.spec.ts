@@ -10,7 +10,8 @@ import { expect, test, type Locator, type Page } from "./test";
  * words and the today line painted on top of it. Here, in each view (Timeline, Gantt,
  * Now/Next/Later, Waterfall), desktop and phone, light and dark, the panel opens over a busy
  * chart and, at its title, its Dates row, its warnings and the talk's message box, the
- * element on top (elementFromPoint) is the panel's own.
+ * element on top (elementFromPoint) is the panel's own. The header's Key dates editor and the
+ * Needs a decision tray open over the same chart and sit on top of it too.
  */
 
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
@@ -45,11 +46,11 @@ function itemIn(page: Page, view: View, key: string): Locator {
   return page.locator(`[data-testid="bar"][data-item="${key}"]`).first();
 }
 
-/** True when the element on top at the middle of `part` belongs to the open item's panel. */
-async function onTop(card: Locator, part: Locator): Promise<boolean> {
+/** True when the element on top at the middle of `part` belongs to the open panel (`within`). */
+async function onTop(part: Locator, within = "floating-card"): Promise<boolean> {
   await part.evaluate((el) => el.scrollIntoView({ block: "nearest" }));
-  return part.evaluate((el) => {
-    const panel = el.closest('[data-testid="floating-card"]')!;
+  return part.evaluate((el, id) => {
+    const panel = el.closest(`[data-testid="${id}"]`)!;
     const r = el.getBoundingClientRect();
     const xs = [r.left + 4, r.left + r.width / 2, r.right - 4];
     const y = r.top + Math.min(r.height / 2, 10);
@@ -57,7 +58,7 @@ async function onTop(card: Locator, part: Locator): Promise<boolean> {
       const hit = document.elementFromPoint(x, y);
       return !!hit && panel.contains(hit);
     });
-  });
+  }, within);
 }
 
 async function check(page: Page, view: View, phone: boolean) {
@@ -82,7 +83,7 @@ async function check(page: Page, view: View, phone: boolean) {
   ];
   for (const [name, part] of parts) {
     await expect(part, `${view}: the panel shows its ${name}`).toBeVisible();
-    expect(await onTop(card, part), `${view}: the panel's ${name} is on top of the chart`).toBe(true);
+    expect(await onTop(part), `${view}: the panel's ${name} is on top of the chart`).toBe(true);
   }
   if (phone) await card.getByRole("tab", { name: "Talk to Oracle" }).click();
   else await card.getByRole("button", { name: "Talk to Oracle" }).click();
@@ -90,11 +91,30 @@ async function check(page: Page, view: View, phone: boolean) {
   const box = card.getByTestId("item-talk").getByRole("textbox", { name: "Message Oracle" });
   await expect(box).toBeVisible();
   if (!phone) {
-    for (const [name, part] of parts) expect(await onTop(card, part), `${view}, talk open: the panel's ${name} is on top`).toBe(true);
+    for (const [name, part] of parts) expect(await onTop(part), `${view}, talk open: the panel's ${name} is on top`).toBe(true);
   }
-  expect(await onTop(card, box), `${view}: the talk's message box is on top of the chart`).toBe(true);
+  expect(await onTop(box), `${view}: the talk's message box is on top of the chart`).toBe(true);
   await page.keyboard.press("Escape");
   await expect(card).toBeHidden();
+  await sheets(page, view);
+}
+
+/** The Key dates editor and the Needs a decision tray, each opened over the same chart, are on top of it. */
+async function sheets(page: Page, view: View) {
+  await page.getByTestId("key-dates-open").click();
+  const editor = page.getByTestId("key-dates-editor");
+  await expect(editor).toBeVisible();
+  const hint = editor.getByTestId("key-dates-hint");
+  expect(await onTop(hint, "key-dates-editor"), `${view}: the Key dates editor is on top of the chart`).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(editor).toBeHidden();
+  await page.getByTestId("needs-decision").click();
+  const tray = page.getByTestId("decision-tray");
+  await expect(tray).toBeVisible();
+  const heading = tray.getByRole("heading", { name: "Needs a decision" });
+  expect(await onTop(heading, "decision-tray"), `${view}: the Needs a decision tray is on top of the chart`).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(tray).toBeHidden();
 }
 
 for (const [device, use, phone] of [

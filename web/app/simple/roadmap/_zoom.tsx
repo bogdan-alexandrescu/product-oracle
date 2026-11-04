@@ -974,7 +974,7 @@ function QuarterList(props: TimelineProps) {
   const qs = quarters(days[0], days[days.length - 1]);
   const tq = qs.find((q) => q.start <= data.today && data.today <= q.end);
   return (
-    <div data-testid="timeline-list" className="isolate space-y-3">
+    <div data-testid="timeline-list" className="space-y-3">
       {qs.map((q) => {
         const items = data.items
           .filter(

@@ -1500,7 +1500,7 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
     : [];
   return (
     <div className="flex flex-col gap-3">
-      <div className="isolate rounded-[14px] border border-[var(--simple-rule)] bg-[var(--simple-paper)] p-3" data-testid="simple-chart" data-format="timeline" data-view="lanes-phone" data-lanes={lane}>
+      <div className="rounded-[14px] border border-[var(--simple-rule)] bg-[var(--simple-paper)] p-3" data-testid="simple-chart" data-format="timeline" data-view="lanes-phone" data-lanes={lane}>
         <div ref={box}>
           <svg ref={(el) => chartRef?.(el)} width={W} height={height} data-testid="chart-svg" className="block select-none" role="group" aria-label="Roadmap chart">
             <Defs />
