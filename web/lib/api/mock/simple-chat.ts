@@ -890,6 +890,15 @@ function clauses(text: string, skipped: string[] = []): Clause[] {
 /** ask-length-limit: the most a chat message holds (the API's ChatIn). */
 const CHAT_TEXT_MAX = 4000;
 
+/** ask-length-limit: ChatIn's 422 for an empty or too long text, shaped as FastAPI's. */
+const textRefused = (text: string) => ({
+  detail: [
+    text
+      ? { type: "string_too_long", loc: ["body", "text"], msg: `String should have at most ${CHAT_TEXT_MAX} characters`, input: text, ctx: { max_length: CHAT_TEXT_MAX } }
+      : { type: "string_too_short", loc: ["body", "text"], msg: "String should have at least 1 character", input: text, ctx: { min_length: 1 } },
+  ],
+});
+
 /** ask-length-limit: parts no chat change does yet, said as such with where they are changed (as chat.NOT_YET). */
 const NOT_YET: [RegExp, string, string, string][] = [
   [/\bgate\b/i, "I can't change an item that is off the gate but still in Now from a chat yet", "Roadmap", "/simple/roadmap"],
@@ -936,7 +945,7 @@ function readLine(db: SimpleDb, ctx: ChatCtx, r: NonNullable<StoredMessage["read
   const refusals: string[] = [];
   let last: Item | null = null;
   const documentId = r.document_id ?? null;
-  for (const c of cs) {
+  for (const c of cs.slice(0, 5)) {
     const build = mockReaderOps[c.op];
     let item: Item | null;
     if (ITEMLESS.has(c.op)) item = null;
@@ -962,11 +971,25 @@ function readLine(db: SimpleDb, ctx: ChatCtx, r: NonNullable<StoredMessage["read
   }
   const links: { label: string; href: string }[] = [];
   const said = unread(skipped, links);
+  if (cs.length > 5) said.push(unused(db, ctx, cs.slice(5), items, last, meeting, documentId));
   if (!drafts.length) return { kind: "note", body: [refusals.length ? `I can't do that here: ${refusals.join(" ")}` : SAY_AGAIN, ...said].join(" "), cards: [], links };
   const n = drafts.length;
   // The valid cards stay; the line says which ones it cannot do and what it did not read.
   const cant = refusals.length ? [`${["One", "Two", "Three"][refusals.length - 1] ?? refusals.length} I can't do: ${refusals.join(" ")}`] : [];
   return { kind: "cards", body: [...cant, ...said, `I understood ${n === 1 ? "one change" : n === 2 ? "two changes" : `${n} changes`}:`].join(" "), cards: drafts, links };
+}
+
+/** ask-length-limit: the changes past the fifth, each named, for the person to say again (as chat._unused). */
+function unused(db: SimpleDb, ctx: ChatCtx, cs: Clause[], items: Item[], last: Item | null, meeting: Meeting | null, documentId: string | null): string {
+  const names: string[] = [];
+  for (const c of cs) {
+    const build = mockReaderOps[c.op];
+    const hits = ITEMLESS.has(c.op) ? [] : /^(it|that)$/i.test(c.x.trim()) && last ? [last] : named(items, c.x);
+    if (!build || (!ITEMLESS.has(c.op) && hits.length !== 1)) continue;
+    const o = build({ db, ctx, item: hits[0] ?? null, months: c.months, period: c.period, rest: c.rest, meeting, documentId });
+    if ("card" in o && o.card.summary) names.push(`“${o.card.summary}”`);
+  }
+  return names.length ? `I did not use these changes yet; say them again: ${names.join("; ")}.` : "I read the first five changes; say the rest again.";
 }
 
 let readerWrote = false;
@@ -1871,7 +1894,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
   if (p[2] === "chat" && p[3] === "messages" && !p[4] && m === "POST") {
     const b = await body();
     const text = String(b.text ?? "").trim();
-    if (!text || text.length > CHAT_TEXT_MAX) return json(422, { detail: `text: 1 to ${CHAT_TEXT_MAX} characters` });
+    if (!text || text.length > CHAT_TEXT_MAX) return json(422, textRefused(text));
     // ask-fresh: continue the caller's own chat `chat_id`; `new_chat` starts a new one about the page.
     const own = typeof b.chat_id === "string" ? ownChat(chat, ctx, b.chat_id) : null;
     if (typeof b.chat_id === "string" && !own) return json(404, { detail: "No such chat" });
@@ -1916,7 +1939,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     }
     if (p[5] === "messages" && m === "POST") {
       const text = String((await body()).text ?? "").trim();
-      if (!text || text.length > CHAT_TEXT_MAX) return json(422, { detail: `text: 1 to ${CHAT_TEXT_MAX} characters` });
+      if (!text || text.length > CHAT_TEXT_MAX) return json(422, textRefused(text));
       const understood = say(db, chat, key, meeting, ctx, text);
       return json(200, { ...threadOut(db, chat, chat.threads[key], ctx, meeting), understood });
     }
