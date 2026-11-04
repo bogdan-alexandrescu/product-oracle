@@ -105,6 +105,14 @@ class Catalogue:
         return [a for a in self.actions.values() if has_role(role, a.needs)]  # type: ignore[arg-type]
 
 
+def _plain(summary: str) -> str:
+    """FastAPI's Title Case summary ("Create Entity") as a sentence ("Create entity")."""
+    words = summary.split()
+    if words and all(w[:1].isupper() for w in words):
+        return " ".join([words[0], *(w.lower() for w in words[1:])])
+    return summary
+
+
 def body_fields(op: tools.Operation) -> list[str]:
     """The top-level fields of the action's JSON body (``body``: the model fills them)."""
     schema = op.body_schema or {}
@@ -164,7 +172,7 @@ def catalogue(app: FastAPI) -> Catalogue:
             denied[op.operation_id] = why
             continue
         actions[op.tool_name] = Action(
-            name=op.tool_name, method=op.method, path=op.path, summary=op.summary,
+            name=op.tool_name, method=op.method, path=op.path, summary=_plain(op.summary),
             reads=op.method == "GET", needs=roles.get((op.method, op.path), "viewer"),
             params=tuple(p.name for p in op.params), body=op.body_media_type is not None,
             op=op,

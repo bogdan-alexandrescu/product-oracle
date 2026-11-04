@@ -177,6 +177,12 @@ async def test_dependency_removal_card_end_to_end_with_undo(client):
     assert r.status_code == 200, r.text
     assert r.json()["card"]["status"] == "applied"
     assert (await w.item("Bulk import")).depends_on == []
+    async with tenant_session(ctx.tenant_id) as s:
+        logged = await s.scalar(
+            select(AuditEvent).where(AuditEvent.action == "simple_chat.card_apply")
+        )
+    assert logged is not None and logged.data["via"] == "Ask Oracle"
+    assert logged.data["op"] == "set_depends_on"
     r = await client.post(f"{CARDS}/{card['id']}/undo", headers=ctx.as_("owner"))
     assert r.status_code == 200, r.text
     assert (await w.item("Bulk import")).depends_on == ["ledger-v2"]

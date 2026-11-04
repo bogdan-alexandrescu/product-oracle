@@ -2385,8 +2385,16 @@ async def apply(
                 )
             except getattr(meetings, "MeetingError", ()) as e:
                 raise ChatError(e.status, e.detail) from e
+    await _logged(db, principal, card)
     await db.commit()
     return await one(db, principal, card, rules), result
+
+
+async def _logged(db: AsyncSession, principal: Any, card: SimpleChatCard) -> None:
+    """ask-oracle-actions: an applied card is in the audit log as made via Ask Oracle."""
+    await audit.record(db, principal, "simple_chat.card_apply", "simple_chat_card", card.id,
+                       {"via": "Ask Oracle", "op": card.op, "summary": card.summary,
+                        "change_id": str(card.change_id) if card.change_id else None})  # fmt: skip
 
 
 async def rebase(db: AsyncSession, card_id: uuid.UUID, detail: Any) -> None:
@@ -2479,6 +2487,8 @@ async def _apply_direct(
     # An applier may leave the card proposed (a commenter's decision on the Ask panel).
     card.status = "proposed" if card.status == "proposed" else "applied"
     card.decided_by, card.decided_at = _me(principal), company_time.now()
+    if card.op != _api().OP:  # an API action logs its own (ask_actions.apply)
+        await _logged(db, principal, card)
     await db.commit()
     return await one(db, principal, card, rules), None
 
