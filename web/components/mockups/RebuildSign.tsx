@@ -423,13 +423,13 @@ function Note({ runs, onOpen }: { runs: Run[]; onOpen: () => void }) {
       case "failed":
         return `${x.failed.reason} at step ${x.step}. You still read v${x.from}.`;
       case "done":
-        return `v${x.to} is a draft until it is approved. You still read v${x.from}.`;
+        return `A draft until it is approved; everyone keeps seeing v${x.from} until then.`;
     }
   };
   const action = (x: Run) =>
     x.state === "done" ? (
       <button type="button" className="font-semibold text-accent-ink hover:underline" onClick={onOpen}>
-        Review v{x.to}
+        Open the draft
       </button>
     ) : (
       <Link href="/runs" className="font-semibold text-accent-ink hover:underline">
@@ -471,7 +471,7 @@ export function RebuildSign({ place, slug, kind = "prd", slot, version }: { plac
   const list = place === "list-row" || place === "home";
   if (slot === "inline") {
     // The four-PRD roadmap: its chip says how many of its PRDs rebuild, then names it.
-    const summary = kind === "roadmap" && rb.hard === "four" && rb.state === "running" ? `2 of 4 PRDs rebuilding · Product roadmap v8 after` : undefined;
+    const summary = kind === "roadmap" && rb.hard === "four" && rb.state === "running" ? `2 of 4 PRDs rebuilding · the roadmap updates after them` : undefined;
     if (p === "a") return <Chip runs={runs} compact={list} onOpen={rb.open} summary={summary} />;
     if (p === "c") return <Marker runs={runs} />;
     if (p === "b" && list) return <Marker runs={runs} />;
@@ -494,13 +494,14 @@ export function RebuildHome() {
           { slug: REBUILD_PRD, kind: "prd" as const, title: "Checkout redesign PRD", href: `/simple/one-pagers/${REBUILD_PRD}` },
           ...(rb.hard === "two" ? [] : [{ slug: REBUILD_ROADMAP, kind: "roadmap" as const, title: "Product roadmap", href: "/simple/roadmap" }]),
         ];
+  const heading = rb.state === "done" ? "New versions ready" : rb.state === "failed" ? "Rebuilds that stopped" : "Being rebuilt";
   if (rb.proposal === "b") {
     const runs = rb.hard === "four" ? runsFor(rb, REBUILD_ROADMAP, "roadmap") : rb.hard === "two" ? runsFor(rb, REBUILD_PRD, "prd") : rb.runs;
     return <Banner runs={runs} onOpen={rb.open} />;
   }
   return (
-    <section className="simple-card" aria-label="Being rebuilt" data-testid="rb-home">
-      <h2 className="simple-h2">Being rebuilt</h2>
+    <section className="simple-card" aria-label={heading} data-testid="rb-home">
+      <h2 className="simple-h2">{heading}</h2>
       <ul className="flex flex-col">
         {items.map((it) => (
           <li key={it.slug} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line py-2.5 last:border-b-0">
