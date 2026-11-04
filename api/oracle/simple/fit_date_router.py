@@ -24,6 +24,7 @@ from __future__ import annotations
 import datetime as dt
 import math
 import re
+import uuid
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -147,6 +148,25 @@ class FitGoalOut(BaseModel):
     approved: FitApprovalOut | None = None
 
 
+class FitBaselineGoalOut(BaseModel):
+    """The Baseline goal the milestone's gate counts toward (the milestone's first target's
+    goal, by name): what "Keep the date with a smaller goal" opens and saves through
+    ``PATCH /v1/baseline/entities/{id}``. ``plan_target``: the number the PRD's milestone
+    target names; ``smaller``: the goal's target is below it, so the answer counts the
+    goal's own work in the milestone in proportion (:func:`_scale`)."""
+
+    id: uuid.UUID
+    title: str
+    target: float | None = None
+    unit: str | None = None
+    comparison: str | None = None
+    start: float | None = None
+    due: dt.date | None = None
+    plan_target: float | None = None
+    smaller: bool = False
+    can_edit: bool = False
+
+
 class FitAnswerOut(FitGoalOut):
     changes: list[FitChangeOut]
     pick: list[str]
@@ -156,6 +176,8 @@ class FitAnswerOut(FitGoalOut):
     locked: list[FitLockedOut]
     # When no set reaches the target: what one more engineer would do.
     hire: FitHireOut | None = None
+    # None: no Baseline goal by the milestone goal's name (the panel says so, no button).
+    baseline_goal: FitBaselineGoalOut | None = None
 
 
 class FitPicksIn(BaseModel):
@@ -258,8 +280,12 @@ def _replans(text: str) -> list[str]:
     return out
 
 
-def build_plan(text: str, view: plan.View, milestone: str, today: dt.date) -> fd.Plan | None:
-    """The fit-date plan of a PRD's approved version: None when the milestone has no date."""
+def build_plan(
+    text: str, view: plan.View, milestone: str, today: dt.date, scale: float = 1.0
+) -> fd.Plan | None:
+    """The fit-date plan of a PRD's approved version: None when the milestone has no date.
+    ``scale`` (a smaller goal, :func:`_scale`): the asked milestone's own work for its goal,
+    unlocked items only, counts at that share of its size."""
     ms = view.milestone(milestone)
     if ms is None or ms.end_date is None:
         return None
@@ -280,6 +306,8 @@ def build_plan(text: str, view: plan.View, milestone: str, today: dt.date) -> fd
         kind, why = rules.get(sl.feature_code, ("", ""))
         guard = f"{kind.capitalize()}: {why}" if kind in ("guardrail", "safety") else None
         pw = sl.effort_weeks or 0
+        if scale < 1 and sl.milestone == milestone and sl.goal == asked_goal and not kind:
+            pw = round(pw * scale, 1)
         lever = _lever(sl, asked_goal)
         items.append(fd.Item(
             id=sl.code, title=sl.name, pw=pw, milestone=sl.milestone, guard=guard,
@@ -299,6 +327,13 @@ async def _approved(db, document: Document) -> DocumentVersion | None:
 
 
 async def _load(db, principal, prd: str, milestone: str):
+    document, v, view, p, _ = await _load_goal(db, principal, prd, milestone)
+    return document, v, view, p
+
+
+async def _load_goal(db, principal, prd: str, milestone: str):
+    """The PRD, its approved version, its plan view, the fit-date plan (counted against the
+    Baseline goal's target) and that Baseline goal (None when none is found)."""
     try:
         document = await one_pager._document(db, principal, prd)
     except ChangeError as e:
@@ -308,10 +343,74 @@ async def _load(db, principal, prd: str, milestone: str):
     if v is None or view is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "This PRD has no approved plan yet.")
     today = await company_time.company_today(db)
-    p = build_plan(v.markdown, view, milestone, today)
+    goal = await _baseline_goal(db, principal, view, milestone)
+    p = build_plan(v.markdown, view, milestone, today, _scale(goal))
     if p is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No dated milestone by that name.")
-    return document, v, view, p
+    return document, v, view, p, goal
+
+
+_NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
+
+
+def _float(x) -> float | None:
+    try:
+        f = float(x)
+    except (TypeError, ValueError):
+        return None
+    return f if math.isfinite(f) else None
+
+
+async def _baseline_goal(db, principal, view: plan.View, milestone: str):
+    """The Baseline goal the milestone's gate counts toward: the goal entity named as the
+    milestone's first target's goal (confirmed first, never a rejected one), as
+    :func:`oracle.simple.plan.enrich` matches goals."""
+    from oracle.authz import has_role
+    from oracle.baseline.models import Entity
+
+    ms = view.milestone(milestone)
+    t = ms.targets[0] if ms and ms.targets else None
+    if t is None or not t.goal:
+        return None
+    name = t.goal.strip().lower()
+    found = None
+    for e in await db.scalars(select(Entity).where(Entity.type == "goal")):
+        if (e.title or "").strip().lower() != name or e.status == "rejected":
+            continue
+        if found is None or e.status == "confirmed":
+            found = e
+    if found is None:
+        return None
+    attrs = found.attrs or {}
+    m = _NUMBER.search((t.target or "").replace(",", ""))
+    try:
+        due = dt.date.fromisoformat(attrs["due"]) if attrs.get("due") else None
+    except (TypeError, ValueError):
+        due = None
+    out = FitBaselineGoalOut(
+        id=found.id, title=found.title, target=_float(attrs.get("target")),
+        unit=attrs.get("unit"), comparison=attrs.get("comparison"),
+        start=_float(attrs.get("start")), due=due,
+        plan_target=float(m[0]) if m else None,
+        can_edit=has_role(principal.role, "approver"),
+    )  # fmt: skip
+    out.smaller = _scale(out) < 1
+    return out
+
+
+def _scale(goal: FitBaselineGoalOut | None) -> float:
+    """The share of the goal's own work a smaller goal still needs: the way from the start
+    value to the goal's target over the way to the PRD's milestone target (1: not smaller;
+    at least 0.1). Only a goal counted up (at least, above) shrinks this way."""
+    if goal is None or goal.target is None or goal.plan_target is None:
+        return 1.0
+    if goal.comparison not in ("at_least", "above"):
+        return 1.0
+    start = goal.start
+    base = start if start is not None and start < goal.plan_target else 0.0
+    if goal.target >= goal.plan_target or goal.plan_target <= base:
+        return 1.0
+    return max(0.1, min(1.0, (goal.target - base) / (goal.plan_target - base)))
 
 
 async def _roadmap(db, document: Document) -> tuple[SimpleDocRef | None, int | None]:
@@ -533,7 +632,7 @@ async def get_fit_date(
     prd: str, principal: Reader, db: TenantDB, milestone: Annotated[str, Query()]
 ) -> FitAnswerOut:
     """Oracle's ranked changes to bring the milestone in to its target."""
-    document, v, view, p = await _load(db, principal, prd, milestone)
+    document, v, view, p, goal = await _load_goal(db, principal, prd, milestone)
     a = fd.answer(p)
     return FitAnswerOut(
         **(await _goal_of(db, principal, document, v, view, p)).model_dump(),
@@ -547,7 +646,7 @@ async def get_fit_date(
         pick=list(a.pick), pick_date=a.pick_date, best_date=a.best_date, reachable=a.reachable,
         locked=[FitLockedOut(item=it.title, pw=it.pw, why=it.guard or "", would_reach=r)
                 for it, r in a.locked],
-        hire=None if a.reachable else _hire(p, a.best_date),
+        hire=None if a.reachable else _hire(p, a.best_date), baseline_goal=goal,
     )  # fmt: skip
 
 
