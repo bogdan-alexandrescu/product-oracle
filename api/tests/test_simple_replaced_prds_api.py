@@ -96,3 +96,33 @@ async def test_decisions_filter_and_questions_only_the_area_prds(client):
     waiting = await _get(client, ctx, "/v1/simple/decisions/waiting")
     assert waiting["questions"]
     assert {q["prd"]["title"] for q in waiting["questions"]} == AREAS
+
+
+async def test_one_pager_of_the_replaced_prd_names_only_the_prds_that_replaced_it(client):
+    """Fix round: GET /v1/simple/one-pagers/<replaced> (and its PDF and Remind) is a 404 whose
+    detail names the PRDs that replaced it, never the one-pager; theirs still read."""
+    ctx = await world(client)
+    r = await client.get("/v1/simple/one-pagers/trust-plan", headers=ctx.as_("owner"))
+    assert r.status_code == 404, r.text
+    detail = r.json()["detail"]
+    assert [p["slug"] for p in detail["replaced_by"]] == ["user-safety", "scale"]
+    assert [p["title"] for p in detail["replaced_by"]] == ["User Safety", "Scale"]
+    assert "blocks" not in r.text
+    r = await client.get("/v1/simple/one-pagers/trust-plan/pdf", headers=ctx.as_("owner"))
+    assert r.status_code == 404, r.text
+    r = await client.post("/v1/simple/one-pagers/trust-plan/remind", headers=ctx.as_("owner"))
+    assert r.status_code == 404, r.text
+    r = await client.get("/v1/simple/one-pagers/scale", headers=ctx.as_("owner"))
+    assert r.status_code != 404, r.text
+
+
+async def test_start_sheet_refuses_the_replaced_prd(client):
+    ctx = await world(client)
+    r = await client.get("/v1/simple/meetings/options?prd=trust-plan", headers=ctx.as_("owner"))
+    assert r.status_code == 404, r.text
+    assert [p["slug"] for p in r.json()["detail"]["replaced_by"]] == ["user-safety", "scale"]
+    r = await client.post("/v1/simple/meetings", headers=ctx.as_("owner"),
+                          json={"prd": "trust-plan", "attendee_ids": []})  # fmt: skip
+    assert r.status_code == 404, r.text
+    options = await _get(client, ctx, "/v1/simple/meetings/options?prd=scale")
+    assert [p["document"]["title"] for p in options["prds"]] == ["Scale"]
