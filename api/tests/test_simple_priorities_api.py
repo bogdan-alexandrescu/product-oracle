@@ -135,7 +135,8 @@ async def test_read_order_and_rows(client):
     assert rows["pay-3"]["after"] == {"code": "pay-2", "title": "Pay 2"}
     assert rows["pay-2"]["above_line"] is False and rows["pay-2"]["after"] is None
     ins = rows["insights"]
-    assert (ins["item_id"], ins["horizon"], ins["can_reorder"]) == (None, None, False)
+    assert (ins["item_id"], ins["horizon"], ins["can_reorder"]) == (None, None, True)
+    assert ins["on_roadmap"] is False
     assert ins["goal"] == {"key": "retention", "title": "Retention", "position": None}
     assert rows["pay-4"]["no_goal"] is True and rows["pay-4"]["goal"] is None
     widgets = rows["widgets"]
