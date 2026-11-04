@@ -39,6 +39,7 @@ export const ICONS = [
   "plus", "check", "x", "flag", "coin", "pause", "doc", "comment", "ask", "alert", "arrow", "back",
   "chevron-left", "chevron-right", "chevron-down", "chevron-up", "outline",
   "search", "clock", "user", "lock", "grip", "sun", "moon", "monitor", "signout", "folder", "link", "sources", "company",
+  "target",
 ] as const satisfies readonly IconName[];
 
 // Fails to compile when the kit gains an icon this page does not show.

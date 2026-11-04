@@ -128,6 +128,14 @@ const PATHS = {
       <path d="M4 21c1-4 4-6 8-6s7 2 8 6" />
     </>
   ),
+  // Simple's Goal map in the rail: a target.
+  target: (
+    <>
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="12" cy="12" r="0.8" />
+    </>
+  ),
   lock: (
     <>
       <rect x="5" y="11" width="14" height="9" rx="2" />
