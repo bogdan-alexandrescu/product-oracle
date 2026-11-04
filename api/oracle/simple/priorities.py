@@ -44,6 +44,7 @@ from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion
 from oracle.priorities import service as priorities
 from oracle.priorities.schemas import RankedFeature
+from oracle.roadmap import company
 from oracle.roadmap.models import HORIZONS, RoadmapItem
 from oracle.simple import changes, drafts, key_dates, service, targets
 from oracle.simple.models import SimpleChange
@@ -355,6 +356,8 @@ async def _shown_names(db: AsyncSession, key_of: dict[uuid.UUID, str]) -> dict[s
             )
         )
     )
+    # one-roadmap-many-prds: the company roadmap alone while there is one (the rest is history).
+    docs = await company.feeding_ids(db, docs)
     if not docs:
         return {}
     versions = (
