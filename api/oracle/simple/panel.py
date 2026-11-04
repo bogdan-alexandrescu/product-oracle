@@ -42,7 +42,7 @@ async def _written(db: AsyncSession, docs: set[uuid.UUID], ops: tuple[str, ...])
         await db.scalars(
             select(SimpleChange)
             .where(SimpleChange.document_id.in_(docs), SimpleChange.op.in_(ops))
-            .order_by(SimpleChange.at, SimpleChange.id)
+            .order_by(SimpleChange.at, SimpleChange.seq)
         )
     )
     undone = {r.undoes_id for r in rows if r.undoes_id is not None}
