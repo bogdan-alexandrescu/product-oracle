@@ -1,17 +1,26 @@
 # Frame review: mk-rebuildsign
 
-Each frame was read as rendered by a local Sonnet reviewer (one per screen: one-pager A, one-pager B/C, roadmap, list + detailed, home), then a second Sonnet pass re-read every frame the fixes touched (hard cases, mid-update, C notes, Home done). The fixes they asked for were made, recaptured, and the changed frames checked again by eye. Capture checks per frame: console errors 0, document width 1425 (desktop, scrollbar) or 390 (phone).
+Every frame was read as rendered by local Sonnet reviewers, one per screen (one-pager A, one-pager B/C, roadmap, list + detailed, home), then a second pass re-read every frame the fixes touched (hard cases, mid-update, C notes, Home landed), and a third read the 24 dark frames added last. Their findings were fixed, recaptured and checked again by eye. Capture checks per frame (capture-report.json): console errors 0, document width 1425 (desktop, beside its scrollbar) or 390 (phone).
 
 | frame | viewport | theme | console | width | verdict |
 |---|---|---|---|---|---|
 | a-one-pager-running-desktop-dark | desktop | dark | 0 | 1425 | ok |
+| a-list-running-desktop-dark | desktop | dark | 0 | 1425 | ok |
 | a-roadmap-running-desktop-dark | desktop | dark | 0 | 1425 | ok |
+| a-detailed-running-desktop-dark | desktop | dark | 0 | 1425 | ok |
+| a-home-running-desktop-dark | desktop | dark | 0 | 1425 | ok |
 | a-home-done-desktop-dark | desktop | dark | 0 | 1425 | ok |
 | b-one-pager-running-desktop-dark | desktop | dark | 0 | 1425 | ok |
+| b-list-running-desktop-dark | desktop | dark | 0 | 1425 | ok |
 | b-roadmap-running-desktop-dark | desktop | dark | 0 | 1425 | ok |
+| b-detailed-running-desktop-dark | desktop | dark | 0 | 1425 | ok |
+| b-home-running-desktop-dark | desktop | dark | 0 | 1425 | ok |
 | b-home-done-desktop-dark | desktop | dark | 0 | 1425 | ok |
 | c-one-pager-running-desktop-dark | desktop | dark | 0 | 1425 | ok |
+| c-list-running-desktop-dark | desktop | dark | 0 | 1425 | ok |
 | c-roadmap-running-desktop-dark | desktop | dark | 0 | 1425 | ok |
+| c-detailed-running-desktop-dark | desktop | dark | 0 | 1425 | ok |
+| c-home-running-desktop-dark | desktop | dark | 0 | 1425 | ok |
 | c-home-done-desktop-dark | desktop | dark | 0 | 1425 | ok |
 | a-one-pager-running-desktop-light | desktop | light | 0 | 1425 | ok |
 | a-list-running-desktop-light | desktop | light | 0 | 1425 | ok |
@@ -57,8 +66,23 @@ Each frame was read as rendered by a local Sonnet reviewer (one per screen: one-
 | c-one-pager-running-rbtick1-desktop-light | desktop | light | 0 | 1425 | ok |
 | c-one-pager-running-rbcasetwo-desktop-light | desktop | light | 0 | 1425 | ok |
 | c-roadmap-running-rbcasefour-desktop-light | desktop | light | 0 | 1425 | ok |
+| a-one-pager-running-phone-dark | phone | dark | 0 | 390 | ok |
+| a-list-running-phone-dark | phone | dark | 0 | 390 | ok |
+| a-roadmap-running-phone-dark | phone | dark | 0 | 390 | ok |
+| a-detailed-running-phone-dark | phone | dark | 0 | 390 | ok |
+| a-home-running-phone-dark | phone | dark | 0 | 390 | ok |
 | a-one-pager-waiting-phone-dark | phone | dark | 0 | 390 | ok |
+| b-one-pager-running-phone-dark | phone | dark | 0 | 390 | ok |
+| b-list-running-phone-dark | phone | dark | 0 | 390 | ok |
+| b-roadmap-running-phone-dark | phone | dark | 0 | 390 | ok |
+| b-detailed-running-phone-dark | phone | dark | 0 | 390 | ok |
+| b-home-running-phone-dark | phone | dark | 0 | 390 | ok |
 | b-one-pager-waiting-phone-dark | phone | dark | 0 | 390 | ok |
+| c-one-pager-running-phone-dark | phone | dark | 0 | 390 | ok |
+| c-list-running-phone-dark | phone | dark | 0 | 390 | ok |
+| c-roadmap-running-phone-dark | phone | dark | 0 | 390 | ok |
+| c-detailed-running-phone-dark | phone | dark | 0 | 390 | ok |
+| c-home-running-phone-dark | phone | dark | 0 | 390 | ok |
 | c-one-pager-waiting-phone-dark | phone | dark | 0 | 390 | ok |
 | a-one-pager-running-phone-light | phone | light | 0 | 390 | ok |
 | a-list-running-phone-light | phone | light | 0 | 390 | ok |
@@ -80,4 +104,4 @@ Each frame was read as rendered by a local Sonnet reviewer (one per screen: one-
 | c-home-running-phone-light | phone | light | 0 | 390 | ok |
 | c-one-pager-waiting-phone-light | phone | light | 0 | 390 | ok |
 
-Fixed after review: A's mid-update frame lacked its 'just now' tag; the four-PRD case did not name each document (A chip, C note); C's marker and note repeated 'New version coming' (the note now says the step); 'This page keeps showing' read wrong on Home; the Home card heading said 'Being rebuilt' for landed versions; scheduled and started times gained their zone (PDT).
+Fixed after review: A's mid-update frame lacked its 'just now' tag; the four-PRD case did not name each document (A chip, C note); C's marker and note repeated 'New version coming' (the note now says the step); 'This page keeps showing' read wrong on Home; the Home card heading said 'Being rebuilt' for landed versions; the four-PRD chip's 'v8 after' was a fragment; C's landed note repeated the marker; scheduled and started times gained their zone (PDT).
