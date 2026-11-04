@@ -21,6 +21,13 @@ Test cards (protects / fails_when / no_claim):
 - test_hard_case_says_what_an_engineer_does (review): protects=when no set reaches the
   target the answer says what one more engineer, counted after a 3-week start, does to the
   best date; fails_when=the hard case gives no reason more people do not help.
+- test_roadmap_waits_on_its_decider (review 2): protects=when the approver does not decide
+  the roadmap, the re-plan's roadmap draft is still submitted as its next version, in review
+  with its decider, and the answer says it is not live and who decides it;
+  fails_when=the draft is left unsubmitted or the version is called live.
+- test_approve_refuses_a_foreign_draft_edit (review 2): protects=approving never publishes
+  someone else's unsubmitted edits in the roadmap's working draft: it refuses, naming them,
+  and nothing is written; fails_when=the PRD or the roadmap gets a new version.
 - test_draft_claims_no_run (review): protects=the draft, computed from the capacity queue,
   claims no run time or cost; fails_when=a fixed "40 seconds, $0.20" is sent.
 """
@@ -28,10 +35,13 @@ Test cards (protects / fails_when / no_claim):
 import re
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from oracle.docs.models import Document, DocumentVersion
+from oracle.auth.models import User
 from oracle.roadmap.models import RoadmapItem
+from oracle.simple import drafts
+from oracle.simple.models import SimpleDraft
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
 from tests.test_simple_plan_api import FIXTURE, clock, seed  # noqa: F401
@@ -169,3 +179,63 @@ async def test_hard_case_says_what_an_engineer_does(client):
     assert hire["start_weeks"] == 3
     assert hire["date"] <= a["best_date"]
     assert hire["reaches"] is (hire["date"] <= a["target"])
+
+
+async def test_roadmap_waits_on_its_decider(client):
+    ctx = await make_ctx()
+    await seed(ctx, BODY, items=("f-06", "f-03"))
+    async with tenant_session(ctx.tenant_id) as s:
+        (await s.get(User, ctx.users["decider"].id)).name = "Dana Decider"
+        await s.commit()
+    h = ctx.as_("approver")
+    picks = {"milestone": "M2", "picks": ["F-03b", "F-06", "focus"]}
+    r = await client.post(f"{URL}/approve", json=picks, headers=h)
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["roadmap_version"] == 2 and out["roadmap_live"] is False
+    assert out["roadmap_decider"] == "Dana Decider"
+    async with tenant_session(ctx.tenant_id) as s:
+        rm = await s.scalar(select(Document).where(Document.slug == "setup-roadmap"))
+        d = await s.scalar(select(SimpleDraft).where(SimpleDraft.document_id == rm.id))
+        assert d.status == "submitted"
+        v2 = await s.get(DocumentVersion, d.version_id)
+        assert v2.number == 2 and v2.approved_at is None
+    a = (await client.get(URL, params={"milestone": "M2"}, headers=h)).json()
+    assert a["approved"]["roadmap_version"] == 2
+    assert a["approved"]["roadmap_live"] is False
+    assert a["approved"]["roadmap_decider"] == "Dana Decider"
+
+
+async def test_approve_refuses_a_foreign_draft_edit(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx, BODY, items=("f-06", "f-03"))
+    async with tenant_session(ctx.tenant_id) as s:
+        rm = await s.scalar(select(Document).where(Document.slug == "setup-roadmap"))
+        v1 = await s.scalar(select(DocumentVersion).where(DocumentVersion.document_id == rm.id))
+        other = RoadmapItem(roadmap_document_id=rm.id, roadmap_version_id=v1.id,
+                            item_key="help-centre", title="Help centre", horizon="next",
+                            position=9)  # fmt: skip
+        s.add(other)
+        rae = User(email="rae@example.com", name="Rae Example", password_hash="x", role="owner")
+        s.add(rae)
+        await s.flush()
+        changed = drafts.overlaid(other, drafts.snapshot(other))
+        changed.title = "Help centre, renamed"
+        s.add(SimpleDraft(document_id=rm.id, base_version_id=v1.id, status="working",
+                          overlay={str(other.id): drafts.snapshot(changed)},
+                          created_by=rae.id, participant_ids=[rae.id]))  # fmt: skip
+        await s.commit()
+    picks = {"milestone": "M2", "picks": ["F-03b", "F-06", "focus"]}
+    r = await client.post(f"{URL}/approve", json=picks, headers=ctx.as_("decider"))
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == (
+        "Rae Example has unsaved changes in this roadmap's draft; "
+        "ask them to submit or discard first."
+    )
+    async with tenant_session(ctx.tenant_id) as s:
+        n_prd = await s.scalar(select(func.count()).select_from(DocumentVersion).where(
+            DocumentVersion.document_id == ids["prd"]))  # fmt: skip
+        n_rm = await s.scalar(select(func.count()).select_from(DocumentVersion).where(
+            DocumentVersion.document_id == rm.id))  # fmt: skip
+        d = await s.scalar(select(SimpleDraft).where(SimpleDraft.document_id == rm.id))
+    assert (n_prd, n_rm) == (1, 1) and d.status == "working"
