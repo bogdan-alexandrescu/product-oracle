@@ -413,17 +413,22 @@ def _reopen(s: SimpleGoalSuggestion | None) -> None:
         )
 
 
-async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> SimpleChangeResult:
+async def create(
+    db: AsyncSession, principal: Any, body: SimpleChangeIn, agenda: Any = None
+) -> SimpleChangeResult:
+    """``agenda``: the meeting's it is made in (oracle.simple.agenda): an item added to a
+    roadmap the meeting does not review is a proposal for that roadmap's people."""
     me, now = changes._me(principal), company_time.now()
     if not has_role(principal.role, "commenter"):
         raise ChangeError(403, "Viewers read the roadmap; commenters and up add to it")
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     doc, target, after = await _plan(db, principal, body, read_)
     w = await drafts.who(db, {doc.id})
-    applies = drafts.can_edit(principal, doc.id, w)
+    off = agenda is not None and not agenda.covers_document(doc.id)
+    applies = not off and drafts.can_edit(principal, doc.id, w)
     session = await changes._session_for_change(db, me, body.session_id, applies, now)
     c = SimpleChange(
-        session_id=session.id if session else None,
+        session_id=session.id if session else (agenda.session_id if off else None),
         document_id=doc.id,
         op="add_item",
         target=target,

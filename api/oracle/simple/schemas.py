@@ -614,6 +614,13 @@ class SimpleTaskWaiting(SimpleItemTask):
     late: bool = False
 
 
+class SimpleChangeMeeting(BaseModel):
+    """meeting-changes-only-its-agenda: the meeting a change was made in."""
+
+    id: uuid.UUID
+    title: str
+
+
 class SimpleChangeOut(BaseModel):
     id: uuid.UUID
     session_id: uuid.UUID | None
@@ -643,6 +650,11 @@ class SimpleChangeOut(BaseModel):
     # The walk (H2): the change in plain words, as Home's "Since your last visit" says it:
     # "Ana changed the estimate of F-08 Billing page · undone" (oracle.simple.change_words).
     words: str | None = None
+    # meeting-changes-only-its-agenda: the meeting it was made in, and whether it is on an
+    # item that meeting does not review (so a proposal for the item's owner, never applied
+    # by the meeting): "Asked for by the meeting Payments review".
+    from_meeting: SimpleChangeMeeting | None = None
+    off_agenda: bool = False
 
 
 class SimpleItemFlags(BaseModel):
@@ -685,6 +697,8 @@ class InboxSimpleChange(BaseModel):
     reason: str | None
     decision_reason: str | None
     state: Literal["new", "open", "done"]
+    # meeting-changes-only-its-agenda: the meeting that asked for it.
+    from_meeting: SimpleChangeMeeting | None = None
 
 
 DraftStatus = Literal["working", "submitted", "approved", "discarded"]

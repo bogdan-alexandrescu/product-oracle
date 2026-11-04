@@ -57,7 +57,7 @@ async def with_roadmap_b(w: World) -> str:
 
 async def cut_flag(w: World, key: str) -> bool:
     async with tenant_session(w.ctx.tenant_id) as s:
-        from oracle.simple.models import RoadmapItem
+        from oracle.roadmap.models import RoadmapItem
 
         return bool((await drafts.effective_row(s, await s.get(RoadmapItem, w.ids[key]))).cut)
 
