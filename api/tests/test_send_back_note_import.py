@@ -44,7 +44,7 @@ def test_note_answers_parse_and_a_bad_resolution_is_dropped():
     assert parsed.note_resolutions[1].note == "The launch date stays, as the brief says"
     assert len(parsed.dropped_resolutions) == 1
     assert "resolution #3" in parsed.dropped_resolutions[0]
-    assert "feedback item" in parsed.dropped_resolutions[0]
+    assert "not a feedback id" in parsed.dropped_resolutions[0]
 
 
 def test_the_production_note_answers_without_a_kind_parse():

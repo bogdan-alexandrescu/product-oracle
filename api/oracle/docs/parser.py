@@ -274,6 +274,9 @@ class ParsedDraft:
     # malformed resolution was dropped: a resolution never refuses the draft (Nov 3).
     note_resolutions: list[NoteResolution] = field(default_factory=list)
     dropped_resolutions: list[str] = field(default_factory=list)
+    # Each of ``resolutions``' place in the front matter's list (1-based), for a warning
+    # that names one.
+    resolution_numbers: list[int] = field(default_factory=list)
 
 
 def sha256(text: str) -> str:
@@ -542,16 +545,17 @@ def _is_note_answer(item: Any) -> bool:
 def _dropped(i: int, exc: ValidationError) -> str:
     fields = sorted({".".join(map(str, e["loc"])) for e in exc.errors()})
     if "feedback_id" in fields:
-        return f"resolution #{i + 1} was dropped: its feedback_id names no feedback item"
+        return f"resolution #{i + 1} was dropped: its feedback_id is missing or not a feedback id"
     return f"resolution #{i + 1} was dropped: {', '.join(fields) or 'it'} is not valid"
 
 
 def _parse_resolutions(
-    raw: Any, dropped: list[str]
+    raw: Any, dropped: list[str], numbers: list[int]
 ) -> tuple[list[Resolution], list[NoteResolution]]:
-    """The draft's resolutions: those that close feedback items, and those that answer a
-    send-back's note. A malformed one is dropped with why in ``dropped``, never a problem:
-    the draft's content is still imported (Nov 3)."""
+    """The draft's resolutions: those that close feedback items (each one's place in the
+    list in ``numbers``), and those that answer a send-back's note. A malformed one is
+    dropped with why in ``dropped``, never a problem: the draft's content is still
+    imported (Nov 3)."""
     if raw is None:
         return [], []
     if not isinstance(raw, list):
@@ -566,6 +570,7 @@ def _parse_resolutions(
                 notes.append(NoteResolution.model_validate(item))
             else:
                 resolutions.append(Resolution.model_validate(item))
+                numbers.append(i + 1)
         except ValidationError as exc:
             dropped.append(_dropped(i, exc))
     return resolutions, notes
@@ -757,7 +762,8 @@ def _parse_draft(markdown: str) -> ParsedDraft:
     fm = _parse_front_matter(yaml_text, problems)
     citations = _parse_citations(fm.get("citations"), problems)
     dropped: list[str] = []
-    resolutions, note_resolutions = _parse_resolutions(fm.get("resolutions"), dropped)
+    numbers: list[int] = []
+    resolutions, note_resolutions = _parse_resolutions(fm.get("resolutions"), dropped, numbers)
     sections = _parse_sections(body, offset, problems)
     _check_citations(sections, citations, problems)
     for code, message, key in layers.brief_problems(
@@ -794,6 +800,7 @@ def _parse_draft(markdown: str) -> ParsedDraft:
         brief=layers.marked_brief(fm),
         note_resolutions=note_resolutions,
         dropped_resolutions=dropped,
+        resolution_numbers=numbers,
     )
 
 

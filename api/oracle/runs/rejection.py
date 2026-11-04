@@ -53,8 +53,8 @@ _PHRASES: dict[str, tuple[str, str]] = {
     ),
     # Refused before Nov 3 (a resolution is now dropped with a warning instead).
     "invalid_resolution": (
-        "1 resolution names no feedback item",
-        "{n} resolutions name no feedback item",
+        "1 resolution isn't valid",
+        "{n} resolutions aren't valid",
     ),
     "unknown_feedback_item": (
         "1 resolution names a feedback item the document doesn't have",

@@ -108,7 +108,8 @@ Rules:
   note and `addressed_in_version`. An entry with no `feedback_id` (`kind: note`, or an
   `id` such as `note-1`) answers a point of a send-back's note: it is kept with the
   version and noted in a `note_answered` warning, and closes no feedback item. A malformed
-  entry never refuses the draft: it is dropped with a `resolution_dropped` warning.
+  entry, or one whose `feedback_id` names no feedback item of the document, never
+  refuses the draft: it is dropped with a `resolution_dropped` warning.
 - If a section that was **approved** in the previous version changes, the import
   succeeds but the version carries a `locked_section_changed` warning listing ids.
 - Brief layer (O1f, see `docs/brief-and-full.md`): the sections named in `brief`, else

@@ -10083,7 +10083,7 @@ def _cannot_approve(cp: Checkpoint) -> str | None:
 
 def not_imported(imp: dict[str, Any]) -> str:
     """The stop's refusal of a draft not imported, naming what is wrong with it in plain
-    words (Nov 3): "the draft was not imported: 1 resolution names no feedback item;
+    words (Nov 3): "the draft was not imported: 1 resolution isn't valid;
     retry import, or send it back to the writer"."""
     problems = []
     for raw in imp.get("problems") or []:
