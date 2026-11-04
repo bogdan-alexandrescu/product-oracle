@@ -251,9 +251,10 @@ class Answer:
 
 
 def answer(plan: Plan) -> Answer:
-    """Oracle's answer: each change measured alone against today's plan, ranked by days saved
-    for the least harm (must-include last), Oracle's pick ticked, the best reachable date and
-    the locked items with whether cutting one would have reached the target."""
+    """Oracle's answer: each change measured alone against today's plan, ranked strictly by
+    days saved for the least harm (a must-include item too, by its days, never pickable),
+    Oracle's pick ticked, the best reachable date and the locked items with whether cutting
+    one would have reached the target."""
     base = schedule(plan)
     today = base.milestones[plan.milestone]
     measured: list[Change] = []
@@ -279,7 +280,7 @@ def answer(plan: Plan) -> Answer:
         )
         days = (today - after.milestones[plan.milestone]).days
         measured.append(replace(c, days=days, pw_saved=_pw_saved(plan, after_plan), moves=moves))
-    ranked = sorted(measured, key=lambda c: (not c.pickable, -c.days, HARM[c.cost_kind], c.item))
+    ranked = sorted(measured, key=lambda c: (-c.days, HARM[c.cost_kind], c.item))
     pickable = [c.id for c in ranked if c.pickable and c.days > 0]
     best = date_of(plan, pickable)
     reachable = best <= plan.target
