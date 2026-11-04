@@ -170,6 +170,67 @@ test.describe("one feature panel, desktop", () => {
     await expect(panel).toBeVisible();
     await expect(panel.getByTestId("fp-details")).toBeVisible();
   });
+
+  test("Priorities' Goal buckets opens the same panel from a feature's name", async ({ page }) => {
+    await go(page, "/simple/priorities");
+    await page.getByRole("tab", { name: "Goal buckets" }).click();
+    const name = page.getByTestId("bucket-features").locator("button[data-feature]").first();
+    await expect(name).toBeVisible();
+    const title = (await name.innerText()).trim();
+    await name.click();
+    const panel = page.getByRole("dialog", { name: title });
+    await expect(panel).toBeVisible();
+    await expect(panel.getByTestId("fp-start")).toBeVisible();
+  });
+
+  /*
+   * build-feature-panel review: Priorities passes the roadmap item id (not its title) to open
+   * the panel, so two features with the same title would not open each other's. "New plan
+   * tiers" (price-tiers, on the approvers-only pricing roadmap) ranks for a viewer with no
+   * item id (simple-priorities.ts: "mine" is false); opening it finds no roadmap item the
+   * viewer can read, so it toasts instead of silently doing nothing.
+   */
+  test("Priorities names a feature the role cannot read; opening it toasts instead of opening nothing", async ({ page }) => {
+    await go(page, "/simple/priorities", { email: "viewer@example.com" });
+    const row = page.locator('[data-testid="prio-row"][data-code="price-tiers"]');
+    await expect(row).toBeVisible();
+    await row.getByTestId("prio-title").locator("button[data-feature]").click();
+    await expect(page.getByRole("status").filter({ hasText: "This feature is not on a roadmap yet, so it has no panel." })).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+  });
+
+  test("Roadmap's Now / Next / Later opens the same panel from a feature's card", async ({ page }) => {
+    await go(page, "/simple/roadmap");
+    await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+    await page.getByTestId("format-board").click();
+    await page.locator('[data-testid="board-card"][data-item="alert-digest"]').click();
+    const panel = page.getByTestId("floating-card");
+    await expect(panel).toBeVisible();
+    await expect(panel).toHaveAccessibleName("Weekly alert digest");
+    await expect(panel.getByTestId("fp-start")).toBeVisible();
+  });
+
+  test("Roadmap's Waterfall opens the same panel from a feature's bar", async ({ page }) => {
+    await go(page, "/simple/roadmap");
+    await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+    await page.getByTestId("format-waterfall").click();
+    await page.locator('g[data-testid="bar"][data-item="alert-digest"]').click();
+    const panel = page.getByTestId("floating-card");
+    await expect(panel).toBeVisible();
+    await expect(panel).toHaveAccessibleName("Weekly alert digest");
+    await expect(panel.getByTestId("fp-start")).toBeVisible();
+  });
+
+  test("Roadmap's Gantt opens the same panel from a feature's bar", async ({ page }) => {
+    await go(page, "/simple/roadmap");
+    await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+    await page.getByTestId("format-gantt").click();
+    await page.locator('g[data-testid="bar"][data-item="alert-digest"]').click();
+    const panel = page.getByTestId("floating-card");
+    await expect(panel).toBeVisible();
+    await expect(panel).toHaveAccessibleName("Weekly alert digest");
+    await expect(panel.getByTestId("fp-start")).toBeVisible();
+  });
 });
 
 test.describe("one feature panel, Meetings", () => {
