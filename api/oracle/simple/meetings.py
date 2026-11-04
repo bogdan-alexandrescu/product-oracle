@@ -365,6 +365,12 @@ def _defaults(w: PrdWho, me: uuid.UUID | None) -> list[uuid.UUID]:
 # --------------------------------------------------------------------------- start
 
 
+def _current() -> Any:
+    """Not a PRD marked replaced (simple-replaced-prds): Simple offers only the PRDs that
+    replaced it; the replaced one is history, read in Detailed."""
+    return Document.replaced_by == []
+
+
 async def options(
     db: AsyncSession, principal: Any, prd: str | None, occurrence: uuid.UUID | None
 ) -> SimpleStartOptions:
@@ -378,7 +384,7 @@ async def options(
             d
             for d in await db.scalars(
                 select(Document)
-                .where(Document.kind == "prd", Document.deleted_at.is_(None))
+                .where(Document.kind == "prd", Document.deleted_at.is_(None), _current())
                 .order_by(Document.title)
             )
             if await _readable(db, principal, d)
@@ -2359,7 +2365,8 @@ async def decisions_page(
 
     ms = list(await db.scalars(select(SimpleMeeting).order_by(SimpleMeeting.started_at.desc())))
     docs = {d.id: d for d in await db.scalars(
-        select(Document).where(Document.kind == "prd", Document.deleted_at.is_(None)))}  # fmt: skip
+        select(Document).where(Document.kind == "prd", Document.deleted_at.is_(None),
+                               _current()))}  # fmt: skip
     readable = {i for i, d in docs.items() if await _readable(db, principal, d)}
     ms = [m for m in ms if m.prd_document_id in readable]
     await _settle(db, ms)

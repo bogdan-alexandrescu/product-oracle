@@ -12877,6 +12877,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/one-pagers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Simple One Pagers
+         * @description The PRDs Simple lists (One-pagers, Home), newest first, as GET /v1/documents?kind=prd
+         *     has them but without a PRD marked replaced (simple-replaced-prds): Simple shows the PRDs
+         *     that replaced it; Detailed keeps it as history.
+         */
+        get: operations["list_simple_one_pagers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/one-pagers/{doc}": {
         parameters: {
             query?: never;
@@ -71678,6 +71700,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_simple_one_pagers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSummary"][];
                 };
             };
         };

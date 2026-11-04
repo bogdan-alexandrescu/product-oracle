@@ -511,7 +511,9 @@ async def _readable(db: AsyncSession, principal: Any) -> set[uuid.UUID]:
     from oracle.simple import meetings
 
     docs = await db.scalars(
-        select(Document).where(Document.kind == "prd", Document.deleted_at.is_(None))
+        select(Document).where(
+            Document.kind == "prd", Document.deleted_at.is_(None), meetings._current()
+        )
     )
     return {d.id for d in docs if await meetings._readable(db, principal, d)}
 
