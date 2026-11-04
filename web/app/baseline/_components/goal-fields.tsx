@@ -356,7 +356,7 @@ export function GoalFields({
   problems: GoalProblem[];
   /** The company's horizons, from the goal's goal_check. */
   horizons?: PlanningHorizons | null;
-  /** Only the target and its due date, the target's value focused (Simple's "Keep the date with a smaller goal"). */
+  /** Only the target and its due date, the target's value focused when it mounts (Simple's "Keep the date with a smaller goal"). */
   targetOnly?: boolean;
 }) {
   const set = (patch: Partial<GoalDraft>) => onChange({ ...draft, ...patch });
@@ -384,7 +384,7 @@ export function GoalFields({
         </label>
         <label className={LABEL}>
           Value
-          <input className={INPUT} inputMode="decimal" value={draft.target} data-autofocus={targetOnly || undefined} onChange={(e) => set({ target: e.target.value })} />
+          <input className={INPUT} inputMode="decimal" value={draft.target} autoFocus={targetOnly} onChange={(e) => set({ target: e.target.value })} />
         </label>
         <label className={LABEL}>
           Unit
