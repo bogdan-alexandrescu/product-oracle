@@ -4,12 +4,120 @@ import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 
 import type { Schemas } from "@/lib/api/client";
+import { pageNameOnly } from "@/lib/page-context";
 
 /**
  * What is on screen, for the head-of-product panel (G7, 3.3): a discussion subject and its
  * label. A page that says nothing is `{kind: "screen", subject: {path}}`, labelled by its page.
  */
-export type ScreenSubject = { kind: Schemas["DiscussionCreate"]["subject_kind"]; subject: Record<string, unknown>; label: string };
+export type ScreenSubject = {
+  kind: Schemas["DiscussionCreate"]["subject_kind"];
+  subject: Record<string, unknown>;
+  label: string;
+  /** ask-page-context: what "This page" sends of what the page shows (subjectWithView). */
+  view?: PageView | "shown";
+};
+
+/**
+ * ask-page-context: what the open page shows, sent with a "This page" chat's subject (the API
+ * reads it in that private chat only): the page's name, the filters in use and its main
+ * content as lines. A page with a provider of its own says it (usePageView, lib/page-context.ts);
+ * any other page sends its main region's shown text (`"shown"`, read as the chat starts).
+ */
+export type PageView = { name?: string; filters?: string[]; lines: string[] };
+
+/** The API's limits (oracle.discussions.service.PageView). */
+const VIEW_LINES = 300;
+const VIEW_LINE_CHARS = 1000;
+const VIEW_CHARS = 16_000;
+
+
+const clip = (t: string, n: number) => (t.length > n ? `${t.slice(0, n - 1)}…` : t);
+
+/** The view within the API's limits. */
+function bounded(v: PageView): PageView {
+  const lines: string[] = [];
+  let size = 0;
+  for (const raw of v.lines) {
+    const line = clip(raw.replace(/\s+/g, " ").trim(), VIEW_LINE_CHARS);
+    if (!line) continue;
+    if (lines.length >= VIEW_LINES || size + line.length > VIEW_CHARS) break;
+    lines.push(line);
+    size += line.length + 1;
+  }
+  return {
+    ...(v.name ? { name: clip(v.name, 200) } : {}),
+    ...(v.filters?.length ? { filters: v.filters.slice(0, 20).map((f) => clip(f, 200)) } : {}),
+    lines,
+  };
+}
+
+const shownText = (el: HTMLElement) => el.innerText.replace(/\s+/g, " ").trim();
+const isShown = (el: Element) => el.getClientRects().length > 0;
+
+/**
+ * A table's rows, one line each, with their columns' names ("Document: Checkout · Status:
+ * Draft"): the same whatever the layout (on a phone the header is for screen readers only and
+ * each row wraps its cells onto lines of their own).
+ */
+function tableLines(table: HTMLTableElement): string[] {
+  const head = table.tHead?.rows[0];
+  // As shown: a phone's header is for screen readers only, but still drawn (a 1 px box).
+  const names = head ? Array.from(head.cells, shownText) : [];
+  const out: string[] = [];
+  for (const body of Array.from(table.tBodies)) {
+    for (const row of Array.from(body.rows)) {
+      if (!isShown(row) || row.getAttribute("aria-hidden") === "true") continue;
+      const cells = Array.from(row.cells).map((cell, i) => {
+        if (!isShown(cell)) return "";
+        const name = row.cells.length === names.length ? names[i] : "";
+        // A phone shows a cell's own label before its value: the column's name says it once.
+        const shown = shownText(cell);
+        const rest = name && shown.startsWith(name) ? shown.slice(name.length) : "";
+        const text = /^[\s\dA-Z]/.test(rest) ? rest.trim() : shown;
+        return text && name ? `${name}: ${text}` : text;
+      });
+      const line = cells.filter(Boolean).join(" · ");
+      if (line) out.push(line);
+    }
+  }
+  return out;
+}
+
+/** An element's shown text as lines, a table's rows as tableLines. */
+function shownLines(el: HTMLElement, out: string[]) {
+  if (!isShown(el)) return;
+  if (el instanceof HTMLTableElement) {
+    out.push(...tableLines(el));
+    return;
+  }
+  if (!el.querySelector("table")) {
+    out.push(...el.innerText.split("\n"));
+    return;
+  }
+  for (const node of Array.from(el.childNodes)) {
+    if (node instanceof HTMLElement) shownLines(node, out);
+    else if (node.nodeType === Node.TEXT_NODE) out.push(node.textContent ?? "");
+  }
+}
+
+/**
+ * The shown page's main content, as text: the app's one <main>, whose hidden routes (Next keeps
+ * recent ones mounted, `hidden`) have no shown text. The panel and its sheet are outside it.
+ */
+export function readShownPage(name: string): PageView {
+  const main = typeof document === "undefined" ? null : document.querySelector("main");
+  const raw: string[] = [];
+  if (main instanceof HTMLElement) shownLines(main, raw);
+  const lines = raw.map((l) => l.trim()).filter((l, i, all) => l && l !== all[i - 1]);
+  return bounded({ name, lines });
+}
+
+/** The subject a "This page" chat starts on: with what the page shows (ask-page-context). */
+export function subjectWithView(s: ScreenSubject): Record<string, unknown> {
+  if (!s.view) return s.subject;
+  return { ...s.subject, view: s.view === "shown" ? readShownPage(s.label) : bounded({ ...s.view, name: s.view.name ?? s.label }) };
+}
 
 /** The panel's General chat (G7 3.1). */
 export const GENERAL: ScreenSubject = { kind: "screen", subject: { path: "/" }, label: "General" };
@@ -81,12 +189,48 @@ export function subjectKey(s: ScreenSubject): string | null {
 }
 
 type Held = { path: string; value: ScreenSubject } | null;
-const Ctx = createContext<{ set: Held; put: Dispatch<SetStateAction<Held>> } | null>(null);
+type HeldView = { path: string; value: PageView } | null;
+type HeldName = { path: string; value: string } | null;
+const Ctx = createContext<{
+  set: Held;
+  put: Dispatch<SetStateAction<Held>>;
+  view: HeldView;
+  putView: Dispatch<SetStateAction<HeldView>>;
+  name: HeldName;
+  putName: Dispatch<SetStateAction<HeldName>>;
+} | null>(null);
 
 export function ScreenSubjectProvider({ children }: { children: ReactNode }) {
   const [set, put] = useState<Held>(null);
-  const value = useMemo(() => ({ set, put }), [set]);
+  const [view, putView] = useState<HeldView>(null);
+  const [name, putName] = useState<HeldName>(null);
+  const value = useMemo(() => ({ set, put, view, putView, name, putName }), [set, view, name]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+/** Holds a value for the open path while the calling page is mounted (a hidden route never clears the next page's). */
+function useHeld<T>(put: Dispatch<SetStateAction<{ path: string; value: T } | null>> | undefined, value: T | null) {
+  const pathname = usePathname();
+  const key = value == null ? null : JSON.stringify(value);
+  useEffect(() => {
+    if (!put || key == null) return;
+    const mine = { path: pathname, value: JSON.parse(key) as T };
+    put(mine);
+    return () => put((now) => (now === mine ? null : now));
+  }, [put, key, pathname]);
+}
+
+/**
+ * ask-page-context: a page says what it shows, for "This page" (its items, the filters in use),
+ * when its main region's text would say less (lib/page-context.ts lists every route's provider).
+ */
+export function usePageView(view: PageView | null) {
+  useHeld(useContext(Ctx)?.putView, view);
+}
+
+/** The shell's name for the open page, from its heading ("Dates · Plan"): what "This page" is titled. */
+export function useShownPageName(name: string | null) {
+  useHeld(useContext(Ctx)?.putName, name || null);
 }
 
 /**
@@ -109,10 +253,29 @@ export function useScreenSubject(subject: Pick<ScreenSubject, "kind" | "subject"
   }, [put, key, pathname]);
 }
 
-/** What is on screen now: the page's subject, else its `screen` subject. */
+/**
+ * A Detailed page's own name for "This page" (ask-page-context): the shell's, read from its
+ * heading, where the path alone names only its section ("Runs" for a run's review); Simple's
+ * pages and a section's own page keep their names (pageName).
+ */
+function screenLabel(path: string, shown: string | null): string {
+  const name = pageName(path);
+  const parts = path.split("?")[0].split("/").filter(Boolean);
+  if (!shown || parts[0] === "simple" || parts.length < 2 || name.includes(" · ")) return name;
+  return shown;
+}
+
+/** What is on screen now: the page's subject, else its `screen` subject; with what the page shows. */
 export function useCurrentScreenSubject(): ScreenSubject {
   const ctx = useContext(Ctx);
   const pathname = usePathname();
-  if (ctx?.set && ctx.set.path === pathname) return ctx.set.value;
-  return { kind: "screen", subject: { path: pathname }, label: pageName(pathname) };
+  const held = ctx?.view && ctx.view.path === pathname ? ctx.view.value : null;
+  const shown = ctx?.name && ctx.name.path === pathname ? ctx.name.value : null;
+  const own = ctx?.set && ctx.set.path === pathname ? ctx.set.value : null;
+  // One object while nothing changes: callers keep it in their hooks' dependencies.
+  return useMemo(() => {
+    const view: ScreenSubject["view"] = held ?? (pageNameOnly(pathname) ? undefined : "shown");
+    const base: ScreenSubject = own ?? { kind: "screen", subject: { path: pathname }, label: screenLabel(pathname, shown) };
+    return view ? { ...base, view } : base;
+  }, [own, held, shown, pathname]);
 }
