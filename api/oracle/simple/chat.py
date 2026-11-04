@@ -2310,7 +2310,9 @@ async def apply(
                 raise ChatError(409, f"This card is {c.status if c else 'gone'} already")
             c.status = "applied"
             await db.flush()
-        return await changes.create(db, principal, body, getattr(rules, "meeting_id", None))
+        # The meeting's session closed: still only what the meeting reviews changes.
+        later = {"meeting_id": rules.meeting_id} if body.session_id is None and rules else {}
+        return await changes.create(db, principal, body, **later)
 
     try:
         result = await make()
