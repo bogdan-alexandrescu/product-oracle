@@ -84,6 +84,7 @@ from oracle.simple.additions_router import router as simple_additions_router
 from oracle.simple.changes_router import router as simple_changes_router
 from oracle.simple.chat_router import router as simple_chat_router
 from oracle.simple.goal_buckets import router as simple_goal_buckets_router
+from oracle.simple.goal_map_router import router as simple_goal_map_router
 from oracle.simple.meetings_router import router as simple_meetings_router
 from oracle.simple.plan_router import router as simple_plan_router
 from oracle.simple.priorities import router as simple_priorities_router
@@ -311,6 +312,7 @@ def create_app() -> FastAPI:
     app.include_router(simple_router)
     app.include_router(simple_plan_router)
     app.include_router(simple_goal_buckets_router)
+    app.include_router(simple_goal_map_router)
     app.include_router(simple_changes_router)
     app.include_router(simple_additions_router)
     app.include_router(simple_chat_router)

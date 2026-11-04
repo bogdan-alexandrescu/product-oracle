@@ -205,6 +205,15 @@ class TrackMilestone(TenantScoped, Base):
         Uuid, ForeignKey("document_versions.id", ondelete="CASCADE")
     )
     counts: Mapped[str | None] = mapped_column(Text)
+    # Goal map gate (build-goal-map): the threshold met when the goal holds it 7 days, who
+    # confirmed it and when (unconfirmed: only proposed), and the areas it pulls. Its
+    # reading, 7 days and status are read from the goal's measurements, never stored.
+    gate_threshold: Mapped[Decimal | None] = mapped_column(Numeric(20, 6))
+    gate_confirmed_by: Mapped[str | None] = mapped_column(Text)
+    gate_confirmed_on: Mapped[date | None] = mapped_column(Date)
+    gate_area_ids: Mapped[list[uuid.UUID]] = _uuids()
+    # The milestone it comes after (picked, never derived); the Goal map's column order.
+    after_id: Mapped[uuid.UUID | None] = _fk("track_milestones", "SET NULL")
     lock_version: Mapped[int] = _lock_version()
     __mapper_args__ = {"version_id_col": lock_version}
     updated_at: Mapped[datetime] = _updated_at()

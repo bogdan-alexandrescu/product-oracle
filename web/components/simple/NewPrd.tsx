@@ -118,11 +118,13 @@ function Answered({ q, given }: { q: Question; given: Given }) {
 
 /** The guided New PRD sheet: four fields, then Oracle's questions one at a time. */
 /** Mounted while open: each opening starts afresh. */
-export function NewPrdSheet({ onClose, onStarted }: { onClose: () => void; onStarted: () => void }) {
+/** `prefill`: what a page starting the PRD already knows (Goal map: the milestone's name, its
+ * goal, threshold and areas in the problem). */
+export function NewPrdSheet({ onClose, onStarted, prefill }: { onClose: () => void; onStarted: () => void; prefill?: { name?: string; problem?: string } }) {
   const { me, can } = useMe();
   const goals = useConfirmedGoals();
-  const [name, setName] = useState("");
-  const [problem, setProblem] = useState("");
+  const [name, setName] = useState(prefill?.name ?? "");
+  const [problem, setProblem] = useState(prefill?.problem ?? "");
   const [who, setWho] = useState("");
   // The goals ticked, any number; null once "Not sure yet" is picked (it clears them, a goal
   // clears it). The sheet opens with nothing picked, "Not sure yet" included.
