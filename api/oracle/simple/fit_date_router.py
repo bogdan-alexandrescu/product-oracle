@@ -15,8 +15,8 @@ and must-include features) and the re-plans already approved ("## Re-plan"). No 
   date that moves (the target too when no set reaches it) and the items needing a new
   estimate.
 - ``POST /v1/simple/prds/{prd}/fit-date/approve``: the PRD's next version with the re-plan,
-  approved through the same path as any PRD version (its roadmap follows,
-  ``prd_roadmap.on_prd_approved``); the resized items' estimates go back to unverified.
+  approved through the same path as any PRD version; the roadmap follows in its next version
+  (``_roadmap_follows``), approved when the approver decides the roadmap.
 """
 
 from __future__ import annotations
@@ -43,10 +43,6 @@ router = APIRouter(prefix="/v1/simple", tags=["simple"])
 
 Reader = Annotated[Principal, Depends(_people("viewer"))]
 Approver = Annotated[Principal, Depends(_people("approver"))]
-
-# What drafting the re-plan takes, from the run estimator's figures for a PRD re-draft.
-RUN_SECONDS = 40
-RUN_USD = 0.20
 
 _TEAM = re.compile(r"(\d+)\s+engineers?\s+at\s+(\d+)\s*%\s*focus", re.I)
 _RULE = re.compile(
@@ -75,6 +71,16 @@ class FitChangeOut(BaseModel):
     # What the change does, in one line ("Moves to M3 Team inbox: lands Mar 19").
     effect: str
     moves: list[FitMove]
+
+
+class FitHireOut(BaseModel):
+    """One more engineer when no set reaches the target: counted only after their start
+    weeks, at the team's focus. ``date``: the best date with them; ``reaches``: whether it
+    is by the target."""
+
+    start_weeks: int
+    date: dt.date
+    reaches: bool
 
 
 class FitLockedOut(BaseModel):
@@ -145,8 +151,8 @@ class FitAnswerOut(FitGoalOut):
     best_date: dt.date
     reachable: bool
     locked: list[FitLockedOut]
-    run_seconds: int
-    run_usd: float
+    # When no set reaches the target: what one more engineer would do.
+    hire: FitHireOut | None = None
 
 
 class FitPicksIn(BaseModel):
@@ -192,8 +198,6 @@ class FitDraftOut(BaseModel):
     new_target: dt.date | None = None
     date: dt.date
     needs_estimate: list[FitEstimate]
-    run_seconds: int
-    run_usd: float
 
 
 class FitApprovedOut(BaseModel):
@@ -203,6 +207,10 @@ class FitApprovedOut(BaseModel):
     target: dt.date
     approved_at: dt.datetime
     needs_estimate: list[FitEstimate]
+    # The roadmap's version with the re-planned dates: live when the approver decides the
+    # roadmap, else in review with its decider; None when nothing on it moved.
+    roadmap_version: int | None = None
+    roadmap_live: bool = False
 
 
 # --------------------------------------------------------------------------- reading
@@ -435,6 +443,21 @@ def _effect(p: fd.Plan, c: fd.Change) -> str:
     return f"Every bar is shorter at {round((p.focus_raise or p.focus) * 100)}% focus"
 
 
+# The weeks before a new engineer's work counts (the picked frame's "a 3-week start").
+HIRE_START_WEEKS = 3
+
+
+def _hire(p: fd.Plan, best: dt.date) -> FitHireOut:
+    """The best date with one more engineer who counts only after their start weeks: the
+    work left after the start goes at n + 1 engineers' pace instead of n's."""
+    n = p.engineers
+    start = HIRE_START_WEEKS * 7
+    days = (best - p.start).days
+    after = days if days <= start else start + math.ceil((days - start) * n / (n + 1))
+    date = p.start + dt.timedelta(days=after)
+    return FitHireOut(start_weeks=HIRE_START_WEEKS, date=date, reaches=date <= p.target)
+
+
 @router.get("/prds/{prd}/fit-date", response_model=FitAnswerOut)
 async def get_fit_date(
     prd: str, principal: Reader, db: TenantDB, milestone: Annotated[str, Query()]
@@ -454,7 +477,7 @@ async def get_fit_date(
         pick=list(a.pick), pick_date=a.pick_date, best_date=a.best_date, reachable=a.reachable,
         locked=[FitLockedOut(item=it.title, pw=it.pw, why=it.guard or "", would_reach=r)
                 for it, r in a.locked],
-        run_seconds=RUN_SECONDS, run_usd=RUN_USD,
+        hire=None if a.reachable else _hire(p, a.best_date),
     )  # fmt: skip
 
 
@@ -493,7 +516,6 @@ def _draft_out(document, v, p: fd.Plan, d: fd.Draft) -> FitDraftOut:
         changes=[FitPrdChange(item=i, change=c) for i, c in d.prd], dates=dates,
         new_target=d.new_target, date=fd.schedule(d.plan).milestones[p.milestone],
         needs_estimate=_estimates(p, d),
-        run_seconds=RUN_SECONDS, run_usd=RUN_USD,
     )  # fmt: skip
 
 
@@ -539,6 +561,72 @@ def replan_markdown(text: str, p: fd.Plan, d: fd.Draft, picks: list[str]) -> str
     return out + "\n" + "\n".join(lines) + "\n"
 
 
+async def _roadmap_follows(
+    db, principal: Principal, document: Document, nv: DocumentVersion, p: fd.Plan, d: fd.Draft
+) -> tuple[int | None, bool]:
+    """The roadmap follows the re-plan: the PRD's items on its published roadmap take their
+    re-planned end dates in the roadmap's working draft (as an approved PRD's items do,
+    ``prd_roadmap``), which is submitted as its next version and approved through the same
+    path as any Simple draft. An approver who does not decide the roadmap leaves it in review
+    with its decider. Returns the version and whether it is live; (None, False) when nothing
+    on the roadmap moved or its draft is in review already."""
+    from oracle.roadmap import views
+    from oracle.roadmap.models import ProductTrack
+    from oracle.simple import drafts, prd_roadmap
+    from oracle.simple.priorities import prd_code
+
+    rid = await db.scalar(
+        select(ProductTrack.roadmap_document_id).where(ProductTrack.prd_document_id == document.id)
+    )
+    if rid is None:
+        return None, False
+    ends = fd.schedule(d.plan).items
+    draft = await prd_roadmap._draft(db, rid, principal)
+    if draft is None:
+        return None, False
+    base = await db.get(DocumentVersion, draft.base_version_id) if draft.base_version_id else None
+    published = await views.version_items(db, base) if base is not None else []
+    overlay = dict(draft.overlay or {})
+    wrote: dict = {}
+    for row in published:
+        code = prd_code(row.prd_section_key)
+        if row.prd_document_id != document.id or code is None:
+            continue
+        # An item's end is its last slice's ("F-03" ends with "F-03b").
+        got = [x for k, x in ends.items() if re.fullmatch(rf"{re.escape(code)}[a-z]?", k) and x]
+        if not got:
+            continue
+        cur = drafts.overlaid(row, overlay.get(str(row.id)))
+        if cur.end_date == max(got):
+            continue
+        changed = drafts.overlaid(row, drafts.snapshot(cur))
+        changed.end_date = max(got)
+        if changed.start_date and changed.start_date > changed.end_date:
+            changed.start_date = None
+        overlay[str(row.id)] = wrote[str(row.id)] = drafts.snapshot(changed)
+    if not wrote:
+        return None, False
+    sources = dict(overlay.get(prd_roadmap.KEY) or {})
+    mine = dict(sources.get(str(document.id)) or {"items": [], prd_roadmap.KEY_DATES: []})
+    mine["version"] = nv.number
+    mine["items"] = list(dict.fromkeys([*(mine.get("items") or []), *wrote]))
+    mine["wrote"] = {**(mine.get("wrote") or {}), **wrote}
+    sources[str(document.id)] = mine
+    overlay[prd_roadmap.KEY] = sources
+    draft.overlay = overlay
+    await db.flush()
+    try:
+        async with db.begin_nested():
+            await drafts.submit(db, principal, draft.id)
+            await drafts.approve(db, principal, draft.id)
+    except drafts.DraftError:
+        # Not this approver's to decide: the roadmap's owner reviews the draft.
+        return None, False
+    await db.refresh(draft)
+    version = await db.get(DocumentVersion, draft.version_id)
+    return version.number, draft.status == "approved"
+
+
 @router.post("/prds/{prd}/fit-date/approve", response_model=FitApprovedOut)
 async def fit_date_approve(
     prd: str, body: FitPicksIn, principal: Approver, db: TenantDB
@@ -569,7 +657,9 @@ async def fit_date_approve(
         for m in _draft_out(document, v, p, d).dates
         if m.what != f"{p.milestone} target"
     ]
-    _, rv = await _roadmap(db, document)
+    rv, live = await _roadmap_follows(db, principal, document, nv, p, d)
+    if rv is None:
+        rv = (await _roadmap(db, document))[1]
     await audit.record(db, principal, "simple_fit_date.approved", "document", document.id, data={
         "version": nv.number, "roadmap_version": rv, "picks": body.picks,
         "milestone": p.milestone, "was": was.isoformat(), "date": date.isoformat(),
@@ -579,5 +669,5 @@ async def fit_date_approve(
     return FitApprovedOut(
         prd=_ref(doc), version=nv.number, date=fd.schedule(d.plan).milestones[p.milestone],
         target=d.new_target or p.target, approved_at=nv.approved_at,
-        needs_estimate=_estimates(p, d),
+        needs_estimate=_estimates(p, d), roadmap_version=rv, roadmap_live=live,
     )  # fmt: skip

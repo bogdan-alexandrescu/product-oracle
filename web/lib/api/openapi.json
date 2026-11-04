@@ -75829,13 +75829,15 @@
             "type": "array",
             "title": "Locked"
           },
-          "run_seconds": {
-            "type": "integer",
-            "title": "Run Seconds"
-          },
-          "run_usd": {
-            "type": "number",
-            "title": "Run Usd"
+          "hire": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FitHireOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -75854,9 +75856,7 @@
           "pick_date",
           "best_date",
           "reachable",
-          "locked",
-          "run_seconds",
-          "run_usd"
+          "locked"
         ],
         "title": "FitAnswerOut"
       },
@@ -75952,6 +75952,22 @@
             },
             "type": "array",
             "title": "Needs Estimate"
+          },
+          "roadmap_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Version"
+          },
+          "roadmap_live": {
+            "type": "boolean",
+            "title": "Roadmap Live",
+            "default": false
           }
         },
         "type": "object",
@@ -76165,14 +76181,6 @@
             },
             "type": "array",
             "title": "Needs Estimate"
-          },
-          "run_seconds": {
-            "type": "integer",
-            "title": "Run Seconds"
-          },
-          "run_usd": {
-            "type": "number",
-            "title": "Run Usd"
           }
         },
         "type": "object",
@@ -76183,9 +76191,7 @@
           "changes",
           "dates",
           "date",
-          "needs_estimate",
-          "run_seconds",
-          "run_usd"
+          "needs_estimate"
         ],
         "title": "FitDraftOut"
       },
@@ -76321,6 +76327,31 @@
           "lanes"
         ],
         "title": "FitGoalOut"
+      },
+      "FitHireOut": {
+        "properties": {
+          "start_weeks": {
+            "type": "integer",
+            "title": "Start Weeks"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "reaches": {
+            "type": "boolean",
+            "title": "Reaches"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start_weeks",
+          "date",
+          "reaches"
+        ],
+        "title": "FitHireOut",
+        "description": "One more engineer when no set reaches the target: counted only after their start\nweeks, at the team's focus. ``date``: the best date with them; ``reaches``: whether it\nis by the target."
       },
       "FitLane": {
         "properties": {

@@ -162,9 +162,9 @@ async def test_draft_claims_no_run(client):
 
 async def test_hard_case_says_what_an_engineer_does(client):
     ctx = await make_ctx()
-    await seed(ctx, BODY)
+    await seed(ctx, BODY.replace("| 30 Nov 2026 | 25 Dec 2026 |", "| 30 Nov 2026 | 1 Dec 2026 |"))
     a = (await client.get(URL, params={"milestone": "M2"}, headers=ctx.as_("owner"))).json()
-    assert a["reachable"] is False
+    assert a["reachable"] is False, a
     hire = a["hire"]
     assert hire["start_weeks"] == 3
     assert hire["date"] <= a["best_date"]

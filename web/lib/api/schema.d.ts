@@ -23835,10 +23835,7 @@ export interface components {
             reachable: boolean;
             /** Locked */
             locked: components["schemas"]["FitLockedOut"][];
-            /** Run Seconds */
-            run_seconds: number;
-            /** Run Usd */
-            run_usd: number;
+            hire?: components["schemas"]["FitHireOut"] | null;
         };
         /**
          * FitApprovalOut
@@ -23900,6 +23897,13 @@ export interface components {
             approved_at: string;
             /** Needs Estimate */
             needs_estimate: components["schemas"]["FitEstimate"][];
+            /** Roadmap Version */
+            roadmap_version?: number | null;
+            /**
+             * Roadmap Live
+             * @default false
+             */
+            roadmap_live: boolean;
         };
         /** FitChangeOut */
         FitChangeOut: {
@@ -23970,10 +23974,6 @@ export interface components {
             date: string;
             /** Needs Estimate */
             needs_estimate: components["schemas"]["FitEstimate"][];
-            /** Run Seconds */
-            run_seconds: number;
-            /** Run Usd */
-            run_usd: number;
         };
         /** FitEstimate */
         FitEstimate: {
@@ -24014,6 +24014,23 @@ export interface components {
             /** Lanes */
             lanes: components["schemas"]["FitLane"][];
             approved?: components["schemas"]["FitApprovalOut"] | null;
+        };
+        /**
+         * FitHireOut
+         * @description One more engineer when no set reaches the target: counted only after their start
+         *     weeks, at the team's focus. ``date``: the best date with them; ``reaches``: whether it
+         *     is by the target.
+         */
+        FitHireOut: {
+            /** Start Weeks */
+            start_weeks: number;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Reaches */
+            reaches: boolean;
         };
         /** FitLane */
         FitLane: {
