@@ -26,6 +26,7 @@ from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from functools import cache
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlsplit
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -299,6 +300,9 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
     # Each item's goal group too (O5 owner decision 2026-10-26): Board and Team group by
     # the goal derived at render time, so a goal renamed or unconfirmed regroups them.
     goal_of, group_of = await tiers.item_goal_links(db, rows)
+    # roadmap-draft-wording: the kind of the verified basis each dated milestone names
+    # (a capacity date is the item's place in the team's queue).
+    kinds = await _date_kinds(db, rows)
     ev.items = []
     for r in rows:
         goal, goal_title = (goal_of or {}).get(r.item_key, ("none", None))
@@ -319,8 +323,29 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
                 goals=[goal_title] if goal_title else [],
                 no_goal=goal_of is not None and goal == "none",
                 group=group_of.get(r.item_key),
+                date_kind=kinds.get(r.id),
             )
         )
+
+
+async def _date_kinds(db: AsyncSession, rows: list[Any]) -> dict[uuid.UUID, str]:
+    """Per dated item, the kind of the verified basis of its PRD that its milestone's
+    ``date_source`` names and that supports its date (estimate, capacity or commitment)."""
+    from oracle.roadmap import schedule
+
+    out: dict[uuid.UUID, str] = {}
+    bases: dict[uuid.UUID, list[schedule.Basis]] = {}
+    for r in rows:
+        m = r.milestone or {}
+        if not m.get("date") or not m.get("date_source") or r.prd_document_id is None:
+            continue
+        if r.prd_document_id not in bases:
+            bases[r.prd_document_id] = await schedule.verified_bases(db, r.prd_document_id)
+        for b in schedule.supporting(m["date"], m["date_source"], bases[r.prd_document_id],
+                                     r.item_key):  # fmt: skip
+            out[r.id] = b.kind
+            break
+    return out
 
 
 def apply_audience(ev: ExportVersion, audience: str | None) -> ExportVersion:
