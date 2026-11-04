@@ -108,14 +108,13 @@ for (const size of ["desktop", "phone"] as const) {
       await expect(rows).toHaveCount(total);
     });
 
-    test("the same pill on the Simple roadmap's rows and in Home's tasks", async ({ page }) => {
+    test("the same pill on the Simple roadmap's rows (Timeline and Gantt); Home's tasks: walkc-roadmap-tasks.spec.ts", async ({ page }) => {
       await open(page, "/simple/roadmap");
-      const marks = page.getByTestId("label-title").locator("xpath=..").getByTestId("cs-mark");
-      await expect(marks.first()).toBeVisible();
+      await expect(page.locator('[data-testid="cs-mark"]').first()).toBeVisible();
       await expect(page.locator('[data-testid="cs-mark"][data-mark="in_progress"]').first()).toBeVisible();
-      await page.goto("/simple");
-      const tasks = page.getByTestId("home-task-list");
-      if (await tasks.count()) await expect(tasks.getByTestId("cs-mark").first()).toBeVisible();
+      await expect(page.locator('[data-testid="cs-mark"][data-mark="exists_old"]').first()).toBeVisible();
+      await page.getByTestId("format-gantt").click();
+      await expect(page.locator('[data-testid="cs-mark"][data-mark="exists"]').first()).toBeVisible();
     });
   });
 }

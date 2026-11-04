@@ -93,7 +93,8 @@ function stateOut(db: CurrentStateDb, r: Row, i: number, today: number): State {
     answered_at: s?.answered_at ?? null,
     moved_at: s?.moved_at ?? null,
     move_how: s?.move_how ?? null,
-    item_ids: r.item_id ? [r.item_id] : [],
+    // The mock's features stand for its roadmap items (simple-priorities.ts: feature-<item id>).
+    item_ids: [r.item_id ?? r.feature_id.replace(/^feature-/, "")],
     proofs: ps.map((p) => ({ ...p, note: p.kind === "measured" && p.value && p.period && p.period !== thisMonth ? "not read yet" : null })),
   };
 }
