@@ -381,6 +381,7 @@ export type NeedGroup =
   | "webhooks"
   | "reminders"
   | "minutes"
+  | "proposals"
   | "shipped"
   | "fyi";
 export type StatedNeed = Need & { state: InboxState; counted: boolean; group: NeedGroup };

@@ -26,7 +26,7 @@ import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { draftDecisionNotes } from "./decision-notes";
 import { stableUuid } from "./ids";
-import { changeSentence } from "./simple-change-words";
+import { changePhrase, changeSentence } from "./simple-change-words";
 import { priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
 import {
   canDecideItem,
@@ -951,16 +951,20 @@ export function simpleInboxRows(
   db: SimpleDb | undefined,
   me: string,
   seen: string | null,
-  who: Pick<SimpleChangesCtx, "owners" | "roles"> = { owners: [] },
+  who: Pick<SimpleChangesCtx, "owners" | "roles"> & { role?: Role } = { owners: [] },
 ): { simple_proposals: Schemas["InboxSimpleChange"][]; simple_decisions: Schemas["InboxSimpleChange"][]; simple_approvals: Schemas["InboxSimpleApproval"][] } {
   const changes = db?.changes ?? [];
   const row = (c: Change, at: string | null, state?: Schemas["InboxSimpleChange"]["state"]): Schemas["InboxSimpleChange"] => {
     const key = db ? keyOf(db, c.target.item_id) : undefined;
+    const title = key ? seed(db!, key).title : null;
     return {
-      id: c.id, op: c.op, status: c.status, item_id: (c.target.item_id as string) ?? null, item_title: key ? seed(db!, key).title : typeof c.after.title === "string" ? c.after.title : null,
+      id: c.id, op: c.op, status: c.status, item_id: (c.target.item_id as string) ?? null, item_title: title ?? (typeof c.after.title === "string" ? c.after.title : null),
       document_id: c.document_id, by: c.by, by_name: c.by_name, at: c.at, decided_by: c.decided_by, decided_at: c.decided_at,
       reason: c.reason, decision_reason: c.decision_reason, state: state ?? (!seen || (at && at > seen) ? "new" : "open"),
       from_meeting: c.from_meeting ?? null,
+      // inbox-meeting-proposals: what was asked, the item by its name, and whether I may decide it now.
+      asked: changePhrase(c.op, c.target, c.before, c.after, title),
+      can_decide: !!db && !!who.role && c.status === "proposed" && decidesChange(db, { ...who, id: me, role: who.role, names: {} }, c),
     };
   };
   return {

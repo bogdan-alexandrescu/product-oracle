@@ -926,6 +926,18 @@ function seedMeetingAgendaScenario(): Db {
 }
 
 /**
+ * inbox-meeting-proposals "meeting-agenda-owner" scenario: "meeting-agenda" with the onboarding
+ * roadmap decided by approver@example.com, so a review of Usage alerts that cuts the Welcome
+ * video sends the proposal to that person's Inbox, not the owner's who runs the meeting.
+ */
+function seedMeetingAgendaOwnerScenario(): Db {
+  const db = seedMeetingAgendaScenario();
+  const approver = db.members.find((m) => m.email === "approver@example.com")!;
+  db.simple_roadmap!.deciders = { ...(db.simple_roadmap!.deciders ?? {}), "onboarding-roadmap": approver.id };
+  return db;
+}
+
+/**
  * The plan strip's "+N more" (#723 polish): "simple-home" plus ten invented items on the
  * onboarding roadmap (Guided setup, the top PRD by priority), each with its own milestone.
  */
@@ -3164,6 +3176,8 @@ function load(): Db {
                 ? seedSimpleDecidersScenario
               : scenario === "meeting-agenda"
                 ? seedMeetingAgendaScenario
+              : scenario === "meeting-agenda-owner"
+                ? seedMeetingAgendaOwnerScenario
               : scenario === "simple-home"
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-move"
@@ -6419,6 +6433,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     inbox.total += launchRows.filter((r) => r.counted).length;
     // Simple S3a: proposals waiting for me count; decisions on mine are shown.
     const simpleRows = simpleInboxRows(db.simple_roadmap, me.id, seenBefore, {
+      role: me.role,
       owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
       roles: Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role])),
     });
