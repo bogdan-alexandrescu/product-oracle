@@ -1,0 +1,477 @@
+{
+ "title": "Edit goals right in Goal buckets",
+ "subtitle": "Simple > Priorities > Goal buckets: add, edit and archive goals, and move features between them. Invented company: an e-bike subscription service.",
+ "decisions": [
+  {
+   "code": "GB1",
+   "name": "Add and edit a goal",
+   "question": "How is a goal added and edited from the buckets, and what must it have?",
+   "common": "Owners and approvers see the controls; viewers and commenters see none (checked through can(), never by role name). A goal has a name, a measure, a target and a date; its small order number is the owner's and is set in Baseline. Saving updates the same goal Baseline shows, with Undo.",
+   "proposals": [
+    {
+     "letter": "a",
+     "name": "Pencil, form in place",
+     "recommended": true,
+     "what": "Each bucket header gets a pencil. It turns that header into a small form right where it sits: the goal, its measure, its target and its date, with its order number shown but set in Baseline. A dashed \"+ Add goal\" bucket at the end opens the same form as goal 6. Save stays off until the measure, the target and the date are all there.",
+     "why": "The change happens where the person is looking, one goal at a time, and works the same on a phone. It is the smallest step from today's buckets and needs no new screen.",
+     "plus": "One click to edit; nothing covers the features; the add bucket shows where a new goal will land in the order.",
+     "cost": "The bucket grows while the form is open, so cards beside it shift down; one goal at a time.",
+     "frames": [
+      {
+       "file": "frames/gb1-a-rest.html",
+       "caption": "At rest: a pencil on each goal and a dashed \"+ Add goal\" bucket after the last goal."
+      },
+      {
+       "file": "frames/gb1-a-open.html",
+       "caption": "The pencil on Fewer bikes in repair turns its header into a form, filled in."
+      },
+      {
+       "file": "frames/gb1-a-mid.html",
+       "caption": "Mid-edit: the target is now under 3% and the date is cleared; Save waits for a date."
+      },
+      {
+       "file": "frames/gb1-a-result.html",
+       "caption": "Result: with Mar 31, 2027 picked and saved, the header reads under 3% by Mar 31, 2027, with Undo."
+      },
+      {
+       "file": "frames/gb1-a-hard.html",
+       "caption": "Hard case: eight goals, a long goal name typed into \"+ Add goal\"; it becomes goal 9 and needs a measure, a target and a date."
+      },
+      {
+       "file": "frames/gb1-a-hard-1512.html",
+       "caption": "Hard case: eight goals, a long goal name typed into \"+ Add goal\"; it becomes goal 9 and needs a measure, a target and a date. At the owner's 1512 window."
+      },
+      {
+       "file": "frames/gb1-a-phone-390.html",
+       "caption": "On a phone the form fills the bucket's width; the date field is flagged. Phone, dark."
+      },
+      {
+       "file": "frames/gb1-a-viewer.html",
+       "caption": "A viewer or commenter sees the same buckets with no pencil and no \"+ Add goal\"."
+      }
+     ]
+    },
+    {
+     "letter": "b",
+     "name": "Menu and side panel",
+     "recommended": false,
+     "what": "Each bucket header gets a \"⋯\" menu with Edit goal and Archive goal; \"+ Add goal\" sits above the buckets. Edit and Add open a panel at the right with the goal, measure, target, date, its place in the order and the features under it. On a phone the panel fills the screen.",
+     "plus": "Room for the fields and for what the goal holds; the buckets do not move; one menu also carries Archive.",
+     "cost": "Two clicks to start an edit, and the panel hides half the buckets while it is open.",
+     "frames": [
+      {
+       "file": "frames/gb1-b-rest.html",
+       "caption": "At rest: \"+ Add goal\" above the buckets and a \"⋯\" menu on each goal."
+      },
+      {
+       "file": "frames/gb1-b-open.html",
+       "caption": "The \"⋯\" menu on Fewer bikes in repair: Edit goal and Archive goal."
+      },
+      {
+       "file": "frames/gb1-b-mid.html",
+       "caption": "Edit goal opens the side panel; the target is under 3% and the date still needs picking."
+      },
+      {
+       "file": "frames/gb1-b-result.html",
+       "caption": "Result: saved; the panel closes and the header shows the new target and date."
+      },
+      {
+       "file": "frames/gb1-b-hard.html",
+       "caption": "Hard case: \"+ Add goal\" with eight goals; the long name wraps in the panel, the order says goal 9."
+      },
+      {
+       "file": "frames/gb1-b-hard-1512.html",
+       "caption": "Hard case: \"+ Add goal\" with eight goals; the long name wraps in the panel, the order says goal 9. At the owner's 1512 window."
+      },
+      {
+       "file": "frames/gb1-b-phone-390.html",
+       "caption": "On a phone the panel fills the screen. Phone, dark."
+      }
+     ]
+    },
+    {
+     "letter": "c",
+     "name": "Edit goals mode",
+     "recommended": false,
+     "what": "One \"Edit goals\" button above the buckets turns every header into fields at once and folds the feature lists away. People change several goals, then Save all or Discard. Each goal also gets an Archive link while in this mode.",
+     "plus": "Best for a goal review where several goals change together; one save, one undo.",
+     "cost": "Features are hidden while editing, so you edit without seeing the work; with eight goals it is a long form.",
+     "frames": [
+      {
+       "file": "frames/gb1-c-rest.html",
+       "caption": "At rest: one \"Edit goals\" button above the buckets; headers read as today."
+      },
+      {
+       "file": "frames/gb1-c-open.html",
+       "caption": "Edit goals turns all five headers into fields; feature lists fold to a count."
+      },
+      {
+       "file": "frames/gb1-c-mid.html",
+       "caption": "Mid-edit: two goals changed; Fewer bikes in repair needs a date, so Save all waits."
+      },
+      {
+       "file": "frames/gb1-c-result.html",
+       "caption": "Result: Save all applies both changes, with one Undo."
+      },
+      {
+       "file": "frames/gb1-c-hard.html",
+       "caption": "Hard case: all eight goals in edit mode, the long name in a one-line field."
+      },
+      {
+       "file": "frames/gb1-c-hard-1512.html",
+       "caption": "Hard case: all eight goals in edit mode, the long name in a one-line field. At the owner's 1512 window."
+      },
+      {
+       "file": "frames/gb1-c-phone-390.html",
+       "caption": "On a phone the measure, target and date squeeze into one row. Phone, dark."
+      }
+     ]
+    },
+    {
+     "letter": "d",
+     "name": "Name now, fill later",
+     "recommended": false,
+     "what": "An always-there \"Add a goal\" line at the end takes just a name and Enter. The new bucket shows at once, flagged \"Needs a measure, a target and a date\", and its pencil opens the same small form to finish it. A goal is valid with a name; the flag stays until it has all three.",
+     "plus": "Fastest way to get a goal down in a meeting; features can be moved under it straight away.",
+     "cost": "Goals with no measure exist and can sit unfinished; the flag has to be cleared later.",
+     "frames": [
+      {
+       "file": "frames/gb1-d-rest.html",
+       "caption": "At rest: an \"Add a goal\" line after the last bucket."
+      },
+      {
+       "file": "frames/gb1-d-open.html",
+       "caption": "Typing \"Quieter bikes\"; Enter adds it as goal 6."
+      },
+      {
+       "file": "frames/gb1-d-result.html",
+       "caption": "Result: the new bucket, edged in amber and flagged as needing a measure, a target and a date."
+      },
+      {
+       "file": "frames/gb1-d-hard.html",
+       "caption": "Hard case: eight goals and the new goal 9 being finished; the measure is in, the target and date are still flagged."
+      },
+      {
+       "file": "frames/gb1-d-hard-1512.html",
+       "caption": "Hard case: eight goals and the new goal 9 being finished; the measure is in, the target and date are still flagged. At the owner's 1512 window."
+      },
+      {
+       "file": "frames/gb1-d-phone-390.html",
+       "caption": "On a phone the flagged bucket sits last. Phone, dark."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "GB2",
+   "name": "Archive a goal",
+   "question": "How is a goal archived, and what happens to its features and milestones?",
+   "common": "Only owners and approvers can archive. Milestones are never changed: the work in them moves with its features. Each feature keeps the other goals it serves. Every archive has Undo.",
+   "proposals": [
+    {
+     "letter": "a",
+     "name": "Pick where they go",
+     "recommended": true,
+     "what": "Archive goal asks first. It says what the goal holds (its features and the milestones their work is in). Features that serve another goal too go to that goal; for the rest, pick a goal, or leave them with no goal. Archive saves it all in one step, and Undo puts every link back.",
+     "why": "Nothing is lost or left hidden, the common case is one choice, and features that already serve another goal land in the right place on their own.",
+     "plus": "One dialog, one choice; milestones are untouched; a clear Undo.",
+     "cost": "A bulk move can put features under a goal they fit badly; that needs a second look afterwards.",
+     "frames": [
+      {
+       "file": "frames/gb2-a-rest.html",
+       "caption": "At rest: a \"⋯\" menu on each goal; Archive goal is in it."
+      },
+      {
+       "file": "frames/gb2-a-open.html",
+       "caption": "Archive goal on Grow shop partners: two features with work in M2 and M3; move them to a goal or leave them with no goal."
+      },
+      {
+       "file": "frames/gb2-a-mid.html",
+       "caption": "Faster first ride is picked; the dialog says what it will then hold."
+      },
+      {
+       "file": "frames/gb2-a-result.html",
+       "caption": "Result: the bucket is gone, both features sit under Faster first ride, with Undo."
+      },
+      {
+       "file": "frames/gb2-a-hard.html",
+       "caption": "Hard case: 15 features over M2 and M3; four serve another goal too and go there, the other 11 go where picked."
+      },
+      {
+       "file": "frames/gb2-a-hard-1512.html",
+       "caption": "Hard case: 15 features over M2 and M3; four serve another goal too and go there, the other 11 go where picked. At the owner's 1512 window."
+      },
+      {
+       "file": "frames/gb2-a-phone-390.html",
+       "caption": "On a phone the dialog rises from the bottom. Phone, dark."
+      }
+     ]
+    },
+    {
+     "letter": "b",
+     "name": "Empty it first",
+     "recommended": false,
+     "what": "A goal can only be archived once nothing sits under it. Archive goal on a goal with features says so, lists them, and offers to move them all to one goal; once empty, Archive goal works and needs no choice.",
+     "plus": "Archiving is never a surprise; every feature is moved on purpose.",
+     "cost": "Two steps every time; with 15 features the person has to place them before the goal can go.",
+     "frames": [
+      {
+       "file": "frames/gb2-b-open.html",
+       "caption": "Archive goal on Grow shop partners is refused: it still holds two features in M2 and M3."
+      },
+      {
+       "file": "frames/gb2-b-mid.html",
+       "caption": "After \"Move all 2 to…\" Faster first ride, the goal is empty and Archive goal is now allowed."
+      },
+      {
+       "file": "frames/gb2-b-result.html",
+       "caption": "Result: archived, with Undo."
+      },
+      {
+       "file": "frames/gb2-b-hard.html",
+       "caption": "Hard case: the refusal lists all 15 features."
+      },
+      {
+       "file": "frames/gb2-b-hard-1512.html",
+       "caption": "Hard case: the refusal lists all 15 features. At the owner's 1512 window."
+      },
+      {
+       "file": "frames/gb2-b-phone-390.html",
+       "caption": "On a phone the list scrolls inside the dialog. Phone, dark."
+      }
+     ]
+    },
+    {
+     "letter": "c",
+     "name": "Archive, sort later",
+     "recommended": false,
+     "what": "Archive goal acts at once, with Undo. Features that serve another goal move there; the rest drop to the No goal bucket, marked as coming from the archived goal. The goal itself goes to an \"Archived goals\" shelf at the end, where it can be brought back.",
+     "plus": "One click; no dialog; an archived goal can come back later.",
+     "cost": "Work quietly piles up under No goal, which then needs sorting by hand.",
+     "frames": [
+      {
+       "file": "frames/gb2-c-open.html",
+       "caption": "The \"⋯\" menu on Grow shop partners: Archive goal acts at once."
+      },
+      {
+       "file": "frames/gb2-c-mid.html",
+       "caption": "Done: its two features now sit under No goal, marked as coming from it; Undo in the note."
+      },
+      {
+       "file": "frames/gb2-c-result.html",
+       "caption": "Result: the shelf at the end lists the archived goal, what it held, who archived it, and Bring back."
+      },
+      {
+       "file": "frames/gb2-c-hard.html",
+       "caption": "Hard case: 11 of its 15 features land under No goal at once."
+      },
+      {
+       "file": "frames/gb2-c-hard-1512.html",
+       "caption": "Hard case: 11 of its 15 features land under No goal at once. At the owner's 1512 window."
+      },
+      {
+       "file": "frames/gb2-c-phone-390.html",
+       "caption": "On a phone No goal sits after all the goals. Phone, dark."
+      }
+     ]
+    },
+    {
+     "letter": "d",
+     "name": "Place each feature",
+     "recommended": false,
+     "what": "Archive goal opens a list of the goal's features, each with its own goal picker, set to another goal it serves when it has one and to No goal otherwise. The person sets each, then archives.",
+     "plus": "Each feature lands exactly where it belongs.",
+     "cost": "A long list for a big goal: 15 pickers to set before archiving.",
+     "frames": [
+      {
+       "file": "frames/gb2-d-open.html",
+       "caption": "Archive goal lists both features of Grow shop partners, each with its own picker."
+      },
+      {
+       "file": "frames/gb2-d-mid.html",
+       "caption": "Each feature now has a goal picked."
+      },
+      {
+       "file": "frames/gb2-d-result.html",
+       "caption": "Result: the goal is gone; each feature sits under its picked goal."
+      },
+      {
+       "file": "frames/gb2-d-hard.html",
+       "caption": "Hard case: 15 pickers in a scrolling list."
+      },
+      {
+       "file": "frames/gb2-d-hard-1512.html",
+       "caption": "Hard case: 15 pickers in a scrolling list. At the owner's 1512 window."
+      },
+      {
+       "file": "frames/gb2-d-phone-390.html",
+       "caption": "On a phone each name is cut short beside its picker. Phone, dark."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "GB3",
+   "name": "Move a feature",
+   "question": "How does a feature move to another goal, and how does one that serves several goals show?",
+   "common": "A feature sits once, under the goal it moves most (its first goal link). One that serves other goals too shows \"+1 goal\" beside its name, naming them on hover. A move saves the feature's \"Goals it serves\" links, the same ones Baseline edits, with Undo. Only owners and approvers can move.",
+   "proposals": [
+    {
+     "letter": "a",
+     "name": "Drag to a goal",
+     "recommended": false,
+     "what": "Each feature row gets a grip. Drag it onto another bucket: that bucket lights up and says it becomes the goal the feature moves most. Dropping saves it as the feature's first goal link and drops the old one, with Undo.",
+     "plus": "Direct and quick on a big screen when both buckets are in view.",
+     "cost": "Hard when the target bucket is far down the page (eight goals) and on a phone; needs a keyboard fallback.",
+     "frames": [
+      {
+       "file": "frames/gb3-a-rest.html",
+       "caption": "At rest: a grip at the start of each feature row."
+      },
+      {
+       "file": "frames/gb3-a-open.html",
+       "caption": "Battery health alerts is picked up by its grip."
+      },
+      {
+       "file": "frames/gb3-a-mid.html",
+       "caption": "Mid-drag over Lower support load, which lights up and says what dropping does."
+      },
+      {
+       "file": "frames/gb3-a-result.html",
+       "caption": "Result: the feature sits under Lower support load, with Undo."
+      },
+      {
+       "file": "frames/gb3-a-hard.html",
+       "caption": "Hard case: eight goals; the target is far below the row being dragged."
+      },
+      {
+       "file": "frames/gb3-a-hard-1512.html",
+       "caption": "Hard case: eight goals; the target is far below the row being dragged. At the owner's 1512 window."
+      },
+      {
+       "file": "frames/gb3-a-phone-390.html",
+       "caption": "On a phone the grips are small and dragging fights the page scroll. Phone, dark."
+      }
+     ]
+    },
+    {
+     "letter": "b",
+     "name": "Move to goal menu",
+     "recommended": true,
+     "what": "Each feature row gets a \"⋯\". It lists the goals in the owner's order with their numbers: \"here now\" on the current one and \"also serves\" on the others it serves. Picking one makes it the feature's only goal link, so the feature moves there; Undo puts the old links back. A feature that serves several goals shows \"+1 goal\" beside its name.",
+     "why": "It works the same with a mouse, a keyboard and a thumb, shows every goal at once even with eight, and says plainly what the links become.",
+     "plus": "Works on a phone and by keyboard; the goals' numbers match the owner's order.",
+     "cost": "One feature at a time, and two clicks for each move.",
+     "frames": [
+      {
+       "file": "frames/gb3-b-rest.html",
+       "caption": "At rest: a \"⋯\" at the end of each feature row; \"+1 goal\" marks features that serve another goal."
+      },
+      {
+       "file": "frames/gb3-b-open.html",
+       "caption": "The menu for Battery health alerts: the goals in order, \"here now\" and \"also serves\"."
+      },
+      {
+       "file": "frames/gb3-b-mid.html",
+       "caption": "Pointing at Lower support load; the note says Fewer bikes in repair is dropped from its links."
+      },
+      {
+       "file": "frames/gb3-b-result.html",
+       "caption": "Result: the feature sits under Lower support load, with Undo."
+      },
+      {
+       "file": "frames/gb3-b-hard.html",
+       "caption": "Hard case: the menu lists all eight goals; the long name is cut short."
+      },
+      {
+       "file": "frames/gb3-b-hard-1512.html",
+       "caption": "Hard case: the menu lists all eight goals; the long name is cut short. At the owner's 1512 window."
+      },
+      {
+       "file": "frames/gb3-b-phone-390.html",
+       "caption": "On a phone the menu opens under the row. Phone, dark."
+      }
+     ]
+    },
+    {
+     "letter": "c",
+     "name": "Tick and move",
+     "recommended": false,
+     "what": "\"Pick features to move\" puts a box on every feature row. Tick any number across buckets; a bar at the bottom says how many and moves them all to one goal.",
+     "plus": "Best for big clean-ups, such as emptying a goal before archiving it.",
+     "cost": "A mode to enter and leave; overkill for moving one feature.",
+     "frames": [
+      {
+       "file": "frames/gb3-c-rest.html",
+       "caption": "At rest: \"Pick features to move\" above the buckets."
+      },
+      {
+       "file": "frames/gb3-c-open.html",
+       "caption": "Boxes on every feature row."
+      },
+      {
+       "file": "frames/gb3-c-mid.html",
+       "caption": "Three repair features ticked; the bar offers Move to Lower support load."
+      },
+      {
+       "file": "frames/gb3-c-result.html",
+       "caption": "Result: all three sit under Lower support load, with Undo."
+      },
+      {
+       "file": "frames/gb3-c-hard.html",
+       "caption": "Hard case: eight goals; the bar stays in view while scrolling."
+      },
+      {
+       "file": "frames/gb3-c-hard-1512.html",
+       "caption": "Hard case: eight goals; the bar stays in view while scrolling. At the owner's 1512 window."
+      },
+      {
+       "file": "frames/gb3-c-phone-390.html",
+       "caption": "On a phone the bar wraps to two lines. Phone, dark."
+      }
+     ]
+    },
+    {
+     "letter": "d",
+     "name": "Edit its goal links",
+     "recommended": false,
+     "what": "Each feature row gets a target button that opens its \"Goals it serves\" links, as Baseline holds them: a tick for each goal it serves and a choice of the one it moves most. The feature sits in that bucket; the other goals it serves list it as \"Also served here\".",
+     "plus": "Shows and edits the links fully; nothing about several goals is hidden.",
+     "cost": "The most to read and set; a large box for a quick move.",
+     "frames": [
+      {
+       "file": "frames/gb3-d-rest.html",
+       "caption": "At rest: a target button at the end of each feature row."
+      },
+      {
+       "file": "frames/gb3-d-open.html",
+       "caption": "Goals Battery health alerts serves: two ticked; it moves Fewer bikes in repair most."
+      },
+      {
+       "file": "frames/gb3-d-mid.html",
+       "caption": "Lower support load is now the one it moves most; both stay ticked."
+      },
+      {
+       "file": "frames/gb3-d-result.html",
+       "caption": "Result: it sits under Lower support load, and Fewer bikes in repair lists it as also served there."
+      },
+      {
+       "file": "frames/gb3-d-hard.html",
+       "caption": "Hard case: eight goals to tick, the long name cut short."
+      },
+      {
+       "file": "frames/gb3-d-hard-1512.html",
+       "caption": "Hard case: eight goals to tick, the long name cut short. At the owner's 1512 window."
+      },
+      {
+       "file": "frames/gb3-d-phone-390.html",
+       "caption": "On a phone the box is wider than the row. Phone, dark."
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -15,6 +15,7 @@ import { useMe } from "@/lib/me";
 import { useSetParams } from "@/lib/use-set-params";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
+import { GoalBucketsMockup } from "./goal-buckets-mockup"; // MOCK-HOOK
 import { CodeTag, featureCount, goalLabel, PlanBucketsHead, PlanFeatureList, planGoals, planSpan } from "./plan-buckets";
 
 type Out = Schemas["SimplePrioritiesOut"];
@@ -1785,6 +1786,8 @@ function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }
 function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestionsApi }) {
   const { can } = useMe();
   const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
+  const mk = useSearchParams(); // MOCK-HOOK
+  if (mk.get("gb1") || mk.get("gb2") || mk.get("gb3")) return <GoalBucketsMockup />; // MOCK-HOOK
   // plan-charts: with a dated plan, where each goal's work lands milestone by milestone.
   if (data.plan?.milestones.length && data.plan.span) return <PlanBuckets data={data} plan={data.plan} suggestions={suggestions} />;
   // An empty "No goal" bucket warns about nothing: it is left out.
