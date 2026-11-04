@@ -77127,13 +77127,26 @@
           "threshold": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "number",
+                "exclusiveMinimum": 0.0
               },
               {
                 "type": "null"
               }
             ],
             "title": "Threshold"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
           },
           "confirm": {
             "type": "boolean",
@@ -77526,7 +77539,8 @@
               "on_track",
               "at_risk",
               "missed",
-              "not_measured"
+              "not_measured",
+              "no_gate"
             ],
             "title": "Status"
           },
@@ -77711,7 +77725,14 @@
             "title": "Measure"
           },
           "threshold": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Threshold"
           },
           "unit": {
@@ -77736,7 +77757,8 @@
               "on_track",
               "at_risk",
               "missed",
-              "not_measured"
+              "not_measured",
+              "no_gate"
             ],
             "title": "Status"
           },
@@ -99073,6 +99095,7 @@
           },
           "threshold": {
             "type": "number",
+            "exclusiveMinimum": 0.0,
             "title": "Threshold"
           },
           "areas": {
