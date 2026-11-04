@@ -25,6 +25,7 @@ import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
+import { generalReply } from "./general-chat";
 import { afterAccept, goalInterviewReply, proposeVersion, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
 import { goalCheck } from "./goals";
 import {
@@ -5417,7 +5418,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       current: () => load().discussions ?? emptyDiscussions(),
       // B6: the scripted Oracle of a goals interview.
       // Simple's Ask reads the company's plan first (./simple-chat.ts planAnswer).
-      replyScript: (d, asked) => goalInterviewReply(db.baseline, d, asked.body, (id) => activeMember(db, id)) ?? simplePlanReply(db, me, d, asked.body),
+      // chat-citations: General chat reads the baseline's features too (./general-chat.ts).
+      replyScript: (d, asked) =>
+        goalInterviewReply(db.baseline, d, asked.body, (id) => activeMember(db, id)) ??
+        simplePlanReply(db, me, d, asked.body) ??
+        generalReply(db.baseline, d.subject_kind === "screen" ? String((d.subject as { path?: string }).path ?? "") : "", asked.body, now()),
       // #710: Oracle reads the asker's Fireflies live in a private chat (./live.ts).
       liveReply: (asked, alone) => liveReply(asked.body, alone),
       // G8: the link to a Slack thread needs Oracle's Slack install (./slack.ts).

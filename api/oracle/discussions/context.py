@@ -7,7 +7,9 @@ block: its check, latest measurements, the company's horizons and the other goal
 targets), the baseline slice
 (confirmed goals, then the entities linked to the subject with their top evidence), the
 conversation, and the earlier pushbacks in this discussion (C1b: once). On one of Simple's
-pages the company's plan comes before all of it (oracle.discussions.plan).
+pages the company's plan comes before all of it (oracle.discussions.plan). The panel's
+General chat (a ``screen`` on ``/``) reads what Home shows and the baseline's features, each
+with its status and the confirmed goals it serves (chat-citations).
 
 S6 (G1 §3.4) and AUD-9: findings are read only as ``sharing.EVERYONE`` sees them, or as
 their author sees them in the author's own discussion (rule 3.4.3). Nothing here calls
@@ -40,6 +42,9 @@ MAX_SECTION_CHARS = 6_000
 MAX_MESSAGES = 40
 MAX_CONVERSATION_CHARS = 40_000
 MAX_ENTITIES = 40
+# General chat's baseline (chat-citations): every feature with its status and goals, compact.
+MAX_FEATURES = 80
+BASELINE_CHARS = 12_000
 EVIDENCE_PER_ENTITY = 3
 MAX_EXCERPT = 400
 MEASUREMENTS = 5
@@ -377,6 +382,51 @@ async def _home(db: AsyncSession, ctx: Context) -> None:
     ctx.note(f"Open runs: {runs}; checkpoints waiting: {waiting}")
 
 
+async def _features(db: AsyncSession, ctx: Context) -> None:
+    """The baseline's features as PRD drafting reads them, compactly: each (not rejected)
+    with its status and the confirmed goals it serves, within ``BASELINE_CHARS``."""
+    features = list(
+        await db.scalars(
+            select(Entity)
+            .where(Entity.type == "feature", Entity.status != "rejected")
+            .order_by(Entity.key)
+            .limit(MAX_FEATURES)
+        )
+    )
+    if not features:
+        return
+    rows = await db.execute(
+        select(Edge.src_id, Entity.title)
+        .join(Entity, Entity.id == Edge.dst_id)
+        .where(
+            Edge.type == "supports",
+            Edge.status != "rejected",
+            Edge.src_id.in_([f.id for f in features]),
+            Entity.type == "goal",
+            Entity.status == "confirmed",
+        )
+        .order_by(Entity.title)
+    )
+    serves: dict[uuid.UUID, list[str]] = {}
+    for src, title in rows.all():
+        serves.setdefault(src, []).append(title)
+    start = ctx.size
+    ctx.note("The baseline's features, with their status and the goals they serve:")
+    for f in features:
+        goals_of = serves.get(f.id)
+        line = f"status {f.status}; " + (
+            f"serves {', '.join(goals_of)}" if goals_of else "serves no goal yet"
+        )
+        if ctx.size - start + len(line) > BASELINE_CHARS:
+            ctx.note("The rest of the features are not shown.")
+            break
+        if (
+            ctx.add("entity", str(f.id), f"Feature: {f.title}", line, url=f"/baseline#{f.id}")
+            is None
+        ):
+            break
+
+
 async def _documents(db: AsyncSession, ctx: Context) -> None:
     from oracle.docs.models import Document, DocumentVersion
 
@@ -425,8 +475,9 @@ async def _screen(db: AsyncSession, ctx: Context, path: str) -> None:
     board and investor drafts are hidden from commenters and viewers (H8): the page name."""
     ctx.note(f"The page: {page_name(path)}")
     head = path.split("?")[0].rstrip("/")
-    if head in ("", "/home"):  # General reads what Home shows
+    if head in ("", "/home"):  # General reads what Home shows, and the baseline's features
         await _home(db, ctx)
+        await _features(db, ctx)
     elif head == "/documents":
         await _documents(db, ctx)
     elif head == "/runs":
