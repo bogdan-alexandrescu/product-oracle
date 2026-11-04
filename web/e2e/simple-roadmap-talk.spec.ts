@@ -61,12 +61,12 @@ async function openTalk(page: Page, key: string, phone: boolean): Promise<{ card
     // A phone's tab is the talk itself: no heading over it, Details goes back.
     await expect(card.getByRole("tab", { name: "Details" })).toBeVisible();
   } else {
-    await expect(talk.getByRole("heading", { name: "Talk about Adaptive pacing", exact: true })).toBeVisible();
+    await expect(talk.getByRole("heading", { name: "Talk about this feature", exact: true })).toBeVisible();
     // build-feature-panel: the talk stays open beside the details; × closes the panel.
     await expect(card.getByRole("button", { name: "Close" })).toBeVisible();
   }
-  // A viewer asks questions only: "Ask about Adaptive pacing…".
-  await expect(talk.getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", /^Ask about Adaptive pacing(, or ask for a change)?…$/);
+  // A viewer asks questions only: "Ask about this feature…" (the region names it).
+  await expect(talk.getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", /^Ask about this feature(, or ask for a change)?…$/);
   await expect(talk.getByTestId("chat-note")).toHaveText("Just you and Oracle · kept with this item");
   // The message box sits at the foot of the talk, under the lines.
   const box = (await talk.getByRole("textbox", { name: "Message Oracle" }).boundingBox())!;
