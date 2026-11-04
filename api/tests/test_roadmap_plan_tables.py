@@ -9,12 +9,15 @@ Postgres with the FakeRuntime. Invented data only.
 
 from datetime import date
 
+import pytest
 from sqlalchemy import select
 
 from oracle.docs.models import Document
 from oracle.roadmap.models import RoadmapItem
 from oracle.runs import plan_tables
+from oracle.simple import approved_roadmap
 from oracle.swarm import Outcome
+from oracle.templates.builtins import BUILTIN_TEMPLATES, builtin_body
 from oracle.tenancy import tenant_session
 from tests.test_roadmap import (  # noqa: F401 - fixtures
     ITEMS,
@@ -102,6 +105,55 @@ def test_the_check_finds_each_problem():
     assert p.message == (
         "Payment step's end is Nov 30, 2026 in the engineering dates, not Dec 4, 2026"
     )
+
+
+def test_the_check_finds_an_item_missing_from_the_plan_table():
+    plan = plan_tables.engineering_plan(ITEMS, BASES[:1])
+    row = "| shipping-step | Shipping step |  |  | no date yet | planned |\n"
+    short = ROADMAP_MD.replace(row, "")
+    (p,) = plan_tables.check(short, plan, date(2026, 11, 4))
+    assert p.code == "missing_plan_item" and p.refs == {"item": "shipping-step"}
+    assert p.message.startswith("Shipping step is in roadmap_items.yaml but not in the Plan")
+
+
+def test_the_check_reads_the_dates_from_words():
+    plan = plan_tables.engineering_plan(ITEMS, BASES[:1])
+    today = date(2026, 11, 4)
+    said = ROADMAP_MD.replace("| Nov 30, 2026 | estimate |", "| Nov 30, 2026 | commitment |")
+    (p,) = plan_tables.check(said, plan, today)
+    assert p.code == "plan_basis_differs" and p.refs == {"item": "payment-step"}
+    assert p.message == (
+        "Payment step's end rests on estimate in the engineering dates, not commitment"
+    )
+    # The words are read as a person writes them.
+    assert plan_tables.check(ROADMAP_MD.replace("| estimate |", "| Estimate |"), plan, today) == []
+
+
+def test_a_later_milestones_table_with_gates_takes_the_place_of_one_without():
+    """A timeline template's own Key milestones table (no Gates) gives way to the plan's;
+    a plan's table is not taken over by a later one without Gates."""
+    own = "| Milestone | Date | Kind |\n|---|---|---|\n| Kickoff | Oct 1, 2026 | estimate |\n"
+    plan = "| Milestone | Date | Gates | Counts when |\n|---|---|---|---|\n| Beta | Nov 30, 2026 | Payment step |  |\n"  # noqa: E501
+    for markdown in (own + "\n" + plan, plan + "\n" + own):
+        got = approved_roadmap.parse(markdown, date(2026, 9, 1))
+        assert [(m.name, m.date, m.gates) for m in got.milestones] == [
+            ("Beta", date(2026, 11, 30), ["Payment step"])]  # fmt: skip
+
+
+@pytest.mark.parametrize("t", [t for t in BUILTIN_TEMPLATES if t.kind == "roadmap"],
+                         ids=lambda t: t.key)  # fmt: skip
+def test_every_roadmap_template_has_the_plan_sections(t):
+    """The stored roadmap templates name both plan sections, under Full version and before
+    Sources and data points, as the writer's brief asks."""
+    body = builtin_body(t)
+    heads = (
+        "# Full version {#full}",
+        "## Plan {#plan}",
+        "## Milestones {#plan-milestones}",
+        "## Sources and data points",
+    )
+    at = [body.index(h) for h in heads]
+    assert at == sorted(at)
 
 
 # --------------------------------------------------------------------------- the run
