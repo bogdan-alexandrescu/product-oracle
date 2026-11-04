@@ -1568,6 +1568,9 @@ async def inbox_rows(db: AsyncSession, principal: Any, seen: Any) -> list[InboxS
     if not ds:
         return []
     docs, numbers = await _refs(db, ds)
+    from oracle.simple import changes
+
+    names = await changes._names(db, {d.submitted_by for d in ds if d.submitted_by})
     return [
         InboxSimpleApproval(
             draft_id=d.id,
@@ -1578,6 +1581,7 @@ async def inbox_rows(db: AsyncSession, principal: Any, seen: Any) -> list[InboxS
             ),
             version=numbers.get(d.version_id),
             submitted_by=d.submitted_by,
+            submitted_by_name=names.get(d.submitted_by) if d.submitted_by else None,
             submitted_at=d.submitted_at,
             decider_approved=d.decider_approval is not None,
             state="new" if seen is None or (d.submitted_at and d.submitted_at > seen) else "open",

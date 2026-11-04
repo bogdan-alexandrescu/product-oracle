@@ -25649,6 +25649,16 @@ export interface components {
              */
             simple_approvals: components["schemas"]["InboxSimpleApproval"][];
             /**
+             * Simple Date Suggestions
+             * @default []
+             */
+            simple_date_suggestions: components["schemas"]["InboxSimpleDateSuggestion"][];
+            /**
+             * Simple Goal Suggestions
+             * @default []
+             */
+            simple_goal_suggestions: components["schemas"]["InboxSimpleGoalSuggestion"][];
+            /**
              * Simple Minutes
              * @default []
              */
@@ -25949,6 +25959,8 @@ export interface components {
             version: number | null;
             /** Submitted By */
             submitted_by: string | null;
+            /** Submitted By Name */
+            submitted_by_name?: string | null;
             /** Submitted At */
             submitted_at: string | null;
             /** Decider Approved */
@@ -26024,6 +26036,86 @@ export interface components {
              * @default false
              */
             from_ask: boolean;
+        };
+        /**
+         * InboxSimpleDateSuggestion
+         * @description inbox-meeting-proposals fix: Oracle's open date suggestion on an item I may decide
+         *     (``simple_date_suggestions``, counted in ``total``): one row per item, its slices'
+         *     span; decided on the item's roadmap.
+         */
+        InboxSimpleDateSuggestion: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Item Id
+             * Format: uuid
+             */
+            item_id: string;
+            /** Item Title */
+            item_title: string;
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Basis */
+            basis: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "open";
+        };
+        /**
+         * InboxSimpleGoalSuggestion
+         * @description inbox-meeting-proposals fix: an open feature suggested for a goal whose suggestions
+         *     I decide (``simple_goal_suggestions``, counted in ``total``).
+         */
+        InboxSimpleGoalSuggestion: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            goal: components["schemas"]["SimpleGoalBrief"];
+            /** Title */
+            title: string;
+            /** Outcome */
+            outcome: string;
+            /** From Oracle */
+            from_oracle: boolean;
+            /** Proposed By Name */
+            proposed_by_name?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "open";
         };
         /**
          * InboxSimpleMinutes

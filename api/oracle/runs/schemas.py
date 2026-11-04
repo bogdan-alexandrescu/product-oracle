@@ -11,7 +11,13 @@ from oracle.priorities.schemas import PriorityCheck
 from oracle.reports.schemas import InboxReport, InboxReportFailure
 from oracle.review.schemas import FeedbackKind
 from oracle.roadmap.schemas import InboxDateBasis
-from oracle.simple.schemas import InboxSimpleApproval, InboxSimpleChange, InboxSimpleMinutes
+from oracle.simple.schemas import (
+    InboxSimpleApproval,
+    InboxSimpleChange,
+    InboxSimpleDateSuggestion,
+    InboxSimpleGoalSuggestion,
+    InboxSimpleMinutes,
+)
 
 Flow = Literal[
     "baseline_to_prd",
@@ -1589,6 +1595,10 @@ class InboxOut(BaseModel):
     # Simple S3b: versions from Simple drafts waiting for my approval as a required
     # reviewer (in ``total``).
     simple_approvals: list[InboxSimpleApproval] = []
+    # inbox-meeting-proposals fix: Oracle's open date suggestions and the goals' open
+    # suggestions I may decide (each in ``total``).
+    simple_date_suggestions: list[InboxSimpleDateSuggestion] = []
+    simple_goal_suggestions: list[InboxSimpleGoalSuggestion] = []
     # Simple S8: meeting minutes sent to me as an attendee (not counted in ``total``).
     simple_minutes: list[InboxSimpleMinutes] = []
 
