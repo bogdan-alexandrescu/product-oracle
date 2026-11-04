@@ -73,5 +73,19 @@ for (const size of SIZES) {
       await expect(panel.locator('[data-testid="chat-message"][data-author="person"]')).toHaveCount(1);
       await expect(box).toHaveValue("");
     });
+
+    test("a change Oracle cannot make yet is said so, with where to make it, not 'did not understand'", async ({ page }) => {
+      const panel = await openAsk(page, size.name === "phone");
+      await panel.getByRole("textbox", { name: "Message Oracle" }).fill("cut Weekly alert digest; raise our capacity to 12 engineer-weeks; make it nicer");
+      await panel.getByRole("button", { name: "Send" }).click();
+      const reply = panel.locator('[data-testid="chat-message"][data-author="oracle"]').last();
+      await expect(reply.getByTestId("chat-message-body")).toContainText("I can't change capacity from a chat yet (“raise our capacity to 12 engineer-weeks”); change it on Priorities.");
+      await expect(reply.getByTestId("chat-message-body")).toContainText("I did not understand: “make it nicer”.");
+      await expect(reply.getByTestId("chat-message-body")).not.toContainText("I did not understand: “raise");
+      const link = reply.getByRole("link", { name: "Change it on Priorities" });
+      await expect(link).toHaveAttribute("href", "/simple/priorities");
+      await link.click();
+      await expect(page).toHaveURL(/\/simple\/priorities$/);
+    });
   });
 }
