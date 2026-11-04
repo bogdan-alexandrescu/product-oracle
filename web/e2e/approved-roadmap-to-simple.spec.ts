@@ -23,6 +23,46 @@ async function view(page: Page, format: "timeline" | "gantt") {
   await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", format);
 }
 
+async function approveVersion3(page: Page) {
+  await page.goto("/documents/example-trails/v/3");
+  await page.getByTestId("approve-version").filter({ visible: true }).click();
+  await page.getByRole("group", { name: "Confirm approval" }).filter({ visible: true }).getByRole("button", { name: "Confirm" }).click();
+  await expect(page.getByText(/✓ Approved Oct 22, 2026/).filter({ visible: true }).first()).toBeVisible();
+}
+
+test.describe("a person's change after the version", () => {
+  test.use(DESKTOP);
+
+  /**
+   * protects = once a person adds an item after roadmap version 3 was applied, the line says
+   * "Differs from roadmap version 3" and names it ("<title> was added after version 3", the
+   * API's words), with "Apply version 3 again" for the owner, which applies the version again
+   * and keeps the person's item; fails_when = the line still says it matches, leaves the
+   * added item out, or has no button; no_claim = a person's own dates (the API's tests).
+   */
+  test("an item added after version 3 shows as a difference, with Apply version 3 again", async ({ page }) => {
+    await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "approved-roadmap"] as const);
+    await login(page);
+    await approveVersion3(page);
+    await page.goto(SIMPLE);
+    const line = page.getByTestId("applied-version");
+    await expect(line).toHaveAttribute("data-matches", "true");
+
+    await page.getByLabel("Add an item").fill("Trail photo tips");
+    await page.getByLabel("Add an item").press("Enter");
+    await expect(line).toHaveAttribute("data-matches", "false");
+    await expect(line).toContainText("Differs from roadmap version 3, approved Oct 22, 2026");
+    await expect(line.getByTestId("applied-differences")).toHaveText("Trail photo tips was added after version 3");
+
+    const applied = page.waitForResponse((r) => r.url().includes("/simple/roadmap/apply-approved") && r.request().method() === "POST");
+    await line.getByRole("button", { name: "Apply version 3 again" }).click();
+    expect((await applied).status()).toBe(200);
+    await expect(line.getByRole("button", { name: "Apply version 3 again" })).toBeEnabled();
+    await expect(line.getByTestId("applied-differences")).toHaveText("Trail photo tips was added after version 3");
+    await expect(line.getByTestId("applied-off-plan")).toHaveText("Shipped, off the plan: Offline sync. Moved to the next PRD: Trail chat.");
+  });
+});
+
 for (const phone of [false, true]) {
   const where = phone ? "phone" : "desktop";
   test.describe(where, () => {
