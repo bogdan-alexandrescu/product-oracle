@@ -6132,7 +6132,10 @@ async function route(db: Db, req: Request): Promise<Response> {
       p,
     );
     if (planRes) return planRes;
-    const goalMapRes = await routeGoalMap(db, localStorage.getItem(MOCK_SCENARIO_KEY), { role: me.role, name: simpleNames[me.id] ?? "You" }, r, p);
+    const goalMapRes = await routeGoalMap(db, localStorage.getItem(MOCK_SCENARIO_KEY), { role: me.role, name: simpleNames[me.id] ?? "You" }, r, p, (itemId) => {
+      const key = db.simple_roadmap && Object.keys(db.simple_roadmap.ids).find((k) => db.simple_roadmap!.ids[k] === itemId);
+      return db.simple_roadmap?.items.find((i) => i.key === key) ?? null;
+    });
     if (goalMapRes) return goalMapRes;
     const simpleRes = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, r, p, q);
     if (simpleRes) return simpleRes;

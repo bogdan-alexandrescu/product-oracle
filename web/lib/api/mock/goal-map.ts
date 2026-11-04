@@ -1,6 +1,7 @@
 /**
  * Simple Goal map (build-goal-map): GET /v1/simple/goal-map and its edits (POST /areas,
- * PUT /areas/order, PATCH /goals/{id}, POST /milestones, POST /links), as the API
+ * PUT /areas/order, PATCH /goals/{id}, POST /milestones, PATCH /milestones/{id}, POST
+ * /links), as the API
  * (api/oracle/simple/goal_map.py). Invented data: three goals, a guardrail, four areas,
  * seven gated milestones and twelve features. The "goal-map-hard" scenario
  * (MOCK_SCENARIO_KEY) gives the hard case: 5 areas, 12 milestones, 40 features, one
@@ -22,7 +23,7 @@ export type GmLift = GmFeature["lift"];
 /** The mock's ids: stable UUIDs, as the API's. */
 const id = (k: string) => stableUuid(`goal-map/${k}`);
 /** The Simple roadmap items the first features are (so their item panel opens). */
-const ITEM_KEYS = ["alert-rules", "alert-digest", "alert-mobile", "alert-export", "alert-sso", "setup-checklist", "setup-import", "setup-tour", "setup-video", "setup-ideas", "price-tiers"];
+const ITEM_KEYS = ["alert-rules", "alert-digest", "alert-mobile", "alert-export", "alert-sso", "setup-checklist", "setup-import", "setup-tour", "setup-video", "setup-ideas"];
 const fid = (k: string) => {
   const n = Number(k.slice(1));
   return k.startsWith("f") && n <= ITEM_KEYS.length ? stableUuid(`simple-item/${ITEM_KEYS[n - 1]}`) : id(k);
@@ -144,7 +145,7 @@ function ft(
   measured: string | null,
   released = lift !== "not_measured" || measured !== null,
 ): GmFeature {
-  return { id, name, area, milestones, lever, expected, confidence, released, measured, lift };
+  return { id, name, area, milestones, lever, expected, confidence, released, measured, lift, links: milestones.map((m) => ({ milestone: m, expected, confidence, measured, lift })) };
 }
 
 const FEATURES: GmFeature[] = [
@@ -256,7 +257,7 @@ function withIds(map: GoalMap): GoalMap {
     goals: map.goals.map((g) => ({ ...g, id: id(g.id), builds_on: g.builds_on.map(id) })),
     areas: map.areas.map((a) => ({ ...a, id: id(a.id) })),
     milestones: map.milestones.map((m) => ({ ...m, id: id(m.id), goal: id(m.goal), areas: m.areas.map(id), depends: m.depends.map(id) })),
-    features: map.features.map((f) => ({ ...f, id: fe(f.id), area: f.area ? id(f.area) : null, milestones: f.milestones.map(id) })),
+    features: map.features.map((f) => ({ ...f, id: fe(f.id), area: f.area ? id(f.area) : null, milestones: f.milestones.map(id), links: f.links.map((l) => ({ ...l, milestone: id(l.milestone) })) })),
   };
 }
 
@@ -276,7 +277,15 @@ function amount(v: number, unit: string): string {
 }
 
 /** /v1/simple/goal-map and its edits; null for any other path. Edits need approver and up. */
-export async function routeGoalMap(db: { goal_map?: GoalMap }, scenario: string | null, me: { role: string; name: string }, req: Request, p: string[]): Promise<Response | null> {
+export async function routeGoalMap(
+  db: { goal_map?: GoalMap },
+  scenario: string | null,
+  me: { role: string; name: string },
+  req: Request,
+  p: string[],
+  /** A Simple roadmap item by id (any item can be attached, not only those on the map). */
+  item: (id: string) => { title: string } | null = () => null,
+): Promise<Response | null> {
   if (p[1] !== "simple" || p[2] !== "goal-map") return null;
   const map = (db.goal_map ??= seedGoalMap(scenario));
   const canEdit = me.role === "owner" || me.role === "approver";
@@ -320,11 +329,32 @@ export async function routeGoalMap(db: { goal_map?: GoalMap }, scenario: string 
     });
     return out();
   }
+  if (req.method === "PATCH" && p[3] === "milestones" && p[4]) {
+    const m = map.milestones.find((x) => x.id === p[4]);
+    if (!m) return json(404, { detail: "No such milestone" });
+    if (body?.threshold != null) m.threshold = Number(body.threshold);
+    if (body?.confirm) Object.assign(m, { confirmed: me.name, confirmed_on: "Nov 3", proposed: false });
+    return out();
+  }
   if (req.method === "POST" && p[3] === "links") {
-    const f = map.features.find((x) => x.id === body?.feature);
     const m = map.milestones.find((x) => x.id === body?.milestone);
-    if (!f || !m) return json(404, { detail: "No such feature or milestone" });
-    if (!f.milestones.includes(m.id)) f.milestones.push(m.id);
+    const known = map.features.find((x) => x.id === body?.feature);
+    const it = known ? null : item(String(body?.feature));
+    if (!m || (!known && !it)) return json(404, { detail: "No such feature or milestone" });
+    const area = map.areas.find((a) => a.id === body?.area);
+    if (!area) return json(422, { detail: "Pick an area of this map" });
+    const expected = String(body?.expected ?? "").trim();
+    const confidence = ({ high: "High", medium: "Medium", low: "Low" } as const)[body?.confidence as "high" | "medium" | "low"] ?? "Medium";
+    const link = { milestone: m.id, expected, confidence, measured: null, lift: "not_measured" as const };
+    if (known) {
+      if (!known.milestones.includes(m.id)) {
+        known.milestones.push(m.id);
+        known.links.push(link);
+      }
+      known.area ??= area.id;
+    } else {
+      map.features.push({ id: String(body.feature), name: it!.title, area: area.id, milestones: [m.id], lever: area.lever, expected, confidence, released: false, measured: null, lift: "not_measured", links: [link] });
+    }
     return out();
   }
   return json(404, { detail: "Not found" });

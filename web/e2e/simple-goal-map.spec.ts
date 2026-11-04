@@ -133,6 +133,92 @@ test.describe("desktop", () => {
     await expect(ladder(page).getByTestId("gm-feature-also").filter({ hasText: "Trial reminder texts" })).toHaveCount(1);
   });
 
+  test("attaches a roadmap feature not yet on the map, filed under the cell's area", async ({ page }) => {
+    // protects=the picker lists the roadmap's items, not only those on the map; the cell's area goes
+    // with it; the lift typed is this link's; fails_when=a roadmap item cannot be found, or it lands
+    // in another area; no_claim=lift measurement.
+    await open(page);
+    const row = ladder(page).getByTestId("gm-lane").filter({ hasText: "Onboarding & revenue" });
+    await expect(row).toHaveCount(1);
+    // The cell of Onboarding & revenue under 50 sign-ups per rep: its Attach button.
+    const gate = ladder(page).getByTestId("gm-gate").filter({ has: page.getByText("50 sign-ups per rep", { exact: true }) });
+    const gx = (await gate.boundingBox())!.x;
+    const ry = (await row.boundingBox())!.y;
+    const attach = ladder(page).getByTestId("gm-attach");
+    let hit = -1;
+    for (let i = 0; i < (await attach.count()); i++) {
+      const b = (await attach.nth(i).boundingBox())!;
+      if (b.x >= gx && b.x < gx + 240 && b.y >= ry) {
+        hit = i;
+        break;
+      }
+    }
+    expect(hit).toBeGreaterThanOrEqual(0);
+    await attach.nth(hit).click();
+    const ed = page.getByTestId("gm-editor");
+    await expect(ed.getByLabel("Milestone").locator("option:checked")).toHaveText("50 sign-ups per rep");
+    await expect(ed.getByLabel("Area").locator("option:checked")).toHaveText("Onboarding & revenue");
+    await ed.getByLabel("Feature").fill("plan tiers");
+    const pick = ed.getByRole("button", { name: /New plan tiers/ });
+    await expect(pick).toContainText("Not on the map yet");
+    await pick.click();
+    await ed.getByLabel("Expected lift here").fill("+$20 each");
+    await ed.getByTestId("gm-save").click();
+    await expect(page.getByTestId("gm-flash")).toHaveText("Attached: New plan tiers now also serves 50 sign-ups per rep.");
+    const card = ladder(page).getByTestId("gm-feature").filter({ hasText: "New plan tiers" });
+    await expect(card).toHaveCount(1);
+    await expect(card).toContainText("+$20 each");
+    // Read after the page scrolled to the card: it sits in the Onboarding & revenue row.
+    const cy = (await card.boundingBox())!.y;
+    const top = (await row.boundingBox())!;
+    expect(cy).toBeGreaterThanOrEqual(top.y);
+    expect(cy).toBeLessThan(top.y + top.height);
+  });
+
+  test("sets and confirms a proposed milestone's gate", async ({ page }) => {
+    // protects=a proposed gate's threshold is set and confirmed in the map (it is no longer only
+    // proposed and names who confirmed it); fails_when=there is no way to set or confirm it;
+    // no_claim=the 7 days, read from the goal.
+    await open(page);
+    await page.getByTestId("gm-propose").click();
+    let ed = page.getByTestId("gm-editor");
+    await ed.getByLabel("Name").fill("40 sign-ups per rep");
+    await ed.getByLabel("Met when the reading is at least").fill("40");
+    await ed.getByTestId("gm-save").click();
+    const gate = ladder(page).locator('[data-testid="gm-gate"]').filter({ hasText: "40 sign-ups per rep" }).filter({ hasNotText: "50 sign-ups" });
+    await expect(gate).toContainText("Proposed");
+    await gate.getByTestId("gm-edit-gate").click();
+    ed = page.getByTestId("gm-editor");
+    await expect(ed).toContainText("The gate of 40 sign-ups per rep");
+    await ed.getByLabel("At least").fill("35");
+    await ed.getByLabel("Confirm this gate").check();
+    await ed.getByTestId("gm-save").click();
+    await expect(page.getByTestId("gm-flash")).toHaveText("Gate confirmed: 40 sign-ups per rep, at least 35 for 7 days.");
+    await expect(gate).not.toContainText("Proposed");
+    await expect(gate).toContainText("31 of 35");
+    await gate.getByTestId("gm-edit-gate").click();
+    await expect(page.getByTestId("gm-editor")).toContainText("Confirmed by Avery Stone, Nov 3.");
+  });
+
+  test("the ladder's head and goal cards as the frame: the step hint on its own line, the top goal widest", async ({ page }) => {
+    // protects=the review's frame match: title and subtitle on one line, the step hint below them;
+    // the first goal's title wraps and the third card is the widest; fails_when=the hint shares the
+    // title's line or the cards are sized otherwise; no_claim=colours.
+    await open(page);
+    const head = ladder(page).getByTestId("gm-ladder-head");
+    const h2 = (await head.getByRole("heading", { name: "Milestones by area" }).boundingBox())!;
+    const sub = (await head.getByText("Left to right in steps").boundingBox())!;
+    const hint = (await head.getByTestId("gm-step-hint").boundingBox())!;
+    expect(sub.x).toBeGreaterThan(h2.x + h2.width);
+    expect(hint.y).toBeGreaterThanOrEqual(h2.y + h2.height - 1);
+    const cards = page.getByTestId("gm-goal");
+    const w = await Promise.all([0, 1, 2].map(async (i) => (await cards.nth(i).boundingBox())!.width));
+    expect(w[2]).toBeGreaterThan(w[1]);
+    expect(w[2]).toBeGreaterThan(w[0]);
+    const title = (await cards.nth(0).getByText("Sign-ups per rep per day").boundingBox())!;
+    expect(title.height).toBeGreaterThan(30);
+  });
+
   test("starts a New PRD from a milestone: Simple's New PRD form opens prefilled", async ({ page }) => {
     // protects=New PRD from a milestone, a picked milestone and areas, opens the New PRD form with its
     // name and problem filled in; fails_when=the form is empty or does not open; no_claim=the intake.

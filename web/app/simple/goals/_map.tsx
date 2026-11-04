@@ -18,7 +18,7 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { FeaturePanel } from "./_panel";
 
-type Edit = "propose" | "goal" | "attach" | "prd" | "area" | null;
+type Edit = "propose" | "goal" | "attach" | "prd" | "area" | "gate" | null;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -264,10 +264,14 @@ interface Draft {
   search: string;
   milestone: string;
   areaName: string;
+  /** The area of the cell a feature is attached from. */
+  area: string;
+  expected: string;
+  confirm: boolean;
 }
 
 function emptyDraft(map: GoalMap): Draft {
-  return { name: "", goal: map.goals[0]?.id ?? "", threshold: "", areas: [], after: "", target: "", feature: "", search: "", milestone: "", areaName: "" };
+  return { name: "", goal: map.goals[0]?.id ?? "", threshold: "", areas: [], after: "", target: "", feature: "", search: "", milestone: "", areaName: "", area: "", expected: "", confirm: false };
 }
 
 /* ---------- The page ---------- */
@@ -286,11 +290,12 @@ export function GoalMapPage() {
 
   if (!map) return <div className="simple-page" role="status">{q.error ? errorMessage(q.error) : "Loading the goal map…"}</div>;
 
-  const open = (e: Edit, goal?: string, milestone?: string) => {
+  const open = (e: Edit, goal?: string, milestone?: string, area?: string) => {
     if (goal) setGoalId(goal);
     setFlash(null);
     setEdit(e);
-    setDraft({ ...emptyDraft(map), milestone: milestone ?? "" });
+    const m = map.milestones.find((x) => x.id === milestone);
+    setDraft({ ...emptyDraft(map), milestone: milestone ?? "", area: area ?? "", threshold: e === "gate" && m ? String(m.threshold) : "" });
   };
   const close = () => {
     setEdit(null);
@@ -344,11 +349,21 @@ export function GoalMapPage() {
       reveal(`[data-goal="${goalId}"]`, "start");
     }
     if (edit === "attach") {
-      const f = map.features.find((x) => x.id === draft.feature);
       const m = map.milestones.find((x) => x.id === draft.milestone);
-      const ok = await send(api.POST("/v1/simple/goal-map/links", { body: { feature: draft.feature, milestone: draft.milestone } }), () => `Attached: ${f?.name} now also serves ${m?.name}.`);
+      const ok = await send(
+        api.POST("/v1/simple/goal-map/links", { body: { feature: draft.feature, milestone: draft.milestone, area: draft.area, expected: draft.expected, confidence: "medium" } }),
+        (next) => `Attached: ${next.features.find((x) => x.id === draft.feature)?.name} now also serves ${m?.name}.`,
+      );
       if (!ok) return;
       reveal(`[data-feature="${draft.feature}"]`);
+    }
+    if (edit === "gate") {
+      const m = map.milestones.find((x) => x.id === draft.milestone)!;
+      const ok = await send(
+        api.PATCH("/v1/simple/goal-map/milestones/{milestone_id}", { params: { path: { milestone_id: m.id } }, body: { threshold: Number(draft.threshold), confirm: draft.confirm } }),
+        () => (draft.confirm ? `Gate confirmed: ${m.name}, at least ${num(Number(draft.threshold), m.unit)} for 7 days.` : `Gate saved: ${m.name}, at least ${num(Number(draft.threshold), m.unit)} for 7 days.`),
+      );
+      if (!ok) return;
     }
     if (edit === "prd") {
       const m = map.milestones.find((x) => x.id === draft.milestone)!;
@@ -416,10 +431,71 @@ export function GoalMapPage() {
 
 interface Ctx {
   map: GoalMap;
-  open: (e: Edit, goal?: string, milestone?: string) => void;
+  open: (e: Edit, goal?: string, milestone?: string, area?: string) => void;
   moveArea: (id: string, dir: -1 | 1) => void;
   onOpen: (f: GmFeature) => void;
   week: string[];
+}
+
+/** Attach any roadmap item you can see to a milestone, filed under the cell's area. */
+function AttachDrawer({ map, draft, set, onClose, onSave }: { map: GoalMap; draft: Draft; set: (k: Partial<Draft>) => void; onClose: () => void; onSave: () => void }) {
+  const roadmap = useQuery("simple-roadmap:goal-map", () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } })));
+  const label = "flex flex-col gap-1.5 font-semibold";
+  const on = new Map(map.features.map((f) => [f.id, f]));
+  const term = draft.search.toLowerCase();
+  const named = (roadmap.data?.items ?? []).map((i) => ({ id: i.id, name: on.get(i.id)?.name ?? i.title }));
+  const list = named.filter((i) => !on.get(i.id)?.milestones.includes(draft.milestone) && (!term || i.name.toLowerCase().includes(term)));
+  return (
+    <Drawer title="Attach a feature to a milestone" onClose={onClose} testId="gm-editor">
+      <label className={label}>
+        Milestone
+        <select className={field} value={draft.milestone} onChange={(e) => set({ milestone: e.target.value })}>
+          <option value="">Pick a milestone</option>
+          {map.milestones.map((m) => (
+            <option key={m.id} value={m.id}>{m.name}</option>
+          ))}
+        </select>
+      </label>
+      <label className={label}>
+        Area
+        <select className={field} value={draft.area} onChange={(e) => set({ area: e.target.value })}>
+          <option value="">Pick an area</option>
+          {map.areas.map((a) => (
+            <option key={a.id} value={a.id}>{a.name}</option>
+          ))}
+        </select>
+      </label>
+      <label className={label}>
+        Feature
+        <input className={field} value={draft.search} placeholder="Search the roadmap" onChange={(e) => set({ search: e.target.value })} />
+      </label>
+      <ul className="flex max-h-72 flex-col gap-1.5 overflow-y-auto" data-testid="gm-attach-list">
+        {!roadmap.data && <li className="simple-small">{roadmap.error ? errorMessage(roadmap.error) : "Loading the roadmap…"}</li>}
+        {roadmap.data && !list.length && <li className="simple-small">No roadmap feature left to attach</li>}
+        {list.map((i) => {
+          const f = on.get(i.id);
+          return (
+            <li key={i.id}>
+              <button type="button" onClick={() => set({ feature: i.id })} className={`w-full rounded-xl border px-3 py-2 text-left ${draft.feature === i.id ? "border-accent bg-accent-soft" : "border-line"}`}>
+                <span className="font-semibold">{i.name}</span>
+                <span className="simple-small block text-[14px]! leading-5">
+                  {f ? `${map.areas.find((a) => a.id === f.area)?.name ?? "No area"} · serves ${f.milestones.map((x) => msName(map, x)).join(", ")}` : "Not on the map yet"}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <label className={label}>
+        Expected lift here
+        <input className={field} value={draft.expected} placeholder="For example +5 a day" onChange={(e) => set({ expected: e.target.value })} />
+      </label>
+      <div className="flex justify-end gap-2">
+        <Btn onClick={onClose}>Cancel</Btn>
+        <Btn primary testId="gm-save" disabled={!draft.feature || !draft.milestone || !draft.area} onClick={onSave}>Attach</Btn>
+      </div>
+    </Drawer>
+  );
 }
 
 function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: GoalMap; edit: Edit; draft: Draft; setDraft: (d: Draft) => void; goal: GmGoal; onClose: () => void; onSave: () => void }) {
@@ -495,38 +571,29 @@ function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: Go
         </div>
       </Drawer>
     );
-  if (edit === "attach") {
-    const list = map.features.filter((f) => !draft.search || f.name.toLowerCase().includes(draft.search.toLowerCase()));
+  if (edit === "attach") return <AttachDrawer map={map} draft={draft} set={set} onClose={onClose} onSave={onSave} />;
+  if (edit === "gate") {
+    const m = map.milestones.find((x) => x.id === draft.milestone);
+    if (!m) return null;
     return (
-      <Drawer title="Attach a feature to a milestone" onClose={onClose} testId="gm-editor">
+      <Drawer title={`The gate of ${m.name}`} onClose={onClose} testId="gm-editor">
+        <p className="simple-small">
+          Met when {m.measure} holds this for 7 days in a row. Now {num(m.current, m.unit)}.
+        </p>
         <label className={label}>
-          Milestone
-          <select className={field} value={draft.milestone} onChange={(e) => set({ milestone: e.target.value })}>
-            <option value="">Pick a milestone</option>
-            {map.milestones.map((m) => (
-              <option key={m.id} value={m.id}>{m.name}</option>
-            ))}
-          </select>
+          At least
+          <input className={field} inputMode="decimal" value={draft.threshold} onChange={(e) => set({ threshold: e.target.value })} />
         </label>
-        <label className={label}>
-          Feature
-          <input className={field} value={draft.search} placeholder="Search features" onChange={(e) => set({ search: e.target.value })} />
-        </label>
-        <ul className="flex max-h-72 flex-col gap-1.5 overflow-y-auto">
-          {list.map((f) => (
-            <li key={f.id}>
-              <button type="button" onClick={() => set({ feature: f.id })} className={`w-full rounded-xl border px-3 py-2 text-left ${draft.feature === f.id ? "border-accent bg-accent-soft" : "border-line"}`}>
-                <span className="font-semibold">{f.name}</span>
-                <span className="simple-small block text-[14px]! leading-5">
-                  {map.areas.find((a) => a.id === f.area)?.name} · expects {lower(f.expected)}{f.lever === "Guardrail" ? "" : ` on ${f.lever.toLowerCase()}`}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        {m.proposed ? (
+          <label className="flex items-center gap-2 font-semibold">
+            <input type="checkbox" checked={draft.confirm} onChange={(e) => set({ confirm: e.target.checked })} /> Confirm this gate
+          </label>
+        ) : (
+          <p className="simple-small">Confirmed by {m.confirmed}{m.confirmed_on ? `, ${m.confirmed_on}` : ""}.</p>
+        )}
         <div className="flex justify-end gap-2">
           <Btn onClick={onClose}>Cancel</Btn>
-          <Btn primary testId="gm-save" disabled={!draft.feature || !draft.milestone} onClick={onSave}>Attach</Btn>
+          <Btn primary testId="gm-save" disabled={!(Number(draft.threshold) > 0)} onClick={onSave}>Save gate</Btn>
         </div>
       </Drawer>
     );
@@ -599,11 +666,14 @@ function GoalCard({ g, onEdit, goals, canEdit }: { g: GmGoal; onEdit: () => void
   );
 }
 
+/** The goal cards' widths as the picked frame draws them: the last (the top goal) widest. */
+const GOAL_GROW = [0.9, 1, 1.3];
+
 function Goals({ map, open, arrows = true }: Ctx & { arrows?: boolean }) {
   return (
     <div className="flex items-stretch gap-2 max-[600px]:flex-col">
       {map.goals.map((g, i) => (
-        <div key={g.id} className="flex flex-1 items-stretch gap-2 max-[600px]:flex-col">
+        <div key={g.id} className="flex flex-1 items-stretch gap-2 max-[600px]:flex-col" style={{ flexGrow: GOAL_GROW[i] ?? 1 }}>
           <GoalCard g={g} goals={map.goals} canEdit={map.can_edit} onEdit={() => open("goal", g.id)} />
           {arrows && i < map.goals.length - 1 && (
             <span className="self-center text-[24px] font-bold text-text-faint max-[600px]:rotate-90" aria-label="builds on">→</span>
@@ -636,10 +706,12 @@ function Ladder(ctx: Ctx) {
       <Guardrail map={map} />
       <div className="max-[600px]:hidden!">
         <section className="simple-card gap-0! p-0!" data-testid="gm-ladder" aria-label="Milestones by area">
-          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
-            <h2 className="simple-h2">Milestones by area</h2>
-            <span className="simple-small">Left to right in steps: a milestone needs the ones it comes after.</span>
-            {ms.length > 3 && <span className="simple-small font-semibold">3 of {ms.length} steps shown at a time · scroll sideways for the rest →</span>}
+          <div className="flex flex-col gap-1 px-5 py-3" data-testid="gm-ladder-head">
+            <span className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="simple-h2">Milestones by area</h2>
+              <span className="simple-small">Left to right in steps: a milestone needs the ones it comes after.</span>
+            </span>
+            {ms.length > 3 && <span data-testid="gm-step-hint" className="simple-small font-semibold">3 of {ms.length} steps shown at a time · scroll sideways for the rest →</span>}
           </div>
           <div className="relative border-t border-line">
             <div data-testid="gm-ladder-scroll" className="snap-x snap-mandatory overflow-x-auto scroll-pl-[200px] [container-type:inline-size]">
@@ -670,6 +742,11 @@ function Ladder(ctx: Ctx) {
                       {num(m.current, m.unit)} of {num(m.threshold, m.unit)} · {afterWords(m, map)}
                     </span>
                     <Proof m={m} compact week={ctx.week} />
+                    {map.can_edit && (
+                      <button type="button" data-testid="gm-edit-gate" onClick={() => open("gate", undefined, m.id)} className="self-start rounded-full px-1.5 text-[14px] font-semibold text-accent-ink hover:underline">
+                        {m.proposed ? "Set and confirm the gate" : "Edit the gate"}
+                      </button>
+                    )}
                   </div>
                 ))}
                 {map.areas.map((a, ai) => (
@@ -714,7 +791,7 @@ function LadderRow({ a, ai, n, ms, map, open, moveArea, onOpen, home, proposed }
             )}
             {serves && !fs.length && <span className="simple-small text-[14px]! leading-5 px-1">No feature yet</span>}
             {serves && map.can_edit && (
-              <button type="button" data-testid="gm-attach" onClick={() => open("attach", undefined, m.id)} className="self-start rounded-full px-1.5 text-[14px] font-semibold text-accent-ink hover:underline">
+              <button type="button" data-testid="gm-attach" onClick={() => open("attach", undefined, m.id, a.id)} className="self-start rounded-full px-1.5 text-[14px] font-semibold text-accent-ink hover:underline">
                 + Attach a feature
               </button>
             )}
