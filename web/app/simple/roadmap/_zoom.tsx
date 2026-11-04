@@ -989,6 +989,17 @@ const TimelineRow = memo(function TimelineRow({
               </span>
             </span>
           )}
+          {/* roadmap-decide: an item with no dates of its own (Oracle's estimate on both ends) whose
+           * bar has no room for its dates says so beside it, never a bare unlabeled pill. */}
+          {!live && i.start.estimated && i.end.estimated && (fit || bx + bw - Math.max(bx, sl) <= 120) && (
+            <span
+              data-testid="bar-no-dates"
+              className="pointer-events-none absolute top-[9px] z-[11] rounded bg-surface px-1 text-xs leading-4 whitespace-nowrap text-text2"
+              style={bx + bw + 96 <= trackW ? { left: bx + bw + 4 } : bx >= 96 ? { left: bx - 92 } : { left: Math.max(bx, 0) + 4 }}
+            >
+              No dates yet
+            </span>
+          )}
           {live && (
             // The Gantt's live words while a bar is dragged: its dates, and a link it would break.
             <span

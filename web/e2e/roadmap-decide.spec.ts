@@ -184,3 +184,11 @@ test("milestone labels and the PRD ask keep to their header row: none covers ano
     expect(hits, zoom).toEqual([]);
   }
 });
+
+test("an item with no dates of its own says so beside its bar when the bar has no room for its dates", async ({ page }) => {
+  await open(page);
+  await page.getByTestId("zoom-all").click();
+  const row = (key: string) => page.locator(`[data-testid="timeline-row"][data-item="${key}"]`);
+  await expect(row("setup-video").getByTestId("bar-no-dates")).toHaveText("No dates yet");
+  await expect(row("alert-rules").getByTestId("bar-no-dates")).toHaveCount(0);
+});
