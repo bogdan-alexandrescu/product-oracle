@@ -126,6 +126,14 @@ for (const size of SIZES) {
       await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
       await page.mouse.down();
       const target = bucket(page, "Growth").getByRole("heading", { name: "Growth" });
+      if (size.name === "phone") {
+        // Growth is below the screen: holding at the bottom edge scrolls the page under the finger.
+        await page.mouse.move(from.x + 4, size.viewport.height - 30, { steps: 6 });
+        await expect(page.getByTestId("drag-edge")).toContainText("Scrolling down");
+        await expect.poll(async () => (await target.boundingBox())!.y, { intervals: [30] }).toBeLessThan(size.viewport.height - 160);
+        await page.mouse.move(from.x + 4, size.viewport.height / 2, { steps: 2 });
+        await expect(page.getByTestId("drag-edge")).toHaveCount(0);
+      }
       const to = (await target.boundingBox())!;
       await page.mouse.move(to.x + 10, to.y + to.height / 2, { steps: 8 });
       await expect(bucket(page, "Growth")).toHaveAttribute("data-drop", "");
