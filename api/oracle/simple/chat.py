@@ -249,6 +249,8 @@ class Reply:
         # The reader saw nothing to change in the line (no action, no clarify): in a
         # meeting a line ending in "?" is then kept for the minutes (MEETING_ASK).
         self.no_change = False
+        # ask-length-limit: where the parts Oracle cannot change yet are changed ({label, href}).
+        self.links: list[dict[str, str]] = []
 
 
 # The most of a meeting PRD's text the reader is given (its start; a PRD runs a few pages).
@@ -1202,6 +1204,7 @@ async def thread(
                 cards=by_msg.get(m.id, []), reply_to=m.reply_to, choices=choices,
                 picked=r.picked if r is not None else None, retry=kind == "failed",
                 source=_talk().source_label(m.citations),
+                links=_talk().links_of(m.citations),
             ))  # fmt: skip
     return ChatThreadOut(
         id=d.id if d is not None else None,
@@ -1600,10 +1603,56 @@ def _grounded(c: Ctx, said: str) -> bool:
     return any(len(n) >= 3 and n.lower() in t for n in names)
 
 
-def _unread(skipped: Any) -> list[str]:
-    """The reader's ``skipped`` parts of the line, said back (at most three, each clipped)."""
-    parts = [" ".join(str(x).split())[:120] for x in skipped or [] if str(x).strip()]
-    return [f"I did not understand: “{p}”." for p in parts[:3]] if isinstance(skipped, list) else []
+# ask-length-limit: parts of a line no chat change does yet, said as such with where they are
+# changed (never "I did not understand"): (pattern, the words, the page's name, its link).
+NOT_YET = (
+    (re.compile(r"\bgate\b", re.I),
+     "I can't change an item that is off the gate but still in Now from a chat yet",
+     "Roadmap", "/simple/roadmap"),
+    (re.compile(r"\bcapacity\b|\bheadcount\b|\bengineer[- ]weeks?\b", re.I),
+     "I can't change capacity from a chat yet", "Priorities", "/simple/priorities"),
+    (re.compile(r"\bdates?\b|\bdeadlines?\b", re.I),
+     "I can't change dates from a chat yet", "Roadmap", "/simple/roadmap"),
+)  # fmt: skip
+
+
+def _unread(skipped: Any, links: list[dict[str, str]] | None = None) -> list[str]:
+    """The reader's ``skipped`` parts of the line, every one said back (each clipped): a part
+    about capacity, dates or the gate is not yet supported, with where to change it (added to
+    ``links``, once each); any other part was not understood."""
+    if not isinstance(skipped, list):
+        return []
+    parts = [" ".join(str(x).split())[:120] for x in skipped if str(x).strip()]
+    said: list[str] = []
+    for p in parts:
+        hit = next((n for n in NOT_YET if n[0].search(p)), None)
+        if hit is None:
+            said.append(f"I did not understand: “{p}”.")
+            continue
+        said.append(f"{hit[1]} (“{p}”); change it on {hit[2]}.")
+        if links is not None and all(x["href"] != hit[3] for x in links):
+            links.append({"label": hit[2], "href": hit[3]})
+    return said
+
+
+def _unused(c: Ctx, actions: list[Any]) -> str:
+    """ask-length-limit: the changes past the fifth, each named, for the person to say again."""
+    names = []
+    for a in actions:
+        r = build(c, str(a.get("op")), a.get("args") or {}) if isinstance(a, dict) else None
+        if r is not None and r.kind == "cards" and r.cards:
+            names.append(str(r.cards[0].get("summary") or ""))
+        elif isinstance(a, dict) and str(a.get("restated") or "").strip():
+            names.append(plain(" ".join(str(a["restated"]).split()))[:120])
+    names = [f"“{n}”" for n in names if n]
+    if not names:
+        return "I read the first five changes; say the rest again."
+    return f"I did not use these changes yet; say them again: {'; '.join(names)}."
+
+
+def _linked(reply: Reply, links: list[dict[str, str]]) -> Reply:
+    reply.links = links
+    return reply
 
 
 def interpret(c: Ctx, answer: Any, ask_box: bool = False) -> Reply:
@@ -1639,11 +1688,12 @@ def interpret(c: Ctx, answer: Any, ask_box: bool = False) -> Reply:
             cards += r.cards
         # qa-simple-decide-24: nothing is dropped without a word: every refusal, the parts the
         # reader could not read, the changes past the fifth.
-        said = _unread(answer.get("skipped"))
+        links: list[dict[str, str]] = []
+        said = _unread(answer.get("skipped"), links)
         if len(actions) > 5:
-            said.append("I read the first five changes; say the rest again.")
+            said.append(_unused(c, actions[5:]))
         if not cards:
-            return Reply("note", " ".join([refused[0], *refused[1:], *said]))
+            return _linked(Reply("note", " ".join([refused[0], *refused[1:], *said])), links)
         if refused:
             # The valid cards stay; the line says which ones it cannot do.
             whys = " ".join(
@@ -1652,7 +1702,7 @@ def interpret(c: Ctx, answer: Any, ask_box: bool = False) -> Reply:
             )
             n = {1: "One", 2: "Two", 3: "Three"}.get(len(refused), str(len(refused)))
             said.insert(0, f"{n} I can't do: {whys}")
-        return Reply("cards", " ".join([*said, _count(len(cards))]), cards)
+        return _linked(Reply("cards", " ".join([*said, _count(len(cards))]), cards), links)
     if isinstance(clarify, dict) and clarify.get("choices"):
         if viewer_in_meeting:
             return Reply("note", VIEWER_NOTE)
@@ -1720,6 +1770,9 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
         if not msg.citations and c.prd is not None:
             # A meeting's answer names where it comes from: the meeting's PRD.
             msg.citations = [{"kind": "simple_source", "label": c.prd.source()}]
+    if reply.links:
+        links = [{"kind": "simple_link", **x} for x in reply.links]
+        msg.citations = [*(msg.citations or []), *links]
     read.choices = _jsonable(reply.choices)
     await _attach(s, principal, msg, read.meeting_id, reply)
     await s.flush()

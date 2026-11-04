@@ -60017,7 +60017,7 @@
         "properties": {
           "text": {
             "type": "string",
-            "maxLength": 1000,
+            "maxLength": 4000,
             "minLength": 1,
             "title": "Text"
           },
@@ -60066,6 +60066,24 @@
           "text"
         ],
         "title": "ChatIn"
+      },
+      "ChatLinkOut": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "href": {
+            "type": "string",
+            "title": "Href"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "href"
+        ],
+        "title": "ChatLinkOut"
       },
       "ChatListOut": {
         "properties": {
@@ -60189,6 +60207,13 @@
               }
             ],
             "title": "Source"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/ChatLinkOut"
+            },
+            "type": "array",
+            "title": "Links"
           }
         },
         "type": "object",

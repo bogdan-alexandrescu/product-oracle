@@ -454,6 +454,12 @@ def source_label(citations: list[dict[str, Any]] | None) -> str | None:
                  if isinstance(x, dict) and x.get("kind") == "simple_source"), None)  # fmt: skip
 
 
+def links_of(citations: list[dict[str, Any]] | None) -> list[dict[str, str]]:
+    """ask-length-limit: the pages a reply sends the person to (``simple_link`` citations)."""
+    return [{"label": str(x.get("label")), "href": str(x.get("href"))} for x in citations or []
+            if isinstance(x, dict) and x.get("kind") == "simple_link"]  # fmt: skip
+
+
 def item_context(c: Any) -> dict[str, Any] | None:
     """The talk's item for the reader: "it" means this item."""
     e = c.item
