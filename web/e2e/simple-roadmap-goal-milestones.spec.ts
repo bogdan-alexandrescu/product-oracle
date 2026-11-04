@@ -140,7 +140,7 @@ test.describe("milestones on the Timeline", () => {
     await open(page);
     await label(page, "M2 60% of teams active at day 90").click();
     await expect(card(page).getByTestId("ms-waits-chip")).toHaveCount(2);
-    await card(page).getByRole("button", { name: "Mobile alert push" }).click();
+    await card(page).getByRole("button", { name: "Mobile alert push", exact: true }).click();
     await expect(card(page)).toBeHidden();
     await expect(page.getByTestId("floating-card").getByRole("heading", { name: "Mobile alert push" })).toBeVisible();
   });
