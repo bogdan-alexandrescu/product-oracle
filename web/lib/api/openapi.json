@@ -97710,6 +97710,17 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "source_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Title"
           }
         },
         "type": "object",

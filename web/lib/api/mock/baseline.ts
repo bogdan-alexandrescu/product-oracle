@@ -520,7 +520,7 @@ export function seedBaseline(uuid: () => string): BaselineState {
       created_at,
     });
   proposal(guided, { attrs: { effort: "L" } }, "The setup review estimated more work than planned.", "2026-10-16T08:10:00Z");
-  proposal(dark, { attrs: { status: "planned" } }, "Mentioned as next up in the planning call.", "2026-10-16T08:12:00Z");
+  proposal(dark, { attrs: { status: "planned" } }, "Mentioned as next up in the planning call, under FR-06.", "2026-10-16T08:12:00Z");
   // And one from a commenter: no run. A fixed id, so the ids seeded after it stay put.
   s.proposals.push({
     id: COMMENTER_PROPOSAL,

@@ -330,6 +330,10 @@ class ProposalRun(BaseModel):
     flow_title: str
     status: str
     created_at: datetime
+    # codes-and-chips: the title of the document a reason's requirement numbers (FR-06)
+    # come from: the run's source version's document, else the run's own document; None
+    # when the run has neither.
+    source_title: str | None = None
 
 
 class ProposalProposer(BaseModel):

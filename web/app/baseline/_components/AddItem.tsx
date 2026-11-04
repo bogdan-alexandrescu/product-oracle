@@ -7,7 +7,7 @@ import { INPUT } from "@/components/ui";
 import { api, unwrap, type EntityOut, type GraphOut } from "@/lib/api/client";
 import { errorMessage, useAuthRedirect } from "@/lib/use-query";
 
-import { sortedGoals } from "./common";
+import { goalCodes, sortedGoals } from "./common";
 import { byTitle } from "./order";
 
 /** The kinds a person adds from the Baseline screen, in the form's order. */
@@ -93,6 +93,8 @@ export function AddItemSheet({
   const live = (graph?.entities ?? []).filter((e) => e.status !== "rejected");
   const products = live.filter((e) => e.type === "product").sort(byTitle);
   const goalRows = sortedGoals(graph);
+  // The goal's code ("G-B", a subgoal's "G-B.1"), none when its title has none: the name is shown beside it.
+  const codes = goalCodes(graph);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -199,9 +201,9 @@ export function AddItemSheet({
                   <legend className="mb-1 text-[13px] font-semibold tracking-[0.02em] text-text2">Goals it serves</legend>
                   {goalRows.map((g) => (
                     <div key={g.id} className="flex min-w-0 flex-wrap items-center gap-2">
-                      <GoalTag id={tags.get(g.id) ?? "G"} proposed={g.status === "proposed"} />
+                      <GoalTag id={codes.get(g.id)} proposed={g.status === "proposed"} />
                       <label htmlFor={`${id}-goal-${g.id}`} className="min-w-0 flex-[1_1_10rem] truncate" title={g.title}>
-                        {g.title}
+                        {tags.get(g.id) ?? g.title}
                       </label>
                       <select
                         id={`${id}-goal-${g.id}`}

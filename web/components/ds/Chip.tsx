@@ -53,8 +53,12 @@ export function Chip({
   );
 }
 
-/** A goal id tag (G1): mono, accent-soft; a proposed goal shows in warn. */
-export function GoalTag({ id, proposed = false, title }: { id: string; proposed?: boolean; title?: string }) {
+/**
+ * A goal's code tag (G-B): mono, accent-soft; a proposed goal shows in warn. A goal with no
+ * code has no tag (codes-and-chips): its name beside it is all a person reads, never twice.
+ */
+export function GoalTag({ id, proposed = false, title }: { id: string | null | undefined; proposed?: boolean; title?: string }) {
+  if (!id) return null;
   return (
     <span
       title={title ?? (proposed ? `${id} · proposed` : id)}

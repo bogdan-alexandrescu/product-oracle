@@ -465,6 +465,13 @@ function docTitle(ctx: RunsContext, r: { id: string; document_id?: string | null
   return ctx.briefTitle?.(r.id) ?? null;
 }
 
+/** A proposal's run (the API's ProposalRun), with the title of the document its source codes come from. */
+export function proposalRun(ctx: Pick<RunsContext, "documents">, r: RunOut): Schemas["ProposalRun"] {
+  // codes-and-chips: the source version's document, else the run's own document, else none.
+  const own = r.document_id ? (ctx.documents.find((d) => d.id === r.document_id)?.title ?? null) : null;
+  return { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at, source_title: r.source?.title ?? own };
+}
+
 function summary(r: RunOut): Schemas["RunSummary"] {
   return {
     id: r.id,
@@ -2947,7 +2954,7 @@ export function seedNoDocumentRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
 export function fromRunCheckpoint(ctx: RunsContext, runId: string): { run: Schemas["ProposalRun"]; checkpoint: Schemas["FromRunCheckpoint"] | null; actions: Schemas["ReviewAction"][] } | null {
   const r = ctx.db.runs.find((x) => x.id === runId);
   if (!r) return null;
-  const run = { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at };
+  const run = proposalRun(ctx, r);
   const cp = r.checkpoints.filter((c) => c.kind === "baseline_confirm").pop();
   if (!cp) return { run, checkpoint: null, actions: [] };
   const role = ctx.member?.role ?? ctx.userRole ?? null;

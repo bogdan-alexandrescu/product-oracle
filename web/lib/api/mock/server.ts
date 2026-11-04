@@ -84,6 +84,7 @@ import {
   seedPriorityRuns,
   seedRunReviewRun,
   seedNoDocumentRuns,
+  proposalRun,
   seedRuns,
   seedScopeReviewRuns,
   seedStoredRefusalRun,
@@ -3653,7 +3654,7 @@ function routeBaselineFor(db: Db, me: { id: string; role: Schemas["Me"]["role"] 
   const runOf = (runId: string): Schemas["ProposalRun"] | null => {
     db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
     const r = db.runs.runs.find((x) => x.id === runId);
-    return r ? { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at } : null;
+    return r ? proposalRun({ documents: db.documents }, r) : null;
   };
   const memberEmail = (userId: string) => db.members.find((m) => m.id === userId)?.email ?? null;
   const member = db.members.find((m) => m.id === me.id);
