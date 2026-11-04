@@ -138,7 +138,8 @@ function answer(s: State): Answer {
   const pick = reachable ? PICK : all;
   return {
     ...goal(s), changes: CHANGES, pick, pick_date: shift(PROJECTED, saved(pick).days), best_date: best, reachable,
-    locked: LOCKED.map((l) => ({ ...l, would_reach: !reachable && l.pw === 3 })), run_seconds: 40, run_usd: 0.2,
+    locked: LOCKED.map((l) => ({ ...l, would_reach: !reachable && l.pw === 3 })),
+    hire: reachable ? null : { start_weeks: 3, date: shift(HARD_TARGET, -6), reaches: false },
   };
 }
 
@@ -173,7 +174,7 @@ function draft(s: State, picks: string[]): Draft {
     ...(on("summary") ? [{ item: "Thread summary card", owner: "Tomas Brook" }] : []),
     ...(on("snippets") ? [{ item: "Import saved snippets", owner: "Rina Vale" }] : []),
   ];
-  return { prd: PRD, prd_version: s.version, next_version: s.version + 1, roadmap_version: s.roadmapVersion, changes, dates, new_target: newTarget, date, needs_estimate: needs, run_seconds: 40, run_usd: 0.2 };
+  return { prd: PRD, prd_version: s.version, next_version: s.version + 1, roadmap_version: s.roadmapVersion, changes, dates, new_target: newTarget, date, needs_estimate: needs };
 }
 
 function words(isoDay: string): string {
@@ -224,7 +225,7 @@ export async function routeFitDate(scenario: string | null, role: string, req: R
         ...(picks.includes("bulk") ? ["The goal starts at 34 of 40 replied threads at launch and reaches 40 with M3."] : []),
       ],
     };
-    return json(200, { prd: PRD, version: s.version, date: d.date, target: s.target, approved_at: s.approved.at, needs_estimate: d.needs_estimate });
+    return json(200, { prd: PRD, version: s.version, date: d.date, target: s.target, approved_at: s.approved.at, needs_estimate: d.needs_estimate, roadmap_version: s.roadmapVersion, roadmap_live: true });
   }
   return null;
 }

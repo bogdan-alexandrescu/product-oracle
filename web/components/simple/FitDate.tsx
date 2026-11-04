@@ -107,7 +107,14 @@ function HardNote({ a }: { a: Answer }) {
       <p className="font-semibold text-crit">
         No set of cuts reaches {day(a.target)}. The earliest is {day(a.best_date)}, {plural(gap(a.best_date, a.target), "day")} after.
       </p>
-      <p className="simple-small text-text">Every change is picked. Two items stay whatever the date:</p>
+      <p className="simple-small text-text">
+        Every change is picked.
+        {a.hire &&
+          (a.hire.reaches
+            ? ` Another engineer, counted after a ${a.hire.start_weeks}-week start, brings it to ${day(a.hire.date)}.`
+            : ` Another engineer counts only after a ${a.hire.start_weeks}-week start, so lands too late to help.`)}{" "}
+        {a.locked.length === 2 ? "Two items stay" : a.locked.length === 1 ? "One item stays" : `${a.locked.length} items stay`} whatever the date:
+      </p>
       <Locked a={a} hard />
     </div>
   );
@@ -204,7 +211,7 @@ function Diff({ a, d }: { a: Answer; d: Draft }) {
         </p>
       )}
       <p className="simple-small">
-        Every date that moves is listed. This took about {d.run_seconds} seconds and cost about ${d.run_usd.toFixed(2)} of Claude time. The locked items keep their size.
+        Every date that moves is listed. The locked items keep their size.
       </p>
     </div>
   );
@@ -271,7 +278,7 @@ export function FitPanel({ goal, onClose, onApproved }: { goal: Goal; onClose: (
     <div className="flex flex-col gap-2">
       <p className="simple-small">
         {hard && newTarget && `None of this reaches ${day(a!.target)}, so the target moves to ${day(newTarget)} with it. `}
-        {a && `Oracle drafts the next PRD and roadmap versions for you to check. About ${a.run_seconds} seconds, about $${a.run_usd.toFixed(2)}.`}
+        {a && "Oracle drafts the next PRD and roadmap versions for you to check."}
         {!mayDraft && " Only an approver can draft them."}
       </p>
       <div className="flex flex-wrap gap-2">
