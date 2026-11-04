@@ -5897,7 +5897,29 @@ async def _checked(
     check = await roadmap.check_items_async(
         text, prd_slug=slug, prd_version=version, prd_sections=keys, date_bases=bases
     )
+    if source_id is not None and check.items:
+        check = await _with_work_problems(db, source_id, check)
     return check, slug, version, keys
+
+
+async def _with_work_problems(
+    db: AsyncSession, source_id: uuid.UUID, check: roadmap.ItemsCheck
+) -> roadmap.ItemsCheck:
+    """``check`` with the items' problems with the work the PRD version planned from its
+    brief's answers (walk 2 problem 19: a finding-out is never a blocker). A new check:
+    ``check`` may be the parse cache's."""
+    from oracle.intake import discovery
+
+    prd = await db.get(DocumentVersion, source_id)
+    if prd is None:
+        return check
+    found = discovery.items_problems(check.items, await discovery.version_work(db, prd.markdown))
+    if not found:
+        return check
+    out = roadmap.ItemsCheck(list(check.items), list(check.problems), list(check.resolutions))
+    for code, message, item in found:
+        out.add(code, message, item)
+    return out
 
 
 async def checked_items(

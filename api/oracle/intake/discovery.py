@@ -8,7 +8,9 @@ gap settled (no review wait, B4 is about claims, not plans), the brief lists it 
 ``work`` as a requirement cited to the answer, the draft writer writes it as a
 requirement in the PRD and, when it gates a date, an early discovery item with its own
 estimate, and a run's draft that lists it as a blocker, or leaves it out, is refused
-(:func:`draft_problems`, checked in ``oracle.runs.service._import_draft``).
+(:func:`draft_problems`, checked in ``oracle.runs.service._import_draft``). Roadmap
+items from a PRD version that cites such an answer never list the finding-out under
+blockers (:func:`items_problems`, checked in ``oracle.runs.service._checked``).
 
 :func:`is_discovery` reads plain words: something is unknown (or not checked yet) and
 finding it out is part of the work, the team will find out, or a discovery step does
@@ -264,4 +266,72 @@ def draft_problems(markdown: str, work: Sequence[Work]) -> list[ImportProblem]:
                 p.line = n
                 problems.append(p)
                 break
+    return problems
+
+
+_ANSWER_REF = re.compile(r"urn:oracle:answer:([0-9a-fA-F-]{36})")
+
+
+async def version_work(db: AsyncSession, markdown: str) -> list[Work]:
+    """The work a PRD version plans from its brief's answers: the answers its citations
+    cite (``urn:oracle:answer:<id>``) that say finding out is part of this work."""
+    front, _body, _start = _front(markdown)
+    citations = front.get("citations") if isinstance(front.get("citations"), list) else []
+    ids: set[uuid.UUID] = set()
+    for c in citations:
+        m = _ANSWER_REF.search(str(c.get("ref") or "")) if isinstance(c, dict) else None
+        if m:
+            try:
+                ids.add(uuid.UUID(m[1]))
+            except ValueError:
+                continue
+    if not ids:
+        return []
+    rows = await db.execute(
+        select(StakeholderAnswer, KnowledgeGap)
+        .join(StakeholderQuestion, StakeholderQuestion.id == StakeholderAnswer.question_id)
+        .join(KnowledgeGap, KnowledgeGap.id == StakeholderQuestion.gap_id)
+        .where(StakeholderAnswer.id.in_(ids))
+        .order_by(StakeholderAnswer.created_at, StakeholderAnswer.id)
+    )
+    return [
+        Work(gap.id, a.question_id, a.id, requirement_for(gap.category, gap.statement), a.body)
+        for a, gap in rows.tuples()
+        if a.kind in KINDS and a.body and is_discovery(a.body)
+    ]
+
+
+def _slug(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", _plain(text)).strip("-")
+
+
+def items_problems(items: Sequence[dict], work: Sequence[Work]) -> list[tuple[str, str, str]]:
+    """Roadmap items' problems with the work their PRD planned from its brief's answers:
+    (code, message, item id). A finding-out is an early discovery item, never a blocker:
+    no item lists it under ``blockers`` (by its requirement's slug, the id of the item that
+    finds it out, or its answer id)."""
+    problems = []
+    for w in work:
+        need = _plain(w.requirement)
+        answer = str(w.answer_id).lower()
+        keys = {_slug(w.requirement), answer}
+        keys |= {
+            _slug(str(i.get("id")))
+            for i in items
+            if i.get("id") and need in _plain(f"{i.get('title') or ''} {i.get('outcome') or ''}")
+        }
+        for i in items:
+            blockers = i.get("blockers") if isinstance(i.get("blockers"), list) else []
+            if any(_slug(str(b)) in keys or answer in str(b).lower() for b in blockers):
+                item = str(i.get("id") or "")
+                problems.append(
+                    (
+                        "discovery_as_blocker",
+                        f"item {item}: “{w.requirement}” is listed under blockers. The brief's "
+                        "answer says finding it out is part of this work: make it an early "
+                        "discovery item with its own estimate, before the items whose dates "
+                        "it gates, and list it under depends_on, never under blockers.",
+                        item,
+                    )
+                )
     return problems
