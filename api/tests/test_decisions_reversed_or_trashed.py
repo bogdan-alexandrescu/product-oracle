@@ -6,6 +6,14 @@ something in Trash.
   standing decisions and leave out one about a roadmap now in Trash, saying so in the
   sources; fails_when=a trashed roadmap's decision is fed to drafting, or nothing says it
   was left out; no_claim=what the model writes from them.
+- test_roadmap_read_says_which_decisions_were_left_out and
+  test_one_pager_read_says_which_decisions_were_left_out: protects=the roadmap's items'
+  and a PRD's lines' decided decisions leave out one also about a roadmap now in Trash,
+  and the read's ``left_out`` entry (its sources) says so; fails_when=it is listed, or
+  dropped with nothing to say so; no_claim=the web, which does not show it yet.
+- test_review_due_keeps_a_decision_about_trash: protects=a brief's "review due" block
+  still reminds the owner of a decided decision about a roadmap now in Trash, marked so;
+  fails_when=the reminder is dropped; no_claim=other blocks.
 - test_split_leaves_out_lapsed_decisions: protects=reversed, withdrawn and superseded
   decisions never stand, each with why; fails_when=one is kept; no_claim=none.
 - test_company_decisions_marks_a_decision_about_a_trashed_roadmap: protects=Company >
@@ -106,6 +114,79 @@ async def test_drafting_readers_leave_out_decisions_about_trash(client, ctx):
         needs = await blocks.needs_decision(s, bctx)
         assert all(r.get("decision_id") != gone_open["id"] for r in needs)
         assert any(r.get("kind") == "left_out" for r in needs)
+
+
+def _left_out_line(d: dict, title: str) -> str:
+    return f"Left out, no longer standing: D-{d['number']} {title} (about a roadmap now in Trash)."
+
+
+async def test_roadmap_read_says_which_decisions_were_left_out(client):
+    w = await world()
+    doc_id = await _roadmap(w.ctx)
+    item = {"kind": "roadmap_item", "id": w.ids["edit_title-a"], "ref": "edit_title-a"}
+    kept = await propose(client, w.ctx, title="Keep the weekly digest", subjects=[item])
+    gone = await propose(client, w.ctx, title="Cut bulk export",
+                         subjects=[item, *_about(doc_id)])  # fmt: skip
+    for d in (kept, gone):
+        await decide(client, w.ctx, d["number"])
+
+    async def read() -> dict:
+        r = await client.get("/v1/simple/roadmap", headers=w.ctx.as_("decider"))
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    view = await read()
+    [it] = [i for i in view["items"] if i["key"] == "edit_title-a"]
+    assert {x["number"] for x in it["decided_in"]} == {kept["number"], gone["number"]}
+    assert view["left_out"] is None
+    await _trash(client, w.ctx)
+    view = await read()
+    [it] = [i for i in view["items"] if i["key"] == "edit_title-a"]
+    assert [x["number"] for x in it["decided_in"]] == [kept["number"]]
+    line = _left_out_line(gone, "Cut bulk export")
+    assert view["left_out"] == {"kind": "left_out", "title": line, "decision_ids": [gone["id"]]}
+
+
+async def test_one_pager_read_says_which_decisions_were_left_out(client):
+    from tests import test_simple_one_pager_api as op
+
+    ctx = await op.world(client)
+    view = await op.get(client, ctx)
+    line_id = next(x["id"] for b in view["blocks"] for x in b["lines"])
+    doc_id = await _roadmap(ctx)
+    on_line = {"kind": "section", "id": view["document"]["id"], "ref": f"line:{line_id}"}
+    kept = await propose(client, ctx, title="Keep the weekly digest", subjects=[on_line])
+    gone = await propose(client, ctx, title="Cut saved filters",
+                         subjects=[on_line, *_about(doc_id)])  # fmt: skip
+    for d in (kept, gone):
+        await decide(client, ctx, d["number"])
+    view = await op.get(client, ctx)
+    assert {x["number"] for x in op.line(view, line_id)["decisions"]} == {
+        kept["number"], gone["number"]}  # fmt: skip
+    assert view["left_out"] is None
+    await _trash(client, ctx)
+    view = await op.get(client, ctx)
+    assert [x["number"] for x in op.line(view, line_id)["decisions"]] == [kept["number"]]
+    line = _left_out_line(gone, "Cut saved filters")
+    assert view["left_out"] == {"kind": "left_out", "title": line, "decision_ids": [gone["id"]]}
+
+
+async def test_review_due_keeps_a_decision_about_trash(client, ctx):
+    doc_id = await _roadmap(ctx)
+    gone = await propose(client, ctx, title="Cut saved filters", subjects=_about(doc_id))
+    await decide(client, ctx, gone["number"])
+    await _trash(client, ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.scalar(select(Decision).where(Decision.id == uuid.UUID(gone["id"])))
+        d.review_at = datetime.now(UTC).date()
+        await s.commit()
+        now = datetime.now(UTC)
+        bctx = blocks.BlockCtx(ctx.users["approver"].id, now - timedelta(days=1),
+                               now + timedelta(days=1), now)  # fmt: skip
+        due = await blocks.decisions_due(s, bctx)
+    assert [(r["decision_id"], r["text"]) for r in due] == [
+        (gone["id"], f"D-{gone['number']} Cut saved filters (made about a roadmap now in Trash)")
+    ]
 
 
 async def test_split_leaves_out_lapsed_decisions(client, ctx):
