@@ -12,6 +12,11 @@ Test cards (protects / fails_when / no_claim):
   then it appears); viewers get 403; an empty title is 422; undo removes the item;
   fails_when=a proposer's add writes, a viewer adds, or undo leaves the item;
   no_claim=the web's drag.
+- test_set_goals_moves_an_item_to_another_goal: protects=set_goals makes the goal an item
+  serves another (the bucket a just-added task is dragged to): applied for the owner with
+  Undo, which puts its goal back; a stale ``before``, an unknown goal or a viewer is
+  refused; fails_when=the item keeps its goal, Undo leaves it moved, or a refusal writes;
+  no_claim=the goal buckets' feature links (test_simple_goal_buckets_api.py).
 - test_added_item_is_in_the_draft_only: protects=an added item is read by those who see
   the roadmap's working draft and never by others or by the published version (Detailed's
   rows are untouched); submitting the draft carries the item into the next version;
@@ -178,6 +183,31 @@ async def test_add_item_per_role(client):
     assert c["target"]["item_id"] not in await w.items(client)
     async with tenant_session(w.ctx.tenant_id) as s:
         assert await s.get(RoadmapItem, uuid.UUID(c["target"]["item_id"])) is None
+
+
+async def test_set_goals_moves_an_item_to_another_goal(client):
+    w = await World().build()
+    grow, quiet = w.goals["grow"], w.goals["quiet"]
+    item_id = (await w.add(client, "owner", "Saved carts"))["change"]["target"]["item_id"]
+
+    async def move(who, before, after, status):
+        r = await client.post(CHANGES, headers=w.as_(who), json={
+            "op": "set_goals", "target": {"item_id": item_id},
+            "before": {"goal_ids": before}, "after": {"goal_ids": after}})  # fmt: skip
+        assert r.status_code == status, r.text
+        return r.json()
+
+    await move("viewer", [grow], [quiet], 403)
+    await move("owner", [quiet], [grow], 409)
+    await move("owner", [grow], [str(uuid.uuid4())], 422)
+    c = (await move("owner", [grow], [quiet], 201))["change"]
+    assert c["status"] == "applied" and c["can_undo"]
+    item = (await w.items(client))[item_id]
+    assert item["goal"]["id"] == quiet and item["goal_ids"] == [quiet]
+    r = await client.post(f"{CHANGES}/{c['id']}/undo", headers=w.as_("owner"))
+    assert r.status_code == 201, r.text
+    item = (await w.items(client))[item_id]
+    assert item["goal"]["id"] == grow and item["goal_ids"] == [grow]
 
 
 async def test_added_item_is_in_the_draft_only(client):

@@ -19,6 +19,15 @@ import { expect, test, type Page } from "./test";
  * the new name shows; Undo puts the name back. Card tasks-cut: protects = ⋯ Cut from the roadmap
  * asks first, then the task leaves the bucket; Undo brings it back. Card tasks-viewer: a viewer
  * sees no add row, pencil or ⋯.
+ *
+ * Fix round (PR 1224 review). Card tasks-milestone: protects = a task's milestone changes twice
+ * and clears back to No milestone, each save closing the form with no error, the row showing the
+ * task's own milestone after each (none once cleared); fails_when = a change after the first is
+ * refused as stale, or the row looks unchanged. Card tasks-draft-move: protects = a task just
+ * added (a Draft, with no code chip) has a grip that carries it to another goal by pointer or
+ * keys, and Undo puts it back; fails_when = no grip, the raw item key as its chip, or it stays.
+ * Card tasks-goal-menu: with no dated plan a goal has the same pencil and ⋯ (Edit goal, Archive)
+ * as with one.
  */
 
 const SIZES = [
@@ -168,6 +177,77 @@ for (const view of VIEWS) {
         await expect(note(page)).toContainText("Moved Setup failure alerts to Growth.");
         await note(page).getByRole("button", { name: "Undo" }).click();
         await expect(bucket(page, view, "Reliability").locator('[data-code="F-03"]')).toBeVisible();
+      });
+
+      test("change a task's milestone twice, then clear it", async ({ page }) => {
+        await open(page, view, size.viewport);
+        const row = bucket(page, view, "Reliability").locator('[data-code="F-03"]');
+        const form = row.getByTestId("task-form");
+        for (const index of [1, 2, 0]) {
+          await row.getByRole("button", { name: "Edit Setup failure alerts" }).click();
+          await form.getByLabel("Milestone").selectOption({ index });
+          const name = index ? await form.getByLabel("Milestone").locator("option:checked").textContent() : null;
+          await form.getByRole("button", { name: "Save task" }).click();
+          await expect(form).toHaveCount(0);
+          await expect(page.getByRole("alert")).toHaveCount(0);
+          await expect(note(page)).toContainText("Saved Setup failure alerts.");
+          if (name) await expect(row.getByTestId("task-milestone")).toHaveText(name);
+          else await expect(row.getByTestId("task-milestone")).toHaveCount(0);
+        }
+        await row.getByRole("button", { name: "Edit Setup failure alerts" }).click();
+        await expect(form.getByLabel("Milestone")).toHaveValue("");
+      });
+
+      test("add a task, then move it to another goal by its grip, then Undo", async ({ page }) => {
+        await open(page, view, size.viewport);
+        const growth = bucket(page, view, "Growth");
+        const add = growth.getByTestId("add-task");
+        await add.getByRole("button", { name: "+ Add a task" }).click();
+        await add.getByTestId("task-form").getByLabel("Name").fill("Saved carts");
+        await add.getByTestId("task-form").getByRole("button", { name: "Save task" }).click();
+        await expect(note(page)).toContainText("Added Saved carts to Growth.");
+        const made = (goal: string) => bucket(page, view, goal).getByTestId("plan-feature").filter({ hasText: "Saved carts" });
+        await expect(made("Growth")).toContainText("Draft");
+        // No code people know yet: no chip, never the item's raw key.
+        await expect(made("Growth").getByTestId("prio-code")).toHaveCount(0);
+        const grip = made("Growth").getByTestId("feature-grip");
+        await expect(grip).toHaveAccessibleName("Move Saved carts to another goal");
+        if (size.name === "desktop") {
+          await grip.scrollIntoViewIfNeeded();
+          const from = (await grip.boundingBox())!;
+          await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+          await page.mouse.down();
+          const to = (await bucket(page, view, "Revenue").getByRole("heading", { name: "Revenue", exact: true }).boundingBox())!;
+          await page.mouse.move(to.x + 10, to.y + to.height / 2, { steps: 8 });
+          await expect(bucket(page, view, "Revenue")).toHaveAttribute("data-drop", "");
+          await page.mouse.up();
+        } else {
+          await grip.focus();
+          await page.keyboard.press("Enter");
+          await page.keyboard.press("ArrowDown");
+          await expect(page.getByTestId("bucket-live")).toHaveText("Over goal 1, Reliability. Enter drops it there.");
+          await page.keyboard.press("Enter");
+        }
+        const there = size.name === "desktop" ? "Revenue" : "Reliability";
+        await expect(note(page)).toContainText(`Moved Saved carts to ${there}.`);
+        await expect(made(there)).toContainText("Draft");
+        await expect(made("Growth")).toHaveCount(0);
+        await note(page).getByRole("button", { name: "Undo" }).click();
+        await expect(note(page)).toContainText("Undone");
+        await expect(made("Growth")).toBeVisible();
+        await expect(made(there)).toHaveCount(0);
+      });
+
+      test("a goal has its pencil and ⋯ to edit or archive it", async ({ page }) => {
+        await open(page, view, size.viewport);
+        const growth = bucket(page, view, "Growth");
+        await expect(growth.getByRole("button", { name: "Edit Growth" })).toBeVisible();
+        await growth.getByRole("button", { name: "More for Growth" }).click();
+        await growth.getByRole("menuitem", { name: "Archive goal" }).click();
+        await expect(page.getByRole("dialog", { name: "Archive Growth" })).toBeVisible();
+        await page.getByRole("dialog", { name: "Archive Growth" }).getByRole("button", { name: "Cancel" }).click();
+        await growth.getByRole("button", { name: "Edit Growth" }).click();
+        await expect(growth.getByRole("heading", { name: "Edit goal" })).toBeVisible();
       });
 
       test("a viewer sees the tasks with no add row, pencil, ⋯ or grip", async ({ page }) => {
