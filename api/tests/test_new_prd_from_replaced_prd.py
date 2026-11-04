@@ -418,3 +418,30 @@ async def test_a_run_draft_that_departs_is_sent_back(client, ctx):
         result = await docs_service.import_draft(s, "example-user-safety", good, principal,
                                                  run_id=run.id, commit=False)  # fmt: skip
         assert result.version.number == 1
+
+
+async def test_a_lapsed_approval_leaves_the_replaces_picker(client, ctx):
+    """protects=the Replaces picker (the PRDs GET /v1/documents?kind=prd gives an
+    approved_version) offers exactly the PRDs a brief may replace: once a PRD's approval
+    lapses (C2) it has no approved_version and its carried read is refused alike;
+    fails_when=a lapsed PRD is still offered, so picking it fails with a 422."""
+    from oracle.review.state import lapse_approvals
+
+    old = await _prd(ctx, "example-chat-prd", OLD)
+    kept = await _prd(ctx, "example-other-prd", "Example Other PRD")
+    owner = ctx.users["owner"].id
+    async with tenant_session(ctx.tenant_id) as s:
+        await s.execute(
+            update(DocumentVersion)
+            .where(DocumentVersion.id == uuid.UUID(old["version"]))
+            .values(approved_by=owner)
+        )
+        await lapse_approvals(s, None, reason="approver demoted to commenter", reviewer_id=owner)
+        await s.commit()
+    r = await client.get("/v1/documents", params={"kind": "prd"}, headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    offered = {d["id"] for d in r.json() if d["approved_version"] is not None}
+    assert offered == {kept["id"]}
+    for doc_id, status in ((old["id"], 422), (kept["id"], 200)):
+        got = await client.get(f"/v1/intakes/replaces/{doc_id}/carried", headers=ctx.as_("owner"))
+        assert got.status_code == status, got.text
