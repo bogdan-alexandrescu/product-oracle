@@ -92840,6 +92840,16 @@
             "title": "Sections",
             "default": []
           },
+          "left_out": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleLeftOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "notes": {
             "items": {
               "$ref": "#/components/schemas/OnePagerNote"
@@ -116571,6 +116581,35 @@
         "title": "SimpleKeyDateRoadmap",
         "description": "A roadmap whose key dates the reader reads; ``applies``: their change applies (an\nowner, the decider, with none its owner), ``can_change``: they may change or propose."
       },
+      "SimpleLeftOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "left_out",
+            "title": "Kind",
+            "default": "left_out"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "decision_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Decision Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "SimpleLeftOut",
+        "description": "A read's sources entry: the decisions left out as no longer standing\n(decisions-reversed-or-trashed; oracle.decisions.standing.sources_entry)."
+      },
       "SimpleLine": {
         "properties": {
           "key": {
@@ -119822,6 +119861,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SimplePlanSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "left_out": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleLeftOut"
               },
               {
                 "type": "null"

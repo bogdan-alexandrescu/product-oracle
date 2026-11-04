@@ -30361,6 +30361,7 @@ export interface components {
              * @default []
              */
             sections: components["schemas"]["OnePagerSource"][];
+            left_out?: components["schemas"]["SimpleLeftOut"] | null;
             /** Notes */
             notes: components["schemas"]["OnePagerNote"][];
             draft: components["schemas"]["OnePagerDraft"] | null;
@@ -38807,6 +38808,26 @@ export interface components {
             can_change: boolean;
         };
         /**
+         * SimpleLeftOut
+         * @description A read's sources entry: the decisions left out as no longer standing
+         *     (decisions-reversed-or-trashed; oracle.decisions.standing.sources_entry).
+         */
+        SimpleLeftOut: {
+            /**
+             * Kind
+             * @default left_out
+             * @constant
+             */
+            kind: "left_out";
+            /** Title */
+            title: string;
+            /**
+             * Decision Ids
+             * @default []
+             */
+            decision_ids: string[];
+        };
+        /**
          * SimpleLine
          * @description Roadmap-plus: where the line on priorities is drawn. ``now``: this quarter's plan
          *     (the Now horizon); ``key_date:<id>``, ``milestone:<id>``, ``date:<YYYY-MM-DD>``: planned
@@ -40141,6 +40162,7 @@ export interface components {
             roadmaps: components["schemas"]["SimpleKeyDateRoadmap"][];
             roadmap?: components["schemas"]["SimpleDocRef"] | null;
             span?: components["schemas"]["SimplePlanSpan"] | null;
+            left_out?: components["schemas"]["SimpleLeftOut"] | null;
         };
         /**
          * SimpleRunGroup
