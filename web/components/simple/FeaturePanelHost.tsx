@@ -3,7 +3,7 @@
 /**
  * build-feature-panel: the one feature panel on every Simple page besides Roadmap (which
  * opens it from its own views). A click on any element marked `data-feature` (the item's id,
- * else its title) opens the panel for that feature, read from the roadmap as the caller
+ * else its key, its code (F-06) or its title) opens the panel for that feature, read from the roadmap as the caller
  * reads it; changes made in it go through the change engine, as on Roadmap.
  */
 
@@ -44,11 +44,21 @@ export function FeaturePanelHost({ children }: { children: ReactNode }) {
   );
 }
 
+/** A one-pager's bet ("prd:<PRD slug>:<the bet's words>"): the PRD's item its words name, by its
+ * code (F-06) or its title. */
+function ofBet(items: Map<string, Item>, feature: string): Item | undefined {
+  const m = /^prd:([^:]+):([\s\S]*)$/.exec(feature);
+  if (!m) return undefined;
+  const words = m[2].toLowerCase();
+  const mine = [...items.values()].filter((i) => i.prd?.slug === m[1]);
+  return mine.find((i) => !!i.code && new RegExp(`\\b${i.code}\\b`, "i").test(m[2])) ?? mine.sort((a, b) => b.title.length - a.title.length).find((i) => words.includes(i.title.toLowerCase()));
+}
+
 /** The opened feature, read (and read again after each change) only while the panel is open. */
 function Opened({ feature, phone, canChange, onClose }: { feature: string; phone: boolean; canChange: boolean; onClose: () => void }) {
   const { data, loading, reload } = useQuery("simple-roadmap:feature-panel", () => unwrap(api.GET("/v1/simple/roadmap", {})));
   const items = useMemo(() => new Map((data?.items ?? []).map((i: Item) => [i.id, i])), [data]);
-  const item = items.get(feature) ?? [...items.values()].find((i) => i.title === feature || i.key === feature);
+  const item = items.get(feature) ?? [...items.values()].find((i) => i.title === feature || i.key === feature || (!!i.code && i.code === feature)) ?? ofBet(items, feature);
   const act: Act = useCallback(
     async (_what, body) => {
       try {

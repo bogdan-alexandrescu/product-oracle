@@ -73,8 +73,8 @@ test.describe("desktop 1440x900", () => {
     await expect(card.getByTestId("fp-list-needed").getByRole("heading")).toHaveText("Needed by (0)");
     await expect(card).not.toContainText(/\b[FD]-\d/);
     const talk = await openTalk(card);
-    await expect(talk.getByRole("heading", { name: "Talk about Weekly alert digest", exact: true })).toBeVisible();
-    await expect(talk.getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", "Ask about Weekly alert digest, or ask for a change…");
+    await expect(talk.getByRole("heading", { name: "Talk about this feature", exact: true })).toBeVisible();
+    await expect(talk.getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", "Ask about this feature, or ask for a change…");
     await expect(card).not.toContainText(/\b[FD]-\d/);
 
     await card.getByRole("button", { name: "Close" }).click();

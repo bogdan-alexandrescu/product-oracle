@@ -118,15 +118,25 @@ function Field({ label, value, shown, edit, note, multiline, onSave, testId }: {
 }
 
 /** A value picked or typed in place (FP2 A), its fields drawn by `fields`, Save and Cancel under them. */
-function Editor<T>({ label, shown, edit, start, fields, onSave, testId }: { label: string; shown: ReactNode; edit: boolean; start: () => T; fields: (d: T, set: (d: T) => void) => ReactNode; onSave: (d: T) => Promise<string | null> | string | null; testId: string }) {
+function Editor<T>({ label, shown, edit, start, fields, onSave, testId, after }: { label: string; shown: ReactNode; edit: boolean; start: () => T; fields: (d: T, set: (d: T) => void) => ReactNode; onSave: (d: T) => Promise<string | null> | string | null; testId: string; after?: (open: (() => void) | null) => ReactNode }) {
   const [draft, setDraft] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
-  if (!edit) return <span data-testid={testId}>{shown}</span>;
+  const open = () => (setDraft(start()), setError(null));
+  if (!edit)
+    return (
+      <>
+        <span data-testid={testId}>{shown}</span>
+        {after?.(null)}
+      </>
+    );
   if (draft === null)
     return (
-      <button type="button" data-testid={testId} aria-label={`Change ${label}`} onClick={() => (setDraft(start()), setError(null))} className="-mx-1 rounded px-1 text-left decoration-line-strong decoration-dotted underline-offset-4 hover:bg-surface2 hover:underline" title="Click to change">
-        {shown}
-      </button>
+      <>
+        <button type="button" data-testid={testId} aria-label={`Change ${label}`} onClick={open} className="-mx-1 rounded px-1 text-left decoration-line-strong decoration-dotted underline-offset-4 hover:bg-surface2 hover:underline" title="Click to change">
+          {shown}
+        </button>
+        {after?.(open)}
+      </>
     );
   const save = async () => {
     const err = await onSave(draft);
@@ -263,8 +273,23 @@ function GoalFields({ c }: { c: Ctx }) {
             </select>
           )}
           onSave={(d) => save(d, gs?.measure ?? "")}
+          after={(open) =>
+            gs ? null : item.goal ? (
+              <span className="block text-sm text-text2">
+                Oracle linked it from the PRD
+                {open && (
+                  <>
+                    {" · "}
+                    <button type="button" onClick={open} className="font-medium text-accent-ink underline">
+                      Change
+                    </button>
+                  </>
+                )}
+              </span>
+            ) : null
+          }
         />
-        {gs ? (
+        {gs && (
           <span className="block text-sm text-text2" data-testid="fp-goal-override">
             Oracle suggested {gs.oracle?.title ?? "no goal"}; set to {item.goal?.title ?? "no goal"} by {gs.by ?? "a person"}
             {edit && (
@@ -276,8 +301,6 @@ function GoalFields({ c }: { c: Ctx }) {
               </>
             )}
           </span>
-        ) : (
-          item.goal && <span className="block text-sm text-text2">Oracle linked it from the PRD</span>
         )}
       </Row>
       <Row label="Measure">

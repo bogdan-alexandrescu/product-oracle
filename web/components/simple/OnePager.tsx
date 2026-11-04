@@ -666,6 +666,12 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                                   Draw the flow
                                 </button>
                               )}
+                              {b.key === "bets" && !presenting && (
+                                // build-feature-panel review 2: a bet is a feature: its one panel (FeaturePanelHost finds the item by this PRD and the bet's words).
+                                <button type="button" className="simple-noprint ml-2 text-sm text-text2 underline max-md:min-h-11" aria-label={`Open the feature ${words.get(l.id)}`} data-feature={`prd:${v.document.slug}:${l.text}`}>
+                                  Open the feature
+                                </button>
+                              )}
                             </span>
                             {(v.can_edit || v.can_propose) && !presenting && (
                               // The owner's P6: "Edit" shows when the line is pointed at or tapped, not on every line.

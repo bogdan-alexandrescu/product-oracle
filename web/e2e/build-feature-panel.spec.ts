@@ -113,6 +113,58 @@ test.describe("one feature panel, desktop", () => {
     await expect(panel.getByTestId("fp-milestone")).toHaveText("Beta for the pilot · Dec 18");
   });
 
+  test("review 2: the goal it serves is changed in place, says it is not Oracle's, and Restore puts Oracle's back", async ({ page }) => {
+    const panel = await openOnRoadmap(page, "alert-digest");
+    await expect(panel.getByTestId("fp-goal")).toHaveText("Grow retention");
+    await expect(panel.getByTestId("fp-measure")).toHaveText("Teams active after 90 days");
+    await panel.getByRole("button", { name: "Change Goal" }).click();
+    let edit = panel.getByTestId("fp-edit");
+    await edit.getByRole("combobox", { name: "Goal" }).selectOption({ label: "Faster activation" });
+    await edit.getByRole("button", { name: "Cancel" }).click();
+    await expect(panel.getByTestId("fp-goal")).toHaveText("Grow retention");
+    await panel.getByRole("button", { name: "Change Goal" }).click();
+    edit = panel.getByTestId("fp-edit");
+    await edit.getByRole("combobox", { name: "Goal" }).selectOption({ label: "Faster activation" });
+    await edit.getByRole("button", { name: "Save" }).click();
+    await expect(edit).toBeHidden();
+    await expect(panel.getByTestId("fp-goal")).toHaveText("Faster activation");
+    await expect(panel.getByTestId("fp-goal-override")).toContainText(/^Oracle suggested Grow retention; set to Faster activation by \S/);
+    await panel.getByRole("button", { name: "Change Measure" }).click();
+    await panel.getByRole("textbox", { name: "Measure" }).fill("Teams that read a digest each week");
+    await panel.getByTestId("fp-edit").getByRole("button", { name: "Save" }).click();
+    await expect(panel.getByTestId("fp-measure")).toHaveText("Teams that read a digest each week");
+    await panel.getByTestId("fp-goal-override").getByRole("button", { name: "Restore" }).click();
+    await expect(panel.getByTestId("fp-goal")).toHaveText("Grow retention");
+    await expect(panel.getByTestId("fp-goal-override")).toHaveCount(0);
+    await expect(panel.getByTestId("fp-measure")).toHaveText("Teams active after 90 days");
+  });
+
+  test("review 2: a milestone the date engine wrote, with no name, is renamed in place", async ({ page }) => {
+    const panel = await openOnRoadmap(page, "alert-mobile");
+    const shown = panel.getByTestId("fp-milestone");
+    await expect(shown).toHaveText(/^Milestone · [A-Z][a-z]{2} \d{1,2}/);
+    const dayText = (await shown.innerText()).split(" · ")[1];
+    await panel.getByRole("button", { name: "Change Milestone" }).click();
+    const edit = panel.getByTestId("fp-edit");
+    await edit.getByRole("textbox", { name: "Milestone name" }).fill("Pilot");
+    await edit.getByRole("button", { name: "Save" }).click();
+    await expect(edit).toBeHidden();
+    await expect(shown).toHaveText(`Pilot · ${dayText}`);
+    await expect(page.getByText("Changed since you saw it")).toHaveCount(0);
+  });
+
+  test("review 2: picking its track's owner when the owner is its track's already records no change", async ({ page }) => {
+    const panel = await openOnRoadmap(page, "alert-mobile");
+    const owner = await panel.getByTestId("fp-owner").innerText();
+    await panel.getByRole("button", { name: "Change Owner" }).click();
+    const edit = panel.getByTestId("fp-edit");
+    await edit.getByRole("combobox", { name: "Owner" }).selectOption({ label: "Its track's owner" });
+    await edit.getByRole("button", { name: "Save" }).click();
+    await expect(edit).toBeHidden();
+    await expect(panel.getByTestId("fp-owner")).toHaveText(owner);
+    await expect(page.getByText(/back to its track's owner|No change/)).toHaveCount(0);
+  });
+
   test("Cancel leaves a field as it was", async ({ page }) => {
     const panel = await openOnRoadmap(page, "alert-mobile");
     const before = await panel.getByTestId("fp-delivery").innerText();
@@ -278,6 +330,28 @@ test.describe("one feature panel, Meetings", () => {
     const title = (await name.innerText()).trim();
     await name.click();
     const panel = page.getByRole("dialog", { name: title });
+    await expect(panel.getByTestId("fp-details")).toBeVisible();
+    await expect(panel.getByTestId("fp-list-depends")).toBeVisible();
+  });
+});
+
+test.describe("one feature panel, Decisions and one-pagers (review 2)", () => {
+  test.use(DESKTOP);
+
+  test("Simple Decisions opens the same panel from the feature a question blocks", async ({ page }) => {
+    await go(page, "/simple/decisions");
+    const name = page.getByRole("button", { name: "Weekly alert digest", exact: true }).first();
+    await expect(name).toBeVisible();
+    await name.click();
+    const panel = page.getByRole("dialog", { name: "Weekly alert digest" });
+    await expect(panel.getByTestId("fp-details")).toBeVisible();
+    await expect(panel.getByTestId("fp-goal")).toHaveText("Grow retention");
+  });
+
+  test("a PRD's one-pager opens the same panel from a bet of What we will build", async ({ page }) => {
+    await go(page, "/simple/one-pagers/guided-setup");
+    await page.getByRole("button", { name: "Open the feature A setup checklist that shows the next step" }).click();
+    const panel = page.getByRole("dialog", { name: "Setup checklist" });
     await expect(panel.getByTestId("fp-details")).toBeVisible();
     await expect(panel.getByTestId("fp-list-depends")).toBeVisible();
   });
