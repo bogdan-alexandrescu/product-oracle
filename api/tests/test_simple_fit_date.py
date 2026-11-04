@@ -4,9 +4,10 @@ Pure functions, no database, no model call.
 
 Test cards (protects / fails_when / no_claim):
 
-- test_ranked_by_days_saved_for_least_harm: protects=one list, most days saved first, a tie
-  ranked by the least harm, the must-include item last and not pickable; fails_when=the
-  order follows the PRD or a must-include item can be ticked; no_claim=the wording.
+- test_ranked_by_days_saved_for_least_harm: protects=one list, strictly by days saved (the
+  owner's pick), a tie ranked by the least harm, the must-include item ranked by its days
+  like any other and not pickable; fails_when=the order follows the PRD, the must-include
+  item is put last, or it can be ticked; no_claim=the wording.
 - test_live_date_of_a_picked_set: protects=the picked set's date comes from the capacity
   queue (sizes, team, focus, order, waits), the same picks give the same date, an unknown
   or locked id changes nothing; fails_when=the date is a sum of the parts or a locked item
@@ -89,13 +90,16 @@ def plan(target: dt.date = dt.date(2027, 1, 29), focus_raise: float | None = 0.8
 
 def test_ranked_by_days_saved_for_least_harm():
     a = fd.answer(plan())
-    pickable = [c for c in a.changes if c.pickable]
-    assert [c.days for c in pickable] == sorted((c.days for c in pickable), reverse=True)
-    for x, y in zip(pickable, pickable[1:], strict=False):
+    assert [c.days for c in a.changes] == sorted((c.days for c in a.changes), reverse=True)
+    for x, y in zip(a.changes, a.changes[1:], strict=False):
         if x.days == y.days:
             assert fd.HARM[x.cost_kind] <= fd.HARM[y.cost_kind]
-    assert a.changes[-1].item == "Reply drafts in the inbox"
-    assert a.changes[-1].pickable is False and a.changes[-1].cost_kind == "must"
+    # The must-include item (6 person-weeks) saves the most days: it ranks first, not last,
+    # and still cannot be ticked or picked.
+    must = next(c for c in a.changes if c.cost_kind == "must")
+    assert must.item == "Reply drafts in the inbox" and must.pickable is False
+    assert a.changes[-1] is not must and a.changes.index(must) == 0
+    assert must.id not in a.pick
     # Moving a 5 person-week item out saves more days than slicing 2 off another.
     ids = [c.id for c in a.changes]
     assert ids.index("bulk") < ids.index("summary")

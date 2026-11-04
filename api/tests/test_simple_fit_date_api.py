@@ -42,6 +42,12 @@ Test cards (protects / fails_when / no_claim):
 - test_smaller_goal_reaches_the_date (smaller goal): protects=after the goal's target is
   lowered through the Baseline edit, the answer and the live date count the goal's own work
   in proportion and the hard case reaches its date; fails_when=the answer ignores the goal.
+- test_smaller_goal_keeps_locked_work_whole (review 3): protects=under a smaller goal a
+  must-include item and a guardrail item of the goal, in the asked milestone, keep their
+  full size while the goal's other unlocked work shrinks; fails_when=build_plan scales a
+  locked or must-include item.
+- test_smaller_goal_floor (review 3): protects=a target just above the start counts the
+  goal's own work at the 10% floor, never less; fails_when=the floor is removed.
 """
 
 import re
@@ -344,3 +350,57 @@ async def test_smaller_goal_reaches_the_date(client):
     assert live.json()["over_days"] <= 0
     listed = (await client.get("/v1/simple/fit-date", headers=h)).json()
     assert next(g for g in listed if g["milestone"] == "M2")["today"] == after["today"]
+
+
+# Bulk invite (must-include) and Consent log (guardrail) are the Activation goal's own M2
+# work, as is Setup tips, which is neither.
+RULED = HARD.replace(
+    "| F-06 | Bulk invite | M2 | 4 | Activation | then |\n",
+    "| F-06 | Bulk invite | M2 | 4 | Activation | then |\n"
+    "| F-07 | Consent log | M2 | 3 | Activation | then |\n"
+    "| F-08 | Setup tips | M2 | 2 | Activation | then |\n",
+).replace(
+    "- F-01 Setup checklist: Guardrail: setup never skips the consent step.\n",
+    "- F-01 Setup checklist: Guardrail: setup never skips the consent step.\n"
+    "- F-06 Bulk invite: Must-include: the goal cannot move without it.\n"
+    "- F-07 Consent log: Guardrail: every invite is logged with its consent.\n",
+)
+
+
+def _sizes(a: dict) -> tuple[float, float, float]:
+    must = next(c for c in a["changes"] if c["id"] == "F-06")
+    tips = next(c for c in a["changes"] if c["id"] == "F-08")
+    guard = next(x for x in a["locked"] if x["item"] == "Consent log")
+    assert must["pickable"] is False and must["cost_kind"] == "must"
+    return must["pw_saved"], guard["pw"], tips["pw_saved"]
+
+
+async def test_smaller_goal_keeps_locked_work_whole(client):
+    ctx = await make_ctx()
+    await seed(ctx, RULED)
+    goal = await _activation(client, ctx)
+    h = ctx.as_("owner")
+    before = (await client.get(URL, params={"milestone": "M2"}, headers=h)).json()
+    assert _sizes(before) == (4, 3, 2)
+    r = await client.patch(f"/v1/baseline/entities/{goal['id']}", json={"attrs": {"target": 44}},
+                           headers=h)  # fmt: skip
+    assert r.status_code == 200, r.text
+    after = (await client.get(URL, params={"milestone": "M2"}, headers=h)).json()
+    assert after["baseline_goal"]["smaller"] is True
+    # The scale is (44 - 40) / (55 - 40): only Setup tips shrinks.
+    assert _sizes(after) == (4, 3, round(2 * 4 / 15, 1))
+
+
+async def test_smaller_goal_floor(client):
+    from oracle.simple.fit_date_router import FitBaselineGoalOut, _scale
+
+    g = FitBaselineGoalOut(id="00000000-0000-0000-0000-000000000001", title="Activation",
+                           target=40.5, unit="%", comparison="at_least", start=40, due=None,
+                           plan_target=55, can_edit=True)  # fmt: skip
+    assert _scale(g) == 0.1
+    ctx = await make_ctx()
+    await seed(ctx, RULED)
+    goal = await _activation(client, ctx, target=40.5)
+    a = (await client.get(URL, params={"milestone": "M2"}, headers=ctx.as_("owner"))).json()
+    assert a["baseline_goal"]["smaller"] is True and goal["attrs"]["target"] == 40.5
+    assert _sizes(a) == (4, 3, 0.2)
