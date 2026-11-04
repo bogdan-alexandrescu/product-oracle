@@ -105,3 +105,63 @@ test("a meeting's chat removes a dependency, with Undo", async ({ context, page 
   const box = page.getByTestId("meeting-chat");
   await removeAndUndo(box, `Weekly alert digest should not depend on ${DEP}. Remove that dependency relationship`);
 });
+
+/**
+ * An action of the API as a card, from `box`: "add the assumption …" is a card naming what it
+ * adds; Apply adds it, Undo takes it back. "add the gap …" has no way back: its card says so
+ * before Apply, and once applied it offers no Undo.
+ */
+async function apiActions(box: Locator) {
+  await say(box, "add the assumption Night shift nurse");
+  const made = last(box).getByTestId("chat-card");
+  await expect(made).toHaveCount(1);
+  await expect(made.getByTestId("chat-card-summary")).toHaveText(
+    "Add a product record: type “assumption”, key “night-shift-nurse”, title “Night shift nurse”.",
+  );
+  await tap(made.getByRole("button", { name: "Apply", exact: true }));
+  await expect(made).toHaveAttribute("data-status", "applied");
+  await expect(made.getByTestId("chat-card-outcome")).toContainText("Applied by you");
+  await tap(made.getByRole("button", { name: "Undo" }));
+  await expect(made).toHaveAttribute("data-status", "undone");
+
+  await say(box, "add the gap Who reads the export");
+  const kept = last(box).getByTestId("chat-card");
+  await expect(kept).toHaveCount(1);
+  await expect(kept.getByTestId("chat-card-summary")).toHaveText("Add a gap: title “Who reads the export”. This cannot be undone.");
+  await tap(kept.getByRole("button", { name: "Apply", exact: true }));
+  await expect(kept).toHaveAttribute("data-status", "applied");
+  await expect(kept.getByRole("button", { name: "Undo" })).toHaveCount(0);
+}
+
+/**
+ * Card ask-actions-api-talk: protects = a feature's talk offers the API's actions as cards, with
+ * Undo only where it is sure; fails_when = no card, a card with Undo for an add that has no way
+ * back, or Apply/Undo leave the card as it was; no_claim = the record pages.
+ */
+test("the feature talk applies an action of the API, with Undo, and one that cannot be undone", async ({ page }) => {
+  await signIn(page, "/simple/roadmap");
+  await tap(page.getByTestId("format-gantt"));
+  const bar = page.locator('[data-testid="bar"][data-item="alert-digest"]');
+  await expect(bar).toBeVisible();
+  await bar.click();
+  const panel = page.getByTestId("floating-card");
+  await tap(panel.getByRole("button", { name: "Talk to Oracle" }));
+  await apiActions(panel.getByTestId("item-talk"));
+});
+
+/** Card ask-actions-api-panel: the same from the Ask Oracle panel. */
+test("the Ask Oracle panel applies an action of the API, with Undo, and one that cannot be undone", async ({ page }) => {
+  await signIn(page, "/simple/roadmap");
+  await tap(page.getByTestId("simple-ask").filter({ visible: true }).first());
+  const ask = page.getByTestId("ask-chat").filter({ visible: true });
+  await expect(ask).toBeVisible();
+  await apiActions(ask);
+});
+
+/** Card ask-actions-api-meeting: the same from a meeting's chat. */
+test("a meeting's chat applies an action of the API, with Undo, and one that cannot be undone", async ({ context, page }) => {
+  await context.addInitScript((key) => localStorage.setItem(key, "simple-chat"), MOCK_SCENARIO_KEY);
+  await signIn(page, `/simple/meetings/${CHAT_MEETING_ID}/chat`);
+  await expect(page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
+  await apiActions(page.getByTestId("meeting-chat"));
+});

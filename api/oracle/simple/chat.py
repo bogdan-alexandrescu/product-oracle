@@ -418,6 +418,8 @@ class Ctx:
         self.talk_goals: list[Any] = []
         # meet-chat-right-prd: a meeting's chat reads only the meeting's PRD.
         self.prd: MeetingPrd | None = None
+        # ask-oracle-actions: the role whose reads are offered (a meeting's lowest).
+        self.api_role: str | None = None
 
     async def load(self) -> "Ctx":
         from oracle.simple import chat_actions
@@ -438,6 +440,7 @@ class Ctx:
         span = plan.current_span(list(views.values()), self.read.today)
         self.plan_span = (span.start, span.end) if span is not None else None
         self.people = list(await self.db.scalars(select(User).where(User.disabled_at.is_(None))))
+        self.api_role = await _api().reach_role(self.db, self.principal, self.meeting)
         await _talk().load(self)
         self.meeting_decider_name = await chat_actions.meeting_decider_name(self.db, self)
         self.goals, self.features = await chat_actions.suggest_context(self.db)
@@ -1576,7 +1579,7 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
         "today": c.today.isoformat(),
         "ops": [{"op": o.op, "describe": o.describe, "args": o.args} for o in OPS.values()],
         # ask-oracle-actions: every action of the API the person's role reaches (``calls``).
-        "api": _api().offer(c.principal.role),
+        "api": _api().offer(c.principal.role, c.api_role),
     }
 
 
@@ -1938,7 +1941,12 @@ async def apply_all(
     cards = list(
         await db.scalars(
             select(SimpleChatCard)
-            .where(SimpleChatCard.message_id == message_id, SimpleChatCard.status == "open")
+            # ask-oracle-actions: an API action card is applied on its own, never in bulk.
+            .where(
+                SimpleChatCard.message_id == message_id,
+                SimpleChatCard.status == "open",
+                SimpleChatCard.op != _api().OP,
+            )
             .order_by(SimpleChatCard.created_at, SimpleChatCard.id)
         )
     )

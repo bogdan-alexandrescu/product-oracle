@@ -885,6 +885,20 @@ async def _current(db: AsyncSession, c: SimpleChange, like: dict[str, Any]) -> d
     return read(await drafts.effective_row(db, row), list(like), c.target)
 
 
+def _depends_back(
+    current: dict[str, Any], before: dict[str, Any], after: dict[str, Any]
+) -> dict[str, Any] | None:
+    """The item's depends_on with only the change's own keys turned back: an added key
+    taken out, a removed one put back (None: one of them changed since)."""
+    now = list(current.get("depends_on") or [])
+    was, made = list(before.get("depends_on") or []), list(after.get("depends_on") or [])
+    added = [k for k in made if k not in was]
+    removed = [k for k in was if k not in made]
+    if any(k not in now for k in added) or any(k in now for k in removed):
+        return None
+    return {"depends_on": [*(k for k in now if k not in added), *removed]}
+
+
 async def _lock_change_items(db: AsyncSession, c: SimpleChange) -> None:
     await _lock(db, [uuid.UUID(k) for k in _touched(c)])
     for r in await db.scalars(
@@ -1175,12 +1189,19 @@ async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> Simple
         raise ChangeError(409, "Its session is closed: undo works only in the change's session")
     await _lock_change_items(db, c)
     current = await _current(db, c, c.after)
-    if current != c.after:
+    back = c.before
+    if c.op == "set_depends_on":
+        # ask-oracle-actions: only the dependency the change added or removed goes back;
+        # the item's other dependencies stay as they are now.
+        back = _depends_back(current, c.before, c.after)
+        if back is None:
+            raise await _conflict(db, current, _touched(c), "Changed since")
+    elif current != c.after:
         raise await _conflict(db, current, _touched(c), "Changed since")
     u = SimpleChange(session_id=c.session_id, document_id=c.document_id, op=c.op, target=c.target,
-                     before=c.after, after=c.before, status="undone", by=me, at=now,
+                     before=current, after=back, status="undone", by=me, at=now,
                      undoes_id=c.id, routed_to=[], draft_ids=list(c.draft_ids or []))  # fmt: skip
-    await _apply(db, u, c.before, principal, session, undo=True)
+    await _apply(db, u, back, principal, session, undo=True)
     db.add(u)
     session.last_change_at = now
     await db.flush()
