@@ -1458,15 +1458,20 @@ async def inbox_rows(
         for r in await db.scalars(select(RoadmapItem).where(RoadmapItem.id.in_(item_ids)))
     }
     names = await _names(db, {c.by for c in waiting + decided})
-    from oracle.simple import agenda
+    from oracle.simple import agenda, change_words
 
     asked = await agenda.meetings_of(db, {c.session_id for c in waiting + decided})
+    # inbox-meeting-proposals: whether I may accept or decline each waiting one now.
+    v = await _view(db, principal, waiting) if waiting else None
 
     def row(c: SimpleChange, at: datetime | None, state: str | None = None) -> InboxSimpleChange:
         iid = uuid.UUID(str(c.target["item_id"])) if c.target.get("item_id") else None
         m = asked.get(c.session_id) if c.session_id else None
+        title = titles.get(iid) if iid else None
         return InboxSimpleChange(
             from_meeting=SimpleChangeMeeting(id=m.id, title=m.title) if m else None,
+            asked=change_words.phrase(c.op, c.target, c.before, c.after, title),
+            can_decide=v is not None and c.status == "proposed" and v.may_decide(c),
             id=c.id, op=c.op, status=c.status, item_id=iid,  # type: ignore[arg-type]
             item_title=titles.get(iid) if iid else None, document_id=c.document_id, by=c.by,
             by_name=names.get(c.by, "someone"), at=c.at, decided_by=c.decided_by,

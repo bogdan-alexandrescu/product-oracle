@@ -700,6 +700,10 @@ class InboxSimpleChange(BaseModel):
     state: Literal["new", "open", "done"]
     # meeting-changes-only-its-agenda: the meeting that asked for it.
     from_meeting: SimpleChangeMeeting | None = None
+    # inbox-meeting-proposals: what was asked, in plain words, the item by its name
+    # ("cut Delivery integrity"), and whether I may accept or decline it now.
+    asked: str | None = None
+    can_decide: bool = False
 
 
 DraftStatus = Literal["working", "submitted", "approved", "discarded"]

@@ -26012,6 +26012,13 @@ export interface components {
              */
             state: "new" | "open" | "done";
             from_meeting?: components["schemas"]["SimpleChangeMeeting"] | null;
+            /** Asked */
+            asked?: string | null;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
         };
         /**
          * InboxSimpleMinutes
