@@ -71,7 +71,8 @@ async def test_the_owner_may_move_every_row(client):
 async def test_a_move_adds_the_feature_to_the_company_roadmap(client):
     w = await company_world()
     body = {"op": "override_priority", "target": {"feature_id": w.ids["insights"]},
-            "before": {"override": None}, "after": {"position": 1, "reason": REASON}}  # fmt: skip
+            "before": {"override": None},
+            "after": {"position": 1, "reason": REASON, "confirm": True}}  # fmt: skip
     r = await client.post(CHANGES, json=body, headers=w.ctx.as_("owner"))
     assert r.status_code in (200, 201), r.text
     out = await w.read(client)

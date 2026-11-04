@@ -40414,6 +40414,7 @@ export interface components {
              * @default []
              */
             lines: components["schemas"]["SimpleLine"][];
+            company_roadmap?: components["schemas"]["SimpleDocRef"] | null;
             plan?: components["schemas"]["SimplePlanOut"] | null;
         };
         /**
@@ -40550,6 +40551,8 @@ export interface components {
              * @default
              */
             short_code: string;
+            /** Own Key */
+            own_key?: string | null;
             /** Title */
             title: string;
             goal?: components["schemas"]["SimplePriorityGoal"] | null;
@@ -40604,6 +40607,11 @@ export interface components {
              * @default false
              */
             can_reorder: boolean;
+            /**
+             * On Roadmap
+             * @default false
+             */
+            on_roadmap: boolean;
             /**
              * Applies
              * @default false

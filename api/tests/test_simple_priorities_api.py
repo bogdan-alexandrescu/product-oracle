@@ -142,7 +142,7 @@ async def test_read_order_and_rows(client):
     widgets = rows["widgets"]
     assert (widgets["effort"], widgets["score"]) == (None, None)
     # A draft item is not yet ranked: it sits under the drafts, never as its feature's row.
-    assert (widgets["item_id"], widgets["horizon"], widgets["can_reorder"]) == (None, None, False)
+    assert (widgets["item_id"], widgets["horizon"], widgets["can_reorder"]) == (None, None, True)
 
 
 async def test_buckets_and_drafts(client):
