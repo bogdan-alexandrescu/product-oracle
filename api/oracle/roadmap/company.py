@@ -326,7 +326,7 @@ def _dates(efforts: list[float], per_week: float, today: date) -> list[tuple[dat
 
 
 def _day(d: date) -> str:
-    return f"{d:%b} {d.day}, {d.year}"
+    return f"{company_time.calendar_day(d)}, {d.year}"
 
 
 async def run_queue(
