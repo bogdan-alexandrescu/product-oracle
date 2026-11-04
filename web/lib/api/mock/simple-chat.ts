@@ -1084,6 +1084,40 @@ function buildAdd(title: string, goal: string | null, milestone: string | null, 
 const NUMBERS: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
 const countOf = (x: string) => NUMBERS[x.toLowerCase()] ?? Number(x);
 
+/** item-chat-understands (shipped.SAID / HINT / WHERE / IMPROVE): a line saying the item already exists, one that may mean it, where it runs, "will keep improving it". */
+const SHIPPED_SAID = /\b(?:already (?:happening|shipped|live|out|built|done|running|in use|available|exists?|there|have (?:it|this)|ha(?:s|ve) (?:it|this))|(?:is|it's|its|has been|was) (?:shipped|live|launched|released)|(?:has|have|we) shipped|(?:partly|partially) (?:done|shipped|built|live))\b/i;
+const SHIPPED_HINT = /\b(?:already|shipped|live|launched|released|exists?|in use|using|used|been out|for a while|for months|for years|we have (?:it|this)|built)\b/i;
+const SHIPPED_WHERE = /\b(?:in|on|inside|within|as part of) ((?:our|the|their|its|my|your) [^.,;!?]+?)(?=[.,;!?]|$| and | but | so )/i;
+const SHIPPED_IMPROVE = /\b(?:keep|continue|will|going to)\b[^.]*?\b(?:improv|iterat|polish|work on|grow)/i;
+
+/** The "Mark as already shipped" card (shipped.build): its evidence note says where it runs, in the person's words. */
+function shippedDraft(i: Item, said: string): Draft {
+  const where = SHIPPED_WHERE.exec(said)?.[1]?.trim();
+  const note = (where ? `Runs in ${where}` : `Said in its talk: “${said.slice(0, 200)}”`).slice(0, 200);
+  return {
+    op: "mark_shipped", target: { item_id: i.id }, before: { shipped: null }, after: { shipped: { note, on: today() } },
+    summary: `Mark as already shipped: ${i.title}`, item_id: i.id, item_title: i.title, preview: null, flow: null, fixes: [], change_words: { before: "Planned work", after: `Already shipped · ${note}` }, correct: null,
+  };
+}
+
+/** A line with no change read in an item's talk (shipped.choices): a short question with choices drawn from it, "Neither" last. */
+function talkChoices(i: Item, said: string): Reply {
+  const choices: { label: string; draft: Draft | null }[] = [];
+  if (SHIPPED_HINT.test(said) && i.status !== "done" && i.status !== "cut") choices.push({ label: "Mark it as already shipped?", draft: shippedDraft(i, said) });
+  const title = said.slice(0, 120).replace(/\.$/, "");
+  choices.push({
+    label: "Add this as a task?",
+    draft: { op: "add_item_task", target: { item_id: i.id }, before: {}, after: { title, owner_name: null, due_date: null }, summary: `Add the task “${title}” to ${i.title}`, item_id: i.id, item_title: i.title, preview: null, flow: null, fixes: [] },
+  });
+  if (choices.length < 2) {
+    choices.push({
+      label: "Add it as a feature ask?",
+      draft: { op: "add_feature_ask", target: {}, before: {}, after: { title, requester_name: null, requester_kind: "unknown" }, summary: `New feature ask: ${title}`, item_id: null, item_title: null, preview: null, flow: null, fixes: [] },
+    });
+  }
+  return { kind: "question", body: "What should I do with that?", cards: [], choices: [...choices, { label: "Neither", draft: null }] };
+}
+
 /** Oracle in an item's own talk: "it" and "this" mean the item (deterministic, the demo's sentences). */
 function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, text: string): Reply {
   const i = items.find((x) => x.id === itemId);
@@ -1101,6 +1135,21 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
   if (ctx.role === "viewer") return { kind: "note", body: "Viewers ask questions here; changes need a commenter or above.", cards: [] };
   const one = (d: Draft): Reply => ({ kind: "cards", body: `I understood: ${d.summary.replace(/^./, (c) => c.toLowerCase())}.`, cards: [d] });
   let m: RegExpExecArray | null;
+  if (SHIPPED_SAID.test(t)) {
+    // item-chat-understands (shipped.build): "this already exists" marks it shipped; "will keep improving it" leaves a smaller item.
+    if (i.status === "cut") return { kind: "note", body: `${i.title} is cut already.`, cards: [] };
+    if (i.status === "done") return { kind: "note", body: `${i.title} is marked as shipped already.`, cards: [] };
+    const ship = shippedDraft(i, t);
+    if (!SHIPPED_IMPROVE.test(t)) return one(ship);
+    const title = `Improve ${i.title}`;
+    const keep: Draft = {
+      op: "add_item", target: { where: { kind: "horizon", value: "next" } }, before: {}, after: { title, outcome: null, start_date: null, end_date: null, milestone: null },
+      summary: `Keep improving it: add ${title} to Next`, item_id: null, item_title: null, preview: null, flow: null, fixes: [],
+      change_words: null, correct: { fields: ["title", "goal", "milestone", "start_date", "end_date"], values: { title, goal: null, milestone: null, start_date: null, end_date: null } },
+    };
+    const note = String((ship.after.shipped as { note: string }).note);
+    return { kind: "cards", body: `I understood: ${i.title} already runs. ${note}.`, cards: [ship, keep] };
+  }
   if ((m = new RegExp(`^(?:move|push|shift|slip) ${it}(?: by)? (a|an|one|two|three|four|five|six|\\d+) (day|week|month|quarter)s? (later|earlier|out|back|sooner)$`, "i").exec(t))) {
     // As the API's roadmap_talk._move_kw: a shift of (months, days), as chat.parse_shift.
     const count = countOf(m[1]);
@@ -1156,7 +1205,8 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
     const o = addItemDraft(db, ctx, add[1], add[2] ?? i.milestone?.name ?? "M1", add[3] ?? (i.goal ? i.goal.title : ""));
     return "card" in o ? one(o.card) : { kind: "note", body: o.refusal, cards: [] };
   }
-  return { kind: "note", body: `I could not tell what to change. Try “move it two weeks later”, “move it to M2”, “rename it to …” or ask a question about ${i.title}.`, cards: [] };
+  // item-chat-understands: never "say it another way" alone; a short question with choices drawn from the line.
+  return talkChoices(i, t);
 }
 
 /** Apply with `values` (Correct): the card rebuilt from the corrected values; Correct's values win. A refusal's words, else null. */
@@ -1344,6 +1394,8 @@ function mayOf(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): { may: 
   if (bar) return { may: null, why_not: bar };
   // As the API (chat_actions.proposes): on Ask, approvers and owners record decisions; a commenter proposes one.
   if (!m && c.op === "record_decision" && ctx.role === "commenter") return { may: "propose", why_not: null };
+  // item-chat-understands (shipped.bar): only an owner marks an item as already shipped.
+  if (c.op === "mark_shipped") return ctx.role === "owner" ? { may: "apply", why_not: null } : { may: null, why_not: "Only an owner marks an item as already shipped" };
   const item = c.item_id ? itemsFor(db, ctx, null, true).find((i) => i.id === c.item_id) : undefined;
   // Filing a feature ask is every commenter's right (Requests), as are a meeting's notes, agenda
   // and decisions (the meeting's rules came first) and a decision on Ask; else the item's rule.
@@ -1524,6 +1576,17 @@ async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx,
     if ("detail" in r) return json(r.status, { detail: r.detail });
     c.target = { ...c.target, suggestion_id: r.id };
     const result = applyLocal(c, null, ctx, s8);
+    return { card: cardOut(db, chat, c, ctx), result };
+  }
+  if (c.op === "mark_shipped") {
+    // item-chat-understands (shipped.apply): the item reads done, out of planned work; Undo puts its status back.
+    const s = db.items.find((x) => db.ids[x.key] === c.item_id);
+    if (!s) return json(404, { detail: "No such roadmap item" });
+    if (s.status === "done") return json(409, { detail: `${s.title} is marked as shipped already` });
+    const was = s.status ?? null;
+    s.status = "done";
+    const result = applyLocal(c, null, ctx, s8);
+    c.undo = { status: was };
     return { card: cardOut(db, chat, c, ctx), result };
   }
   if (LOCAL_OPS.has(c.op)) {
@@ -1931,6 +1994,10 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
       const meeting = meetingOf(chat, c);
       if (c.op === "suggest_feature") {
         if (!unfileSuggestion(db, String(c.target.suggestion_id ?? ""))) return json(409, { detail: "The decider has decided this suggestion already" });
+      } else if (c.op === "mark_shipped") {
+        const s = db.items.find((x) => db.ids[x.key] === c.item_id);
+        if (!s || s.status !== "done") return json(409, { detail: "This item is not marked as shipped now" });
+        s.status = (c.undo?.status as typeof s.status | null) ?? undefined;
       } else if (LOCAL_OPS.has(c.op)) {
         if (meeting?.ended) return json(409, { detail: "The meeting has ended" });
         unapplyLocal(c, meeting, s8);

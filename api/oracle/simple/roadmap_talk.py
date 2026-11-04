@@ -361,6 +361,10 @@ def correct_out(card: SimpleChatCard) -> tuple[dict | None, dict | None]:
         values = {"owner": p.get("person_name")}
     elif card.op == "add_item":
         values = {k: p.get(k) for k in CORRECTABLE["add_item"]}
+    elif card.op == "mark_shipped":
+        # item-chat-understands: its evidence note, where it runs in the person's words.
+        note = ((card.after or {}).get("shipped") or {}).get("note")
+        words = {"before": "Planned work", "after": f"Already shipped · {note}"}
     if fields is None:
         return words, None
     return words, {"fields": list(fields), "values": values}

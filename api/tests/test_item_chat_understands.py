@@ -57,6 +57,8 @@ async def test_already_shipped_line_offers_mark_as_shipped(client):
     assert ship["op"] == "mark_shipped"
     assert ship["summary"] == "Mark as already shipped: Adaptive pacing"
     assert ship["after"]["shipped"]["note"] == "Runs in our other app's review section"
+    after = "Already shipped · Runs in our other app's review section"
+    assert ship["change_words"] == {"before": "Planned work", "after": after}
     assert keep["op"] == "add_item" and keep["summary"].startswith("Keep improving it")
     # A commenter's line gets the cards, but only an owner applies them.
     c = await say(client, w, "commenter", "it is already live", page(w))
