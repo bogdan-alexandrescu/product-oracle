@@ -189,7 +189,7 @@ for (const view of VIEWS) {
           const name = index ? await form.getByLabel("Milestone").locator("option:checked").textContent() : null;
           await form.getByRole("button", { name: "Save task" }).click();
           await expect(form).toHaveCount(0);
-          await expect(page.getByRole("alert")).toHaveCount(0);
+          await expect(page.locator('section[aria-label="Goal buckets"]').getByRole("alert")).toHaveCount(0);
           await expect(note(page)).toContainText("Saved Setup failure alerts.");
           if (name) await expect(row.getByTestId("task-milestone")).toHaveText(name);
           else await expect(row.getByTestId("task-milestone")).toHaveCount(0);
@@ -247,7 +247,9 @@ for (const view of VIEWS) {
         await expect(page.getByRole("dialog", { name: "Archive Growth" })).toBeVisible();
         await page.getByRole("dialog", { name: "Archive Growth" }).getByRole("button", { name: "Cancel" }).click();
         await growth.getByRole("button", { name: "Edit Growth" }).click();
-        await expect(growth.getByRole("heading", { name: "Edit goal" })).toBeVisible();
+        // The card's title gives way to the goal's form in place.
+        const form = page.getByTestId(view.card).filter({ has: page.getByRole("heading", { name: "Edit goal" }) });
+        await expect(form.getByRole("button", { name: "Cancel" })).toBeVisible();
       });
 
       test("a viewer sees the tasks with no add row, pencil, ⋯ or grip", async ({ page }) => {

@@ -48,9 +48,10 @@ export function rowOf(rows: Row[], code: string, name: string): Row | undefined 
   return rows.find((r) => r.code.toLowerCase() === c || r.short_code.toLowerCase() === c) ?? rows.find((r) => r.title === name);
 }
 
-/** The milestones a task may be in: the plan's, then those the roadmap's items name. */
-export function milestoneOptions(plan: Schemas["SimplePlanOut"] | null | undefined, items: Item[]): MilestoneOption[] {
+/** The milestones a task may be in: the plan's, the roadmap's, then those the roadmap's items name. */
+export function milestoneOptions(plan: Schemas["SimplePlanOut"] | null | undefined, items: Item[], roadmap: Schemas["SimpleMilestone"][] = []): MilestoneOption[] {
   const out: MilestoneOption[] = (plan?.milestones ?? []).map((m) => ({ name: m.name, date: m.end_date ?? null }));
+  for (const m of roadmap) if (!out.some((o) => o.name === m.name)) out.push({ name: m.name, date: m.date ?? null });
   for (const i of items) {
     const name = i.milestone?.name;
     if (name && !out.some((m) => m.name === name)) out.push({ name, date: i.milestone?.date ?? null });
@@ -461,7 +462,7 @@ export function useBucketTasks({
     setError,
   );
   const all = items.data?.items ?? [];
-  const options = milestoneOptions(plan, all);
+  const options = milestoneOptions(plan, all, items.data?.milestones);
   const itemOf = (t: Task) => all.find((i) => i.id === t.itemId);
   const live = (i: Item) => i.status !== "cut" && i.status !== "merged";
   /** The roadmap item a feature is: its ranked row's, else the live item of its key or name. */
