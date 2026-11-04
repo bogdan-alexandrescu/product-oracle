@@ -2,8 +2,10 @@
 // misses its target, Oracle's ranked changes, the live date of a picked set, the drafted re-plan and
 // its approval. Invented company (Larkspur Help Desk), goals, items and engineers only. Served under
 // the "fit-date" mock scenario (and "fit-date-hard": the target is Jan 8, which no set reaches;
-// "fit-date-hard-no-goal": the same with no Baseline goal by the goal's name). The goal is a Baseline
-// goal (fitDateGoal); lowering its target shrinks the goal's own work, as the API's _scale.
+// "fit-date-hard-no-goal": the same with no Baseline goal by the goal's name; "fit-date-foreign-draft":
+// the roadmap's draft holds someone else's edits, so approving is refused). The goal is a Baseline
+// goal (fitDateGoal); lowering its target shrinks the goal's own unlocked work, as the API's _scale
+// and build_plan: never a guardrail, safety or must-include item.
 
 import type { Schemas } from "@/lib/api/client";
 import { MOCK_NOW } from "./clock";
@@ -15,15 +17,21 @@ type Answer = Schemas["FitAnswerOut"];
 type Change = Schemas["FitChangeOut"];
 type Draft = Schemas["FitDraftOut"];
 
-export const FIT_SCENARIOS = ["fit-date", "fit-date-hard", "fit-date-hard-no-goal"] as const;
+export const FIT_SCENARIOS = ["fit-date", "fit-date-hard", "fit-date-hard-no-goal", "fit-date-foreign-draft"] as const;
 const isHard = (scenario: string | null) => scenario === "fit-date-hard" || scenario === "fit-date-hard-no-goal";
 
 // The Baseline goal the M2 gate counts toward: the PRD's milestone target names 40.
 export const FIT_GOAL_ID = stableUuid("fit-date/goal");
 const GOAL_TITLE = "40 replied threads per agent per day";
 const PLAN_TARGET = 40;
-// The goal's own unlocked work in M2 (Reply drafts in the inbox), in days on the plan.
-const GOAL_DAYS = 18;
+// The goal's own M2 work a smaller goal shrinks (the API's build_plan): unlocked and neither guardrail,
+// safety nor must-include, so Reply drafts in the inbox (must-include) and the two locked items keep their
+// size. Days on the plan in M2, and the days left in M2 once its change is picked (moved: none; sliced:
+// the slice).
+const GOAL_WORK: Record<string, { days: number; left: number }> = {
+  bulk: { days: 16, left: 0 },
+  summary: { days: 21, left: 16 },
+};
 type GoalRow = { id: string; type: string; title: string; status: string; attrs?: Record<string, unknown> | null };
 
 /** The fit-date scenarios' Baseline goal (none under "fit-date-hard-no-goal"). */
@@ -90,14 +98,14 @@ const CHANGES: Change[] = [
     moves: [mv("M2 Agent reply flow", "2027-03-12", "2027-03-06")] },
   { id: "summary", lever: "slice", title: "Ship only the slice M2 needs", item: "Thread summary card", days: 5, pw_saved: 2, cost_kind: "none", pickable: true,
     cost: "Agents cannot fix a wrong summary until the rest ships in M3.",
-    effect: "4 person-weeks down to 2: read-only summary, no edit",
+    effect: "8 person-weeks down to 6: read-only summary, no edit",
     moves: [mv("M2 Agent reply flow", "2027-03-12", "2027-03-07")] },
   { id: "snippets", lever: "split", title: "Split so a first slice lands early", item: "Import saved snippets", days: 3, pw_saved: 1, cost_kind: "none", pickable: true,
     cost: "Snippets with pictures wait for slice 2.",
     effect: "Slice 1 (plain text) lands Jan 14; slice 2 after M2",
     moves: [mv("M2 Agent reply flow", "2027-03-12", "2027-03-09")] },
   { id: "drafts", lever: "move", title: "Move after the date", item: "Reply drafts in the inbox", days: 18, pw_saved: 6, cost_kind: "must", pickable: false,
-    cost: "The goal cannot move without drafts, so Oracle ranks it last and will not tick it.",
+    cost: "The goal cannot move without drafts, so Oracle will not tick it.",
     effect: "Must-include for this goal",
     moves: [mv("M2 Agent reply flow", "2027-03-12", "2027-02-22")] },
 ];
@@ -140,12 +148,28 @@ function scale(g: Schemas["FitBaselineGoalOut"] | null): number {
   return Math.max(0.1, Math.min(1, (g.target - base) / (g.plan_target - base)));
 }
 
-/** Days the smaller goal takes off M2 (its own work counted in proportion). */
-const goalDays = () => Math.round(GOAL_DAYS * (1 - scale(baselineGoal("viewer"))));
-const at = (picks: string[]) => shift(PROJECTED, saved(picks).days + goalDays());
-
+const share = () => scale(baselineGoal("viewer"));
 const byId = (ids: string[]) => CHANGES.filter((c) => c.pickable && ids.includes(c.id));
-const saved = (ids: string[]) => byId(ids).reduce((s, c) => ({ days: s.days + c.days, pw: s.pw + c.pw_saved }), { days: 0, pw: 0 });
+/** Days a set of picks takes off M2: the other changes' days, and the goal's own work (GOAL_WORK)
+ * counted at the smaller goal's share, what is left of it once its change is picked. */
+function savedDays(ids: string[]): number {
+  const s = share();
+  const other = byId(ids).filter((c) => !GOAL_WORK[c.id]).reduce((t, c) => t + c.days, 0);
+  const own = Object.entries(GOAL_WORK).reduce((t, [id, w]) => t + w.days - s * (ids.includes(id) ? w.left : w.days), 0);
+  return Math.round(other + own);
+}
+const pwSaved = (ids: string[]) => Math.round(byId(ids).reduce((t, c) => t + c.pw_saved * (GOAL_WORK[c.id] ? share() : 1), 0) * 10) / 10;
+const at = (picks: string[]) => shift(PROJECTED, savedDays(picks));
+
+const HARM: Record<Change["cost_kind"], number> = { none: 0, risk: 1, gate: 2, goal: 3, must: 9 };
+/** The changes measured against the goal (the goal's own work at its share), ranked strictly by days
+ * saved for the least harm, the must-include change too (the API's answer). */
+function ranked(): Change[] {
+  const s = share();
+  return CHANGES.map((c) => (GOAL_WORK[c.id] ? { ...c, days: Math.round(c.days * s), pw_saved: Math.round(c.pw_saved * s * 10) / 10 } : c)).sort(
+    (x, y) => y.days - x.days || HARM[x.cost_kind] - HARM[y.cost_kind] || x.item.localeCompare(y.item),
+  );
+}
 
 /** The lanes after the picks: kept M2 items end by M2's new date; moved ones go where the change says. */
 function lanes(picks: string[]): Schemas["FitLane"][] {
@@ -184,7 +208,8 @@ function goal(s: State): Goal {
 }
 
 function answer(s: State, role: string): Answer {
-  const all = CHANGES.filter((c) => c.pickable).map((c) => c.id);
+  const changes = ranked();
+  const all = changes.filter((c) => c.pickable).map((c) => c.id);
   const best = at(all);
   const reachable = gap(best, s.target) <= 0;
   // Oracle's own pick, else (a smaller goal) down the ranked list until the date reaches the target.
@@ -192,7 +217,7 @@ function answer(s: State, role: string): Answer {
   for (const id of all) if (gap(at(greedy), s.target) > 0) greedy.push(id);
   const pick = !reachable ? all : gap(at(PICK), s.target) <= 0 ? PICK : greedy;
   return {
-    ...goal(s), changes: CHANGES, pick, pick_date: at(pick), best_date: best, reachable,
+    ...goal(s), changes, pick, pick_date: at(pick), best_date: best, reachable,
     locked: LOCKED.map((l) => ({ ...l, would_reach: !reachable && l.pw === 3 })),
     hire: reachable ? null : { start_weeks: 3, date: shift(HARD_TARGET, -6), reaches: false },
     baseline_goal: baselineGoal(role),
@@ -206,7 +231,7 @@ function draft(s: State, picks: string[]): Draft {
   const prdWords: Record<string, [string, string]> = {
     bulk: ["Reply to similar threads at once", "Moved to M3"],
     analytics: ["Reply time chart", "No longer holds M2; still built, lands Mar 5"],
-    summary: ["Thread summary card (4 to 2 person-weeks)", "First slice only in M2"],
+    summary: ["Thread summary card (8 to 6 person-weeks)", "First slice only in M2"],
     tone: ["Tone presets", "Moved to the next PRD"],
     snippets: ["Import saved snippets", "First slice only in M2 (plain text)"],
     focus: ["Team focus", "70% to 80%; support shifts move to two people outside the team for 10 weeks"],
@@ -243,6 +268,8 @@ function json(status: number, body: unknown): Response {
 
 // The Help desk roadmap's decider (invented).
 const DECIDER = "Noor Hale";
+// Who has unsaved edits in the roadmap's working draft under "fit-date-foreign-draft" (invented).
+const DRAFT_EDITOR = "Ines Moreau";
 const APPROVERS = new Set(["owner", "decider", "approver"]);
 
 /** GET /v1/simple/fit-date, GET|POST /v1/simple/prds/{prd}/fit-date[/live|/draft|/approve]. */
@@ -262,12 +289,16 @@ export async function routeFitDate(scenario: string | null, role: string, req: R
   const picks = body.picks.filter((id) => byId([id]).length > 0);
   if (p[5] === "live") {
     const date = at(picks);
-    return json(200, { date, target: s.target, over_days: gap(date, s.target), pw_saved: saved(picks).pw, picks: body.picks });
+    return json(200, { date, target: s.target, over_days: gap(date, s.target), pw_saved: pwSaved(picks), picks: body.picks });
   }
   if (!APPROVERS.has(role)) return json(403, { detail: "Only approvers can change the plan." });
   if (p[5] === "draft") return json(200, draft(s, picks));
   if (p[5] === "approve") {
     if (picks.length === 0) return json(422, { detail: "Pick at least one change." });
+    // The roadmap's working draft holds someone else's edits: approving would publish them (the API's
+    // _foreign_edits), so it is refused and nothing is written.
+    if (scenario === "fit-date-foreign-draft")
+      return json(409, { detail: `${DRAFT_EDITOR} has unsaved changes in this roadmap's draft; ask them to submit or discard first.` });
     const d = draft(s, picks);
     // The roadmap's version is live when the approver decides the roadmap (an owner or its
     // decider), else it waits in review with its decider, as the API's _roadmap_follows.

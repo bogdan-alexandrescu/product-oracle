@@ -25,7 +25,7 @@ import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
-import { fitDateGoal, routeFitDate } from "./fit-date";
+import { FIT_SCENARIOS, fitDateGoal, routeFitDate } from "./fit-date";
 import { generalReply } from "./general-chat";
 import { afterAccept, goalInterviewReply, proposeVersion, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
 import { goalCheck } from "./goals";
@@ -3224,7 +3224,7 @@ function load(): Db {
                     }
                     return db;
                   }
-              : scenario === "fit-date" || scenario === "fit-date-hard" || scenario === "fit-date-hard-no-goal"
+              : (FIT_SCENARIOS as readonly string[]).includes(scenario ?? "")
                 ? () => {
                     // Bring a date in (./fit-date.ts): its PRD's items on the Help desk roadmap and
                     // the Baseline goal its M2 gate counts toward.

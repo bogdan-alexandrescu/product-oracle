@@ -151,10 +151,15 @@ function RankedList({ a, picks, setPicks, live }: { a: Answer; picks: string[]; 
                 />
                 <span className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="flex flex-wrap items-baseline justify-between gap-x-3">
-                    <span className="font-semibold">
+                    <span className="flex items-baseline gap-1.5 font-semibold">
+                      {must && (
+                        <span className="self-center" data-testid="fit-change-lock" title="Must-include: Oracle will not tick it">
+                          <Icon name="lock" size={16} className="text-crit" />
+                        </span>
+                      )}
                       {i + 1}. {c.item}
                     </span>
-                    <span className="tnum text-[14px] font-semibold text-pass">{must ? "Must-include" : `${c.days} days sooner`}</span>
+                    <span className="tnum text-[14px] font-semibold text-pass">{c.days} days sooner</span>
                   </span>
                   <span className="simple-small">
                     <span className="font-medium text-text">{c.title}.</span> {c.effect}.
@@ -564,7 +569,8 @@ export function FitHomeCard() {
       <p>
         It now lands <span className="font-semibold">{day(a.date)}</span> (was <del>{day(a.was)}</del>), {spare > 0 ? `${plural(spare, "day")} before ${day(a.target)}` : `on ${day(a.target)}`}.{" "}
         {a.by_me ? "You" : "Someone"} approved PRD version {a.version}
-        {a.roadmap_version != null && ` and roadmap version ${a.roadmap_version}`} on {at}.
+        {a.roadmap_version != null && a.roadmap_live && ` and roadmap version ${a.roadmap_version}`} on {at}.
+        {a.roadmap_version != null && !a.roadmap_live && ` Roadmap version ${a.roadmap_version} is in review with ${a.roadmap_decider ?? "its decider"}.`}
       </p>
       {a.moves.length > 0 && (
         <ul className="simple-small flex flex-col gap-1">
