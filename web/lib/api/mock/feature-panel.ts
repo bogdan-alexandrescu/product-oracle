@@ -85,7 +85,7 @@ export function goalSetOf(changes: Change[], item: string): Schemas["SimpleGoalS
 
 /** Each item's `override` and `links` (api: panel.item_panel). `unlinked` are Oracle's links
  * removed before the mock's story starts (a seed's own record of that change). */
-export function withPanel(items: Item[], changes: Change[], keyOf: (id: string) => string | undefined, idOf: (key: string) => string | undefined, unlinked: (key: string) => { key: string; by: string }[] = () => []): void {
+export function withPanel(items: Item[], changes: Change[], keyOf: (id: string) => string | undefined, idOf: (key: string) => string | undefined, unlinked: (key: string) => { key: string; by: string }[] = () => [], linked: (key: string) => { key: string; by: string }[] = () => []): void {
   const rows = written(changes);
   for (const i of items) {
     const typed = i.source === "typed";
@@ -95,6 +95,8 @@ export function withPanel(items: Item[], changes: Change[], keyOf: (id: string) 
     const removed = new Map<string, string>();
     const key = keyOf(i.id);
     for (const u of key ? unlinked(key) : []) removed.set(u.key, u.by);
+    // build-feature-panel review 3: a person's links made before the mock's story (the seed's record of that add_link).
+    for (const l of key ? linked(key) : []) added.set(l.key, l.by);
     for (const c of rows) {
       if (!LINK_OPS.includes(c.op) || c.target.item_id !== i.id) continue;
       const k = String(c.target.subject_key ?? "");

@@ -31,6 +31,8 @@ type Role = Schemas["Me"]["role"];
 interface SeedItem {
   /** build-feature-panel: Oracle's links a person removed before the mock's story (the panel shows them struck, with Restore). */
   unlinked?: { key: string; by: string }[];
+  /** build-feature-panel review 3: links a person added before the mock's story (the panel names who). */
+  linked?: { key: string; by: string }[];
   /** build-feature-panel review 2: the goal a person set in the panel (set_goal; "" for no
    * goal), over `goal`; unset: Oracle's. */
   own_goal?: string;
@@ -1021,7 +1023,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   });
   // build-feature-panel: each item's override and links (api: panel.item_panel).
   const keyOfId = new Map(Object.entries(db.ids).map(([k, id]) => [id, k]));
-  withPanel(items, db.changes ?? [], (id) => keyOfId.get(id), (k) => db.ids[k], (k) => db.items.find((x) => x.key === k)?.unlinked ?? []);
+  withPanel(items, db.changes ?? [], (id) => keyOfId.get(id), (k) => db.ids[k], (k) => db.items.find((x) => x.key === k)?.unlinked ?? [], (k) => db.items.find((x) => x.key === k)?.linked ?? []);
   // qa-simple-home-1: what "Move the dependents" moves, as the change engine moves it (service.read).
   const byItem = new Map(items.map((i) => [i.id, i]));
   for (const i of items)

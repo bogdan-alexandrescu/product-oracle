@@ -482,7 +482,8 @@ function DepList({ c, title, deps, add, onRemove, onRestore, onAdd, adding }: { 
         {title} <span className="tnum">({deps.filter((d) => !d.removed).length})</span>
       </h4>
       <ul>
-        {deps.map((d) => (
+        {/* build-feature-panel review 3: as the frames list them, the live links first, then Oracle's removed ones. */}
+        {[...deps].sort((a, b) => Number(a.removed) - Number(b.removed)).map((d) => (
           <li key={d.item.id} className="flex items-start gap-2 border-b border-line py-1.5 last:border-0" data-testid="fp-dep">
             <div className="min-w-0 flex-1">
               <span className={`block ${d.removed ? "text-text2 line-through" : "font-medium"}`}>{d.item.title}</span>

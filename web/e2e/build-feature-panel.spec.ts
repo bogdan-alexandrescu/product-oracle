@@ -390,6 +390,11 @@ test.describe("one feature panel, as the frames say it (review 3)", () => {
     await expect(panel.getByTestId("fp-notes")).toHaveText("Send on Monday morning in the admin's time zone. Skip teams with no alerts that week.");
     await expect(panel.getByTestId("fp-outcome")).toHaveText("Admins get every alert fired in the week in one email, so fewer alerts go unread.");
     await expect(panel.getByText("Oracle's suggestion")).toHaveCount(0);
+    // Needed by as drawn: the person's link first (who added it), then Oracle's removed one.
+    const needed = panel.getByTestId("fp-list-needed").getByTestId("fp-dep");
+    await expect(needed.nth(0)).toContainText("Alert routing by team");
+    await expect(needed.nth(0)).toContainText("Added by Maya Ortiz");
+    await expect(needed.nth(1)).toContainText("Alert history export");
   });
 
   test("saving a delivery says it as the frames do, and Start keeps its own source", async ({ page }) => {

@@ -932,6 +932,7 @@ function seedFeaturePanelFramesScenario(): Db {
   Object.assign(items.find((x) => x.key === "alert-digest")!, { source: "engineering", start_source: "accepted", outcome: "Admins get every alert fired in the week in one email, so fewer alerts go unread.", note: "Send on Monday morning in the admin's time zone. Skip teams with no alerts that week." });
   const routing = items.find((x) => x.key === "alert-sso")!;
   routing.depends = [...(routing.depends ?? []), "alert-digest"];
+  routing.linked = [{ key: "alert-digest", by: "Maya Ortiz" }];
   db.simple_chat = seedSimpleChat(db.members);
   const owner = db.members.find((m) => m.role === "owner")!;
   seedFramesTalk(db.simple_chat, owner.id, db.simple_roadmap!.ids["alert-digest"], { id: avery.id, name: "Maya Ortiz" });
