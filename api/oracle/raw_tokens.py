@@ -76,7 +76,7 @@ def citation_labels(rows: Mapping[str, object]) -> Callable[[str], str | None]:
         if c is None:
             return None
         title = getattr(c, "title", None) or getattr(c, "excerpt", None) or ""
-        where = " ".join(x for x in (getattr(c, "source", None), getattr(c, "ref", None)) if x)
+        where = ": ".join(x for x in (getattr(c, "source", None), getattr(c, "ref", None)) if x)
         text = f"{title} ({where})" if title and where else title or where
         return " ".join(text.split()) or None
 

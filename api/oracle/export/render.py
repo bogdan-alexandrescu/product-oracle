@@ -670,19 +670,14 @@ def _citation_rule(state: StateInline, silent: bool) -> bool:
 def _render_citation(renderer, tokens, idx, options, env) -> str:
     notes: _Footnotes = env["footnotes"]
     links = []
-    missing = []
     for key in tokens[idx].meta["keys"]:
         ref = notes.reference(key)
         if ref is None:
-            missing.append(key)
             continue
         number, anchor = ref
         links.append(f'<a href="#fn-{number}" id="{anchor}">{number}</a>')
-    html = f'<sup class="cite">[{", ".join(links)}]</sup>' if links else ""
-    if missing:
-        raw = escape(f"[c:{', '.join(missing)}]")
-        html += f'<span class="cite cite-missing">{raw}</span>'
-    return html
+    # A citation that points to nothing is dropped: a reader never sees a raw "[c:id]".
+    return f'<sup class="cite">[{", ".join(links)}]</sup>' if links else ""
 
 
 # Owner decision (2026-10-20): an image loads only when Oracle stores it, a path of this
@@ -746,7 +741,9 @@ def days_in_words(text: str) -> str:
 
 
 def _render_text(renderer, tokens, idx, options, env) -> str:
-    return str(escape(days_in_words(tokens[idx].content)))
+    from oracle.raw_tokens import strip_raw_tokens
+
+    return str(escape(days_in_words(strip_raw_tokens(tokens[idx].content))))
 
 
 @cache
@@ -1261,8 +1258,11 @@ def render_markdown(ev: ExportVersion) -> str:  # full layer only
     the export can still be re-imported. A roadmap's flagged dates carry an HTML comment
     after each (``<!-- oracle: date unverified -->``), which the import drops. The body's
     days stay as stored (``2027-01-29``), not month first as in the HTML, PDF and deck:
-    the file is the source a person edits and imports again.
+    the file is the source a person edits and imports again. Its ``[c:id]`` citations
+    are Markdown footnotes (``[^1]``, defined at the end), never raw markers; one that
+    points to no citation of the version is dropped (raw-tokens-everywhere).
     """
+    from oracle.raw_tokens import citation_labels, markdown_footnotes
     from oracle.roadmap import doc_dates
 
     banner = f"<!-- {banner_line(ev)} -->\n"
@@ -1273,6 +1273,7 @@ def render_markdown(ev: ExportVersion) -> str:  # full layer only
             ev.version.markdown, ev.stored_sections or ev.sections, ev.date_marks
         )
     )
+    markdown = markdown_footnotes(markdown, citation_labels({c.cite_key: c for c in ev.citations}))
     if markdown.startswith("---"):
         m = re.compile(r"^---[ \t]*\r?\n.*?^(?:---|\.\.\.)[ \t]*(?:\r?\n|\Z)", re.S | re.M).match(
             markdown

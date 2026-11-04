@@ -78,7 +78,7 @@ def test_markdown_export_carries_footnotes_not_raw_tokens():
     out = render_markdown(ev)
     assert not RAW.search(out), out
     assert "Teams plan by capacity[^1]; the AI estimate is off." in out
-    assert out.rstrip().endswith("[^1]: Capacity plan (upload capacity-plan.pdf)")
+    assert out.rstrip().endswith("[^1]: Capacity plan (upload: capacity-plan.pdf)")
     assert out.startswith("---\ndocument: planning\n---\n<!-- Product Oracle export:")
 
 
