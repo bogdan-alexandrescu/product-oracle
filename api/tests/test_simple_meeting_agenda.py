@@ -200,3 +200,41 @@ async def test_with_no_roadmap_named_it_reviews_the_prds_own_roadmap(client):
     r = await cut(client, w, "owner", "ship-a", m["session_id"])
     assert r.json()["change"]["status"] == "proposed", r.text
     assert not await cut_flag(w, "ship-a")
+
+
+async def test_the_meetings_agent_makes_no_card_off_its_agenda_on_the_same_prd(client):
+    """review minor: the same PRD's item on roadmap B, in a meeting started on A: the
+    meeting's agent's cut of it applies nothing (no card applies it; a card says it is
+    sent to its owner)."""
+    w = await world()
+    await with_roadmap_b(w, same_prd=True)
+    m = await meeting(client, w, roadmap="payments")
+    mid = uuid.UUID(m["id"])
+    await say(client, w.ctx, "owner", "drop the delivery work", mid)
+    await read(w.ctx, actions(act("cut", item=w.ids["ship-a"])))
+    r = await client.get(f"/v1/simple/meetings/{mid}/chat", headers=w.ctx.as_("owner"))
+    cards = [c for x in r.json()["messages"] for c in x["cards"]]
+    assert all(c.get("elsewhere") for c in cards), cards
+    assert not await cut_flag(w, "ship-a")
+
+
+async def test_an_added_item_on_another_roadmap_is_not_decided_by_the_meeting(client):
+    """review minor (changes.off_agenda_bar): a new item proposed for roadmap B through the
+    meeting's session waits for B's decider; the meeting cannot accept it through its own
+    session, B's decider can."""
+    w = await world()
+    b = await with_roadmap_b(w)
+    m = await meeting(client, w)
+    sid = m["session_id"]
+    body = {"op": "add_item", "target": {"roadmap_id": b, "where": {"kind": "horizon", "value": "next"}},
+            "before": {}, "after": {"title": "Parcel tracking"}, "session_id": sid}  # fmt: skip
+    r = await client.post(CHANGES, json=body, headers=w.ctx.as_("commenter"))
+    assert r.status_code == 201, r.text
+    c = r.json()["change"]
+    assert c["status"] == "proposed", c
+    r = await client.post(f"{CHANGES}/{c['id']}/accept", json={"session_id": sid},
+                          headers=w.ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 409, r.text
+    r = await client.post(f"{CHANGES}/{c['id']}/accept", json={},
+                          headers=w.ctx.as_("reviewer2"))  # fmt: skip
+    assert r.status_code == 200, r.text
