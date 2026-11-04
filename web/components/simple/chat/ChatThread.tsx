@@ -8,6 +8,7 @@ import {
   applyCard,
   CHAT_COUNT_FROM,
   CHAT_TEXT_MAX,
+  ChatTextTooLong,
   chooseChoice,
   hasPending,
   PENDING_POLL_MS,
@@ -95,7 +96,7 @@ const BOX_FOCUS = "focus-visible:!outline-offset-[-1px]";
 /** ask-length-limit: "4,050" (a count as people read it). */
 const count = (n: number) => n.toLocaleString("en-US");
 /** ask-length-limit: a message past the limit is refused in words, the limit named; the text stays in the box. */
-export const tooLong = (n: number) => `This message is ${count(n)} characters; Oracle takes up to ${count(CHAT_TEXT_MAX)}. Shorten it and send again.`;
+export const tooLong = (n: number, max = CHAT_TEXT_MAX) => `This message is ${count(n)} characters; Oracle takes up to ${count(max)}. Shorten it and send again.`;
 
 /** ask-length-limit: the quiet count under a long message (past 3,000 characters), red past the limit. */
 function CharCount({ n }: { n: number }) {
@@ -169,7 +170,8 @@ export function ChatComposer({
       await send(t);
       setText("");
     } catch (e) {
-      setError(detail(e));
+      // The server's own length check says the same words, with its limit.
+      setError(e instanceof ChatTextTooLong ? tooLong(t.length, e.max) : detail(e));
     } finally {
       setBusy(false);
     }

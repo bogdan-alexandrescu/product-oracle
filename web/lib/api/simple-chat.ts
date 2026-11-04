@@ -3,7 +3,7 @@
  * from the API contract; the calls go through the same client (mock or real), by path, until
  * schema.d.ts carries the routes.
  */
-import { api, unwrap, type Schemas } from "./client";
+import { api, ApiError, unwrap, type Schemas } from "./client";
 
 export type ChatPreview =
   // walkc-meeting r2 (5b): `current`, the dates the item shows now and their source (chat._current).
@@ -170,6 +170,26 @@ type Init = { params?: { path?: Record<string, string>; query?: Record<string, u
 type Call = (path: string, init?: Init) => Promise<{ data?: unknown; error?: unknown; response: Response }>;
 const loose = api as unknown as { GET: Call; POST: Call; PUT: Call };
 
+/** ask-length-limit: the API refused a chat message for its length; `max` is the API's own limit. */
+export class ChatTextTooLong extends ApiError {
+  constructor(readonly max: number) {
+    super(422, `Oracle takes up to ${max.toLocaleString("en-US")} characters.`, "text_too_long");
+  }
+}
+
+/** A message's POST: a 422 for the text's length (ChatIn's max_length) throws ChatTextTooLong. */
+async function sayCall(call: ReturnType<Call>): Promise<ChatThread> {
+  const r = await call;
+  const detail = r.response.status === 422 && r.error && typeof r.error === "object" && "detail" in r.error ? r.error.detail : null;
+  const long = Array.isArray(detail)
+    ? (detail as { type?: unknown; loc?: unknown; ctx?: { max_length?: unknown } }[]).find(
+        (d) => d?.type === "string_too_long" && Array.isArray(d.loc) && d.loc[d.loc.length - 1] === "text",
+      )
+    : undefined;
+  if (long) throw new ChatTextTooLong(typeof long.ctx?.max_length === "number" ? long.ctx.max_length : CHAT_TEXT_MAX);
+  return unwrap(Promise.resolve(r)) as Promise<ChatThread>;
+}
+
 /** GET /v1/simple/chat?page=: the reader's own Ask thread on that Simple page (one per page; Home without one). */
 export function askThread(page?: string, chat?: string | null): Promise<ChatThread> {
   const query = { ...(page ? { page } : {}), ...(chat ? { chat } : {}) };
@@ -185,7 +205,7 @@ export type ChatTo = { chatId?: string | null; newChat?: boolean; general?: bool
  * `understood: false`, for the panel to ask Oracle's Ask instead.
  */
 export function askSay(text: string, page?: string, onlyUnderstood = false, to: ChatTo = {}): Promise<ChatThread> {
-  return unwrap(
+  return sayCall(
     loose.POST("/v1/simple/chat/messages", {
       body: {
         text,
@@ -194,7 +214,7 @@ export function askSay(text: string, page?: string, onlyUnderstood = false, to: 
         ...(to.chatId ? { chat_id: to.chatId } : to.newChat ? { new_chat: true, ...(to.general ? { general: true } : {}) } : {}),
       },
     }),
-  ) as Promise<ChatThread>;
+  );
 }
 
 /** GET /v1/simple/chats (ask-fresh): Recent chats, the reader's last Ask chats from any page; never a meeting's. */
@@ -214,7 +234,7 @@ export function meetingThread(meetingId: string): Promise<ChatThread> {
 
 /** POST /v1/simple/meetings/{meeting_id}/chat/messages. */
 export function meetingSay(meetingId: string, text: string): Promise<ChatThread> {
-  return unwrap(loose.POST("/v1/simple/meetings/{meeting_id}/chat/messages", { params: { path: { meeting_id: meetingId } }, body: { text } })) as Promise<ChatThread>;
+  return sayCall(loose.POST("/v1/simple/meetings/{meeting_id}/chat/messages", { params: { path: { meeting_id: meetingId } }, body: { text } }));
 }
 
 /** PUT /v1/simple/meetings/{meeting_id}/chat/mode (the presenter). */
