@@ -312,6 +312,40 @@ def _keys_in(text: str, keys: list[str]) -> list[str]:
     return [k for k in keys if re.search(rf"(?<![\w-]){re.escape(k)}(?![\w-])", text)]
 
 
+def continues_in(markdown: str) -> list[str]:
+    """The old item keys a section's 'Continues:' lines name, in order, once each."""
+    found: list[str] = []
+    for m in _CONTINUES.finditer(markdown):
+        for token in re.split(r"[,;\s]+", m.group(1)):
+            key = token.strip("`*_.()[]")
+            if key and re.fullmatch(r"[\w.-]+", key) and key not in found:
+                found.append(key)
+    return found
+
+
+async def replaced_document(db: AsyncSession, document_id: uuid.UUID) -> uuid.UUID | None:
+    """The approved PRD that ``document_id`` replaces: the one its run's brief named."""
+    from oracle.runs.models import Run
+    from oracle.v2.models import ProductIntake
+
+    raws = await db.scalars(
+        select(Run.knobs["intake_id"].astext).where(
+            Run.document_id == document_id, Run.knobs["intake_id"].astext.is_not(None)
+        )
+    )
+    ids = [uuid.UUID(r) for r in raws if r]
+    if not ids:
+        return None
+    for replaces in await db.scalars(
+        select(ProductIntake.replaces).where(
+            ProductIntake.id.in_(ids), ProductIntake.replaces.is_not(None)
+        )
+    ):
+        if replaces and replaces.get("document_id"):
+            return uuid.UUID(str(replaces["document_id"]))
+    return None
+
+
 def continued_items(markdown: str, keys: list[str]) -> list[str]:
     """The old items the draft continues (its 'Continues:' lines), in ``keys``' order."""
     found = " ".join(m.group(1) for m in _CONTINUES.finditer(markdown))
