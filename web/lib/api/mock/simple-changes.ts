@@ -495,6 +495,8 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     ? priorityBefore(db, keyOf(db, target.item_id)!, body.op, id)
     : (body.op as string) === "set_owner"
       ? { owner_id: itemOwnerId(db, keyOf(db, target.item_id)!) }
+      : body.op === "set_milestone"
+        ? { milestone: ownMilestone(db, String(target.item_id)) }
       : (body.op as string) === "set_decider"
         ? { decider_id: itemDeciderId(db, keyOf(db, target.item_id)!, ctx.roles) }
         : spec.adds ? {} : Object.fromEntries(Object.keys(body.before).map((k) => [k, stored[k] ?? null]));
@@ -513,6 +515,12 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   }
   (db.changes ??= []).push(change);
   return json(201, { change: view(db, ctx, change), flags: [] });
+}
+
+/** The item's own milestone as the API stores it (changes.py set_milestone's before): null when it has only its track's. */
+function ownMilestone(db: SimpleDb, itemId: string): Values | null {
+  const m = roadmapOut(db, "owner", new URLSearchParams())!.items.find((i) => i.id === itemId)?.milestone;
+  return m?.source === "item" && m.name ? { name: m.name, date: m.date ?? null, date_source: m.date ? "typed" : null } : null;
 }
 
 function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false): void {

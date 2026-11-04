@@ -712,6 +712,12 @@ const namedOn = (db: SimpleDb, key: string, field: "owner_id" | "decider_id"): s
   return t && field in t ? ((t[field] as string | null) ?? null) : undefined;
 };
 
+/** The item's own milestone a set_milestone wrote (null: cleared), if any. */
+const namedMilestone = (db: SimpleDb, key: string): { name: string; date?: string | null } | null | undefined => {
+  const t = db.targets?.[db.ids[key]];
+  return t && "milestone" in t ? ((t.milestone as { name: string; date?: string | null } | null) ?? null) : undefined;
+};
+
 /** The item's owner: the one a chat card named, else its track's owner. */
 export function itemOwnerId(db: SimpleDb, key: string): string | null {
   const named = namedOn(db, key, "owner_id");
@@ -950,7 +956,10 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       source: r.end.estimated ? r.start.source : r.end.source,
       estimated: r.start.estimated && r.end.estimated,
       suggestion: suggestion ? { ...suggestion, can_decide: decides(s) } : null,
-      milestone: s.milestone
+      // set_milestone: the item's own milestone, as typed in its panel (null: cleared).
+      milestone: namedMilestone(db, s.key) !== undefined
+        ? (namedMilestone(db, s.key) ? { name: namedMilestone(db, s.key)!.name, date: namedMilestone(db, s.key)!.date ?? null, source: "item" } : s.record ? { name: s.record, date: null, source: "track", ...recordOf(s) } : null)
+        : s.milestone
         ? { name: s.milestone.name, date: addDays(w[s.horizon][0], s.milestone.day), source: "item", ...recordOf(s) }
         : s.record ? { name: s.record, date: null, source: "track", ...recordOf(s) } : null,
       phases: phases(r.start.date, r.end.date, s, w[s.horizon]),

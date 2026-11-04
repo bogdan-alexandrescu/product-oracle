@@ -15,7 +15,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ds";
+import { api, unwrap } from "@/lib/api/client";
 import { calendarDay, displayZone, todayIn } from "@/lib/dates";
+import { useQuery } from "@/lib/use-query";
 
 import type { Act } from "@/app/simple/roadmap/_card";
 import { confidenceWord, statusWord, storedDates, yearSpan, type Item } from "@/app/simple/roadmap/_lib";
@@ -112,6 +114,107 @@ function Field({ label, value, shown, edit, note, multiline, onSave, testId }: {
         </Button>
       </div>
     </div>
+  );
+}
+
+/** A value picked or typed in place (FP2 A), its fields drawn by `fields`, Save and Cancel under them. */
+function Editor<T>({ label, shown, edit, start, fields, onSave, testId }: { label: string; shown: ReactNode; edit: boolean; start: () => T; fields: (d: T, set: (d: T) => void) => ReactNode; onSave: (d: T) => Promise<string | null> | string | null; testId: string }) {
+  const [draft, setDraft] = useState<T | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  if (!edit) return <span data-testid={testId}>{shown}</span>;
+  if (draft === null)
+    return (
+      <button type="button" data-testid={testId} aria-label={`Change ${label}`} onClick={() => (setDraft(start()), setError(null))} className="-mx-1 rounded px-1 text-left decoration-line-strong decoration-dotted underline-offset-4 hover:bg-surface2 hover:underline" title="Click to change">
+        {shown}
+      </button>
+    );
+  const save = async () => {
+    const err = await onSave(draft);
+    if (err) setError(err);
+    else setDraft(null);
+  };
+  return (
+    <div data-testid="fp-edit">
+      {fields(draft, setDraft)}
+      {error && (
+        <p className="mt-1 text-sm text-crit" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="mt-1.5 flex gap-2">
+        <Button variant="solid" onClick={() => void save()}>
+          Save
+        </Button>
+        <Button variant="ghost" onClick={() => setDraft(null)}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+const FIELD = "w-full rounded-md border-2 border-accent bg-surface px-2 text-[15px] h-9";
+
+/** The owner, any active member of the company; "Its track's owner" clears the item's own. */
+function Owner({ c }: { c: Ctx }) {
+  const { item, act, edit } = c;
+  const people = useQuery(edit ? "people:feature-panel" : "people:none", () => (edit ? unwrap(api.GET("/v1/people", { params: { query: { limit: 100 } } })) : Promise.resolve([])));
+  const list = people.data ?? [];
+  return (
+    <Editor<string>
+      label="Owner"
+      testId="fp-owner"
+      edit={edit}
+      shown={item.owner?.name ?? <span className="text-text2">No owner yet</span>}
+      start={() => item.owner?.id ?? ""}
+      fields={(d, set) => (
+        <select autoFocus aria-label="Owner" value={d} onChange={(e) => set(e.target.value)} className={FIELD}>
+          <option value="">Its track&apos;s owner</option>
+          {item.owner && !list.some((p) => p.user_id === item.owner!.id) && <option value={item.owner.id}>{item.owner.name}</option>}
+          {list.map((p) => (
+            <option key={p.user_id} value={p.user_id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      )}
+      onSave={async (d) => {
+        if (d === (item.owner?.id ?? "")) return null;
+        const name = list.find((p) => p.user_id === d)?.name;
+        await act(name ? `Made ${name} the owner of '${item.title}'` : `Gave '${item.title}' back to its track's owner`, { op: "set_owner", target: { item_id: item.id }, before: { owner_id: item.owner?.id ?? null }, after: { owner_id: d || null } });
+        return null;
+      }}
+    />
+  );
+}
+
+/** The item's own milestone: a name and, if typed, a day ("Nov 27"); an empty name clears it. */
+function MilestoneField({ c }: { c: Ctx }) {
+  const { item, act, edit } = c;
+  const m = item.milestone;
+  const own = m?.source === "item" && m.name ? { name: m.name, date: m.date ?? null, date_source: m.date ? "typed" : null } : null;
+  const near = todayIn(displayZone());
+  return (
+    <Editor<{ name: string; date: string }>
+      label="Milestone"
+      testId="fp-milestone"
+      edit={edit}
+      shown={m?.name ? `${m.name}${m.date ? ` · ${day(m.date)}` : ""}` : <span className="text-text2">None</span>}
+      start={() => ({ name: m?.name ?? "", date: m?.date ? day(m.date) : "" })}
+      fields={(d, set) => (
+        <div className="grid gap-1.5">
+          <input autoFocus aria-label="Milestone name" value={d.name} onChange={(e) => set({ ...d, name: e.target.value })} className={FIELD} />
+          <input aria-label="Milestone day" placeholder="Nov 27" value={d.date} onChange={(e) => set({ ...d, date: e.target.value })} className={FIELD} />
+        </div>
+      )}
+      onSave={async (d) => {
+        const name = d.name.trim();
+        const date = d.date.trim() ? readDay(d.date, near) : null;
+        if (d.date.trim() && !date) return "Type the day as Nov 27";
+        await act(name ? `Set the milestone of '${item.title}' to ${name}` : `Cleared the milestone of '${item.title}'`, { op: "set_milestone", target: { item_id: item.id }, before: { milestone: own }, after: { milestone: name ? { name, date } : null } });
+        return null;
+      }}
+    />
   );
 }
 
@@ -450,7 +553,9 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
       </Section>
       <Section title="Milestone" id="milestone">
         <dl>
-          <Row label="Milestone">{item.milestone?.name ? `${item.milestone.name}${item.milestone.date ? ` · ${day(item.milestone.date)}` : ""}` : <span className="text-text2">None</span>}</Row>
+          <Row label="Milestone">
+            <MilestoneField c={c} />
+          </Row>
         </dl>
       </Section>
       <Section title="Details" id="details">
@@ -459,7 +564,9 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
             <Field label="Outcome" value={item.outcome ?? ""} shown={item.outcome ?? <span className="text-text2">Not written yet</span>} edit={canChange} multiline onSave={async (v) => (await act(`Changed the outcome of '${item.title}'`, { op: "edit_outcome", target: { item_id: item.id }, before: { outcome: item.outcome ?? null }, after: { outcome: v.trim() || null } }), null)} testId="fp-outcome" />
           </Row>
           <Row label="Status">{statusWord(item.status)}</Row>
-          <Row label="Owner">{item.owner?.name ?? <span className="text-text2">No owner yet</span>}</Row>
+          <Row label="Owner">
+            <Owner c={c} />
+          </Row>
           <Row label="Confidence">{item.confidence ? confidenceWord(item.confidence) : "Not rated"}</Row>
         </dl>
       </Section>
