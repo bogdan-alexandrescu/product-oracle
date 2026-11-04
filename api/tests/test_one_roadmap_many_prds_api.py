@@ -431,3 +431,27 @@ async def test_a_features_shown_name_comes_from_the_company_roadmap(client):
         shown = await priorities._shown_names(s, {feature.id: feature.key})
     # The older per-PRD roadmap is history: its title never names the feature.
     assert shown == {"f-report": "Report button"}
+
+
+async def test_a_runs_queue_is_the_roadmap_as_it_was_when_the_run_started(client):
+    from oracle.roadmap import company
+
+    ctx, ids = await world(client)
+    started = datetime.now(UTC)
+    async with tenant_session(ctx.tenant_id) as s:
+        # Another PRD's draft lands while the run is going.
+        rm = await s.get(Document, ids["company"])
+        later = "# Product roadmap v2"
+        v2 = await _add(s, DocumentVersion(document_id=rm.id, number=2, markdown=later,
+                                           content_hash=_hash(later), source_version_id=ids["cv"],
+                                           created_at=started + timedelta(minutes=5)))  # fmt: skip
+        safety, scale = await s.get(Document, ids["safety"]), await s.get(Document, ids["scale"])
+        sv, cv = await s.get(DocumentVersion, ids["sv"]), await s.get(DocumentVersion, ids["cv"])
+        s.add(_item(rm, v2, safety, sv, "report-button", "Report button", 0))
+        s.add(_item(rm, v2, scale, cv, "read-replicas", "Read replicas", 1))
+        s.add(_item(rm, v2, scale, cv, "sharding", "Sharding", 2))
+        await s.commit()
+        now_rows = await company.run_queue(s, ids["safety"])
+        then_rows = await company.run_queue(s, ids["safety"], as_of=started)
+    assert "sharding" in {r["key"] for r in now_rows}
+    assert {r["key"] for r in then_rows} == {"report-button", "read-replicas"}
