@@ -82,6 +82,17 @@ async function brandOf(): Promise<Brand | null> {
 
 type Filters = { group: Lane; roadmap: string; prd: string; goal: string; track: string; from: string; to: string };
 const NO_FILTERS: Filters = { group: "goal", roadmap: "", prd: "", goal: "", track: "", from: "", to: "" };
+type Picks = Record<"prd" | "goal" | "track", Set<string>>;
+const PICKS = ["prd", "goal", "track"] as const;
+/** roadmap-stale-filters: the PRDs, goals and tracks a roadmap's items are on (what its filters may pick). */
+const picksOf = (items: Roadmap["items"]): Picks => ({
+  prd: new Set(items.flatMap((i) => (i.prd ? [i.prd.slug] : []))),
+  goal: new Set(items.flatMap((i) => (i.goal ? [i.goal.key] : []))),
+  track: new Set(items.flatMap((i) => (i.track ? [i.track.id] : []))),
+});
+/** Saved picks with those `gone` says left blank. */
+const without = (saved: Schemas["SimpleFilters"], gone: (k: (typeof PICKS)[number], v: string) => boolean): Schemas["SimpleFilters"] =>
+  Object.fromEntries(PICKS.map((k) => [k, saved[k] && !gone(k, saved[k]) ? saved[k] : ""])) as Schemas["SimpleFilters"];
 
 const PHONE = "(max-width: 640px)";
 function usePhone(): boolean {
@@ -297,6 +308,8 @@ function Select({ label, value, options, onChange, all = "All", testId }: { labe
       {/* qa4-simple-roadmap-46: named by its label's word alone, not every option's text. */}
       <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} data-testid={testId} className="h-8 max-w-[11rem] rounded-lg border border-line-strong bg-surface px-2 text-sm text-text [field-sizing:content]">
         <option value="">{all}</option>
+        {/* roadmap-stale-filters: a pick it has no choice for is named, never shown as "All". */}
+        {value && !options.some(([v]) => v === value) && <option value={value}>Not on this roadmap</option>}
         {options.map(([v, t]) => (
           <option key={v} value={v}>
             {t}
@@ -724,13 +737,20 @@ export function SimpleRoadmap() {
   // The Roadmap filter: landing without ?roadmap=, the person's remembered pick (preferences)
   // once the roadmaps they may read are known (a roadmap they no longer read is dropped);
   // their PRD (unless a link names one), Goal and Track picks come back with it.
+  // roadmap-stale-filters: a saved pick no longer on the roadmap (its PRD in Trash, its goal
+  // archived) is dropped, as the roadmap is read without the link's filters, and the cleaned
+  // picks are saved back once, quietly.
   const prefs = useQuery("me-preferences", () => unwrap(api.GET("/v1/me/preferences")));
   const [restored, setRestored] = useState(false);
+  const [cleaned, setCleaned] = useState<Schemas["SimpleFilters"] | null>(null);
   const known = roadmap.data?.roadmaps;
   if (!restored && known && (prefs.data || prefs.error)) {
     setRestored(true);
     const pick = prefs.data?.simple_roadmap;
-    const kept = prefs.data?.simple_filters;
+    const saved = prefs.data?.simple_filters;
+    const here = !f.prd && !f.goal && !f.track ? picksOf(roadmap.data!.items) : null;
+    const kept = saved && here ? without(saved, (k, v) => !here[k].has(v)) : saved;
+    if (saved && kept && PICKS.some((k) => kept[k] !== (saved[k] ?? ""))) setCleaned(kept);
     const next = { ...f, goal: params.get("goal") || kept?.goal || f.goal, track: kept?.track || f.track };
     if (!params.get("prd")) next.prd = kept?.prd || f.prd;
     if (!params.get("roadmap") && pick && pick !== "all" && known.some((r) => r.roadmap.id === pick)) next.roadmap = pick;
@@ -745,6 +765,41 @@ export function SimpleRoadmap() {
       toast({ message: failed });
     }
   };
+  const sent = useRef<Schemas["SimpleFilters"] | null>(null);
+  useEffect(() => {
+    if (!cleaned || sent.current === cleaned) return;
+    sent.current = cleaned;
+    api
+      .PATCH("/v1/me/preferences", { body: { simple_filters: cleaned } })
+      .then((r) => r.data && prefs.setData(() => r.data))
+      .catch(() => undefined);
+  }, [cleaned, prefs]);
+  // Narrowed to nothing by a PRD, goal or track: the roadmap without them says which picks it
+  // no longer has; a saved one is dropped (and saved back), a link's one is said so.
+  const emptied = restored && !!(f.prd || f.goal || f.track) && !!roadmap.data && !roadmap.loading && !roadmap.data.items.length;
+  const wideQs = useMemo(() => ({ group: qs.group, ...(qs.roadmap ? { roadmap: qs.roadmap } : {}) }), [qs]);
+  const wide = useQuery(`simple-roadmap-picks:${emptied ? JSON.stringify(wideQs) : ""}`, () =>
+    emptied ? unwrap(api.GET("/v1/simple/roadmap", { params: { query: wideQs as never } })).then((d) => picksOf(d.items)) : Promise.resolve(null),
+  );
+  const gone = emptied && wide.data && !wide.loading ? PICKS.filter((k) => f[k] && !wide.data![k].has(f[k])) : [];
+  const linked = gone.filter((k) => k !== "track" && params.get(k) === f[k]);
+  const dropped = gone.filter((k) => !linked.includes(k));
+  // roadmap-stale-filters review: Clear takes the link's picks out of the address too (Next
+  // keeps useSearchParams in step), so a reload does not bring the note back.
+  const clearLinked = () => {
+    setF({ ...f, ...Object.fromEntries(linked.map((k) => [k, ""])) });
+    const next = new URLSearchParams(window.location.search);
+    for (const k of linked) next.delete(k);
+    const s = next.toString();
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${s ? `?${s}` : ""}${window.location.hash}`);
+  };
+  if (dropped.length) {
+    const next = { ...f };
+    for (const k of dropped) next[k] = "";
+    setF(next);
+    const saved = prefs.data?.simple_filters;
+    if (saved && dropped.some((k) => saved[k] === f[k])) setCleaned(without(saved, (k, v) => dropped.includes(k) && v === f[k]));
+  }
   const pickRoadmap = (id: string) => {
     setRestored(true);
     setCard(null);
@@ -1310,7 +1365,14 @@ export function SimpleRoadmap() {
         </p>
       )}
       <div ref={wrap} className={blank ? "hidden" : "relative"}>
-        {filtered && !data.items.length ? (
+        {linked.length ? (
+          <div data-testid="filters-gone" className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-line-strong bg-surface px-4 py-3">
+            <p className="text-[15px] font-semibold">
+              {linked.length > 1 ? "That PRD and goal are no longer on this roadmap" : linked[0] === "prd" ? "That PRD is no longer on this roadmap" : "That goal is no longer on this roadmap"}
+            </p>
+            <Button onClick={clearLinked}>Clear</Button>
+          </div>
+        ) : filtered && !data.items.length ? (
           // fix4 qa-simple-roadmap-12: no bare axis when the filters leave nothing: say so, and a way back.
           <div data-testid="filters-empty" className="flex flex-col items-start gap-2 rounded-xl border border-dashed border-line-strong bg-surface px-4 py-6">
             <p className="text-[15px] font-semibold">Nothing matches these filters</p>
