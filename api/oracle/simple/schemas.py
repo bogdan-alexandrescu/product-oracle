@@ -1862,6 +1862,9 @@ class SimpleUpcomingMeeting(BaseModel):
     pre_read_ready: bool = False
     # Owners and the ritual's owner start a ritual's review (the caller may).
     can_start: bool = False
+    # What the ritual reviews when all of it is in Trash ("roadmap": a roadmap refresh while
+    # every roadmap is in Trash); Home says so and links the ritual's settings.
+    reviews_in_trash: Literal["roadmap"] | None = None
 
 
 class SimpleMeetingsOut(BaseModel):
