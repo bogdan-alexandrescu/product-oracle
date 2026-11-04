@@ -78,8 +78,12 @@ class GmMilestone(BaseModel):
     areas: list[uuid.UUID]
     depends: list[uuid.UUID]
     month: str
+    # The due date in words ("Oct 31"), when the milestone has one.
+    due: str | None
     days: list[float | None]
     confirmed: str | None
+    # When it was confirmed, in words ("Nov 2").
+    confirmed_on: str | None
     proposed: bool
 
 
@@ -151,6 +155,10 @@ def amount(v: float, unit: str) -> str:
     if unit == "$":
         return f"${round(v / 100) / 10:g}k" if v >= 1000 else f"${v:g}"
     return f"{round(v * 10) / 10:g}"
+
+
+def _short(d: date | None) -> str | None:
+    return f"{d:%b} {d.day}" if d else None
 
 
 def in_words(d: date) -> str:
@@ -307,8 +315,10 @@ async def build(db: AsyncSession, can_edit: bool) -> GoalMapOut:
                 areas=list(m.gate_area_ids or []),
                 depends=list(m.gate_after_ids or []),
                 month=f"{m.target_date:%b}" if m.target_date else "",
+                due=_short(m.target_date),
                 days=days,
                 confirmed=m.gate_confirmed_by,
+                confirmed_on=_short(m.gate_confirmed_on),
                 proposed=bool(m.gate_proposed),
             )
         )

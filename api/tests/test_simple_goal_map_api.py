@@ -98,6 +98,7 @@ async def world() -> tuple[Ctx, dict[str, str]]:
                 track_id=track.id, name="25 sign-ups per rep", gate_goal_id=signups.id,
                 gate_threshold=Decimal(25), gate_reading=Decimal(31),
                 gate_days=[30, 29, 31, 30, 31, 30, 31], gate_confirmed_by="Ann Example",
+                gate_confirmed_on=date(2026, 11, 2),
                 gate_area_ids=[scale.id],
             )
         )  # fmt: skip
@@ -165,6 +166,7 @@ async def test_map_reads_goals_guardrail_areas_milestones_features(client, role)
     m1 = ms[ids["m1"]]
     assert m1["threshold"] == 25 and m1["current"] == 31 and m1["status"] == "met"
     assert m1["days"] == [30, 29, 31, 30, 31, 30, 31] and m1["confirmed"] == "Ann Example"
+    assert m1["confirmed_on"] == "Nov 2" and m1["due"] is None
     assert m1["goal"] == ids["signups"] and m1["areas"] == [ids["scale"]]
     assert m1["measure"] == "sign-ups per rep per day" and m1["proposed"] is False
     assert ms[ids["m2"]]["depends"] == [ids["m1"]] and ms[ids["m2"]]["status"] == "at_risk"
@@ -193,6 +195,7 @@ async def test_milestone_status_follows_its_gate(client):
     ms = {m["id"]: m for m in (await read(client, ctx))["milestones"]}
     assert ms[ids["m1"]]["status"] == "met"
     assert ms[ids["m2"]]["status"] == "missed" and ms[ids["m2"]]["month"] == "Oct"
+    assert ms[ids["m2"]]["due"] == "Oct 31"
     assert ms[ids["m3"]]["status"] == "not_measured"
     assert ms[ids["m3"]]["days"] == [None] * 7
 

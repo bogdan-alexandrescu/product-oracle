@@ -185,6 +185,7 @@ class TrackMilestone(TenantScoped, Base):
     gate_reading: Mapped[Decimal | None] = mapped_column(Numeric(20, 6))
     gate_days: Mapped[list[Any]] = _json("[]")
     gate_confirmed_by: Mapped[str | None] = mapped_column(Text)
+    gate_confirmed_on: Mapped[date | None] = mapped_column(Date)
     gate_status: Mapped[str | None] = mapped_column(Text)
     gate_area_ids: Mapped[list[uuid.UUID]] = _uuids()
     gate_after_ids: Mapped[list[uuid.UUID]] = _uuids()

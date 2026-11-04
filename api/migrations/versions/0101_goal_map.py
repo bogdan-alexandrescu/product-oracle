@@ -4,7 +4,7 @@
 roadmap item serving a track milestone, with expected and measured lift. On
 ``track_milestones`` (the records Simple Roadmap draws, never a second milestone table)
 the gate: ``gate_goal_id``, ``gate_threshold``, ``gate_reading``, ``gate_days`` (the last
-7 daily readings), ``gate_confirmed_by``, ``gate_status``, ``gate_area_ids``,
+7 daily readings), ``gate_confirmed_by``, ``gate_confirmed_on``, ``gate_status``, ``gate_area_ids``,
 ``gate_after_ids`` and ``gate_proposed``.
 
 Revision ID: 0101_goal_map
@@ -89,6 +89,7 @@ def upgrade() -> None:
         M, sa.Column("gate_days", postgresql.JSONB(), server_default="[]", nullable=False)
     )
     op.add_column(M, sa.Column("gate_confirmed_by", sa.Text(), nullable=True))
+    op.add_column(M, sa.Column("gate_confirmed_on", sa.Date(), nullable=True))
     op.add_column(M, sa.Column("gate_status", sa.Text(), nullable=True))
     for col in ("gate_area_ids", "gate_after_ids"):
         op.add_column(
@@ -102,7 +103,8 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("SET LOCAL lock_timeout = '5s'")
     for col in ("gate_proposed", "gate_after_ids", "gate_area_ids", "gate_status",
-                "gate_confirmed_by", "gate_days", "gate_reading", "gate_threshold"):  # fmt: skip
+                "gate_confirmed_on", "gate_confirmed_by", "gate_days", "gate_reading",
+                "gate_threshold"):  # fmt: skip
         op.drop_column(M, col)
     op.drop_index(op.f(f"ix_{M}_gate_goal_id"), table_name=M)
     op.drop_constraint(op.f(f"fk_{M}_gate_goal_id_entities"), M, type_="foreignkey")

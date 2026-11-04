@@ -77381,6 +77381,17 @@
             "type": "string",
             "title": "Month"
           },
+          "due": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
+          },
           "days": {
             "items": {
               "anyOf": [
@@ -77406,6 +77417,17 @@
             ],
             "title": "Confirmed"
           },
+          "confirmed_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed On"
+          },
           "proposed": {
             "type": "boolean",
             "title": "Proposed"
@@ -77424,8 +77446,10 @@
           "areas",
           "depends",
           "month",
+          "due",
           "days",
           "confirmed",
+          "confirmed_on",
           "proposed"
         ],
         "title": "GmMilestone"

@@ -24442,10 +24442,14 @@ export interface components {
             depends: string[];
             /** Month */
             month: string;
+            /** Due */
+            due: string | null;
             /** Days */
             days: (number | null)[];
             /** Confirmed */
             confirmed: string | null;
+            /** Confirmed On */
+            confirmed_on: string | null;
             /** Proposed */
             proposed: boolean;
         };
