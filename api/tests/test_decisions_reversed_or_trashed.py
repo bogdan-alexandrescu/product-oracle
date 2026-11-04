@@ -147,6 +147,30 @@ async def test_roadmap_read_says_which_decisions_were_left_out(client):
     assert view["left_out"] == {"kind": "left_out", "title": line, "decision_ids": [gone["id"]]}
 
 
+async def test_roadmap_read_names_a_reversed_decision_as_left_out(client):
+    # Train AK review: the draft banner's left-out line names a reversed decision too; the
+    # read must carry it (decided_in reads lapsed decisions, standing.split leaves them out).
+    w = await world()
+    item = {"kind": "roadmap_item", "id": w.ids["edit_title-a"], "ref": "edit_title-a"}
+    kept = await propose(client, w.ctx, title="Keep the weekly digest", subjects=[item])
+    gone = await propose(client, w.ctx, title="Cut bulk export", subjects=[item])
+    for d in (kept, gone):
+        await decide(client, w.ctx, d["number"])
+    r = await client.post(
+        f"/v1/decisions/{gone['number']}/reviews",
+        json={"verdict": "reversed", "note": "Bulk export is back in"},
+        headers=w.ctx.as_("approver"),
+    )
+    assert r.status_code == 200, r.text
+    r = await client.get("/v1/simple/roadmap", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    view = r.json()
+    [it] = [i for i in view["items"] if i["key"] == "edit_title-a"]
+    assert [x["number"] for x in it["decided_in"]] == [kept["number"]]
+    line = f"Left out, no longer standing: D-{gone['number']} Cut bulk export (reversed)."
+    assert view["left_out"] == {"kind": "left_out", "title": line, "decision_ids": [gone["id"]]}
+
+
 async def test_one_pager_read_says_which_decisions_were_left_out(client):
     from tests import test_simple_one_pager_api as op
 
