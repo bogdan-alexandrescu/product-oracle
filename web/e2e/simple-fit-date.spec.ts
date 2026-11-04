@@ -15,7 +15,7 @@ import { expect, test, type Page } from "./test";
 
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 
-async function open(page: Page, scenario = "fit-date", scheme: "light" | "dark" = "light") {
+async function open(page: Page, scenario = "fit-date", scheme: "light" | "dark" = "light", email?: string) {
   await page.context().addInitScript(
     ([key, value, themeKey, theme]) => {
       localStorage.setItem(key, value);
@@ -24,7 +24,7 @@ async function open(page: Page, scenario = "fit-date", scheme: "light" | "dark" 
     [MOCK_SCENARIO_KEY, scenario, THEME_KEY, scheme] as const,
   );
   await page.emulateMedia({ colorScheme: scheme });
-  await login(page);
+  await login(page, email);
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("fit-goal")).toBeVisible();
 }
@@ -114,6 +114,16 @@ test.describe("desktop", () => {
     await expect(home).toContainText("M2 Agent reply flow is on its date");
     await expect(home).toContainText("It now lands Jan 25 (was Mar 12), 4 days before Jan 29.");
     await expect(home).toContainText("Tone presets left this PRD");
+  });
+
+  test("an approver who does not decide the roadmap leaves its version in review with its decider", async ({ page }) => {
+    await open(page, "fit-date", "light", "approver@example.com");
+    await page.getByRole("button", { name: "Bring this date in" }).click();
+    await page.getByRole("button", { name: "Draft 5 changes" }).click();
+    await page.getByRole("button", { name: "Approve both", exact: true }).click();
+    const done = page.getByTestId("fit-approved");
+    await expect(done).toContainText("PRD version 4 is live: M2 lands Jan 25. Roadmap version 7 is in review with Noor Hale.");
+    await expect(done).not.toContainText("are live");
   });
 
   test("hard case: no set reaches the target, so it says so with the best date", async ({ page }) => {
