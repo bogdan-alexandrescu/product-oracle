@@ -23,7 +23,11 @@ and other compatibility forms (``２０２６``) fold to ASCII (NFKC). The forms
 - month names: ``Nov 30, 2026``, ``30 November 2026``, ``the 30th of November, 2026``,
   ``30-Nov-2026``;
 - year-less ``Nov 30``, ``30 Nov``, ``the 30th of November``: the first such day on or
-  after the version's date (the import day for a draft).
+  after the version's date (the import day for a draft); after a past or done word
+  ("closed on Oct 27", "since Oct 2") the most recent such day, a done thing's day and
+  no schedule date (the plan tables' date columns keep the first reading).
+
+A Counts when, evidence or sources column or labelled line is not a schedule place.
 
 Month and quarter phrases (``November 2026``, ``Q4``) are horizons, not dates.
 
