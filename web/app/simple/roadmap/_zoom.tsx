@@ -3,6 +3,7 @@
 // state has its own look with the key on top (QR2 A), broken links sit in a panel above the
 // chart (QR3 A) and an item opens in a side panel (QR4 A; a sheet on a phone).
 
+import { MsLayer, type MsLane, type MsRow } from "./_milestones";
 import {
   memo,
   useContext,
@@ -772,10 +773,31 @@ function DayChart(props: TimelineProps) {
               />
             );
           })}
+          {/* build-milestones-on-roadmap: the milestones over the Timeline */}
+          <TimelineMilestones rows={rows} moved={moved} x={x} labelW={labelW} trackW={trackW} phone={phone} />
         </div>
       </div>
     </div>
   );
+}
+
+/** build-milestones-on-roadmap: each row's place, for the milestone layer over the Timeline. */
+function TimelineMilestones({ rows, moved, x, labelW, trackW, phone }: { rows: Row[]; moved: Record<string, [string, string]>; x: (d: string) => number; labelW: number; trackW: number; phone: boolean }) {
+  let y = 44;
+  const out: MsRow[] = [];
+  const lanes: MsLane[] = [];
+  for (const r of rows) {
+    if (r.kind === "lane") {
+      lanes.push({ key: r.key, title: r.title, y0: y, y1: y + 32 });
+      y += 32;
+      continue;
+    }
+    const [s, e] = moved[r.item.id] ?? barSpan(r.item);
+    out.push({ id: r.item.id, title: r.item.title, lane: lanes[lanes.length - 1]?.key ?? "", y, h: ROW_H, start: s, end: e });
+    y += ROW_H;
+    if (lanes.length) lanes[lanes.length - 1].y1 = y;
+  }
+  return <MsLayer view="timeline" x={x} left={labelW} top={44} axisY={33} height={y} width={labelW + trackW} rows={out} lanes={lanes} phone={phone} />;
 }
 
 const NO_WARN: string[] = [];
