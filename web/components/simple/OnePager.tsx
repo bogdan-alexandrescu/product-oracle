@@ -6,6 +6,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { Button, LinkButton } from "@/components/ds";
 import { clock, FlowPanel, meetingMoment } from "@/components/simple/FlowVisual";
+import { WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { dmy, ew, PrdPlan, TAP44, usePhone } from "@/components/simple/PrdTimeline";
 import { PrdStatus } from "@/components/simple/PrdStatus";
@@ -581,7 +582,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
               <h2 className="text-sm font-semibold uppercase tracking-wide text-text-faint">{b.title}</h2>
               {b.kind === "timeline" ? (
                 <div className="mt-2" aria-label="Timeline strip">
-                  {v.plan ? <PlanByMonth plan={v.plan} prd={v.document} legend /> : <p className="text-base text-text-faint">No roadmap items yet</p>}
+                  {v.plan ? <WithFeatureMarks><PlanByMonth plan={v.plan} prd={v.document} legend items={v.timeline} /></WithFeatureMarks> : <p className="text-base text-text-faint">No roadmap items yet</p>}
                 </div>
               ) : (
                 <ul className="mt-1 space-y-1">

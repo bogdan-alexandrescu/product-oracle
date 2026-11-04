@@ -6,13 +6,17 @@ import { ADMIN } from "./helpers";
 /*
  * Current state's word pill where a feature is named outside Priorities and the roadmap:
  * a feature (or its roadmap item) Oracle's Ask answer cites, and the item a review meeting's
- * agenda takes next. Each pill is a button whose card says what the mark means and names the
- * feature. Against the mock (lib/api/mock/currentstate.ts: Weekly alert digest runs today,
- * Setup checklist is being built), with the mock's invented people; desktop and phone.
+ * agenda takes next, and each roadmap item a one-pager's plan strip lists under its row. Each
+ * pill is a button whose card says what the mark means and names the feature. Against the mock
+ * (lib/api/mock/currentstate.ts: Weekly alert digest and Welcome video run today, Alert routing
+ * by team with old proof, Setup checklist is being built, Sample data import is new), with the
+ * mock's invented people; desktop and phone.
  *
- * Card: protects=the pill beside a feature an answer cites and beside the agenda's next item,
- * and its card opening on a click; fails_when=no pill shows there, or clicking it opens no
- * card; no_claim=one-pager lines (they carry no feature or item id in the API).
+ * Card: protects=the pill beside a feature an answer cites, beside the agenda's next item and
+ * beside each roadmap item listed under a one-pager's plan-strip row (by the item's id), and
+ * its card opening on a click with its meaning and proof; fails_when=no pill shows there, the
+ * row lists no items, or clicking it opens no card; no_claim=the one-pager's lines (bets,
+ * risks: they carry no feature or item id in the API) and the plan-led page (PrdPlan).
  */
 
 const PHONE = { width: 390, height: 844 };
@@ -59,6 +63,40 @@ for (const size of ["desktop", "phone"] as const) {
       await expect(card).toBeVisible();
       await expect(card).toContainText("Weekly alert digest");
       await expect(card).toContainText("Runs today");
+    });
+
+    test(`a one-pager lists each plan-strip row's items with their pills (${size})`, async ({ page }) => {
+      await signIn(page, "/simple/prds/guided-setup");
+      const strip = page.getByLabel("Timeline strip");
+      const row = (name: string) => strip.getByRole("listitem").filter({ has: page.getByTestId("plan-strip-label").filter({ hasText: name }) });
+      const m1 = row("Milestone M1 · 12 roadmap items");
+      await expect(m1.getByTestId("plan-strip-item")).toHaveCount(12);
+      await expect(m1.getByTestId("plan-strip-item").first()).toContainText("Setup checklist");
+      const item = (r: Locator, name: string) => r.getByTestId("plan-strip-item").filter({ hasText: name });
+      // An item with no feature behind it is listed, with no pill.
+      await expect(item(m1, "Setup step 3")).toBeVisible();
+      await expect(item(m1, "Setup step 3").getByTestId("cs-mark")).toHaveCount(0);
+
+      const kinds: [Locator, string, string, string, RegExp][] = [
+        [m1, "Setup checklist", "In progress", "Being built", /4 merged pull requests/],
+        [m1, "Sample data import", "New", "Nothing built yet", /No merged pull requests or done tasks yet/],
+        [row("Milestone M2 · 5 roadmap items"), "Welcome video", "Exists", "Runs today, with proof", /11 merged pull requests/],
+        [row("No milestone · 2 roadmap items"), "Alert routing by team", "Exists · proof old", "more than 30 days old", /4 merged pull requests/],
+      ];
+      for (const [r, name, word, means, proof] of kinds) {
+        const it = item(r, name);
+        await expect(it.getByTestId("cs-mark")).toHaveText(word);
+        await tap(it.getByRole("button", { name: `What ${word} means` }));
+        const card = it.getByTestId("cs-mark-card");
+        await expect(card).toBeVisible();
+        await expect(card).toContainText(name);
+        await expect(card).toContainText(means);
+        await expect(card).toContainText(proof);
+        await page.keyboard.press("Escape");
+        await expect(card).toHaveCount(0);
+      }
+      // The page still fits a phone.
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(size === "phone" ? PHONE.width : 1440);
     });
 
     test(`the meeting agenda's next item carries its pill, and the pill opens its card (${size})`, async ({ page }) => {
