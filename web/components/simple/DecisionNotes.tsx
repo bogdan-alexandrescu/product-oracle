@@ -34,7 +34,7 @@ function Note({ text }: { text: string }) {
   return (
     <>
       <DecisionLink n={n} title={title} /> was {why}
-      {on ? datesInWords(on) : ""}; the next draft drops what it changed.
+      {on ? datesInWords(on) : ""}; the next draft no longer relies on it.
       {said ? ` Why: ${plain(said)}.` : ""}
     </>
   );

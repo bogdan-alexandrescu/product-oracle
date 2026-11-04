@@ -17,7 +17,7 @@ import { expect, test, type Page } from "./test";
  */
 
 const NOTE =
-  "Decision 12 Cut bulk export from the first release was reversed; the next draft drops what it changed. Why: Customers asked for exports back.";
+  "Decision 12 Cut bulk export from the first release was reversed; the next draft no longer relies on it. Why: Customers asked for exports back.";
 const LEFT_OUT =
   "Left out, no longer standing: Decision 12 Cut bulk export from the first release (reversed); Decision 9 Ship alerts by email only (about a roadmap now in Trash).";
 const DESKTOP = { width: 1366, height: 820 };

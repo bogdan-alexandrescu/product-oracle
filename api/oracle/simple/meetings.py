@@ -2177,13 +2177,16 @@ async def decided_in(
     if not subjects:
         return out
     wanted = {(s["kind"], s["id"], s.get("ref")) for s in subjects}
+    from oracle.decisions import standing
+
+    # Lapsed ones (reversed, withdrawn, replaced) are read too, so standing.split names them
+    # in the left-out line; only decided ones are kept.
     rows = await db.scalars(
         select(Decision)
-        .where(Decision.status == "decided")
+        .where(Decision.status.in_(("decided", *standing.LAPSED)))
         .where(or_(*[Decision.subjects.contains([{"kind": k, "id": i}]) for k, i, _ in wanted]))
         .order_by(Decision.number.desc())
     )
-    from oracle.decisions import standing
 
     # None about something in Trash (decisions-reversed-or-trashed).
     kept, gone = await standing.split(db, list(rows))
