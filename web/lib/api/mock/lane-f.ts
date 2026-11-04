@@ -9,7 +9,7 @@ import { goalPosition, sortGoals } from "@/lib/goal-order";
 import { plainText } from "@/lib/markdown";
 import { LONG_WORDS_SCENARIO } from "./baseline";
 import { presenterNotes, resolveBrief } from "./brief";
-import { mockUuid, seeded } from "./ids";
+import { MOCK_SCENARIO_KEY, mockUuid, seeded } from "./ids";
 import { calibration } from "./quality";
 import { cannotApproveNow } from "./runs";
 
@@ -178,6 +178,29 @@ const FEATURES: FeatureSeed[] = [
   },
 ];
 
+// po-mock-scenario=long-goals: more features, long goal names and many dependencies, so the
+// Goal and Depends on columns wrap beside the panel and widen when it closes. Invented.
+export const LONG_GOALS_SCENARIO = "long-goals";
+const PG1 = "Cut the time from sign-up to the first shared project in half";
+const PG2 = "Keep monthly churn of team plans under two percent";
+const PG3 = "Make checkout accessible for screen reader users";
+const longGoal = (key: string, title: string, goals: GoalLink[], depends_on: string[], effort: number, confidence: number): FeatureSeed => ({
+  key, title, status: "proposed", goals, depends_on, evidence: [],
+  attrs: { effort, reach: 1200, impact: 2, confidence, business_value: 5, time_criticality: 3, risk_reduction: 2, job_size: effort, moscow: "should" },
+});
+const LONG_GOAL_FEATURES: FeatureSeed[] = [
+  longGoal("F-9", "Guided first project with sample tasks", [{ goal: "g.long-first-project", title: PG1, weight: 3, contribution: 3 }, { goal: "g.activation", title: G1, weight: 3, contribution: 2 }], ["F-1", "F-3", "F-5", "F-10", "F-11", "F-12"], 2, 0.8),
+  longGoal("F-10", "Invite teammates from the project page", [{ goal: "g.long-first-project", title: PG1, weight: 3, contribution: 2 }], ["F-3"], 1, 0.7),
+  longGoal("F-11", "Team plan renewal reminders", [{ goal: "g.long-churn", title: PG2, weight: 2, contribution: 3 }, { goal: "g.paid-conversion", title: G2, weight: 2, contribution: 1 }], ["F-4", "F-7", "F-8"], 2, 0.6),
+  longGoal("F-12", "Keyboard and screen reader support at checkout", [{ goal: "g.long-accessible", title: PG3, weight: 2, contribution: 3 }, { goal: "g.activation", title: G1, weight: 3, contribution: 1 }], ["F-1", "F-2", "F-5"], 3, 0.7),
+  longGoal("F-13", "Usage report for workspace owners", [{ goal: "g.long-churn", title: PG2, weight: 2, contribution: 2 }], ["F-4", "F-7", "F-8", "F-11"], 2, 0.5),
+  longGoal("F-14", "Project templates for agencies", [{ goal: "g.long-first-project", title: PG1, weight: 3, contribution: 1 }, { goal: "g.long-churn", title: PG2, weight: 2, contribution: 1 }], ["F-3", "F-9", "F-10"], 3, 0.6),
+];
+// The features of the scenario in use, read each time: the shared list is never changed.
+const featureSeeds = (): FeatureSeed[] =>
+  typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === LONG_GOALS_SCENARIO
+    ? [...FEATURES, ...LONG_GOAL_FEATURES]
+    : FEATURES;
 const round = (n: number) => Math.round(n * 1000) / 1000;
 const num = (v: unknown): number | null => {
   if (typeof v === "number") return v;
@@ -371,7 +394,7 @@ function findCycles(deps: Record<string, string[]>): string[][] {
 }
 
 export function ranking(method: Method, cal: TrackRecord = null): Schemas["PriorityRanking"] {
-  const scored = FEATURES.map((f) => scoreFeature(f, method, cal));
+  const scored = featureSeeds().map((f) => scoreFeature(f, method, cal));
   const byScore = [...scored].sort(
     (a, b) => a.group - b.group || b.order_score - a.order_score || a.key.localeCompare(b.key),
   );
@@ -449,7 +472,7 @@ export function ranking(method: Method, cal: TrackRecord = null): Schemas["Prior
 // ---------------------------------------------------------------- overrides (C9 Move and pin)
 
 const entityId = (key: string) => `00000000-0000-4000-8000-${hash(key).padStart(12, "0")}`;
-const featureById = (id: string) => FEATURES.find((f) => entityId(f.key) === id);
+const featureById = (id: string) => featureSeeds().find((f) => entityId(f.key) === id);
 
 /** The mock scenario (MOCK_SCENARIO_KEY) with one change from before a feature it moved above was retired. */
 export const LEGACY_OVERRIDE_SCENARIO = "priority-legacy-override";

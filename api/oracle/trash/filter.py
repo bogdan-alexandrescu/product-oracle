@@ -61,6 +61,7 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
         RoadmapPublicText,
         ScheduleBasis,
         TrackerRecord,
+        TrackMilestone,
     )
     from oracle.runs.models import Checkpoint, Run, RunSegment
     from oracle.runs.scope_models import PrdScope
@@ -141,6 +142,9 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
         # The PRD's plan (plan-model): a trashed PRD's milestones and slices leave the
         # roadmap, the priorities and the PRD timeline with it.
         SimplePrdPlan: [("document_id", docs)],
+        # Goal milestones: a trashed roadmap's leave with it, and a PRD's own (origin_prd_id)
+        # leave the roadmap with their PRD, as its plan does.
+        TrackMilestone: [("roadmap_id", docs), ("origin_prd_id", docs)],
     }
 
 

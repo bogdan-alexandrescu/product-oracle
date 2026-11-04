@@ -1557,6 +1557,9 @@ class SourceContext:
     # Verified schedule bases (CR-11): kind, reference, supports_date. The only sources
     # a milestone date may name.
     schedule_bases: list[dict[str, Any]] = field(default_factory=list)
+    # one-roadmap-many-prds: every item on the company roadmap in one team's queue
+    # (oracle.roadmap.company.run_queue); empty: no company roadmap.
+    company_queue: list[dict[str, Any]] = field(default_factory=list)
     # The run's planning horizons (A1, the planning_horizons setting as the run started,
     # run.knobs["planning_horizons"]); empty: B2's defaults (HORIZONS).
     horizons: dict[str, int] = field(default_factory=dict)
@@ -1885,6 +1888,20 @@ def step_prompt(
         lines += source_lines(ctx.source, paste=not ctx.mcp_attached)
     if ctx.draft is not None:
         lines += draft_lines(ctx.draft.kind, ctx.draft, ctx.source)
+    if flow.key == "prd_to_roadmap" and segment.name == "roadmap_draft" and ctx.source:
+        # roadmap-plan-tables: the tables approving the draft applies to Simple.
+        from oracle.roadmap import company
+        from oracle.runs import plan_tables
+
+        items = ctx.prior_outputs.get(plan_tables.ITEMS_FILE)
+        queued = company.with_run_items(ctx.source.company_queue, items)
+        plan = plan_tables.engineering_plan(
+            items,
+            ctx.source.schedule_bases,
+            others=queued,
+        )
+        lines += company.queue_lines(queued)
+        lines += plan_tables.prompt_lines(plan, critic=role == "critic")
     if ctx.extra_lines:
         lines += ["", *ctx.extra_lines]
     if flow.key == "update_draft" and ctx.document:

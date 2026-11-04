@@ -9,10 +9,12 @@ from sqlalchemy import select, update
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document
 from oracle.roadmap.models import RoadmapItem
+from oracle.runs import plan_tables
 from oracle.swarm import Outcome
 from oracle.tenancy import tenant_session
 from tests.test_roadmap import (
     ITEMS,
+    PLAN_TABLES,
     PRD,
     ROADMAP,
     ROADMAP_MD,
@@ -22,6 +24,9 @@ from tests.test_roadmap import (
     start,
     tick,
 )
+
+# The ENG-412 estimate approved_prd records (oracle.runs.plan_tables reads its JSON shape).
+ENG_412 = ({"kind": "estimate", "reference": "ENG-412", "supports_date": "2026-11-30"},)
 
 # Two items in Now (payment-step, shipping-step) and one in Next (order-tracking).
 ITEMS_3 = (
@@ -41,7 +46,12 @@ ITEMS_3 = (
 
 async def build_roadmap(client, auth, runtime, items: str = ITEMS_3) -> None:
     runtime.script["roadmap_items"] = [Outcome(artifacts={"roadmap_items.yaml": items})]
-    runtime.script["roadmap_draft"] = [Outcome(artifacts={"roadmap.md": ROADMAP_MD})]
+    # The plan tables of these items, without milestone rows: approving the roadmap sets
+    # no track milestones the launch tests do not set themselves.
+    plan = plan_tables.engineering_plan(items, ENG_412)
+    plan.milestones = []
+    md = ROADMAP_MD.replace(PLAN_TABLES, plan_tables.markdown(plan))
+    runtime.script["roadmap_draft"] = [Outcome(artifacts={"roadmap.md": md})]
     off = {"roadmap_items": False, "roadmap_review": False}
     run = await start(
         client, auth, await create(client, auth, source=PRD, knobs={"checkpoints": off})

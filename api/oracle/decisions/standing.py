@@ -196,7 +196,11 @@ async def note_reversed(db: AsyncSession, d: Decision, note: str) -> int:
     )
     if not docs:
         return 0
-    text = f"D-{d.number} {d.title} was reversed: {note}".strip()
+    # The reversal's day, month first, in the company's zone ("was reversed on Nov 3: ...").
+    from oracle import company_time
+
+    on = company_time.day_in_words(company_time.now(), await company_time.company_time_zone(db))
+    text = f"D-{d.number} {d.title} was reversed on {on}: {note}".strip()
     n = 0
     for draft in await db.scalars(
         select(SimpleDraft).where(SimpleDraft.document_id.in_(docs), SimpleDraft.status.in_(OPEN))

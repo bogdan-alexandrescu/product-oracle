@@ -414,6 +414,57 @@ class SimpleKeyDateRoadmap(BaseModel):
     can_change: bool = False
 
 
+class SimpleMilestonePending(BaseModel):
+    """build-milestones-on-roadmap: an edit to a PRD's milestone, waiting on its owner's
+    decision through the change engine (the milestone's date and ``counts_when`` stay as
+    the PRD has them until it is accepted)."""
+
+    date: dt.date | None = None
+    counts_when: str | None = None
+    asked_of: str | None = None
+    change_id: uuid.UUID | None = None
+
+
+MilestoneProgress = Literal["on_track", "at_risk", "not_started", "met"]
+
+
+class SimpleGoalMilestone(BaseModel):
+    """build-milestones-on-roadmap: a milestone on the Simple roadmap, per goal. ``prd``
+    set: read from that PRD's own milestones (read-only except through ``pending``);
+    ``prd_owner``: its display name. ``date`` null: no date yet."""
+
+    id: uuid.UUID
+    roadmap_id: uuid.UUID
+    code: str
+    name: str
+    date: dt.date | None = None
+    goal_id: uuid.UUID | None = None
+    item_ids: list[uuid.UUID] = []
+    counts_when: str = ""
+    progress: MilestoneProgress = "not_started"
+    prd: "SimpleDocRef | None" = None
+    prd_owner: str | None = None
+    pending: SimpleMilestonePending | None = None
+    can_change: bool = False
+
+
+class SimpleGoalMilestoneIn(BaseModel):
+    roadmap_id: uuid.UUID
+    name: str = Field(min_length=1, max_length=120)
+    date: dt.date
+    goal_id: uuid.UUID | None = None
+    item_ids: list[uuid.UUID] = []
+    counts_when: str = ""
+
+
+class SimpleGoalMilestonePatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    date: dt.date | None = None
+    goal_id: uuid.UUID | None = None
+    item_ids: list[uuid.UUID] | None = None
+    counts_when: str | None = None
+
+
 class SimpleRoadmapOut(BaseModel):
     today: dt.date
     group: RoadmapGroup
@@ -421,6 +472,9 @@ class SimpleRoadmapOut(BaseModel):
     groups: list[SimpleGroup]
     items: list[SimpleRoadmapItem]
     milestones: list[SimpleMilestone]
+    # build-milestones-on-roadmap: each shown roadmap's milestones per goal (its own, and
+    # those read from the PRDs its items come from).
+    goal_milestones: list[SimpleGoalMilestone] = []
     # S3b: changes waiting in working drafts and proposals of roadmaps whose drafts the
     # reader may not see (the banner's count, no details: they read the published version).
     changes_in_review: int = 0
@@ -512,6 +566,9 @@ ChangeOp = Literal[
     # fix5-cut-dependents: an item cut with every item that waits on it (transitively), as
     # one change keyed by item id (oracle.simple.changes).
     "cut_with_dependents",
+    # build-milestones-on-roadmap: a proposed date/counts_when on a PRD's own goal
+    # milestone, on the PRD document, routed to its owner (oracle.simple.goal_milestones).
+    "edit_goal_milestone",
 ]
 # chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
 # the change engine (oracle.simple.chat_actions).
@@ -614,6 +671,13 @@ class SimpleTaskWaiting(SimpleItemTask):
     late: bool = False
 
 
+class SimpleChangeMeeting(BaseModel):
+    """meeting-changes-only-its-agenda: the meeting a change was made in."""
+
+    id: uuid.UUID
+    title: str
+
+
 class SimpleChangeOut(BaseModel):
     id: uuid.UUID
     session_id: uuid.UUID | None
@@ -643,6 +707,12 @@ class SimpleChangeOut(BaseModel):
     # The walk (H2): the change in plain words, as Home's "Since your last visit" says it:
     # "Ana changed the estimate of F-08 Billing page · undone" (oracle.simple.change_words).
     words: str | None = None
+    # meeting-changes-only-its-agenda: the meeting it was made in, and whether it is on an
+    # item that meeting does not review (so a proposal for the item's owner, never applied
+    # by the meeting): "Asked for by the meeting Payments review".
+    # null: not made in a meeting.
+    from_meeting: SimpleChangeMeeting | None = None
+    off_agenda: bool | None = None
 
 
 class SimpleItemFlags(BaseModel):
@@ -685,6 +755,8 @@ class InboxSimpleChange(BaseModel):
     reason: str | None
     decision_reason: str | None
     state: Literal["new", "open", "done"]
+    # meeting-changes-only-its-agenda: the meeting that asked for it.
+    from_meeting: SimpleChangeMeeting | None = None
 
 
 DraftStatus = Literal["working", "submitted", "approved", "discarded"]
@@ -1238,7 +1310,7 @@ class OnePagerDraft(BaseModel):
     # "Sections Scope need a reviewer"), as the meeting's banner says it.
     blocked_by: list[str] = []
     # decisions-reversed-or-trashed: decisions this draft cited that were reversed since
-    # ("D-4 Cut bulk export was reversed: ...").
+    # ("D-4 Cut bulk export was reversed on Nov 3: ...").
     decision_notes: list[str] = []
 
 
@@ -1524,6 +1596,9 @@ class ChatCardOut(BaseModel):
     # it cuts (changes.cut_route), and whether that is outside the meeting.
     asks_with_dependents: list[str] = []
     asks_with_dependents_outside: bool = False
+    # meeting-changes-only-its-agenda: in a meeting, the card's item is not on its agenda:
+    # "Delivery integrity is on another roadmap: sent to its owner to decide".
+    elsewhere: str | None = None
 
 
 class ChatChoiceOut(BaseModel):
@@ -1970,6 +2045,9 @@ class SimpleMeetingIn(BaseModel):
     # row's due time: a start the ritual has moved past is 409, never next week's review.
     ritual_id: uuid.UUID | None = None
     due_at: dt.datetime | None = None
+    # meeting-changes-only-its-agenda: the roadmap it reviews (slug or id), when the PRD's
+    # items are on several; else the one they are on.
+    roadmap: str | None = Field(default=None, max_length=200)
     attendee_ids: list[uuid.UUID] = Field(default_factory=list, max_length=50)
     change_mode: ChangeMode = "everyone"
     change_people: list[uuid.UUID] = Field(default_factory=list, max_length=2)

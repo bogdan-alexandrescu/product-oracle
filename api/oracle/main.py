@@ -69,6 +69,7 @@ from oracle.requests.router import router as requests_router
 from oracle.review.router import router as review_router
 from oracle.review.v2_router import router as review_v2_router
 from oracle.rituals.router import router as rituals_router
+from oracle.roadmap.company_router import router as roadmap_company_router
 from oracle.roadmap.public_router import router as roadmap_public_router
 from oracle.roadmap.router import router as roadmap_router
 from oracle.runs.router import router as runs_router
@@ -81,6 +82,7 @@ from oracle.shares.router import router as shares_router
 from oracle.simple.additions_router import router as simple_additions_router
 from oracle.simple.changes_router import router as simple_changes_router
 from oracle.simple.chat_router import router as simple_chat_router
+from oracle.simple.goal_buckets import router as simple_goal_buckets_router
 from oracle.simple.meetings_router import router as simple_meetings_router
 from oracle.simple.plan_router import router as simple_plan_router
 from oracle.simple.priorities import router as simple_priorities_router
@@ -281,6 +283,7 @@ def create_app() -> FastAPI:
     app.include_router(blockers_router)
     # CR-09: engineering specs, user flows and wireframes from an approved PRD.
     app.include_router(specs_router)
+    app.include_router(roadmap_company_router)
     app.include_router(roadmap_router)
     # O5: a roadmap's Public version (public texts, preview, public check).
     app.include_router(roadmap_public_router)
@@ -306,6 +309,7 @@ def create_app() -> FastAPI:
     app.include_router(plan_router)
     app.include_router(simple_router)
     app.include_router(simple_plan_router)
+    app.include_router(simple_goal_buckets_router)
     app.include_router(simple_changes_router)
     app.include_router(simple_additions_router)
     app.include_router(simple_chat_router)

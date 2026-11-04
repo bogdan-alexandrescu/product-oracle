@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Numeral } from "./Figures";
+import { PanelCloseButton } from "./panel-close";
 
 export type InspectorStat = {
   label: string;
@@ -27,6 +28,7 @@ export function Inspector({
   title,
   chips,
   action,
+  onClose,
   head,
   stats,
   statColumns,
@@ -43,6 +45,8 @@ export function Inspector({
   chips?: ReactNode;
   /** "Open": a hero-variant Button or LinkButton. */
   action?: ReactNode;
+  /** The panel closes by its page's own means (clearing the pick): the head's × calls it. */
+  onClose?: () => void;
   /** Extra content in the dark head (a ring and numerals). */
   head?: ReactNode;
   stats?: InspectorStat[];
@@ -79,7 +83,10 @@ export function Inspector({
       >
         <div className="flex items-center justify-between gap-3">
           <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">{eyebrow}</span>
-          {action}
+          <span className="flex items-center gap-3">
+            {action}
+            <PanelCloseButton onClose={onClose} />
+          </span>
         </div>
         {title && (
           <h2 className="mt-1.5 mb-2.5 font-display text-[22px] leading-[27px] font-bold tracking-heading break-words">{title}</h2>

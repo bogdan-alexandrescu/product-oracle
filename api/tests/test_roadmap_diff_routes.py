@@ -24,6 +24,7 @@ from tests.test_roadmap import (  # noqa: F401 - fixtures
     seed_baseline,
     start,
     tick,
+    with_plan,
 )
 
 DIFF = "/v1/roadmap-items/diff"
@@ -48,12 +49,15 @@ ITEMS_V2 = (
 )
 # Version 3: the address book leaves again.
 ITEMS_V3 = ITEMS_V2.split("  - id: address-book")[0]
+# The ENG-412 estimate approved_prd records: the plan tables' Beta date rests on it.
+BASES = ({"kind": "estimate", "reference": "ENG-412", "supports_date": "2026-11-30"},)
 
 
 async def new_version(client, auth, runtime, items: str, n: int, approve: bool = False) -> None:  # noqa: F811
     """Version ``n`` of the roadmap, written by a prd_to_roadmap run with these items."""
     runtime.script["roadmap_items"] = [Outcome(artifacts={"roadmap_items.yaml": items})]
-    text = ROADMAP_MD.replace("payment first", f"payment first (v{n})")
+    # The draft carries the plan tables of this version's items (roadmap-plan-tables).
+    text = with_plan(ROADMAP_MD, items, BASES).replace("payment first", f"payment first (v{n})")
     runtime.script["roadmap_draft"] = [Outcome(artifacts={"roadmap.md": text})]
     off = {"roadmap_items": False, "roadmap_review": False}
     run = await start(

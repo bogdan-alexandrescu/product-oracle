@@ -49,7 +49,16 @@ from oracle.discussions.models import Discussion, DiscussionMessage, DiscussionP
 from oracle.docs.models import Document, DocumentVersion
 from oracle.members.names import display_name
 from oracle.roadmap.models import DraftRoadmap, ProductTrack, RoadmapItem
-from oracle.simple import change_words, changes, constraints, dates, drafts, service, targets
+from oracle.simple import (
+    agenda,
+    change_words,
+    changes,
+    constraints,
+    dates,
+    drafts,
+    service,
+    targets,
+)
 from oracle.simple.changes import ChangeError
 from oracle.simple.models import SimpleChange, SimpleChatCard, SimpleChatRead
 from oracle.simple.schemas import (
@@ -2105,9 +2114,13 @@ async def cards_out(
                           | {i for ids in routes.values() for i in ids}
                           | {r.decided_by for r in declined.values() if r.decided_by})  # fmt: skip
     owners: list[uuid.UUID] | None = None
+    # meeting-changes-only-its-agenda: an item the meeting does not review is only proposed
+    # to its own decider, and the card says so.
+    ag = await agenda.for_session(db, rules.session_id) if rules is not None else None
     outs: list[ChatCardOut] = []
     for c in cards:
         e = read_.by_id().get(c.item_id) if c.item_id else None
+        off = ag is not None and e is not None and not ag.covers(e.row)
         flags: list[SimpleItemFlags] = []
         fixes: list[ChatFix] = []
         # fix5-cut-dependents: what "Cut it and its dependents" cuts with the item, as the
@@ -2188,6 +2201,14 @@ async def cards_out(
                     db, rules, cut, read_.deciders, asks_all
                 )
             names.update(await _names(db, {i for i in asks_all if i not in names}))
+        if off and e is not None:
+            may = "propose" if may == "apply" else may
+            may_all = "propose" if may_all == "apply" else may_all
+            if may == "propose":
+                owners = owners if owners is not None else await changes._company_owners(db)
+                asks, here = service.decider_ids(e, read_.deciders) or owners, False
+                asks_all, here_all = asks if may_all else [], False
+                names.update(await _names(db, {i for i in asks if i not in names}))
         # walkc-meeting r2: a proposal declined since reads as declined, by whom and when.
         no = declined.get(c.change_id) if c.status == "proposed" and c.change_id else None
         by, at = (no.decided_by, no.decided_at) if no is not None else (c.decided_by, c.decided_at)
@@ -2207,6 +2228,7 @@ async def cards_out(
             asks=[names[i] for i in asks if i in names], asks_outside=not here,
             asks_with_dependents=[names[i] for i in asks_all if i in names],
             asks_with_dependents_outside=not here_all,
+            elsewhere=agenda.elsewhere_words(e.row.title) if off and e is not None else None,
         ))  # fmt: skip
     return outs
 
@@ -2288,7 +2310,9 @@ async def apply(
                 raise ChatError(409, f"This card is {c.status if c else 'gone'} already")
             c.status = "applied"
             await db.flush()
-        return await changes.create(db, principal, body)
+        # The meeting's session closed: still only what the meeting reviews changes.
+        later = {"meeting_id": rules.meeting_id} if body.session_id is None and rules else {}
+        return await changes.create(db, principal, body, **later)
 
     try:
         result = await make()

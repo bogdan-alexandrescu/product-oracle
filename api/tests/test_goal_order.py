@@ -23,6 +23,8 @@ Test cards (protects / fails_when / no_claim):
   no_claim=drift findings.
 - test_simple_goal_suggestions_follow_the_rule: protects=Simple Roadmap's goal cards come in
   the one order; fails_when=they come by key; no_claim=the suggestions.
+- test_simple_decisions_goal_filter_follows_the_rule: protects=Simple Decisions' Goal filter
+  lists the goals in the one order; fails_when=they come by key; no_claim=the decisions.
 - test_position_must_be_a_whole_number: protects=a goal's Edit saves a position of 1 or
   more and refuses 0 or a word with a field problem; a tie on position goes to the older
   goal; fails_when=a bad position is stored; no_claim=the web form.
@@ -106,6 +108,14 @@ async def test_simple_priorities_buckets_follow_the_rule(client):
     buckets = r.json()["buckets"]
     assert [b["key"] for b in buckets if not b["no_goal"]] == ORDER
     assert [b["position"] for b in buckets if not b["no_goal"]] == [1, 2, 3, None, None]
+
+
+async def test_simple_decisions_goal_filter_follows_the_rule(client):
+    ctx = await make_people()
+    await seed_goals(ctx)
+    r = await client.get("/v1/simple/decisions", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert [g["id"] for g in r.json()["goals"]] == ORDER
 
 
 async def test_strategy_stack_follows_the_rule(client):

@@ -15,6 +15,7 @@ from oracle.tenancy import tenant_session
 from tests.roadmap_helpers import basis, other_company, seed_trace
 from tests.test_roadmap import (  # noqa: F401 - fixtures
     ITEMS,
+    PLAN_TABLES,
     PRD,
     ROADMAP,
     ROADMAP_MD,
@@ -31,6 +32,8 @@ from tests.test_roadmap import (  # noqa: F401 - fixtures
 )
 
 URL = f"/v1/roadmaps/{ROADMAP}/items"
+# A roadmap pushed by hand: no plan tables (roadmap-plan-tables checks a run's draft).
+HAND_MD = ROADMAP_MD.replace(PLAN_TABLES, "")
 
 
 async def test_run_items_are_traced_to_the_approved_prd(client, owner, runtime):  # noqa: F811
@@ -263,7 +266,7 @@ async def test_items_need_a_roadmap_built_from_a_prd_version(client, owner):  # 
     # (Undated: with no PRD, a date in the text is refused, round 3.)
     resp = await client.post(
         f"/v1/documents/{ROADMAP}/versions",
-        content=ROADMAP_MD.replace("Beta by 2026-11-30.", "Beta first.").encode(),
+        content=HAND_MD.replace("Beta by 2026-11-30.", "Beta first.").encode(),
         headers={**auth, "Content-Type": "text/markdown"},
     )
     assert resp.status_code == 201, resp.text
@@ -349,14 +352,14 @@ async def test_carried_items_keep_a_date_only_while_its_basis_holds(client, owne
     # text may not write the withdrawn date either: round 3, O4 'document dates'.)
     resp = await client.post(
         f"/v1/documents/{ROADMAP}/versions",
-        content=ROADMAP_MD.replace("payment first", "payment now").encode(),
+        content=HAND_MD.replace("payment first", "payment now").encode(),
         headers={**auth, "Content-Type": "text/markdown"},
     )
     assert resp.status_code == 422, resp.text
     assert [p["code"] for p in resp.json()["errors"]] == ["unverified_date"]
     resp = await client.post(
         f"/v1/documents/{ROADMAP}/versions",
-        content=ROADMAP_MD.replace("payment first", "payment now")
+        content=HAND_MD.replace("payment first", "payment now")
         .replace("Beta by 2026-11-30.", "Beta when re-estimated.")
         .encode(),
         headers={**auth, "Content-Type": "text/markdown"},

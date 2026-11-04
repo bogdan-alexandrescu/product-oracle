@@ -42,6 +42,20 @@ After the checklist panel. From the PRD: [Invite step](/documents/legacy-onboard
 
 ## Later {#later}
 
+## Plan {#plan}
+
+| Key | Item | Start | End | Dates from | Status |
+|---|---|---|---|---|---|
+| checklist-panel | Checklist panel |  |  | no date yet | planned |
+| invite-step | Invite step |  |  | no date yet | planned |
+
+## Milestones {#plan-milestones}
+
+| Milestone | Date | Gates | Counts when |
+|---|---|---|---|
+| Checklist beta |  | Checklist panel |  |
+| Invite defaults |  | Invite step |  |
+
 ## Sources and data points {#sources}
 
 - Week-one setup rate: Activation review [c:c1]

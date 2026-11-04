@@ -60,6 +60,7 @@ from oracle.baseline.models import Edge, Entity, Evidence
 from oracle.docs.models import Document, DocumentVersion
 from oracle.jobs.models import LlmJob
 from oracle.members.names import display_name
+from oracle.roadmap import company
 from oracle.roadmap.models import HORIZONS, ProductTrack, RoadmapItem
 from oracle.simple import changes, drafts, quality, service
 from oracle.simple.models import (
@@ -196,7 +197,8 @@ async def _roadmap_for(
     db: AsyncSession, principal: Any, given: Any, goal: Entity | None, read_: service.Read
 ) -> Document:
     """The roadmap a new item goes to: the one asked for, else the roadmap of the goal's
-    items, else the first the caller may change, else the first."""
+    items, else the first the caller may change, else the first. While the company roadmap
+    exists it is the only one: older per-PRD roadmaps are history."""
     if given:
         try:
             doc = await db.get(Document, uuid.UUID(str(given)))
@@ -206,7 +208,11 @@ async def _roadmap_for(
             raise ChangeError(404, "No such roadmap")
         if doc.visibility == "approvers" and not has_role(principal.role, "approver"):
             raise ChangeError(404, "No such roadmap")
+        if not await company.feeding_ids(db, [doc.id]):
+            raise ChangeError(409, "That roadmap is history: add to the product roadmap")
         return doc
+    if (found := await company.active(db)) is not None:
+        return found
     if goal is not None:
         for e in read_.entries:
             if e.goal is not None and e.goal.id == goal.id:
@@ -413,17 +419,22 @@ def _reopen(s: SimpleGoalSuggestion | None) -> None:
         )
 
 
-async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> SimpleChangeResult:
+async def create(
+    db: AsyncSession, principal: Any, body: SimpleChangeIn, agenda: Any = None
+) -> SimpleChangeResult:
+    """``agenda``: the meeting's it is made in (oracle.simple.agenda): an item added to a
+    roadmap the meeting does not review is a proposal for that roadmap's people."""
     me, now = changes._me(principal), company_time.now()
     if not has_role(principal.role, "commenter"):
         raise ChangeError(403, "Viewers read the roadmap; commenters and up add to it")
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     doc, target, after = await _plan(db, principal, body, read_)
     w = await drafts.who(db, {doc.id})
-    applies = drafts.can_edit(principal, doc.id, w)
+    off = agenda is not None and not agenda.covers_document(doc.id)
+    applies = not off and drafts.can_edit(principal, doc.id, w)
     session = await changes._session_for_change(db, me, body.session_id, applies, now)
     c = SimpleChange(
-        session_id=session.id if session else None,
+        session_id=session.id if session else (agenda.session_id if off else None),
         document_id=doc.id,
         op="add_item",
         target=target,
@@ -837,7 +848,10 @@ async def _job_document(
     db: AsyncSession, goal: Entity, read_: service.Read | None = None
 ) -> Document | None:
     """The roadmap a goal's suggestions job is filed under (and whose decider decides its
-    suggestions): one holding its items, else the company's first roadmap."""
+    suggestions): the company roadmap while there is one, else one holding its items, else
+    the company's first roadmap."""
+    if (found := await company.active(db)) is not None:
+        return found
     read_ = read_ or await service.load(db)
     for e in read_.entries:
         if e.goal is not None and e.goal.id == goal.id:

@@ -150,7 +150,9 @@ test("12d: an approver sees the table and the Summaries choice without edit cont
   await ritualRow(page, "Weekly goals check-in").click();
   const panel = inspector(page);
   await expect(panel).toContainText("Mondays 9:00 AM");
-  await expect(panel.getByRole("button")).toHaveCount(0);
+  // No edit controls: the panel's only button is its × (panel-close), which any reader has.
+  await expect(panel.getByRole("button")).toHaveCount(1);
+  await expect(panel.getByRole("button", { name: "Close the details" })).toBeVisible();
   await expect(panel.getByRole("combobox")).toHaveCount(0);
 });
 

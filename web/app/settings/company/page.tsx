@@ -15,6 +15,7 @@ import { ZONE_NOT_SET } from "@/lib/zone";
 import { INPUT, SELECT_FIELD } from "../_components/fields";
 import { setupReturn } from "../_nav";
 import { BrandingPanel } from "./BrandingPanel";
+import { ProductRoadmapPanel, TeamCapacityPanel } from "./RoadmapSetup";
 
 /** The planning_horizons setting (oracle.tenant_settings_api): B2 Goals framework. */
 type Horizons = { short_quarters: number; medium_quarters: number; long_from_months: number; long_to_months: number };
@@ -706,8 +707,12 @@ export default function CompanySettingsPage() {
             <TimezonePanel canChange={canChange} />
             {/* H9: owners choose the pricing owner; others do not see the field. */}
             {canChange && can("list_members") && <PricingOwnerPanel />}
+            {/* one-roadmap-many-prds: the one team that plans every PRD's items. */}
+            <TeamCapacityPanel canChange={canChange} />
           </>
         )}
+        {/* one-roadmap-many-prds: the first-run step, the company's one roadmap. */}
+        {can("get_company_roadmap") && <ProductRoadmapPanel />}
         {readsBranding && <BrandingPanel />}
       </div>
     </>

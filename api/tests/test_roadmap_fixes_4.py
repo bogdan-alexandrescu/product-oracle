@@ -495,7 +495,8 @@ async def test_a_withdrawn_date_on_an_unapproved_version_also_refuses_approval(
     assert resp.status_code == 200, resp.text
     resp = await client.post(f"{VERSIONS}/1/approve", headers=auth)
     assert resp.status_code == 409
-    assert [d["status"] for d in resp.json()["dates"]] == ["withdrawn"]
+    # The body's date and the plan tables' two.
+    assert [d["status"] for d in resp.json()["dates"]] == ["withdrawn"] * 3
 
 
 # --------------------------------------------------------------------------- minors
