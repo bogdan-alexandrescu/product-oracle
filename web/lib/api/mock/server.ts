@@ -1238,28 +1238,27 @@ const ROADMAP_MILESTONES_HARD_ITEMS: [string, string][] = [
 
 /**
  * mk-milestones "roadmap-milestones-hard" (ms1/ms2/ms3-a-hard-1512): "simple-milestones" grown so
- * Grow retention holds 30 items (its usual four, plus 26 more alert features with no dates of
- * their own); two more of its own milestones, M3 Jan 20 and M4 Feb 17, and a second milestone on
- * Faster activation, M2 Dec 22 (the same day as Grow retention's own M2): the Timeline's axis
- * reads "2 on Dec 22", and each of M3 and M2 waits on an item that ends after it ("Ends after
- * M3 ..." and "Ends after M2 ..."). Invented data.
+ * Grow retention holds 30 items (its usual four, plus 26 more dated alert features); two more of
+ * its own milestones, M3 Jan 20 and M4 Feb 17, and a second milestone on Faster activation, M2
+ * Dec 22 (the same day as Grow retention's own M2): the Timeline's axis reads "2 on Dec 22", and
+ * M3 waits on Alert routing by team, M2 on Team invite nudges, each ending after it ("Ends after
+ * M3 ..." and "Ends after M2 ...", as the frames draw). Invented data.
  */
 export const ROADMAP_MILESTONES_HARD_SCENARIO = "roadmap-milestones-hard";
 
 function seedRoadmapMilestonesHardScenario(): Db {
   const db = seed();
   const rm = (db.simple_roadmap = seedSimpleRoadmap());
-  for (const [key, title] of ROADMAP_MILESTONES_HARD_ITEMS) {
-    rm.items.push({ key, title, horizon: "later", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts" });
+  ROADMAP_MILESTONES_HARD_ITEMS.forEach(([key, title], i) => {
+    const start = -15 + (i % 8) * 4;
+    rm.items.push({ key, title, horizon: "later", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", start, end: start + 25 + (i % 5) * 6 });
     rm.ids[key] = stableUuid(`simple-item/${key}`);
-  }
-  // Sample data import now ends Dec 24, past Dec 22, so Faster activation's new M2 reads "Ends after" it.
-  rm.items.find((x) => x.key === "setup-import")!.end = 83;
+  });
   rm.goal_milestones = [
     ...seedOwnMilestones(),
-    { id: stableUuid("simple-gm/m3"), roadmap: "alerts-roadmap", code: "M3", name: "Teams set 3 rules in week 1", date: "2027-01-20", goal: "grow-retention", gates: ["alert-feedback"], counts_when: "Holds 7 days in a row", progress: "not_started" },
+    { id: stableUuid("simple-gm/m3"), roadmap: "alerts-roadmap", code: "M3", name: "Teams set 3 rules in week 1", date: "2027-01-20", goal: "grow-retention", gates: ["alert-sso"], counts_when: "Holds 7 days in a row", progress: "not_started" },
     { id: stableUuid("simple-gm/m4"), roadmap: "alerts-roadmap", code: "M4", name: "Digest opened by 70%", date: "2027-02-17", goal: "grow-retention", gates: [], counts_when: "Sent to every team 2 weeks in a row", progress: "not_started" },
-    { id: stableUuid("simple-gm/a2"), roadmap: "onboarding-roadmap", code: "M2", name: "Half of new teams invite a teammate", date: "2026-12-22", goal: "faster-activation", gates: ["setup-import"], counts_when: "Holds 14 days in a row on all teams", progress: "not_started" },
+    { id: stableUuid("simple-gm/a2"), roadmap: "onboarding-roadmap", code: "M2", name: "Half of new teams invite a teammate", date: "2026-12-22", goal: "faster-activation", gates: ["setup-ideas"], counts_when: "Holds 14 days in a row on all teams", progress: "not_started" },
   ];
   return db;
 }

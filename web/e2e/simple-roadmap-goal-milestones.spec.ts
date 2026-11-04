@@ -227,6 +227,24 @@ test.describe("a PRD's own milestones", () => {
     await expect(page.getByTestId("ms-proposed")).toHaveCount(1);
     await shot(page, "ms3-a-done");
   });
+
+  test("ms3-a-mid: dragging a PRD milestone fades its old place and draws the dashed amber 'Moving' one", async ({ page }) => {
+    await open(page, "simple-prd-milestones");
+    const d = page.locator('[data-testid="ms-prd-diamond"][title^="M2 Digest for all teams"]');
+    const box = (await d.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 60, box.y + box.height / 2, { steps: 4 });
+    await page.mouse.move(box.x + 120, box.y + box.height / 2, { steps: 4 });
+    const moving = page.getByTestId("ms-asked");
+    await expect(moving).toContainText(/^Moving M2 Digest for all teams to [A-Z][a-z]{2} \d{1,2}$/);
+    expect(await moving.evaluate((e) => getComputedStyle(e).borderTopColor)).not.toBe(await page.getByTestId("ms-prd-label").first().evaluate((e) => getComputedStyle(e).borderTopColor));
+    await expect(page.getByTestId("ms-proposed")).toHaveCount(1);
+    expect(Number(await page.getByTestId("ms-prd-label").filter({ hasText: "M2 Digest for all teams" }).evaluate((e) => getComputedStyle(e).opacity))).toBeLessThan(1);
+    await expect(page.getByTestId("ms-ghost-words")).toHaveCount(0);
+    await shot(page, "ms3-a-drag");
+    await page.mouse.up();
+  });
 });
 
 test.describe("labels in sight", () => {

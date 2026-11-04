@@ -217,7 +217,7 @@ test.describe("phone", () => {
     const title = sheet.getByRole("heading", { level: 2, name: "Guided first project with sample tasks", exact: true }).first();
     const look = await title.evaluate((e) => {
       const s = getComputedStyle(e);
-      return { weight: Number(s.fontWeight), cut: e.scrollWidth > e.clientWidth + 1 || s.textOverflow === "ellipsis", lines: Math.round(e.getBoundingClientRect().height / parseFloat(s.lineHeight)) };
+      return { weight: Number(s.fontWeight), cut: e.scrollWidth > e.clientWidth + 1 || s.textOverflow === "ellipsis", lines: Math.round((e.clientHeight - parseFloat(s.paddingTop) - parseFloat(s.paddingBottom)) / parseFloat(s.lineHeight)) };
     });
     expect(look.weight).toBeGreaterThanOrEqual(700);
     expect(look.cut).toBe(false);
