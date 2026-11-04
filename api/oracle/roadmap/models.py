@@ -212,6 +212,9 @@ class TrackMilestone(TenantScoped, Base):
     )
     origin_prd_id: Mapped[uuid.UUID | None] = _fk("documents", "SET NULL")
     pending_change: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # build-milestones-on-roadmap review: the date the PRD's approved plan last gave a PRD
+    # milestone; when the plan's date moves off it, the milestone takes the new date.
+    plan_date: Mapped[date | None] = mapped_column(Date)
     item_ids: Mapped[list[uuid.UUID]] = _uuids()
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

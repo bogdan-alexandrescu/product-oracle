@@ -20,7 +20,8 @@ from datetime import date
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -38,6 +39,7 @@ from oracle.simple.schemas import (
     SimpleGoalMilestonePatch,
     SimpleMilestonePending,
 )
+from oracle.tenancy import current_tenant
 
 OPS: frozenset[str] = frozenset({"edit_goal_milestone"})
 _CODE = re.compile(r"^M(\d+)$")
@@ -71,6 +73,19 @@ async def _company_owners(db: AsyncSession) -> list[uuid.UUID]:
 # --------------------------------------------------------------------------- reading
 
 
+# No change waits on it: the column is SQL NULL, or JSON null once a decision cleared it.
+_no_pending = func.coalesce(func.jsonb_typeof(TrackMilestone.pending_change), "null") == "null"
+
+
+async def _rows(
+    db: AsyncSession, roadmap_ids: list[uuid.UUID], fresh: bool = False
+) -> list[TrackMilestone]:
+    q = select(TrackMilestone).where(TrackMilestone.roadmap_id.in_(roadmap_ids))
+    if fresh:
+        q = q.execution_options(populate_existing=True)
+    return list(await db.scalars(q))
+
+
 async def _out(
     db: AsyncSession,
     principal: Any,
@@ -78,6 +93,7 @@ async def _out(
     roadmap: Document,
     prd: Document | None,
     w: drafts.Who,
+    names: dict[uuid.UUID, str] | None = None,
 ) -> SimpleGoalMilestone:
     pending = None
     if row.pending_change:
@@ -92,7 +108,12 @@ async def _out(
     can_change: bool
     if prd is not None:
         owners = sorted(w.owners.get(prd.id, set()), key=str)
-        prd_owner = await _name_of(db, owners[0]) if owners else None
+        if not owners:
+            prd_owner = None
+        elif names is not None:
+            prd_owner = names.get(owners[0])
+        else:
+            prd_owner = await _name_of(db, owners[0])
         can_change = _may_propose(principal)
     else:
         can_change = drafts.can_edit(principal, row.roadmap_id, w)
@@ -118,33 +139,53 @@ async def list_for_roadmaps(
     roadmaps' rows, so the roadmap read stays bulk."""
     if not docs:
         return []
-    rows = list(
-        await db.scalars(select(TrackMilestone).where(TrackMilestone.roadmap_id.in_(list(docs))))
-    )
+    rows = await _rows(db, list(docs))
     prds_by_id = {p.id: p for of in kd_prds.values() for p in of}
     goal_of: dict[tuple[uuid.UUID, uuid.UUID], uuid.UUID] = {}
     for e in entries:
         if e.prd is not None and e.goal is not None:
             goal_of.setdefault((e.roadmap.id, e.prd.id), e.goal.id)
-    have = {(r.roadmap_id, r.origin_prd_id, r.code) for r in rows if r.origin_prd_id}
-    added = False
+    have = {(r.roadmap_id, r.origin_prd_id, r.code): r for r in rows if r.origin_prd_id}
+    new: list[dict[str, Any]] = []
     for doc_id in docs:
         for prd in kd_prds.get(doc_id, []):
             view = views.get(prd.id)
             for m in view.milestones if view is not None else []:
-                if (doc_id, prd.id, m.code) in have:
+                row = have.get((doc_id, prd.id, m.code))
+                if row is None:
+                    new.append({
+                        "id": uuid.uuid5(prd.id, f"goal-milestone:{doc_id}:{m.code}"),
+                        "track_id": None, "roadmap_id": doc_id,
+                        "goal_id": goal_of.get((doc_id, prd.id)), "origin_prd_id": prd.id,
+                        "code": m.code, "name": m.name, "target_date": m.end_date,
+                        "plan_date": m.end_date,
+                    })  # fmt: skip
                     continue
-                row = TrackMilestone(
-                    id=uuid.uuid5(prd.id, f"goal-milestone:{doc_id}:{m.code}"),
-                    track_id=None, roadmap_id=doc_id, goal_id=goal_of.get((doc_id, prd.id)),
-                    origin_prd_id=prd.id, code=m.code, name=m.name, target_date=m.end_date,
-                )  # fmt: skip
-                db.add(row)
-                rows.append(row)
-                have.add((doc_id, prd.id, m.code))
-                added = True
-    if added:
+                if row.pending_change:
+                    continue
+                to: dict[str, Any] = {}
+                if row.name != m.name:
+                    to["name"] = m.name
+                if row.plan_date != m.end_date:
+                    to["target_date"] = to["plan_date"] = m.end_date
+                if to:
+                    await db.execute(
+                        update(TrackMilestone)
+                        .where(TrackMilestone.id == row.id, _no_pending)
+                        .values(**to, lock_version=TrackMilestone.lock_version + 1)
+                        .execution_options(synchronize_session=False)
+                    )
+                    new.append({})
+    if new:
+        # Two first reads at once both insert the same uuid5 row: the later one skips it.
+        if rows_in := [n for n in new if n]:
+            await db.execute(
+                pg_insert(TrackMilestone)
+                .values([{**n, "tenant_id": current_tenant(db)} for n in rows_in])
+                .on_conflict_do_nothing()
+            )
         await db.commit()
+        rows = await _rows(db, list(docs), fresh=True)
     in_plan = {
         (doc_id, prd.id, m.code)
         for doc_id in docs
@@ -159,8 +200,16 @@ async def list_for_roadmaps(
     if not shown:
         return []
     w = await drafts.who(db, set(docs) | set(prds_by_id))
+    first_owners = {
+        sorted(w.owners[p], key=str)[0] for p in prds_by_id if w.owners.get(p)
+    }  # fmt: skip
+    names = {
+        u.id: display_name(u.email, u.name)
+        for u in (await db.scalars(select(User).where(User.id.in_(first_owners))))
+    } if first_owners else {}  # fmt: skip
     out = [
-        await _out(db, principal, r, docs[r.roadmap_id], prds_by_id.get(r.origin_prd_id), w)  # type: ignore[arg-type]
+        await _out(db, principal, r, docs[r.roadmap_id], prds_by_id.get(r.origin_prd_id), w,  # type: ignore[arg-type]
+                   names)  # fmt: skip
         for r in shown
     ]
     out.sort(key=lambda m: (str(m.roadmap_id), m.goal_id is None, str(m.goal_id), m.code))
