@@ -82,8 +82,9 @@ async def world(client) -> tuple[Ctx, dict]:
                                                                 tzinfo=UTC)))  # fmt: skip
         s.add(_item(old, ov, safety, sv, "old-report", "Old report button", 0))
         rm = await s.get(Document, company["id"])
-        v1 = await _add(s, DocumentVersion(document_id=rm.id, number=1, markdown="# Product roadmap",
-                                           content_hash=_hash("# Product roadmap"),
+        top = "# Product roadmap"
+        v1 = await _add(s, DocumentVersion(document_id=rm.id, number=1, markdown=top,
+                                           content_hash=_hash(top),
                                            source_version_id=sv.id,
                                            approved_at=datetime(2026, 10, 3,
                                                                 tzinfo=UTC)))  # fmt: skip
@@ -196,7 +197,7 @@ async def test_a_prd_run_writes_into_the_company_roadmap(client):
     r = await client.post("/v1/runs", headers=ctx.as_("owner"),
                           json={"flow": "prd_to_roadmap", "source": "user-safety"})  # fmt: skip
     assert r.status_code == 201, r.text
-    assert r.json()["document"] in (ids["slug"], str(ids["company"]))
+    assert r.json()["document_id"] == str(ids["company"])
 
 
 async def _goal(s, key: str, title: str, position: int, feature_key: str) -> Entity:
@@ -313,7 +314,7 @@ async def test_replaced_prd_is_read_only_and_stops_feeding(client):
     # Read-only: a new version is refused.
     r = await client.post("/v1/documents/trust-plan/versions", headers={
         **ctx.as_("owner"), "content-type": "text/markdown"},
-        content="---\ntitle: Trust plan\n---\n# Trust plan\n\nMore.\n")  # fmt: skip
+        content="---\ntitle: Trust plan\n---\n# Trust plan {#trust-plan}\n\nMore.\n")  # fmt: skip
     assert r.status_code == 409, r.text
     # Its items no longer feed the roadmap.
     r = await client.get("/v1/simple/roadmap", headers=ctx.as_("owner"))

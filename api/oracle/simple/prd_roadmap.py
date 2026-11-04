@@ -59,8 +59,11 @@ KEPT = ("outcome", "horizon", "feature_id", "prd_section_key", "depends_on", "go
 
 
 async def _roadmap(db: AsyncSession, prd: Document, derived: list[RoadmapItem]) -> uuid.UUID | None:
-    from oracle.roadmap import tracks
+    from oracle.roadmap import company, tracks
 
+    # one-roadmap-many-prds: every PRD feeds the company roadmap while there is one.
+    if (one := await company.active(db)) is not None:
+        return one.id
     track = await tracks.track_of_prd(db, prd.id)
     if track is not None and track.roadmap_document_id is not None:
         return track.roadmap_document_id

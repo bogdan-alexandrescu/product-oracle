@@ -169,6 +169,7 @@ from oracle.review import inbox as inbox_states
 from oracle.review.models import FeedbackItem
 from oracle.review.schemas import Resolution
 from oracle.review.service import locked_section_keys
+from oracle.roadmap import company as roadmap_company
 from oracle.roadmap import doc_dates, schedule
 from oracle.roadmap.views import items_version, version_items
 from oracle.runs import (
@@ -2110,7 +2111,14 @@ async def _resolve_inputs(
         assert source is not None
         return source[0].id, {"source_version_id": str(source[1].id)}
     default_slug = None
-    if source is not None and inputs.document is None:
+    if source is not None and source[0].replaced_by:
+        # one-roadmap-many-prds: a replaced PRD is read-only and feeds no roadmap.
+        raise Invalid(f"{source[0].title} is replaced: run its replacing PRDs instead")
+    company_roadmap = await roadmap_company.active(db) if flow.target_kind == "roadmap" else None
+    if source is not None and inputs.document is None and company_roadmap is not None:
+        # one-roadmap-many-prds: every PRD's run writes the company roadmap's next version.
+        default_slug = company_roadmap.slug
+    elif source is not None and inputs.document is None:
         # "<prd>-roadmap": that roadmap's next version, or a new roadmap.
         base = f"{source[0].slug}-{flow.target_kind or 'roadmap'}"
         existing = await docs_service.find_document(db, base)
