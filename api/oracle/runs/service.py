@@ -6899,7 +6899,8 @@ async def _import_names(db: AsyncSession, run: Run, segment: RunSegment) -> set[
 def _note_refused(
     run: Run, segment: RunSegment, art: dict[str, Any], skipped: dict[str, str], needed: set[str]
 ) -> str | None:
-    """Notes each file SwarmCloud refused to serve, once per file. Returns what to say
+    """Notes each file SwarmCloud refused to serve, once per file name (its refusal's
+    words may carry a request id that changes on every read). Returns what to say
     when one of them is a file the segment's import needs: its results are not taken."""
     refused = art.setdefault("refused_files", {})
     held: list[str] = []
@@ -6910,14 +6911,16 @@ def _note_refused(
             note = (
                 f"SwarmCloud refused to send {name} ({why}), the file this step's results "
                 "are imported from, so they were not imported. Oracle asks again each "
-                "minute; if SwarmCloud keeps refusing it, cancel the run and start it again."
+                "minute; if SwarmCloud keeps refusing it, ask whoever runs SwarmCloud why "
+                "it refuses this file: it goes by the file's name, so running the step "
+                "again will not help."
             )
         else:
             note = (
                 f"SwarmCloud refused to send {name} ({why}), so this step's results were "
                 "imported without it."
             )
-        if refused.get(name) != why:
+        if name not in refused:
             refused[name] = why
             _note_art(art, note)
     if not held:

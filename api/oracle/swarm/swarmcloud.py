@@ -1224,7 +1224,11 @@ class SwarmCloudRuntime:
                             skipped[name.rsplit("/", 1)[-1]] = _refused_why(exc)
                         continue
                     if content is not None:
-                        files[name.rsplit("/", 1)[-1]] = content.decode("utf-8", "replace")
+                        base = name.rsplit("/", 1)[-1]
+                        files[base] = content.decode("utf-8", "replace")
+                        # A later step serves what an earlier one's copy was refused for.
+                        if skipped is not None:
+                            skipped.pop(base, None)
         return files
 
     async def read_artifacts(

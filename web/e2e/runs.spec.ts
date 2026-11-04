@@ -625,6 +625,9 @@ async function refusedBaseline(page: Page) {
   const notes = page.getByTestId("run-notes").locator("li").filter({ hasText: "baseline.yaml" });
   await expect(notes).toHaveCount(1);
   await expect(notes).toContainText("SwarmCloud refused to send baseline.yaml (422 validation_error: artifact name not allowed)");
+  // SwarmCloud refuses the file by its name, so starting the run again would not help.
+  await expect(notes).toContainText("ask whoever runs SwarmCloud why it refuses this file");
+  await expect(notes).not.toContainText("start it again");
 }
 
 test("artifact-skip-refused: a file SwarmCloud refuses that the step needs is said in words, not only counted", async ({ page }) => {

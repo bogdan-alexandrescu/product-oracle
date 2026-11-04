@@ -171,3 +171,62 @@ async def test_a_refused_file_the_import_needs_holds_it_with_a_note_in_words(cli
     assert "baseline.yaml" in out["errors"][0]
     run = await get(client, auth, run["id"])
     assert len(_naming(run, "baseline.yaml")) == 1, run["notes"]
+
+
+def _two_steps() -> httpx.MockTransport:
+    """Two succeeded steps that both list ``_export.yaml``: the first step's copy is
+    refused for good (422), the later step's is served."""
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/v1/workflows/wf_1":
+            steps = [
+                {"step_id": "s1", "task_id": "t1", "state": "SUCCEEDED"},
+                {"step_id": "s2", "task_id": "t2", "state": "SUCCEEDED"},
+            ]
+            return httpx.Response(200, json={"workflow": {"state": "SUCCEEDED", "steps": steps}})
+        if path in ("/v1/tasks/t1/artifacts", "/v1/tasks/t2/artifacts"):
+            return httpx.Response(200, json={"artifacts": [{"name": "_export.yaml", "role": None}]})
+        if path == "/v1/tasks/t1/artifacts/raw":
+            return httpx.Response(
+                422, json={"code": "validation_error", "message": "artifact name not allowed"}
+            )
+        if path == "/v1/tasks/t2/artifacts/raw":
+            return httpx.Response(200, text="rows: []\n")
+        return httpx.Response(404, json={"detail": "Not Found"})
+
+    return httpx.MockTransport(handle)
+
+
+async def test_a_file_refused_in_one_step_but_served_by_a_later_one_is_not_skipped():
+    runtime = SwarmCloudRuntime(
+        "https://swarm.test", StaticBearer("sc-bearer"), transport=_two_steps()
+    )
+    files, skipped = await runtime.read_artifacts("wf_1")
+    # A later step's file of the same name wins, the refused earlier copy with it.
+    assert files == {"_export.yaml": "rows: []\n"}
+    assert skipped == {}
+
+
+async def test_the_held_note_does_not_say_to_start_the_run_again(client, owner):
+    _, auth = owner
+    _swarm("baseline.yaml", 422)
+    run = await started(client, auth)
+    await _tick(client, auth)
+    run = await get(client, auth, run["id"])
+    [note] = _naming(run, "baseline.yaml")
+    # SwarmCloud refuses the file by its name, so the same step run again is refused too.
+    assert "start it again" not in note
+    assert "ask whoever runs SwarmCloud" in note
+
+
+async def test_a_refusal_whose_words_change_is_still_noted_once_per_file(client, owner):
+    _, auth = owner
+    swarm = _swarm("baseline.yaml", 422)
+    run = await started(client, auth)
+    swarm.raw_refusal_message = "artifact name not allowed (request req_1)"
+    await _tick(client, auth)
+    swarm.raw_refusal_message = "artifact name not allowed (request req_2)"
+    await _tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert len(_naming(run, "baseline.yaml")) == 1, run["notes"]

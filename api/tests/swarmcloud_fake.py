@@ -196,6 +196,7 @@ class FakeSwarmCloud:
         # Files every agent step leaves, and raw reads SwarmCloud refuses by file name.
         self.extra_files: dict[str, str] = {}
         self.raw_refusals: dict[str, int] = {}
+        self.raw_refusal_message = "artifact name not allowed"
         # #2498: a step that would start after the MCP credential expired parks
         # CREDENTIAL_MISSING instead of failing ("blocked_by": in task.blocked_by,
         # "waiting": in task.waiting.detail; None: it fails, as before #2498).
@@ -314,7 +315,7 @@ class FakeSwarmCloud:
                     return _err(404, "not_found", "no such artifact")
                 if name in self.raw_refusals:
                     status = self.raw_refusals[name]
-                    return _err(status, "invalid_name", "artifact name not allowed")
+                    return _err(status, "invalid_name", self.raw_refusal_message)
                 return httpx.Response(200, text=step.files[name])
             rows = [{"name": n, "role": None} for n in step.files]
             rows.append({"name": "agent.log", "role": "agent_stdout"})
