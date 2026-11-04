@@ -89,7 +89,9 @@ test.describe("desktop", () => {
     const m2 = page.getByTestId("fit-diff-dates").locator("li").filter({ hasText: "M2 Agent reply flow" });
     await expect(m2.locator("del")).toHaveText("Mar 12");
     await expect(m2.locator("ins")).toHaveText("Jan 25");
-    await expect(page.getByTestId("fit-needs-estimate")).toContainText("Thread summary card needs a new estimate: Tomas Brook is asked");
+    // Nothing asks the owner yet, so the panel does not say they are asked.
+    await expect(page.getByTestId("fit-needs-estimate")).toContainText("Thread summary card needs a new estimate from Tomas Brook");
+    await expect(page.getByTestId("fit-needs-estimate")).not.toContainText("is asked");
 
     // Back to the picks keeps them; drafting again returns to the check.
     await page.getByRole("button", { name: "Back to the picks" }).click();
