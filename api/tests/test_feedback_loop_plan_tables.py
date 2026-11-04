@@ -174,3 +174,24 @@ async def test_the_loop_writer_is_told_it_cannot_add_or_remove_items(client, own
     assert "Simple's add-item flow" in prompt
     assert "writes the roadmap draft" in prompt
     assert "writes the prd draft" not in prompt
+
+
+async def test_a_loop_draft_flipping_a_shipped_row_is_refused(client, owner, runtime):  # noqa: F811
+    """The review's minor: a loop draft cannot change a kept row's status (shipped back to
+    planned here); it is refused with plan_state_differs, not imported."""
+    tenant_id, auth = owner
+    planned = SHIPPED_ROW.replace("| shipped |", "| planned |")
+    run = await _loop_after_shipped(client, auth, runtime, SHIPPED_MD.replace(SHIPPED_ROW, planned))
+    assert _codes(run) == ["plan_state_differs"], run["segments"][0]["draft_import"]
+    problem = run["segments"][0]["draft_import"]["problems"][0]
+    assert "Shipping step" in problem["message"] and "shipped" in problem["message"]
+    assert await _versions(tenant_id) == [1]
+
+
+async def test_a_loop_draft_moving_a_shipped_row_to_next_prd_is_refused(client, owner, runtime):  # noqa: F811
+    _, auth = owner
+    next_prd = SHIPPED_ROW.replace("| shipped |", "| next PRD |")
+    run = await _loop_after_shipped(
+        client, auth, runtime, SHIPPED_MD.replace(SHIPPED_ROW, next_prd)
+    )
+    assert _codes(run) == ["plan_state_differs"], run["segments"][0]["draft_import"]
