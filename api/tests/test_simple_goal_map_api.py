@@ -37,6 +37,9 @@ Test cards (protects / fails_when / no_claim):
   0 or less is refused; fails_when='Met' or '31 of 0' for no gate; no_claim=the roadmap.
 - test_edits_need_approver: protects=commenters and viewers are refused every edit (403)
   and read can_edit false; fails_when=a commenter edits; no_claim=run tokens.
+- test_only_the_company_roadmap_feeds_the_map (train review): protects=while the company
+  roadmap exists the map shows only its goal milestones and a new one lands on it;
+  fails_when=an older roadmap's milestones show or the proposal lands on the oldest roadmap.
 """
 
 import uuid
@@ -48,6 +51,7 @@ from sqlalchemy import event, func, select
 
 from oracle import company_time
 from oracle.baseline.models import GoalMeasurement
+from oracle.docs.models import Document
 from oracle.roadmap.models import TrackMilestone
 from oracle.simple import goal_map
 from oracle.simple.models import FocusArea, MilestoneFeature
@@ -496,3 +500,30 @@ async def test_edits_need_approver(client, role):
     ]  # fmt: skip
     for call in calls:
         assert (await call).status_code == 403
+
+
+async def test_only_the_company_roadmap_feeds_the_map(client):
+    """one-roadmap-many-prds (train review): while the company roadmap exists, the map reads
+    its goal milestones alone (the older roadmap's are history) and a new milestone lands on
+    it, never on the oldest roadmap."""
+    ctx, ids = await world()
+    async with tenant_session(ctx.tenant_id) as s:
+        one = Document(slug="product-roadmap", title="Product roadmap", kind="roadmap",
+                       status="draft", company_roadmap=True)  # fmt: skip
+        s.add(one)
+        await s.commit()
+        company_id = str(one.id)
+    assert (await read(client, ctx))["milestones"] == []
+    r = await client.post(
+        f"{URL}/milestones",
+        json={"name": "35 sign-ups per rep", "goal": ids["signups"], "threshold": 35},
+        headers=ctx.as_("owner"),
+    )
+    assert r.status_code == 200, r.text
+    assert [m["name"] for m in r.json()["milestones"]] == ["35 sign-ups per rep"]
+    m = r.json()["milestones"][0]
+    assert m["depends"] == []
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(TrackMilestone, uuid.UUID(m["id"]))
+        assert str(row.roadmap_id) == company_id and row.code == "M1"
+    assert [m["name"] for m in (await read(client, ctx))["milestones"]] == ["35 sign-ups per rep"]

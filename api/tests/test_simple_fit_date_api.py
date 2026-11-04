@@ -48,6 +48,9 @@ Test cards (protects / fails_when / no_claim):
   locked or must-include item.
 - test_smaller_goal_floor (review 3): protects=a target just above the start counts the
   goal's own work at the 10% floor, never less; fails_when=the floor is removed.
+- test_approve_lands_on_the_company_roadmap (train review): protects=with a company roadmap,
+  the answer and the re-plan read and write it, even when the PRD's track points at an
+  older roadmap; fails_when=the re-plan is written or approved on the track's old roadmap.
 """
 
 import re
@@ -57,12 +60,13 @@ from sqlalchemy import func, select
 
 from oracle.auth.models import User
 from oracle.docs.models import Document, DocumentVersion
+from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import drafts
 from oracle.simple.models import SimpleDraft
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
-from tests.test_simple_plan_api import FIXTURE, clock, seed  # noqa: F401
+from tests.test_simple_plan_api import FIXTURE, clock, seed, version  # noqa: F401
 
 BODY = "---\ntitle: Guided setup\nkind: prd\n---\n\n" + re.sub(
     r"^(#+ )(.+)$",
@@ -404,3 +408,45 @@ async def test_smaller_goal_floor(client):
     a = (await client.get(URL, params={"milestone": "M2"}, headers=ctx.as_("owner"))).json()
     assert a["baseline_goal"]["smaller"] is True and goal["attrs"]["target"] == 40.5
     assert _sizes(a) == (4, 3, 0.2)
+
+
+async def test_approve_lands_on_the_company_roadmap(client):
+    """one-roadmap-many-prds (train review): the PRD's track still points at its own older
+    roadmap, but the re-plan is written and approved on the company roadmap, the one Simple
+    Roadmap, Priorities and Home read; the older roadmap is left as history."""
+    ctx = await make_ctx()
+    ids = await seed(ctx, BODY, items=("f-06", "f-03"))
+    async with tenant_session(ctx.tenant_id) as s:
+        old = await s.scalar(select(Document).where(Document.slug == "setup-roadmap"))
+        one = Document(slug="product-roadmap", title="Product roadmap", kind="roadmap",
+                       status="approved", visibility="company", company_roadmap=True)  # fmt: skip
+        s.add(one)
+        await s.flush()
+        cv = await version(s, one, 1, "# Product roadmap\n")
+        s.add(DocumentReviewPolicy(document_id=one.id, decider_id=ctx.users["decider"].id))
+        pv = await s.scalar(select(DocumentVersion.id).where(
+            DocumentVersion.document_id == ids["prd"]))  # fmt: skip
+        for n, key in enumerate(("f-06", "f-03")):
+            s.add(RoadmapItem(roadmap_document_id=one.id, roadmap_version_id=cv.id,
+                              item_key=key, prd_document_id=ids["prd"], prd_version_id=pv,
+                              prd_section_key=key, title=key.upper(), horizon="now",
+                              position=n))  # fmt: skip
+        await s.commit()
+        old_id, one_id = old.id, one.id
+    h = ctx.as_("decider")
+    before = (await client.get(URL, params={"milestone": "M2"}, headers=h)).json()
+    assert before["roadmap"]["slug"] == "product-roadmap", before["roadmap"]
+    picks = {"milestone": "M2", "picks": ["F-03b", "F-06", "focus"]}
+    r = await client.post(f"{URL}/approve", json=picks, headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["roadmap_version"] == 2
+    async with tenant_session(ctx.tenant_id) as s:
+        n_old = await s.scalar(select(func.count()).select_from(DocumentVersion).where(
+            DocumentVersion.document_id == old_id))  # fmt: skip
+        vs = list(await s.scalars(select(DocumentVersion).where(
+            DocumentVersion.document_id == one_id).order_by(DocumentVersion.number)))  # fmt: skip
+        assert [v.approved_at is not None for v in vs] == [True, True]
+        rows = {r.item_key for r in await s.scalars(
+            select(RoadmapItem).where(RoadmapItem.roadmap_version_id == vs[1].id))}  # fmt: skip
+    assert n_old == 1
+    assert rows == {"f-06", "f-03"}
