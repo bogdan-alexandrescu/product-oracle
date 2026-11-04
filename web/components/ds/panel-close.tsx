@@ -3,6 +3,8 @@
 // A Split's side panel closes on a desktop: an × in its head, or Esc. Closed, the table takes
 // the whole width; picking a row (click, Enter or Space) opens it again on that row. The ×
 // shows only where a table's row can bring the panel back. A phone keeps its panel as built.
+// A panel that closes by clearing the page's pick (Baseline's) hands its own close to the ×,
+// which then shows on a phone too, and Esc closes it the same way.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { Icon } from "./Icon";
@@ -22,6 +24,10 @@ type SplitPanel = {
   register: () => () => void;
   /** The panel's own control: it closes and focus goes back to the selected row. */
   close: () => void;
+  /** Close by the page's own means (clearing its pick); focus goes back to the row all the same. */
+  closeWith: (close: () => void) => void;
+  /** A panel that closes by its page's means says how, while it is shown. */
+  own: (close: () => void) => () => void;
 };
 
 const SplitPanelContext = createContext<SplitPanel | null>(null);
@@ -33,6 +39,14 @@ export const useSplitPanel = () => useContext(SplitPanelContext);
 const PHONE = "(max-width: 600px)";
 // Esc that belongs to something open in the page (a menu, a dialog, a list of choices).
 const OWN_ESC = '[role="dialog"], [role="menu"], [role="listbox"], [role="combobox"]';
+const BUTTONS = new Set(["button", "checkbox", "radio", "submit", "reset", "range", "color", "file", "image"]);
+
+/** Esc in a text field leaves the field: it is not a close. */
+export function inTextField(t: EventTarget | null) {
+  if (!(t instanceof HTMLElement)) return false;
+  if (t instanceof HTMLInputElement) return !BUTTONS.has(t.type);
+  return t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement || t.isContentEditable;
+}
 
 /** The Split's grid (Layout.tsx's Split hands over here). */
 export function ClosableSplit({
@@ -61,17 +75,25 @@ export function ClosableSplit({
     setTables((n) => n + 1);
     return () => setTables((n) => n - 1);
   }, []);
-  const close = useCallback(() => {
-    setOpen(false);
+  const ownClose = useRef<(() => void) | null>(null);
+  const ownBy = useCallback((c: () => void) => {
+    ownClose.current = c;
+    return () => {
+      if (ownClose.current === c) ownClose.current = null;
+    };
+  }, []);
+  const closeWith = useCallback((c: () => void) => {
+    const main = root.current?.querySelector("[data-split-table]");
+    const picked = main?.querySelector<HTMLElement>('tr[data-row][aria-selected="true"]');
+    c();
     requestAnimationFrame(() => {
-      const main = root.current?.querySelector("[data-split-table]");
-      const row =
-        main?.querySelector<HTMLElement>('tr[data-row][aria-selected="true"]') ??
-        main?.querySelector<HTMLElement>("tr[data-row][tabindex]");
+      // A page that clears its pick keeps the row: focus goes back to the one that was picked.
+      const row = (picked?.isConnected ? picked : null) ?? main?.querySelector<HTMLElement>("tr[data-row][tabindex]");
       row?.focus();
     });
-  }, [setOpen]);
-  const value = useMemo(() => ({ pickable, register, close }), [pickable, register, close]);
+  }, []);
+  const close = useCallback(() => closeWith(ownClose.current ?? (() => setOpen(false))), [closeWith, setOpen]);
+  const value = useMemo(() => ({ pickable, register, close, closeWith, own: ownBy }), [pickable, register, close, closeWith, ownBy]);
 
   // Picking a row of the table (a click anywhere on it, or Enter or Space) opens the panel again.
   const reopen = (t: EventTarget | null) => {
@@ -87,7 +109,7 @@ export function ClosableSplit({
         onKeyDown={(e) => {
           if (e.key !== "Escape" || e.defaultPrevented || closed || !pickable || window.matchMedia(PHONE).matches)
             return;
-          if (e.target instanceof Element && e.target.closest(OWN_ESC)) return;
+          if (inTextField(e.target) || (e.target instanceof Element && e.target.closest(OWN_ESC))) return;
           e.preventDefault();
           close();
         }}
@@ -119,19 +141,25 @@ export function usePickableTable(selectable: boolean) {
   return sp;
 }
 
-/** The × in the panel's head, beside its title. */
-export function PanelCloseButton() {
+/**
+ * The × in the panel's head, beside its title. `onClose`: the panel closes by its page's own
+ * means (clearing the pick), on every screen.
+ */
+export function PanelCloseButton({ onClose }: { onClose?: () => void }) {
   const p = useSplitPanel();
   const inPanel = useContext(InPanel);
-  if (!p?.pickable || !inPanel) return null;
+  const split = inPanel ? p : null;
+  const own = split?.own;
+  useEffect(() => (onClose && own ? own(onClose) : undefined), [onClose, own]);
+  if (!onClose && !split?.pickable) return null;
   return (
     <button
       type="button"
-      onClick={p.close}
+      onClick={() => (split ? split.close() : onClose?.())}
       aria-label="Close the details"
       title="Close the details (Esc)"
       data-testid="panel-close"
-      className="-my-1.5 -mr-2 inline-flex h-8 w-8 flex-none items-center justify-center rounded-md text-hero-text2 hover:bg-hero-2 hover:text-hero-text focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-hero-accent max-[600px]:hidden"
+      className={`-my-1.5 -mr-2 inline-flex h-8 w-8 flex-none items-center justify-center rounded-md text-hero-text2 hover:bg-hero-2 hover:text-hero-text focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-hero-accent ${onClose ? "" : "max-[600px]:hidden"}`}
     >
       <Icon name="x" size={18} />
     </button>

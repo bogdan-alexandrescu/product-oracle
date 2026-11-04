@@ -28,6 +28,7 @@ export function Inspector({
   title,
   chips,
   action,
+  onClose,
   head,
   stats,
   statColumns,
@@ -44,6 +45,8 @@ export function Inspector({
   chips?: ReactNode;
   /** "Open": a hero-variant Button or LinkButton. */
   action?: ReactNode;
+  /** The panel closes by its page's own means (clearing the pick): the head's × calls it. */
+  onClose?: () => void;
   /** Extra content in the dark head (a ring and numerals). */
   head?: ReactNode;
   stats?: InspectorStat[];
@@ -82,7 +85,7 @@ export function Inspector({
           <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">{eyebrow}</span>
           <span className="flex items-center gap-3">
             {action}
-            <PanelCloseButton />
+            <PanelCloseButton onClose={onClose} />
           </span>
         </div>
         {title && (

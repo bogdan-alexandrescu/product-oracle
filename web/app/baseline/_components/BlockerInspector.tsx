@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 
+import { inTextField, useSplitPanel } from "@/components/ds/panel-close";
 import { Button, Chip, InfoTip, Inspector, InspectorSection, Notice, ViewOnly, type ChipKind } from "@/components/ds";
 import { findPeople, type Person } from "@/components/PersonPicker";
 import { INPUT, Loading } from "@/components/ui";
@@ -135,6 +136,7 @@ export function BlockerInspector({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  const split = useSplitPanel();
 
   useEffect(() => {
     if (window.matchMedia("(max-width: 1100px)").matches) root.current?.scrollIntoView({ block: "start" });
@@ -142,11 +144,13 @@ export function BlockerInspector({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented) onClose();
+      if (e.key !== "Escape" || e.defaultPrevented || inTextField(e.target)) return;
+      if (split) split.closeWith(onClose);
+      else onClose();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, split]);
 
   const act: Act = async (run, message) => {
     setBusy(true);
@@ -216,11 +220,7 @@ export function BlockerInspector({
             </>
           )
         }
-        action={
-          <Button variant="hero" icon="x" onClick={onClose} aria-label="Close">
-            Close
-          </Button>
-        }
+        onClose={onClose}
         stats={
           s && [
             { label: "Options", value: s.options.filter((o) => o.status !== "rejected").length },

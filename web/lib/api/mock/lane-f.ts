@@ -9,7 +9,7 @@ import { goalPosition, sortGoals } from "@/lib/goal-order";
 import { plainText } from "@/lib/markdown";
 import { LONG_WORDS_SCENARIO } from "./baseline";
 import { presenterNotes, resolveBrief } from "./brief";
-import { mockUuid, seeded } from "./ids";
+import { MOCK_SCENARIO_KEY, mockUuid, seeded } from "./ids";
 import { calibration } from "./quality";
 import { cannotApproveNow } from "./runs";
 
@@ -196,12 +196,11 @@ const LONG_GOAL_FEATURES: FeatureSeed[] = [
   longGoal("F-13", "Usage report for workspace owners", [{ goal: "g.long-churn", title: PG2, weight: 2, contribution: 2 }], ["F-4", "F-7", "F-8", "F-11"], 2, 0.5),
   longGoal("F-14", "Project templates for agencies", [{ goal: "g.long-first-project", title: PG1, weight: 3, contribution: 1 }, { goal: "g.long-churn", title: PG2, weight: 2, contribution: 1 }], ["F-3", "F-9", "F-10"], 3, 0.6),
 ];
-export function longGoalFeatures(scenario: string | null | undefined) {
-  const at = FEATURES.findIndex((f) => f.key === "F-9");
-  if (scenario === LONG_GOALS_SCENARIO && at < 0) FEATURES.push(...LONG_GOAL_FEATURES);
-  // Any other scenario drops them again, so they never leak into a later one.
-  else if (scenario !== LONG_GOALS_SCENARIO && at >= 0) FEATURES.splice(at, LONG_GOAL_FEATURES.length);
-}
+// The features of the scenario in use, read each time: the shared list is never changed.
+const featureSeeds = (): FeatureSeed[] =>
+  typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === LONG_GOALS_SCENARIO
+    ? [...FEATURES, ...LONG_GOAL_FEATURES]
+    : FEATURES;
 const round = (n: number) => Math.round(n * 1000) / 1000;
 const num = (v: unknown): number | null => {
   if (typeof v === "number") return v;
@@ -395,7 +394,7 @@ function findCycles(deps: Record<string, string[]>): string[][] {
 }
 
 export function ranking(method: Method, cal: TrackRecord = null): Schemas["PriorityRanking"] {
-  const scored = FEATURES.map((f) => scoreFeature(f, method, cal));
+  const scored = featureSeeds().map((f) => scoreFeature(f, method, cal));
   const byScore = [...scored].sort(
     (a, b) => a.group - b.group || b.order_score - a.order_score || a.key.localeCompare(b.key),
   );
@@ -473,7 +472,7 @@ export function ranking(method: Method, cal: TrackRecord = null): Schemas["Prior
 // ---------------------------------------------------------------- overrides (C9 Move and pin)
 
 const entityId = (key: string) => `00000000-0000-4000-8000-${hash(key).padStart(12, "0")}`;
-const featureById = (id: string) => FEATURES.find((f) => entityId(f.key) === id);
+const featureById = (id: string) => featureSeeds().find((f) => entityId(f.key) === id);
 
 /** The mock scenario (MOCK_SCENARIO_KEY) with one change from before a feature it moved above was retired. */
 export const LEGACY_OVERRIDE_SCENARIO = "priority-legacy-override";
@@ -2059,7 +2058,6 @@ export async function laneF(
   const q = new URL(req.url).searchParams;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
 
-  longGoalFeatures(scenario);
   if (area === "priorities") {
     if (p.length === 2 && m === "GET") {
       const method = q.get("method") ?? "goal_weighted";
