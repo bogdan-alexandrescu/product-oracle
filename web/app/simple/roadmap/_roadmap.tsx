@@ -1155,6 +1155,8 @@ export function SimpleRoadmap() {
   const workingDrafts = (drafts.data ?? []).filter((d) => d.status === "working" && d.changes > 0);
   const draftItems = workingDrafts.flatMap((d) => d.change_log.flatMap((c) => (c.item_id ? [byId.get(c.item_id)] : [])));
   const reviewPrd = draftItems.find((i) => i?.prd)?.prd?.slug;
+  // meeting-changes-only-its-agenda: a review started on one roadmap reviews that roadmap.
+  const reviewRoadmap = data.roadmap ? { id: data.roadmap.id, prds: [...new Set(data.items.flatMap((i) => (i.roadmap.id === data.roadmap?.id && i.prd ? [i.prd.slug] : [])))] } : undefined;
   const draftChanges = workingDrafts.reduce((n, d) => n + d.changes, 0);
   const reviewFrom = workingDrafts.length ? `Your roadmap's working draft · ${draftChanges} ${draftChanges === 1 ? "change" : "changes"}` : undefined;
   const goalCounts = new Map<string, number>();
@@ -1408,7 +1410,7 @@ export function SimpleRoadmap() {
       {phone && actions}
       {!phone && canChange && addable.length > 0 && <QuickAdd phone={false} options={addOptions} verb={addVerb} onAdd={onAdd} target={target?.title ?? null} roadmaps={askRoadmap ? addable.map((r) => r.roadmap) : []} />}
       {!phone && goalCounters}
-      <StartSheet open={starting} onClose={() => setStarting(false)} origin="roadmap" prefer={reviewPrd} from={reviewFrom} />
+      <StartSheet open={starting} onClose={() => setStarting(false)} origin="roadmap" prefer={reviewPrd} from={reviewFrom} roadmap={reviewRoadmap} />
       {draftBanner}
       {/* The items' decisions left out as no longer standing, one quiet line under the banner. */}
       <LeftOutLine leftOut={data.left_out} className="px-1 text-sm text-text-faint" />

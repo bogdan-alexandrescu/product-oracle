@@ -821,6 +821,12 @@ export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request
     const title = items(ctx).find((i) => i.id === stored.target.item_id)?.title ?? "This item";
     return json(409, { detail: `${title} is on another roadmap: its owner decides this from their Inbox` });
   }
+  // A new item (add_item) has no row until accepted: the roadmap it goes on.
+  const goesOn = stored && !stored.target.item_id ? (stored.target as Record<string, unknown>).roadmap_id : undefined;
+  const reviewed = reviewedRoadmaps(ctx, m);
+  if (verb && typeof goesOn === "string" && reviewed && !reviewed.includes(goesOn)) {
+    return json(409, { detail: `${String(stored?.after?.title ?? "This item")} is for another roadmap: its owner decides this from their Inbox` });
+  }
   if (isCreate && b.target && (b.target as Record<string, unknown>).item_id && !onAgenda(ctx, m, (b.target as Record<string, unknown>).item_id)) {
     const who = { id: ctx.me.id, role: ctx.me.role, owners: owners(ctx), names: Object.fromEntries(ctx.members.map((x) => [x.id, x.name])), roles: Object.fromEntries(ctx.members.map((x) => [x.id, x.role])) };
     const out = proposeOffAgenda(ctx.roadmap, who, rest as Schemas["SimpleChangeIn"], { id: m.id, title: m.title }, m.session_id);

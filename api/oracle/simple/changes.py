@@ -1092,6 +1092,15 @@ async def off_agenda_bar(db: AsyncSession, c: SimpleChange, session_id: uuid.UUI
     if row is not None and not ag.covers(row):
         raise ChangeError(409, f"{row.title} is on another roadmap: its owner decides this "
                                "from their Inbox")  # fmt: skip
+    # A new item (add_item) has no row until it is accepted: the roadmap it goes on.
+    try:
+        rm = uuid.UUID(str(c.target.get("roadmap_id")))
+    except ValueError:
+        rm = None
+    if row is None and rm is not None and rm not in ag.roadmap_ids:
+        title = (c.after or {}).get("title") or "This item"
+        raise ChangeError(409, f"{title} is for another roadmap: its owner decides this "
+                               "from their Inbox")  # fmt: skip
 
 
 async def withdraw(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> SimpleChangeResult:
@@ -1278,6 +1287,7 @@ class _View:
 
 
 def _out(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> SimpleChangeOut:
+    asked = v.meeting(c)
     return SimpleChangeOut(
         id=c.id, session_id=c.session_id, document_id=c.document_id, op=c.op,  # type: ignore[arg-type]
         draft_ids=list(c.draft_ids or []),
@@ -1286,7 +1296,7 @@ def _out(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> SimpleChange
         decided_at=c.decided_at, reason=c.reason, decision_reason=c.decision_reason,
         routed_to=v.route(c), undoes_id=c.undoes_id, undone=c.id in v.undone,
         can_decide=c.status == "proposed" and v.may_decide(c), can_undo=v.can_undo(c),
-        words=_words(c, v, names), from_meeting=v.meeting(c)[0], off_agenda=v.meeting(c)[1],
+        words=_words(c, v, names), from_meeting=asked[0], off_agenda=asked[1],
     )  # fmt: skip
 
 
