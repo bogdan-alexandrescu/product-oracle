@@ -140,22 +140,19 @@ for (const [where, use] of [
         else await bar(page, "alert-digest").click();
         const card = page.getByTestId("floating-card");
         await expect(card).toBeVisible();
-        await expect(card).toHaveAttribute("data-sheet", where === "phone" ? "bottom" : "float");
-        await expect(card.getByRole("heading", { name: "Weekly alert digest" })).toBeVisible();
-        await expect(card.getByTestId("card-owner")).toHaveText("No owner yet");
-        await expect(card.getByTestId("card-dates")).toContainText("accepted");
-        await expect(card.getByTestId("card-depends")).toHaveText("Alert rules engine");
+        await expect(card).toHaveAttribute("data-sheet", where === "phone" ? "full" : "panel");
+        // build-feature-panel: the one feature panel (FP1 B): its head, Dates, Links, then the card's own parts.
+        await expect(card.getByRole("heading", { name: "Weekly alert digest", exact: true })).toBeVisible();
+        await expect(card.getByTestId("fp-details")).toContainText("No owner yet");
+        await expect(card.getByTestId("fp-details")).toContainText("Oracle's suggestion");
+        await expect(card.getByTestId("fp-list-depends").getByTestId("fp-dep")).toContainText("Alert rules engine");
         await expect(card.getByTestId("card-reasons")).toContainText("Serves the goal Grow retention.");
         await expect(card.getByTestId("card-decisions")).toContainText("Send the digest weekly or daily?");
-        await expect(card.getByTestId("card-flags")).toContainText("which it depends on, ends");
+        await expect(card.getByTestId("fp-clash")).toContainText("before Alert rules engine ends");
         await expect(card.getByRole("link", { name: "Open the detailed view" })).toHaveAttribute("href", /^\/plan\?item=alert-digest&prd=[0-9a-f-]{36}$/);
-        // The owner's pick C: a desktop card's foot has Talk to Oracle; a phone's sheet has it as a tab.
-        await expect(card.getByRole(where === "phone" ? "tab" : "button", { name: "Talk to Oracle" })).toBeVisible();
-        if (where === "desktop") {
-          const c = (await card.boundingBox())!;
-          const b = (await body(page, "alert-digest").boundingBox())!;
-          expect(Math.abs(c.y - (b.y + b.height))).toBeLessThan(24);
-        }
+        // build-feature-panel (FP1 B): the talk beside the details on a desktop; a phone's sheet has it as a tab.
+        if (where === "phone") await expect(card.getByRole("tab", { name: "Talk to Oracle" })).toBeVisible();
+        else await expect(card.getByTestId("item-talk")).toBeVisible();
         await card.getByRole("button", { name: "Close" }).click();
         await expect(card).toHaveCount(0);
       });
@@ -302,7 +299,7 @@ test("the Gantt: day and week, today's line, arrows, the same card", async ({ pa
   await expect(page.getByTestId("today-line")).toBeAttached();
   await expect(page.getByTestId("dep-arrow").first()).toBeAttached();
   await bar(page, "alert-rules").click();
-  await expect(page.getByTestId("floating-card").getByRole("heading", { name: "Alert rules engine" })).toBeVisible();
+  await expect(page.getByTestId("floating-card").getByRole("heading", { name: "Alert rules engine", exact: true })).toBeVisible();
   // #47: the card floats over a dimmed backdrop that takes the page's clicks; close it first.
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("floating-card")).toHaveCount(0);
@@ -378,7 +375,7 @@ test("only a new feature's proposal carries a flow thumbnail", async ({ page }) 
   await expect(page.getByText(/Moved 'Team invite nudges'.*proposed: it waits for .+ in Needs a decision/)).toBeVisible();
   await bar(page, "setup-ideas").click();
   await card.getByTestId("flow-thumb").click();
-  await expect(card).toHaveAttribute("data-wide", "true");
+  await expect(card.getByTestId("fp-more")).toHaveAttribute("data-wide", "true");
   await expect(card.getByTestId("flow-empty")).toContainText("No flow yet");
 });
 
@@ -462,7 +459,7 @@ test.describe("phone, long-press", () => {
     await page.getByTestId("chart-label").filter({ hasText: "Team invite nudges" }).click();
     const card = page.getByTestId("floating-card");
     await card.getByTestId("flow-thumb").click();
-    await expect(card).toHaveAttribute("data-wide", "true");
+    await expect(card.getByTestId("fp-more")).toHaveAttribute("data-wide", "true");
     const c = (await card.boundingBox())!;
     expect(c.y).toBeLessThanOrEqual(1);
     expect(c.height).toBeGreaterThanOrEqual(844 - 2);

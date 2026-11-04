@@ -477,7 +477,7 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
     return (
       <>
         {backdrop}
-        <aside ref={ref} tabIndex={-1} role="dialog" aria-label={item.title} data-testid={testId} className={`${base} inset-0`}>
+        <aside ref={ref} tabIndex={-1} role="dialog" aria-label={item.title} data-testid={testId} data-sheet="full" className={`${base} inset-0`}>
           <div className="flex-none border-b border-line px-4 pt-3.5 pb-2.5">
             {head}
             <div role="tablist" aria-label="The feature" className="mt-2.5 flex gap-1 rounded-lg bg-surface2 p-1 text-sm">
@@ -493,7 +493,7 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
               {talkCol}
             </div>
           ) : (
-            <div role="tabpanel" aria-label="Details" className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
+            <div role="tabpanel" aria-label="Details" className="min-h-0 flex-1 overflow-y-auto px-4 pb-6" data-testid="fp-details">
               {body}
             </div>
           )}
@@ -503,7 +503,7 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
   return (
     <>
       {backdrop}
-      <aside ref={ref} tabIndex={-1} role="dialog" aria-label={item.title} data-testid={testId} className={`${base} top-4 right-4 bottom-4 w-[880px] max-w-[calc(100vw-32px)] rounded-xl border`}>
+      <aside ref={ref} tabIndex={-1} role="dialog" aria-label={item.title} data-testid={testId} data-sheet="panel" className={`${base} top-4 right-4 bottom-4 w-[880px] max-w-[calc(100vw-32px)] rounded-xl border`}>
         <div className="flex-none border-b border-line px-4 pt-3.5 pb-2.5">{head}</div>
         <div className="grid min-h-0 flex-1 grid-cols-[460px_minmax(0,1fr)]">
           <div className="min-h-0 overflow-y-auto border-r border-line px-4 pb-4" data-testid="fp-details">
