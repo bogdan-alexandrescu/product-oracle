@@ -29,6 +29,9 @@ async function toSimple(page: Page, phone: boolean) {
   }
 }
 
+/** simple-plan's items of Usage alerts and Guided setup (the mock's invented data). */
+const GONE = ["Alert rules engine", "Weekly alert digest", "Mobile alert push", "Setup checklist", "Sample data import"];
+
 const optionTexts = async (select: Locator) => (await select.locator("option").allTextContents()).map((t) => t.trim());
 
 for (const [name, viewport] of [["desktop", { width: 1440, height: 900 }], ["phone", { width: 390, height: 844 }]] as const) {
@@ -127,8 +130,11 @@ for (const [name, viewport] of [["desktop", { width: 1440, height: 900 }], ["pho
  * "Its decisions" link of the past "Review: Usage alerts" opens that meeting with its decision,
  * and Guided setup's decided question stays outside meetings; only the PRD filter leaves them
  * out. protects = a replaced PRD's past meetings, their decisions and its decided questions on
- * Decisions; fails_when = the meeting's link lands on an empty page, or the decided question is
- * gone; no_claim = the replaced PRD's open questions (the API's tests).
+ * Decisions, reached from the Meetings page, the meeting page's own links and the minutes' Inbox
+ * row; and (round 4) Roadmap, its PRD filter and Priorities' Goal buckets leave out the replaced
+ * PRDs' items, as the API's service.load does. fails_when = a link lands on an empty page, the
+ * decided question is gone, or a replaced PRD's item or filter option shows; no_claim = the
+ * replaced PRD's open questions (the API's tests).
  */
 test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -146,11 +152,45 @@ test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
     await expect(page.getByTestId("replaced-by").filter({ visible: true })).toContainText("Replaced by Team workspaces PRD");
   }
 
+  // Round 4: Roadmap and Priorities' Goal buckets leave out the replaced PRDs' items (service.load).
+  await page.goto("/simple/roadmap");
+  const prdFilter = page.getByRole("combobox", { name: "PRD", exact: true });
+  await expect(page.getByText("New plan tiers").filter({ visible: true }).first()).toBeVisible();
+  await expect(prdFilter.locator("option", { hasText: "Plan changes" })).toHaveCount(1);
+  expect((await optionTexts(prdFilter)).filter((t) => /Usage alerts|Guided setup/.test(t))).toEqual([]);
+  for (const title of GONE) await expect(page.getByText(title, { exact: true }).filter({ visible: true })).toHaveCount(0);
+
+  await page.goto("/simple/priorities?tab=buckets");
+  const buckets = page.getByRole("region", { name: "Goal buckets" });
+  await expect(buckets.getByText("New plan tiers").first()).toBeVisible();
+  for (const title of GONE) await expect(buckets.getByText(title, { exact: true })).toHaveCount(0);
+
   await page.goto("/simple/meetings");
   const row = page.getByTestId("meetings-past").locator("li").filter({ has: page.getByRole("link", { name: "Review: Usage alerts" }) });
   await row.getByTestId("meetings-its-decisions").click();
   await expect(page).toHaveURL(/\/simple\/decisions\?meeting=/);
   const past = page.getByRole("region", { name: "Review: Usage alerts" });
+  await expect(past.getByTestId("decision-row")).toHaveCount(1);
+  await expect(past.getByTestId("decision-row").first()).toContainText("D-4 Moved Weekly alert digest");
+
+  // The meeting page's own links: its decision's code, and "Open the Decisions page".
+  await page.goto("/simple/meetings");
+  await page.getByTestId("meetings-past").getByRole("link", { name: "Review: Usage alerts" }).click();
+  await expect(page).toHaveURL(/\/simple\/meetings\/[^/?]+$/);
+  await page.getByRole("list", { name: "Decisions taken" }).getByRole("link", { name: "D-4 Moved Weekly alert digest" }).click();
+  await expect(page).toHaveURL(/\/simple\/decisions#d-4$/);
+  await expect(page.getByTestId("decision-row").filter({ hasText: "D-4 Moved Weekly alert digest" }).filter({ visible: true }).first()).toBeVisible();
+  await page.goBack();
+  await page.getByRole("status", { name: "Sent" }).getByRole("link", { name: "Open the Decisions page" }).click();
+  await expect(page).toHaveURL(/\/simple\/decisions\?meeting=/);
+  await expect(past.getByTestId("decision-row").first()).toContainText("D-4 Moved Weekly alert digest");
+
+  // The minutes in the Inbox: Open reads them beside their decision.
+  await page.goto("/inbox");
+  const minutes = page.getByRole("row").filter({ hasText: "Review: Usage alerts" });
+  await expect(minutes).toContainText("Meeting minutes");
+  await minutes.getByRole("link", { name: "Open" }).click();
+  await expect(page).toHaveURL(/\/simple\/decisions\?meeting=/);
   await expect(past.getByTestId("decision-row")).toHaveCount(1);
   await expect(past.getByTestId("decision-row").first()).toContainText("D-4 Moved Weekly alert digest");
 
