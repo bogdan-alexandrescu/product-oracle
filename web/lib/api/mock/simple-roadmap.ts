@@ -102,6 +102,9 @@ interface SimpleDb {
   /** walkc-meeting (./simple-changes.ts markMeetingProposal): the ids of proposals made in a
    * meeting, which stay with the meeting's deciders (changes.current_route). */
   meeting_proposals?: string[];
+  /** inbox-meeting-proposals owner (changes.inbox_rows from_ask): the ids of proposals asked
+   * through Ask Oracle (a card applied outside a meeting). */
+  ask_proposals?: string[];
   /** Simple S3b (./simple-changes.ts): working drafts, each with its roadmap's published items. */
   drafts?: MockDraft[];
   /** walkb-roadmap review 5a: roadmaps built from a PRD with no approved version yet (their drafts' `published` is false). */

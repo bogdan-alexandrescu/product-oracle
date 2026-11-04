@@ -10,35 +10,42 @@ type Proposal = Schemas["InboxSimpleChange"];
 
 const upper = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
+/** Who or what asked for it: a meeting by its name, Ask Oracle for a teammate, or the teammate. */
+function askedBy(p: Proposal): string {
+  if (p.from_meeting) return `asked for by the meeting ${p.from_meeting.title}`;
+  if (p.from_ask) return `asked through Ask Oracle by ${p.by_name}`;
+  return `asked for by ${p.by_name}`;
+}
+
 /**
- * inbox-meeting-proposals: a meeting changes only what it reviews; what it asked for on an
- * item it does not review waits here for that item's owner (the API's `simple_proposals` made in
- * a meeting): the item by its name, what was asked in plain words, which meeting and when.
- * Accept applies it as Needs a decision does, Decline leaves the item; either way the row
- * leaves the Inbox. Only someone who may decide it (its `can_decide`) gets the buttons.
+ * inbox-meeting-proposals: every Simple proposal waiting on me (the API's `simple_proposals`):
+ * one a meeting asked for on an item it does not review, one asked through Ask Oracle, one a
+ * teammate made on the page. Each says the item by its name, what was asked in plain words, who
+ * or what asked and when. Accept applies it as Needs a decision does, Decline leaves the item;
+ * either way the row leaves the Inbox. Only someone who may decide it (its `can_decide`) gets
+ * the buttons.
  */
-export function meetingProposalRows(proposals: Proposal[], busy: string | null, act: Act, seenBefore: string | null | undefined): StatedNeed[] {
+export function proposalRows(proposals: Proposal[], busy: string | null, act: Act, seenBefore: string | null | undefined): StatedNeed[] {
   return proposals
-    .filter((p) => p.from_meeting)
     .map((p) => {
       const name = p.item_title ?? "An item";
       const path = { params: { path: { change_id: p.id } }, body: {} };
       return {
-        key: `meeting-proposal-${p.id}`,
+        key: `proposal-${p.id}`,
         icon: "roadmap",
         kind: "Proposal",
-        // The item cell keeps its room (it wraps): what was asked, by which meeting and when, under the name.
+        // The item cell keeps its room (it wraps): what was asked, by whom or what and when, under the name.
         item: (
           <>
             <span className="min-w-0 truncate" title={name}>
               {name}
             </span>
             <span className="block basis-full text-sm break-words whitespace-normal text-text2" data-testid="meeting-proposal-context">
-              {upper(p.asked ?? "a change")} · asked for by the meeting {p.from_meeting!.title} on {formatDateTime(p.at)}
+              {upper(p.asked ?? "a change")} · {askedBy(p)} on {formatDateTime(p.at)}
             </span>
           </>
         ),
-        context: <span className="block truncate text-text2">Not on that meeting&apos;s agenda</span>,
+        context: <span className="block truncate text-text2">{p.from_meeting ? "Not on that meeting's agenda" : p.reason?.trim() || "Waiting for your decision"}</span>,
         at: p.at,
         state: isNew(p.at, seenBefore) ? "new" : "open",
         counted: true,

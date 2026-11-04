@@ -1699,6 +1699,8 @@ async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx,
     result.change.routed_to = routed;
     markMeetingProposal(db, result.change.id);
   }
+  // inbox-meeting-proposals owner: a proposal asked through Ask Oracle says so in its decider's Inbox.
+  if (!inMeeting && result.change.status === "proposed") (db.ask_proposals ??= []).push(result.change.id);
   afterApplied(db, c, result);
   if (withDependents) {
     const t = result.change.target as Record<string, unknown>;

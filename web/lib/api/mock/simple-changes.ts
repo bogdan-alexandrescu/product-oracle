@@ -965,6 +965,8 @@ export function simpleInboxRows(
       // inbox-meeting-proposals: what was asked, the item by its name, and whether I may decide it now.
       asked: changePhrase(c.op, c.target, c.before, c.after, title),
       can_decide: !!db && !!who.role && c.status === "proposed" && decidesChange(db, { ...who, id: me, role: who.role, names: {} }, c),
+      // inbox-meeting-proposals owner: asked through Ask Oracle, not on the page nor in a meeting.
+      from_ask: !c.from_meeting && c.status === "proposed" && !!db?.ask_proposals?.includes(c.id),
     };
   };
   return {

@@ -14,7 +14,7 @@ import { setPanelOpen, usePanelOpen } from "@/components/hop/open-state";
 import { SIMPLE_HOME, switchTarget } from "@/lib/experience";
 import { useMe } from "@/lib/me";
 import { api, unwrap } from "@/lib/api/client";
-import { loadInbox, onWaitingChanged } from "@/lib/waiting";
+import { loadInbox, loadMyQuestions, onWaitingChanged, waitingCount } from "@/lib/waiting";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string };
 
@@ -32,6 +32,8 @@ export const SIMPLE_DESTINATIONS: Dest[] = [
   { label: "Priorities", href: "/simple/priorities", icon: "priorities", testId: "simple-nav-priorities" },
   { label: "Meetings", href: "/simple/meetings", icon: "clock", testId: "simple-nav-meetings" },
   { label: "Decisions", href: "/simple/decisions", icon: "flag", testId: "simple-nav-decisions" },
+  // inbox-meeting-proposals owner: the one Inbox (Detailed's too), with every proposal waiting on me.
+  { label: "Inbox", href: "/inbox", icon: "inbox", testId: "simple-nav-inbox" },
 ];
 
 /** Phone tab bar: Home, One-pagers, Roadmap, Decisions, More (Detailed's pattern). */
@@ -49,7 +51,7 @@ function isActive(pathname: string, d: Dest): boolean {
  * decide and drafts waiting for their approval); Meetings counts what its page lists (the
  * production walk): the live meetings and the upcoming reviews not started yet, read when the
  * rail mounts, when something waiting changes and on the Meetings pages, not on every other
- * route change (review).
+ * route change (review). Inbox counts what waits on me as /inbox's "N waiting" does (lib/waiting).
  */
 function useSimpleCounts(enabled: boolean): Record<string, number> | null {
   const pathname = usePathname();
@@ -62,12 +64,13 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
     if (!enabled) return;
     let alive = true;
     // prd-questions: Decisions counts the product decisions waiting for me (Oracle's run approvals never).
-    Promise.all([loadInbox(), unwrap(api.GET("/v1/simple/decisions/waiting"))])
-      .then(([inbox, waiting]) => {
+    Promise.all([loadInbox(), unwrap(api.GET("/v1/simple/decisions/waiting")), loadMyQuestions().catch(() => [])])
+      .then(([inbox, waiting, questions]) => {
         if (!alive) return;
         setCounts({
           Decisions: waiting.count,
           Roadmap: inbox.simple_proposals.length + inbox.simple_approvals.length,
+          Inbox: waitingCount(inbox, questions),
         });
       })
       .catch(() => undefined);
@@ -217,11 +220,13 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
   const moreActive = moreDests.some((d) => isActive(pathname, d));
   // qa-simple-home-29: the phone shows the rail's counts too; More sums the counts in its sheet.
   const countOf = (d: Dest) => counts?.[d.label] ?? 0;
-  const moreCount = moreDests.reduce((sum, d) => sum + countOf(d), 0);
+  // inbox-meeting-proposals owner: the Inbox's count repeats what the tabs count (Roadmap's proposals), so More's sum leaves it out.
+  const summed = moreDests.filter((d) => d.label !== "Inbox");
+  const moreCount = summed.reduce((sum, d) => sum + countOf(d), 0);
   // qa4-simple-home-22: a count that needs nothing from you (Meetings with none live) is grey on the phone as on the rail; More is
   // yellow only when something in it waits on you.
   const quietOf = (d: Dest) => d.label === "Meetings" && !counts?.["Meetings live"];
-  const moreQuiet = moreDests.every((d) => countOf(d) === 0 || quietOf(d));
+  const moreQuiet = summed.every((d) => countOf(d) === 0 || quietOf(d));
   const tabBadge = (id: string, n: number, words: string, quiet = false) =>
     n > 0 && (
       <span id={id} data-testid={id} aria-label={words} title={words} className={`simple-count simple-count-tab tnum${quiet ? " simple-count-quiet" : ""}`}>
