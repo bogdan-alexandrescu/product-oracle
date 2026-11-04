@@ -196,8 +196,8 @@ async def recheck_tracker_milestones(db: AsyncSession, refs: Iterable[str]) -> l
     """Tracker records were (re-)matched: a verified basis for one of these tracker keys
     now covers the items its issue is matched to now. A track milestone keeps such a
     basis only while it still covers every item the milestone lists, and loses its date
-    when no basis is left. Returns the milestones that lost their date. The caller
-    commits."""
+    when no basis is left; the stored date warnings of the PRD's versions are checked
+    again. Returns the milestones that lost their date. The caller commits."""
     from oracle.roadmap.models import TrackMilestone
 
     refs = set(refs)
@@ -212,10 +212,15 @@ async def recheck_tracker_milestones(db: AsyncSession, refs: Iterable[str]) -> l
     )
     if not affected:
         return []
+    from oracle.docs.service import refresh_date_warnings
+
     scopes: dict[uuid.UUID, frozenset[str] | None] = {}
     for prd in {b.prd_document_id for b in affected}:
         for b in await verified_bases(db, prd):
             scopes[b.id] = b.item_keys
+        # date-warnings-honest review: the bases now cover other items, so the stored
+        # warnings of the versions resting on this PRD are checked again.
+        await refresh_date_warnings(db, prd)
     ids = [b.id for b in affected]
     undated: list[uuid.UUID] = []
     for m in await db.scalars(
