@@ -49,7 +49,7 @@ async function cutElsewhere(page: Page) {
   await expect(slice.getByTestId("roadmap-said")).toHaveText("Welcome video is on another roadmap: sent to its owner to decide.");
 }
 
-const proposalRow = (page: Page) => page.getByRole("row").filter({ hasText: "Meeting proposal" }).filter({ hasText: "Welcome video" });
+const proposalRow = (page: Page) => page.getByRole("row").filter({ hasText: "asked for by the meeting" }).filter({ hasText: "Welcome video" });
 
 async function waiting(page: Page): Promise<number> {
   const chip = page.getByText(/^\d+ waiting$/).first();

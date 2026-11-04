@@ -26,17 +26,19 @@ export function meetingProposalRows(proposals: Proposal[], busy: string | null, 
       return {
         key: `meeting-proposal-${p.id}`,
         icon: "roadmap",
-        kind: "Meeting proposal",
+        kind: "Proposal",
+        // The item cell keeps its room (it wraps): what was asked, by which meeting and when, under the name.
         item: (
-          <span className="min-w-0 truncate" title={name}>
-            {name}
-          </span>
+          <>
+            <span className="min-w-0 truncate" title={name}>
+              {name}
+            </span>
+            <span className="block basis-full text-sm break-words whitespace-normal text-text2" data-testid="meeting-proposal-context">
+              {upper(p.asked ?? "a change")} · asked for by the meeting {p.from_meeting!.title} on {formatDateTime(p.at)}
+            </span>
+          </>
         ),
-        context: (
-          <span className="block text-text2" data-testid="meeting-proposal-context">
-            {upper(p.asked ?? "a change")} · asked for by the meeting {p.from_meeting!.title} on {formatDateTime(p.at)}
-          </span>
-        ),
+        context: <span className="block truncate text-text2">Not on that meeting&apos;s agenda</span>,
         at: p.at,
         state: isNew(p.at, seenBefore) ? "new" : "open",
         counted: true,
