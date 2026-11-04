@@ -173,8 +173,9 @@ test.describe("desktop", () => {
     await btn.click();
     const scope = page.getByTestId("tray-scope");
     await expect(scope).toBeVisible();
-    await expect(scope).toContainText(`${n} on this roadmap view`);
-    await expect(scope).toContainText("side menu");
+    await expect(scope).toContainText(`${n} to decide in this roadmap's working draft`);
+    // roadmap-decide: one broken-link count everywhere, so the tray names what it counts, with no apology for a differing side menu.
+    await expect(scope).toContainText("broken links, dates to confirm, proposals");
   });
 
   /**

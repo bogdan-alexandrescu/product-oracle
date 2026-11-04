@@ -76,7 +76,8 @@ for (const phone of [false, true]) {
           const home = page.getByTestId("simple-nav-home");
           expect(await home.evaluate((el) => getComputedStyle(el).fontSize)).toBe("18px");
           // A yellow count only where something waits on me: the commenter's three proposals on the Roadmap.
-          await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveText("3");
+          // roadmap-decide: the Roadmap count adds the broken links to what waits on me, and says both.
+          await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveAttribute("title", /, 3 changes or drafts waiting on you$/);
           await expect(page.getByTestId("simple-nav-one-pagers-count")).toHaveCount(0);
           await expect(page.getByTestId("simple-nav-priorities-count")).toHaveCount(0);
           await expect(page.getByTestId("simple-person")).toContainText(/owner/i);
@@ -124,10 +125,10 @@ for (const phone of [false, true]) {
         await expect(proposals.getByTestId("home-proposal")).toHaveCount(2);
         // Accepting applied it to the roadmap's working draft: the summary says so.
         await expect(page.getByTestId("home-draft")).toContainText("Your working draft of Alerts roadmap has 1 change.");
-        await expect(page.getByTestId("home-draft")).toContainText("It publishes as v");
+        await expect(page.getByTestId("home-draft")).toContainText("Next: you approve it, and version");
         await proposals.getByTestId("home-proposal").filter({ hasText: "Move to another horizon" }).getByRole("button", { name: "Decline" }).click();
         await expect(proposals.getByTestId("home-proposal")).toHaveCount(1);
-        if (!phone) await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveText("1");
+        if (!phone) await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveAttribute("title", /, 1 change or draft waiting on you$/);
 
         // A broken dependency: Move dependents applies into the roadmap's working draft, with Undo.
         const broken = card(page, "plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ });
