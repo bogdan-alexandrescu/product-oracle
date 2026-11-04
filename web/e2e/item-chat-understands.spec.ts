@@ -30,11 +30,16 @@ async function signIn(page: Page) {
   await tap(page.getByTestId("format-gantt"));
 }
 
-/** Opens Adaptive pacing's card from its bar, then its talk (a phone: the Talk to Oracle tab). */
-async function openTalk(page: Page, phone: boolean): Promise<{ card: Locator; talk: Locator }> {
-  const bar = page.locator('[data-testid="bar"][data-item="adaptive-pacing"]');
-  await expect(bar).toBeVisible();
-  await bar.click();
+/** Opens Adaptive pacing's card from its bar (a done item, off the plan: from the Done list), then its talk (a phone: the Talk to Oracle tab). */
+async function openTalk(page: Page, phone: boolean, done = false): Promise<{ card: Locator; talk: Locator }> {
+  if (done) {
+    await tap(page.getByTestId("done-items-toggle"));
+    await tap(page.getByTestId("done-item").filter({ hasText: "Adaptive pacing" }));
+  } else {
+    const bar = page.locator('[data-testid="bar"][data-item="adaptive-pacing"]');
+    await expect(bar).toBeVisible();
+    await bar.click();
+  }
   const card = page.getByTestId("floating-card");
   await expect(card).toBeVisible();
   await tap(card.getByRole(phone ? "tab" : "button", { name: "Talk to Oracle" }));
@@ -142,7 +147,9 @@ for (const phone of [false, true]) {
      */
     test(`an item done by its tracker can still be marked as already shipped (${where})`, async ({ page }) => {
       await signIn(page);
-      const { card, talk } = await openTalk(page, phone);
+      // roadmap-done: an item done is off the Gantt, kept under Done.
+      await expect(page.locator('[data-testid="bar"][data-item="adaptive-pacing"]')).toHaveCount(0);
+      const { card, talk } = await openTalk(page, phone, true);
       if (phone) await tap(card.getByRole("tab", { name: "Details" }));
       await expect(card.getByTestId("card-status")).toHaveText("Done");
       if (phone) await tap(card.getByRole("tab", { name: "Talk to Oracle" }));
