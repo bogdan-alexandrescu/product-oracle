@@ -26,7 +26,7 @@ import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { carriedFor, REPLACED_PRD_SCENARIO, seedReplacedBases } from "./replaced-prd";
 import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
-import { FIT_SCENARIOS, fitDateGoal, routeFitDate } from "./fit-date";
+import { FIT_COMPANY_SCENARIO, FIT_SCENARIOS, fitDateGoal, routeFitDate } from "./fit-date";
 import { generalReply } from "./general-chat";
 import { afterAccept, goalInterviewReply, proposeVersion, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
 import { goalCheck } from "./goals";
@@ -3487,7 +3487,13 @@ function load(): Db {
                     // Bring a date in (./fit-date.ts): its PRD's items on the Help desk roadmap and
                     // the Baseline goal its M2 gate counts toward.
                     const db = seed();
-                    seedFitDateRoadmap((db.simple_roadmap ??= seedSimpleRoadmap()));
+                    // "fit-date-company-roadmap": the company roadmap next to the PRD's older Help desk roadmap.
+                    const company = scenario === FIT_COMPANY_SCENARIO;
+                    if (company) {
+                      const at = "2026-10-01T09:00:00Z";
+                      db.documents.push({ id: uuid(), slug: COMPANY_SLUG, title: COMPANY_TITLE, status: "approved", kind: "roadmap", template: null, template_version: null, theme: null, created_at: at, updated_at: at, company_roadmap: true });
+                    }
+                    seedFitDateRoadmap((db.simple_roadmap ??= seedSimpleRoadmap()), company);
                     const goal = fitDateGoal(scenario, db.baseline.entities.find((e) => e.type === "goal")!);
                     if (goal) db.baseline.entities.push(goal);
                     return db;

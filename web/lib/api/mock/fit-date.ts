@@ -3,21 +3,25 @@
 // its approval. Invented company (Larkspur Help Desk), goals, items and engineers only. Served under
 // the "fit-date" mock scenario (and "fit-date-hard": the target is Jan 8, which no set reaches;
 // "fit-date-hard-no-goal": the same with no Baseline goal by the goal's name; "fit-date-foreign-draft":
-// the roadmap's draft holds someone else's edits, so approving is refused). The goal is a Baseline
+// the roadmap's draft holds someone else's edits, so approving is refused; "fit-date-company-roadmap":
+// the company roadmap (Product roadmap) exists next to the PRD's older Help desk roadmap, so the
+// answer and the re-plan read and write the company roadmap, as the API's _roadmap_id). The goal is a Baseline
 // goal (fitDateGoal); lowering its target shrinks the goal's own unlocked work, as the API's _scale
 // and build_plan: never a guardrail, safety or must-include item.
 
 import type { Schemas } from "@/lib/api/client";
 import { MOCK_NOW } from "./clock";
 import { stableUuid } from "./ids";
-import { fitDateApproved } from "./simple-roadmap";
+import { COMPANY_SLUG, COMPANY_TITLE } from "./one-roadmap";
+import { fitDateApproved, roadmapId } from "./simple-roadmap";
 
 type Goal = Schemas["FitGoalOut"];
 type Answer = Schemas["FitAnswerOut"];
 type Change = Schemas["FitChangeOut"];
 type Draft = Schemas["FitDraftOut"];
 
-export const FIT_SCENARIOS = ["fit-date", "fit-date-hard", "fit-date-hard-no-goal", "fit-date-foreign-draft"] as const;
+export const FIT_COMPANY_SCENARIO = "fit-date-company-roadmap";
+export const FIT_SCENARIOS = ["fit-date", "fit-date-hard", "fit-date-hard-no-goal", "fit-date-foreign-draft", FIT_COMPANY_SCENARIO] as const;
 const isHard = (scenario: string | null) => scenario === "fit-date-hard" || scenario === "fit-date-hard-no-goal";
 
 // The Baseline goal the M2 gate counts toward: the PRD's milestone target names 40.
@@ -46,6 +50,9 @@ export function fitDateGoal<T extends GoalRow>(scenario: string | null, template
 
 const PRD = { id: stableUuid("fit-date/prd"), slug: "reply-faster", title: "Reply faster in the shared inbox" };
 const ROADMAP = { id: stableUuid("fit-date/roadmap"), slug: "help-desk-roadmap", title: "Help desk roadmap" };
+// one-roadmap-many-prds: while the company roadmap exists, the re-plan reads and writes it, never the
+// PRD's track's older roadmap (the API's fit_date_router._roadmap_id).
+const COMPANY = { id: roadmapId(COMPANY_SLUG), slug: COMPANY_SLUG, title: COMPANY_TITLE };
 
 const day = (iso: string) => Date.parse(`${iso}T00:00:00Z`);
 const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
@@ -116,10 +123,10 @@ const LOCKED = [
   { item: "Hide card numbers in drafts", pw: 2, why: "Safety: card numbers never reach a draft or a log." },
 ];
 
-type State = { version: number; roadmapVersion: number; approved: Schemas["FitApprovalOut"] | null; picks: string[]; target: string };
+type State = { version: number; roadmapVersion: number; approved: Schemas["FitApprovalOut"] | null; picks: string[]; target: string; company: boolean };
 let state: State | null = null;
-function fresh(hard: boolean): State {
-  return { version: 3, roadmapVersion: 6, approved: null, picks: [], target: hard ? HARD_TARGET : TARGET };
+function fresh(scenario: string | null): State {
+  return { version: 3, roadmapVersion: 6, approved: null, picks: [], target: isHard(scenario) ? HARD_TARGET : TARGET, company: scenario === FIT_COMPANY_SCENARIO };
 }
 
 let goals: GoalRow[] = [];
@@ -200,7 +207,7 @@ function lanes(picks: string[]): Schemas["FitLane"][] {
 function goal(s: State): Goal {
   const today = at(s.picks);
   return {
-    prd: PRD, prd_version: s.version, roadmap: ROADMAP, roadmap_version: s.roadmapVersion,
+    prd: PRD, prd_version: s.version, roadmap: s.company ? COMPANY : ROADMAP, roadmap_version: s.roadmapVersion,
     goal: "40 replied threads per agent per day", goal_now: "26 replied threads per agent today",
     milestone: "M2", milestone_name: "M2 Agent reply flow", target: s.target, today,
     late_days: gap(today, s.target), team: { engineers: 4, focus: 0.7 }, lanes: lanes(s.picks), approved: s.approved,
@@ -280,9 +287,9 @@ export async function routeFitDate(scenario: string | null, role: string, req: R
   const one = p[2] === "prds" && p[4] === "fit-date";
   if (!list && !one) return null;
   const on = (FIT_SCENARIOS as readonly string[]).includes(scenario ?? "");
-  if (list) return json(200, on ? [goal((state ??= fresh(isHard(scenario))))] : []);
+  if (list) return json(200, on ? [goal((state ??= fresh(scenario)))] : []);
   if (!on || (p[3] !== PRD.slug && p[3] !== PRD.id)) return json(404, { detail: "No such PRD" });
-  const s = (state ??= fresh(isHard(scenario)));
+  const s = (state ??= fresh(scenario));
   if (req.method === "GET" && p.length === 5) return json(200, answer(s, role));
   if (req.method !== "POST") return null;
   const body = JSON.parse((await req.text()) || "{}") as Schemas["FitPicksIn"];
