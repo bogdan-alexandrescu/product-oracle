@@ -251,3 +251,60 @@ def test_critic_flags_a_departure_and_a_dropped_item():
     # D-70 is not D-7.
     other = good.replace("We keep D-7", "This draft departs from D-70")
     assert carried.draft_problems(c, other, AREA) == []
+
+
+async def test_new_prd_items_keep_a_link_to_the_old_items_they_continue(client, ctx):
+    """protects=the new PRD's draft items keep a ``continues`` link to the old PRD's items
+    their section continues (or that they declare), naming the old PRD; fails_when=no
+    link, or a link on an item that continues nothing; no_claim=carrying estimates over."""
+    import hashlib
+
+    from oracle.docs.models import Section
+    from oracle.roadmap import items as items_mod
+    from oracle.runs.models import Run
+
+    w = await _world(client, ctx)
+    replaces = {"document_id": w["old"]["id"], "area_name": "User Safety",
+                "area_scope": "caps, tripwires and ban prevention", "item_keys": AREA}  # fmt: skip
+    made = await create_intake(client, ctx, replaces=replaces)
+    bodies = {
+        "rate-limits": "Continues: caps\nKeep D-1 as decided.",
+        "safety": "Safe mode for new accounts.",
+        "growth": "Invites for teams.",
+    }
+    async with tenant_session(ctx.tenant_id) as s:
+        doc = Document(slug="example-user-safety", title="Example User Safety PRD", kind="prd")
+        s.add(doc)
+        await s.flush()
+        v = DocumentVersion(document_id=doc.id, number=1, markdown="# Example\n", content_hash="x")
+        s.add(v)
+        await s.flush()
+        for i, (key, body) in enumerate(bodies.items()):
+            s.add(Section(version_id=v.id, section_key=key, ordinal=i, level=2, heading=key,
+                          body_md=body, body_text=body,
+                          content_hash=hashlib.sha256(body.encode()).hexdigest()))  # fmt: skip
+        s.add(Run(flow="baseline_to_prd", status="running", document_id=doc.id,
+                  created_by=ctx.users["owner"].id,
+                  knobs={"intake_id": made["intake"]["id"]}))  # fmt: skip
+        draft = DraftRoadmap(prd_document_id=doc.id, prd_version_id=v.id, status="ready")
+        s.add(draft)
+        await s.flush()
+        text = (
+            "version: 1\nprd: {document: example-user-safety, version: 1}\nitems:\n"
+            "  - {id: limits, title: Rate limits, horizon: now, prd_section: rate-limits}\n"
+            "  - {id: safe, title: Safe mode, horizon: now, prd_section: safety,"
+            " continues: safe-mode}\n"
+            "  - {id: invites, title: Team invites, horizon: next, prd_section: growth}\n"
+        )
+        result = await items_mod.import_items(s, v, text, draft=draft)
+        links = {
+            i.item_key: [
+                (t["id"], t["key"], t["via"]) for t in i.trace if t["target"] == "continues"
+            ]
+            for i in result.items
+        }
+    assert links == {
+        "limits": [(w["old"]["id"], "caps", "section")],
+        "safe": [(w["old"]["id"], "safe-mode", "declared")],
+        "invites": [],
+    }
