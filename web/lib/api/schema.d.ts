@@ -40576,6 +40576,8 @@ export interface components {
             can_start: boolean;
             /** Reviews In Trash */
             reviews_in_trash?: "roadmap" | null;
+            /** Reviews Deleted */
+            reviews_deleted?: "roadmap" | null;
         };
         /** SimpleVisualCommentIn */
         SimpleVisualCommentIn: {

@@ -1884,6 +1884,9 @@ class SimpleUpcomingMeeting(BaseModel):
     # What the ritual reviews when all of it is in Trash ("roadmap": a roadmap refresh while
     # every roadmap is in Trash); Home says so and links the ritual's settings.
     reviews_in_trash: Literal["roadmap"] | None = None
+    # What the ritual reviews when all of it was deleted for good (purged from Trash, none
+    # left); Home says "Its roadmap was deleted" and links the ritual's settings.
+    reviews_deleted: Literal["roadmap"] | None = None
 
 
 class SimpleMeetingsOut(BaseModel):
