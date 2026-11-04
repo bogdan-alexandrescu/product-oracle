@@ -58,9 +58,10 @@ def test_drafting_and_note_prompts_carry_the_named_code_rules():
     assert flows.NAMED_CODES in text
 
 
-def test_the_roadmap_prompts_do_not_carry_the_named_code_rules():
-    """Only the prompts that write PRD sections, proposals and checkpoint notes carry the
-    rules; the roadmap draft's prompt is pinned byte for byte (test_runs_prd_template)."""
+def test_the_roadmap_items_prompt_does_not_carry_the_named_code_rules():
+    """The prompts that write PRD sections, proposals and checkpoint notes carry the
+    rules, and the roadmap draft's (roadmap-draft-wording, pinned byte for byte in
+    test_runs_prd_template); the roadmap items step writes YAML, not text people read."""
     flow = flows.FLOWS["prd_to_roadmap"]
     ctx = flows.PromptContext(
         run_id="run-1",
@@ -72,7 +73,7 @@ def test_the_roadmap_prompts_do_not_carry_the_named_code_rules():
     for seg in flow.segments:
         for role in seg.roles:
             text = flows.step_prompt(flow, seg, role, last=True, ctx=ctx)
-            assert flows.NAMED_CODES not in text, (seg.name, role)
+            assert (flows.NAMED_CODES in text) == (seg.name == "roadmap_draft"), (seg.name, role)
 
 
 # --- Output checks -------------------------------------------------------------------
