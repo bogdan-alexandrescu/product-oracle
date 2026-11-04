@@ -26,6 +26,7 @@ type Row = Schemas["SimplePriorityRow"];
 type Proposal = Schemas["SimplePriorityProposal"];
 type Draft = Schemas["SimplePriorityDraft"];
 type Bucket = Schemas["SimpleGoalBucket"];
+type Line = Schemas["SimpleLine"];
 type ChangeIn = Schemas["SimpleChangeIn"];
 type Tab = "ranked" | "value-effort" | "buckets";
 
@@ -564,8 +565,8 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
                 className={`inline-block h-3 w-3 flex-none rounded-full border-2 border-accent ${r.above_line ? "bg-accent" : "bg-transparent"}`}
                 data-testid="prio-line-mark"
               />
-              <span className="min-w-[12rem] flex-1 font-medium" data-testid="prio-title">
-                {r.title}
+              <span className="min-w-[12rem] flex-1 font-medium">
+                <span data-testid="prio-title">{r.title}</span>
                 <OwnKey r={r} />
               </span>
               {/* walkb-priorities: no ml-auto, so details that wrap under the title start at the left on every row. */}
@@ -608,7 +609,8 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
             )}
             {mayChange && !r.can_reorder && (
               <p className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12" data-testid="prio-locked">
-                {r.on_roadmap ? "Only people with access to this feature's roadmap can move it. Ask the owner for access." : "Only an owner can add this feature to the company roadmap to move it. Ask an owner."}
+                {/* prio-company: never the owner's (an owner moves every row); someone who truly lacks the right. */}
+                Only people with access to this feature&apos;s roadmap can move it. Ask the owner for access.
               </p>
             )}
             {r.after && (
@@ -1296,7 +1298,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
     { name: "Later", at: "bottom-[22px] right-[10px] text-right" },
   ];
   // B's legend: "Codes are the one-pager's feature codes" when every mark's code is one, else codes stay with the item.
-  const fCodes = rows.length > 0 && rows.every((r) => !!r.own_key);
+  const fCodes = rows.length > 0 && rows.every((r) => /^F-\d+$/.test(r.short_code || r.code));
   const effortAt = xPct(byEffort.median);
   const valueAt = yPct(byValue.median);
   // B writes "middle effort" at the foot of its line and "middle value" under its line at 82%
@@ -1402,7 +1404,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   data-shape={shapeOf(r)}
                   aria-pressed={isSelected}
                   aria-label={`#${r.rank} ${nameOf(r)}: goal value ${fmt(r.goal_value)}, ${r.effort == null ? "PM-owned, no effort" : `effort ${fmt(r.effort)} ${r.effort === 1 ? "week" : "weeks"}`}${r.above_line ? "" : ", below the line"}${goalOf(r) ? "" : ", no goal"}`}
-                  title={`#${r.rank} ${r.own_key ? `${r.own_key} · ` : ""}${r.title}`}
+                  title={`#${r.rank} ${r.short_code || r.code} · ${r.title}`}
                   className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ${isSelected ? "z-20 ring-[3px] ring-accent ring-offset-2 ring-offset-surface" : isMoved ? "z-10 ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""} ${mayChange && r.can_reorder ? "cursor-grab touch-none" : "cursor-pointer"}`}
                   style={{ left, top }}
                   onClick={() => {
@@ -1424,7 +1426,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   onPointerCancel={() => setDrag(null)}
                   onKeyDown={(e) => key(e, r)}
                 >
-                  <ShapeMark shape={shapeOf(r)} hollow={!r.above_line} code={r.own_key || String(r.rank)} />
+                  <ShapeMark shape={shapeOf(r)} hollow={!r.above_line} code={r.short_code || r.code} />
                 </button>
               );
             })}
@@ -1472,7 +1474,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
             </li>
           )}
           <li>
-            {fCodes ? "Each mark shows the feature's own key; its rank is in the list." : "Each mark shows the feature's own key, else its rank."} Hollow: below the line ({lineWords(data)}). A mark on a middle line counts on the side its rank puts it.
+            {fCodes ? "Each mark shows the feature's code from its one-pager; its rank is in the list." : "Each mark shows the feature's code; its rank is in the list."} Hollow: below the line ({lineWords(data)}). A mark on a middle line counts on the side its rank puts it.
           </li>
         </ul>
         <p className="mt-1 pl-6 text-[15px] leading-[22px] text-text2">
@@ -1506,18 +1508,17 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   <span className="w-5 flex-none text-right font-[650] tabular-nums" data-testid="side-rank">
                     {r.rank}
                   </span>
-                  {r.own_key && (
-                    <span className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text" data-testid="side-code" title={r.title}>
-                      {r.own_key}
-                    </span>
-                  )}
+                  {/* The mark's code, so a mark and its row read alike (Value / effort only; the ranked rows name the feature). */}
+                  <span className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text" data-testid="side-code" title={r.title}>
+                    {r.short_code || r.title}
+                  </span>
                   <span className="min-w-0 flex-1 truncate" data-testid="prio-title" title={r.title}>
                     {r.title}
                   </span>
                   {/* qa4-simple-plan-8: why a score is out of order: a person's move, or a feature it needs. */}
                   {r.after ? (
                     <span data-testid="side-held" title={`After ${r.after.title}, which it needs`} className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2">
-                      after {r.after.title}
+                      after {rows.find((x) => x.code === r.after!.code)?.short_code || r.after.title}
                     </span>
                   ) : (
                     r.oracle_rank != null &&
@@ -1634,13 +1635,23 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
             else if (e.target.value !== "picked") onPick(e.target.value);
           }}
         >
-          {offered.map((l) => (
+          {lineGroups(offered).map(([prd, ls]) => {
             // priorities-keydates: a PRD's milestone is a key date marked as the roadmap marks it ("From the PRD", in
-            // place of "Key date"); it changes in the PRD, never here. prio-company: every line names its PRD.
-            <option key={l.key} value={l.key} title={l.prd ? `A key date from the PRD; change it in the PRD, ${l.prd.title}` : undefined}>
-              {`${l.kind === "key_date" ? `${l.prd ? "From the PRD" : "Key date"}: ` : l.kind === "milestone" ? "Milestone: " : ""}${l.label}${l.prd ? ` (${l.prd.title})` : ""}`}
-            </option>
-          ))}
+            // place of "Key date", so the chosen line fits a phone's box); it changes in the PRD, never here.
+            const options = ls.map((l) => (
+              <option key={l.key} value={l.key} title={l.prd ? `A key date from the PRD; change it in the PRD, ${l.prd.title}` : undefined}>
+                {l.kind === "key_date" ? `${l.prd ? "From the PRD" : "Key date"}: ${l.label}` : l.kind === "milestone" ? `Milestone: ${l.label}` : l.label}
+              </option>
+            ));
+            // prio-company: each PRD's milestones listed under its name.
+            return prd ? (
+              <optgroup key={prd.id} label={prd.title} data-testid="line-prd">
+                {options}
+              </optgroup>
+            ) : (
+              options
+            );
+          })}
           {current.kind === "date" && <option value="picked">{`Date: ${current.label.replace(/^By /, "")}`}</option>}
           <option value="pick">{current.kind === "date" ? "Pick another date…" : "Pick a date…"}</option>
         </select>
@@ -1648,6 +1659,17 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
       </span>
     </div>
   );
+}
+
+/** prio-company: the lines in their order, each run of one PRD's lines under that PRD (null: lines of no PRD). */
+function lineGroups(lines: Line[]): [Line["prd"], Line[]][] {
+  const out: [Line["prd"], Line[]][] = [];
+  for (const l of lines) {
+    const last = out[out.length - 1];
+    if (last && (last[0]?.id ?? null) === (l.prd?.id ?? null)) last[1].push(l);
+    else out.push([l.prd ?? null, [l]]);
+  }
+  return out;
 }
 
 /** A day as a date field writes it (2026-10-31), in the reader's own time zone. */

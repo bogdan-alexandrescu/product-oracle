@@ -93,12 +93,19 @@ for (const scheme of ["light", "dark"] as const) {
         await expect(pricing.getByTestId("prio-numbers")).toContainText("2 wk");
       });
 
-      test("the Line picker names each line's PRD", async ({ page }) => {
+      test("the Line picker lists each PRD's milestones under its name, each once", async ({ page }) => {
         await setUp(page, scheme, phone);
-        const options = await page.getByTestId("line-picker").getByLabel("Line", { exact: true }).locator("option").allTextContents();
-        const dated = options.filter((t) => /^(From the PRD|Milestone): /.test(t));
-        expect(dated.length, options.join("\n")).toBeGreaterThan(0);
-        for (const t of dated) expect(t, options.join("\n")).toMatch(/\([^)]+\)$/);
+        const select = page.getByTestId("line-picker").getByLabel("Line", { exact: true });
+        const options = await select.locator("option").allTextContents();
+        const groups = select.locator("optgroup");
+        expect(await groups.count(), options.join("\n")).toBeGreaterThan(0);
+        for (const g of await groups.all()) {
+          expect(await g.getAttribute("label")).toBeTruthy();
+          for (const t of await g.locator("option").allTextContents()) expect(t).toMatch(/^(From the PRD|Milestone): /);
+        }
+        // Every PRD milestone sits under its PRD; each line once; no placeholder name.
+        const loose = await select.locator(":scope > option").allTextContents();
+        expect(loose.filter((t) => t.startsWith("From the PRD: ")), loose.join("\n")).toEqual([]);
         expect(new Set(options).size, options.join("\n")).toBe(options.length);
         expect(options.join("\n")).not.toMatch(/(^|\s)N(\s|$)/m);
       });

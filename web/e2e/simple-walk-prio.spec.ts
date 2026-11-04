@@ -240,7 +240,10 @@ test("Value/effort's side caption names three that miss the line and counts the 
   const titles = async (rows: Locator) => (await rows.evaluateAll((rs) => rs.filter((r) => r.getAttribute("data-misses") === "true").map((r) => r.querySelector('[data-testid="prio-title"]')!.textContent!.trim())));
   const all = await titles(page.getByTestId("prio-row"));
   expect(all.length).toBeGreaterThan(3);
-  for (const t of all) await expect(page.getByTestId("line-caption")).toContainText(t);
+  // prio-company (the owner, Nov 4): a count, then "Show them" lists each on its own line.
+  for (const t of all) await expect(page.getByTestId("line-caption")).not.toContainText(t);
+  await page.getByTestId("line-caption").getByRole("button", { name: "Show them" }).click();
+  for (const t of all) await expect(page.getByTestId("line-caption").getByTestId("line-miss").filter({ hasText: t })).toHaveCount(1);
 
   await page.getByRole("tab", { name: "Value / effort" }).click();
   const side = page.getByRole("region", { name: "Ranked side list" });
@@ -248,11 +251,10 @@ test("Value/effort's side caption names three that miss the line and counts the 
   await expect(side.getByTestId("side-row").first()).toBeVisible();
   const missing = await titles(side.getByTestId("side-row"));
   await expect(caption).toContainText(`${missing.length} of ${await side.getByTestId("side-row").count()} miss ${label}`);
-  await expect(caption).toContainText(`${missing.slice(0, 3).join(", ")} and ${missing.length - 3} more`);
-  for (const t of missing.slice(3)) await expect(caption).not.toContainText(t);
-  // QA pass 3 (qa-simple-plan-19): "and n more" opens the rest.
+  // prio-company: the side list's caption is the count too; "Show them" opens the names, one per line.
+  for (const t of missing) await expect(caption).not.toContainText(t);
   await caption.getByTestId("line-caption-more").click();
-  for (const t of missing) await expect(caption).toContainText(t);
+  for (const t of missing) await expect(caption.getByTestId("line-miss").filter({ hasText: t })).toHaveCount(1);
   await select.selectOption("now");
 });
 

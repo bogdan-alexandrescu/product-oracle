@@ -25,8 +25,8 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       const keyDates = async () => (await select.locator("option").allTextContents()).filter((t) => /^(Key date|From the PRD): /.test(t));
       await expect.poll(keyDates).toEqual(
         expect.arrayContaining([
-          "From the PRD: M1 · Prove it · Nov 27, 2026 (Guided setup)",
-          "From the PRD: M2 · Scale volume · Dec 25, 2026 (Guided setup)",
+          "From the PRD: M1 · Prove it · Nov 27, 2026",
+          "From the PRD: M2 · Scale volume · Dec 25, 2026",
           expect.stringMatching(/^Key date: Board meeting · [A-Z][a-z]{2} \d{1,2}, \d{4}$/),
         ]),
       );
@@ -51,8 +51,8 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
 
       await page.goto("/simple/priorities");
       await expect(page.getByTestId("simple-priorities")).toBeVisible();
-      await expect.poll(keyDates).toContain("From the PRD: M2 · Scale volume · Jan 8, 2027 (Guided setup)");
-      expect(await keyDates()).not.toContain("From the PRD: M2 · Scale volume · Dec 25, 2026 (Guided setup)");
+      await expect.poll(keyDates).toContain("From the PRD: M2 · Scale volume · Jan 8, 2027");
+      expect(await keyDates()).not.toContain("From the PRD: M2 · Scale volume · Dec 25, 2026");
     });
   });
 }
