@@ -418,7 +418,7 @@ export function MsLayer(props: MsLayerProps) {
       out.push(<Diamond key={`pp-${m.id}`} x={to} y={axisY} code={m.code} hollow dashed color="var(--warn)" title={`Asked: ${fullDay(asked!)}`} testid="ms-proposed" />);
       out.push(<div key={`ppv-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: to - 0.75, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: "1.5px dashed var(--warn)" }} />);
       out.push(
-        <Chip key={`ppc-${m.id}`} testid="ms-asked" className="border border-warn bg-warn-bg text-warn" style={{ left: to + 6, top: lane.y0 + 54 }}>
+        <Chip key={`ppc-${m.id}`} testid="ms-asked" mx={to} className="border border-warn bg-warn-bg text-warn" style={{ left: to + 6, top: lane.y0 + 54 }}>
           {live ? `Moving ${words(m)} to ${day(asked!)}` : `Asked the PRD: move ${words(m)} to ${day(asked!)} · waits for ${m.prd_owner ?? "its owner"}`}
         </Chip>,
       );
@@ -459,7 +459,10 @@ export function MsLayer(props: MsLayerProps) {
           ms.setHover(dayAt(x, px, ms.today));
         }}
         onPointerLeave={() => ms.setHover(null)}
-        onClick={(e) => {
+        // The chart under it pans on a press: the axis takes its own press (a click or a tap) first.
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
           const px = e.clientX - e.currentTarget.getBoundingClientRect().left;
           ms.setHover(null);
           ms.begin(dayAt(x, px, ms.today), null);

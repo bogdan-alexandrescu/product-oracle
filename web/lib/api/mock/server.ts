@@ -171,7 +171,7 @@ import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visual
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
-import { approvedPrdToDraft, companyToday, itemSubjectName, knowCompanyGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { approvedPrdToDraft, itemSubjectName, knowCompanyGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -3141,7 +3141,7 @@ function load(): Db {
                 ? () => {
                     // build-milestones-on-roadmap: the roadmaps' own milestones per goal; with a PRD's (Usage alerts).
                     const db = seed();
-                    (db.simple_roadmap = seedSimpleRoadmap()).goal_milestones = scenario === "simple-milestones" ? seedOwnMilestones(companyToday()) : seedPrdMilestones(companyToday());
+                    (db.simple_roadmap = seedSimpleRoadmap()).goal_milestones = scenario === "simple-milestones" ? seedOwnMilestones() : seedPrdMilestones();
                     return db;
                   }
               : scenario === "simple-plan"

@@ -26,26 +26,25 @@ export interface MockMilestone {
   deleted?: boolean;
 }
 
-const at = (today: string, n: number): string => new Date(Date.parse(`${today}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
 
 /** The roadmap's own milestones on the goals' ladders (the "simple-milestones" scenario). */
-export function seedOwnMilestones(today: string): MockMilestone[] {
+export function seedOwnMilestones(): MockMilestone[] {
   return [
-    { id: stableUuid("simple-gm/m1"), roadmap: "alerts-roadmap", code: "M1", name: "Alerts live for 50 teams", date: at(today, 17), goal: "grow-retention", gates: ["alert-rules"], counts_when: "Holds 7 days in a row", progress: "on_track" },
-    { id: stableUuid("simple-gm/m2"), roadmap: "alerts-roadmap", code: "M2", name: "60% of teams active at day 90", date: at(today, 49), goal: "grow-retention", gates: ["alert-digest", "alert-mobile"], counts_when: "Holds 14 days in a row on all teams", progress: "at_risk" },
-    { id: stableUuid("simple-gm/a1"), roadmap: "onboarding-roadmap", code: "M1", name: "First alert within a day", date: at(today, 31), goal: "faster-activation", gates: ["setup-checklist", "setup-import"], counts_when: "Holds 7 days in a row", progress: "on_track" },
+    { id: stableUuid("simple-gm/m1"), roadmap: "alerts-roadmap", code: "M1", name: "Alerts live for 50 teams", date: "2026-11-20", goal: "grow-retention", gates: ["alert-rules"], counts_when: "Holds 7 days in a row", progress: "on_track" },
+    { id: stableUuid("simple-gm/m2"), roadmap: "alerts-roadmap", code: "M2", name: "60% of teams active at day 90", date: "2026-12-22", goal: "grow-retention", gates: ["alert-digest", "alert-mobile"], counts_when: "Holds 14 days in a row on all teams", progress: "at_risk" },
+    { id: stableUuid("simple-gm/a1"), roadmap: "onboarding-roadmap", code: "M1", name: "First alert within a day", date: "2026-12-04", goal: "faster-activation", gates: ["setup-checklist", "setup-import"], counts_when: "Holds 7 days in a row", progress: "on_track" },
   ];
 }
 
 /** A PRD's own milestones ("Usage alerts"), dated from its approved roadmap version; one has no date. */
-export function seedPrdMilestones(today: string): MockMilestone[] {
+export function seedPrdMilestones(): MockMilestone[] {
   const prd = { slug: "usage-alerts", title: "Usage alerts", owner: "Nora Vance" };
   return [
-    ...seedOwnMilestones(today).filter((m) => m.goal !== "grow-retention"),
-    { id: stableUuid("simple-gm/p1"), roadmap: "alerts-roadmap", code: "M1", name: "Rules in beta", date: at(today, 24), goal: "grow-retention", gates: ["alert-rules"], counts_when: "10 beta teams use it for a week", progress: "on_track", prd },
-    { id: stableUuid("simple-gm/p2"), roadmap: "alerts-roadmap", code: "M2", name: "Digest for all teams", date: at(today, 42), goal: "grow-retention", gates: ["alert-digest"], counts_when: "Sent to every team 2 weeks in a row", progress: "at_risk", prd },
-    { id: stableUuid("simple-gm/p3"), roadmap: "alerts-roadmap", code: "M3", name: "Push on phones", date: at(today, 70), goal: "grow-retention", gates: ["alert-mobile"], counts_when: "Live on both phone apps", progress: "not_started", prd },
-    { id: stableUuid("simple-gm/p4"), roadmap: "alerts-roadmap", code: "M4", name: "Routing by team", date: at(today, 118), goal: "grow-retention", gates: ["alert-sso"], counts_when: "Used by 20 teams", progress: "not_started", prd },
+    ...seedOwnMilestones().filter((m) => m.goal !== "grow-retention"),
+    { id: stableUuid("simple-gm/p1"), roadmap: "alerts-roadmap", code: "M1", name: "Rules in beta", date: "2026-11-27", goal: "grow-retention", gates: ["alert-rules"], counts_when: "10 beta teams use it for a week", progress: "on_track", prd },
+    { id: stableUuid("simple-gm/p2"), roadmap: "alerts-roadmap", code: "M2", name: "Digest for all teams", date: "2026-12-15", goal: "grow-retention", gates: ["alert-digest"], counts_when: "Sent to every team 2 weeks in a row", progress: "at_risk", prd },
+    { id: stableUuid("simple-gm/p3"), roadmap: "alerts-roadmap", code: "M3", name: "Push on phones", date: "2027-01-12", goal: "grow-retention", gates: ["alert-mobile"], counts_when: "Live on both phone apps", progress: "not_started", prd },
+    { id: stableUuid("simple-gm/p4"), roadmap: "alerts-roadmap", code: "M4", name: "Routing by team", date: "2027-03-01", goal: "grow-retention", gates: ["alert-sso"], counts_when: "Used by 20 teams", progress: "not_started", prd },
     { id: stableUuid("simple-gm/p5"), roadmap: "alerts-roadmap", code: "M5", name: "Alerts in the admin app", date: null, goal: "grow-retention", gates: [], counts_when: "", progress: "not_started", prd },
   ];
 }
