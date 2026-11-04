@@ -267,6 +267,26 @@ class DateSuggestionOut(BaseModel):
     can_decide: bool = False
 
 
+class SimpleOverride(BaseModel):
+    """build-feature-panel: Oracle's dates a person's replaced, and who set the new ones."""
+
+    start_date: dt.date | None = None
+    end_date: dt.date | None = None
+    source: str | None = None
+    by: str | None = None
+    at: dt.datetime | None = None
+
+
+class SimpleLink(BaseModel):
+    """build-feature-panel: one item the item depends on; ``by`` null: Oracle found it.
+    ``removed``: Oracle's link a person removed (``removed_by``), shown with Restore."""
+
+    item_id: uuid.UUID
+    by: str | None = None
+    removed: bool = False
+    removed_by: str | None = None
+
+
 class SimpleRoadmapItem(BaseModel):
     id: uuid.UUID
     key: str
@@ -324,6 +344,10 @@ class SimpleRoadmapItem(BaseModel):
         default=[], description="S7: the goals the item is linked to directly."
     )
 
+    # build-feature-panel (oracle.simple.panel): Oracle's dates kept under a person's, and
+    # the item's links with who made them (Oracle's removed ones too).
+    override: SimpleOverride | None = None
+    links: list[SimpleLink] = []
     # S8: the decided decisions that changed the item (newest first; the Decisions page).
     decided_in: list["SimpleDecidedRef"] = []
     # walkc-roadmap-tasks: the work under the item (not dropped), in order.
@@ -512,6 +536,12 @@ ChangeOp = Literal[
     # fix5-cut-dependents: an item cut with every item that waits on it (transitively), as
     # one change keyed by item id (oracle.simple.changes).
     "cut_with_dependents",
+    # build-feature-panel: an item's links (a dependency added, removed, or Oracle's link
+    # put back) and Oracle's dates put back over a person's (oracle.simple.panel).
+    "add_link",
+    "remove_link",
+    "restore_link",
+    "restore_dates",
 ]
 # chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
 # the change engine (oracle.simple.chat_actions).

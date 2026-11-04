@@ -40,6 +40,14 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             return f"moved the dates of {x}"
         case "accept_date_suggestion":
             return f"accepted Oracle's dates for {x}"
+        case "restore_dates":
+            return f"put Oracle's dates back on {x}"
+        case "add_link" | "restore_link":
+            other = _quoted(target.get("subject_title")) or "another item"
+            return f"made {x} depend on {other}"
+        case "remove_link":
+            other = _quoted(target.get("subject_title")) or "another item"
+            return f"took out the link from {x} to {other}"
         case "change_horizon":
             h = HORIZON_WORDS.get(str(after.get("horizon")))
             return f"moved {x} to {h}" if h else f"moved {x} to another horizon"

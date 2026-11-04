@@ -1098,6 +1098,10 @@ async def build(
 
     await item_codes(db, read.entries)
     extra = await additions.item_extras(db, read, shown)
+    from oracle.simple import panel
+
+    for item_id, x in (await panel.item_panel(db, read, shown)).items():
+        extra.setdefault(item_id, {}).update(x)
     from oracle.simple import meetings
 
     left_out: list = []

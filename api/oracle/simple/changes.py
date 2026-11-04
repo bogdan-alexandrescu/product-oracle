@@ -116,7 +116,12 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "set_milestone": ("milestone",),
     "set_owner": ("owner_id",),
     "set_decider": ("decider_id",),
+    "add_link": ("depends_on",),
+    "remove_link": ("depends_on",),
+    "restore_link": ("depends_on",),
+    "restore_dates": DATES,
 }
+LINK_OPS = ("add_link", "remove_link", "restore_link")
 FIXES = ("shift_dependents", "move_dependency")
 # fix5-cut-dependents: the item and every item that waits on it, cut as one change.
 CUT_ALL = "cut_with_dependents"
@@ -563,6 +568,43 @@ def dependents(entry: service.Entry, by_id: dict[uuid.UUID, service.Entry]) -> l
     return out
 
 
+async def _link_plan(
+    op: str, entry: service.Entry, target: dict[str, Any], by_id: dict
+) -> list[str]:
+    """build-feature-panel: the item's depends_on after adding, removing or restoring the
+    link to ``target.subject``; 422 for a link already there, one not there, one across
+    roadmaps, or one that would make a loop."""
+    dep_id = _uuid(target.get("subject"), "subject")
+    target["subject"] = str(dep_id)
+    dep = by_id.get(dep_id)
+    if dep is None or dep is entry:
+        raise ChangeError(422, "target.subject: another item of the roadmap")
+    if dep.row.roadmap_version_id != entry.row.roadmap_version_id:
+        raise ChangeError(422, "A link joins two items of one roadmap")
+    key = dep.row.item_key
+    target["subject_key"], target["subject_title"] = key, dep.row.title
+    now_ = list(entry.row.depends_on or [])
+    if op == "remove_link":
+        if key not in now_:
+            raise ChangeError(422, "No such link")
+        return [k for k in now_ if k != key]
+    if key in now_:
+        raise ChangeError(422, f"{entry.row.title} already depends on {dep.row.title}")
+    # A loop: the new dependency already waits on the item, directly or through others.
+    seen, queue = {dep_id}, deque([dep_id])
+    while queue:
+        cur = by_id.get(queue.popleft())
+        for nid in cur.depends_on if cur is not None else []:
+            if nid == entry.row.id:
+                raise ChangeError(
+                    422, f"{dep.row.title} needs {entry.row.title}: it would make a loop"
+                )
+            if nid not in seen:
+                seen.add(nid)
+                queue.append(nid)
+    return [*now_, key]
+
+
 async def _plan(
     db: AsyncSession, principal: Any, body: SimpleChangeIn, read_: service.Read
 ) -> tuple[service.Entry, dict[str, Any], dict[str, Any], dict[str, Any]]:
@@ -677,6 +719,17 @@ async def _plan(
                 )
             target["edited"] = True
         after = {"start_date": _iso(start), "end_date": _iso(end), "date_source": "accepted"}
+        stored = (*DATES, "date_source")
+    elif op in LINK_OPS:
+        after = {"depends_on": await _link_plan(op, entry, target, by_id)}
+    elif op == "restore_dates":
+        from oracle.simple import panel
+
+        kept = await panel.override_of(db, row)
+        if kept is None or not kept.get("end_date"):
+            raise ChangeError(422, "No dates of Oracle's to restore")
+        after = {"start_date": kept["start_date"], "end_date": kept["end_date"],
+                 "date_source": kept["source"]}  # fmt: skip
         stored = (*DATES, "date_source")
     elif op == "change_horizon":
         if a.get("horizon") not in HORIZONS:

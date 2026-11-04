@@ -59657,7 +59657,11 @@
                   "set_decider",
                   "decide_question",
                   "name_decider",
-                  "cut_with_dependents"
+                  "cut_with_dependents",
+                  "add_link",
+                  "remove_link",
+                  "restore_link",
+                  "restore_dates"
                 ]
               },
               {
@@ -60037,7 +60041,11 @@
               "set_decider",
               "decide_question",
               "name_decider",
-              "cut_with_dependents"
+              "cut_with_dependents",
+              "add_link",
+              "remove_link",
+              "restore_link",
+              "restore_dates"
             ],
             "title": "Op"
           },
@@ -81083,7 +81091,11 @@
               "set_decider",
               "decide_question",
               "name_decider",
-              "cut_with_dependents"
+              "cut_with_dependents",
+              "add_link",
+              "remove_link",
+              "restore_link",
+              "restore_dates"
             ],
             "title": "Op"
           },
@@ -114608,7 +114620,11 @@
               "set_decider",
               "decide_question",
               "name_decider",
-              "cut_with_dependents"
+              "cut_with_dependents",
+              "add_link",
+              "remove_link",
+              "restore_link",
+              "restore_dates"
             ],
             "title": "Op"
           },
@@ -114726,7 +114742,11 @@
               "set_decider",
               "decide_question",
               "name_decider",
-              "cut_with_dependents"
+              "cut_with_dependents",
+              "add_link",
+              "remove_link",
+              "restore_link",
+              "restore_dates"
             ],
             "title": "Op"
           },
@@ -117113,6 +117133,48 @@
         "title": "SimpleLine",
         "description": "Roadmap-plus: where the line on priorities is drawn. ``now``: this quarter's plan\n(the Now horizon); ``key_date:<id>``, ``milestone:<id>``, ``date:<YYYY-MM-DD>``: planned\nto finish by that day."
       },
+      "SimpleLink": {
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Item Id"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "removed": {
+            "type": "boolean",
+            "title": "Removed",
+            "default": false
+          },
+          "removed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Removed By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_id"
+        ],
+        "title": "SimpleLink",
+        "description": "build-feature-panel: one item the item depends on; ``by`` null: Oracle found it.\n``removed``: Oracle's link a person removed (``removed_by``), shown with Restore."
+      },
       "SimpleMatch": {
         "properties": {
           "kind": {
@@ -118268,6 +118330,71 @@
         ],
         "title": "SimpleOpenDecision",
         "description": "S4: a proposed decision naming the item as a subject (the floating card's)."
+      },
+      "SimpleOverride": {
+        "properties": {
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          }
+        },
+        "type": "object",
+        "title": "SimpleOverride",
+        "description": "build-feature-panel: Oracle's dates a person's replaced, and who set the new ones."
       },
       "SimpleOwnerRef": {
         "properties": {
@@ -120189,6 +120316,24 @@
             "type": "array",
             "title": "Goal Ids",
             "description": "S7: the goals the item is linked to directly.",
+            "default": []
+          },
+          "override": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleOverride"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleLink"
+            },
+            "type": "array",
+            "title": "Links",
             "default": []
           },
           "decided_in": {
