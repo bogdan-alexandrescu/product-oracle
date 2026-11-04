@@ -709,7 +709,7 @@ async def test_a_runs_queue_is_frozen_when_its_prompt_is_first_built(client):
         await roadmap_items.import_items(s, await _version(s, ids, 1, cv.id), SCALE_ITEMS)
         await s.commit()
     r = await client.put("/v1/settings/team_capacity", headers=ctx.as_("owner"),
-                         json={"value": {"team_size": 2, "focus": 0.5}})  # fmt: skip
+                         json={"value": {"team_size": 2, "focus": 1.0}})  # fmt: skip
     assert r.status_code == 200, r.text
     async with tenant_session(ctx.tenant_id) as s:
         run = await s.get(Run, run_id)

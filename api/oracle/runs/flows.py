@@ -1558,8 +1558,11 @@ class SourceContext:
     # a milestone date may name.
     schedule_bases: list[dict[str, Any]] = field(default_factory=list)
     # one-roadmap-many-prds: every item on the company roadmap in one team's queue
-    # (oracle.roadmap.company.run_queue); empty: no company roadmap.
+    # (oracle.roadmap.company.run_queue); empty: no company roadmap. Frozen on the run when
+    # its prompt is first built, with company_plan: {per_week, today}, the team's capacity
+    # and the run's day its own items are dated from.
     company_queue: list[dict[str, Any]] = field(default_factory=list)
+    company_plan: dict[str, Any] = field(default_factory=dict)
     # The run's planning horizons (A1, the planning_horizons setting as the run started,
     # run.knobs["planning_horizons"]); empty: B2's defaults (HORIZONS).
     horizons: dict[str, int] = field(default_factory=dict)
@@ -1894,7 +1897,8 @@ def step_prompt(
         from oracle.runs import plan_tables
 
         items = ctx.prior_outputs.get(plan_tables.ITEMS_FILE)
-        queued = company.with_run_items(ctx.source.company_queue, items)
+        queued = company.with_run_items(ctx.source.company_queue, items,
+                                         **ctx.source.company_plan)  # fmt: skip
         plan = plan_tables.engineering_plan(
             items,
             ctx.source.schedule_bases,

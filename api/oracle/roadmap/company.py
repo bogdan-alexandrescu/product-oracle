@@ -24,7 +24,6 @@ Many PRDs (one per area of focus) feed it; links between features stay within it
   PRD title>`` and their verified status; the old PRD keeps its own.
 """
 
-import math
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -46,8 +45,6 @@ CAPACITY_KEY = "team_capacity"
 DEFAULT_CAPACITY = {"team_size": 1, "focus": 1.0}
 HORIZON_ORDER = {"now": 0, "next": 1, "later": 2}
 CARRIED = "carried from {title}"
-LAST = math.inf
-NEW = 10**9  # a new item of a run: after every item already on the roadmap
 
 
 class CompanyError(Exception):
@@ -257,12 +254,6 @@ async def queue(
         )
         if r.prd_document_id not in replaced and r.plan_state is None
     ]
-    # Milestone order: horizon, then where the milestone first shows on the roadmap.
-    first: dict[str, tuple[int, int]] = {}
-    for r in rows:
-        name = _milestone_name(r.milestone)
-        if name and name not in first:
-            first[name] = (HORIZON_ORDER.get(r.horizon, 3), r.position)
     # The company goal order: the first goal each item's feature supports.
     feature_ids = {r.feature_id for r in rows if r.feature_id}
     goal_of: dict[uuid.UUID, tuple] = {}
@@ -284,18 +275,13 @@ async def queue(
             key = goal_sort_key(goal)
             if src not in goal_of or key < goal_of[src]:
                 goal_of[src] = key
-    last = (True, LAST)
+    rank = {key: n for n, key in enumerate(sorted(set(goal_of.values())))}
+    places = [_place(r, rank.get(goal_of.get(r.feature_id)) if r.feature_id else None)
+              for r in rows]  # fmt: skip
+    orders = dict(zip(map(id, rows), _orders(places), strict=True))
 
     def order(r: RoadmapItem) -> tuple:
-        name = _milestone_name(r.milestone)
-        place = first.get(name) if name else None
-        return (
-            place is None,
-            place or (HORIZON_ORDER.get(r.horizon, 3), r.position),
-            goal_of.get(r.feature_id, last) if r.feature_id else last,
-            -_priority(r),
-            r.position,
-        )
+        return orders[id(r)]
 
     prds = {
         p["id"]: p
@@ -347,20 +333,63 @@ def _day(d: date) -> str:
     return f"{company_time.calendar_day(d)}, {d.year}"
 
 
+def _place(item: RoadmapItem, goal: int | None) -> dict[str, Any]:
+    """What an item's place in the queue is made of: its milestone, horizon and position,
+    its rank in the company goal order (None: no goal) and its priority."""
+    return {
+        "milestone": _milestone_name(item.milestone),
+        "horizon": HORIZON_ORDER.get(item.horizon, 3),
+        "position": item.position,
+        "goal": goal,
+        "priority": _priority(item),
+    }
+
+
+def _orders(places: list[dict[str, Any]]) -> list[tuple]:
+    """Each item's sort key in one team's queue, from :func:`_place`: items naming a
+    milestone first, in the milestone's place (the horizon and position of its item that
+    sits first on the roadmap), the rest in their own; then the goal order, then priority
+    (highest first), then position. :func:`queue` and :func:`with_run_items` both order by
+    it, so a run's plan tables are the queue once its file lands."""
+    first: dict[str, tuple[int, int]] = {}
+    for p in sorted(places, key=lambda p: p["position"]):
+        if p["milestone"] and p["milestone"] not in first:
+            first[p["milestone"]] = (p["horizon"], p["position"])
+    out = []
+    for p in places:
+        place = first.get(p["milestone"]) if p["milestone"] else None
+        out.append((
+            place is None,
+            place or (p["horizon"], p["position"]),
+            (p["goal"] is None, p["goal"] or 0),
+            -p["priority"],
+            p["position"],
+        ))  # fmt: skip
+    return out
+
+
 async def run_queue(
     db: AsyncSession, prd_id: uuid.UUID | None, as_of: datetime | None = None
 ) -> list[dict[str, Any]]:
     """What a PRD's roadmap run reads of the shared queue: every item on the company
     roadmap with its place in one team's queue ({key, title, prd, start, end, ours}); the
     other PRDs' items go into the draft's plan tables as they are (Dates from: team queue).
-    ``as_of`` (the run's start): the roadmap as it was then, so the prompt and the check of a
-    run read the same queue though another PRD's draft lands mid-run."""
-    company_doc = await active(db)
-    if company_doc is None:
-        return []
-    cap, rows = await queue(db, as_of)
+    ``as_of`` (the run's start): the roadmap as it was then."""
+    return (await frozen_queue(db, prd_id, as_of))["rows"]
+
+
+async def frozen_queue(
+    db: AsyncSession, prd_id: uuid.UUID | None, as_of: datetime | None = None
+) -> dict[str, Any]:
+    """The shared queue as a run stores it once, when its prompt is first built (JSON):
+    {rows: :func:`run_queue`'s rows, per_week: the team's capacity, today: the run's day};
+    per_week and today are None without a company roadmap. The run's prompt, every rewrite
+    and its check read this copy, though other PRDs' runs land or the capacity changes."""
+    if await active(db) is None:
+        return {"rows": [], "per_week": None, "today": None}
+    cap, queued = await queue(db, as_of)
     today = (await run_day(db, as_of)).isoformat()
-    return [
+    rows = [
         {
             "key": q.item.item_key,
             "title": q.item.title,
@@ -368,88 +397,92 @@ async def run_queue(
             "start": q.start.isoformat(),
             "end": q.end.isoformat(),
             "ours": q.item.prd_document_id == prd_id,
+            # What with_run_items plans the queue again from (see _place).
             "milestone": _milestone_name(q.item.milestone),
-            # The item's own spot (horizon, position): a milestone's place if it comes first.
-            "spot": (HORIZON_ORDER.get(q.item.horizon, 3), q.item.position),
-            # What with_run_items re-plans the queue from.
+            "horizon": HORIZON_ORDER.get(q.item.horizon, 3),
+            "position": q.item.position,
+            "goal": None if q.order[2][0] else q.order[2][1],
+            "priority": _priority(q.item),
             "effort_weeks": q.effort_weeks,
-            "order": q.order,
             "per_week": _per_week(cap),
             "today": today,
         }
-        for q in rows
+        for q in queued
     ]
+    return {"rows": rows, "per_week": _per_week(cap), "today": today}
 
 
-def with_run_items(rows: list[dict[str, Any]], items_text: str | None) -> list[dict[str, Any]]:
-    """The shared queue with this run's items file in it: the run's PRD's rows are replaced
-    by the file's items (an item that names a milestone takes that milestone's place, the
-    spot of its first item once the file lands; else an item already on the roadmap keeps its
-    position in the file's horizon and a new one goes after its horizon's items, in file
-    order) and the queue is
-    planned again as one team, so the run's own items and every other PRD's take their place
-    together."""
-    if not rows or not items_text:
-        return rows
-    from oracle.runs.roadmap import ItemsYamlError, load_items_yaml
+def _run_entries(items_text: str | None) -> list[dict[str, Any]] | None:
+    """The items of a run's file that landing stores, in file order (as import_items
+    keeps them: a mapping with a horizon, a title and an id not used before); None: the
+    file cannot be read."""
+    from oracle.roadmap.models import HORIZONS
+    from oracle.runs.roadmap import ItemsYamlError, _text, load_items_yaml
 
+    if not items_text:
+        return None
     try:
         data = load_items_yaml(items_text)
     except ItemsYamlError:
-        return rows
+        return None
     entries = data.get("items") if isinstance(data, dict) else None
     if not isinstance(entries, list):
+        return None
+    out, seen = [], set()
+    for n, raw in enumerate((e for e in entries if isinstance(e, dict)), start=1):
+        key = _text(raw.get("id")) or f"#{n}"
+        if (_text(raw.get("horizon")) not in HORIZONS or not _text(raw.get("title"))
+                or key in seen or key.startswith("#")):  # fmt: skip
+            continue
+        seen.add(key)
+        out.append({**raw, "id": key})
+    return out
+
+
+def with_run_items(
+    rows: list[dict[str, Any]],
+    items_text: str | None,
+    *,
+    per_week: float | None = None,
+    today: str | None = None,
+) -> list[dict[str, Any]]:
+    """The shared queue with this run's items file in it, as :func:`queue` will plan it once
+    the file lands: the run's PRD's rows are replaced by the file's items, which take
+    positions 0..n-1 in file order (import_items), and every other PRD's item comes after
+    them in its current order (carry_other_prds); each milestone's place and the order are
+    :func:`_orders`'. ``per_week`` and ``today`` (the run's frozen capacity and day, else the
+    rows'): the run's own items are dated though the shared queue is empty."""
+    per_week = per_week or (rows[0]["per_week"] if rows and "per_week" in rows[0] else None)
+    today = today or (rows[0]["today"] if rows and "today" in rows[0] else None)
+    entries = _run_entries(items_text)
+    if entries is None or not per_week or not today:
         return rows
     ours = {r["key"]: r for r in rows if r["ours"]}
     prd = next((r["prd"] for r in ours.values()), "")
-    merged = [dict(r) for r in rows if not r["ours"]]
-    # Each milestone's place as queue() gives it once the file lands: the spot of the item
-    # naming it that sits first (lowest position), among the other PRDs' items and the
-    # file's; a place only an item the file drops or moves gave it is gone.
-    spots: dict[str, tuple] = {}
-
-    def offer(milestone: str | None, spot: tuple) -> None:
-        if milestone and (milestone not in spots or spot[1] < spots[milestone][1]):
-            spots[milestone] = spot
-
-    for r in merged:
-        offer(r.get("milestone"), tuple(r.get("spot") or r["order"][1]))
-    for i, raw in enumerate(entries):
-        key = str(raw.get("id") or "").strip() if isinstance(raw, dict) else ""
-        if not key or any(r["key"] == key for r in merged):
-            continue
-        old = ours.get(key)
-        item = RoadmapItem(horizon=raw.get("horizon"), priority=raw.get("priority")
-                           if isinstance(raw.get("priority"), dict) else None,
+    merged: list[dict[str, Any]] = []
+    for raw in entries:
+        key, old = raw["id"], ours.get(raw["id"])
+        item = RoadmapItem(horizon=raw.get("horizon"), position=len(merged),
+                           milestone=raw.get("milestone"),
+                           priority=raw["priority"] if isinstance(raw.get("priority"), dict)
+                           else None,
                            economics={"declared": raw["economics"]}
                            if isinstance(raw.get("economics"), dict) else {})  # fmt: skip
-        if old is not None:
-            order, effort = old["order"], old["effort_weeks"]
-            position = order[4]
-            horizon = HORIZON_ORDER.get(str(raw.get("horizon") or ""),
-                                        tuple(old.get("spot") or order[1])[0])  # fmt: skip
-        else:
-            position, effort = NEW + i, _effort(item)
-            horizon = HORIZON_ORDER.get(str(raw.get("horizon") or ""), 3)
-            order = (True, (horizon, position), (True, LAST), -_priority(item), position)
-        milestone = _milestone_name(raw.get("milestone"))
-        offer(milestone, (horizon, position))
-        title = str(raw.get("title") or "").strip() or key
-        merged.append({"key": key, "title": title, "prd": prd, "ours": True,
-                       "milestone": milestone, "effort_weeks": effort,
-                       "spot": (horizon, position),
-                       "order": (True, (horizon, position), *tuple(order)[2:])})  # fmt: skip
-    for r in merged:
-        if r.get("milestone"):
-            r["order"] = (False, spots[r["milestone"]], *tuple(r["order"])[2:])
-    first = rows[0]
-    merged.sort(key=lambda r: tuple(r["order"]))
-    planned = _dates([r["effort_weeks"] for r in merged], first["per_week"],
-                     date.fromisoformat(first["today"]))  # fmt: skip
+        place = _place(item, old["goal"] if old else None)
+        if old is not None and item.priority is None:
+            place["priority"] = old["priority"]
+        merged.append({"key": key, "title": str(raw.get("title")).strip(), "prd": prd,
+                       "ours": True, "effort_weeks": old["effort_weeks"] if old
+                       else _effort(item), **place})  # fmt: skip
+    for r in sorted((r for r in rows if not r["ours"]), key=lambda r: r["position"]):
+        merged.append({**r, "position": len(merged)})
+    orders = _orders(merged)
+    ordered = [r for _, r in sorted(zip(orders, merged, strict=True), key=lambda p: p[0])]
+    planned = _dates([r["effort_weeks"] for r in ordered], per_week, date.fromisoformat(today))
     return [
-        {**r, "start": start.isoformat(), "end": end.isoformat(), "per_week": first["per_week"],
-         "today": first["today"]}
-        for r, (start, end) in zip(merged, planned, strict=True)
+        {**r, "start": start.isoformat(), "end": end.isoformat(), "per_week": per_week,
+         "today": today}
+        for r, (start, end) in zip(ordered, planned, strict=True)
     ]  # fmt: skip
 
 
