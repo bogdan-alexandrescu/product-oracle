@@ -49,6 +49,9 @@ TRACK_STATUSES = ("active", "paused", "closed")
 # The monitor's verdict on a track (oracle.roadmap.views.monitor).
 TRACK_HEALTH = ("on_track", "at_risk", "off_track", "no_roadmap", "paused", "closed")
 MILESTONE_STATUSES = ("planned", "done", "dropped")
+# build-milestones-on-roadmap: a goal milestone's progress (the status column above keeps
+# its own planned/done/dropped semantics for track milestones).
+MILESTONE_PROGRESS = ("on_track", "at_risk", "not_started", "met")
 BASIS_KINDS = ("estimate", "capacity", "commitment")
 BASIS_STATUSES = ("verified", "withdrawn", "proposed", "rejected")
 TRACKERS = ("linear", "jira", "github", "other")
@@ -153,20 +156,40 @@ class ScheduleBasis(TenantScoped, Base):
 
 
 class TrackMilestone(TenantScoped, Base):
-    """A milestone of a track. Undated by default (Now/Next/Later, O4); a date needs at
-    least one verified schedule basis supporting exactly that date."""
+    """A milestone of a track, undated by default (Now/Next/Later, O4); a date needs at
+    least one verified schedule basis supporting exactly that date.
+
+    build-milestones-on-roadmap: or a goal milestone on a Simple roadmap (``roadmap_id``
+    set, ``track_id`` null): "M1".. numbered per goal on that roadmap (``code``), with the
+    rule for when it counts (``counts_when``) and its own progress word (``progress``;
+    ``status`` keeps its track meaning). One read from a PRD's own milestones
+    (``origin_prd_id`` set) is read-only from the PRD except for its ``pending_change``, an
+    edit waiting on the PRD owner's decision through the change engine. Soft-deleted by
+    ``deleted_at``; restore clears it. A goal milestone's date needs no basis (the
+    ``dated_needs_basis`` check below exempts rows with ``roadmap_id`` set).
+    """
 
     __tablename__ = "track_milestones"
     __table_args__ = (
         UniqueConstraint("track_id", "name"),
         CheckConstraint(_in("horizon", HORIZONS), name="horizon"),
         CheckConstraint(_in("status", MILESTONE_STATUSES), name="status"),
+        CheckConstraint(_in("progress", MILESTONE_PROGRESS), name="progress"),
         CheckConstraint(
-            "target_date IS NULL OR cardinality(basis_ids) > 0", name="dated_needs_basis"
+            "roadmap_id IS NOT NULL OR target_date IS NULL OR cardinality(basis_ids) > 0",
+            name="dated_needs_basis",
+        ),
+        Index(
+            "uq_track_milestones_goal_code",
+            "roadmap_id",
+            "goal_id",
+            "code",
+            unique=True,
+            postgresql_where=text("roadmap_id IS NOT NULL AND deleted_at IS NULL"),
         ),
     )
 
-    track_id: Mapped[uuid.UUID] = _fk("product_tracks", nullable=False)
+    track_id: Mapped[uuid.UUID | None] = _fk("product_tracks", nullable=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     horizon: Mapped[str] = mapped_column(Text, nullable=False, server_default="now")
     target_date: Mapped[date | None] = mapped_column(Date)
@@ -179,6 +202,18 @@ class TrackMilestone(TenantScoped, Base):
     lock_version: Mapped[int] = _lock_version()
     __mapper_args__ = {"version_id_col": lock_version}
     updated_at: Mapped[datetime] = _updated_at()
+    # build-milestones-on-roadmap: a goal milestone on a Simple roadmap.
+    roadmap_id: Mapped[uuid.UUID | None] = _fk("documents", "SET NULL")
+    goal_id: Mapped[uuid.UUID | None] = _fk("entities", "SET NULL")
+    code: Mapped[str | None] = mapped_column(Text)
+    counts_when: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    progress: Mapped[str] = mapped_column(
+        Text, nullable=False, default="not_started", server_default="not_started"
+    )
+    origin_prd_id: Mapped[uuid.UUID | None] = _fk("documents", "SET NULL")
+    pending_change: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    item_ids: Mapped[list[uuid.UUID]] = _uuids()
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class TrackerRecord(TenantScoped, Base):

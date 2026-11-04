@@ -7996,9 +7996,8 @@ export interface paths {
         put?: never;
         /**
          * Accept Intake Proposal
-         * @description Accept: a research proposal's run is estimated and started (the intake's one
-         *     unstarted research draft is reused); a PRD patch becomes feedback on the PRD's
-         *     latest version.
+         * @description Accept: a research proposal becomes a draft run; a PRD patch becomes feedback on
+         *     the PRD's latest version.
          */
         post: operations["accept_intake_proposal"];
         delete?: never;
@@ -11205,27 +11204,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/requests/release-from-trash": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Release Requests From Trash
-         * @description Release it (New PRD 4): each of these requests still linked to a PRD in Trash loses
-         *     that link and its brief, so a new brief may take it. A live PRD's link stays.
-         */
-        post: operations["release_requests_from_trash"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/requests/{request_id}": {
         parameters: {
             query?: never;
@@ -12247,6 +12225,78 @@ export interface paths {
          * @description Dismiss: the item stays undated.
          */
         post: operations["dismiss_date_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/milestones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Goal Milestone
+         * @description Add a milestone to a goal on a roadmap: coded the next "M<n>" in that goal on that
+         *     roadmap. Who may change the roadmap directly (an owner, its decider, with none its
+         *     owner while an approver, same as a key date); a commenter is refused (403: milestones
+         *     are not proposed here, unlike key dates).
+         */
+        post: operations["create_goal_milestone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/milestones/{milestone_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Goal Milestone
+         * @description Delete one of the roadmap's own milestones (undo: PATCH the old values back, or
+         *     restore). A PRD's own milestone is 409: it is not deleted here.
+         */
+        delete: operations["delete_goal_milestone"];
+        options?: never;
+        head?: never;
+        /**
+         * Patch Goal Milestone
+         * @description Edit a milestone's name, date, goal, items it waits on or counts-when rule. A PRD's
+         *     own milestone is read-only here: a date or counts-when edit instead proposes a change
+         *     to the PRD's owner (``pending`` filled, the milestone unchanged) through the change
+         *     engine (``POST /v1/simple/changes/{id}/accept|decline``); its name, goal and items are
+         *     the PRD's own and are 422 here.
+         */
+        patch: operations["patch_goal_milestone"];
+        trace?: never;
+    };
+    "/v1/simple/roadmap/milestones/{milestone_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Goal Milestone
+         * @description Undo a delete: clears the milestone's ``deleted_at``.
+         */
+        post: operations["restore_goal_milestone"];
         delete?: never;
         options?: never;
         head?: never;
@@ -18006,7 +18056,7 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             /** Op */
-            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature");
+            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature");
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -18120,7 +18170,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -20426,7 +20476,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline" | "pricing" | "meeting" | "prd";
+            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline" | "pricing" | "meeting";
             /**
              * Reversibility
              * @enum {string}
@@ -20721,7 +20771,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline" | "pricing" | "meeting" | "prd";
+            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline" | "pricing" | "meeting";
             /**
              * Reversibility
              * @enum {string}
@@ -22481,8 +22531,6 @@ export interface components {
             /** Parent Id */
             parent_id?: string | null;
             progress?: components["schemas"]["GoalProgress"] | null;
-            /** Position */
-            position?: number | null;
             /**
              * Evidence
              * @default []
@@ -22565,8 +22613,6 @@ export interface components {
             /** Parent Id */
             parent_id?: string | null;
             progress?: components["schemas"]["GoalProgress"] | null;
-            /** Position */
-            position?: number | null;
         };
         /** EntityPatch */
         EntityPatch: {
@@ -24301,8 +24347,6 @@ export interface components {
             goal: string;
             /** Title */
             title: string;
-            /** Position */
-            position?: number | null;
             /** Weight */
             weight: number;
             /** Weight Assumed */
@@ -25937,7 +25981,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone";
             /**
              * Status
              * @enum {string}
@@ -31339,7 +31383,7 @@ export interface components {
             /** Size */
             size?: ("small_change" | "new_feature" | "new_product") | null;
             /** Readers */
-            readers?: ("founder" | "product_eng" | "leadership" | "engineers_or_agents")[] | null;
+            readers?: ("founder" | "product_eng" | "leadership" | "engineers_or_agents") | null;
             /** Model Driven */
             model_driven?: boolean | null;
         };
@@ -31888,25 +31932,6 @@ export interface components {
             skip_fields: string[];
         };
         /**
-         * ProposalAlso
-         * @description Another of the run's open proposals of the same change, shown on this one's card.
-         */
-        ProposalAlso: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** By */
-            by: string;
-            /** Fields */
-            fields: {
-                [key: string]: unknown;
-            };
-            /** Same */
-            same: boolean;
-        };
-        /**
          * ProposalCreate
          * @description Suggest a change for an approver to accept: commenters and agents use this.
          */
@@ -31936,8 +31961,6 @@ export interface components {
             run_id?: string | null;
             /** Reason */
             reason?: string | null;
-            /** Role */
-            role?: string | null;
         };
         /** ProposalDecision */
         ProposalDecision: {
@@ -31986,20 +32009,6 @@ export interface components {
              * @default []
              */
             overlaps: components["schemas"]["ProposalOverlap"][];
-            /** Duplicate Of */
-            duplicate_of?: string | null;
-            /**
-             * Also Proposed
-             * @default []
-             */
-            also_proposed: components["schemas"]["ProposalAlso"][];
-            /** Outcome */
-            outcome?: ("already_done" | "not_chosen") | null;
-            /**
-             * Closed As Done
-             * @default []
-             */
-            closed_as_done: string[];
         };
         /**
          * ProposalOverlap
@@ -32065,8 +32074,6 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
-            /** Source Title */
-            source_title?: string | null;
         };
         /**
          * ProposedAssessment
@@ -33325,22 +33332,6 @@ export interface components {
             label: string;
             /** Credential */
             credential: string;
-        };
-        /**
-         * ReleaseFromTrashIn
-         * @description Release it (New PRD 4): the requests a new brief would take.
-         */
-        ReleaseFromTrashIn: {
-            /** Request Ids */
-            request_ids: string[];
-        };
-        /**
-         * ReleaseFromTrashOut
-         * @description The requests whose link to a PRD in Trash was cleared.
-         */
-        ReleaseFromTrashOut: {
-            /** Released */
-            released: string[];
         };
         /** RemovedOut */
         RemovedOut: {
@@ -37328,12 +37319,6 @@ export interface components {
             heartbeat_at?: string | null;
             /** Cost Usd */
             cost_usd?: number | null;
-            /** Event At */
-            event_at?: string | null;
-            /** Last Work At */
-            last_work_at?: string | null;
-            /** Last Work */
-            last_work?: ("heartbeat" | "event" | "proposals") | null;
         };
         /** SegmentAttempt */
         SegmentAttempt: {
@@ -37450,16 +37435,6 @@ export interface components {
             agents: components["schemas"]["SegmentAgent"][];
             /** Checked At */
             checked_at?: string | null;
-            /**
-             * Cost Reported
-             * @default false
-             */
-            cost_reported: boolean;
-            /**
-             * Proposals Written
-             * @default 0
-             */
-            proposals_written: number;
             queue_wait?: components["schemas"]["QueueWait"] | null;
         };
         /** SettingIn */
@@ -37907,7 +37882,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -37943,7 +37918,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -38638,8 +38613,6 @@ export interface components {
             key: string;
             /** Title */
             title: string;
-            /** Position */
-            position?: number | null;
         };
         /** SimpleGoalBucket */
         SimpleGoalBucket: {
@@ -38658,8 +38631,97 @@ export interface components {
              * @default false
              */
             no_goal: boolean;
-            /** Position */
-            position?: number | null;
+        };
+        /**
+         * SimpleGoalMilestone
+         * @description build-milestones-on-roadmap: a milestone on the Simple roadmap, per goal. ``prd``
+         *     set: read from that PRD's own milestones (read-only except through ``pending``);
+         *     ``prd_owner``: its display name. ``date`` null: no date yet.
+         */
+        SimpleGoalMilestone: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Roadmap Id
+             * Format: uuid
+             */
+            roadmap_id: string;
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Date */
+            date?: string | null;
+            /** Goal Id */
+            goal_id?: string | null;
+            /**
+             * Item Ids
+             * @default []
+             */
+            item_ids: string[];
+            /**
+             * Counts When
+             * @default
+             */
+            counts_when: string;
+            /**
+             * Progress
+             * @default not_started
+             * @enum {string}
+             */
+            progress: "on_track" | "at_risk" | "not_started" | "met";
+            prd?: components["schemas"]["SimpleDocRef"] | null;
+            /** Prd Owner */
+            prd_owner?: string | null;
+            pending?: components["schemas"]["SimpleMilestonePending"] | null;
+            /**
+             * Can Change
+             * @default false
+             */
+            can_change: boolean;
+        };
+        /** SimpleGoalMilestoneIn */
+        SimpleGoalMilestoneIn: {
+            /**
+             * Roadmap Id
+             * Format: uuid
+             */
+            roadmap_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Goal Id */
+            goal_id?: string | null;
+            /**
+             * Item Ids
+             * @default []
+             */
+            item_ids: string[];
+            /**
+             * Counts When
+             * @default
+             */
+            counts_when: string;
+        };
+        /** SimpleGoalMilestonePatch */
+        SimpleGoalMilestonePatch: {
+            /** Name */
+            name?: string | null;
+            /** Date */
+            date?: string | null;
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Item Ids */
+            item_ids?: string[] | null;
+            /** Counts When */
+            counts_when?: string | null;
         };
         /** SimpleGoalRef */
         SimpleGoalRef: {
@@ -38674,8 +38736,6 @@ export interface components {
             title: string;
             /** Metric */
             metric?: string | null;
-            /** Position */
-            position?: number | null;
         };
         /** SimpleGoalSuggestion */
         SimpleGoalSuggestion: {
@@ -39306,6 +39366,22 @@ export interface components {
             targets: components["schemas"]["SimpleMilestoneTarget"][];
         };
         /**
+         * SimpleMilestonePending
+         * @description build-milestones-on-roadmap: an edit to a PRD's milestone, waiting on its owner's
+         *     decision through the change engine (the milestone's date and ``counts_when`` stay as
+         *     the PRD has them until it is accepted).
+         */
+        SimpleMilestonePending: {
+            /** Date */
+            date?: string | null;
+            /** Counts When */
+            counts_when?: string | null;
+            /** Asked Of */
+            asked_of?: string | null;
+            /** Change Id */
+            change_id?: string | null;
+        };
+        /**
          * SimpleMilestoneTarget
          * @description plan-model: one goal's target at a milestone, in words with its unit.
          */
@@ -39739,8 +39815,6 @@ export interface components {
             key: string;
             /** Title */
             title: string;
-            /** Position */
-            position?: number | null;
         };
         /** SimplePriorityMerge */
         SimplePriorityMerge: {
@@ -40206,6 +40280,11 @@ export interface components {
             /** Milestones */
             milestones: components["schemas"]["SimpleMilestone"][];
             /**
+             * Goal Milestones
+             * @default []
+             */
+            goal_milestones: components["schemas"]["SimpleGoalMilestone"][];
+            /**
              * Changes In Review
              * @default 0
              */
@@ -40565,8 +40644,6 @@ export interface components {
              * @default false
              */
             can_start: boolean;
-            /** Reviews In Trash */
-            reviews_in_trash?: "roadmap" | null;
         };
         /** SimpleVisualCommentIn */
         SimpleVisualCommentIn: {
@@ -41423,8 +41500,6 @@ export interface components {
             key: string;
             /** Title */
             title: string;
-            /** Position */
-            position?: number | null;
             /**
              * Items
              * @default 0
@@ -41442,8 +41517,6 @@ export interface components {
             key: string;
             /** Title */
             title: string;
-            /** Position */
-            position?: number | null;
         };
         /** StackStrategy */
         StackStrategy: {
@@ -43084,16 +43157,6 @@ export interface components {
             runs_paused: number;
             /** Errors */
             errors: string[];
-            /**
-             * Active Runs
-             * @default 0
-             */
-            active_runs: number;
-            /**
-             * Unchecked
-             * @default []
-             */
-            unchecked: components["schemas"]["TickUnchecked"][];
             claude_accounts?: components["schemas"]["ClaudeSweepSummary"] | null;
             llm_jobs?: components["schemas"]["LlmJobsTick"] | null;
             /**
@@ -43101,21 +43164,6 @@ export interface components {
              * @default 0
              */
             member_follow_ups: number;
-        };
-        /**
-         * TickUnchecked
-         * @description run-progress: a run a tick could not check, and why, in words.
-         */
-        TickUnchecked: {
-            /**
-             * Run Id
-             * Format: uuid
-             */
-            run_id: string;
-            /** Title */
-            title: string;
-            /** Reason */
-            reason: string;
         };
         /** TierSuggestion */
         TierSuggestion: {
@@ -43326,8 +43374,6 @@ export interface components {
             locked: boolean;
             /** Confidence */
             confidence?: number | null;
-            /** Position */
-            position?: number | null;
         };
         /** TraceEvidenceRef */
         TraceEvidenceRef: {
@@ -43409,8 +43455,6 @@ export interface components {
              * @enum {string}
              */
             status: "proposed" | "confirmed" | "rejected";
-            /** Position */
-            position?: number | null;
             /** Weight */
             weight?: number | null;
             /** Confidence */
@@ -45436,11 +45480,6 @@ export interface components {
              * @default null
              */
             weight: number | null;
-            /**
-             * Position
-             * @default null
-             */
-            position: number | null;
         };
         /** WebhookActor */
         WebhookActor: {
@@ -56747,7 +56786,7 @@ export interface operations {
                 approver?: string | null;
                 /** @description true: only those whose review has come; false: none of them */
                 due?: boolean | null;
-                /** @description one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, prd, comma-separated */
+                /** @description one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, comma-separated */
                 origin?: string | null;
                 /** @description the chosen option's key */
                 chosen?: string | null;
@@ -67881,39 +67920,6 @@ export interface operations {
             };
         };
     };
-    release_requests_from_trash: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReleaseFromTrashIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReleaseFromTrashOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_request: {
         parameters: {
             query?: never;
@@ -69886,6 +69892,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DateSuggestionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_goal_milestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleGoalMilestoneIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleGoalMilestone"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_goal_milestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                milestone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_goal_milestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                milestone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleGoalMilestonePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleGoalMilestone"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_goal_milestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                milestone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleGoalMilestone"];
                 };
             };
             /** @description Validation Error */

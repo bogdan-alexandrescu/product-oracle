@@ -18173,10 +18173,10 @@
                   "type": "null"
                 }
               ],
-              "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, prd, comma-separated",
+              "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, comma-separated",
               "title": "Origin"
             },
-            "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, prd, comma-separated"
+            "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, comma-separated"
           },
           {
             "name": "chosen",
@@ -28102,7 +28102,7 @@
           "intake"
         ],
         "summary": "Accept Intake Proposal",
-        "description": "Accept: a research proposal's run is estimated and started (the intake's one\nunstarted research draft is reused); a PRD patch becomes feedback on the PRD's\nlatest version.",
+        "description": "Accept: a research proposal becomes a draft run; a PRD patch becomes feedback on\nthe PRD's latest version.",
         "operationId": "accept_intake_proposal",
         "security": [
           {
@@ -38925,57 +38925,6 @@
         "x-min-role": "approver"
       }
     },
-    "/v1/requests/release-from-trash": {
-      "post": {
-        "tags": [
-          "requests"
-        ],
-        "summary": "Release Requests From Trash",
-        "description": "Release it (New PRD 4): each of these requests still linked to a PRD in Trash loses\nthat link and its brief, so a new brief may take it. A live PRD's link stays.",
-        "operationId": "release_requests_from_trash",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReleaseFromTrashIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReleaseFromTrashOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "x-min-role": "commenter"
-      }
-    },
     "/v1/requests/{request_id}": {
       "get": {
         "tags": [
@@ -42416,6 +42365,217 @@
         },
         "x-min-role": "viewer",
         "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/roadmap/milestones": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Create Goal Milestone",
+        "description": "Add a milestone to a goal on a roadmap: coded the next \"M<n>\" in that goal on that\nroadmap. Who may change the roadmap directly (an owner, its decider, with none its\nowner while an approver, same as a key date); a commenter is refused (403: milestones\nare not proposed here, unlike key dates).",
+        "operationId": "create_goal_milestone",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimpleGoalMilestoneIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleGoalMilestone"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "commenter"
+      }
+    },
+    "/v1/simple/roadmap/milestones/{milestone_id}": {
+      "patch": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Patch Goal Milestone",
+        "description": "Edit a milestone's name, date, goal, items it waits on or counts-when rule. A PRD's\nown milestone is read-only here: a date or counts-when edit instead proposes a change\nto the PRD's owner (``pending`` filled, the milestone unchanged) through the change\nengine (``POST /v1/simple/changes/{id}/accept|decline``); its name, goal and items are\nthe PRD's own and are 422 here.",
+        "operationId": "patch_goal_milestone",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "milestone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Milestone Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimpleGoalMilestonePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleGoalMilestone"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      },
+      "delete": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Delete Goal Milestone",
+        "description": "Delete one of the roadmap's own milestones (undo: PATCH the old values back, or\nrestore). A PRD's own milestone is 409: it is not deleted here.",
+        "operationId": "delete_goal_milestone",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "milestone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Milestone Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
+    "/v1/simple/roadmap/milestones/{milestone_id}/restore": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Restore Goal Milestone",
+        "description": "Undo a delete: clears the milestone's ``deleted_at``.",
+        "operationId": "restore_goal_milestone",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "milestone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Milestone Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleGoalMilestone"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/simple/prds/{prd}/plan": {
@@ -59604,7 +59764,8 @@
                   "set_decider",
                   "decide_question",
                   "name_decider",
-                  "cut_with_dependents"
+                  "cut_with_dependents",
+                  "edit_goal_milestone"
                 ]
               },
               {
@@ -59983,7 +60144,8 @@
               "set_decider",
               "decide_question",
               "name_decider",
-              "cut_with_dependents"
+              "cut_with_dependents",
+              "edit_goal_milestone"
             ],
             "title": "Op"
           },
@@ -66157,8 +66319,7 @@
               "checkpoint",
               "request_decline",
               "pricing",
-              "meeting",
-              "prd"
+              "meeting"
             ],
             "title": "Origin"
           },
@@ -67060,8 +67221,7 @@
               "checkpoint",
               "request_decline",
               "pricing",
-              "meeting",
-              "prd"
+              "meeting"
             ],
             "title": "Origin"
           },
@@ -71927,17 +72087,6 @@
               }
             ]
           },
-          "position": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Position"
-          },
           "evidence": {
             "items": {
               "$ref": "#/components/schemas/EvidenceOut"
@@ -72147,17 +72296,6 @@
                 "type": "null"
               }
             ]
-          },
-          "position": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Position"
           }
         },
         "type": "object",
@@ -76956,17 +77094,6 @@
             "type": "string",
             "title": "Title"
           },
-          "position": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Position"
-          },
           "weight": {
             "type": "number",
             "title": "Weight"
@@ -80982,7 +81109,8 @@
               "set_decider",
               "decide_question",
               "name_decider",
-              "cut_with_dependents"
+              "cut_with_dependents",
+              "edit_goal_milestone"
             ],
             "title": "Op"
           },
@@ -95795,17 +95923,13 @@
           "readers": {
             "anyOf": [
               {
-                "items": {
-                  "type": "string",
-                  "enum": [
-                    "founder",
-                    "product_eng",
-                    "leadership",
-                    "engineers_or_agents"
-                  ]
-                },
-                "type": "array",
-                "maxItems": 4
+                "type": "string",
+                "enum": [
+                  "founder",
+                  "product_eng",
+                  "leadership",
+                  "engineers_or_agents"
+                ]
               },
               {
                 "type": "null"
@@ -97359,37 +97483,6 @@
         "type": "object",
         "title": "ProposalAccept"
       },
-      "ProposalAlso": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id"
-          },
-          "by": {
-            "type": "string",
-            "title": "By"
-          },
-          "fields": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Fields"
-          },
-          "same": {
-            "type": "boolean",
-            "title": "Same"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "by",
-          "fields",
-          "same"
-        ],
-        "title": "ProposalAlso",
-        "description": "Another of the run's open proposals of the same change, shown on this one's card."
-      },
       "ProposalCreate": {
         "properties": {
           "op": {
@@ -97461,18 +97554,6 @@
               }
             ],
             "title": "Reason"
-          },
-          "role": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 60
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Role"
           }
         },
         "type": "object",
@@ -97621,50 +97702,6 @@
             "type": "array",
             "title": "Overlaps",
             "default": []
-          },
-          "duplicate_of": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Duplicate Of"
-          },
-          "also_proposed": {
-            "items": {
-              "$ref": "#/components/schemas/ProposalAlso"
-            },
-            "type": "array",
-            "title": "Also Proposed",
-            "default": []
-          },
-          "outcome": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "already_done",
-                  "not_chosen"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Outcome"
-          },
-          "closed_as_done": {
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "type": "array",
-            "title": "Closed As Done",
-            "default": []
           }
         },
         "type": "object",
@@ -97797,17 +97834,6 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
-          },
-          "source_title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Title"
           }
         },
         "type": "object",
@@ -101317,44 +101343,6 @@
           "credential"
         ],
         "title": "RegisterIn"
-      },
-      "ReleaseFromTrashIn": {
-        "properties": {
-          "request_ids": {
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "type": "array",
-            "maxItems": 50,
-            "title": "Request Ids"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "request_ids"
-        ],
-        "title": "ReleaseFromTrashIn",
-        "description": "Release it (New PRD 4): the requests a new brief would take."
-      },
-      "ReleaseFromTrashOut": {
-        "properties": {
-          "released": {
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "type": "array",
-            "title": "Released"
-          }
-        },
-        "type": "object",
-        "required": [
-          "released"
-        ],
-        "title": "ReleaseFromTrashOut",
-        "description": "The requests whose link to a PRD in Trash was cleared."
       },
       "RemovedOut": {
         "properties": {
@@ -112722,46 +112710,6 @@
               }
             ],
             "title": "Cost Usd"
-          },
-          "event_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Event At"
-          },
-          "last_work_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Work At"
-          },
-          "last_work": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "heartbeat",
-                  "event",
-                  "proposals"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Work"
           }
         },
         "type": "object",
@@ -113191,16 +113139,6 @@
               }
             ],
             "title": "Checked At"
-          },
-          "cost_reported": {
-            "type": "boolean",
-            "title": "Cost Reported",
-            "default": false
-          },
-          "proposals_written": {
-            "type": "integer",
-            "title": "Proposals Written",
-            "default": 0
           },
           "queue_wait": {
             "anyOf": [
@@ -114426,7 +114364,8 @@
               "set_decider",
               "decide_question",
               "name_decider",
-              "cut_with_dependents"
+              "cut_with_dependents",
+              "edit_goal_milestone"
             ],
             "title": "Op"
           },
@@ -114544,7 +114483,8 @@
               "set_decider",
               "decide_question",
               "name_decider",
-              "cut_with_dependents"
+              "cut_with_dependents",
+              "edit_goal_milestone"
             ],
             "title": "Op"
           },
@@ -116152,17 +116092,6 @@
           "title": {
             "type": "string",
             "title": "Title"
-          },
-          "position": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Position"
           }
         },
         "type": "object",
@@ -116202,17 +116131,6 @@
             "type": "boolean",
             "title": "No Goal",
             "default": false
-          },
-          "position": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Position"
           }
         },
         "type": "object",
@@ -116224,6 +116142,244 @@
           "codes"
         ],
         "title": "SimpleGoalBucket"
+      },
+      "SimpleGoalMilestone": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "roadmap_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Roadmap Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "item_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Item Ids",
+            "default": []
+          },
+          "counts_when": {
+            "type": "string",
+            "title": "Counts When",
+            "default": ""
+          },
+          "progress": {
+            "type": "string",
+            "enum": [
+              "on_track",
+              "at_risk",
+              "not_started",
+              "met"
+            ],
+            "title": "Progress",
+            "default": "not_started"
+          },
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prd_owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Owner"
+          },
+          "pending": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleMilestonePending"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "can_change": {
+            "type": "boolean",
+            "title": "Can Change",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "roadmap_id",
+          "code",
+          "name"
+        ],
+        "title": "SimpleGoalMilestone",
+        "description": "build-milestones-on-roadmap: a milestone on the Simple roadmap, per goal. ``prd``\nset: read from that PRD's own milestones (read-only except through ``pending``);\n``prd_owner``: its display name. ``date`` null: no date yet."
+      },
+      "SimpleGoalMilestoneIn": {
+        "properties": {
+          "roadmap_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Roadmap Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "item_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Item Ids",
+            "default": []
+          },
+          "counts_when": {
+            "type": "string",
+            "title": "Counts When",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "roadmap_id",
+          "name",
+          "date"
+        ],
+        "title": "SimpleGoalMilestoneIn"
+      },
+      "SimpleGoalMilestonePatch": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "item_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Ids"
+          },
+          "counts_when": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counts When"
+          }
+        },
+        "type": "object",
+        "title": "SimpleGoalMilestonePatch"
       },
       "SimpleGoalRef": {
         "properties": {
@@ -116250,17 +116406,6 @@
               }
             ],
             "title": "Metric"
-          },
-          "position": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Position"
           }
         },
         "type": "object",
@@ -117909,6 +118054,59 @@
         ],
         "title": "SimpleMilestone"
       },
+      "SimpleMilestonePending": {
+        "properties": {
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "counts_when": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counts When"
+          },
+          "asked_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asked Of"
+          },
+          "change_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Id"
+          }
+        },
+        "type": "object",
+        "title": "SimpleMilestonePending",
+        "description": "build-milestones-on-roadmap: an edit to a PRD's milestone, waiting on its owner's\ndecision through the change engine (the milestone's date and ``counts_when`` stay as\nthe PRD has them until it is accepted)."
+      },
       "SimpleMilestoneTarget": {
         "properties": {
           "goal": {
@@ -118859,17 +119057,6 @@
           "title": {
             "type": "string",
             "title": "Title"
-          },
-          "position": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Position"
           }
         },
         "type": "object",
@@ -120053,6 +120240,14 @@
             "type": "array",
             "title": "Milestones"
           },
+          "goal_milestones": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleGoalMilestone"
+            },
+            "type": "array",
+            "title": "Goal Milestones",
+            "default": []
+          },
           "changes_in_review": {
             "type": "integer",
             "title": "Changes In Review",
@@ -120918,18 +121113,6 @@
             "type": "boolean",
             "title": "Can Start",
             "default": false
-          },
-          "reviews_in_trash": {
-            "anyOf": [
-              {
-                "type": "string",
-                "const": "roadmap"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reviews In Trash"
           }
         },
         "type": "object",
@@ -123445,17 +123628,6 @@
             "type": "string",
             "title": "Title"
           },
-          "position": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Position"
-          },
           "items": {
             "type": "integer",
             "title": "Items",
@@ -123484,17 +123656,6 @@
           "title": {
             "type": "string",
             "title": "Title"
-          },
-          "position": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Position"
           }
         },
         "type": "object",
@@ -128186,19 +128347,6 @@
             "type": "array",
             "title": "Errors"
           },
-          "active_runs": {
-            "type": "integer",
-            "title": "Active Runs",
-            "default": 0
-          },
-          "unchecked": {
-            "items": {
-              "$ref": "#/components/schemas/TickUnchecked"
-            },
-            "type": "array",
-            "title": "Unchecked",
-            "default": []
-          },
           "claude_accounts": {
             "anyOf": [
               {
@@ -128234,31 +128382,6 @@
           "errors"
         ],
         "title": "TickOut"
-      },
-      "TickUnchecked": {
-        "properties": {
-          "run_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Run Id"
-          },
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "reason": {
-            "type": "string",
-            "title": "Reason"
-          }
-        },
-        "type": "object",
-        "required": [
-          "run_id",
-          "title",
-          "reason"
-        ],
-        "title": "TickUnchecked",
-        "description": "run-progress: a run a tick could not check, and why, in words."
       },
       "TierSuggestion": {
         "properties": {
@@ -128815,17 +128938,6 @@
               }
             ],
             "title": "Confidence"
-          },
-          "position": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Position"
           }
         },
         "type": "object",
@@ -129044,17 +129156,6 @@
               "rejected"
             ],
             "title": "Status"
-          },
-          "position": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Position"
           },
           "weight": {
             "anyOf": [
@@ -134772,19 +134873,6 @@
             ],
             "default": null,
             "title": "Weight"
-          },
-          "position": {
-            "anyOf": [
-              {
-                "minimum": 1,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Position"
           }
         },
         "title": "GoalAttrs",
