@@ -28,6 +28,7 @@ import {
   type Column,
 } from "@/components/ds";
 import { ORACLE_WORK } from "@/components/JobsPanel";
+import { ReplacedByButton } from "@/components/ReplacedBy";
 import { RequestSpecDialog, SPEC_STATE, specHref, useSpecs, type SpecSummary } from "@/components/RequestSpec";
 import { Campaigns, ReviewSettingsButton, SectionAssignments } from "@/components/ReviewSetup";
 import { FRESHNESS, sizeText } from "@/components/tech-brief";
@@ -389,6 +390,7 @@ function EngineeringSpecs({ doc, approved, q, latestOf }: { doc: string; approve
 
 export function DocumentOverview({ doc }: { doc: string }) {
   const router = useRouter();
+  const { can } = useMe();
   // qa-shell-1: a document the API does not have says so in words, never the API's own text.
   const q = useQuery(`doc|${doc}`, () =>
     unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })).catch((e: unknown) => {
@@ -459,6 +461,8 @@ export function DocumentOverview({ doc }: { doc: string }) {
                 <>
                   {d.kind === "prd" && <LinkButton href={`/documents/${d.slug}/composition`}>Composition</LinkButton>}
                   {d.kind === "prd" && !d.replaced_by?.length && <BuildRoadmapButton prd={d} />}
+                  {/* one-roadmap-many-prds: approvers and owners pick the PRDs that replace it, or clear it. */}
+                  {d.kind === "prd" && can("set_replaced_by") && <ReplacedByButton prd={d} onSaved={q.reload} />}
                   {d.kind === "pricing" && <PricingDecide slug={d.slug} />}
                   {statesQ.data && <ReviewSettingsButton doc={doc} sections={states} onSaved={statesQ.reload} />}
                   {templateOnly && <DraftWithOracleButton slug={d.slug} />}

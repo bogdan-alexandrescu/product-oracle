@@ -3793,6 +3793,78 @@ export function resetMockData() {
 
 // ---------------------------------------------------------------- domain helpers
 
+/** A document as GET /v1/documents/{doc} returns it (DocumentOut). */
+function documentOut(db: Db, doc: DocumentRow): Schemas["DocumentOut"] {
+  // one-roadmap-many-prds: the PRDs that replace it, by name (oracle.roadmap.company.refs).
+  const replacedBy = (doc.replaced_by ?? []).flatMap((id) => db.documents.filter((x) => x.id === id).map((x) => ({ id: x.id, slug: x.slug, title: x.title })));
+  return { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary), replaced_by: replacedBy, changes_in_review: 0 };
+}
+
+/**
+ * one-roadmap-many-prds (api/oracle/roadmap/company_router.py): GET/POST /v1/roadmaps/company,
+ * GET /v1/roadmaps/company/queue, POST /v1/documents/{doc}/replaced-by.
+ */
+async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
+  const m = req.method;
+  const company = () => db.documents.find((d) => d.company_roadmap && d.kind === "roadmap");
+  const ref = (d: DocumentRow) => ({ id: d.id, slug: d.slug, title: d.title });
+  if (p[1] === "roadmaps" && p[2] === "company" && !p[3]) {
+    if (m === "GET") {
+      const found = company();
+      return found ? json(200, ref(found)) : json(404, { detail: "No company roadmap yet" });
+    }
+    if (m === "POST") {
+      if (!atLeast(me.role, "approver")) return forbidden("approver");
+      const found = company();
+      if (found) return json(200, ref(found));
+      let slug = COMPANY_SLUG;
+      for (let n = 2; db.documents.some((d) => d.slug === slug); n++) slug = `${COMPANY_SLUG}-${n}`;
+      const at = now();
+      const row: DocumentRow = { id: uuid(), slug, title: COMPANY_TITLE, status: "draft", kind: "roadmap", template: null, template_version: null, theme: null, created_at: at, updated_at: at, company_roadmap: true };
+      db.documents.push(row);
+      return json(201, ref(row));
+    }
+  }
+  if (p[1] === "roadmaps" && p[2] === "company" && p[3] === "queue" && !p[4] && m === "GET") {
+    const cap = (mockSettingValue("team_capacity") ?? { team_size: 1, focus: 1 }) as { team_size: number; focus: number };
+    const found = company();
+    const replaced = new Set(db.documents.filter((d) => d.kind === "prd" && (d.replaced_by ?? []).length > 0).map((d) => d.id));
+    const prd = q.get("prd");
+    const rm = db.simple_roadmap;
+    const items =
+      found && rm
+        ? rm.items
+            .filter((s) => s.roadmap === found.slug && !(s.prd_doc && replaced.has(s.prd_doc.id)))
+            .map((s) => {
+              const { start, end } = shownDates(rm, s.key);
+              const days = Math.max(1, (Date.parse(end) - Date.parse(start)) / 86_400_000 + 1);
+              return { key: s.key, title: s.title, prd: s.prd_doc ?? null, milestone: null, effort_weeks: Math.round((days / 7) * 10) / 10, start, end };
+            })
+            .filter((i) => !prd || (i.prd && (i.prd.slug === prd || i.prd.id === prd)))
+        : [];
+    return json(200, { roadmap: found ? ref(found) : null, team_size: Math.trunc(cap.team_size), focus: Number(cap.focus), items });
+  }
+  if (p[1] === "documents" && p[2] && p[3] === "replaced-by" && !p[4] && m === "POST") {
+    if (!atLeast(me.role, "approver")) return forbidden("approver");
+    const doc = findDocument(db, p[2]);
+    if (!doc) return json(404, { detail: `document '${p[2]}' not found` });
+    const input = JSON.parse((await req.text()) || "null") as Partial<Schemas["ReplacedByIn"]> | null;
+    if (!input || !Array.isArray(input.prds)) return json(422, { detail: "prds is a list of PRD slugs" });
+    if ((doc.kind ?? "prd") !== "prd") return json(422, { detail: "only a PRD can be replaced" });
+    const by: DocumentRow[] = [];
+    for (const slug of [...new Set(input.prds)]) {
+      const other = db.documents.find((d) => d.slug === slug);
+      if (!other || (other.kind ?? "prd") !== "prd") return json(422, { detail: `'${slug}' is not a PRD` });
+      if (other.id === doc.id) return json(422, { detail: "a PRD cannot replace itself" });
+      if ((other.replaced_by ?? []).length > 0) return json(422, { detail: `${other.title} is itself replaced` });
+      by.push(other);
+    }
+    doc.replaced_by = by.map((d) => d.id);
+    return json(200, documentOut(db, doc));
+  }
+  return null;
+}
+
 function findDocument(db: Db, ref: string) {
   return db.documents.find((d) => d.slug === ref || d.id === ref);
 }
@@ -6136,6 +6208,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   const v2 = routeV2(v2Db, req, p, q, me.id);
   if (v2) return v2;
 
+  const oneRoadmap = await routeOneRoadmap(db, me, req, p, q);
+  if (oneRoadmap) return oneRoadmap;
   // Roadmap alignment and product tracks (CR-11).
   const roadmapCtx = roadmapContext(db, me);
   // E1: a PRD draft's roadmap items and the PRD's "Derive for each new draft" switch.
@@ -6538,9 +6612,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   const doc = findDocument(db, p[2]);
   if (!doc) return notFound("Document");
   if (p.length === 3) {
-    // one-roadmap-many-prds: the PRDs that replace it, by name (oracle.roadmap.company.refs).
-    const replacedBy = (doc.replaced_by ?? []).flatMap((id) => db.documents.filter((x) => x.id === id).map((x) => ({ id: x.id, slug: x.slug, title: x.title })));
-    return json(200, { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary), replaced_by: replacedBy });
+    return json(200, documentOut(db, doc));
   }
   // H8: who sees the document (owners only, with a reason; the API audits it).
   if (p[3] === "visibility" && p.length === 4 && m === "PATCH") {
