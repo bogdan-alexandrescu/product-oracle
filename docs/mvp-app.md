@@ -126,7 +126,7 @@ All tables: `id uuid pk`, `tenant_id uuid not null` (indexed, FK tenants),
 | `tenants` | `name` |
 | `users` | `email` (unique per tenant), `password_hash`, `role` (`owner`) |
 | `api_tokens` | `name`, `token_hash`, `last_used_at`, `revoked_at` |
-| `documents` | `slug` (unique per tenant), `title`, `status` (`draft`/`in_review`/`approved`), `template`, `template_version`, `updated_at`, `company_roadmap` (one-roadmap-many-prds: the company's one roadmap, at most one not in Trash), `replaced_by jsonb` (a PRD replaced by area PRDs: their slugs, in order) |
+| `documents` | `slug` (unique per tenant), `title`, `status` (`draft`/`in_review`/`approved`), `template`, `template_version`, `updated_at`, `company_roadmap` (one-roadmap-many-prds: the company's one roadmap, at most one not in Trash), `replaced_by uuid[]` (a PRD replaced by area PRDs: their document ids, in order) |
 | `document_versions` | `document_id`, `number` (unique per document), `markdown`, `content_hash` (unique per document), `front_matter jsonb`, `snapshot`, `warnings jsonb`, `imported_by` (user or token id), `approved_at`, `brief_source` (`draft`/`template`/`full_heading`/`none`) |
 | `sections` | `version_id`, `section_key` (unique per version), `ordinal`, `level`, `heading`, `body_md`, `body_text`, `content_hash`, `citation_keys text[]`, `layer` (`brief`/`detail`) |
 | `citations` | `version_id`, `cite_key` (unique per version), `source`, `ref`, `title`, `excerpt`, `retrieved_at` |

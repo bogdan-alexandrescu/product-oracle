@@ -415,3 +415,19 @@ async def test_the_queue_starts_on_the_companys_day(client, monkeypatch):
     r = await client.get(f"{COMPANY}/queue", headers=ctx.as_("viewer"))
     assert r.status_code == 200, r.text
     assert r.json()["items"][0]["start"] == "2026-11-03"
+
+
+async def test_a_features_shown_name_comes_from_the_company_roadmap(client):
+    from oracle.simple import priorities
+
+    ctx, ids = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        feature = await _add(s, Entity(type="feature", key="f-report", title="Reporting",
+                                       status="confirmed", origin="user"))  # fmt: skip
+        for row in await s.scalars(select(RoadmapItem).where(
+                RoadmapItem.item_key.in_(["old-report", "report-button"]))):  # fmt: skip
+            row.feature_id = feature.id
+        await s.commit()
+        shown = await priorities._shown_names(s, {feature.id: feature.key})
+    # The older per-PRD roadmap is history: its title never names the feature.
+    assert shown == {"f-report": "Report button"}
