@@ -23,6 +23,9 @@ import { expect, test, type Page } from "./test";
  * Escape cancels; fails_when = the feature stays put or Undo does not bring it back.
  * Card gb-viewer: protects = a viewer sees no pencil, menu, add bucket or grip; fails_when = any
  * control shows. Milestone chips and the effort bars name their milestone.
+ * Card gb-panel: protects = a feature's name in a bucket opens the Simple item panel (the one the
+ * roadmap opens) with that feature's card; Close shuts it; the grip still only moves it;
+ * fails_when = clicking a bucket feature opens nothing; no_claim = the card's own edits.
  */
 
 const SIZES = [
@@ -171,6 +174,19 @@ for (const size of SIZES) {
       await expect(bucket(page, "Reliability").locator('[data-code="F-03"]')).toBeVisible();
     });
 
+    test("a feature's name opens its item panel, as the roadmap's does", async ({ page }) => {
+      await open(page, size.viewport);
+      await expect(page.getByTestId("item-panel")).toHaveCount(0);
+      await bucket(page, "Revenue").locator('[data-code="F-14"]').getByRole("button", { name: "Plan limits" }).click();
+      const panel = page.getByTestId("item-panel");
+      await expect(panel).toHaveCount(1);
+      const card = panel.getByTestId("floating-card");
+      await expect(card).toBeVisible();
+      await expect(card).toContainText("Plan limits");
+      await card.getByRole("button", { name: /Close/ }).first().click();
+      await expect(page.getByTestId("item-panel")).toHaveCount(0);
+    });
+
     test("a viewer reads the goals with no controls; chips and bars name the milestone", async ({ page }) => {
       await open(page, size.viewport, "viewer@example.com");
       await expect(bucket(page, "Reliability").getByTestId("goal-measure")).toHaveText("Setups that finish without an error: 99.9% by Feb 12, 2027");
@@ -178,6 +194,9 @@ for (const size of SIZES) {
       await expect(page.getByRole("button", { name: /^More for / })).toHaveCount(0);
       await expect(page.getByTestId("add-goal")).toHaveCount(0);
       await expect(page.getByTestId("feature-grip")).toHaveCount(0);
+      // A viewer opens a feature's item panel too, to read it.
+      await bucket(page, "Revenue").locator('[data-code="F-14"]').getByRole("button", { name: "Plan limits" }).click();
+      await expect(page.getByTestId("item-panel").getByTestId("floating-card")).toContainText("Plan limits");
       for (const t of await page.getByTestId("plan-chip").allInnerTexts()) expect(t.replace(/\s+/g, " ")).toMatch(/^M\d (Prove it|Scale volume|Open to all)$/);
       for (const t of await page.getByTestId("goal-bar-label").allInnerTexts()) expect(t).toMatch(/^M\d (Prove it|Scale volume|Open to all) · [\d.]+ wk$/);
     });
