@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as R
 
 import { Button, Sheet, toast } from "@/components/ds";
 import { FlowThumb } from "@/components/simple/Flow";
+import { openFeaturePanel } from "@/components/simple/FeaturePanelHost";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief, type GoalPanelStart, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
 import { FlowPanel, subjectOf } from "@/components/simple/FlowVisual";
 import { usePanelOpen } from "@/components/hop/open-state";
@@ -1389,6 +1390,8 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                       return;
                     }
                     select(r.feature_id, "mark");
+                    // build-feature-panel review 5: a mark clicked, not dragged, also opens the one feature panel.
+                    openFeaturePanel(r.item_id ?? r.code);
                   }}
                   onPointerDown={(e) => {
                     dragged.current = false;
@@ -1487,7 +1490,8 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   <span className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text" data-testid="side-code" title={r.title}>
                     {r.short_code || r.title}
                   </span>
-                  <span className="min-w-0 flex-1 truncate" data-testid="prio-title" title={r.title}>
+                  {/* build-feature-panel review 5: the title opens the one feature panel (the row still selects it). */}
+                  <span className="min-w-0 flex-1 truncate hover:underline" data-testid="prio-title" data-feature={r.item_id ?? r.code} title={r.title}>
                     {r.title}
                   </span>
                   {/* qa4-simple-plan-8: why a score is out of order: a person's move, or a feature it needs. */}

@@ -207,7 +207,12 @@ export function PlanFeatureList({ plan, goal }: { plan: Plan; goal: string | nul
           <li key={f.code} data-testid="plan-feature" data-code={f.code} className="flex items-center gap-2 border-b border-line py-[5px] text-[16px] leading-[22px]">
             <CodeTag code={f.code} title={f.name} />{" "}
             <span data-testid="plan-feature-name" className="min-w-0 flex-1">
-              {f.name}
+              {/* build-feature-panel review 5: a plan feature's name opens the one feature panel, by
+               * its feature code (F-05), which FeaturePanelHost resolves to its roadmap item: a slice
+               * carries no item id. */}
+              <button type="button" data-feature={f.code} className="text-left hover:underline">
+                {f.name}
+              </button>
             </span>
             <span className="flex flex-none gap-1">
               {milestones.map((code) => {

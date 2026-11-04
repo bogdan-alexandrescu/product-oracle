@@ -18,6 +18,14 @@ import { api, unwrap } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
+const OPEN_EVENT = "simple:open-feature";
+
+/** Opens the one feature panel from code, for a control that must not open it on every click
+ * (a Value / effort mark, which opens it only when it was not dragged). */
+export function openFeaturePanel(feature: string) {
+  document.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: feature }));
+}
+
 export function FeaturePanelHost({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState<string | null>(null);
   const phone = usePhone();
@@ -32,8 +40,13 @@ export function FeaturePanelHost({ children }: { children: ReactNode }) {
       e.preventDefault();
       setOpen(el.dataset.feature ?? null);
     };
+    const onOpen = (e: Event) => setOpen((e as CustomEvent<string>).detail || null);
     document.addEventListener("click", onClick, true);
-    return () => document.removeEventListener("click", onClick, true);
+    document.addEventListener(OPEN_EVENT, onOpen);
+    return () => {
+      document.removeEventListener("click", onClick, true);
+      document.removeEventListener(OPEN_EVENT, onOpen);
+    };
   }, [roadmap]);
   const close = useCallback(() => setOpen(null), []);
   return (

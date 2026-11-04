@@ -85,6 +85,21 @@ const withoutCodes = (text: string) => text.replace(/\b[A-Z]{1,3}-\d{1,4}\s+/g, 
  * The sentence under a broken link's item, without the item's name the heading already says
  * (qa-simple-home-11; qa4-simple-home-28: quoted straight or curly, or not quoted at all).
  */
+/** The problem in words, the other feature it names a button that opens the one feature panel (build-feature-panel review 5). */
+function ProblemWords({ words, other }: { words: string; other?: { id: string; title: string } }) {
+  const at = other ? words.indexOf(other.title) : -1;
+  if (!other || at < 0) return <>{words}</>;
+  return (
+    <>
+      {words.slice(0, at)}
+      <button type="button" data-feature={other.id} className="text-left underline decoration-dotted underline-offset-2 hover:text-accent-ink">
+        {other.title}
+      </button>
+      {words.slice(at + other.title.length)}
+    </>
+  );
+}
+
 function problemWords(reason: string, title: string): string {
   const names = [title, title.length <= 40 ? title : `${title.slice(0, 39)}…`];
   const own = names.flatMap((t) => [`'${t}' `, `‘${t}’ `, `${t} `]).find((p) => reason.startsWith(p));
@@ -1001,6 +1016,10 @@ export default function SimpleHome() {
                                   const c = coveredBy(b);
                                   return c ? { title: itemTitle(c.target.item_id), waitingFor: c.routed_to.map((id) => nameOf(id, "the decider")).join(", ") || "the decider" } : undefined;
                                 })()}
+                                other={(() => {
+                                  const o = b.flag.subject ? roadmap.data?.items.find((i) => i.id === b.flag.subject) : undefined;
+                                  return o ? { id: o.id, title: o.title } : undefined;
+                                })()}
                                 nameOf={nameOf}
                               />
                             ))}
@@ -1293,6 +1312,7 @@ function BrokenRow({
   proposed,
   movedWith,
   coveredBy,
+  other,
   nameOf,
 }: {
   b: BrokenLink;
@@ -1306,6 +1326,8 @@ function BrokenRow({
   movedWith?: string;
   /** qa4-simple-home-18: my waiting proposal on another item that moves this one too. */
   coveredBy?: { title: string; waitingFor: string };
+  /** The other feature the link names (its subject), when the roadmap has it. */
+  other?: { id: string; title: string };
   nameOf: (id: string, fallback: string) => string;
 }) {
   const [noting, setNoting] = useState(false);
@@ -1329,7 +1351,7 @@ function BrokenRow({
     <li data-testid="home-broken" className="flex flex-col gap-2">
       <span className="text-text">
         <span className="sr-only">{b.item.title}: </span>
-        {problemWords(b.flag.reason, b.item.title)}
+        <ProblemWords words={problemWords(b.flag.reason, b.item.title)} other={other} />
       </span>
       {proposed && (
         <span data-testid="home-broken-proposed" className="block font-semibold text-text">

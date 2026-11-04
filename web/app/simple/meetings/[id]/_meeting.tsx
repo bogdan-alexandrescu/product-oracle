@@ -428,12 +428,24 @@ function AgendaStrip({ agenda }: { agenda?: MeetingAgenda }) {
     <div role="status" aria-label="Agenda" data-testid="agenda-strip" className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-line px-4 py-2 text-base [overflow-wrap:anywhere]">
       {agenda.next && (
         <p data-testid="agenda-next">
-          <span className="font-semibold">Next:</span> {agenda.next.title}
+          {/* build-feature-panel review 5: each name opens the one feature panel. */}
+          <span className="font-semibold">Next:</span>{" "}
+          <button type="button" data-feature={agenda.next.id} className="text-left hover:underline">
+            {agenda.next.title}
+          </button>
         </p>
       )}
       {agenda.skipped.length > 0 && (
         <p data-testid="agenda-skipped" className="text-text2">
-          <span className="font-semibold">Skipped:</span> {agenda.skipped.map((x) => x.title).join(", ")}
+          <span className="font-semibold">Skipped:</span>{" "}
+          {agenda.skipped.map((x, k) => (
+            <span key={x.id}>
+              {k > 0 && ", "}
+              <button type="button" data-feature={x.id} className="text-left hover:underline">
+                {x.title}
+              </button>
+            </span>
+          ))}
         </p>
       )}
     </div>
