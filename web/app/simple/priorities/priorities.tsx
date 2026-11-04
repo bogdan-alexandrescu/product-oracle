@@ -545,7 +545,12 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
                 data-testid="prio-line-mark"
               />
               <CodeChip r={r} />
-              <span className="min-w-[12rem] flex-1 font-medium" data-testid="prio-title">{r.title}</span>
+              <span className="min-w-[12rem] flex-1 font-medium" data-testid="prio-title">
+                {/* build-feature-panel: a feature's name opens the one feature panel. */}
+                <button type="button" data-feature={r.title} className="text-left hover:underline">
+                  {r.title}
+                </button>
+              </span>
               {/* walkb-priorities: no ml-auto, so details that wrap under the title start at the left on every row. */}
               <span data-testid="prio-details" className={`${half ? "basis-full sm:pl-12" : ""} flex min-w-0 max-w-full flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--simple-small)] text-text2`}>
                 {/* The chips stay together, wrapping as one group. */}
@@ -1841,7 +1846,13 @@ function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestion
                   return (
                     <li key={c} className="flex items-center gap-1.5">
                       {r && <CodeChip r={r} />}
-                      <span>{r?.title ?? c}</span>
+                      {r ? (
+                        <button type="button" data-feature={r.title} className="text-left hover:underline">
+                          {r.title}
+                        </button>
+                      ) : (
+                        <span>{c}</span>
+                      )}
                     </li>
                   );
                 })}

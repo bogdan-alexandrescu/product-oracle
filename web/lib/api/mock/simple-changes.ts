@@ -60,6 +60,7 @@ import {
   type SimpleDb,
 } from "./simple-roadmap";
 import { routeGoalSuggestions } from "./simple-suggestions";
+import { linkPlan, overrideOf } from "./feature-panel";
 
 type Change = Schemas["SimpleChangeOut"];
 type Session = Schemas["SimpleSessionOut"];
@@ -93,6 +94,11 @@ const FIELDS: Record<string, string[]> = {
   accept_risk: ["risk"],
   // S6: a draft item confirmed (changes.py confirm_item).
   confirm_item: ["draft"],
+  // build-feature-panel: an item's links, and Oracle's dates put back (./feature-panel.ts).
+  add_link: ["depends_on"],
+  remove_link: ["depends_on"],
+  restore_link: ["depends_on"],
+  restore_dates: ["start_date", "end_date"],
 };
 const FIXES = ["shift_dependents", "move_dependency"];
 /** fix5-cut-dependents: the item and everything waiting on it, cut as one change (changes.py CUT_ALL). */
@@ -267,6 +273,7 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "title") out[f] = s.title;
     else if (f === "outcome") out[f] = s.outcome ?? null;
     else if (f === "draft") out[f] = !!s.draft;
+    else if (f === "depends_on") out[f] = [...(s.depends ?? [])];
     else if (f === "risk") out[f] = (s.risks ?? []).find((r) => r.flag === target.flag && (r.subject ?? null) === (target.subject ?? null)) ?? null;
   }
   return out;
@@ -283,6 +290,7 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   if ("cut" in values) s.status = values.cut ? "cut" : "planned";
   if ("title" in values) s.title = String(values.title);
   if ("draft" in values) s.draft = !!values.draft;
+  if ("depends_on" in values) s.depends = [...(values.depends_on as string[])];
   if ("outcome" in values) s.outcome = (values.outcome as string | null) ?? null;
   if ("risk" in values) {
     const kept = (s.risks ?? []).filter((r) => !(r.flag === target.flag && (r.subject ?? null) === (target.subject ?? null)));
@@ -700,6 +708,39 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     if (body.op === "move_dates") {
       if (!a.start_date || !a.end_date || String(a.end_date) < String(a.start_date)) return json(422, { detail: "after: start_date and end_date, the end not before the start" });
       after = { start_date: a.start_date, end_date: a.end_date, date_source: "typed" };
+      stored = ["start_date", "end_date", "date_source"];
+      // build-feature-panel: Oracle's dates as the item showed them, for the panel's override line.
+      const shownNow = roadmapOut(seen, "owner", new URLSearchParams())!.items.find((i) => i.id === target.item_id);
+      if (shownNow && shownNow.source !== "typed" && !shownNow.end.estimated) target.oracle = { start_date: shownNow.start.date, end_date: shownNow.end.date, source: shownNow.source };
+    } else if (body.op === "add_link" || body.op === "remove_link" || body.op === "restore_link") {
+      const depKey = keyOf(db, target.subject);
+      const dep = depKey ? seen.items.find((x) => x.key === depKey) : undefined;
+      if (!dep || depKey === key) return json(422, { detail: "target.subject: another item of the roadmap" });
+      if (dep.roadmap !== seed(seen, key).roadmap) return json(422, { detail: "A link joins two items of one roadmap" });
+      target.subject_key = depKey;
+      target.subject_title = dep.title;
+      const waitsOn = (from: string): boolean => {
+        const seenKeys = new Set<string>();
+        const queue = [from];
+        while (queue.length) {
+          const k = queue.shift()!;
+          for (const d of seen.items.find((x) => x.key === k)?.depends ?? []) {
+            if (d === key) return true;
+            if (!seenKeys.has(d)) {
+              seenKeys.add(d);
+              queue.push(d);
+            }
+          }
+        }
+        return false;
+      };
+      const plan = linkPlan(body.op, seed(seen, key).title, [...(seed(seen, key).depends ?? [])], depKey!, dep.title, waitsOn);
+      if (typeof plan === "string") return json(422, { detail: plan });
+      after = { depends_on: plan };
+    } else if (body.op === "restore_dates") {
+      const kept = overrideOf(db.changes ?? [], String(target.item_id));
+      if (!kept || !kept.end_date) return json(422, { detail: "No dates of Oracle's to restore" });
+      after = { ...kept.restore };
       stored = ["start_date", "end_date", "date_source"];
     } else if (body.op === "accept_date_suggestion") {
       const s = db.suggestions.find((x) => x.id === target.suggestion_id && x.item_id === target.item_id);

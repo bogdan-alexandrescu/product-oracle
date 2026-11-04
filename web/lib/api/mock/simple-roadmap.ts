@@ -18,6 +18,7 @@ import { newCompany, seeded, stableUuid } from "./ids";
 import { betSubject, flowFor, type VisualsDb } from "./simple-visuals";
 import type { OnePagerDb } from "./simple-one-pager";
 import { appliedMilestones, type AppliedRecord } from "./approved-roadmap";
+import { withPanel } from "./feature-panel";
 import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
 
 type Item = Schemas["SimpleRoadmapItem"];
@@ -28,6 +29,8 @@ type Horizon = Item["horizon"];
 type Role = Schemas["Me"]["role"];
 
 interface SeedItem {
+  /** build-feature-panel: Oracle's links a person removed before the mock's story (the panel shows them struck, with Restore). */
+  unlinked?: { key: string; by: string }[];
   key: string;
   title: string;
   horizon: Horizon;
@@ -315,7 +318,7 @@ const SEED: SeedItem[] = [
   { key: "alert-rules", title: "Alert rules engine", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 40, source: "typed", status: "in_progress", gates: [{ phase: "discover", day: 6 }, { phase: "build", day: 28 }], why: "Admins asked for it most this quarter.", section: "bets" },
   { key: "alert-digest", title: "Weekly alert digest", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 30, end: 70, source: "accepted", depends: ["alert-rules"], milestone: { name: "Beta", day: 60 }, section: "f-06", heading: "F-06 Weekly digest of fired alerts" },
   { key: "alert-mobile", title: "Mobile alert push", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", end: 80, source: "engineering", depends: ["alert-rules"], status: "in_progress" },
-  { key: "alert-export", title: "Alert history export", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", end: 50, source: "tracker" },
+  { key: "alert-export", title: "Alert history export", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", end: 50, source: "tracker", unlinked: [{ key: "alert-digest", by: "Leo Brandt" }] },
   { key: "alert-sso", title: "Alert routing by team", horizon: "next", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "low", depends: ["alert-export"] },
   { key: "setup-checklist", title: "Setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "high", start: 10, end: 45, source: "typed", status: "in_progress", gates: [{ phase: "Beta", day: 40 }] },
   { key: "setup-import", title: "Sample data import", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium", start: 20, end: 60, source: "typed", status: "in_progress", depends: ["setup-checklist"], gates: [{ phase: "beta", day: 75 }], risks: [{ flag: "dependency_order", note: "The checklist's last step is not needed" }] },
@@ -975,8 +978,14 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       decided_in: [...(db.decided_in?.[db.ids[s.key]] ?? [])],
       // walkc-roadmap-tasks: the work under the item (service._tasks).
       tasks: itemTasks(db, db.ids[s.key]),
+      // build-feature-panel: filled below (withPanel).
+      override: null,
+      links: [],
     };
   });
+  // build-feature-panel: each item's override and links (api: panel.item_panel).
+  const keyOfId = new Map(Object.entries(db.ids).map(([k, id]) => [id, k]));
+  withPanel(items, db.changes ?? [], (id) => keyOfId.get(id), (k) => db.ids[k], (k) => db.items.find((x) => x.key === k)?.unlinked ?? []);
   // qa-simple-home-1: what "Move the dependents" moves, as the change engine moves it (service.read).
   const byItem = new Map(items.map((i) => [i.id, i]));
   for (const i of items)

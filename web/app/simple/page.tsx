@@ -973,7 +973,10 @@ export default function SimpleHome() {
                         lead={<RowIcon name="alert" />}
                         title={
                           <>
-                            <span className="text-crit">{links[0].item.title}</span>
+                            {/* build-feature-panel: a feature's name opens the one feature panel. */}
+                            <button type="button" data-feature={links[0].item.id} className="text-left text-crit hover:underline">
+                              {links[0].item.title}
+                            </button>
                             {/* qa4-simple-home-7: the plan draws one PRD; with links on several roadmaps each item says its own. */}
                             {brokenRoadmaps.length > 1 && (
                               <span data-testid="home-broken-roadmap" className="font-normal text-text2">
@@ -1028,9 +1031,10 @@ export default function SimpleHome() {
                         testId="home-milestone-row"
                         lead={<RowIcon name="roadmap" />}
                         title={
-                          <Link href={i.prd ? `/simple/roadmap?prd=${encodeURIComponent(i.prd.slug)}` : `/simple/roadmap?roadmap=${encodeURIComponent(i.roadmap.id)}`} className="hover:underline">
+                          // build-feature-panel: a feature's name opens the one feature panel.
+                          <button type="button" data-feature={i.id} className="text-left hover:underline">
                             {i.title}
-                          </Link>
+                          </button>
                         }
                         meta={`${m.name} · ${i.outcome ?? i.roadmap.title}`}
                       />
