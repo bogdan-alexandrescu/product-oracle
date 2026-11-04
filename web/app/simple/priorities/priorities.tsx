@@ -1919,7 +1919,7 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
                     const form = t ? tasks.form(t, b.title) : null;
                     if (form)
                       return (
-                        <li key={c} data-testid="plan-feature" data-code={c} className="border-b border-line">
+                        <li key={c} data-testid="plan-feature" data-code={r?.short_code || c} className="border-b border-line">
                           {form}
                         </li>
                       );
