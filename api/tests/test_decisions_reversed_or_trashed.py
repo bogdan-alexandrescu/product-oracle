@@ -272,7 +272,7 @@ async def test_company_decisions_marks_a_decision_about_a_trashed_roadmap(client
                      other["number"]: None}  # fmt: skip
 
 
-async def test_reversing_a_decision_notes_the_open_drafts_that_cited_it(client):
+async def test_reversing_a_decision_notes_the_open_drafts_that_cited_it(client, clock):
     w = await world()
     assert (await edit_title(client, w, "decider")).status_code == 201
     item = {"kind": "roadmap_item", "id": w.ids["edit_title-a"], "ref": "edit_title-a"}
@@ -280,12 +280,16 @@ async def test_reversing_a_decision_notes_the_open_drafts_that_cited_it(client):
     await decide(client, w.ctx, d["number"])
     assert (await the_draft(client, w))["decision_notes"] == []
 
+    # Reversed a minute before Pacific midnight (Mon Nov 2, 11:59 PM PST), read a minute
+    # after it: the note keeps the reversal's own day, month first, in the company's zone.
+    clock["now"] = datetime(2026, 11, 3, 7, 59, tzinfo=UTC)
     r = await client.post(
         f"/v1/decisions/{d['number']}/reviews",
         json={"verdict": "reversed", "note": "Bulk export is back in"},
         headers=w.ctx.as_("approver"),
     )
     assert r.status_code == 200, r.text
+    clock["now"] = datetime(2026, 11, 3, 8, 1, tzinfo=UTC)
     assert (await the_draft(client, w))["decision_notes"] == [
-        f"D-{d['number']} Cut bulk export was reversed: Bulk export is back in"
+        f"D-{d['number']} Cut bulk export was reversed on Nov 2: Bulk export is back in"
     ]

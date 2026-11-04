@@ -1238,7 +1238,7 @@ class OnePagerDraft(BaseModel):
     # "Sections Scope need a reviewer"), as the meeting's banner says it.
     blocked_by: list[str] = []
     # decisions-reversed-or-trashed: decisions this draft cited that were reversed since
-    # ("D-4 Cut bulk export was reversed: ...").
+    # ("D-4 Cut bulk export was reversed on Nov 3: ...").
     decision_notes: list[str] = []
 
 

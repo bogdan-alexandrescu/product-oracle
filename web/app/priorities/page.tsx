@@ -729,7 +729,7 @@ function byGoal(features: RankedFeature[], names?: Names): GoalRow[] {
   }
   const terms = new Map(features.flatMap((f) => f.explanation.goals.map((g) => [g.goal, g] as const)));
   const goal = (r: GoalRow) => names?.byKey.get(r.id) ?? { id: r.id, title: r.title, position: terms.get(r.id)?.position ?? null };
-  return [...m.values()].sort((a, b) => byGoalOrder(goal(a), goal(b)) || a.id.localeCompare(b.id, undefined, { numeric: true }));
+  return [...m.values()].sort((a, b) => byGoalOrder(goal(a), goal(b)));
 }
 
 /**
