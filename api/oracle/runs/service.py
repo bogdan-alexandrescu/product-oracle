@@ -4704,18 +4704,21 @@ def _creator(principal_tenant: uuid.UUID, user: User | None, token: ApiToken | N
 
 async def _loop_plan_inputs(
     db: AsyncSession, run: Run
-) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     """What a roadmap draft without an items file of its own (the feedback loop's next
     draft, the owner Nov 4) builds its plan tables from, as the roadmap was when the run
     started (so the brief and the check read the same): (its latest items of the PRD its
     latest version came from, as an items file; that PRD's verified bases; on the company
-    roadmap, the shared queue with the other PRDs' items, as prd_to_roadmap reads it)."""
+    roadmap, the shared queue with the other PRDs' items, as prd_to_roadmap reads it; the
+    items an approved version took off the plan, shipped or moved to the next PRD, whose
+    plan_state carry_forward keeps: {key, title, state}, so the tables show them with their
+    status and a draft that keeps their rows is not refused)."""
     from oracle.roadmap import draft_items
     from oracle.roadmap.models import RoadmapItem
 
     doc = await db.get(Document, run.document_id) if run.document_id else None
     if doc is None:
-        return "", [], []
+        return "", [], [], []
     latest = await db.scalar(
         select(DocumentVersion)
         .where(
@@ -4733,17 +4736,20 @@ async def _loop_plan_inputs(
     prd_id = source.document_id if source is not None else None
     version = await roadmap_company._items_version(db, doc.id, run.created_at)
     rows: list[RoadmapItem] = []
+    kept: list[dict[str, Any]] = []
     if version is not None:
         replaced = await roadmap_company.replaced_prd_ids(db)
-        rows = [
-            r
-            for r in await db.scalars(
-                select(RoadmapItem)
-                .where(RoadmapItem.roadmap_version_id == version.id)
-                .order_by(RoadmapItem.position)
-            )
-            if r.plan_state is None and r.prd_document_id not in replaced
-        ]
+        for r in await db.scalars(
+            select(RoadmapItem)
+            .where(RoadmapItem.roadmap_version_id == version.id)
+            .order_by(RoadmapItem.position)
+        ):
+            if r.prd_document_id in replaced:
+                continue
+            if r.plan_state is None:
+                rows.append(r)
+            else:
+                kept.append({"key": r.item_key, "title": r.title, "state": r.plan_state})
     if doc.company_roadmap:
         # The other PRDs' items are in the tables as the queue has them.
         rows = [r for r in rows if r.prd_document_id == prd_id]
@@ -4756,7 +4762,7 @@ async def _loop_plan_inputs(
         if doc.company_roadmap
         else []
     )
-    return items, bases, queued
+    return items, bases, queued, kept
 
 
 async def _plan_table_problems(
@@ -4769,8 +4775,8 @@ async def _plan_table_problems(
 
     today = await company_time.company_today(db)
     if run.flow != "prd_to_roadmap":
-        items_text, loop_bases, queued = await _loop_plan_inputs(db, run)
-        loop_plan = plan_tables.engineering_plan(items_text, loop_bases, others=queued)
+        items_text, loop_bases, queued, kept = await _loop_plan_inputs(db, run)
+        loop_plan = plan_tables.engineering_plan(items_text, loop_bases, others=queued, kept=kept)
         return plan_tables.check(markdown, loop_plan, today, loop=True)
     items = None
     for seg in await db.scalars(

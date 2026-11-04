@@ -48,6 +48,7 @@ ITEMS_FILE = "roadmap_items.yaml"
 BASIS_WORDS = {"estimate": "estimate", "capacity": "team queue", "commitment": "commitment"}
 NO_DATE = "no date yet"
 PLANNED = "planned"
+STATE_WORDS = {approved_roadmap.SHIPPED: "shipped", approved_roadmap.NEXT_PRD: "next PRD"}
 ITEMS_HEADER = "| Key | Item | Start | End | Dates from | Status |"
 MILESTONES_HEADER = "| Milestone | Date | Gates | Counts when |"
 
@@ -59,6 +60,9 @@ class Row:
     start: date | None = None
     end: date | None = None
     basis: str = NO_DATE
+    # The feedback loop: an item an approved version took off the plan (its plan_state,
+    # shipped or next_prd); the draft may keep its row with that status.
+    state: str | None = None
 
 
 @dataclass
@@ -114,13 +118,16 @@ def engineering_plan(
     items_text: str | None,
     bases: Iterable[dict[str, Any]],
     others: Iterable[dict[str, Any]] = (),
+    kept: Iterable[dict[str, Any]] = (),
 ) -> EngineeringPlan:
     """The run's engineering dates for each item of the items file and its milestones. An
     unreadable or missing items file: no items. ``others`` (one-roadmap-many-prds): the
     shared queue with this run's items in it (oracle.roadmap.company.with_run_items,
     {key, title, end, ours}): the run's own item with no schedule basis of its own takes its
     queue end (Dates from: team queue); the other PRDs' items are listed after them as they
-    are in the queue, so the tables cover every item."""
+    are in the queue, so the tables cover every item. ``kept`` (the feedback loop): the
+    roadmap's items an approved version took off the plan ({key, title, state}), listed
+    last with their status."""
     plan = EngineeringPlan()
     if not items_text:
         return plan
@@ -142,6 +149,10 @@ def engineering_plan(
                     basis=BASIS_WORDS["capacity"] if end else NO_DATE,
                 )
             )
+    keys = {r.key for r in plan.items}
+    plan.items += [
+        Row(key=k["key"], title=k["title"], state=k["state"]) for k in kept if k["key"] not in keys
+    ]
     return plan
 
 
@@ -207,7 +218,8 @@ def table_lines(plan: EngineeringPlan) -> list[str]:
     word when the items name no validation gate."""
     lines = [ITEMS_HEADER, "|---|---|---|---|---|---|"]
     lines += [
-        f"| {r.key} | {_cell(r.title)} | {day(r.start)} | {day(r.end)} | {r.basis} | {PLANNED} |"
+        f"| {r.key} | {_cell(r.title)} | {day(r.start)} | {day(r.end)} | {r.basis} | "
+        f"{STATE_WORDS.get(r.state or '', PLANNED)} |"
         for r in plan.items
     ]
     lines += ["", MILESTONES_HEADER, "|---|---|---|---|"]
@@ -260,6 +272,14 @@ def prompt_lines(plan: EngineeringPlan, *, critic: bool, loop: bool = False) -> 
         *table_lines(plan),
         "--- end of plan tables ---",
     ]
+    if loop:
+        lines += [
+            "",
+            "A next draft of the roadmap cannot add or remove roadmap items: keep every row "
+            "above, with its status (shipped, done or next PRD rows stay as they are). Decline "
+            "a feedback item that asks for a new item, with a note that Simple's add-item flow "
+            "is the way to add one.",
+        ]
     if critic:
         lines += [
             "",
@@ -310,7 +330,7 @@ def check(
                                 "title", item=p.key or p.title))  # fmt: skip
             continue
         listed.add(eng.key)
-        if p.state is not None:
+        if p.state is not None or eng.state is not None:
             continue
         said = (p.basis or "").strip()
         if said.lower() != eng.basis.lower():
@@ -323,7 +343,7 @@ def check(
                 out.append(_problem("plan_date_differs", text, item=eng.key))
     if got.has_items_table:
         for r in plan.items:
-            if r.key not in listed:
+            if r.key not in listed and r.state is None:
                 out.append(_problem("missing_plan_item", f"{r.title} is {where} but not "
                                     "in the Plan table: add its row from the plan tables in "
                                     "your brief", item=r.key))  # fmt: skip
