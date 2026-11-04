@@ -42217,6 +42217,59 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/simple/roadmap/apply-approved": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Apply Approved Roadmap",
+        "description": "approved-roadmap-to-simple: apply the roadmap's latest approved version to its items\nagain (its dates, shipped and new items, milestones), approvers and up. 404: no such\nroadmap, or none approved; 409: the version has no plan to apply.",
+        "operationId": "apply_approved_roadmap",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roadmap",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "title": "Roadmap"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleAppliedVersion"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/simple/roadmap/date-suggestions/refresh": {
       "post": {
         "tags": [
@@ -59897,7 +59950,8 @@
                   "open_question",
                   "agenda_next",
                   "agenda_skip",
-                  "suggest_feature"
+                  "suggest_feature",
+                  "mark_shipped"
                 ]
               }
             ],
@@ -60299,7 +60353,7 @@
         "properties": {
           "text": {
             "type": "string",
-            "maxLength": 1000,
+            "maxLength": 4000,
             "minLength": 1,
             "title": "Text"
           },
@@ -60348,6 +60402,24 @@
           "text"
         ],
         "title": "ChatIn"
+      },
+      "ChatLinkOut": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "href": {
+            "type": "string",
+            "title": "Href"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "href"
+        ],
+        "title": "ChatLinkOut"
       },
       "ChatListOut": {
         "properties": {
@@ -60471,6 +60543,13 @@
               }
             ],
             "title": "Source"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/ChatLinkOut"
+            },
+            "type": "array",
+            "title": "Links"
           }
         },
         "type": "object",
@@ -66530,6 +66609,17 @@
               }
             ]
           },
+          "trash_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trash Note"
+          },
           "question": {
             "anyOf": [
               {
@@ -67432,6 +67522,17 @@
                 "type": "null"
               }
             ]
+          },
+          "trash_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trash Note"
           }
         },
         "type": "object",
@@ -93618,6 +93719,14 @@
             "type": "array",
             "title": "Blocked By",
             "default": []
+          },
+          "decision_notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Decision Notes",
+            "default": []
           }
         },
         "type": "object",
@@ -94202,6 +94311,16 @@
             "type": "array",
             "title": "Sections",
             "default": []
+          },
+          "left_out": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleLeftOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "notes": {
             "items": {
@@ -115594,6 +115713,69 @@
         ],
         "title": "SimpleAgendaItem"
       },
+      "SimpleAppliedVersion": {
+        "properties": {
+          "roadmap": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "approved_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Approved At"
+          },
+          "href": {
+            "type": "string",
+            "title": "Href"
+          },
+          "matches": {
+            "type": "boolean",
+            "title": "Matches"
+          },
+          "differences": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Differences",
+            "default": []
+          },
+          "shipped": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Shipped",
+            "default": []
+          },
+          "moved_out": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Moved Out",
+            "default": []
+          },
+          "can_apply": {
+            "type": "boolean",
+            "title": "Can Apply",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "roadmap",
+          "version",
+          "approved_at",
+          "href",
+          "matches"
+        ],
+        "title": "SimpleAppliedVersion",
+        "description": "approved-roadmap-to-simple: the approved roadmap version a roadmap's shown items were\napplied from (oracle.simple.approved_roadmap): ``matches`` when nothing changed since,\nelse ``differences`` in words; the items it took off the plan; ``can_apply``: the\nreader may apply it again (an approver and up)."
+      },
       "SimpleAttendee": {
         "properties": {
           "id": {
@@ -116826,6 +117008,14 @@
             "type": "boolean",
             "title": "Can Withdraw",
             "default": false
+          },
+          "decision_notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Decision Notes",
+            "default": []
           },
           "from_prds": {
             "items": {
@@ -118148,6 +118338,35 @@
         ],
         "title": "SimpleKeyDateRoadmap",
         "description": "A roadmap whose key dates the reader reads; ``applies``: their change applies (an\nowner, the decider, with none its owner), ``can_change``: they may change or propose."
+      },
+      "SimpleLeftOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "left_out",
+            "title": "Kind",
+            "default": "left_out"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "decision_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Decision Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "SimpleLeftOut",
+        "description": "A read's sources entry: the decisions left out as no longer standing\n(decisions-reversed-or-trashed; oracle.decisions.standing.sources_entry)."
       },
       "SimpleLine": {
         "properties": {
@@ -121145,6 +121364,17 @@
             "title": "Estimate Pending",
             "default": false
           },
+          "date_basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Basis"
+          },
           "suggestion": {
             "anyOf": [
               {
@@ -121426,6 +121656,24 @@
                 "type": "null"
               }
             ]
+          },
+          "left_out": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleLeftOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "applied_versions": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleAppliedVersion"
+            },
+            "type": "array",
+            "title": "Applied Versions",
+            "default": []
           }
         },
         "type": "object",
@@ -122247,6 +122495,18 @@
               }
             ],
             "title": "Reviews In Trash"
+          },
+          "reviews_deleted": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "roadmap"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviews Deleted"
           }
         },
         "type": "object",

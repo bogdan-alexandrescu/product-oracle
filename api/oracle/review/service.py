@@ -1220,6 +1220,12 @@ async def approve_version(
 
         await prd_roadmap.on_prd_approved(session, principal, document, version)
     elif document.kind == "roadmap":
+        # approved-roadmap-to-simple: the version's plan (dates, shipped and new items,
+        # milestones) goes on its items, so Simple reads the approved version (before
+        # its launches are planned, so they follow the applied plan).
+        from oracle.simple import approved_roadmap
+
+        await approved_roadmap.apply(session, principal, document, version)
         # H6: approving a roadmap version plans a launch per item in Now, owned by the
         # approver (none for items that already have one).
         from oracle.launches import service as launches_service

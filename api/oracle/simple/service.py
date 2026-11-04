@@ -13,6 +13,10 @@ items by those who may see it (``overlays``); everyone else gets the published v
 ``changes_in_review``. A version submitted from a draft is never shown before it is
 approved.
 
+approved-roadmap-to-simple: items an applied roadmap version took off the plan (shipped,
+next PRD) are not read; each item says the version's words for its dates (``date_basis``)
+and ``applied_versions`` which version the roadmap matches (oracle.simple.approved_roadmap).
+
 It reads in bulk, a fixed number of statements whatever the company's size, and writes
 nothing. :func:`load` is also what the daily suggestions read, as Oracle (no principal).
 """
@@ -44,7 +48,7 @@ from oracle.roadmap.models import (
     TrackerRecord,
     TrackMilestone,
 )
-from oracle.simple import constraints, dates, plan_strip
+from oracle.simple import approved_roadmap, constraints, dates, plan_strip
 from oracle.simple.models import RoadmapDateSuggestion, SimpleVisual
 from oracle.simple.schemas import (
     DateSuggestionOut,
@@ -278,7 +282,11 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
         rows = list(
             await db.scalars(
                 select(RoadmapItem)
-                .where(RoadmapItem.roadmap_version_id.in_(list(shown.values())))
+                .where(
+                    RoadmapItem.roadmap_version_id.in_(list(shown.values())),
+                    # approved-roadmap-to-simple: shipped or moved to the next PRD.
+                    RoadmapItem.plan_state.is_(None),
+                )
                 .order_by(RoadmapItem.position, RoadmapItem.item_key)
             )
         )
@@ -504,6 +512,9 @@ def _status(row: RoadmapItem, recs: list[TrackerRecord], cut: set[str]) -> str:
         return "cut"
     if row.draft:
         return "draft"
+    if row.shipped:
+        # item-chat-understands: marked as already shipped from its talk.
+        return "done"
     states = {r.state for r in recs if r.state != "cancelled"}
     if states and states <= {"done"}:
         return "done"
@@ -865,6 +876,7 @@ def item_out(
         source=r.source,
         estimated=r.estimated,
         estimate_pending=row.estimate_pending,
+        date_basis=approved_roadmap.date_basis(row),
         suggestion=suggestion_out(e.suggestion, row, may, e.suggestion_span)
         if e.suggestion is not None
         else None,
@@ -931,14 +943,19 @@ def task_out(t: Any, names: dict[uuid.UUID, str]) -> SimpleItemTask:
                           due_date=t.due_date)  # fmt: skip
 
 
-async def _decided(db: AsyncSession, shown: list[Entry]) -> dict[uuid.UUID, list]:
+async def _decided(
+    db: AsyncSession, shown: list[Entry], left: list | None = None
+) -> dict[uuid.UUID, list]:
     """S8: the decided decisions naming each item, in any version of its roadmap (an
-    approved draft is a new version: its rows are new, its keys are the same)."""
+    approved draft is a new version: its rows are new, its keys are the same); those no
+    longer standing go to ``left`` (meetings.decided_in)."""
 
-    return await decided_of_rows(db, [e.row for e in shown])
+    return await decided_of_rows(db, [e.row for e in shown], left)
 
 
-async def decided_of_rows(db: AsyncSession, rows: list[Any]) -> dict[uuid.UUID, list]:
+async def decided_of_rows(
+    db: AsyncSession, rows: list[Any], left: list | None = None
+) -> dict[uuid.UUID, list]:
     """_decided for roadmap item rows (Detailed's Plan items too), keyed by row id."""
     from oracle.simple import meetings
 
@@ -956,7 +973,9 @@ async def decided_of_rows(db: AsyncSession, rows: list[Any]) -> dict[uuid.UUID, 
     ).all():
         if (doc, key) in keyed:
             alias[rid] = keyed[(doc, key)]
-    found = await meetings.decided_in(db, [{"kind": "roadmap_item", "id": str(i)} for i in alias])
+    found = await meetings.decided_in(
+        db, [{"kind": "roadmap_item", "id": str(i)} for i in alias], left
+    )
     out: dict[uuid.UUID, list] = defaultdict(list)
     for (_, sid, _), lst in found.items():
         target = alias.get(uuid.UUID(sid))
@@ -981,6 +1000,8 @@ def _milestone_out(m: TrackMilestone, keyed: dict, ids: set, view: Any) -> Simpl
         item_ids=[
             keyed[(m.track_id, k)] for k in m.item_keys or [] if keyed.get((m.track_id, k)) in ids
         ],
+        # approved-roadmap-to-simple: how a roadmap version's milestone counts.
+        done_when=[m.counts] if m.counts else [],
     )
     pm = view.milestone(plan_strip.milestone_of(m.name)[0]) if view is not None else None
     if pm is not None:
@@ -1078,7 +1099,10 @@ async def build(
 
     await item_codes(db, read.entries)
     extra = await additions.item_extras(db, read, shown)
-    decided = await _decided(db, shown)
+    from oracle.simple import meetings
+
+    left_out: list = []
+    decided = await _decided(db, shown, left_out)
     tasks = await _tasks(db, shown)
     ids = {e.row.id for e in read.entries}
     keyed = {(e.track.id, e.row.item_key): e.row.id for e in read.entries if e.track is not None}
@@ -1148,4 +1172,11 @@ async def build(
         key_date_roadmaps=kd_roadmaps,
         roadmaps=all_roadmaps,
         roadmap=_ref(chosen),
+        left_out=meetings.left_out_entry(left_out),
+        applied_versions=await approved_roadmap.lines(
+            db,
+            principal,
+            [e for e in read.entries if chosen is None or e.roadmap.id == chosen.id],
+            [chosen] if chosen is not None else list(readable.values()),
+        ),
     )

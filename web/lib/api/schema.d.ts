@@ -12171,6 +12171,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/roadmap/apply-approved": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Approved Roadmap
+         * @description approved-roadmap-to-simple: apply the roadmap's latest approved version to its items
+         *     again (its dates, shipped and new items, milestones), approvers and up. 404: no such
+         *     roadmap, or none approved; 409: the version has no plan to apply.
+         */
+        post: operations["apply_approved_roadmap"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/roadmap/date-suggestions/refresh": {
         parameters: {
             query?: never;
@@ -18109,7 +18131,7 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             /** Op */
-            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature");
+            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped");
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -18261,6 +18283,13 @@ export interface components {
              */
             general: boolean;
         };
+        /** ChatLinkOut */
+        ChatLinkOut: {
+            /** Label */
+            label: string;
+            /** Href */
+            href: string;
+        };
         /** ChatListOut */
         ChatListOut: {
             /** Items */
@@ -18309,6 +18338,8 @@ export interface components {
             retry: boolean;
             /** Source */
             source?: string | null;
+            /** Links */
+            links?: components["schemas"]["ChatLinkOut"][];
         };
         /** ChatModeIn */
         ChatModeIn: {
@@ -20556,6 +20587,8 @@ export interface components {
              */
             created_at: string;
             source?: components["schemas"]["DecisionSource"] | null;
+            /** Trash Note */
+            trash_note?: string | null;
             /** Question */
             question?: string | null;
             /** Context */
@@ -20851,6 +20884,8 @@ export interface components {
              */
             created_at: string;
             source?: components["schemas"]["DecisionSource"] | null;
+            /** Trash Note */
+            trash_note?: string | null;
         };
         /**
          * DeckOut
@@ -30635,6 +30670,11 @@ export interface components {
              * @default []
              */
             blocked_by: string[];
+            /**
+             * Decision Notes
+             * @default []
+             */
+            decision_notes: string[];
         };
         /**
          * OnePagerFlow
@@ -30869,6 +30909,7 @@ export interface components {
              * @default []
              */
             sections: components["schemas"]["OnePagerSource"][];
+            left_out?: components["schemas"]["SimpleLeftOut"] | null;
             /** Notes */
             notes: components["schemas"]["OnePagerNote"][];
             draft: components["schemas"]["OnePagerDraft"] | null;
@@ -38347,6 +38388,47 @@ export interface components {
             /** Title */
             title: string;
         };
+        /**
+         * SimpleAppliedVersion
+         * @description approved-roadmap-to-simple: the approved roadmap version a roadmap's shown items were
+         *     applied from (oracle.simple.approved_roadmap): ``matches`` when nothing changed since,
+         *     else ``differences`` in words; the items it took off the plan; ``can_apply``: the
+         *     reader may apply it again (an approver and up).
+         */
+        SimpleAppliedVersion: {
+            roadmap: components["schemas"]["SimpleDocRef"];
+            /** Version */
+            version: number;
+            /**
+             * Approved At
+             * Format: date-time
+             */
+            approved_at: string;
+            /** Href */
+            href: string;
+            /** Matches */
+            matches: boolean;
+            /**
+             * Differences
+             * @default []
+             */
+            differences: string[];
+            /**
+             * Shipped
+             * @default []
+             */
+            shipped: string[];
+            /**
+             * Moved Out
+             * @default []
+             */
+            moved_out: string[];
+            /**
+             * Can Apply
+             * @default false
+             */
+            can_apply: boolean;
+        };
         /** SimpleAttendee */
         SimpleAttendee: {
             /**
@@ -38875,6 +38957,11 @@ export interface components {
              */
             can_withdraw: boolean;
             /**
+             * Decision Notes
+             * @default []
+             */
+            decision_notes: string[];
+            /**
              * From Prds
              * @default []
              */
@@ -39383,6 +39470,26 @@ export interface components {
              * @default false
              */
             can_change: boolean;
+        };
+        /**
+         * SimpleLeftOut
+         * @description A read's sources entry: the decisions left out as no longer standing
+         *     (decisions-reversed-or-trashed; oracle.decisions.standing.sources_entry).
+         */
+        SimpleLeftOut: {
+            /**
+             * Kind
+             * @default left_out
+             * @constant
+             */
+            kind: "left_out";
+            /** Title */
+            title: string;
+            /**
+             * Decision Ids
+             * @default []
+             */
+            decision_ids: string[];
         };
         /**
          * SimpleLine
@@ -40613,6 +40720,8 @@ export interface components {
              * @default false
              */
             estimate_pending: boolean;
+            /** Date Basis */
+            date_basis?: string | null;
             suggestion?: components["schemas"]["DateSuggestionOut"] | null;
             milestone?: components["schemas"]["SimpleItemMilestone"] | null;
             /** Phases */
@@ -40731,6 +40840,12 @@ export interface components {
             roadmaps: components["schemas"]["SimpleKeyDateRoadmap"][];
             roadmap?: components["schemas"]["SimpleDocRef"] | null;
             span?: components["schemas"]["SimplePlanSpan"] | null;
+            left_out?: components["schemas"]["SimpleLeftOut"] | null;
+            /**
+             * Applied Versions
+             * @default []
+             */
+            applied_versions: components["schemas"]["SimpleAppliedVersion"][];
         };
         /**
          * SimpleRunGroup
@@ -41066,6 +41181,8 @@ export interface components {
             can_start: boolean;
             /** Reviews In Trash */
             reviews_in_trash?: "roadmap" | null;
+            /** Reviews Deleted */
+            reviews_deleted?: "roadmap" | null;
         };
         /** SimpleVisualCommentIn */
         SimpleVisualCommentIn: {
@@ -70268,6 +70385,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DateSuggestionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_approved_roadmap: {
+        parameters: {
+            query: {
+                roadmap: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleAppliedVersion"];
                 };
             };
             /** @description Validation Error */

@@ -40,7 +40,10 @@ matched to (``tracker_key``), supports a date only where that item owns the date
 item's own section (``{#now-<key>}``), or a table row, list item or paragraph whose
 first item link is that item's (``[Payment](#now-payment-step)``). A mention of the
 key elsewhere does not count. A tracker basis also supports a date in a block that
-names the tracker key.
+names the tracker key. A date outside every item (a summary, a lane, a milestones
+table) is supported by the basis of one of the roadmap's own items: those with a section,
+else, when the template gives items no section of their own (quarterly-timeline,
+release-plan), the run's items (:func:`own_items`).
 
 On import (oracle.docs.service.import_draft):
 
@@ -491,6 +494,10 @@ class _Block:
     end: int
     item: str | None = None  # its first item link's key
     items_by_line: dict[int, str] = field(default_factory=dict)  # source line -> key
+    # date-warnings-honest: every item link, at its offset in the rendered text, and
+    # whether the block is quoted (a blockquote: a source's words, not a schedule claim).
+    links: list[tuple[int, str]] = field(default_factory=list)
+    quoted: bool = False
 
 
 def _item_link(href: str) -> str | None:
@@ -603,6 +610,7 @@ def _render_inline(
             cur = found + 1 if found >= 0 else cur
             key = _item_link(str(t.attrs.get("href") or ""))
             if key:
+                block.links.append((out.size, key))
                 block.item = block.item or key
                 block.items_by_line.setdefault(_line_of(starts, at(cur)), key)
         elif t.type == "link_close":
@@ -635,10 +643,14 @@ def _render_body(body: str, *, skip_yaml: bool) -> tuple[_Rendered, list[_Block]
     blocks: list[_Block] = []
     row: _Block | None = None
     row_index = -1
+    quotes = 0
     for t in _md.parse(body):
+        if t.type in ("blockquote_open", "blockquote_close"):
+            quotes += 1 if t.type == "blockquote_open" else -1
+            continue
         if t.type == "tr_open":
             out.separate()
-            row = _Block(out.size, out.size)
+            row = _Block(out.size, out.size, quoted=quotes > 0)
             blocks.append(row)
             row_index = len(blocks) - 1
             continue
@@ -653,7 +665,7 @@ def _render_body(body: str, *, skip_yaml: bool) -> tuple[_Rendered, list[_Block]
                 continue
             out.separate()
             index = len(blocks)
-            blk = _Block(out.size, out.size)
+            blk = _Block(out.size, out.size, quoted=quotes > 0)
             blocks.append(blk)
             first = t.map[0] + (1 if t.type == "fence" else 0)
             content = t.content.rstrip("\n")
@@ -667,7 +679,7 @@ def _render_body(body: str, *, skip_yaml: bool) -> tuple[_Rendered, list[_Block]
             continue
         if row is None:
             out.separate()
-            blk = _Block(out.size, out.size)
+            blk = _Block(out.size, out.size, quoted=quotes > 0)
             blocks.append(blk)
             index = len(blocks) - 1
         else:
@@ -706,6 +718,12 @@ class Found:
     block: str  # the rendered block it is in (a tracker key named there counts)
     in_code: bool = False  # in a code block: a marker goes right after it, as text
     items: frozenset[str] = frozenset()  # the roadmap's own item keys, lowercased
+    # date-warnings-honest: the items its sentence is about (the owner, the section's
+    # item, every item its sentence links), the items its block links, and what its
+    # section is ("summary": a summary or outcomes text; "milestone"; "": anything else).
+    about: frozenset[str] = frozenset()
+    named: frozenset[str] = frozenset()
+    role: str = ""
 
     @property
     def day(self) -> date:
@@ -740,6 +758,7 @@ def _found_in(
     ref: date,
     skip_yaml: bool = False,
     plain: bool = False,
+    role: str = "",
 ) -> list[Found]:
     if plain:
         rendered = _Rendered()
@@ -751,7 +770,11 @@ def _found_in(
     out: list[Found] = []
     # One string per block, shared by its dates (what a version keeps stays small).
     block_texts: dict[int, str] = {}
-    for hit, a, b in rendered.find(ref):
+    hits = rendered.find(ref)
+    skip = _quarter_ranges(rendered.text, hits)
+    for n, (hit, a, b) in enumerate(hits):
+        if n in skip:
+            continue
         spans = [rendered.span(k) for k in range(a, b) if rendered.src_start[k] >= 0]
         if not spans:
             continue
@@ -766,13 +789,27 @@ def _found_in(
         line = _line_of(starts, start)
         owner = section_item
         block_text = rendered.text
+        block_start = 0
+        about: set[str] = {section_item} if section_item else set()
+        named: set[str] = set()
         index = next((rendered.owner[k] for k in range(a, b) if rendered.owner[k] >= 0), -1)
         if 0 <= index < len(blocks):
             blk = blocks[index]
+            if blk.quoted:
+                continue  # a quoted source's words
             owner = blk.items_by_line.get(line) or blk.item or section_item
             if index not in block_texts:
                 block_texts[index] = rendered.text[blk.start : blk.end]
-            block_text = block_texts[index]
+            block_text, block_start = block_texts[index], blk.start
+            lo, hi = _sentence(rendered.text, blk.start, blk.end, a, b)
+            about |= {k for at, k in blk.links if lo <= at < hi}
+            named = {k for _, k in blk.links}
+        if owner:
+            about.add(owner)
+        if plain and ref in hit.days:
+            continue  # the document's own day, in its title
+        if not _claim(rendered.text[block_start:a]):
+            continue
         out.append(
             Found(
                 section_key,
@@ -786,8 +823,87 @@ def _found_in(
                 owner,
                 block_text,
                 in_code,
+                about=frozenset(k.lower() for k in about),
+                named=frozenset(k.lower() for k in named),
+                role=role or ("milestone" if MILESTONE.search(block_text) else ""),
             )
         )
+    return out
+
+
+# date-warnings-honest (owner, Nov 3): what a section is, by its heading or key. Not
+# schedule claims: a history or changes section, the document's own day and "today", a
+# decision's due date, a quoted source's words, and a range that only restates a quarter.
+HISTORY = re.compile(
+    r"\b(?:history|changes|change[ -]?log|revisions?|what changed)\b", re.IGNORECASE
+)
+SUMMARY = re.compile(
+    r"\b(?:summary|outcomes?|overview|at a glance|highlights|brief)\b", re.IGNORECASE
+)
+MILESTONE = re.compile(r"\bmilestones?\b", re.IGNORECASE)
+_OWN_DAY = re.compile(
+    r"\b(?:today(?:\s+is)?|updated|last updated|dated|written|published|as at)"
+    r"\s*[:,]?\s*(?:on\s+)?\(?$",
+    re.IGNORECASE,
+)
+_DECISION = re.compile(
+    r"\b(?:needed|decide[sd]?|decisions?|answers?|answered|reply|input|sign-?off)\b"
+    # The due word in the decision's own clause: a comma or "then" starts another one
+    # ("Sign-off from legal, then ship on Mar 3" claims a ship date).
+    r"(?:(?!\bthen\b)[^.;!?,]){0,40}?\b(?:by|before|due|on)\s*$",
+    re.IGNORECASE,
+)
+_RANGE = re.compile(r"\s*(?:-|\u2013|\u2014|to|through|thru|until)\s*", re.IGNORECASE)
+_SENTENCE_END = re.compile(r"[.;!?](?:\s|$)")
+
+
+def _role(key: str, heading: str) -> str:
+    words = f"{key.replace('-', ' ')} {heading}"
+    if MILESTONE.search(words):
+        return "milestone"
+    return "summary" if SUMMARY.search(words) else ""
+
+
+def _sentence(text: str, lo: int, hi: int, a: int, b: int) -> tuple[int, int]:
+    """The span of the sentence a date (``text[a:b]``) is in, within its block."""
+    start = lo
+    for m in _SENTENCE_END.finditer(text, lo, a):
+        start = m.end()
+    m = _SENTENCE_END.search(text, b, hi)
+    return start, (m.end() if m else hi)
+
+
+def _quoted(before: str) -> bool:
+    """Inside quotation marks: an odd number of straight quotes before it, or an opening
+    curly quote not closed yet."""
+    return before.count('"') % 2 == 1 or before.rfind("\u201c") > before.rfind("\u201d")
+
+
+def _claim(before: str) -> bool:
+    """Whether a date (``before``: its block's text up to it) claims a schedule."""
+    if _OWN_DAY.search(before[-30:]):
+        return False  # the document's own day, today
+    if _DECISION.search(before[-60:]):
+        return False  # when a decision is needed, not when work lands
+    return not _quoted(before)
+
+
+def _quarter_end(day: date) -> date:
+    month = day.month + 2
+    nxt = date(day.year + (month == 12), 1 if month == 12 else month + 1, 1)
+    return date.fromordinal(nxt.toordinal() - 1)
+
+
+def _quarter_ranges(text: str, hits: list[tuple["Hit", int, int]]) -> set[int]:
+    """The hits that only restate a quarter: ``Jan 1 – Mar 31, 2027`` (both ends)."""
+    out: set[int] = set()
+    for n in range(len(hits) - 1):
+        (h1, _, b1), (h2, a2, _) = hits[n], hits[n + 1]
+        if len(h1.days) != 1 or len(h2.days) != 1 or not _RANGE.fullmatch(text[b1:a2]):
+            continue
+        first, last = h1.days[0], h2.days[0]
+        if first.day == 1 and first.month in (1, 4, 7, 10) and last == _quarter_end(first):
+            out |= {n, n + 1}
     return out
 
 
@@ -816,6 +932,7 @@ def find(
     )
     # The item a section belongs to: its own anchor, else its parent item section's.
     stack: list[tuple[int, str | None]] = []
+    history: set[int] = set()  # the level of the history section being skipped
     for s in sections:
         while stack and stack[-1][0] >= s.level:
             stack.pop()
@@ -823,8 +940,20 @@ def find(
         stack.append((s.level, item))
         if s.section_key in sc.exempt or s.section_key in changes:
             continue
+        if item is None and HISTORY.search(f"{s.section_key.replace('-', ' ')} {s.heading}"):
+            history.add(s.level)
+            continue
+        if history and min(history) < s.level:
+            continue  # inside a history section
+        history.clear()
+        role = "" if item else _role(s.section_key, s.heading or "")
         out += _found_in(
-            s.heading or "", section_key=s.section_key, where="heading", section_item=item, ref=ref
+            s.heading or "",
+            section_key=s.section_key,
+            where="heading",
+            section_item=item,
+            ref=ref,
+            role=role,
         )
         out += _found_in(
             s.body_md or "",
@@ -833,6 +962,7 @@ def find(
             section_item=item,
             ref=ref,
             skip_yaml=s.section_key == LAYOUT_KEY,
+            role=role,
         )
     items = frozenset(k.lower() for k in map(_item_of_anchor, keys) if k)
     return [replace(f, items=items) for f in out]
@@ -844,7 +974,7 @@ def covering(found: Found, bases: Iterable[schedule.Basis]) -> list[schedule.Bas
     bases = list(bases)
     out: list[schedule.Basis] = []
     for day in found.days:
-        here = [b for b in bases if b.supports_date == day and _in_scope(b, found)]
+        here = _backing(found, day, bases)
         if not here:
             return []
         out += here
@@ -855,25 +985,54 @@ def unbacked(found: Found, bases: Iterable[schedule.Basis]) -> tuple[date, ...]:
     """The days this date reads as that no basis in scope supports (all of them backed:
     none)."""
     bases = list(bases)
-    return tuple(
-        day
-        for day in found.days
-        if not any(b.supports_date == day and _in_scope(b, found) for b in bases)
-    )
+    return tuple(day for day in found.days if not _backing(found, day, bases))
+
+
+def _backing(found: Found, day: date, bases: list[schedule.Basis]) -> list[schedule.Basis]:
+    """The bases that back ``day`` where ``found`` is written: those for that day in its
+    scope, else (a milestone's date) the latest verified ends of the milestone's items."""
+    here = [b for b in bases if b.supports_date == day and _in_scope(b, found)]
+    if here or found.role != "milestone":
+        return here
+    # date-warnings-honest: a milestone lands when the last of its items does.
+    ends: dict[str, list[schedule.Basis]] = {}
+    for key in found.named | found.about:
+        mine = [b for b in bases if _for_item(b, key)]
+        if mine:
+            last = max(b.supports_date for b in mine)
+            ends[key] = [b for b in mine if b.supports_date == last]
+    if not ends or max(bs[0].supports_date for bs in ends.values()) != day:
+        return []
+    return [b for bs in ends.values() for b in bs if b.supports_date == day]
+
+
+def _for_item(b: schedule.Basis, key: str) -> bool:
+    """A basis limited to the item ``key`` (lowercased), by its item or tracker key."""
+    if b.item_key:
+        return b.item_key.lower() == key
+    return bool(b.tracker_key) and key in {k.lower() for k in b.item_keys or ()}
 
 
 def _in_scope(b: schedule.Basis, found: Found) -> bool:
     owner = (found.owner or "").lower()
+    about = found.about | ({owner} if owner else set())
+    # date-warnings-honest: a summary or outcomes text that names an item, and a
+    # commitment named where its milestone or item is written.
+    named = found.named if found.role == "summary" or b.kind == "commitment" else frozenset()
+    if b.kind == "commitment" and schedule._names(b.reference, found.block):
+        return True
     if b.item_key:
+        key = b.item_key.lower()
         # walkb-roadmap: a date outside every item (a summary, a brief table) is backed by
         # the verified basis for that day of one of this roadmap's own items.
-        if not owner:
-            return b.item_key.lower() in found.items
-        return owner == b.item_key.lower()
+        if not about and key in found.items:
+            return True
+        return key in about or key in named
     if b.tracker_key:
         if schedule._names(b.tracker_key, found.block):
             return True
-        return bool(owner) and owner in {k.lower() for k in b.item_keys or ()}
+        keys = {k.lower() for k in b.item_keys or ()}
+        return bool(keys & (about | named))
     return True
 
 
@@ -896,7 +1055,7 @@ def template_dates(body: str, ref: date | None = None) -> set[tuple[str, str]]:
 # version, its day and RENDERER. A template's literal dates are kept per template body.
 
 # Bump when find() reads the same text differently: what older code found is not served.
-RENDERER = 1
+RENDERER = 2
 # A request waits at most this long for dates: a draft's import is then refused
 # (too_slow), a stored version's read answers 503 while its dates are still being found.
 WAIT_SECONDS = safe_yaml.PARSE_SECONDS
@@ -979,8 +1138,10 @@ def _template_dates(body: str, ref: date) -> frozenset[tuple[str, str]]:
 
 
 # Per date, in _Packed.ints: section key, end of its text, end of its days, line, where,
-# start, end, insert_at, owner (-1: none), block, in_code.
-_FIELDS = 11
+# start, end, insert_at, owner (-1: none), block, in_code, and (date-warnings-honest) the
+# roadmap's items, the items it is about, the items its block names (each comma-joined)
+# and its section's role.
+_FIELDS = 15
 _WHERE: tuple[Where, ...] = ("title", "heading", "body")
 
 
@@ -1034,6 +1195,10 @@ def _pack(found: Sequence[Found]) -> _Packed:
                 ref(f.owner),
                 ref(f.block),
                 int(f.in_code),
+                ref(",".join(sorted(f.items))),
+                ref(",".join(sorted(f.about))),
+                ref(",".join(sorted(f.named))),
+                ref(f.role),
             )
         )
     return _Packed(ints, days, "".join(texts), tuple(strings))
@@ -1044,9 +1209,10 @@ def _unpack(packed: _Packed) -> tuple[Found, ...]:
     strings, texts, ints, days = packed.strings, packed.texts, packed.ints, packed.days
     text_at = day_at = 0
     for k in range(0, len(ints), _FIELDS):
-        key, text_end, days_end, line, where, start, end, insert_at, owner, block, code = ints[
-            k : k + _FIELDS
+        (key, text_end, days_end, line, where, start, end, insert_at, owner, block, code) = ints[
+            k : k + 11
         ]
+        items, about, named, role = (strings[i] for i in ints[k + 11 : k + _FIELDS])
         out.append(
             Found(
                 strings[key],
@@ -1060,10 +1226,18 @@ def _unpack(packed: _Packed) -> tuple[Found, ...]:
                 strings[owner] if owner >= 0 else None,
                 strings[block],
                 bool(code),
+                _keys(items),
+                _keys(about),
+                _keys(named),
+                role,
             )
         )
         text_at, day_at = text_end, days_end
     return tuple(out)
+
+
+def _keys(joined: str) -> frozenset[str]:
+    return frozenset(joined.split(",")) if joined else frozenset()
 
 
 def _weight(value: Any) -> int:
@@ -1374,6 +1548,7 @@ class Mark:
     in_code: bool = False
     # The readings no verified basis supports yet (a date that reads two ways needs both).
     missing: tuple[date, ...] = ()
+    item: str | None = None  # the item the date is written for (its section, row or line)
 
     @property
     def label(self) -> str | None:
@@ -1528,9 +1703,32 @@ def check_found(
                 f.insert_at,
                 f.in_code,
                 () if support else unbacked(f, verified),
+                f.owner,
             )
         )
     return out
+
+
+async def own_items(db: AsyncSession, document: Any, version: Any = None) -> frozenset[str]:
+    """The roadmap's own item keys, lowercased (roadmap-draft-wording review): a stored
+    version's items, else (a draft being imported) the items file of the run writing
+    it. A roadmap whose items have no section of their own names them nowhere else."""
+    from oracle.roadmap import items as items_mod
+    from oracle.roadmap.models import RoadmapItem
+    from oracle.runs import roadmap as items_file
+
+    if version is not None:
+        keys = await db.scalars(
+            select(RoadmapItem.item_key).where(RoadmapItem.roadmap_version_id == version.id)
+        )
+        return frozenset(k.lower() for k in keys)
+    if document is None or getattr(document, "id", None) is None:
+        return frozenset()
+    run_file = await items_mod.run_items_file(db, document)
+    if run_file is None:
+        return frozenset()
+    parsed = await items_file.check_items_async(run_file[0])
+    return frozenset(str(i["id"]).lower() for i in parsed.items)
 
 
 async def check(
@@ -1539,14 +1737,21 @@ async def check(
     prd_document_id: uuid.UUID | Sequence[uuid.UUID] | None,
     *,
     exempt: Iterable[tuple[str, str]] | None = None,
+    items: frozenset[str] = frozenset(),
 ) -> list[Mark]:
     """Every date the roadmap writes (``found``: :func:`found_for_version` or
     :func:`found_for_draft`) with its status against the PRD's bases now: verified,
     withdrawn (only a withdrawn basis supported it) or unverified. Every occurrence.
     ``exempt``: (section key, date as written) pairs the company's template writes
-    (:func:`template_dates`), which are not schedule claims and are left out."""
+    (:func:`template_dates`), which are not schedule claims and are left out.
+    ``items``: the roadmap's own item keys (:func:`own_items`), for a roadmap whose items
+    have no section of their own."""
     skip = set(exempt or ())
-    found = [f for f in found if (f.section_key, f.text) not in skip]
+    found = [
+        f if f.items or not items else replace(f, items=items)
+        for f in found
+        if (f.section_key, f.text) not in skip
+    ]
     if not found:
         return []
     prds = (
@@ -1625,8 +1830,20 @@ def problem_refs(mark: Mark, prd_slug: str | None) -> dict[str, str]:
     return {
         "date": mark.text,
         "shown": shown(mark) + _reads_as(mark),
+        # date-warnings-honest: the day (Plan > Dates is opened filtered to it) and item.
+        "day": mark.day.isoformat(),
+        **({"item": mark.item} if mark.item else {}),
         **({"prd": prd_slug} if prd_slug else {}),
     }
+
+
+def distinct(marks: list[Mark]) -> list[tuple[Mark, int]]:
+    """date-warnings-honest (owner, Nov 3): one entry per distinct date and item, its
+    first mention (worst status first), with how many times it is written."""
+    out: dict[tuple[tuple[date, ...], str | None], list[Mark]] = {}
+    for m in marks:
+        out.setdefault((m.days or (m.day,), (m.item or "").lower() or None), []).append(m)
+    return [(min(ms, key=lambda m: _RANK[m.status]), len(ms)) for ms in out.values()]
 
 
 SOURCES_NOT_LAST = (
@@ -1681,7 +1898,8 @@ async def occurrences_for_version(
         )
     )
     exempt = await version_template_dates(db, version, version_day(version, zone))
-    return await check(db, found, prds, exempt=exempt)
+    items = await own_items(db, None, version) if any(not f.items for f in found) else None
+    return await check(db, found, prds, exempt=exempt, items=items or frozenset())
 
 
 async def version_template_dates(

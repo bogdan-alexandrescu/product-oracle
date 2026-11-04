@@ -234,6 +234,11 @@ class SimpleDraft(TenantScoped, Base):
     added_reviewers: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, nullable=False, server_default="[]"
     )
+    # decisions-reversed-or-trashed: a decision this draft cited was reversed since,
+    # ``[{"decision_id", "text"}]``; shown on its next draft.
+    decision_notes: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
 
 
 class SimpleSessionDraft(TenantScoped, Base):

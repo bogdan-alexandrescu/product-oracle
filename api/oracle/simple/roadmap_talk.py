@@ -309,7 +309,11 @@ SHIFT = r"(a|an|one|two|three|four|\d+) (day|week|month|quarter)s?"
 
 
 def phrase(c: Any, t: str) -> tuple[str, dict[str, Any]] | None:
-    """The item talk's own fixed phrases ("move it two weeks later")."""
+    """The item talk's own fixed phrases ("move it two weeks later"; "this is already live")."""
+    from oracle.simple import shipped
+
+    if said := shipped.phrase(c, t):
+        return said
     if m := re.fullmatch(rf"(?:move|push|shift|slip) (.+?) (?:by )?{SHIFT} (later|earlier)\.?",
                          t, re.I):  # fmt: skip
         return "move_dates", {"item": m[1], "shift": f"{m[2]} {m[3]}s {m[4].lower()}".lower()}
@@ -357,6 +361,10 @@ def correct_out(card: SimpleChatCard) -> tuple[dict | None, dict | None]:
         values = {"owner": p.get("person_name")}
     elif card.op == "add_item":
         values = {k: p.get(k) for k in CORRECTABLE["add_item"]}
+    elif card.op == "mark_shipped":
+        # item-chat-understands: its evidence note, where it runs in the person's words.
+        note = ((card.after or {}).get("shipped") or {}).get("note")
+        words = {"before": "Planned work", "after": f"Already shipped · {note}"}
     if fields is None:
         return words, None
     return words, {"fields": list(fields), "values": values}
@@ -452,6 +460,12 @@ def source_of(c: Any, said: Any) -> list[dict[str, Any]]:
 def source_label(citations: list[dict[str, Any]] | None) -> str | None:
     return next((str(x.get("label")) for x in citations or []
                  if isinstance(x, dict) and x.get("kind") == "simple_source"), None)  # fmt: skip
+
+
+def links_of(citations: list[dict[str, Any]] | None) -> list[dict[str, str]]:
+    """ask-length-limit: the pages a reply sends the person to (``simple_link`` citations)."""
+    return [{"label": str(x.get("label")), "href": str(x.get("href"))} for x in citations or []
+            if isinstance(x, dict) and x.get("kind") == "simple_link"]  # fmt: skip
 
 
 def item_context(c: Any) -> dict[str, Any] | None:

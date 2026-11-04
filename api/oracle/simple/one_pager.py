@@ -1299,8 +1299,11 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
         | ({uuid.UUID(approved_sid)} if approved_sid else set())
     )  # fmt: skip
     line_ids = [x["id"] for blk in page for x in blk["lines"]]
+    left_out: list = []
     by_line = await meetings.decided_in(
-        db, [{"kind": "section", "id": str(document.id), "ref": f"line:{i}"} for i in line_ids]
+        db,
+        [{"kind": "section", "id": str(document.id), "ref": f"line:{i}"} for i in line_ids],
+        left_out,
     )
 
     def note(c: SimpleChange, kind: str) -> OnePagerNote:
@@ -1455,6 +1458,7 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
             can_remind=may_remind(principal, w) and bool(due_reminders(d, now)),
             approved_in=titles.get(uuid.UUID(approved_sid)) if approved_sid else None,
             blocked_by=drafts.held(d),
+            decision_notes=[str(x.get("text")) for x in d.decision_notes or []],
         )
     patched = ((d.overlay or {}).get("sections") or {}) if sees and d else {}
     used = {k for blk in page for x in blk["lines"] for k in x["source_keys"]}
@@ -1495,6 +1499,7 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
         timeline=items,
         plan=plan,
         sections=sources,
+        left_out=meetings.left_out_entry(left_out),
         notes=notes,
         draft=draft,
         changes_in_review=hidden,

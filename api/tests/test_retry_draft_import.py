@@ -46,7 +46,15 @@ OFF = {
 }
 ORACLE_PRD = draft("prd_oracle_citations.md")
 OLDER = "citation #1 (o-g1) is invalid: source"
-NOT_IMPORTED = "the draft was not imported: retry import, or request changes"
+# The stop names what is wrong with the draft in plain words (Nov 3).
+NOT_IMPORTED = (
+    "the draft was not imported: 1 citation is invalid (source); retry import, or send it "
+    "back to the writer"
+)
+NO_FRONT_MATTER = (
+    "the draft was not imported: draft must start with YAML front matter between '---' "
+    "lines; retry import, or send it back to the writer"
+)
 
 
 @pytest.fixture
@@ -199,7 +207,7 @@ async def test_a_draft_still_rejected_keeps_the_new_error(client, owner, runtime
     assert [p["code"] for p in imp["problems"]] == ["missing_front_matter"]
     assert imp["summary"] == seg["draft_import"]["summary"]
     assert imp["summary"].startswith("Oracle refused prd.md: draft must start with YAML")
-    assert pending(run)["cannot_approve"] == NOT_IMPORTED
+    assert pending(run)["cannot_approve"] == NO_FRONT_MATTER
     # Still waiting, still retryable, no document.
     assert seg["can_retry_draft_import"] is True
     assert run["status"] == "awaiting_checkpoint" and run["document_id"] is None

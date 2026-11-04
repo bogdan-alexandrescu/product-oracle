@@ -1,13 +1,16 @@
 /**
  * A deliberately small markdown subset for PRD section bodies: paragraphs, lists,
  * blockquotes, fenced code, tables, minor headings, and inline code / strong /
- * emphasis / links / `[c:<id>]` citations. Fenced ```notes blocks (presenter notes)
- * are left out.
+ * emphasis / links / `[c:<id>]` citations (`[c:a, b]` cites two). Fenced ```notes blocks
+ * (presenter notes) are left out. Any other raw marker a writer leaves ("[l:2]", "[s:id]",
+ * "[c:a b]") is no text: it is dropped (lib/raw-tokens.ts), as the API's body_text drops it.
  *
  * The UI renders this tree itself (rather than via an HTML string) so comment
  * highlights can be placed by text offset: the text of a section is the
  * concatenation of its text and code leaves, in order. Citations add no text.
  */
+
+import { hasRawTokens, stripRawTokens } from "@/lib/raw-tokens";
 
 export type Inline =
   | { t: "text"; v: string }
@@ -26,12 +29,12 @@ export type Block =
   | { t: "pre"; v: string }
   | { t: "table"; head: Inline[][]; rows: Inline[][][] };
 
-// Citation ids are those the API accepts ([A-Za-z0-9_.:-]); an image is matched before a
+// Citation ids are those the API accepts ([A-Za-z0-9_.:-]), one or more split by commas; an image is matched before a
 // link, so its alt text never shows as link text. Alt and link text, a destination and
 // emphasized text are length-bounded, so many unclosed `![`, `[`, `*` or `_` scan a bounded
 // stretch each (linear overall, not quadratic); a longer one reads as plain text.
 const INLINE =
-  /\[c:([\w.:-]+)\]|!\[([^\]]{0,500})\]\(([^)\s]{1,1000})\)|`([^`]+)`|\*\*(.{1,500}?)\*\*|\[([^\]]{1,500})\]\(([^)\s]{1,1000})\)|(?<![\w*])\*(?!\s)(.{1,500}?)(?<!\s)\*(?![\w*])|(?<!\w)_(?!\s)(.{1,500}?)(?<!\s)_(?!\w)/g;
+  /\[c:[ \t]*([\w.:-]+(?:[ \t]*,[ \t]*[\w.:-]+)*)[ \t]*\]|!\[([^\]]{0,500})\]\(([^)\s]{1,1000})\)|`([^`]+)`|\*\*(.{1,500}?)\*\*|\[([^\]]{1,500})\]\(([^)\s]{1,1000})\)|(?<![\w*])\*(?!\s)(.{1,500}?)(?<!\s)\*(?![\w*])|(?<!\w)_(?!\s)(.{1,500}?)(?<!\s)_(?!\w)/g;
 
 /**
  * Owner decision (2026-10-20): an image loads only when Oracle stores it, a path of this
@@ -72,6 +75,7 @@ export function parseInline(src: string): Inline[] {
   const out: Inline[] = [];
   let last = 0;
   const pushText = (v: string) => {
+    if (hasRawTokens(v)) v = stripRawTokens(v);
     if (!v) return;
     const prev = out[out.length - 1];
     if (prev?.t === "text") prev.v += v;
@@ -80,7 +84,7 @@ export function parseInline(src: string): Inline[] {
   for (const m of src.matchAll(new RegExp(INLINE))) {
     pushText(src.slice(last, m.index));
     last = m.index + m[0].length;
-    if (m[1] !== undefined) out.push({ t: "cite", key: m[1] });
+    if (m[1] !== undefined) for (const key of m[1].split(",")) out.push({ t: "cite", key: key.trim() });
     else if (m[3] !== undefined) out.push({ t: "img", alt: m[2], src: m[3] });
     else if (m[4] !== undefined) out.push({ t: "code", v: m[4] });
     else if (m[5] !== undefined) out.push({ t: "strong", c: parseInline(m[5]) });
@@ -229,8 +233,9 @@ export function blocksText(blocks: Block[]): string {
 
 /** Readable plain text (blocks separated by blank lines), e.g. for diffs and exports. */
 export function plainText(md: string): string {
-  // Drop citation markers together with the space before them ("appears [c:c1]." → "appears.").
-  return parseBlocks(md.replace(/[ \t]*\[c:[\w.:-]+\]/g, ""))
+  // Drop citation markers (and any other raw marker) together with the space before them
+  // ("appears [c:c1]." → "appears.").
+  return parseBlocks(stripRawTokens(md))
     .map((b) => {
       switch (b.t) {
         case "p":

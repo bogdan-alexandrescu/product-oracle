@@ -24,6 +24,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
+import { draftDecisionNotes } from "./decision-notes";
 import { stableUuid } from "./ids";
 import { changeSentence } from "./simple-change-words";
 import { priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
@@ -377,7 +378,7 @@ function intoDrafts(db: SimpleDb, c: Change, session: Session, undo = false): st
         out: {
           id: crypto.randomUUID(), document: { id: stableUuid(`simple-doc/${rm}`), slug: rm, title: rm.replace(/-/g, " ").replace(/^./, (x) => x.toUpperCase()) },
           status: "working", base_version: 1, version: null, created_by: session.started_by, created_at: iso(mockNowMs()), participant_ids: [session.started_by],
-          submitted_at: null, submitted_by: null, decider_approved: false, waiting_on: [], approved_at: null, blocked_by: [],
+          submitted_at: null, submitted_by: null, decider_approved: false, waiting_on: [], approved_at: null, blocked_by: [], decision_notes: [],
         },
       };
       drafts.push(d);
@@ -411,6 +412,8 @@ function draftOut(db: SimpleDb, ctx: SimpleChangesCtx, d: MockDraft): Schemas["S
     can_approve: d.out.status === "submitted" && edits,
     can_withdraw: d.out.status === "submitted" && (d.out.created_by === ctx.id || edits),
     published: !(db.unapproved ?? []).includes(d.roadmap),
+    // decisions-reversed-or-trashed: notes on decisions it cited that were reversed since.
+    decision_notes: [...(d.out.decision_notes ?? []), ...draftDecisionNotes()],
   };
 }
 

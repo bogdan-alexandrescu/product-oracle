@@ -315,9 +315,11 @@ async def test_every_probe_is_a_warning_and_a_marker_on_a_run_s_import(client, o
     await _run_import(client, auth, runtime, _with_paragraph("\n\n".join(DATE_PROBES)))
     version = (await client.get(f"{VERSIONS}/1", headers=auth)).json()
     warnings = [w for w in version["warnings"] if w["code"] == "unverified_date"]
-    assert len(warnings) == len(DATE_PROBES), [w["message"] for w in warnings]
     flagged = [m for m in version["date_marks"] if m["status"] == "unverified"]
     assert len(flagged) == len(DATE_PROBES)
+    # date-warnings-honest: one warning per distinct date and item, not one per mention.
+    days = {tuple(m["days"]) for m in flagged}
+    assert len(warnings) == len(days) < len(DATE_PROBES), [w["message"] for w in warnings]
     assert all(m["label"] == "unverified" for m in flagged)
     # The verified Beta date stays unmarked.
     assert ("2026-11-30", "verified") in {(m["text"], m["status"]) for m in version["date_marks"]}
@@ -591,12 +593,18 @@ async def test_an_item_basis_counts_only_where_its_item_owns_the_date(client, ow
     )
     assert row != ROADMAP_MD
     assert (await import_draft(client, auth, row, ROADMAP)).status_code == 201, "row"
-    # A row that only mentions it after another item's link: the first item link owns it.
+    # date-warnings-honest: a row whose sentence links the item is about it too.
     other = ROADMAP_MD.replace(
         "| [Payment step](#now-payment-step) | Buyers pay without re-entering their card |",
         "| [Payment step](#now-payment-step) | After [ship](#next-shipping-step) 2026-12-15 |",
     )
-    assert (await import_draft(client, auth, other, ROADMAP)).status_code == 422
+    assert (await import_draft(client, auth, other, ROADMAP)).status_code == 201
+    # A row that names it only in words is not.
+    words = ROADMAP_MD.replace(
+        "| [Payment step](#now-payment-step) | Buyers pay without re-entering their card |",
+        "| [Payment step](#now-payment-step) | After shipping, 2026-12-15 |",
+    )
+    assert (await import_draft(client, auth, words, ROADMAP)).status_code == 422
 
 
 async def test_a_roadmap_takes_its_prd_from_its_own_link_not_from_its_text(client, owner):  # noqa: F811

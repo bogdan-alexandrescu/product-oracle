@@ -1,4 +1,5 @@
 import type { Schemas } from "@/lib/api/client";
+import { cleanFlow } from "@/lib/raw-tokens";
 
 import { stableUuid } from "./ids";
 
@@ -163,10 +164,12 @@ export function seedVisuals(): VisualsDb {
   const failBet = typeof localStorage === "undefined" ? null : localStorage.getItem(MOCK_VISUAL_FAIL_KEY);
   if (failBet) db.failOnce!.push(`one_pager_line:${betSubject(failBet)}`);
   const bet = betSubject("bets-1", "A setup checklist that shows the next step");
+  // raw-tokens-everywhere: the drawing as Oracle stored it carries the writer's "[c:id]" tokens;
+  // flowFor and every route serve it without them, as the API does.
   add(db, "one_pager_line", bet, "A setup checklist that shows the next step", flowOf("one_pager_line", bet, 1, 1, {
     title: "Finish setup from the checklist",
     goal: "Setup finished in a day",
-    steps: [step("s1", "Sign in as a new admin", null, "same"), step("s2", "See the setup checklist", "Setup checklist", "new"), step("s3", "Invite now or later?", null, "new", "decision", "User", "The invite form opens.", "The checklist moves on and asks again tomorrow."), step("s4", "Invite a teammate", "Invite suggestions", "changed"), step("s5", "See the progress meter fill", "Progress meter", "new")],
+    steps: [step("s1", "Sign in as a new admin", null, "same"), step("s2", "See the setup checklist [c:gametric]", "Setup checklist", "new"), step("s3", "Invite now or later? [c:convdef]", null, "new", "decision", "User", "The invite form opens. [c:convdef]", "The checklist moves on and asks again tomorrow."), step("s4", "Invite a teammate", "Invite suggestions", "changed"), step("s5", "See the progress meter fill", "Progress meter", "new")],
     screen: { title: "Home with the checklist", regions: ["Header", "Setup checklist: 4 steps", "Invite suggestions", "Progress meter"] },
     notes: [
       { n: 1, target: "s2", note: "The checklist shows the next step", section_key: "build", requirement: "R1" },
@@ -213,10 +216,11 @@ export const plainFlow = (f: Pick<Flow, "title" | "steps" | "screen"> & Partial<
   ...f,
 });
 
-/** The newest drawing of a subject's visual (train T's `flow` fields); null: "No flow yet". */
+/** The newest drawing of a subject's visual (train T's `flow` fields); null: "No flow yet". As the
+ * API's visuals._flow: its words without a writer's raw "[c:id]" tokens. */
 export function flowFor(db: VisualsDb | undefined, kind: string, id: string): Flow | null {
   const v = db?.visuals[`${kind}:${id}`];
-  return v?.versions.at(-1) ?? null;
+  return cleanFlow(v?.versions.at(-1) ?? null);
 }
 
 /** The one-pager's shape of a flow. */
@@ -239,7 +243,7 @@ function out(v: MockVisual | undefined, kind: string, id: string, ctx: Ctx, docu
     subject_kind: kind,
     subject_id: id,
     brief: v.brief,
-    flow: n ? { ...v.versions[n - 1], versions: n } : null,
+    flow: n ? cleanFlow({ ...v.versions[n - 1], versions: n }) : null,
     versions: v.versions
       .map((f, i) => ({ number: f.version, title: f.title, made_at: f.made_at ?? at, made_by_name: v.made_by[i] ? (ctx.names[v.made_by[i]!] ?? "someone") : null, addressed: v.comments.filter((c) => c.addressed_in === f.version).length }))
       .reverse(),
@@ -290,7 +294,7 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
   }
   if (m === "GET" && p[5] === "versions") {
     const f = v?.versions.find((x) => x.version === Number(p[6]));
-    return f ? json(200, { ...f, versions: v!.versions.length }) : json(404, { detail: "No such version" });
+    return f ? json(200, cleanFlow({ ...f, versions: v!.versions.length })) : json(404, { detail: "No such version" });
   }
   if (m !== "POST") return null;
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;

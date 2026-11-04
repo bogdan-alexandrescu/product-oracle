@@ -26,6 +26,7 @@ from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from functools import cache
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlsplit
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -43,6 +44,7 @@ from oracle.docs import layers
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
 from oracle.docs.parser import strip_citations
 from oracle.docs.schemas import VersionSource
+from oracle.raw_tokens import citation_labels, markdown_footnotes, strip_raw_tokens
 from oracle.swarm.settings import get_runtime_settings
 from oracle.templates.models import Template, TemplateVersion, Theme
 
@@ -299,6 +301,9 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
     # Each item's goal group too (O5 owner decision 2026-10-26): Board and Team group by
     # the goal derived at render time, so a goal renamed or unconfirmed regroups them.
     goal_of, group_of, rank_of = await tiers.item_goal_links(db, rows)
+    # roadmap-draft-wording: the kind of the verified basis each dated milestone names
+    # (a capacity date is the item's place in the team's queue).
+    kinds = await _date_kinds(db, rows)
     ev.items = []
     for r in rows:
         goal, goal_title = (goal_of or {}).get(r.item_key, ("none", None))
@@ -320,8 +325,29 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
                 no_goal=goal_of is not None and goal == "none",
                 group=group_of.get(r.item_key),
                 group_rank=rank_of.get(r.item_key),
+                date_kind=kinds.get(r.id),
             )
         )
+
+
+async def _date_kinds(db: AsyncSession, rows: list[Any]) -> dict[uuid.UUID, str]:
+    """Per dated item, the kind of the verified basis of its PRD that its milestone's
+    ``date_source`` names and that supports its date (estimate, capacity or commitment)."""
+    from oracle.roadmap import schedule
+
+    out: dict[uuid.UUID, str] = {}
+    bases: dict[uuid.UUID, list[schedule.Basis]] = {}
+    for r in rows:
+        m = r.milestone or {}
+        if not m.get("date") or not m.get("date_source") or r.prd_document_id is None:
+            continue
+        if r.prd_document_id not in bases:
+            bases[r.prd_document_id] = await schedule.verified_bases(db, r.prd_document_id)
+        for b in schedule.supporting(m["date"], m["date_source"], bases[r.prd_document_id],
+                                     r.item_key):  # fmt: skip
+            out[r.id] = b.kind
+            break
+    return out
 
 
 def apply_audience(ev: ExportVersion, audience: str | None) -> ExportVersion:
@@ -671,19 +697,14 @@ def _citation_rule(state: StateInline, silent: bool) -> bool:
 def _render_citation(renderer, tokens, idx, options, env) -> str:
     notes: _Footnotes = env["footnotes"]
     links = []
-    missing = []
     for key in tokens[idx].meta["keys"]:
         ref = notes.reference(key)
         if ref is None:
-            missing.append(key)
             continue
         number, anchor = ref
         links.append(f'<a href="#fn-{number}" id="{anchor}">{number}</a>')
-    html = f'<sup class="cite">[{", ".join(links)}]</sup>' if links else ""
-    if missing:
-        raw = escape(f"[c:{', '.join(missing)}]")
-        html += f'<span class="cite cite-missing">{raw}</span>'
-    return html
+    # A citation that points to nothing is dropped: a reader never sees a raw "[c:id]".
+    return f'<sup class="cite">[{", ".join(links)}]</sup>' if links else ""
 
 
 # Owner decision (2026-10-20): an image loads only when Oracle stores it, a path of this
@@ -747,7 +768,7 @@ def days_in_words(text: str) -> str:
 
 
 def _render_text(renderer, tokens, idx, options, env) -> str:
-    return str(escape(days_in_words(tokens[idx].content)))
+    return str(escape(days_in_words(strip_raw_tokens(tokens[idx].content))))
 
 
 @cache
@@ -1262,7 +1283,9 @@ def render_markdown(ev: ExportVersion) -> str:  # full layer only
     the export can still be re-imported. A roadmap's flagged dates carry an HTML comment
     after each (``<!-- oracle: date unverified -->``), which the import drops. The body's
     days stay as stored (``2027-01-29``), not month first as in the HTML, PDF and deck:
-    the file is the source a person edits and imports again.
+    the file is the source a person edits and imports again. Its ``[c:id]`` citations
+    are Markdown footnotes (``[^1]``, defined at the end), never raw markers; one that
+    points to no citation of the version is dropped (raw-tokens-everywhere).
     """
     from oracle.roadmap import doc_dates
 
@@ -1274,6 +1297,7 @@ def render_markdown(ev: ExportVersion) -> str:  # full layer only
             ev.version.markdown, ev.stored_sections or ev.sections, ev.date_marks
         )
     )
+    markdown = markdown_footnotes(markdown, citation_labels({c.cite_key: c for c in ev.citations}))
     if markdown.startswith("---"):
         m = re.compile(r"^---[ \t]*\r?\n.*?^(?:---|\.\.\.)[ \t]*(?:\r?\n|\Z)", re.S | re.M).match(
             markdown

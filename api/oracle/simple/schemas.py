@@ -290,6 +290,10 @@ class SimpleRoadmapItem(BaseModel):
     estimated: bool
     # A re-plan resized it: its date waits on a new estimate from its owner.
     estimate_pending: bool = False
+    # approved-roadmap-to-simple: the applied roadmap version's words for the dates
+    # ("engineering estimate", "founder commitment", "set by <person>"); null when the
+    # dates are not the version's (none applied, or a person changed them since).
+    date_basis: str | None = None
     suggestion: DateSuggestionOut | None = None
     milestone: SimpleItemMilestone | None = None
     phases: list[SimplePhase]
@@ -369,6 +373,23 @@ class SimpleMilestone(BaseModel):
     targets: list["SimpleMilestoneTarget"] = []
 
 
+class SimpleAppliedVersion(BaseModel):
+    """approved-roadmap-to-simple: the approved roadmap version a roadmap's shown items were
+    applied from (oracle.simple.approved_roadmap): ``matches`` when nothing changed since,
+    else ``differences`` in words; the items it took off the plan; ``can_apply``: the
+    reader may apply it again (an approver and up)."""
+
+    roadmap: "SimpleDocRef"
+    version: int
+    approved_at: dt.datetime
+    href: str
+    matches: bool
+    differences: list[str] = []
+    shipped: list[str] = []
+    moved_out: list[str] = []
+    can_apply: bool = False
+
+
 class SimpleKeyDate(BaseModel):
     """Roadmap-plus: one of a roadmap's key dates (a conference, a product launch, a board
     meeting), as the reader reads it (the working draft's when they see it)."""
@@ -417,6 +438,11 @@ class SimpleRoadmapOut(BaseModel):
     roadmap: "SimpleDocRef | None" = None
     # plan-model: the shown PRDs' plan span ("this quarter"); null with no plan.
     span: "SimplePlanSpan | None" = None
+    # The items' decided decisions left out as no longer standing (about something in
+    # Trash), named in one line; null when none was.
+    left_out: "SimpleLeftOut | None" = None
+    # approved-roadmap-to-simple: one line per shown roadmap applied from an approved version.
+    applied_versions: list[SimpleAppliedVersion] = []
 
 
 class DateSuggestionEdit(BaseModel):
@@ -498,6 +524,8 @@ ChatActionOp = Literal[
     "agenda_next",
     "agenda_skip",
     "suggest_feature",
+    # item-chat-understands: an item already shipped (oracle.simple.shipped).
+    "mark_shipped",
 ]
 ChangeStatus = Literal["applied", "proposed", "accepted", "declined", "undone"]
 SessionKind = Literal["editing", "meeting"]
@@ -557,6 +585,15 @@ class SimpleDecidedRef(SimpleOpenDecision):
     decided_at: dt.datetime | None = None
     meeting: SimpleMeetingRef | None = None
     minutes_url: str | None = None
+
+
+class SimpleLeftOut(BaseModel):
+    """A read's sources entry: the decisions left out as no longer standing
+    (decisions-reversed-or-trashed; oracle.decisions.standing.sources_entry)."""
+
+    kind: Literal["left_out"] = "left_out"
+    title: str
+    decision_ids: list[uuid.UUID] = []
 
 
 class SimpleItemTask(BaseModel):
@@ -731,6 +768,8 @@ class SimpleDraftOut(BaseModel):
     published: bool = True
     # The draft's author or the decider withdraws a submitted draft back to working.
     can_withdraw: bool = False
+    # decisions-reversed-or-trashed: decisions this draft cited that were reversed since.
+    decision_notes: list[str] = []
     # approved-prd-roadmap: the items and key dates approved PRDs put in it.
     from_prds: list[SimpleDraftPrd] = []
 
@@ -1202,6 +1241,9 @@ class OnePagerDraft(BaseModel):
     # What else, besides ``waiting_on``, holds a decider-approved draft back (#723 review:
     # "Sections Scope need a reviewer"), as the meeting's banner says it.
     blocked_by: list[str] = []
+    # decisions-reversed-or-trashed: decisions this draft cited that were reversed since
+    # ("D-4 Cut bulk export was reversed: ...").
+    decision_notes: list[str] = []
 
 
 class OnePagerRemindOut(BaseModel):
@@ -1284,6 +1326,8 @@ class OnePagerOut(BaseModel):
     # bars); None with no roadmap items.
     plan: SimplePlanStrip | None = None
     sections: list[OnePagerSource] = []
+    # The lines' decided decisions left out as no longer standing, named in one line.
+    left_out: "SimpleLeftOut | None" = None
     notes: list[OnePagerNote]
     draft: OnePagerDraft | None
     # Drafts and proposals the reader may not see (the count only).
@@ -1405,8 +1449,12 @@ CardStatus = Literal["open", "applied", "proposed", "declined", "discarded", "un
 ChangeMode = Literal["everyone", "presenter", "named"]
 
 
+# ask-length-limit: a long change request (a pasted list of changes) fits.
+CHAT_TEXT_MAX = 4000
+
+
 class ChatIn(BaseModel):
-    text: str = Field(min_length=1, max_length=1000)
+    text: str = Field(min_length=1, max_length=CHAT_TEXT_MAX)
     # The Simple page the person asks from (the Ask panel), for context.
     page: str | None = Field(default=None, max_length=300)
     # The Ask panel's one box: write nothing when Oracle's reader does not know the line
@@ -1490,6 +1538,11 @@ class ChatChoiceOut(BaseModel):
 ChatKind = Literal["request", "cards", "question", "answer", "note", "pending", "failed", "ask"]
 
 
+class ChatLinkOut(BaseModel):
+    label: str
+    href: str
+
+
 class ChatMessageOut(BaseModel):
     id: uuid.UUID
     author_kind: Literal["person", "oracle"]
@@ -1508,6 +1561,8 @@ class ChatMessageOut(BaseModel):
     retry: bool = False
     # roadmap-talk: where an item talk's answer comes from ("From the PRD · F-06 …").
     source: str | None = None
+    # ask-length-limit: where a part Oracle cannot change yet is changed (Priorities, Roadmap).
+    links: list[ChatLinkOut] = Field(default_factory=list)
 
 
 class ChatRulesOut(BaseModel):
@@ -1877,6 +1932,9 @@ class SimpleUpcomingMeeting(BaseModel):
     # What the ritual reviews when all of it is in Trash ("roadmap": a roadmap refresh while
     # every roadmap is in Trash); Home says so and links the ritual's settings.
     reviews_in_trash: Literal["roadmap"] | None = None
+    # What the ritual reviews when all of it was deleted for good (purged from Trash, none
+    # left); Home says "Its roadmap was deleted" and links the ritual's settings.
+    reviews_deleted: Literal["roadmap"] | None = None
 
 
 class SimpleMeetingsOut(BaseModel):

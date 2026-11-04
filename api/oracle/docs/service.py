@@ -14,11 +14,12 @@ from typing import Any, Literal
 from sqlalchemy import func, select, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from oracle import audit, changes, company_time, safe_yaml, webhooks, wording
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
-from oracle.docs import layers, named_codes
+from oracle.docs import draft_checks, layers
 from oracle.docs.diff import diff_sections
 from oracle.docs.models import DOCUMENT_KINDS, Citation, Document, DocumentVersion, Section
 from oracle.docs.parser import (
@@ -603,6 +604,7 @@ async def read_version(
         version.source_version_id  # type: ignore[arg-type]
     )
     date_marks: list[dict] = []
+    fresh_warnings: list[Any] = list(version.warnings or [])
     # One query for the kind and, for a roadmap built from a PRD version, that PRD.
     kind, built_prd = (
         await db.execute(
@@ -620,12 +622,15 @@ async def read_version(
         except doc_dates.DatesUnavailable:
             if require_dates:
                 raise
-            marks = []
-        date_marks = [m.as_json() for m in doc_dates.per_section(marks)]
+            marks = None
+        if marks is not None:
+            fresh_warnings = await date_warnings(db, version, sections, marks)
+        date_marks = [m.as_json() for m in doc_dates.per_section(marks or [])]
     return VersionOut(
         **VersionSummary.model_validate(version).model_dump(
-            exclude={"source", "imported_by_name", "imported_again"}
+            exclude={"source", "imported_by_name", "imported_again", "warnings"}
         ),
+        warnings=[VersionWarning.model_validate(w) for w in fresh_warnings],
         source=source,
         imported_by_name=(await importer_names(db, [version])).get(version.id),
         imported_again=(await imported_again(db, version.document_id, [version])).get(version.id),
@@ -675,6 +680,124 @@ async def version_markdown(db: AsyncSession, version: DocumentVersion) -> tuple[
         return version.markdown, []
     markdown = doc_dates.annotate_markdown(version.markdown, sections, marks)
     return markdown, [m.as_json() for m in doc_dates.per_section(marks)]
+
+
+def date_problems(
+    marks: list[Any],
+    prd_slug: str | None,
+    prd_title: str | None,
+    headings: dict[str, str],
+    *,
+    update: bool,
+) -> list[ImportProblem]:
+    """One ``unverified_date`` problem per distinct date and item a roadmap writes without
+    a basis (date-warnings-honest: not one per mention)."""
+    from oracle.roadmap import doc_dates
+
+    out = []
+    for m, times in doc_dates.distinct(marks):
+        refs = doc_dates.problem_refs(m, prd_slug)
+        if times > 1:
+            refs["mentions"] = str(times)
+        out.append(
+            ImportProblem(
+                code="unverified_date",
+                message=doc_dates.problem_message(
+                    m, prd_title, update=update, heading=headings.get(m.section_key)
+                ),
+                section_key=m.section_key or None,
+                refs=refs,
+            )
+        )
+    return out
+
+
+async def date_warnings(
+    db: AsyncSession, version: DocumentVersion, sections: list[Any], marks: list[Any]
+) -> list[dict[str, Any]]:
+    """date-warnings-honest: the version's warnings with its date warnings re-checked
+    against the bases as they stand (``marks``: every occurrence, checked now), so a basis
+    verified or withdrawn since the import is never stale."""
+    from oracle.roadmap import doc_dates
+
+    kept = [w for w in (version.warnings or []) if w.get("code") != "unverified_date"]
+    bad = doc_dates.flagged(marks)
+    if not bad:
+        return kept
+    kind = await db.scalar(select(Document.kind).where(Document.id == version.document_id))
+    prd_id = None
+    if kind != "update":
+        prd_id = await doc_dates.prd_of(
+            db, version.document_id, version.source_version_id, version.front_matter
+        )
+    prd = (
+        (await db.execute(select(Document.slug, Document.title).where(Document.id == prd_id)))
+        .tuples()
+        .first()
+        if prd_id
+        else None
+    )
+    prd_slug, prd_title = prd or (None, None)
+    headings = {s.section_key: s.heading for s in sections}
+    return kept + [
+        VersionWarning(
+            code=p.code,
+            message=p.message,
+            section_keys=[p.section_key] if p.section_key else [],
+            refs=p.refs,
+        ).model_dump()
+        for p in date_problems(bad, prd_slug, prd_title, headings, update=kind == "update")
+    ]
+
+
+async def refresh_date_warnings(db: AsyncSession, prd_document_id: uuid.UUID) -> None:
+    """date-warnings-honest: re-run the date check of each roadmap or update document's
+    latest version that rests on this PRD's bases, when one is recorded, verified or withdrawn,
+    and store its warnings as they stand now. A version whose dates are still being
+    found keeps its stored ones (its reads re-check them)."""
+    from oracle.roadmap import doc_dates
+
+    source = aliased(DocumentVersion)
+    # Only each document's latest version: this runs inside the request, and an older
+    # version's read re-checks its own dates.
+    newer = aliased(DocumentVersion)
+    latest = (
+        select(func.max(newer.number))
+        .where(newer.document_id == DocumentVersion.document_id)
+        .correlate(DocumentVersion)
+        .scalar_subquery()
+    )
+    versions = list(
+        await db.scalars(
+            select(DocumentVersion)
+            .join(Document, Document.id == DocumentVersion.document_id)
+            .outerjoin(source, source.id == DocumentVersion.source_version_id)
+            .where(
+                DocumentVersion.number == latest,
+                Document.kind.in_(doc_dates.DATED_KINDS),
+                (Document.kind == "update")
+                | (source.document_id == prd_document_id)
+                | (DocumentVersion.source_version_id.is_(None)),
+            )
+        )
+    )
+    for v in versions:
+        prds = await doc_dates.prds_for(db, v.document_id, v.source_version_id, v.front_matter)
+        if prd_document_id not in prds:
+            continue
+        sections = list(
+            await db.scalars(
+                select(Section).where(Section.version_id == v.id).order_by(Section.ordinal)
+            )
+        )
+        try:
+            marks = await doc_dates.occurrences_for_version(db, v, sections)
+        except doc_dates.DatesUnavailable:
+            continue
+        fresh = await date_warnings(db, v, sections, marks)
+        if fresh != (v.warnings or []):
+            v.warnings = fresh
+    await db.flush()
 
 
 async def _check_document_dates(
@@ -753,7 +876,10 @@ async def _check_document_dates(
     else:
         prd_id = await doc_dates.prd_of(db, document.id, source_version_id, draft.front_matter)
         prds = [prd_id] if prd_id is not None else []
-    marks = await doc_dates.check(db, found, prds, exempt=exempt)
+    # A roadmap whose items have no section of their own: the run's items scope its dates.
+    sectionless = document.kind == "roadmap" and any(not f.items for f in found)
+    items = await doc_dates.own_items(db, document) if sectionless else None
+    marks = await doc_dates.check(db, found, prds, exempt=exempt, items=items or frozenset())
     bad = [
         m
         for m in doc_dates.flagged(marks)
@@ -770,20 +896,7 @@ async def _check_document_dates(
     )
     prd_slug, prd_title = prd or (None, None)
     headings = {sec.section_key: sec.heading for sec in draft.sections}
-    problems += [
-        ImportProblem(
-            code="unverified_date",
-            message=doc_dates.problem_message(
-                m,
-                prd_title,
-                update=document.kind == "update",
-                heading=headings.get(m.section_key),
-            ),
-            section_key=m.section_key or None,
-            refs=doc_dates.problem_refs(m, prd_slug),
-        )
-        for m in bad
-    ]
+    problems += date_problems(bad, prd_slug, prd_title, headings, update=document.kind == "update")
     if refuse:
         await db.rollback()
         raise DraftError(problems)
@@ -1190,9 +1303,29 @@ async def import_draft(
                 section_keys=sorted(held),
             )
         )
-    resolutions = draft.resolutions
+    for message in draft.dropped_resolutions:
+        # A malformed resolution is dropped, never a refusal of the draft (Nov 3).
+        warnings.append(VersionWarning(code="resolution_dropped", message=message))
+    if draft.note_resolutions:
+        # A send-back's note answered point by point: recorded against the note (the
+        # version keeps the entries in its front matter); no feedback item is closed.
+        answers = draft.note_resolutions
+        declined = sum(1 for a in answers if a.status == "declined")
+        n = len(answers)
+        warnings.append(
+            VersionWarning(
+                code="note_answered",
+                message=f"the draft answers the send-back note: {n} "
+                f"{'point' if n == 1 else 'points'} ({n - declined} addressed, "
+                f"{declined} declined)",
+                refs={"note_points": [a.id for a in answers]},
+            )
+        )
+    resolutions = await _known_resolutions(db, document, draft, warnings)
     if origin == "run" and previous is not None and resolutions:
-        resolutions, skipped = await _run_resolutions(db, document, previous, draft, revisions)
+        resolutions, skipped = await _run_resolutions(
+            db, document, previous, resolutions, revisions
+        )
         if skipped:
             # #396: the sections by heading; the feedback ids in refs.
             message, refs = wording.feedback_left_open(
@@ -1291,9 +1424,10 @@ async def import_draft(
         except DraftError:
             await db.rollback()
             raise
-    if origin == "run" and document.kind == "prd":
-        # #306: an agent names the codes it writes; a draft that does not is flagged.
-        warnings += named_codes.check(draft.sections)
+    if origin == "run":
+        # #306: an agent names the codes it writes; a draft that does not is flagged. A
+        # roadmap's date words too (roadmap-draft-wording).
+        warnings += draft_checks.run_warnings(document.kind, draft.sections)
     if previous is not None:
         locked = await review_service.locked_section_keys(db, previous.id)
         if locked:
@@ -1562,11 +1696,43 @@ async def _check_base(
         )
 
 
+async def _known_resolutions(
+    db: AsyncSession, document: Document, draft: ParsedDraft, warnings: list[VersionWarning]
+) -> list:
+    """The draft's resolutions that name feedback items of the document. One whose
+    feedback_id names no item is dropped with a ``resolution_dropped`` warning, never a
+    refusal of the draft (Nov 3)."""
+    from oracle.review.models import FeedbackItem
+
+    if not draft.resolutions:
+        return []
+    ids = [r.feedback_id for r in draft.resolutions]
+    known = set(
+        await db.scalars(
+            select(FeedbackItem.id).where(
+                FeedbackItem.document_id == document.id, FeedbackItem.id.in_(ids)
+            )
+        )
+    )
+    keep = []
+    for n, res in zip(draft.resolution_numbers, draft.resolutions, strict=True):
+        if res.feedback_id in known:
+            keep.append(res)
+        else:
+            warnings.append(
+                VersionWarning(
+                    code="resolution_dropped",
+                    message=f"resolution #{n} was dropped: its feedback_id names no feedback item",
+                )
+            )
+    return keep
+
+
 async def _run_resolutions(
     db: AsyncSession,
     document: Document,
     previous: DocumentVersion,
-    draft: ParsedDraft,
+    resolutions: list,
     revisions: dict[str, str],
 ) -> tuple[list, dict[str, str | None]]:
     """The resolutions of an agent's draft it may apply, and the ones it may not (feedback
@@ -1574,12 +1740,13 @@ async def _run_resolutions(
     when the item is on a section whose revision this version changes: it never
     declines feedback, never closes a document-level item, and never closes an item on a
     section it left alone (an approved section it changed is held, so it is left alone
-    until its patch is accepted). Unknown ids pass through (the import refuses them)."""
+    until its patch is accepted). ``resolutions`` name items of the document only
+    (:func:`_known_resolutions` dropped the rest)."""
     from oracle.review.models import FeedbackItem
 
     before = {k: s.revision for k, s in (await _section_rows(db, previous.id)).items()}
     changed = {k for k, r in revisions.items() if before.get(k) != r}
-    ids = [r.feedback_id for r in draft.resolutions]
+    ids = [r.feedback_id for r in resolutions]
     items = {
         i.id: i
         for i in await db.scalars(
@@ -1589,7 +1756,7 @@ async def _run_resolutions(
         )
     }
     keep, skipped = [], {}
-    for res in draft.resolutions:
+    for res in resolutions:
         item = items.get(res.feedback_id)
         if item is None or (
             res.status == "addressed" and item.section_key and item.section_key in changed

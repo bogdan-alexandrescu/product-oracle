@@ -24,6 +24,7 @@ import {
   quarterValue,
   scale,
   shortDay,
+  datesFrom,
   sourceWord,
   whereAttr,
   type Item,
@@ -894,7 +895,7 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
   const legend = <LanesLegend data={data} lanes={lanes} noWork={noWork} />;
   return (
     <div
-      className="overflow-hidden rounded-[14px] border border-[var(--simple-rule)] bg-[var(--simple-paper)] pt-[14px] pb-3"
+      className="isolate overflow-hidden rounded-[14px] border border-[var(--simple-rule)] bg-[var(--simple-paper)] pt-[14px] pb-3"
       data-testid="simple-chart"
       data-format="timeline"
       data-view="lanes"
@@ -1066,7 +1067,7 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
   const mark = left >= 10 ? left : Math.min(width - 10, Math.max(sc.x(s?.end_date ?? end), x1) + sc.px + 12);
   // QA2 finding 14: a reader's words, not the API's raw enum (sourceWord, from ./_lib).
   // qa4-simple-roadmap-30: each red flag in its own words ("ends Jun 8, after its milestone 'Beta'"), as Now / Next / Later says it.
-  const label = `${item.title}: ${yearSpan(start, end, " to ")}, ${sourceWord(item.estimated ? "estimated" : item.source)}${red ? `, ${broken(item).map((f) => f.reason).join("; ")}` : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && sliced && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? ". Arrows move it, Shift+arrows its end, sent when you pause; Escape cancels" : ""}`;
+  const label = `${item.title}: ${yearSpan(start, end, " to ")}, ${item.estimated ? sourceWord("estimated") : datesFrom(item)}${red ? `, ${broken(item).map((f) => f.reason).join("; ")}` : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && sliced && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? ". Arrows move it, Shift+arrows its end, sent when you pause; Escape cancels" : ""}`;
   const strokeOf = (base: string) => (red ? "var(--crit)" : amber ? "var(--warn)" : base);
   const strokeW = red || amber || open ? 2.5 : 1.5;
   // fix4 qa-simple-roadmap-31: the suggestion's outline is drawn under the pill (its fill hides

@@ -118,6 +118,16 @@ export function sourceWord(source: Schemas["SimpleDate"]["source"]): string {
   return SOURCE_WORDS[source];
 }
 
+/**
+ * approved-roadmap-to-simple: where an item's dates come from, in a reader's words: the source
+ * words of the approved roadmap version that set them ("Founder commitment"), else its date
+ * source's (sourceWord).
+ */
+export function datesFrom(item: Pick<Item, "date_basis" | "source">): string {
+  const basis = item.date_basis?.trim();
+  return basis ? basis[0].toUpperCase() + basis.slice(1) : sourceWord(item.source);
+}
+
 /** An item's status, in plain words for a reader (not the API's `in_progress`-style enum
  * value). Also used for a bar's aria-label (_timeline.tsx, _lanes.tsx). */
 export const STATUS_WORDS: Record<Item["status"], string> = {

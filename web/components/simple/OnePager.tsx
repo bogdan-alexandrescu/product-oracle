@@ -17,9 +17,11 @@ import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
 import { DownloadNote, useDownloadNote } from "@/components/DownloadNote";
+import { DecisionNotes, LeftOutLine } from "@/components/simple/DecisionNotes";
 import { downloadedNote } from "@/lib/export-note";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
+import { stripRawTokens } from "@/lib/raw-tokens";
 
 type View = Schemas["OnePagerOut"];
 type Line = Schemas["OnePagerLine"];
@@ -27,7 +29,7 @@ type Note = Schemas["OnePagerNote"];
 
 export { quoteLine };
 
-/** A section's Markdown as plain lines: no "- " bullets, "#" heads or "**" marks (qa-simple-prd-16/17). */
+/** A section's Markdown as plain lines: no "- " bullets, "#" heads, "**" marks (qa-simple-prd-16/17) or raw "[c:id]" tokens. */
 export function plainLines(md: string): { text: string; bullet: boolean }[] {
   return md
     .split("\n")
@@ -35,7 +37,7 @@ export function plainLines(md: string): { text: string; bullet: boolean }[] {
     .filter(Boolean)
     .map((x) => {
       const bullet = /^([-*+]|\d+[.)])\s+/.test(x);
-      return { text: x.replace(/^([-*+]|\d+[.)]|#+)\s+/, "").replace(/\*\*|__|`/g, ""), bullet };
+      return { text: stripRawTokens(x.replace(/^([-*+]|\d+[.)]|#+)\s+/, "").replace(/\*\*|__|`/g, "")), bullet };
     });
 }
 
@@ -484,8 +486,12 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
               {v.draft.reminded_at && <span data-testid="reminded-at">Reminded {ago(v.draft.reminded_at)}</span>}
             </span>
           )}
+          {/* decisions-reversed-or-trashed: a decision this draft cited was reversed since. */}
+          <DecisionNotes notes={v.draft.decision_notes ?? []} className="basis-full text-[15px]" />
         </div>
       )}
+      {/* The lines' decisions left out as no longer standing, one quiet line under the banner. */}
+      {!presenting && <LeftOutLine leftOut={v.left_out} className="simple-noprint border-b border-[var(--simple-rule)] px-4 py-2 text-[15px] text-text-faint" />}
       {sending && v.draft?.can_submit && (
         <SendForApproval v={v} busy={busy} onClose={() => setSending(false)} onSend={(ids) => { setSending(false); void submit(ids); }} />
       )}

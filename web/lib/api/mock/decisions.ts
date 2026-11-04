@@ -54,6 +54,8 @@ export interface DecisionsContext {
   outcomeStatus?: (id: string) => Schemas["DecisionOut"]["outcome_status"];
   /** H3: a tracking outcome record with a proposed assessment (the Outcomes tab's "Check due"). */
   outcomeCheckDue?: (id: string) => boolean;
+  /** decisions-reversed-or-trashed: the kind of a document in Trash the subjects name ("roadmap"), or null. */
+  trashedAbout?: (subjects: Row["subjects"]) => string | null;
   /** H3: deciding with a prediction creates its outcome record (tracking); returns its id. */
   addOutcome?: (d: { title: string; goal_id: string; prediction: Record<string, unknown>; evidence_ids: string[]; owner_id: string }) => string;
   /**
@@ -393,7 +395,14 @@ function summaryOf(ctx: DecisionsContext, d: Row): Summary {
     run_id: d.run_id,
     created_at: d.created_at,
     source: d.source,
+    trash_note: trashNote(ctx.trashedAbout?.(d.subjects) ?? null),
   };
+}
+
+/** As oracle.decisions.standing.trash_label: Company > Decisions' mark. */
+function trashNote(kind: string | null): string | null {
+  if (!kind) return null;
+  return `Made about ${kind === "roadmap" ? "a roadmap" : "a document"} now in Trash`;
 }
 
 function outOf(ctx: DecisionsContext, db: DecisionsDb, d: Row): DecisionOut {

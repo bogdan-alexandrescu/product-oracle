@@ -273,7 +273,7 @@ test("a rejected draft: Retry import imports it, and the segment links the PRD",
   // The review cannot be approved without a draft; changes can still be requested.
   const review = prd.getByTestId("checkpoint-prd_review");
   await expect(review.getByRole("button", { name: "Approve and continue" })).toBeDisabled();
-  await expect(review.getByTestId("cannot-approve")).toHaveText("The draft was not imported: retry import, or request changes.");
+  await expect(review.getByTestId("cannot-approve")).toHaveText("The draft was not imported: retry import, or send it back to the writer.");
   await review.getByLabel("Note for the agents").fill("Fix the citations");
   await expect(review.getByRole("button", { name: "Request changes" })).toBeEnabled();
 
@@ -328,33 +328,70 @@ test("a rejected draft reads Draft rejected, with one summary line and every pro
   await expect(page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByTestId("run-draft-rejected")).toHaveCount(0);
 });
 
-test("a rejected draft: Send back to writer pre-fills Request changes with the summary", async ({ page }) => {
+test("a rejected draft: the stop names the problem, and Send back to writer sends it and starts the next attempt", async ({ page }) => {
+  // protects=send-back-note-import (Nov 3); fails_when=the stop says only "retry import, or
+  // request changes", or Send back to writer does nothing visible on a refused draft.
+  await login(page);
+  const id = await seedRejectedDraft(page, true);
+  // The production case: a roadmap whose note answers had no feedback ids.
+  const cpId = await page.evaluate((id) => {
+    const key = "po-mock-db-v2";
+    const db = JSON.parse(localStorage.getItem(key)!);
+    const run = db.runs.runs.find((r: { id: string }) => r.id === id);
+    const summary = "Oracle refused prd.md: 8 resolutions name no feedback item.";
+    run.segments[3].draft_import.summary = summary;
+    const cp = run.checkpoints.find((c: { kind: string }) => c.kind === "prd_review");
+    cp.payload.import.summary = summary;
+    localStorage.setItem(key, JSON.stringify(db));
+    // The send-back answers late, so the page shows it is being sent.
+    localStorage.setItem("po-mock-slow", `POST /v1/runs/${id}/checkpoints/${cp.id}/decide`);
+    return cp.id as string;
+  }, id);
+  expect(cpId).toBeTruthy();
+  await page.goto(`/runs/${id}`);
+  const prd = page.getByTestId("segment-prd_draft");
+  const review = prd.getByTestId("checkpoint-prd_review");
+  await expect(review.getByTestId("cannot-approve")).toHaveText(
+    "The draft was not imported: 8 resolutions name no feedback item; retry import, or send it back to the writer.",
+  );
+  await expect(review.getByRole("button", { name: "Approve and continue" })).toBeDisabled();
+  // No note is needed: the import's problems are what goes to the writer.
+  await expect(review.getByLabel("Note for the agents")).toHaveValue("");
+  await prd.getByRole("button", { name: "Send back to writer" }).click();
+  // While it is sent, the button says so and the page says what comes next.
+  await expect(prd.getByRole("button", { name: "Sending back…" })).toBeDisabled();
+  await expect(prd.getByTestId("draft-sending-back")).toHaveText(
+    "Sending the problems to the writer; the next attempt starts when they are sent.",
+  );
+  // The next attempt starts, and the run page says so.
+  await expect(prd.getByTestId("segment-attempt")).toHaveText("attempt 2");
+  await expect(prd.getByTestId("draft-sending-back")).toHaveCount(0);
+  await expect(status(page)).toHaveText("Running");
+  await expect(prd.getByRole("button", { name: "Send back to writer" })).toHaveCount(0);
+  await expect(prd.getByTestId("checkpoint-waiting")).toHaveCount(0);
+});
+
+test("Send back to writer sends the note written so far with the problems", async ({ page }) => {
   await login(page);
   const id = await seedRejectedDraft(page, true);
   await page.goto(`/runs/${id}`);
   const prd = page.getByTestId("segment-prd_draft");
-  const review = prd.getByTestId("checkpoint-prd_review");
-  const note = review.getByLabel("Note for the agents");
-  await expect(note).toHaveValue("");
+  await prd.getByTestId("checkpoint-prd_review").getByLabel("Note for the agents").fill("Use source 'oracle'.");
   await prd.getByRole("button", { name: "Send back to writer" }).click();
-  // The Request changes flow, opened with the summary as its note, ready to edit.
-  await expect(note).toHaveValue(SUMMARY);
-  await expect(note).toBeFocused();
-  await expect(note).toBeInViewport();
-  await note.press("End");
-  await note.pressSequentially(" Use source 'oracle'.");
-  await expect(note).toHaveValue(`${SUMMARY} Use source 'oracle'.`);
-  // Nothing is sent until the person sends it.
-  await expect(status(page)).toHaveText("Waiting for review");
-  await review.getByRole("button", { name: "Request changes" }).click();
-  await expect(prd).toContainText("attempt 2");
+  await expect(prd.getByTestId("segment-attempt")).toHaveText("attempt 2");
   await expect(status(page)).toHaveText("Running");
+  const sent = await page.evaluate((id) => {
+    const db = JSON.parse(localStorage.getItem("po-mock-db-v2")!);
+    const run = db.runs.runs.find((r: { id: string }) => r.id === id);
+    const cp = run.checkpoints.find((c: { kind: string }) => c.kind === "prd_review");
+    return [cp.status, cp.note];
+  }, id);
+  expect(sent).toEqual(["changes_requested", "Use source 'oracle'."]);
 });
 
-test("Send back to writer fills the segment's own review, not another stop waiting on it", async ({ page }) => {
-  // protects=hardening 2026-10-20 (sendBack); fails_when=the refusal's summary lands in the
-  // first deciding stop's note when that stop is not the segment's own review;
-  // no_claim=what Request changes sends (the test above).
+test("Send back to writer decides the segment's own review, not another stop waiting on it", async ({ page }) => {
+  // protects=hardening 2026-10-20 (sendBack); fails_when=the send-back lands on the first
+  // deciding stop when that stop is not the segment's own review.
   await login(page);
   const id = await seedRejectedDraft(page, true);
   // Another stop of the same segment waits on me, listed before the segment's own review.
@@ -368,13 +405,14 @@ test("Send back to writer fills the segment's own review, not another stop waiti
   }, id);
   await page.goto(`/runs/${id}`);
   const prd = page.getByTestId("segment-prd_draft");
-  const other = prd.getByTestId("checkpoint-roadmap_review").getByLabel("Note for the agents");
-  const note = prd.getByTestId("checkpoint-prd_review").getByLabel("Note for the agents");
-  await expect(other).toHaveValue("");
   await prd.getByRole("button", { name: "Send back to writer" }).click();
-  await expect(note).toHaveValue(SUMMARY);
-  await expect(note).toBeFocused();
-  await expect(other).toHaveValue("");
+  await expect(prd.getByTestId("segment-attempt")).toHaveText("attempt 2");
+  const statuses = await page.evaluate((id) => {
+    const db = JSON.parse(localStorage.getItem("po-mock-db-v2")!);
+    const run = db.runs.runs.find((r: { id: string }) => r.id === id);
+    return Object.fromEntries(run.checkpoints.filter((c: { segment_seq: number }) => c.segment_seq === 4).map((c: { kind: string; status: string }) => [c.kind, c.status]));
+  }, id);
+  expect(statuses).toEqual({ roadmap_review: "pending", prd_review: "changes_requested" });
 });
 
 test("the in-page ask makes the page behind it inert, and gives focus back on close", async ({ page }) => {

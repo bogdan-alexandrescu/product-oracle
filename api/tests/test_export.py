@@ -337,8 +337,12 @@ async def test_markdown_is_stored_markdown_with_banner_after_front_matter(client
     assert banner.startswith("<!-- Product Oracle export:") and banner.endswith("-->")
     assert "version 1" in banner and "status superseded" in banner
     assert "imported Oct 16, 2026, 7:01 AM PDT" in banner
-    # Nothing else changed.
-    assert body.replace(banner + "\n", "", 1) == V1_MARKDOWN
+    # Nothing else changed but the citation, now a footnote (raw-tokens-everywhere).
+    assert body.replace(banner + "\n", "", 1) == (
+        V1_MARKDOWN.replace(" [c:c1].", "[^1].")
+        + "\n[^1]: #product thread on drop-off (slack: https://example.slack.com/archives/C123/p1700000000)\n"
+    )
+    assert "[c:" not in body
 
     v2 = (await _export(client, fx, "md", n=2)).text
     assert "status approved" in v2 and "approved Oct 17, 2026, 2:30 AM PDT" in v2

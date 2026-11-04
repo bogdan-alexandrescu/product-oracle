@@ -1211,6 +1211,8 @@ async def record(
         tracker_key=body.tracker_key,
     )  # fmt: skip
     await roadmap.record_basis(db, principal, rights, row, prd)
+    if row.status == "verified":
+        await roadmap._refresh_dates(db, row)
     await _done(db, principal, d, c, {"basis_id": str(row.id)}, "recorded")
     return c, {"basis_id": str(row.id), "status": row.status}
 

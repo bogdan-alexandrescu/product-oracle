@@ -1,10 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import {
   applyAll,
   applyCard,
+  CHAT_COUNT_FROM,
+  CHAT_TEXT_MAX,
+  ChatTextTooLong,
   chooseChoice,
   hasPending,
   PENDING_POLL_MS,
@@ -89,6 +93,21 @@ const SEND = "simple-button simple-button-primary disabled:!border-line-strong d
 // Important: the global :focus-visible rule is unlayered and would win over a layered utility.
 const BOX_FOCUS = "focus-visible:!outline-offset-[-1px]";
 
+/** ask-length-limit: "4,050" (a count as people read it). */
+const count = (n: number) => n.toLocaleString("en-US");
+/** ask-length-limit: a message past the limit is refused in words, the limit named; the text stays in the box. */
+export const tooLong = (n: number, max = CHAT_TEXT_MAX) => `This message is ${count(n)} characters; Oracle takes up to ${count(max)}. Shorten it and send again.`;
+
+/** ask-length-limit: the quiet count under a long message (past 3,000 characters), red past the limit. */
+function CharCount({ n }: { n: number }) {
+  if (n <= CHAT_COUNT_FROM) return null;
+  return (
+    <p data-testid="chat-count" aria-live="polite" className={`text-right text-xs tabular-nums ${n > CHAT_TEXT_MAX ? "text-crit" : "text-text2"}`}>
+      {count(n)} of {count(CHAT_TEXT_MAX)} characters
+    </p>
+  );
+}
+
 /** The chat's box and Send (Enter sends, Shift+Enter a new line); `send` failing keeps the text and says why. */
 export function ChatComposer({
   send,
@@ -144,13 +163,15 @@ export function ChatComposer({
   const submit = async () => {
     const t = text.trim();
     if (!t) return;
+    if (t.length > CHAT_TEXT_MAX) return setError(tooLong(t.length));
     setBusy(true);
     setError(null);
     try {
       await send(t);
       setText("");
     } catch (e) {
-      setError(detail(e));
+      // The server's own length check says the same words, with its limit.
+      setError(e instanceof ChatTextTooLong ? tooLong(t.length, e.max) : detail(e));
     } finally {
       setBusy(false);
     }
@@ -181,10 +202,12 @@ export function ChatComposer({
             ref={box}
             aria-label="Message Oracle"
             rows={1}
-            maxLength={2000}
             value={text}
             placeholder={placeholder}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              setText(e.target.value);
+              setError(null);
+            }}
             onKeyDown={keys}
             className={`max-h-40 min-h-11 min-w-0 flex-1 resize-none rounded-[10px] border border-line-strong bg-surface px-3 py-2.5 text-[15px] leading-[22px] text-text [field-sizing:content] placeholder:text-text-faint ${BOX_FOCUS}`}
           />
@@ -192,6 +215,7 @@ export function ChatComposer({
             Send
           </button>
         </div>
+        <CharCount n={text.trim().length} />
         {error && (
           <p role="alert" className="text-sm text-crit">
             {error}
@@ -217,13 +241,16 @@ export function ChatComposer({
         ref={box}
         aria-label="Message Oracle"
         rows={2}
-        maxLength={2000}
         value={text}
         placeholder={placeholder}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => {
+          setText(e.target.value);
+          setError(null);
+        }}
         onKeyDown={keys}
         className={`min-h-16 w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-text ${BOX_FOCUS}`}
       />
+      <CharCount n={text.trim().length} />
       {error && (
         <p role="alert" className="simple-small text-crit">
           {error}
@@ -380,6 +407,15 @@ export function ChatLine({
           // qa-simple-home-29: a long unbroken word wraps inside the bubble (never a sideways scroll).
           <p className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]" data-testid="chat-message-body">
             {m.body}
+          </p>
+        )}
+        {!!m.links?.length && (
+          <p className="simple-small flex flex-wrap gap-x-3" data-testid="chat-message-links">
+            {m.links.map((l) => (
+              <Link key={l.href} href={l.href} className="text-accent-ink hover:underline">
+                Change it on {l.label}
+              </Link>
+            ))}
           </p>
         )}
         {m.source && ask ? (
