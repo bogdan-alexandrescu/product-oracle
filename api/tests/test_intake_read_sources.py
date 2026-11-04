@@ -204,6 +204,24 @@ def test_described_check_reads_features_and_sections():
     assert not intake_job.described("How fast must the pricing engine answer?", features, [])
 
 
+def test_described_drops_only_a_gap_about_the_feature_or_section_itself():
+    # An old PRD carries headings for goals, metrics, risks and timeline: a gap that asks
+    # for more than the feature or the heading names is still open.
+    features = [{"key": "pricing-engine", "title": "Pricing engine", "description": "x"}]
+    headings = ["Overview", "Goals", "Success metrics", "Risks", "Timeline", "Pricing engine"]
+    for open_gap in [
+        "Engineering ownership of the launch is not defined.",
+        "Engineering is not defined.",
+        "Success metrics for the new version are not defined.",
+        "The launch timeline is missing.",
+        "Refund rules for the pricing engine are not described.",
+    ]:
+        assert not intake_job.described(open_gap, features, headings), open_gap
+    assert intake_job.described("The pricing engine is not described.", features, [])
+    assert intake_job.described("Success metrics are not defined.", [], headings)
+    assert intake_job.described("The timeline is missing.", [], headings)
+
+
 def test_the_tasks_say_read_everything_before_calling_it_missing():
     task = flows.INTAKE_ANALYSIS_TASK
     assert "features" in task and "not described" in task
