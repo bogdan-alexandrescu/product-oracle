@@ -12,3 +12,7 @@
 - Never use pkill, killall or kill on a pattern; kill by PID only.
 - Logs and temp files go under $TMPDIR or the job's own folder, never a literal /tmp.
 - A generated text shown to people never carries raw tokens such as [c:c4], template labels or internal file names.
+- In Simple, every feature anywhere it can be selected (Roadmap timeline and Gantt, Goal buckets, Priorities, Home,
+  and every other page) opens the same feature panel: its details, what it depends on, what depends on it, its start
+  and delivery estimate, the goal it serves and how that is measured. Each of these is editable there, including
+  overriding Oracle's suggestion or an existing dependency. No page shows a feature that cannot be read or changed.
