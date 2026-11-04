@@ -23,11 +23,13 @@ and other compatibility forms (``２０２６``) fold to ASCII (NFKC). The forms
 - month names: ``Nov 30, 2026``, ``30 November 2026``, ``the 30th of November, 2026``,
   ``30-Nov-2026``;
 - year-less ``Nov 30``, ``30 Nov``, ``the 30th of November``: the first such day on or
-  after the version's date (the import day for a draft); after a past or done word
-  ("closed on Oct 27", "since Oct 2") the most recent such day, a done thing's day and
-  no schedule date (the plan tables' date columns keep the first reading).
+  after the version's date (the import day for a draft); reported as done ("closed on
+  Oct 27", "since Oct 2") in a sentence with no plan words, and its most recent such day
+  within 60 days before the version's, that day: a done thing's day and no schedule date
+  (the plan tables' date columns keep the first reading).
 
-A Counts when, evidence or sources column or labelled line is not a schedule place.
+A Counts when, evidence or sources column (its whole header) or labelled sentence is not a
+schedule place.
 
 Month and quarter phrases (``November 2026``, ``Q4``) are horizons, not dates.
 
@@ -87,7 +89,7 @@ from array import array
 from collections import OrderedDict
 from collections.abc import Callable, Hashable, Iterable, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Literal, Protocol
 
 from fastapi import HTTPException, status
@@ -854,13 +856,17 @@ def _found_in(
         if not _claim(rendered.text[block_start:a]):
             continue
         cell = next((c for c in blk.cells if c[0] <= a < c[1]), None) if blk else None
-        if cell and _NOT_SCHEDULE.search(cell[2]):
+        if cell and _NOT_SCHEDULE.fullmatch(cell[2]):
             continue  # a Counts when, evidence or sources cell
-        start_at = cell[0] if cell else block_start
-        if not cell and _NOT_SCHEDULE_LABEL.match(rendered.text[block_start:a].lstrip()):
-            continue  # "Counts when: ...", "Evidence: ..." prose
+        lo, hi = cell[:2] if cell else (block_start, blk.end if blk else len(rendered.text))
+        label_at = lo
+        for m in _LABEL_END.finditer(rendered.text, lo, a):
+            label_at = m.end()
+        if _NOT_SCHEDULE_LABEL.match(rendered.text[label_at:a].lstrip()):
+            continue  # "Counts when: ...", "Evidence: ..." sentence
         plan_cell = cell is not None and _DATE_COLUMN.search(cell[2])
-        if not plan_cell and _done(hit, rendered.text[start_at:a], ref):
+        s_lo, s_hi = _sentence(rendered.text, lo, hi, a, b)
+        if not plan_cell and _done(hit, rendered.text[s_lo:s_hi], a - s_lo, ref):
             continue  # a done thing's day, not a schedule date
         out.append(
             Found(
@@ -910,44 +916,53 @@ _SENTENCE_END = re.compile(r"[.;!?](?:\s|$)")
 
 
 # date-past (production, Nov 4): where a date is no schedule date. A Counts when, evidence
-# or sources column or labelled line says how a thing counts or what shows it; the plan
-# tables' own date columns keep the usual reading. A year-less date after a past or done
-# word ("closed on Oct 27") is a done thing's day: its most recent past occurrence.
+# or sources column (its whole header) or labelled sentence says how a thing counts or
+# what shows it; the plan tables' own date columns keep the usual reading. A year-less date
+# reported as done ("closed on Oct 27") in a sentence with no plan words is a done thing's
+# day when its most recent past occurrence is recent (_RECENT before the version's day).
 _NOT_SCHEDULE = re.compile(
-    r"\b(?:counts? when|evidence|sources?|proof|measured (?:by|when)|how (?:it|we) "
-    r"(?:counts?|measure|know))\b",
+    r"[*_\s]*(?:counts? when|evidence|sources?|proofs?|measured (?:by|when)|how (?:it|we) "
+    r"(?:counts?|measure|know))[*_\s]*:?\s*",
     re.IGNORECASE,
 )
 _NOT_SCHEDULE_LABEL = re.compile(
-    r"(?:[*_]+\s*)?(?:counts? when|evidence|sources?|proof|measured (?:by|when))\s*[*_]*\s*:",
+    r"(?:[*_]+\s*)?(?:counts? when|evidence|sources?|proofs?|measured (?:by|when))\s*[*_]*\s*:",
     re.IGNORECASE,
 )
-_DATE_COLUMN = re.compile(r"^\s*(?:start|end|date|dates|due|target|delivery)\s*$", re.IGNORECASE)
+_LABEL_END = re.compile(r"[.!?](?:\s|$)")
+_DATE_COLUMN = re.compile(
+    r"^[*_\s]*(?:(?:start|end|due|target|delivery|ship|launch|release)\s+)?"
+    r"(?:dates?|day|start|end|due|target|delivery|eta)[*_\s]*$",
+    re.IGNORECASE,
+)
+_RECENT = timedelta(days=60)
+# Report words: a thing that happened. "done", "opened", "started", "was ... on" read as
+# plans as often ("M2: done on Dec 15", "was moved to Dec 15") and are left out.
 _PAST = re.compile(
-    r"(?:\b(?:closed|shipped|merged|released|launched|landed|completed|finished|delivered|"
-    r"resolved|fixed|deployed|started|began|opened|filed|signed off|went live|done)"
-    r"\s+(?:on\s+)?|\bsince\s+|\b(?:was|were)\b(?:(?!\b(?:then|and|but)\b)"
-    r"[^.;!?,]){0,40}?\bon\s+)(?:the\s+)?\(?$",
+    r"(?:\b(?:closed|shipped|merged|released|launched|landed|completed|resolved|fixed|"
+    r"deployed|filed|went live|rolled out)\s+(?:on\s+)?|\bsince\s+)(?:the\s+)?\(?$",
     re.IGNORECASE,
 )
-# A plan's words around the done word: "to be delivered on", "will have shipped on".
+# A plan's words anywhere in the sentence: "to be delivered on", "Target: shipped on",
+# "at the latest", "is the plan", "moved to".
 _PLANNED = re.compile(
-    r"\b(?:will|shall|going to|to be|to have|planned|scheduled|expected|due|set to|should|"
-    r"must|would|could|can)\b",
+    r"\b(?:will|shall|going to|to be|to have|plan|plans|planned|planning|schedule|scheduled|"
+    r"rescheduled|expected|expect|due|set to|should|must|would|could|can|target|targets|"
+    r"targeted|goal|aim|aims|aimed|eta|deadline|at the latest|no later than|moved|move|"
+    r"postponed|delayed|pushed|slipped|slips|if|once|until|next)\b",
     re.IGNORECASE,
 )
 
 
-def _done(hit: Hit, before: str, ref: date) -> bool:
-    """Whether a date (``before``: its block's or cell's text up to it) is a done thing's
-    day: after a past or done word, and on or before the version's day as it reads (a
-    year-less one as its most recent past occurrence)."""
-    before = before[-80:]
-    m = _PAST.search(before)
-    if not m or _PLANNED.search(before, max(0, m.start() - 25)):
+def _done(hit: Hit, sentence: str, at: int, ref: date) -> bool:
+    """Whether a date (at ``at`` in ``sentence``, the sentence or cell it is in) is a done
+    thing's day: right after a report word, no plan word in the sentence, and on or before
+    the version's day as it reads (a year-less one as its most recent past occurrence,
+    within _RECENT of that day)."""
+    if not _PAST.search(sentence[max(0, at - 80) : at]) or _PLANNED.search(sentence):
         return False
     if hit.past is not None:
-        return True
+        return ref - _RECENT <= hit.past <= ref
     return all(day <= ref for day in hit.days)
 
 

@@ -2,11 +2,14 @@
 
 'Approve version' was refused with "1 date is not backed by a confirmed schedule: Oct 27,
 2027" because a milestone's Counts when cell said "be#1358 closed on Oct 27": a past
-event, written without a year, read as the next Oct 27. (1) A year-less date after a
-past-tense or done word ("closed on", "shipped on", "merged on", "since", "was ... on")
-reads as its most recent past day and is not a schedule date; (2) Counts when, evidence
-and sources prose is not where a schedule is written; (3) the plan tables' own date
-cells keep the usual reading, so a milestone date with no basis still warns."""
+event, written without a year, read as the next Oct 27. (1) A year-less date reported as
+done ("closed on", "shipped on", "merged on", "since") in a sentence with no plan words
+reads as its most recent past day, when that is within about 60 days before the version's
+day, and is not a schedule date; "done", "opened", "started", "was ... on", a plan word or
+a far past reading keep the usual reading and still warn; (2) Counts when, evidence and
+sources columns (the whole header) and labelled sentences are not where a schedule is
+written; (3) the plan tables' own date cells keep the usual reading, so a milestone date
+with no basis still warns."""
 
 from datetime import date
 
