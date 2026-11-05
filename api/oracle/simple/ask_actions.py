@@ -22,8 +22,9 @@ person and named in the card (no name, no card); a value that looks like a secre
 secret's key or pasted into any text, is never kept in one. In a meeting no read of one
 person's own records (``OWN_READS``: their sources) is offered, as everyone there reads the
 answer. Nothing runs until Apply, which calls the same route as the page would, with the
-person's own session (so the route's own checks decide); the route's own audit rows say "via Ask Oracle" (oracle.audit.VIA), and the card's
-``simple_chat.api_action`` row is written with the chat's change. Undo is promised only
+person's own session (so the route's own checks decide); the route's own audit rows say
+"via Ask Oracle" (oracle.audit.VIA), and the card's ``simple_chat.api_action`` row is
+written with the chat's change. Undo is promised only
 where it is sure: a create whose route makes a new record (201) and returns its one id,
 with a DELETE of it; an edit whose record reads back every field sent; a delete with a
 ``/restore``. Any other write's card says before Apply that it cannot be undone; so does an
