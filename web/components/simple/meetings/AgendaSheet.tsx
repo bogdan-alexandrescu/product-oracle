@@ -62,8 +62,8 @@ function Name({ x, onOpen }: { x: Row; onOpen?: () => void }) {
 /** "1 left out": the ops whose item was removed since, said behind the (i). */
 function LeftOut({ words, testId }: { words: string[]; testId: string }) {
   return (
-    <span className="flex items-center gap-1 text-text2" data-testid={testId}>
-      {words.length} left out
+    <span className="flex items-center gap-1 text-text2">
+      <span data-testid={testId}>{words.length} left out</span>
       <InfoTip label="What was left out" align="start">
         The item was removed since: {agendaSentence(words)}
       </InfoTip>
