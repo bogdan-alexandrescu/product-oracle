@@ -10,13 +10,7 @@ import { expect, test } from "./test";
  */
 
 const row = (id: string, key: string, roadmap: string, prd: { id: string; slug: string } | null = null) =>
-  ({
-    id,
-    key,
-    title: id,
-    roadmap: { slug: roadmap, version: 1, anchor: key },
-    prd,
-  }) as unknown as PlanItem;
+  ({ id, key, title: id, roadmap: { slug: roadmap, version: 1, anchor: key }, prd }) as unknown as PlanItem;
 
 const A1 = row("a1", "k", "roadmap-a", { id: "prd-a", slug: "prd-a" });
 const A2 = row("a2", "k", "roadmap-a", { id: "prd-c", slug: "prd-c" });

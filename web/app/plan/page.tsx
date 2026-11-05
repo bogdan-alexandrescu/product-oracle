@@ -231,7 +231,9 @@ export default function PlanPage() {
       />
       <div className="flex flex-col gap-4 max-[600px]:gap-3">
         {q.error && <Notice tone="error">{q.error}</Notice>}
-        {data && wanted != null && !wantedItem && <MissingItem wanted={wanted} prdId={wantedPrd} roadmap={wantedRoadmap} />}
+        {data && wanted != null && !wantedItem && (
+          <MissingItem wanted={wanted} prdId={wantedPrd} roadmap={wantedRoadmap} scope={scope} onShowDrafts={() => setScope("all")} />
+        )}
         <GoalsBand canImport={canBaseline} />
         <PrdCards prds={data?.prds} canWrite={canWrite} tracks={tracks.data} />
         {roadmaps.map((r) => (
