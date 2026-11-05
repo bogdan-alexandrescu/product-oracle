@@ -160,7 +160,28 @@ for (const v of VIEWS) {
       // A label shows only where it fits (B leaves a narrow segment blank, its words in its title);
       // named labels ("M2 Scale volume · 3 wk") fit fewer segments than the code alone did.
       await nothingCut(head.locator('[data-testid="goal-bar-label"], [data-testid="milestone-chip"]'));
-      if (!v.phone) await expect(head.getByTestId("goal-bar-label")).toHaveCount(5);
+      // The rule, at whatever width the text draws: each shown label fits its segment with room
+      // to spare and lies wholly inside it; each hidden one would not fit, and its segment's
+      // title holds its words.
+      const segments = await head.getByTestId("goal-bar-segment").evaluateAll((els) =>
+        els.map((e) => {
+          const text = e.querySelector<HTMLElement>("[data-label]")!;
+          const [s, t] = [e.getBoundingClientRect(), text.getBoundingClientRect()];
+          return {
+            label: text.textContent!,
+            shown: text.dataset.testid === "goal-bar-label" && getComputedStyle(text).opacity === "1",
+            fits: text.offsetWidth + 12 <= e.clientWidth,
+            inside: t.left >= s.left - 0.5 && t.right <= s.right + 0.5,
+            title: e.getAttribute("title")!,
+          };
+        }),
+      );
+      for (const g of segments) {
+        expect(g.shown, `"${g.label}" shows only where it fits`).toBe(g.fits);
+        if (g.shown) expect(g.inside, `"${g.label}" is not cut`).toBe(true);
+        else expect(g.title, `"${g.label}"'s words are in its title`).toBe(g.label.replace(/ · ([\d.]+) wk$/, ": $1 engineer-weeks"));
+      }
+      if (!v.phone) expect(segments.filter((g) => g.shown).length, "a desktop bar names its milestones").toBeGreaterThan(0);
       // Every label on a milestone colour reads at AA (4.5:1), light and dark.
       expect(await contrasts(head.getByTestId("goal-bar-label"))).toEqual([]);
 

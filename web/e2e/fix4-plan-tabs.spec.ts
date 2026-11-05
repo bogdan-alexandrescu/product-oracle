@@ -59,6 +59,26 @@ test.describe("phone", () => {
   test("qa-plan-18: the Plan tabs are one row that scrolls, Reports never alone on a second row", async ({ page }) => {
     await start(page);
     await page.goto("/plan");
+    // One row that scrolls sideways, whatever width the text draws at (another system's font
+    // runs a few percent wider or narrower): every tab on Plan's line, the strip never wrapping
+    // or scrolling up and down, and the open tab in full view in it.
+    const row = (current: string) =>
+      strip(page).locator('[data-testid^="plan-tab-"]').first().evaluate((first, open) => {
+        const s = first.parentElement!;
+        const cs = getComputedStyle(s);
+        const box = s.getBoundingClientRect();
+        const on = s.querySelector<HTMLElement>(`[data-testid="${open}"]`)!.getBoundingClientRect();
+        return {
+          wrap: cs.flexWrap,
+          overflowX: cs.overflowX,
+          tall: s.scrollHeight > s.clientHeight + 1,
+          rows: new Set([...s.querySelectorAll("[data-testid^='plan-tab-']")].map((t) => Math.round(t.getBoundingClientRect().top))).size,
+          openInView: on.left >= box.left - 0.5 && on.right <= box.right + 0.5,
+        };
+      }, current);
+    const ONE_ROW = { wrap: "nowrap", overflowX: "auto", tall: false, rows: 1, openInView: true };
+    await expect(strip(page).getByTestId("plan-tab-plan")).toHaveAttribute("aria-current", "page");
+    await expect.poll(() => row("plan-tab-plan")).toEqual(ONE_ROW);
     const reports = strip(page).getByTestId("plan-tab-reports");
     await reports.scrollIntoViewIfNeeded();
     // Both measured after the scroll, so a page that scrolled to bring Reports in moves both alike.
@@ -67,6 +87,8 @@ test.describe("phone", () => {
     expect(Math.abs(r.y - plan.y)).toBeLessThanOrEqual(1);
     await reports.click();
     await expect(page).toHaveURL(/\/plan\/reports$/);
+    await expect(strip(page).getByTestId("plan-tab-reports")).toHaveAttribute("aria-current", "page");
+    await expect.poll(() => row("plan-tab-reports")).toEqual(ONE_ROW);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(PHONE.width);
   });
 
