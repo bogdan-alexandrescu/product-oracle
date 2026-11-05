@@ -2071,6 +2071,8 @@ class SimpleAgenda(BaseModel):
     batch: str | None = None
     words: list[str] = []
     proposal: SimpleAgendaProposal | None = None
+    # Who decides what an approver proposes: the PRD's decider (none: an owner).
+    decider: SimplePersonRef | None = None
 
 
 class SimpleAgendaEditIn(BaseModel):

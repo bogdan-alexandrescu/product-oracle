@@ -235,6 +235,11 @@ async def record_meeting_decision(
     if me is None:
         raise MeetingError(403, "Meeting decisions are made by people")
     clean = [_subject(s) for s in subjects or []]
+    # agenda-sheet: an agenda item decided in the meeting reads done.
+    decided = [str(s["id"]) for s in clean if s and s.get("kind") == "roadmap_item"]
+    if decided:
+        done = list(dict.fromkeys([*((m.agenda or {}).get("done") or []), *decided]))
+        m.agenda = {**(m.agenda or {}), "done": done}
     nxt = (m.agenda or {}).get("next")
     if nxt and any(s and s.get("kind") == "roadmap_item" and str(s.get("id")) == nxt
                    for s in clean):  # fmt: skip
@@ -1230,7 +1235,7 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
         ),
         not_approved=not_approved or [],
         notes=await _notes_out(db, m),
-        agenda=await _agenda_out(db, m, document.id),
+        agenda=await _agenda_out(db, m, document.id, w.decider),
         draft_roadmap=await meeting_draft.draft_out(db, document, m.id),
     )
 
@@ -1471,11 +1476,13 @@ def _rows(m: SimpleMeeting, features: list[RoadmapItem]) -> list[dict]:
 
 
 def _states(a: dict, rows: list[dict]) -> list[str]:
-    """Done rows are done; the chat's skipped ones skipped; the first other row is now."""
+    """Rows decided in the meeting are done; the chat's skipped ones skipped; the first
+    other row is now."""
     skipped = set(a.get("skipped") or [])
+    done = set(a.get("done") or [])
     out, now = [], False
     for x in rows:
-        if x.get("done"):
+        if x.get("done") or (x.get("feature_id") or "") in done:
             out.append("done")
         elif x["id"] in skipped or (x.get("feature_id") or "") in skipped:
             out.append("skipped")
@@ -1487,7 +1494,9 @@ def _states(a: dict, rows: list[dict]) -> list[str]:
     return out
 
 
-async def _agenda_out(db: AsyncSession, m: SimpleMeeting, document_id: uuid.UUID) -> Any:
+async def _agenda_out(
+    db: AsyncSession, m: SimpleMeeting, document_id: uuid.UUID, decider: uuid.UUID | None
+) -> Any:
     from oracle.simple.schemas import (
         SimpleAgenda,
         SimpleAgendaItem,
@@ -1510,7 +1519,7 @@ async def _agenda_out(db: AsyncSession, m: SimpleMeeting, document_id: uuid.UUID
 
     stored = _rows(m, features)
     prop = a.get("proposal")
-    people = {uuid.UUID(x["by"]) for x in stored if x.get("by")}
+    people = {uuid.UUID(x["by"]) for x in stored if x.get("by")} | ({decider} if decider else set())
     if prop:
         people |= {uuid.UUID(i) for i in (prop["by"], prop.get("decider")) if i}
     names = await _names(db, people)

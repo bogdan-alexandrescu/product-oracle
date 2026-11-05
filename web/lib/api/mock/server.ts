@@ -965,6 +965,22 @@ function seedMeetingAgendaScenario(): Db {
 }
 
 /**
+ * agenda-sheet "meeting-agenda-sheet" scenario (mk-edit-meetings-tracks, proposal b): the
+ * default company plus Dana Whitfield (an invented approver); Priya Raman decides the Usage
+ * alerts PRD, and a review of it starts mid-agenda: Alert rules engine decided, Weekly alert
+ * digest now, Dana's topic "Quiet hours for muted teams" added, Alert history export skipped.
+ */
+function seedMeetingAgendaSheetScenario(): Db {
+  const db = seed();
+  const dana = { email: "dana.whitfield@example.com", name: "Dana Whitfield", role: "approver" as const, engineering_lead: false, created_at: "2026-09-10T09:00:00Z", id: uuid(), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0 };
+  db.members.push(dana);
+  const rm = (db.simple_roadmap = seedSimpleRoadmap());
+  rm.prd_deciders = { "usage-alerts": db.members.find((m) => m.email === "approver@example.com")!.id };
+  rm.agenda_midway = { topic: "Quiet hours for muted teams", by: dana.id };
+  return db;
+}
+
+/**
  * The plan strip's "+N more" (#723 polish): "simple-home" plus ten invented items on the
  * onboarding roadmap (Guided setup, the top PRD by priority), each with its own milestone.
  */
@@ -3388,6 +3404,8 @@ function load(): Db {
                 ? seedFeaturePanelFramesScenario
               : scenario === "meeting-agenda"
                 ? seedMeetingAgendaScenario
+              : scenario === "meeting-agenda-sheet"
+                ? seedMeetingAgendaSheetScenario
               : scenario === "simple-home"
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-move"

@@ -11,7 +11,7 @@ import { OnePager } from "@/components/simple/OnePager";
 import { QuestionRow, sourceName, useQuestionActions } from "@/components/simple/questions/Questions";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import type { MeetingAgenda, MeetingNote } from "@/lib/api/simple-chat";
+import type { MeetingNote } from "@/lib/api/simple-chat";
 import { calendarDay, todayIn, useCompanyZone } from "@/lib/dates";
 import { zoneName } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -23,9 +23,10 @@ import { DeliveryLine, emailWords, slackWords } from "../_delivery";
 import { DecidedItem, LINK, momentWords } from "../_flow";
 import { DraftDates } from "./_draft";
 import { SimpleSelect } from "@/components/simple/meetings/SimpleSelect";
+import { AgendaSheet } from "@/components/simple/meetings/AgendaSheet";
 
-// Chat actions (notes, open questions, the agenda's next and skipped items): optional until schema.d.ts carries them.
-type Meeting = Schemas["SimpleMeetingOut"] & { notes?: MeetingNote[]; agenda?: MeetingAgenda };
+// Chat actions (notes, open questions): optional until schema.d.ts carries them.
+type Meeting = Schemas["SimpleMeetingOut"] & { notes?: MeetingNote[] };
 type Mode = Meeting["change_mode"];
 
 const STEPS = ["One-pager", "Roadmap", "Decisions"] as const;
@@ -368,7 +369,8 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
           )}
         </div>
       )}
-      <AgendaStrip agenda={m.agenda} />
+      {/* agenda-sheet: Now, Next, Item n of N and the Agenda sheet (mk-edit-meetings-tracks, b). */}
+      {(m.agenda.items ?? []).length > 0 && <AgendaSheet meetingId={m.id} agenda={m.agenda} can={m.can} phone={phone} reload={reload} />}
       <div className="grid flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         {/* qa-simple-decide-49: the app has the one <main>; the stage is a section. */}
         <section aria-label="Stage" className="min-w-0">
@@ -417,37 +419,6 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
           </section>
         </aside>
       </div>
-    </div>
-  );
-}
-
-/** The agenda as the meeting's chat changed it ("next: …", "skip …"): every attendee sees it. */
-function AgendaStrip({ agenda }: { agenda?: MeetingAgenda }) {
-  if (!agenda || (!agenda.next && agenda.skipped.length === 0)) return null;
-  return (
-    <div role="status" aria-label="Agenda" data-testid="agenda-strip" className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-line px-4 py-2 text-base [overflow-wrap:anywhere]">
-      {agenda.next && (
-        <p data-testid="agenda-next">
-          {/* build-feature-panel review 5: each name opens the one feature panel. */}
-          <span className="font-semibold">Next:</span>{" "}
-          <button type="button" data-feature={agenda.next.id} className="text-left hover:underline">
-            {agenda.next.title}
-          </button>
-        </p>
-      )}
-      {agenda.skipped.length > 0 && (
-        <p data-testid="agenda-skipped" className="text-text2">
-          <span className="font-semibold">Skipped:</span>{" "}
-          {agenda.skipped.map((x, k) => (
-            <span key={x.id}>
-              {k > 0 && ", "}
-              <button type="button" data-feature={x.id} className="text-left hover:underline">
-                {x.title}
-              </button>
-            </span>
-          ))}
-        </p>
-      )}
     </div>
   );
 }

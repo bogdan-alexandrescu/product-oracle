@@ -38656,6 +38656,7 @@ export interface components {
              */
             words: string[];
             proposal?: components["schemas"]["SimpleAgendaProposal"] | null;
+            decider?: components["schemas"]["SimplePersonRef"] | null;
         };
         /**
          * SimpleAgendaEditIn

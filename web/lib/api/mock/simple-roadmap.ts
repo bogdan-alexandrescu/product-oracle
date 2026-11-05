@@ -129,6 +129,10 @@ interface SimpleDb {
   targets?: Record<string, Record<string, unknown>>;
   /** D-a (#730 review): each roadmap's designated decider (roadmap slug -> person id). */
   deciders?: Record<string, string>;
+  /** agenda-sheet ("meeting-agenda-sheet"): a PRD's designated decider (PRD slug -> person id). */
+  prd_deciders?: Record<string, string>;
+  /** agenda-sheet ("meeting-agenda-sheet"): a review of Usage alerts starts mid-agenda (one item decided, a topic added, one skipped). */
+  agenda_midway?: { topic: string; by: string } | null;
   /** D-a: each track's owner (track key -> person id); their role (Who.roles) says whether they decide. */
   track_owners?: Record<string, string>;
   /** S4: people's display names (person id -> name), for the items' owners. */

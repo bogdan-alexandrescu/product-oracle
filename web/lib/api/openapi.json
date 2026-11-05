@@ -116476,6 +116476,16 @@
                 "type": "null"
               }
             ]
+          },
+          "decider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

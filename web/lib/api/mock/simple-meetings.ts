@@ -54,6 +54,7 @@ import { publishOnePager, type OnePagerDb } from "./simple-one-pager";
 import { APPROVED_KEY, draftAct, draftRoadmapOut } from "./meeting-draft";
 import { goalRank, homeRoadmapOf, roadmapId, roadmapOut, tasksWaiting, type SimpleDb } from "./simple-roadmap";
 import type { ChatMeetings, MeetingAgenda, MeetingNote } from "./simple-chat";
+import { agendaRight, agendaRowsOut, editAgenda, TOPIC_MINS, type AgendaCtx, type AgendaSheetDb } from "./simple-meeting-agenda";
 
 export const MOCK_MEETINGS_KEY = "po-mock-simple-meetings";
 /** "minutes-later": the minutes job ends this long after End (the production walk: 14 s). */
@@ -134,6 +135,8 @@ interface Meeting {
   /** Chat actions (./simple-chat.ts): the notes and open questions typed in its chat, and its agenda's next and skipped items. */
   notes?: MeetingNote[];
   agenda_state?: MeetingAgenda;
+  /** agenda-sheet: the agenda's rows, the sheet's batch for Undo and an approver's proposal. */
+  agenda_sheet?: AgendaSheetDb;
   /** meeting-changes-only-its-agenda (agenda.roadmap_id): the roadmap it reviews; none: every roadmap its PRD's items are on. */
   roadmap_id?: string | null;
 }
@@ -216,7 +219,7 @@ function prds(ctx: MeetingsCtx): Prd[] {
   const titled = (slug: string, title: string) => docs.find((d) => d.slug === slug)?.title ?? title;
   const known: Prd[] = [
     { slug: "guided-setup", title: titled("guided-setup", "Guided setup"), id: ctx.onePager.doc.id, ids: [ctx.onePager.doc.id, stableUuid("simple-prd/onboarding-roadmap")], decider: dana?.id ?? null, reviewers: approver && !flags().includes("no-reviewers") ? [approver.id] : [] },
-    { slug: "usage-alerts", title: titled("usage-alerts", "Usage alerts"), id: stableUuid("simple-prd/alerts-roadmap"), ids: [stableUuid("simple-prd/alerts-roadmap")], decider: null, reviewers: [] },
+    { slug: "usage-alerts", title: titled("usage-alerts", "Usage alerts"), id: stableUuid("simple-prd/alerts-roadmap"), ids: [stableUuid("simple-prd/alerts-roadmap")], decider: ctx.roadmap.prd_deciders?.["usage-alerts"] ?? null, reviewers: [] },
   ];
   // qa4-simple-prd-1: the API starts a review of any PRD the reader reads, not only these two.
   const more = docs.filter((d) => !known.some((k) => k.slug === d.slug || k.ids.includes(d.id))).map((d) => ({ slug: d.slug, title: d.title, id: d.id, ids: [d.id], decider: null, reviewers: [] }));
@@ -563,7 +566,40 @@ function settleStuck(m: Meeting) {
   else if (waited > MINUTES_SLOW_MS) m.minutes_job = "slow";
 }
 
-function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeetingOut"] & { notes: MeetingNote[]; agenda: MeetingAgenda } {
+/** agenda-sheet (meetings._agenda_out's inputs): the PRD's features, its decider, and the items decided in the meeting (done). */
+function agendaCtx(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): AgendaCtx {
+  return {
+    me: ctx.me,
+    nameOf: (id) => nameOf(ctx, id),
+    features: prdItems(ctx, p).map((i) => ({ id: i.id, title: i.title })),
+    decider: p.decider,
+    skipped: (m.agenda_state?.skipped ?? []).map((x) => x.id),
+    live: m.status === "live",
+  };
+}
+
+function agendaSheet(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): AgendaSheetDb {
+  if (!m.agenda_sheet) {
+    m.agenda_sheet = {};
+    // "meeting-agenda-sheet": a review of Usage alerts starts mid-agenda, as the owner's picked frames draw it.
+    const mid = ctx.roadmap.agenda_midway;
+    if (mid && p.slug === "usage-alerts") {
+      const f = prdItems(ctx, p);
+      const id = (title: string) => f.find((i) => i.title === title)?.id ?? "";
+      const row = (title: string, mins = 10) => ({ id: id(title), feature_id: id(title), title: null, mins });
+      m.agenda_sheet = {
+        done: [id("Alert rules engine")],
+        items: [row("Alert rules engine"), row("Weekly alert digest", 15), row("Mobile alert push"), { id: crypto.randomUUID(), feature_id: null, title: mid.topic, mins: TOPIC_MINS, by: mid.by }, row("Alert history export")],
+      };
+      m.agenda_state = { next: null, skipped: [{ id: id("Alert history export"), title: "Alert history export" }] };
+    }
+  }
+  const done = db.decisions.filter((d) => d.meeting_id === m.id).flatMap((d) => d.subjects.filter((x) => x.kind === "roadmap_item").map((x) => x.id));
+  if (done.length) m.agenda_sheet.done = [...new Set([...(m.agenda_sheet.done ?? []), ...done])];
+  return m.agenda_sheet;
+}
+
+function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeetingOut"] & { notes: MeetingNote[]; agenda: Schemas["SimpleAgenda"] } {
   const p = prds(ctx).find((x) => x.slug === m.prd)!;
   const deciderOrOwner = ctx.me.id === p.decider || ctx.me.role === "owner";
   return {
@@ -599,10 +635,12 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
       end: presenterOrDecider(ctx, m, p) && m.minutes_state !== "sent" && RANK[ctx.me.role] >= RANK.commenter,
       redraft: m.status === "ended" && m.minutes_state === "drafting" && m.minutes_job === "failed" && presenterOrDecider(ctx, m, p),
       retry_delivery: mayRetry(ctx, m),
+      edit_agenda: m.status === "live" && agendaRight(agendaCtx(ctx, db, m, p)) === "save",
+      propose_agenda: m.status === "live" && agendaRight(agendaCtx(ctx, db, m, p)) === "propose",
     },
     not_approved: [],
     notes: m.notes ?? [],
-    agenda: m.agenda_state ?? { next: null, skipped: [] },
+    agenda: { ...(m.agenda_state ?? { next: null, skipped: [] }), ...agendaRowsOut(agendaSheet(ctx, db, m, p), agendaCtx(ctx, db, m, p)) },
     // build-runplan RP2: the run's draft roadmap of the PRD (meeting_draft.draft_out).
     draft_roadmap: draftRoadmapOut(ctx.roadmap, p.ids, approvedHere(db, m, p.ids)),
   };
@@ -1218,6 +1256,13 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     m.change_mode = mode;
     m.change_people = people;
     return ok();
+  }
+  // agenda-sheet (meetings.edit_agenda): one op of the Agenda sheet.
+  if (p[4] === "agenda" && method === "POST") {
+    const b = (await body(req)) as Schemas["SimpleAgendaEditIn"];
+    const sheet = agendaSheet(ctx, db, m, prd);
+    const err = editAgenda(sheet, agendaCtx(ctx, db, m, prd), b);
+    return err ? json(err.status, { detail: err.detail }) : ok();
   }
   if (p[4] === "comments" && method === "POST") {
     const b = (await body(req)) as Partial<Schemas["SimpleMeetingCommentIn"]>;
