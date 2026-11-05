@@ -58,23 +58,34 @@ test("an approved PRD's items show once on the Simple roadmap", async ({ page })
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await expect(page.getByTestId("draft-from-prd")).toHaveText(/2 items came from Visit reminders \(version 1\)/);
 
-  for (const f of ["gantt", "timeline"] as const) {
-    await page.getByTestId(`format-${f}`).click();
-    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", f);
-    const bars = page.locator('g[data-testid="bar"]');
-    await expect(bars.first()).toBeVisible();
-    // No item twice: every bar is its own item, by key and by title.
-    const shown = await bars.evaluateAll((els) =>
-      els.map((e) => ({ key: e.getAttribute("data-item"), title: (e.getAttribute("aria-label") ?? "").split(":")[0] })),
-    );
-    const keys = shown.map((s) => s.key);
-    const titles = shown.map((s) => s.title);
-    expect(keys.length, keys.join(", ")).toBe(new Set(keys).size);
-    expect(titles.length, titles.join(", ")).toBe(new Set(titles).size);
-    for (const [title, end] of [["Weekly alert digest", "2027-02-19"], ["Alert history export", "2027-02-26"]] as const) {
-      const bar = page.locator(`g[data-testid="bar"][aria-label^="${title}:"]`);
-      await expect(bar).toHaveCount(1);
-      await expect(bar).toHaveAttribute("data-end", end);
-    }
+  const items = [
+    ["Weekly alert digest", "2027-02-19", "Feb 19, 2027"],
+    ["Alert history export", "2027-02-26", "Feb 26, 2027"],
+  ] as const;
+
+  await page.getByTestId("format-gantt").click();
+  await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
+  const bars = page.locator('g[data-testid="bar"]');
+  await expect(bars.first()).toBeVisible();
+  // No item twice: every bar is its own item, by key and by title.
+  const shown = await bars.evaluateAll((els) =>
+    els.map((e) => ({ key: e.getAttribute("data-item"), title: (e.getAttribute("aria-label") ?? "").split(":")[0] })),
+  );
+  const keys = shown.map((s) => s.key);
+  const titles = shown.map((s) => s.title);
+  expect(keys.length, keys.join(", ")).toBe(new Set(keys).size);
+  expect(titles.length, titles.join(", ")).toBe(new Set(titles).size);
+  for (const [title, end] of items) {
+    const bar = page.locator(`g[data-testid="bar"][aria-label^="${title}:"]`);
+    await expect(bar).toHaveCount(1);
+    await expect(bar).toHaveAttribute("data-end", end);
+  }
+
+  // The Timeline lists each once too, with the PRD's new end.
+  await page.getByTestId("format-timeline").click();
+  await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "timeline");
+  for (const [title, , day] of items) {
+    await expect(page.getByRole("button", { name: title, exact: true })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: new RegExp(`^${title}, .*${day}\\.`) })).toHaveCount(1);
   }
 });
