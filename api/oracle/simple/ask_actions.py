@@ -1,11 +1,16 @@
 """Ask Oracle does what a person can do (owner, Nov 4): the action catalogue of the API.
 
 **The catalogue** is an allow-list: ``ALLOWED`` names each operation the chats may offer,
-with its plain words; each stays inside Oracle and carries no secret. None pings a person
-(a Slack DM, the Slack outbox, an email): those that do (a question asked of someone, a
-decision requested of its approver) are not offered, as a card would notify someone it does
-not name (tests/test_ask_oracle_actions.py walks each allowed route's calls). An allowed
-write still sends the company's own webhooks, as the same edit on its page does. Every
+with its plain words; each stays inside Oracle and carries no secret. Ask Oracle does what a
+person can (owner, Nov 5): a write that sends a Slack message (``PINGS``: a question asked
+of someone or reassigned, a decision requested of its approver) is offered, and its card
+names each person messaged, by name, and what the message does ("Sends a Slack message to
+<name> asking for a decision"); no name, no card. Apply sends exactly that: whom, as the
+route decides then, must be whom the card names (else 409). Such a card has no Undo (a
+message sent is not taken back). tests/test_ask_oracle_actions.py walks each allowed
+route's calls: one reaching a Slack ping, the Slack outbox or the mailer must be in
+``PINGS`` with a card naming its recipients. An allowed write still sends the company's own
+webhooks, as the same edit on its page does. Every
 other route of the app is named in oracle.simple.ask_action_routes (outward or
 secret-bearing, with why, or not offered), and a route added later is not offered until
 it is allowed here by name (tests/test_ask_oracle_actions.py fails while a route is in
@@ -18,7 +23,9 @@ person's role reaches, in a meeting the role every attendee reaches (``offer``),
 answers ``calls`` (``{"action", "args"}``). A read runs at once and a second call words
 its result in plain words. A write becomes a card (op ``api_action``) naming what changes:
 each record its path names, and each its body or query points to by id, is read first as the
-person and named in the card (no name, no card); a value that looks like a secret, under a
+person and named in the card (no name, no card): by an offered read, or by ``NAME_READS``
+(a person, an intake, a document and its versions, a run, a discussion, a request; never
+offered themselves); a value that looks like a secret, under a
 secret's key or pasted into any text, is never kept in one. In a meeting no read of one
 person's own records (``OWN_READS``: their sources) is offered, as everyone there reads the
 answer. Nothing runs until Apply, which calls the same route as the page would, with the
@@ -118,13 +125,18 @@ PINGS: dict[str, tuple[str, str]] = {
 PINGED_CHANGED = "Whom this card messages has changed since it was made; ask again."
 # The reads that name a record a write points to by id but the chat does not offer
 # (operation id), each called as the person: a person (the member picker, which any
-# member may read), an intake, a document; a document version is named by its document.
-NAME_READS = {"person": "list_people", "intake": "get_intake", "document": "get_document"}
+# member may read), an intake, a document, a run, a discussion, a request; a document
+# version (a PRD's, a roadmap's) is named by its document and number.
+NAME_READS = {
+    "person": "list_people", "intake": "get_intake", "document": "get_document",
+    "run": "get_run", "discussion": "get_discussion", "request": "get_request",
+}  # fmt: skip
 # A body field's stem -> the kind of record it names.
 KINDS = {
     "asked_to": "person", "approver": "person", "contributor": "person", "informed": "person",
     "owner": "person", "author": "person", "intake": "intake", "document": "document",
     "prd_version": "version", "roadmap_version": "version", "document_version": "version",
+    "run": "run", "discussion": "discussion", "request": "request",
 }  # fmt: skip
 NOT_OFFERED_WHY = "not offered in the chat"
 NEW_ROUTE_WHY = "a new route: not offered until it is allowed by name"
@@ -548,7 +560,12 @@ async def _name_by_kind(db: AsyncSession, principal: Any, kind: str, rid: str) -
         reader = namers.get(kind)
         if reader is None:
             return None
-        return _name_of(await run(db, principal, reader, _args_for(reader, [rid])))
+        data = await run(db, principal, reader, _args_for(reader, [rid]))
+        if kind == "run" and isinstance(data, dict):
+            # A run has no title: its flow and its document's ("Draft of Saved addresses").
+            flow, doc = data.get("flow_title"), data.get("document_title")
+            return f"{flow} of {doc}" if flow and doc else None
+        return _name_of(data)
     except tools.ToolError:
         return None
 

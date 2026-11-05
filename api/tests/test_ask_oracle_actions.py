@@ -42,9 +42,12 @@ Test cards (protects / fails_when / no_claim):
 - test_apply_all_leaves_api_action_cards_for_their_own_apply.
 - test_undo_of_a_dependency_card_turns_back_only_its_dependency: protects=Undo puts back the
   one dependency it removed and keeps one added since; fails_when=the whole list is restored.
-- test_no_allowed_operation_pings_a_person_or_reaches_an_outbox: protects=no allowed route's
-  calls reach a Slack ping, the Slack outbox or the mailer (a question asked of someone, a
-  decision requested of its approver are denied with why); fails_when=one does.
+- test_an_allowed_route_that_pings_names_each_person_on_its_card: protects=an allowed route
+  whose calls reach a Slack ping, the Slack outbox or the mailer is in ``PINGS`` and its card
+  says "Sends a Slack message to <name>"; asking a question, changing one and requesting a
+  decision are offered (owner, Nov 5); fails_when=one pings someone its card does not name,
+  or the three are refused; no_claim=a ping reached only through a method of an object made at
+  run time (the walk follows names, not methods).
 - test_a_card_names_every_record_its_body_points_to: protects=create_edge's card names both
   records, a reparent names the new parent, an id no one can name gets no card.
 - test_undo_is_not_promised_for_a_merged_value: protects=an edit sending a dict (attrs, which
@@ -53,6 +56,15 @@ Test cards (protects / fails_when / no_claim):
   meeting: the asker's own sources are neither offered nor read there.
 - test_a_secret_value_is_never_kept_in_a_card: protects=a token pasted into a title: no card.
 - test_a_proposal_answer_promises_no_undo: protects=a 202 (a proposal) keeps no Undo.
+- test_a_decision_request_names_the_approver_and_apply_pings_exactly_them: protects=the card
+  reads "Sends a Slack message to <name> asking for a decision" before Apply, nothing is
+  queued until Apply, then one ping to that person; an approver no one can name: no card.
+- test_a_question_names_whom_it_asks_and_a_reassigned_one_the_new_person: protects=a question
+  card names its subject and whom it messages; a reassignment names the new person and pings
+  them; a withdrawal says no message.
+- test_a_card_names_an_intake_a_prd_version_and_a_document: protects=a gap on an intake, a
+  blocker on a document and an outcome on a PRD version get named cards (intake title,
+  document title, "<PRD> version <n>"), and the gap's applies; fails_when=refused as unnamed.
 - test_a_card_whose_commit_failed_cannot_apply_twice: protects=the route ran, the card's own
   write failed: a second Apply is refused, the route is not called again.
 """
@@ -740,6 +752,20 @@ async def test_a_question_names_whom_it_asks_and_a_reassigned_one_the_new_person
     assert card["summary"].endswith(ask_actions.CANNOT_UNDO)
     await _apply(client, ctx, "owner", card)
     assert [p.recipient_id for p in await pings_of(ctx)][-1] == ctx.users["approver"].id
+    # Apply sends exactly what the card names: reassigned on the page meanwhile, the card's
+    # move would message no one, so it is refused and nothing more is sent.
+    back = {"action": "update_question",
+            "args": {"question_id": str(q.id),
+                     "body": {"asked_to": str(ctx.users["decider"].id)}}}  # fmt: skip
+    [card] = (await _called(client, ctx, "owner", back))["cards"]
+    assert f"Sends a Slack message to {decider} with the question." in card["summary"]
+    r = await client.patch(f"/v1/questions/{q.id}", headers=ctx.as_("owner"),
+                           json={"asked_to": str(ctx.users["decider"].id)})  # fmt: skip
+    assert r.status_code == 200, r.text
+    sent = len(await pings_of(ctx))
+    r = await client.post(f"{CARDS}/{card['id']}/apply", headers=ctx.as_("owner"))
+    assert r.status_code == 409 and ask_actions.PINGED_CHANGED in r.text, r.text
+    assert len(await pings_of(ctx)) == sent
     # A withdrawal pings no one, and its card says no message.
     stop = {"action": "update_question",
             "args": {"question_id": str(q.id), "body": {"status": "withdrawn"}}}  # fmt: skip
