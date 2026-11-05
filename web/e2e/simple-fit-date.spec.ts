@@ -40,6 +40,8 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("fit-on-plan")).toHaveText("Mar 12");
     await expect(goal).toContainText("6 weeks late");
     await expect(page.getByTestId("fit-lane-M2")).toContainText("Send check before a draft goes out");
+    // The chip beside Roadmap names the PRD whose goal leads the page (fd1-a-rest), not "All roadmaps".
+    await expect(page.getByTestId("roadmap-scope")).toHaveText("Reply faster in the shared inbox");
 
     await page.getByRole("button", { name: "Bring this date in" }).click();
     const panel = page.getByTestId("fit-panel");
@@ -102,6 +104,11 @@ test.describe("desktop", () => {
     // Nothing asks the owner yet, so the panel does not say they are asked.
     await expect(page.getByTestId("fit-needs-estimate")).toContainText("Thread summary card needs a new estimate from Tomas Brook");
     await expect(page.getByTestId("fit-needs-estimate")).not.toContainText("is asked");
+    // The target is reached, so Approve both and Back to the picks sit side by side (fd3-a-result).
+    const approveBox = (await page.getByRole("button", { name: "Approve both", exact: true }).boundingBox())!;
+    const backBox = (await page.getByRole("button", { name: "Back to the picks" }).boundingBox())!;
+    expect(Math.abs(backBox.y - approveBox.y)).toBeLessThanOrEqual(1);
+    expect(backBox.x).toBeGreaterThan(approveBox.x + approveBox.width);
 
     // Back to the picks keeps them; drafting again returns to the check.
     await page.getByRole("button", { name: "Back to the picks" }).click();
@@ -171,7 +178,15 @@ test.describe("desktop", () => {
     await expect(page.getByRole("button", { name: "Draft 7 changes and the Jan 16 target" })).toBeVisible();
     await page.getByRole("button", { name: "Draft 7 changes and the Jan 16 target" }).click();
     await expect(page.getByTestId("fit-diff")).toContainText("No set of cuts reaches Jan 8, so you approve the new target too.");
-    await expect(page.getByRole("button", { name: "Approve both and the Jan 16 target" })).toBeVisible();
+    const approve = page.getByRole("button", { name: "Approve both and the Jan 16 target" });
+    await expect(approve).toBeVisible();
+    // No set reaches the target: Back to the picks sits under the Approve button, both at the
+    // footer's left (fd3-a-hard-1512).
+    const back = page.getByTestId("fit-check-actions").getByRole("button", { name: "Back to the picks" });
+    const a = (await approve.boundingBox())!;
+    const b = (await back.boundingBox())!;
+    expect(b.y).toBeGreaterThanOrEqual(a.y + a.height);
+    expect(Math.abs(b.x - a.x)).toBeLessThanOrEqual(1);
   });
 });
 

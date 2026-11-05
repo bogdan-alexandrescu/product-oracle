@@ -556,7 +556,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
         )}
         {planShown && (
           <div aria-busy={updating} className={updating ? "opacity-60" : undefined}>
-            <PrdPlan plan={plan!} title={v.document.title} onPlan={(p) => {
+            <PrdPlan plan={plan!} title={v.document.title} prd={v.document.slug} onPlan={(p) => {
               setPlanNote(null);
               if (p.status === "reading") setUpdating(true);
               else setPlanNow(p);

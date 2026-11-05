@@ -28,6 +28,8 @@ const isHard = (scenario: string | null) => scenario === "fit-date-hard" || scen
 export const FIT_GOAL_ID = stableUuid("fit-date/goal");
 const GOAL_TITLE = "40 replied threads per agent per day";
 const PLAN_TARGET = 40;
+// The goal's own due date (invented): the smaller-goal sheet opens with it.
+const GOAL_DUE = "2027-03-31";
 // The goal's own M2 work a smaller goal shrinks (the API's build_plan): unlocked and neither guardrail,
 // safety nor must-include, so Reply drafts in the inbox (must-include) and the two locked items keep their
 // size. Days on the plan in M2, and the days left in M2 once its change is picked (moved: none; sliced:
@@ -44,7 +46,7 @@ export function fitDateGoal<T extends GoalRow>(scenario: string | null, template
   return {
     ...template, id: FIT_GOAL_ID, key: "replied-threads", type: "goal", title: GOAL_TITLE, body: null, status: "confirmed",
     locked: false, locked_by: null, locked_at: null,
-    attrs: { metric: "replied threads per agent per day", unit: "threads", comparison: "at_least", start: 20, target: PLAN_TARGET, horizon: "short" },
+    attrs: { metric: "replied threads per agent per day", unit: "threads", comparison: "at_least", start: 20, target: PLAN_TARGET, horizon: "short", due: GOAL_DUE },
   };
 }
 

@@ -1388,6 +1388,17 @@ const ALERTS_APPROVED: PlanSeedItem[] = [
   { key: "team-budgets", title: "Budgets per team", horizon: "later", goals: ["g.early-churn"], state: "planned", section: "behaviour" },
 ];
 /**
+ * Current state: the baseline features the Plan's items trace (as GET /v1/feature-states lists
+ * every confirmed feature, each with its roadmap items), so the Plan's item names carry their
+ * pills. Their items are the approved version's rows (the Plan finds a pill by the feature's id).
+ */
+export function planFeatureRows(): { feature_id: string; item_id: string; code: string; title: string }[] {
+  return ALERTS_APPROVED.flatMap((s) =>
+    s.feature ? [{ feature_id: entityRef("feature", s.feature).id, item_id: seeded(`plan:${ALERTS_ROADMAP_SLUG}:1:${s.key}`, mockUuid), code: s.feature[0], title: s.feature[1] }] : [],
+  );
+}
+
+/**
  * qa-plan-1: the tracked PRD's items as its track reads them: the Plan's approved rows, each with
  * the reasons it needs attention (none once its slip was accepted from the alert).
  */

@@ -276,11 +276,9 @@ interface Draft {
   confirm: boolean;
 }
 
-/** The goal's last milestone in the map's order: what a new one of that goal comes after by default. */
-const lastOf = (map: GoalMap, goal: string) => [...map.milestones].reverse().find((m) => m.goal === goal)?.id ?? "";
-
+/** A proposed milestone starts with nothing before it (gm1-a-open): "Nothing: it can start now". */
 function emptyDraft(map: GoalMap): Draft {
-  return { name: "", goal: map.goals[0]?.id ?? "", threshold: "", areas: [], after: lastOf(map, map.goals[0]?.id ?? ""), target: "", feature: "", search: "", milestone: "", areaName: "", area: "", expected: "", confirm: false };
+  return { name: "", goal: map.goals[0]?.id ?? "", threshold: "", areas: [], after: "", target: "", feature: "", search: "", milestone: "", areaName: "", area: "", expected: "", confirm: false };
 }
 
 /* ---------- The page ---------- */
@@ -532,7 +530,7 @@ function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: Go
         </label>
         <label className={label}>
           Goal it moves
-          <select className={field} value={draft.goal} onChange={(e) => set({ goal: e.target.value, after: lastOf(map, e.target.value) })}>
+          <select className={field} value={draft.goal} onChange={(e) => set({ goal: e.target.value })}>
             {map.goals.map((g) => (
               <option key={g.id} value={g.id}>{g.name}</option>
             ))}

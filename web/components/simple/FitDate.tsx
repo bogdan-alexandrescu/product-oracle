@@ -7,16 +7,18 @@
  * answer in a side panel over the roadmap (a sheet on a phone): one list of changes ranked by days
  * saved, a tick box each, a meter with the live date (oracle.simple.fit_date: the capacity queue,
  * no model call), the items Oracle will not cut, then the drafted re-plan to approve. When no set
- * reaches the target, "Keep <date> with a smaller goal" opens the Baseline goal the milestone's
- * gate counts toward in a sheet over the panel (its target and due date, the target focused); it
- * saves through PATCH /v1/baseline/entities/{id} and the answer reloads against the new target.
+ * reaches the target, "Keep <date> with a smaller goal" (under the Draft button) opens the Baseline
+ * goal the milestone's gate counts toward in a sheet over the panel, "Target and due only": the
+ * target's one value (its comparison and unit read as text) and the goal's due date; it saves
+ * through PATCH /v1/baseline/entities/{id} and the answer reloads against the new target.
  */
 
 import { useEffect, useRef, useState } from "react";
 
-import { GoalFields, goalDraft, goalPatch, problemsOf, typedTarget, type GoalDraft, type GoalProblem } from "@/app/baseline/_components/goal-fields";
+import { COMPARISONS, COUNT, goalDraft, goalPatch, problemsOf, typedTarget, UNITS, type GoalDraft, type GoalProblem } from "@/app/baseline/_components/goal-fields";
 import { Icon } from "@/components/ds/Icon";
 import { Sheet } from "@/components/ds/Sheet";
+import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay, formatInZone, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
@@ -233,7 +235,75 @@ function targetWords(g: BaselineGoal, value = g.target): string {
   return t ? t.words : `${value ?? "no target"}`;
 }
 
-/** The Baseline goal's edit form (target and due date, the target focused) in a sheet over the panel. */
+const CURRENCY: Record<string, string> = { USD: "$", EUR: "€", GBP: "£" };
+const FIELD_LABEL = "flex min-w-0 flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2";
+
+/** The API's problems with one field, under it. */
+function Problems({ field, problems }: { field: string[]; problems: GoalProblem[] }) {
+  const mine = problems.filter((p) => field.some((f) => p.where === `attrs.${f}`));
+  if (mine.length === 0) return null;
+  return (
+    <span role="alert" className="text-[13px] font-medium tracking-normal text-crit">
+      {mine.map((p) => p.message).join(" ")}
+    </span>
+  );
+}
+
+/**
+ * The owner's pick "Target and due only": one input for the target's value, its comparison and
+ * unit (or counted noun) read as text around it ("At least [40] threads"), and the due date read
+ * month first ("Mar 31, 2027") over a date picker.
+ */
+function TargetAndDue({ draft, onChange, problems }: { draft: GoalDraft; onChange: (d: GoalDraft) => void; problems: GoalProblem[] }) {
+  const cmp = COMPARISONS.find((c) => c.value === draft.comparison)?.label;
+  const unit = draft.unit === COUNT ? draft.noun : (UNITS.find((u) => u.value === draft.unit)?.label ?? draft.unit);
+  const before = CURRENCY[draft.unit];
+  const after = before ? "" : unit;
+  return (
+    <>
+      <div className={FIELD_LABEL}>
+        <label htmlFor="fit-goal-target">Target</label>
+        <span className="flex min-w-0 flex-wrap items-center gap-2 text-[17px] font-normal tracking-normal text-text" data-testid="fit-goal-target">
+          {cmp && <span>{cmp}</span>}
+          {before && <span>{before}</span>}
+          <input
+            id="fit-goal-target"
+            className={`${INPUT} w-28 flex-none`}
+            inputMode="decimal"
+            value={draft.target}
+            autoFocus
+            onChange={(e) => onChange({ ...draft, target: e.target.value })}
+          />
+          {after && <span>{after}</span>}
+        </span>
+        <Problems field={["target", "comparison", "unit"]} problems={problems} />
+      </div>
+      <div className={FIELD_LABEL}>
+        <span aria-hidden>Due</span>
+        <span className="relative flex min-h-10 w-48 items-center rounded-lg border border-line-strong bg-surface px-2.5 text-[17px] font-normal tracking-normal text-text" data-testid="fit-goal-due">
+          {draft.due ? calendarDay(draft.due, { month: "short", day: "numeric", year: "numeric" }) : "Not set"}
+          <input
+            aria-label="Due"
+            type="date"
+            className="absolute inset-0 cursor-pointer opacity-0"
+            value={draft.due}
+            onClick={(e) => {
+              try {
+                e.currentTarget.showPicker();
+              } catch {
+                // A browser without showPicker keeps its own date field.
+              }
+            }}
+            onChange={(e) => onChange({ ...draft, due: e.target.value })}
+          />
+        </span>
+        <Problems field={["due"]} problems={problems} />
+      </div>
+    </>
+  );
+}
+
+/** The Baseline goal's target and due date (the target focused) in a sheet over the panel. */
 function GoalSheet({ goal, onClose, onSaved }: { goal: BaselineGoal; onClose: () => void; onSaved: () => void }) {
   const entity = useQuery(`baseline-entity:${goal.id}`, () => unwrap(api.GET("/v1/baseline/entities/{entity_id}", { params: { path: { entity_id: goal.id } } })));
   const [draft, setDraft] = useState<GoalDraft | null>(null);
@@ -278,7 +348,7 @@ function GoalSheet({ goal, onClose, onSaved }: { goal: BaselineGoal; onClose: ()
         </p>
         {entity.error && <p className="simple-small text-crit">{entity.error}</p>}
         {!d && !entity.error && <p className="simple-small">Opening the goal…</p>}
-        {d && <GoalFields draft={d} onChange={setDraft} problems={problems} targetOnly />}
+        {d && <TargetAndDue draft={d} onChange={setDraft} problems={problems} />}
         {error && (
           <p role="alert" className="simple-small text-crit">
             {error}
@@ -354,8 +424,12 @@ export function FitPanel({ goal, onClose, onApproved, onGoalSaved }: { goal: Goa
     }
   };
   const newTarget = (live && live.over_days > 0 ? live.date : null) ?? draft?.new_target;
+  // When no set reaches the target, the footer's buttons stack, the second under the first
+  // (fd2-a-hard-1512, fd3-a-hard-1512); otherwise they sit side by side (fd3-a-result).
+  const stack = "flex flex-col items-start gap-2";
+  const keep = hard && !!bg?.can_edit;
   const foot = draft ? (
-    <div className="flex flex-wrap gap-2">
+    <div className={draft.new_target ? stack : "flex flex-wrap gap-2"} data-testid="fit-check-actions">
       <button type="button" className="simple-button simple-button-primary" disabled={busy || !can("fit_date_approve")} onClick={() => void approve()}>
         {draft.new_target ? `Approve both and the ${day(draft.new_target)} target` : "Approve both"}
       </button>
@@ -370,11 +444,16 @@ export function FitPanel({ goal, onClose, onApproved, onGoalSaved }: { goal: Goa
         {a && "Oracle drafts the next PRD and roadmap versions for you to check."}
         {!mayDraft && " Only an approver can draft them."}
       </p>
-      <div className="flex flex-wrap gap-2">
+      <div className={keep ? stack : "flex flex-wrap gap-2"} data-testid="fit-pick-actions">
         <button type="button" className="simple-button simple-button-primary" disabled={!a || chosen.length === 0 || busy || !mayDraft} onClick={() => void runDraft()} data-testid="fit-draft">
           {busy ? "Drafting…" : `Draft ${plural(chosen.length, "change")}`}
           {hard && newTarget && ` and the ${day(newTarget)} target`}
         </button>
+        {keep && (
+          <button type="button" className="simple-button" onClick={() => setEditGoal(true)}>
+            Keep {day(a!.target)} with a smaller goal
+          </button>
+        )}
       </div>
     </div>
   );
@@ -398,26 +477,15 @@ export function FitPanel({ goal, onClose, onApproved, onGoalSaved }: { goal: Goa
             </p>
           )}
           {a && (draft ? <Diff a={a} d={draft} /> : <RankedList a={a} picks={chosen} setPicks={setPicks} live={live} />)}
-          {a && hard && !draft && (
+          {/* Who may change the goal gets "Keep <date> with a smaller goal" under the Draft button
+              (fd2-a-hard-1512); anyone else is told why there is none. */}
+          {a && hard && !draft && !keep && (
             <div className="flex flex-col gap-2 rounded-xl border border-line p-3" data-testid="fit-keep-date">
-              {!bg ? (
-                <p className="simple-small">
-                  Oracle finds no Baseline goal named &ldquo;{goal.goal ?? goal.milestone_name}&rdquo;, so it cannot offer to keep {day(a.target)} with a smaller goal.
-                </p>
-              ) : (
-                <>
-                  <p className="simple-small">
-                    Or keep {day(a.target)} and ask for less: the goal is {targetWords(bg)}.{!bg.can_edit && " Only an owner or approver can change it."}
-                  </p>
-                  {bg.can_edit && (
-                    <div>
-                      <button type="button" className="simple-button" onClick={() => setEditGoal(true)}>
-                        Keep {day(a.target)} with a smaller goal
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
+              <p className="simple-small">
+                {!bg
+                  ? `Oracle finds no Baseline goal named “${goal.goal ?? goal.milestone_name}”, so it cannot offer to keep ${day(a.target)} with a smaller goal.`
+                  : `Or keep ${day(a.target)} and ask for less: the goal is ${targetWords(bg)}. Only an owner or approver can change it.`}
+              </p>
             </div>
           )}
           {error && (
