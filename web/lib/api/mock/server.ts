@@ -6571,6 +6571,13 @@ async function route(db: Db, req: Request): Promise<Response> {
       return id;
     };
     const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, proposeTo: (d: string | null) => reviews.proposeTo(d),
+      // ask_actions.slack_reach: whether Slack sends a pinged person the message (connected, and their review-requested ping on).
+      slackReach: (id: string): "on" | "off" | "none" => {
+        const install = ensureReports(db, db.user_id, reportLive(db, me)).integration;
+        if (!install || install.status !== "active") return "none";
+        const email = db.members.find((x) => x.id === id)?.email ?? "";
+        return { ...SLACK_PINGS, ...(db.preferences?.[email]?.slack_pings ?? {}) }.review_requested ? "on" : "off";
+      },
       ownsDiscussion: (id: string) => !!(db.discussions ??= emptyDiscussions()).discussions.find((d) => d.id === id && d.origin === "panel" && d.started_by === me.id),
       // Recent chats: a chat whose first line went to Oracle's Ask is named by that line, in its Ask chat.
       askQuestion: (id: string) =>
