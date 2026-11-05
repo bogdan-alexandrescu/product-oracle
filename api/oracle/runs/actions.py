@@ -1091,6 +1091,8 @@ async def read(
 async def _read(
     db: AsyncSession, principal: Principal, run: Run, cp: Checkpoint
 ) -> CheckpointReview:
+    # The gate below counts the Engineering check's problems as the run's page shows them.
+    await service.recheck_briefs(db, run, [cp])
     found = await _file(db, run, cp)
     rows = await batch.once(("actions", cp.id), lambda: _actions(db, [cp.id]))
     question_ids = [r.question_id for r in rows if r.question_id]

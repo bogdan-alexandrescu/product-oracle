@@ -1211,7 +1211,8 @@ async def create(
     else:
         # As if applied, on what the proposer reads; nothing is written.
         rows = {str(e.row.id): e.row for e in read_.entries}
-        flags = await _flags(db, c, drafts.simulate(c, after, rows, seen, KEYED, write))
+        copies = await drafts.copies_of(db, list(rows.values()), seen)
+        flags = await _flags(db, c, drafts.simulate(c, after, rows, seen, KEYED, write, copies))
     db.add(c)
     await db.flush()
     await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,

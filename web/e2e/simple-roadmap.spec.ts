@@ -195,10 +195,13 @@ test("the drag shows dates and constraint flags live", async ({ page }) => {
   await expect(tl).toBeVisible();
   await tl.scrollIntoViewIfNeeded();
   // Mobile alert push depends on the rules engine: any span before the rules end is broken.
+  // hotfix-effort-start: it starts its 3 weeks before its Dec 20 end (Nov 29), so it is
+  // dragged back past the rules engine's end (Nov 10).
   const box = (await tl.boundingBox())!;
+  const rules = (await page.locator('[data-testid="timeline-row"][data-item="alert-rules"] [data-testid="timeline-bar"]').boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2 - 30, box.y + box.height / 2, { steps: 6 });
+  await page.mouse.move(rules.x + rules.width - 40 + box.width / 2, box.y + box.height / 2, { steps: 6 });
   await expect(page.getByTestId("drag-live")).toBeVisible();
   await expect(page.getByTestId("drag-live")).toHaveAttribute("data-state", "broken");
   await expect(tl).toHaveAttribute("data-live", "broken");

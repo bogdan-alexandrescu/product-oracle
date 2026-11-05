@@ -43,13 +43,16 @@ async def _items(db: AsyncSession, document_id: uuid.UUID) -> list[RoadmapItem]:
 
 async def _spans(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uuid.UUID, tuple[date, date]]:
     """Each item's start and end as the Simple roadmap resolves them (its own dates, its
-    engineering milestone, else its horizon's window)."""
-    from oracle.simple.service import _candidates
+    engineering milestone, else its horizon's window; an end-only item starts its feature's
+    effort before its end)."""
+    from oracle.simple.service import _candidates, efforts
 
     windows = dates.windows(await company_horizons(db), await company_time.company_today(db))
+    effort = await efforts(db, rows)
     out = {}
     for r in rows:
-        resolved = dates.resolve(_candidates(r, [], {}, {}), windows.get(r.horizon, windows["now"]))
+        window = windows.get(r.horizon, windows["now"])
+        resolved = dates.resolve(_candidates(r, [], {}, {}), window, effort.get(r.id))
         out[r.id] = (resolved.start.date, resolved.end.date)
     return out
 

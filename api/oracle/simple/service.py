@@ -39,6 +39,7 @@ from oracle.baseline.goal_order import goal_position, goal_sort_key
 from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document, DocumentVersion
 from oracle.members.names import display_name
+from oracle.priorities.scoring import _number
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap import company
 from oracle.roadmap.models import (
@@ -301,11 +302,22 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
         if replaced := await company.replaced_prd_ids(db):
             rows = [r for r in rows if r.prd_document_id not in replaced]
     if overlays:
+        # S7: the items added in Simple to the drafts the reader sees; approved-prd-shown-once:
+        # one that copies a shown item (same roadmap, PRD and key) is read as that item, once.
+        added = await drafts.added_raw(db, overlays)
+        copies = drafts.twins(rows, [a for a, _ in added])
+        folded = {c.id for c in copies.values()}
         rows = [
-            drafts.overlaid(r, overlays.get(r.roadmap_document_id, {}).get(str(r.id))) for r in rows
+            drafts.fold(r, copies[r.id], overlays.get(r.roadmap_document_id, {}))
+            if r.id in copies
+            else drafts.overlaid(r, overlays.get(r.roadmap_document_id, {}).get(str(r.id)))
+            for r in rows
         ]
-        # S7: the items added in Simple to the drafts the reader sees.
-        rows += await drafts.added_rows(db, overlays)
+        rows += [
+            drafts.placed(a, base, overlays[a.roadmap_document_id].get(str(a.id)))
+            for a, base in added
+            if a.id not in folded
+        ]
         rows.sort(key=lambda r: (r.position, r.item_key))
     tracks: dict[uuid.UUID, ProductTrack] = {}
     owner_roles: dict[uuid.UUID, str] = {}
@@ -360,6 +372,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
         else:
             bases_by_ref[(b.prd_document_id, b.tracker_key)].append(b)
     goals = await _goals(db, {r.feature_id for r in rows if r.feature_id})
+    effort = await efforts(db, rows)
     # S7: the goals items are linked to directly (dropped on, suggested for).
     linked = {
         g.id: g
@@ -427,7 +440,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 or next((linked[g] for g in row.goal_ids or [] if g in linked), None),
                 goal_set=goal_sets.get(str(row.id)),
                 window=window,
-                resolved=dates.resolve(cands, window),
+                resolved=dates.resolve(cands, window, effort.get(row.id)),
                 status=_status(row, recs, cut.get(roadmap.id, set())),
                 milestone=milestone,
                 blockers=[blockers[b] for b in row.blocker_ids or [] if b in blockers],
@@ -563,6 +576,23 @@ def _milestone(
     if own.get("name"):
         return SimpleItemMilestone(name=own.get("name"), date=None, source="item")
     return None
+
+
+async def efforts(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uuid.UUID, float]:
+    """hotfix-effort-start: item id -> its feature's effort in weeks as Priorities reads it
+    (attrs ``effort``, else ``effort_weeks``; tiers XS 0.5, S 1, M 2, L 4); items without
+    one are absent. The estimated start of an item dated only by its end lies that far
+    before it (dates.resolve)."""
+    ids = {r.feature_id for r in rows if r.feature_id}
+    if not ids:
+        return {}
+    weeks: dict[uuid.UUID, float] = {}
+    for fid, attrs in await db.execute(select(Entity.id, Entity.attrs).where(Entity.id.in_(ids))):
+        a = attrs or {}
+        v = _number(a["effort"]) if "effort" in a else _number(a.get("effort_weeks"))
+        if v is not None and v > 0:
+            weeks[fid] = v
+    return {r.id: weeks[r.feature_id] for r in rows if r.feature_id in weeks}
 
 
 async def _goals(db: AsyncSession, features: set[uuid.UUID]) -> dict[uuid.UUID, Entity]:

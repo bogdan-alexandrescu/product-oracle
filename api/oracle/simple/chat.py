@@ -290,13 +290,15 @@ class MeetingPrd:
         return f"From {self.document.title}{n} and {where}"
 
 
-def _draft_entry(read: service.Read, prd: Document, row: RoadmapItem) -> service.Entry:
+def _draft_entry(
+    read: service.Read, prd: Document, row: RoadmapItem, effort: float | None = None
+) -> service.Entry:
     """A draft-roadmap item as an entry: it has no roadmap, so its PRD stands in (its
-    decider decides it)."""
+    decider decides it); ``effort``: its feature's, in weeks (service.efforts)."""
     window = read.windows.get(row.horizon, read.windows["now"])
     return service.Entry(
         row=row, roadmap=prd, prd=prd, track=None, goal=None, window=window,
-        resolved=dates.resolve(service._candidates(row, [], {}, {}), window),
+        resolved=dates.resolve(service._candidates(row, [], {}, {}), window, effort),
         status=service._status(row, [], set()), milestone=service._milestone(row, None, {}),
     )  # fmt: skip
 
@@ -380,7 +382,8 @@ async def meeting_prd(
         return MeetingPrd(prd, number, approved, False, {e.row.id for e in on_roadmap}, text)
     _, rows = got
     known = read.by_id()
-    drafts_ = [known.get(r.id) or _draft_entry(read, prd, r) for r in rows]
+    effort = await service.efforts(db, [r for r in rows if r.id not in known])
+    drafts_ = [known.get(r.id) or _draft_entry(read, prd, r, effort.get(r.id)) for r in rows]
     await service._prd_headings(db, [e for e in drafts_ if e.row.id not in known])
     read.entries += [e for e in drafts_ if e.row.id not in known]
     if prd.id not in read.deciders:

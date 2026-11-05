@@ -22,6 +22,7 @@ import { appliedMilestones, type AppliedRecord } from "./approved-roadmap";
 import { withPanel } from "./feature-panel";
 import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
 import { COMPANY_SLUG, COMPANY_TITLE } from "./one-roadmap";
+import { estimates } from "./simple-priorities";
 import { basePlan as fitBasePlan, PLAN_TARGET as FIT_PLAN_TARGET, schedule as fitSchedule } from "./fit-date-engine";
 
 type Item = Schemas["SimpleRoadmapItem"];
@@ -102,6 +103,8 @@ interface SeedItem {
   draft_roadmap?: boolean;
   /** approved-prd-roadmap: an item an approved PRD put in the draft names that PRD. */
   from_prd?: { slug: string; title: string };
+  /** The Baseline feature it is (RoadmapItem.feature_id): an approved PRD's item matches by it. */
+  feature_id?: string | null;
   /** approved-prd-roadmap: its dates as the PRD has them (ISO days; no start: end-only). */
   dates?: { start: string | null; end: string; source: "engineering" | "accepted" };
   /** build-runplan RP2: the PRD it belongs to when not its roadmap's own (./meeting-draft.ts). */
@@ -726,6 +729,15 @@ export function ownDates(db: SimpleDb, s: SeedItem): SimpleDb["own"][string] | u
   return { start: addDays(w[0], s.start), end: addDays(w[0], s.end), source: s.source };
 }
 
+/**
+ * dates.lead_days (hotfix-effort-start): an estimated start lies the item's effort as Priorities
+ * reads it (weeks x 7 calendar days) before a given end, else 28 days.
+ */
+function leadDays(db: SimpleDb, s: SeedItem): number {
+  const weeks = estimates(db, s.key, db.ids[s.key] ?? stableUuid(`simple-item/${s.key}`)).effort;
+  return weeks && weeks > 0 ? Math.floor(weeks * 7 + 0.5) : 28;
+}
+
 function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated; end: Dated } {
   const own = db.own[s.key];
   if (own) {
@@ -735,12 +747,12 @@ function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated
   if (s.dates) {
     const end: Dated = { date: s.dates.end, source: s.dates.source, estimated: false };
     if (s.dates.start) return { start: { date: s.dates.start, source: s.dates.source, estimated: false }, end };
-    return { start: { date: end.date < w[0] ? addDays(end.date, -41) : w[0], source: "estimated", estimated: true }, end };
+    return { start: { date: addDays(end.date, -leadDays(db, s)), source: "estimated", estimated: true }, end };
   }
   const end: Dated = s.end !== undefined && s.source ? { date: addDays(w[0], s.end), source: s.source, estimated: false } : { date: w[1], source: "estimated", estimated: true };
   let start: Dated = { date: w[0], source: "estimated", estimated: true };
   if (s.start !== undefined && s.source) start = { date: addDays(w[0], s.start), source: s.start_source ?? s.source, estimated: false };
-  else if (end.date < w[0]) start = { date: addDays(end.date, -41), source: "estimated", estimated: true };
+  else if (!end.estimated) start = { date: addDays(end.date, -leadDays(db, s)), source: "estimated", estimated: true };
   return { start, end };
 }
 
@@ -1107,7 +1119,7 @@ function regenerate(db: SimpleDb, today: string): number {
       why = `starts the day after ‘${latest.s.title}’ ends`;
     }
     const same = [...(durations.get(s.confidence ?? "") ?? [])].sort((a, b) => a - b);
-    const mid = same.length ? (same.length % 2 ? same[(same.length - 1) / 2] : Math.floor((same[same.length / 2 - 1] + same[same.length / 2]) / 2 + 0.5)) : 42;
+    const mid = same.length ? (same.length % 2 ? same[(same.length - 1) / 2] : Math.floor((same[same.length / 2 - 1] + same[same.length / 2]) / 2 + 0.5)) : 28;
     const conf = s.confidence ? `${s.confidence}-confidence` : "unrated";
     // finding 30: plain words, not statistics jargon ("median").
     const how = same.length ? `${mid} days, about the same as ${same.length} similar ${conf} item${same.length === 1 ? "" : "s"}` : `${mid} days, typical with no dated ${conf} items yet`;
@@ -1186,6 +1198,7 @@ export function readerDb(db: SimpleDb, me: { id: string; role: Role }): SimpleDb
 export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Who): Schemas["SimpleRoadmapOut"] | null {
   knowTalkGoals(db);
   knowExtraRoadmaps(db);
+  foldPrdCopies(db);
   const decides = (s: SeedItem) => canDecideItem(db, s, me ?? { id: "", role });
   const deciders = (s: SeedItem) => {
     const ids = deciderIds(db, s, me?.roles);
@@ -1619,10 +1632,37 @@ export interface PrdApproval {
     title: string;
     horizon: Horizon;
     outcome?: string | null;
+    feature_id?: string | null;
     start: string | null;
     end: string | null;
     source: "engineering" | "accepted";
   }[];
+}
+
+/**
+ * approved-prd-shown-once (hotfix PR 1273): a copy of a shown item (same roadmap and PRD, its key
+ * the shown one's with "-2", "-3", ... as the mock re-keys an added item) reads as that item, once,
+ * as the API's drafts.fold: the copy's title and dates, its own dates and cut on top. Folded for
+ * good, so a change made later on the item always takes effect.
+ */
+export function foldPrdCopies(db: SimpleDb): void {
+  const prdOf = (x: SeedItem) => x.from_prd?.slug ?? ROADMAPS[x.roadmap]?.prd.toLowerCase().replace(/ /g, "-");
+  for (const copy of [...db.items]) {
+    if (!copy.from_prd) continue;
+    const m = /^(.+)-\d+$/.exec(copy.key);
+    const shown = m && db.items.find((x) => x !== copy && x.key === m[1] && x.roadmap === copy.roadmap && prdOf(x) === prdOf(copy));
+    if (!shown) continue;
+    shown.title = copy.title;
+    if (copy.dates) shown.dates = copy.dates;
+    if (db.own[copy.key]) db.own[shown.key] = db.own[copy.key];
+    else if (copy.dates) delete db.own[shown.key];
+    if (copy.status === "cut") shown.status = "cut";
+    delete db.own[copy.key];
+    db.items = db.items.filter((x) => x !== copy);
+    for (const d of db.drafts ?? [])
+      for (const p of Object.values(d.prds ?? {}))
+        p.keys = [...new Set(p.keys.map((k) => (k === copy.key ? shown.key : k)))];
+  }
 }
 
 /**
@@ -1699,18 +1739,37 @@ export function approvedPrdToDraft(
         : [x],
     );
   }
+  foldPrdCopies(db);
   const w = simpleWindows(companyToday());
   const keys: string[] = [];
+  // approved-prd-shown-once: the PRD's item the roadmap shows already (same key, else same
+  // feature, else same title; every key match first, each shown item matched once) is updated,
+  // never added again.
+  const ours = db.items.filter(
+    (x) =>
+      x.roadmap === rm &&
+      (x.from_prd?.slug ??
+        ROADMAPS[rm].prd.toLowerCase().replace(/ /g, "-")) === a.prd.slug,
+  );
+  const named = (t: string) => t.trim().toLowerCase();
+  const matched = new Map<string, SeedItem>();
+  for (const same of [
+    (it: PrdApproval["items"][number], x: SeedItem) => x.key === it.key,
+    (it: PrdApproval["items"][number], x: SeedItem) => !!it.feature_id && x.feature_id === it.feature_id,
+    (it: PrdApproval["items"][number], x: SeedItem) =>
+      !!named(it.title) && named(x.title) === named(it.title),
+  ]) {
+    for (const it of a.items) {
+      if (!it.end || matched.has(it.key)) continue;
+      const taken = new Set(matched.values());
+      const x = ours.find((o) => !taken.has(o) && same(it, o));
+      if (x) matched.set(it.key, x);
+    }
+  }
   for (const it of a.items) {
     if (!it.end) continue;
     const start = it.start && it.start <= it.end ? it.start : null;
-    const pub = db.items.find(
-      (x) =>
-        x.roadmap === rm &&
-        x.key === it.key &&
-        (x.from_prd?.slug ??
-          ROADMAPS[rm].prd.toLowerCase().replace(/ /g, "-")) === a.prd.slug,
-    );
+    const pub = matched.get(it.key);
     if (pub) {
       const r = resolve(db, pub, w[pub.horizon]);
       if (

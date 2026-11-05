@@ -2022,6 +2022,22 @@ const seedEngCheckNoPrd = () => {
   return db;
 };
 
+/**
+ * "eng-check-stale" / "eng-check-stale-unknown" scenarios: the "eng-check" run waiting at an
+ * Engineering check stored before cross-PRD links were read (the owner, Nov 4), so its first
+ * brief's dependency is stored as unknown. The account health ledger is now a Safety PRD
+ * feature on the company roadmap, so read again the briefs have no problem; "-unknown" depends
+ * on a ledger no PRD or roadmap knows, a problem that stays.
+ */
+function seedEngCheckStale(dep: string): Db {
+  const db = seedEngCheckWith(dep === "account-health-ledger" ? "eng-check-stale" : "eng-check-stale-unknown", (check) => {
+    const briefs = (check as unknown as { features: Parameters<typeof briefsCheckOf>[0] }).features;
+    Object.assign(check, briefsCheckOf(briefs.map((b, i) => (i === 0 ? { ...b, depends_on: [...b.depends_on, dep] } : b))));
+  });
+  db.runs!.roadmap_features = { "account-health-ledger": "Account health ledger (Safety PRD)" };
+  return db;
+}
+
 /** "eng-check-long-key" scenario: the "eng-check" run whose first brief has a long key with no break in it. */
 const seedEngCheckLongKey = () =>
   seedEngCheckWith("eng-check-long-key", (check) => {
@@ -3540,6 +3556,10 @@ function load(): Db {
             ? seedEngCheckCrossPrd
           : scenario === "eng-check-no-prd"
             ? seedEngCheckNoPrd
+          : scenario === "eng-check-stale"
+            ? () => seedEngCheckStale("account-health-ledger")
+          : scenario === "eng-check-stale-unknown"
+            ? () => seedEngCheckStale("old-ledger")
           : scenario === "eng-check-long-key"
             ? seedEngCheckLongKey
           : scenario === "eng-check-shop"
@@ -7497,6 +7517,7 @@ async function route(db: Db, req: Request): Promise<Response> {
               title: i.title,
               horizon: i.horizon,
               outcome: i.outcome ?? null,
+              feature_id: (i as { feature_id?: string | null }).feature_id ?? null,
               start,
               end,
               source: lead ? ("engineering" as const) : ("accepted" as const),

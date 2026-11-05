@@ -555,3 +555,33 @@ def test_a_slice_never_grows_an_item(scale):
         # 0.4 slices to 0.4: nothing saved, so no slice is offered.
         assert (item.pw, item.slice_pw) == (0.4, 0.4)
         assert "F-12" not in changes
+
+
+async def test_the_roadmap_follows_on_the_version_it_shows(client):
+    """protects=hotfix PR 1273: when the roadmap has no approved version and its latest (the
+    one the Simple roadmap shows) holds the PRD's items while its working draft was opened
+    on an older version, approving the re-plan writes the new end dates on the shown items;
+    fails_when=it looks only at the draft's base version and writes nothing."""
+    ctx = await make_ctx()
+    await seed(ctx, BODY, items=("f-06", "f-03"))
+    async with tenant_session(ctx.tenant_id) as s:
+        rm = await s.scalar(select(Document).where(Document.slug == "setup-roadmap"))
+        v1 = await s.scalar(select(DocumentVersion).where(DocumentVersion.document_id == rm.id))
+        v1.approved_at = None
+        v2 = await version(s, rm, 2, "# Setup roadmap v2\n", approved=False)
+        mine = select(RoadmapItem).where(RoadmapItem.roadmap_document_id == rm.id)
+        for row in await s.scalars(mine):
+            row.roadmap_version_id = v2.id
+        s.add(SimpleDraft(document_id=rm.id, base_version_id=v1.id, status="working",
+                          overlay={}, created_by=ctx.users["decider"].id,
+                          participant_ids=[ctx.users["decider"].id]))  # fmt: skip
+        await s.commit()
+    picks = {"milestone": "M2", "picks": ["F-03b", "F-06", "focus"]}
+    r = await client.post(f"{URL}/approve", json=picks, headers=ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.scalar(select(SimpleDraft).where(SimpleDraft.document_id == rm.id))
+        rows = {r.item_key: str(r.id) for r in await s.scalars(
+            select(RoadmapItem).where(RoadmapItem.roadmap_version_id == v2.id))}  # fmt: skip
+    assert rows["f-06"] in (d.overlay or {}), d.overlay
+    assert (d.overlay or {})[rows["f-06"]]["end_date"]

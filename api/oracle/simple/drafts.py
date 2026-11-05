@@ -194,22 +194,108 @@ def placed(row: RoadmapItem, base_version_id: uuid.UUID | None, values: dict | N
 async def added_rows(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]]) -> list:
     """S7: the items added in Simple to the open drafts of the roadmaps in ``overlays``
     (those the reader sees), each placed on its draft's base version."""
+    return [
+        placed(row, base, overlays[row.roadmap_document_id].get(str(row.id)))
+        for row, base in await added_raw(db, overlays)
+    ]
+
+
+async def added_raw(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]]) -> list:
+    """(added item as stored, its draft's base version) of :func:`added_rows`."""
     if not overlays:
         return []
-    out = []
-    for row, base in (
-        await db.execute(
-            select(RoadmapItem, SimpleDraft.base_version_id)
-            .join(SimpleDraft, SimpleDraft.id == RoadmapItem.simple_draft_id)
-            .where(
-                SimpleDraft.status.in_(OPEN),
-                SimpleDraft.document_id.in_(list(overlays)),
-                RoadmapItem.roadmap_version_id.is_(None),
+    return list(
+        (
+            await db.execute(
+                select(RoadmapItem, SimpleDraft.base_version_id)
+                .join(SimpleDraft, SimpleDraft.id == RoadmapItem.simple_draft_id)
+                .where(
+                    SimpleDraft.status.in_(OPEN),
+                    SimpleDraft.document_id.in_(list(overlays)),
+                    RoadmapItem.roadmap_version_id.is_(None),
+                )
+                .order_by(RoadmapItem.id)
             )
-        )
-    ).all():
-        out.append(placed(row, base, overlays[row.roadmap_document_id].get(str(row.id))))
+        ).all()
+    )
+
+
+# approved-prd-shown-once: what approving a PRD wrote into a draft (title and dates).
+FROM_PRD = ("title", "start_date", "end_date", "date_source")
+
+
+def twins(rows: list[RoadmapItem], added: list[RoadmapItem]) -> dict[uuid.UUID, RoadmapItem]:
+    """approved-prd-shown-once: shown item id -> the item added to the draft that copies it
+    (same roadmap, PRD and key; approving a PRD added such copies when the roadmap's shown
+    version was not the draft's base). Read as one item (:func:`fold`)."""
+    by = {
+        (r.roadmap_document_id, r.prd_document_id, r.item_key): r
+        for r in rows
+        if r.prd_document_id is not None
+    }
+    out: dict[uuid.UUID, RoadmapItem] = {}
+    for a in added:
+        row = by.get((a.roadmap_document_id, a.prd_document_id, a.item_key))
+        if row is not None and a.prd_document_id is not None:
+            out.setdefault(row.id, a)
     return out
+
+
+async def copies_of(
+    db: AsyncSession, rows: list[RoadmapItem], overlays: dict[uuid.UUID, dict[str, Any]]
+) -> dict[str, RoadmapItem]:
+    """Shown item id -> its draft copy (:func:`twins`) in the drafts of ``overlays``."""
+    added = [a for a, _ in await added_raw(db, overlays)]
+    return {str(k): v for k, v in twins(rows, added).items()}
+
+
+async def _copy_in(db: AsyncSession, d: SimpleDraft, row: RoadmapItem) -> RoadmapItem | None:
+    """The item added to ``d`` that copies the shown ``row`` (:func:`twins`), if any."""
+    if row.prd_document_id is None or row.roadmap_version_id is None:
+        return None
+    return await db.scalar(
+        select(RoadmapItem)
+        .where(
+            RoadmapItem.simple_draft_id == d.id,
+            RoadmapItem.roadmap_version_id.is_(None),
+            RoadmapItem.roadmap_document_id == row.roadmap_document_id,
+            RoadmapItem.prd_document_id == row.prd_document_id,
+            RoadmapItem.item_key == row.item_key,
+        )
+        .order_by(RoadmapItem.id)
+        .limit(1)
+    )
+
+
+def _write_on(
+    ov: dict[str, Any], row: RoadmapItem, v: dict[str, Any], target: dict, write: Any
+) -> None:
+    k = str(row.id)
+    cur = overlaid(row, ov.get(k) or snapshot(row))
+    if cur is row:
+        cur = overlaid(row, snapshot(row))
+    write(cur, v, target)
+    ov[k] = snapshot(cur)
+
+
+def _changed(row: RoadmapItem, values: dict[str, Any] | None) -> dict[str, Any]:
+    """The draft's fields ``values`` sets other than ``row`` has them."""
+    have = snapshot(row)
+    return {f: v for f, v in (values or {}).items() if f in FIELDS and v != have.get(f)}
+
+
+def fold(row: RoadmapItem, copy: RoadmapItem, overlay: dict[str, Any]) -> RoadmapItem:
+    """The shown ``row`` with the draft's ``copy`` of it folded in: the copy's title and
+    dates (the PRD's newer), then what a change did to the copy (cut, dates, dependencies;
+    undo still works), then what one did to the row: the owner's own changes win, field by
+    field."""
+    values = snapshot(row)
+    values.update({f: _json(f, getattr(copy, f)) for f in FROM_PRD})
+    theirs = _changed(copy, overlay.get(str(copy.id)))
+    theirs.pop("merged_into", None)
+    values.update(theirs)
+    values.update(_changed(row, overlay.get(str(row.id))))
+    return overlaid(row, values)
 
 
 async def drop_added(db: AsyncSession, d: SimpleDraft) -> None:
@@ -630,17 +716,17 @@ def simulate(
     overlays: dict[uuid.UUID, dict[str, Any]],
     fixes: tuple[str, ...],
     write: Any,
+    copies: dict[str, RoadmapItem] | None = None,
 ) -> dict[uuid.UUID, dict[str, Any]]:
-    """The overlays as if the change applied (a proposal's flags), without writing."""
+    """The overlays as if the change applied (a proposal's flags), without writing; a
+    change to a folded item lands on its draft copy too (``copies``, :func:`copies_of`)."""
     out = {k: dict(v) for k, v in overlays.items()}
     for k, v in _keys(c, values, fixes).items():
         row = rows[k]
         ov = out.setdefault(row.roadmap_document_id, {})
-        cur = overlaid(row, ov.get(k) or {f: _json(f, getattr(row, f)) for f in FIELDS})
-        if cur is row:
-            cur = overlaid(row, snapshot(row))
-        write(cur, v, c.target)
-        ov[k] = snapshot(cur)
+        _write_on(ov, row, v, c.target, write)
+        if (copy := (copies or {}).get(k)) is not None:
+            _write_on(ov, copy, v, c.target, write)
     return out
 
 
@@ -681,9 +767,13 @@ async def write_items(
             await link(db, session, d)
         else:
             d = await ensure(db, session, row, session.started_by)
-        cur = overlaid(row, (d.overlay or {}).get(k) or snapshot(row))
-        write(cur, v, c.target)
-        d.overlay = {**(d.overlay or {}), k: snapshot(cur)}
+        ov = dict(d.overlay or {})
+        _write_on(ov, row, v, c.target, write)
+        # hotfix PR 1273: a change to a folded item (fold) lands on its draft copy too, so
+        # the read shows it even when it puts back the shown item's own stored value.
+        if (copy := await _copy_in(db, d, row)) is not None:
+            _write_on(ov, copy, v, c.target, write)
+        d.overlay = ov
         if d.id not in out:
             out.append(d.id)
     await db.flush()
@@ -984,6 +1074,9 @@ async def submit(
             .order_by(RoadmapItem.position, RoadmapItem.item_key)
         )
     ]
+    # approved-prd-shown-once: an added copy of a base item is published as that item, once.
+    copies = twins(base_rows, added)
+    folded = {c.id for c in copies.values()}
     titles = {str(r.id): r.title for r in [*base_rows, *added]}
     lines = [f"Changed in Simple on version {base.number}:", ""]
     for c in live:
@@ -1025,12 +1118,18 @@ async def submit(
         for p in {r.prd_document_id for r in [*base_rows, *added]}
     }
     for old in [*base_rows, *added]:
-        cur = overlaid(old, overlay.get(str(old.id)))
+        if old.id in folded:
+            continue
+        cur = (
+            fold(old, copies[old.id], overlay)
+            if old.id in copies
+            else overlaid(old, overlay.get(str(old.id)))
+        )
         if old in added and cur.merged_into:
             continue
         note = (
             f"from version {base.number}, changed in Simple"
-            if str(old.id) in overlay
+            if str(old.id) in overlay or old.id in copies
             else f"from version {base.number}"
         )
         if old in added:
