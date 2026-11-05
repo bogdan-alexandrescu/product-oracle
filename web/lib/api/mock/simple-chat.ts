@@ -1527,6 +1527,7 @@ function meetingBar(m: Meeting, ctx: ChatCtx): string | null {
 /** What the reader's Apply does now: apply (they decide), propose (others do), or nothing. */
 function mayOf(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): { may: "apply" | "propose" | null; why_not: string | null } {
   if (c.status !== "open") return { may: null, why_not: null };
+  if (replacedBy(chat, c)) return { may: null, why_not: null };
   const m = meetingOf(chat, c);
   const bar = m ? meetingBar(m, ctx) : ctx.role === "viewer" ? "Viewers read the plan; they don't change it" : null;
   if (bar) return { may: null, why_not: bar };
@@ -1540,6 +1541,43 @@ function mayOf(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): { may: 
   const decides = c.op === "add_feature_ask" || LOCAL_OPS.has(c.op) ? true : c.item_id ? !!item?.can_decide : ctx.role === "owner";
   return { may: decides ? "apply" : "propose", why_not: null };
 }
+
+/** chat-latest-card (card_order.topic): what a card changes, its item or the record its target names. */
+const NOT_TOPIC = new Set(["note_id", "suggestion_id", "meeting_id", "dependency_id", "decider_id"]);
+function cardTopic(c: StoredCard): string {
+  if (c.item_id) return c.item_id;
+  const t = (c.target ?? {}) as Record<string, unknown>;
+  if (c.op === API_OP) {
+    const args = (t.args ?? {}) as Record<string, unknown>;
+    const ids = Object.entries(args).filter(([k, v]) => (k === "id" || k.endsWith("_id")) && typeof v === "string");
+    return ids.length ? String(ids[ids.length - 1][1]) : `${String(t.action)}:${JSON.stringify(args)}`;
+  }
+  const id = Object.entries(t).find(([k, v]) => k.endsWith("_id") && !NOT_TOPIC.has(k) && v);
+  if (id) return String(id[1]);
+  const rest = Object.fromEntries(Object.entries(t).filter(([k]) => k !== "note_id" && k !== "suggestion_id").sort(([a], [b]) => a.localeCompare(b)));
+  return `${c.op}:${JSON.stringify(rest)}`;
+}
+
+/**
+ * chat-latest-card (card_order.replaced): the card that replaced `c` in its chat, or null. Once a
+ * card is acted on, every card on an earlier line is replaced; among open cards, only the newest
+ * per topic acts. Cards on one line never replace one another.
+ */
+function replacedBy(chat: ChatDb, c: StoredCard): string | null {
+  const t = chat.threads[c.thread];
+  if (!t) return null;
+  const all = t.messages.flatMap((m) => m.card_ids.map((id) => chat.cards[id]).filter(Boolean));
+  const at = all.findIndex((x) => x.id === c.id);
+  if (at < 0) return null;
+  const later = all.slice(at + 1).filter((x) => x.message_id !== c.message_id);
+  const key = cardTopic(c);
+  const acted = later.filter((x) => x.status !== "open");
+  const same = later.filter((x) => cardTopic(x) === key);
+  const pick = c.status === "open" ? (same.length ? same : acted) : acted.filter((x) => same.includes(x)).length ? acted.filter((x) => same.includes(x)) : acted;
+  return pick.length ? pick[pick.length - 1].id : null;
+}
+
+export const REPLACED = "This card was replaced by a newer card in the chat: use the newest one";
 
 /** qa4-simple-decide-1 (chat._undo_bar): why the reader may not undo an applied card, by its Apply's rule. */
 function undoBar(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): string | null {
@@ -1601,7 +1639,7 @@ function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   // walkc-meeting r2 (chat.cards_out): a proposed card whose proposal was declined since reads as declined, by whom and when.
   const no = c.status === "proposed" && c.change_id ? db.changes?.find((x) => x.id === c.change_id && x.status === "declined") : undefined;
   const declined = no ? { status: "declined" as const, decided_by_name: no.decided_by ? (ctx.names[no.decided_by] ?? "someone") : null, decided_at: no.decided_at ?? null } : {};
-  return { change_words: null, correct: null, ...rest, ...declined, ...may, ...asksOut, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents, can_undo: c.status === "applied" && !undoBar(db, chat, c, ctx) };
+  return { change_words: null, correct: null, ...rest, ...declined, ...may, ...asksOut, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents, can_undo: c.status === "applied" && !undoBar(db, chat, c, ctx), replaced_by: replacedBy(chat, c), ...(c.status === "open" && replacedBy(chat, c) ? { correct: null } : {}) };
 }
 
 function rulesOut(m: Meeting, ctx: ChatCtx) {
@@ -2048,7 +2086,10 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     if (p[5] === "apply-all") {
       const applied: string[] = [];
       let stopped: { card_id: string; summary: string; reason: string } | null = null;
-      for (const c of msg.card_ids.map((id) => chat.cards[id]).filter((c) => c.status === "open" && c.op !== API_OP)) {
+      // chat-latest-card: only the line's active cards; a newer card replaced the others.
+      const active = msg.card_ids.map((id) => chat.cards[id]).filter((c) => c.status === "open" && c.op !== API_OP && !replacedBy(chat, c));
+      if (!active.length) return json(409, { detail: "No open cards on this line" });
+      for (const c of active) {
         const { may, why_not } = mayOf(db, chat, c, ctx);
         if (!may) {
           stopped = { card_id: c.id, summary: c.summary, reason: why_not ?? "You may not apply this change" };
@@ -2140,6 +2181,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     if (!c || !sees(chat, c, ctx)) return json(404, { detail: "No such card" });
     if (p[5] === "discard") {
       if (c.status !== "open") return json(409, { detail: `This card is ${c.status} already` });
+      if (replacedBy(chat, c)) return json(409, { detail: REPLACED });
       // Those the change mode bars from applying may not discard either (the API's rule).
       const { may, why_not } = mayOf(db, chat, c, ctx);
       if (!may) return json(403, { detail: why_not ?? "You may not discard this card" });
@@ -2180,6 +2222,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     if (p[5] === "apply") {
       const { may, why_not } = mayOf(db, chat, c, ctx);
       if (c.status !== "open") return json(409, { detail: `This card is ${c.status} already` });
+      if (replacedBy(chat, c)) return json(409, { detail: REPLACED });
       if (!may) return json(403, { detail: why_not ?? "You may not apply this change" });
       const b = await body();
       const n = b.fix == null ? null : Number(b.fix);
