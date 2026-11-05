@@ -17,10 +17,16 @@ const SHOWN = "Ground Truth decision D-12";
 /** "baseline" naming the graph; a goal measure's starting value would read "Baseline value". */
 const OLD_NAME = /\bbaseline\b(?! value)/i;
 
-/** Version 2 of Checkout redesign cites a Ground Truth decision, with no title, in Problem. */
+/**
+ * Version 2 of Checkout redesign cites a Ground Truth decision, with no title, in Problem. The
+ * edit is made as the next page loads, before its scripts run: made on Home, a request Home
+ * still had under way could save its own copy of the mock over it.
+ */
 async function citeDecision(page: Page) {
   await login(page);
-  await page.evaluate(() => {
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("cited-o-d12")) return;
+    sessionStorage.setItem("cited-o-d12", "1");
     const key = "po-mock-db-v2";
     const db = JSON.parse(localStorage.getItem(key)!);
     const doc = db.documents.find((d: { slug: string }) => d.slug === "checkout-redesign");
