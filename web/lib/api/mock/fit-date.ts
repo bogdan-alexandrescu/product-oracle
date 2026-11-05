@@ -32,11 +32,11 @@ const PLAN_TARGET = 40;
 const GOAL_DUE = "2027-03-31";
 // The goal's own M2 work a smaller goal shrinks (the API's build_plan): unlocked and neither guardrail,
 // safety nor must-include, so Reply drafts in the inbox (must-include) and the two locked items keep their
-// size. Days on the plan in M2, and the days left in M2 once its change is picked (moved: none; sliced:
-// the slice).
-const GOAL_WORK: Record<string, { days: number; left: number }> = {
-  bulk: { days: 16, left: 0 },
-  summary: { days: 21, left: 16 },
+// size. Days on the plan in M2, the days left in M2 once its change is picked (moved: none; sliced:
+// the slice), and its person-weeks.
+const GOAL_WORK: Record<string, { days: number; left: number; pw: number }> = {
+  bulk: { days: 16, left: 0, pw: 5 },
+  summary: { days: 21, left: 16, pw: 8 },
 };
 type GoalRow = { id: string; type: string; title: string; status: string; attrs?: Record<string, unknown> | null };
 
@@ -105,9 +105,9 @@ const CHANGES: Change[] = [
     cost: "Support shifts move to two people outside the team for 10 weeks.",
     effect: "Fewer support shifts for the four engineers",
     moves: [mv("M2 Agent reply flow", "2027-03-12", "2027-03-06")] },
-  { id: "summary", lever: "slice", title: "Ship only the slice M2 needs", item: "Thread summary card", days: 5, pw_saved: 2, cost_kind: "none", pickable: true,
+  { id: "summary", lever: "slice", title: "Ship only the slice M2 needs", item: "Thread summary card", days: 5, pw_saved: 4, cost_kind: "none", pickable: true,
     cost: "Agents cannot fix a wrong summary until the rest ships in M3.",
-    effect: "8 person-weeks down to 6: read-only summary, no edit",
+    effect: "8 person-weeks down to 4",
     moves: [mv("M2 Agent reply flow", "2027-03-12", "2027-03-07")] },
   { id: "snippets", lever: "split", title: "Split so a first slice lands early", item: "Import saved snippets", days: 3, pw_saved: 1, cost_kind: "none", pickable: true,
     cost: "Snippets with pictures wait for slice 2.",
@@ -167,8 +167,10 @@ function savedDays(ids: string[]): number {
   const own = Object.entries(GOAL_WORK).reduce((t, [id, w]) => t + w.days - s * (ids.includes(id) ? w.left : w.days), 0);
   return Math.round(other + own);
 }
-/** Python's round(x, 1), as the API rounds person-weeks: the number's exact value, a tie to the even tenth. */
-function round1(x: number): number {
+/** Python's round(x, 1), as the API rounds person-weeks: the number's exact value, a tie to the even tenth
+ * (a negative number rounds as its size does, so -0.3 stays -0.3). */
+export function round1(x: number): number {
+  if (x < 0) return -round1(-x);
   const [whole, frac] = x.toFixed(60).split(".");
   const tenths = Number(whole) * 10 + Number(frac[0]);
   const rest = frac.slice(1);
@@ -178,7 +180,17 @@ function round1(x: number): number {
 /** A change's person-weeks under a smaller goal (the API's build_plan): its share, never under a tenth
  * of its size rounded to a tenth of a week, and a small one keeps 0.1. */
 const shrunk = (pw: number, s: number) => Math.max(round1(pw * s), round1(pw * 0.1), Math.min(pw, 0.1));
-const changePw = (c: Change) => (GOAL_WORK[c.id] ? shrunk(c.pw_saved, share()) : c.pw_saved);
+/** The API's slice of an item: half its whole weeks, never more than the item itself. */
+const sliceOf = (pw: number) => Math.min(Math.ceil(pw) / 2, pw);
+/** A goal-work change measured as the API measures it: the item shrunk to the goal's share; moved,
+ * it saves all of that; sliced, the shrunk size less its slice, and its effect names both sizes. */
+function goalChange(c: Change): Change {
+  const size = shrunk(GOAL_WORK[c.id].pw, share());
+  if (c.lever !== "slice") return { ...c, pw_saved: size };
+  const part = sliceOf(size);
+  return { ...c, pw_saved: round1(size - part), effect: `${size} person-weeks down to ${part}` };
+}
+const changePw = (c: Change) => (GOAL_WORK[c.id] ? goalChange(c).pw_saved : c.pw_saved);
 const pwSaved = (ids: string[]) => round1(byId(ids).reduce((t, c) => t + changePw(c), 0));
 const at = (picks: string[]) => shift(PROJECTED, savedDays(picks));
 
@@ -187,7 +199,10 @@ const HARM: Record<Change["cost_kind"], number> = { none: 0, risk: 1, gate: 2, g
  * saved for the least harm, the must-include change too (the API's answer). */
 function ranked(): Change[] {
   const s = share();
-  return CHANGES.map((c) => (GOAL_WORK[c.id] ? { ...c, days: Math.round(c.days * s), pw_saved: changePw(c) } : c)).sort(
+  // A slice that saves nothing (its slice is the whole item) is not offered.
+  return CHANGES.map((c) => (GOAL_WORK[c.id] ? { ...goalChange(c), days: Math.round(c.days * s) } : c))
+    .filter((c) => c.lever !== "slice" || c.pw_saved > 0)
+    .sort(
     (x, y) => y.days - x.days || HARM[x.cost_kind] - HARM[y.cost_kind] || x.item.localeCompare(y.item),
   );
 }
@@ -252,7 +267,7 @@ function draft(s: State, picks: string[]): Draft {
   const prdWords: Record<string, [string, string]> = {
     bulk: ["Reply to similar threads at once", "Moved to M3"],
     analytics: ["Reply time chart", "No longer holds M2; still built, lands Mar 5"],
-    summary: ["Thread summary card (8 to 6 person-weeks)", "First slice only in M2"],
+    summary: ["Thread summary card (8 to 4 person-weeks)", "First slice only in M2"],
     tone: ["Tone presets", "Moved to the next PRD"],
     snippets: ["Import saved snippets", "First slice only in M2 (plain text)"],
     focus: ["Team focus", "70% to 80%; support shifts move to two people outside the team for 10 weeks"],

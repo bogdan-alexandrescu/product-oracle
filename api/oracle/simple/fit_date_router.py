@@ -315,7 +315,8 @@ def build_plan(
         items.append(fd.Item(
             id=sl.code, title=sl.name, pw=pw, milestone=sl.milestone, guard=guard,
             must=kind == "must-include", lever=lever,
-            slice_pw=math.ceil(pw) / 2 if lever in ("slice", "split") else None,
+            # Half its whole weeks, never more than the item itself (a slice never grows it).
+            slice_pw=min(math.ceil(pw) / 2, pw) if lever in ("slice", "split") else None,
         ))  # fmt: skip
     start = min((m.start_date for m in view.milestones if m.start_date), default=today)
     focus_raise = round(focus + 0.1, 2) if focus <= 0.9 else None
