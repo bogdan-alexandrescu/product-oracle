@@ -107,8 +107,10 @@ test("B-24: Push to tracker keeps its reason behind an (i)", async ({ page }) =>
   const push = track.getByRole("button", { name: "Push to tracker" });
   await expect(push).toBeDisabled();
   await expect(push).toHaveAccessibleDescription(/Two-way tracker sync is off/);
-  await expect(track.getByText(/Two-way tracker sync is off/).filter({ visible: true })).toHaveCount(0);
-  await track.getByRole("button", { name: "About Push to tracker" }).click();
+  // Only the screen-reader copy (1 px) carries the words on the card; no sentence shows.
+  const widths = await track.getByText(/Two-way tracker sync is off/).evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
+  expect(widths.every((w) => w <= 1)).toBe(true);
+  await track.getByRole("button", { name: "About two-way sync" }).click();
   await expect(track.getByRole("tooltip").filter({ visible: true })).toContainText("Two-way tracker sync is off");
 });
 

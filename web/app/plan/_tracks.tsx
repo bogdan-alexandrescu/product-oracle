@@ -478,7 +478,7 @@ export function TrackPanel({
                   <span id={pushWhy} className="sr-only">
                     {pushOff}
                   </span>
-                  <InfoTip label="Push to tracker" testId="track-push-why">
+                  <InfoTip label="two-way sync" testId="track-push-why">
                     {pushOff}
                   </InfoTip>
                 </span>
