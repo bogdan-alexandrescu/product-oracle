@@ -28,6 +28,40 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       await expect(page.getByTestId("slide-counter")).toHaveText(/^2 \/ \d+$/);
     });
 
+    test("B-04: with no brief, slide 2 starts with the title section's text under its own heading", async ({ page }) => {
+      // protects=B-04 fix 1; fails_when=slide 2 is headed "Checkout redesign PRD" again after the title slide.
+      await login(page);
+      await page.goto("/documents/checkout-redesign/v/2/present");
+      const audience = page.getByTestId("audience-view");
+      await expect(audience.locator(".slide-title").first()).toHaveText("Checkout redesign PRD");
+      await page.keyboard.press("ArrowRight");
+      await expect(page.getByTestId("slide-counter")).toHaveText(/^2 \/ \d+$/);
+      const title = audience.locator(".slide-title").first();
+      await expect(title).not.toHaveText("Checkout redesign PRD");
+      await expect(audience.locator(".slide-body").first()).toContainText("This document proposes a redesign");
+    });
+
+    test("B-04: with no brief, the slides leave out the sources section and its sub-sections, as the API", async ({ page }) => {
+      // protects=B-04 fix 1; fails_when=the mock deck shows the Sources sub-section as a slide.
+      await scenario(page, "no-brief-sources");
+      await login(page);
+      await page.goto("/documents/saved-carts/v/2/present");
+      const counter = page.getByTestId("slide-counter");
+      await expect(counter).toHaveText(/^1 \/ \d+$/);
+      const total = Number((await counter.textContent())!.split("/")[1]);
+      const headings: string[] = [];
+      for (let i = 1; i <= total; i++) {
+        await expect(counter).toHaveText(`${i} / ${total}`);
+        headings.push((await page.getByTestId("audience-view").locator(".slide-title").first().textContent())!.trim());
+        await page.keyboard.press("ArrowRight");
+      }
+      expect(headings[0]).toBe("Saved carts PRD");
+      expect(headings).toContain("Risks and open questions");
+      expect(headings).not.toContain("Sources");
+      expect(headings.filter((h) => h === "Saved carts PRD")).toHaveLength(1);
+      expect(headings.at(-1)).toBe("Sources and data points");
+    });
+
     test("B-05: the roadmap's title line reads its as-of day month first", async ({ page }) => {
       // protects=B-05; fails_when=the line under the title reads "As of 2026-10-02".
       await login(page);

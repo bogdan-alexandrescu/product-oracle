@@ -400,9 +400,9 @@ const CARTS_V1: SectionSeed[] = [
     body: [
       "| Milestone | Feature | Goal | Outcome |",
       "|---|---|---|---|",
-      "| [Beta](#milestone-beta) | [Save cart](#feature-save-cart) | G2 | A cart survives the session |",
-      "|  | [Cart on every device](#feature-sync) | G2 | The same cart on phone and laptop |",
-      "| [General release](#milestone-ga) | [Reminder email](#feature-reminder) | G2 | Shoppers come back to finish |",
+      "| [Beta](#milestone-beta) | [Save cart](#feature-save-cart) | Retention | A cart survives the session |",
+      "|  | [Cart on every device](#feature-sync) | Retention | The same cart on phone and laptop |",
+      "| [General release](#milestone-ga) | [Reminder email](#feature-reminder) | Retention | Shoppers come back to finish |",
     ].join("\n"),
   },
   {
@@ -425,7 +425,7 @@ const CARTS_V1: SectionSeed[] = [
     body: "- Approve the beta scope: owner the founder, needed by 2026-11-01.\n- Pick the reminder delay (24 or 72 hours): owner the growth lead, needed by 2026-11-15.",
   },
   { key: "full", level: 1, heading: "Full version", body: "" },
-  { key: "feature-detail", level: 2, heading: "Feature detail", body: "One section per feature, in priority order." },
+  { key: "feature-detail", level: 2, heading: "Feature detail", body: "Keep a signed-in shopper's cart on our servers, so it follows them to any device." },
   {
     key: "feature-save-cart",
     level: 3,

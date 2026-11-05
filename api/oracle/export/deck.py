@@ -231,6 +231,16 @@ def _grouped(ev: ExportVersion, brief: list[Section]) -> list[tuple[Section, str
             out.append((s, "\n\n".join(parts)))
         elif s.section_key not in taken:
             out.append((s, s.body_md or ""))
+    # The title slide already names the document: a title section with a body (no brief,
+    # B-04) starts the next slide, under that slide's own heading, never the title again.
+    title = ev.title.strip().casefold()
+    if (
+        len(out) > 1
+        and out[0][0].level == 1
+        and _plain_heading(out[0][0]).strip().casefold() == title
+    ):
+        (_, lead), (nxt, body) = out[0], out[1]
+        out[:2] = [(nxt, f"{lead}\n\n{body}" if lead.strip() else body)]
     return out
 
 

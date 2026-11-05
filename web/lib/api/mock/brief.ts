@@ -228,6 +228,13 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
   // In document order: a group sits where its first section does.
   const order = new Map(brief.map((s, i) => [s.section_key, i]));
   if (d.slides?.length) groups.sort((a, b) => order.get(a[0].section_key)! - order.get(b[0].section_key)!);
+  // As the API: a title section with a body (no brief, B-04) starts the next slide, under that
+  // slide's own heading; the title slide already names the document.
+  const [first, second] = groups;
+  if (second && first.length === 1 && first[0].level === 1 && first[0].heading.trim().toLowerCase() === d.title.trim().toLowerCase()) {
+    const lead = first[0].body_md.trim() ? `${first[0].body_md}\n\n` : "";
+    groups.splice(0, 2, [{ ...second[0], body_md: lead + second[0].body_md }, ...second.slice(1)]);
+  }
   for (const [s, ...rest] of groups) {
     const all = [s, ...rest];
     const notes = all.map((x) => presenterNotes(x.body_md)).filter(Boolean);

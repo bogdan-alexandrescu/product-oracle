@@ -18,7 +18,7 @@ import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from 
 import { applied, handOver, membersDetailRoute, type MembersContext, type MembersDb } from "./members";
 import type { HandOver } from "@/lib/api/members-types";
 import { accountRoute, liveCredentials, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
-import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
+import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief, subtree } from "./brief";
 import { brandHeaderHtml, brandStyleHtml, emptyBranding, routeBranding, type BrandingDb } from "./branding";
 import { capabilitiesOut } from "./capabilities";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
@@ -2009,6 +2009,16 @@ function seedNoDocument(): Db {
   return db;
 }
 
+/** B-04 "no-brief-sources" scenario: the default seed with saved-carts v2 imported without a brief (its Sources has a sub-section). */
+function seedNoBriefSources(): Db {
+  const db = seed();
+  const doc = db.documents.find((d) => d.slug === "saved-carts")!;
+  const v = docVersions(db, doc).find((x) => x.number === 2)!;
+  v.brief_source = "none";
+  v.sections = v.sections.map((s) => ({ ...s, layer: "detail", notes: null }));
+  return db;
+}
+
 /** D10 "run-review" scenario: the default seed plus a run waiting at its PRD review of usage-alerts v2 (./runs.ts). */
 function seedRunReview(): Db {
   const db = seed();
@@ -3482,6 +3492,8 @@ function load(): Db {
             ? seedRunReview
           : scenario === "no-document"
             ? seedNoDocument
+          : scenario === "no-brief-sources"
+            ? seedNoBriefSources
           : scenario === "run-review-decider"
             ? seedRunReviewDecider
           : scenario === "priority-order"
@@ -7422,10 +7434,10 @@ function exportRoute(db: Db, doc: DocumentRow, v: VersionRow, sub: string | unde
         created_at: v.created_at,
         source: v.source ?? null,
         // B-04, as the API: a version with no brief shows its full document's sections, one per
-        // slide (not its empty title section, not the sources appendix).
+        // slide (not its empty title section, not the sources appendix or its sub-sections).
         sections: noBrief
-          ? v.sections.map((s) =>
-              s.section_key !== "sources" && (s.level > 1 || (s.body_md ?? "").trim()) ? { ...s, layer: "brief" } : s,
+          ? v.sections.map((s, _, all) =>
+              !subtree(all, "sources").includes(s) && (s.level > 1 || (s.body_md ?? "").trim()) ? { ...s, layer: "brief" } : s,
             )
           : v.sections,
         citations: v.citations,

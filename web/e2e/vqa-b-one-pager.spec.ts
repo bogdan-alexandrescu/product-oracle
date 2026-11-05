@@ -48,6 +48,19 @@ test.describe("desktop", () => {
     await expect(page.getByRole("region", { name: "Risks and open decisions" })).toContainText("Pickup availability differs by region");
   });
 
+  test("B-13: Saved carts' bets name the goal in words and are no template line", async ({ page }) => {
+    // protects = a bet reads its goal by name ("Cart on every device: Retention") and every bet
+    // is the PRD's own; fails_when = the fixture's table shows "G2" or its Feature detail is
+    // the template's "One section per feature, in priority order."
+    await login(page);
+    await openFromList(page, "Saved carts PRD");
+    const bets = page.getByRole("region", { name: "What we will build" });
+    await expect(bets).toContainText("Cart on every device: Retention");
+    await expect(bets).toContainText("Keep a signed-in shopper's cart on our servers");
+    await expect(bets).not.toContainText(/\bG\d+\b/);
+    await expect(bets).not.toContainText("One section per feature");
+  });
+
   test("B-14: today's line starts below the month names", async ({ page }) => {
     await login(page);
     await page.goto("/simple/prds/guided-setup");
