@@ -184,6 +184,7 @@ from oracle.runs import (
     review_link,
     review_text,
     roadmap,
+    stop_answers,
     waits,
     workflow,
 )
@@ -224,6 +225,7 @@ from oracle.runs.schemas import (
     QueueWait,
     RunCreate,
     RunDecision,
+    RunDecisionAnswer,
     RunNoteRefs,
     RunOut,
     RunPatch,
@@ -1331,6 +1333,7 @@ async def decisions_of_runs(
             )
     by = {cp.id: _decider_of(cp) for cp in decided}
     people = await _people_named(db, {i for i in by.values() if i})
+    answered = await stop_answers.of_checkpoints(db, {r.id: r for r in runs}, decided)
     out: dict[uuid.UUID, list[RunDecision]] = {i: [] for i in flows_of}
     for cp in decided:
         flow = flows_of[cp.run_id]
@@ -1366,6 +1369,16 @@ async def decisions_of_runs(
                 review=cp.review or extra.get("review"),
                 delivered=delivered,
                 summary=decision_summary(cp.kind, cp.status, role, via, cp.note, delivered, who),
+                answers=[
+                    RunDecisionAnswer(
+                        question=a.question,
+                        answer=a.answer,
+                        feature=a.feature,
+                        answered_by_name=a.by_name,
+                        answered_at=a.at,
+                    )
+                    for a in answered.get(cp.id, [])
+                ],  # fmt: skip
             )
         )
     far = datetime.max.replace(tzinfo=UTC)
@@ -2982,6 +2995,7 @@ async def _prompt_context(
         extra_lines=[
             *await extensions.prompt_lines(db, run),
             *await eng_check.prompt_lines(db, run.id, segment.name),
+            *await stop_answers.prompt_lines(db, run, segment.name),
             *(
                 await eng_check.run_architect_lines(db, run, mcp_reachable=mcp_reachable)
                 if flows.BRIEFS_FILE in _flow(run).segment(segment.name).outputs
@@ -4781,6 +4795,12 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
         # roadmap-plan-tables: a draft without the plan tables approving it applies to
         # Simple, or with other items or dates than the run's, goes back to the writer.
         problems = await _plan_table_problems(db, run, markdown, source_id)
+        if problems:
+            return rejection.refused(name, problems)
+    if kind == "prd":
+        # A question a person answered at a stop is decided: a draft that still lists it
+        # under Decisions needed or Open questions goes back to the writer.
+        problems = await stop_answers.open_problems(db, run, markdown)
         if problems:
             return rejection.refused(name, problems)
     async with tenant_session(tenant_id) as s:
