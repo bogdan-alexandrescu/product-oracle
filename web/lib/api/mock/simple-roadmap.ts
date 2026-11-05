@@ -157,6 +157,9 @@ interface SimpleDb {
   /** simple-replaced-prds (api/oracle/roadmap/company.replaced_prd_ids): the ids and slugs of the
    * PRDs marked replaced, set by server.ts from its documents; their items no longer feed Simple. */
   replaced_prds?: string[];
+  /** The current PRD each replaced one (by id and slug) went to: its first "Replaced by",
+   * followed while that one is replaced too (additions._home files a new item under it). */
+  replaced_with?: Record<string, Schemas["SimpleDocRef"]>;
   /** approved-roadmap-to-simple (./approved-roadmap.ts): what each roadmap's last applied version said. */
   applied?: Record<string, AppliedRecord>;
 }
@@ -809,6 +812,22 @@ export function canEditRoadmap(db: SimpleDb, roadmap: string, me: { id: string; 
 export function ofReplacedPrd(db: SimpleDb, s: SeedItem): boolean {
   const replaced = db.replaced_prds ?? [];
   return !!replaced.length && (replaced.includes(ownPrd(s).id) || replaced.includes(ownPrd(s).slug));
+}
+
+/** additions._home: the PRD (and track) a feature added in Simple is filed under, in place:
+ * its roadmap's PRD while current, else that of the roadmap's first item of a current PRD
+ * with a track, else the PRD that replaced the roadmap's. */
+export function fileUnderCurrentPrd(db: SimpleDb, s: SeedItem): void {
+  if (!ofReplacedPrd(db, s)) return;
+  const live = db.items.find((x) => x.roadmap === s.roadmap && x.track && !ofReplacedPrd(db, x));
+  if (live) {
+    s.track = live.track;
+    s.prd_doc = ownPrd(live);
+    return;
+  }
+  const own = ownPrd(s);
+  const to = db.replaced_with?.[own.id] ?? db.replaced_with?.[own.slug];
+  if (to) s.prd_doc = to;
 }
 
 function visibleItems(db: SimpleDb, role: Role): SeedItem[] {

@@ -4019,10 +4019,25 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
       by.push(other);
     }
     doc.replaced_by = by.map((d) => d.id);
-    if (db.simple_roadmap) db.simple_roadmap.replaced_prds = replacedPrds(db);
+    if (db.simple_roadmap) markReplaced(db, db.simple_roadmap);
     return json(200, documentOut(db, doc));
   }
   return null;
+}
+
+/** simple-replaced-prds: the PRDs marked replaced, and the current PRD each went to, on Simple's roadmap. */
+function markReplaced(db: Db, simple: SimpleDb): void {
+  simple.replaced_prds = replacedPrds(db);
+  const to: NonNullable<SimpleDb["replaced_with"]> = {};
+  for (const d of db.documents.filter((x) => x.kind === "prd" && x.replaced_by?.length)) {
+    let at: DocumentRow | undefined = d;
+    for (const seen = new Set<string>(); at?.replaced_by?.length && !seen.has(at.id); ) {
+      seen.add(at.id);
+      at = db.documents.find((x) => x.id === at!.replaced_by![0]);
+    }
+    if (at && !at.replaced_by?.length) to[d.id] = to[d.slug] = { id: at.id, slug: at.slug, title: at.title };
+  }
+  simple.replaced_with = to;
 }
 
 /** simple-replaced-prds (company.replaced_prd_ids): the ids and slugs of the PRDs marked replaced. */
@@ -6410,7 +6425,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.simple_one_pager.visuals = db.simple_visuals;
   db.simple_roadmap ??= seedSimpleRoadmap();
   // simple-replaced-prds: the PRDs marked replaced, whose items no longer feed Simple (service.load).
-  db.simple_roadmap.replaced_prds = replacedPrds(db);
+  markReplaced(db, db.simple_roadmap);
   const roadmapItems = db.simple_roadmap;
   const visualsRes = await routeSimpleVisuals(
     db.simple_visuals,

@@ -40,6 +40,7 @@ import {
   itemDeciderId,
   itemOwnerId,
   lookalikes,
+  fileUnderCurrentPrd,
   ofReplacedPrd,
   shiftPlan,
   ownDates,
@@ -1151,12 +1152,15 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
     for (let n = 2; db.ids[key]; n++) key = `${slug(String(a.title))}-${n}`;
     const goalKey = Object.keys(GOALS).find((k) => (a.goal_ids as string[]).includes(goalId(k)));
     db.ids[key] = id;
-    db.items.push({
+    const added: SeedItem = {
       key, title: String(a.title), horizon: a.horizon as SeedItem["horizon"], roadmap, goal: goalKey,
       track: db.items.find((x) => x.roadmap === roadmap && x.track)?.track, draft: true, outcome: typeof a.outcome === "string" ? a.outcome : null,
       drafting_until: mockNowMs() + DRAFTING_MS, quarter: (a.quarter as { start: string; end: string } | undefined) ?? undefined,
       looks_like: lookalikes(db, String(a.title), roadmap),
-    });
+    };
+    // simple-replaced-prds: never filed under a replaced PRD, which Simple leaves out.
+    fileUnderCurrentPrd(db, added);
+    db.items.push(added);
     return;
   }
   const s = seed(db, keyOf(db, id)!);
