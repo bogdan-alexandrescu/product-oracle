@@ -22,12 +22,19 @@ Test cards (protects / fails_when / no_claim):
   decider approval is a ``simple_approvals`` row for its decider (who is never in
   ``waiting_on``), counted in ``total``, gone once they approve; fails_when=no row, not
   counted, or it stays once approved.
+- test_feature_ask_waits_as_asked_and_files_who_asked: protects=a teammate's feature ask
+  waiting on the owners reads as proposed in their Inbox row (never "filed" before it is),
+  and accepted, the request in Requests names the teammate as who asked when the ask named
+  no one; fails_when=the row says "filed", or the request has no requester_name.
 """
 
 import uuid
 from datetime import date
 
-from oracle.simple.models import RoadmapDateSuggestion, SimpleGoalSuggestion
+from sqlalchemy import select
+
+from oracle.requests.models import ProductRequest
+from oracle.simple.models import RoadmapDateSuggestion, SimpleChange, SimpleGoalSuggestion
 from oracle.tenancy import tenant_session
 from tests.test_simple_additions_api import SUGGESTIONS, World
 from tests.test_simple_additions_api import clock as clock  # noqa: F401
@@ -137,3 +144,30 @@ async def test_draft_waiting_on_the_decider_is_in_their_inbox(client):
     inbox = await _inbox(client, w, "decider")
     assert [x for x in inbox["simple_approvals"] if x["draft_id"] == d["id"]] == []
     assert inbox["total"] == before
+
+
+async def test_feature_ask_waits_as_asked_and_files_who_asked(client):
+    from oracle import company_time
+
+    w = await World().build()
+    u = w.ctx.users
+    rid = uuid.uuid4()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        c = SimpleChange(op="add_feature_ask", target={"request_id": str(rid)}, before={},
+                         after={"title": "Bulk export", "requester_name": None,
+                                "requester_kind": "unknown", "channel": "other"},
+                         status="proposed", by=u["commenter"].id, at=company_time.now(),
+                         routed_to=[u["owner"].id])  # fmt: skip
+        s.add(c)
+        await s.commit()
+        cid = str(c.id)
+    inbox = await _inbox(client, w, "owner")
+    [row] = [x for x in inbox["simple_proposals"] if x["id"] == cid]
+    assert row["asked"] == "proposed the feature ask “Bulk export”"
+    r = await client.post(f"/v1/simple/changes/{cid}/accept", headers=w.as_("owner"), json={})
+    assert r.status_code == 200, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        request = await s.scalar(select(ProductRequest).where(ProductRequest.id == rid))
+    assert request is not None and request.filed_by == u["commenter"].id
+    assert request.requester_name == _name(w, "commenter")
+    assert request.requester_kind == "team"

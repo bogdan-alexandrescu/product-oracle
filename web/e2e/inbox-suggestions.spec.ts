@@ -6,7 +6,8 @@ import { expect, test, type Locator, type Page } from "./test";
  * inbox-meeting-proposals fix: everything in Simple waiting on me has its own Inbox row that
  * opens where it is decided. In the mock's "inbox-reviewer" scenario approver@example.com is a
  * required reviewer of the Alerts roadmap, and commenter@example.com's feature ask Bulk export,
- * on no roadmap, waits on the owners.
+ * on no roadmap, waits on the owners, as does commenter@example.com's (Theo Brandt's) new name for
+ * Weekly alert digest on the Alerts roadmap.
  *
  * Card inbox-date-suggestion: protects = Oracle's open dates for an item the owner decides are a
  * row naming the item and the dates; Open shows Oracle's dates on the roadmap, and the item's
@@ -21,6 +22,15 @@ import { expect, test, type Locator, type Page } from "./test";
  * which no other page shows until it is filed, has no Open and is decided in its row, and once
  * accepted it is in Requests; fails_when = an Open leads where the item or its action is not
  * shown, the feature ask has an Open, or after Accept Requests does not list it.
+ *
+ * Card inbox-feature-ask-words: protects = the waiting feature ask reads as proposed, never as
+ * filed before it is; accepted, Requests names the teammate who asked (Asked by), the ask having
+ * named no one; fails_when = the row says "Filed", or Requests shows no one under Asked by.
+ *
+ * Card inbox-counts-at-once: protects = accepting Oracle's dates (their popover), a goal's
+ * suggested feature (its card) and a proposal (Needs a decision) on the roadmap takes one off
+ * the rail's Inbox count (on a phone, More's) at once, with no navigation or reload;
+ * fails_when = the count stays until a reload.
  *
  * Card inbox-simple-approval: protects = a roadmap version sent for review waits in its required
  * reviewer's Inbox, reached from Simple's rail whose count equals "N waiting": the roadmap by
@@ -78,6 +88,21 @@ async function shownCount(page: Page, phone: boolean): Promise<number> {
   const count = page.getByTestId(phone ? "simple-tab-roadmap-count" : "simple-nav-inbox-count");
   // Read without waiting: the badge goes away as the count drops to 0.
   const t = await count.allTextContents();
+  return t.length ? Number(t[0].trim()) : 0;
+}
+
+/** The Inbox's count as shown now, without leaving the page: the rail's, or on a phone More's (its sheet opened and closed); 0 when none shows. */
+async function inboxCount(page: Page, phone: boolean): Promise<number> {
+  if (!phone) {
+    const t = await page.getByTestId("simple-nav-inbox-count").allTextContents();
+    return t.length ? Number(t[0].trim()) : 0;
+  }
+  const sheet = page.getByRole("dialog", { name: "More" });
+  await tap(page.getByTestId("simple-tab-more"));
+  await expect(sheet.getByRole("link", { name: "Inbox", exact: true })).toBeVisible();
+  const t = await sheet.getByTestId("simple-more-inbox-count").allTextContents();
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
   return t.length ? Number(t[0].trim()) : 0;
 }
 
@@ -159,6 +184,9 @@ for (const phone of [false, true]) {
       // A feature ask on no roadmap: no Open (no page shows it before it is filed), Accept and Decline in its row.
       const ask = table.getByRole("row").filter({ hasText: "Bulk export" }).filter({ hasText: "asked for by" });
       await expect(ask).toHaveCount(1);
+      // card: inbox-feature-ask-words: proposed, not filed yet.
+      await expect(ask).toContainText("Proposed the feature ask “Bulk export”");
+      await expect(ask).not.toContainText(/filed/i);
       await expect(ask.getByRole("link", { name: /^Open/ })).toHaveCount(0);
       await expect(ask.getByRole("button", { name: "Accept" })).toBeVisible();
       await expect(ask.getByRole("button", { name: "Decline" })).toBeVisible();
@@ -197,7 +225,7 @@ for (const phone of [false, true]) {
           throw new Error(`An Open the spec does not know: ${label}`);
         }
       }
-      expect([...kinds]).toEqual(expect.arrayContaining(["dates", "goal"]));
+      expect([...kinds]).toEqual(expect.arrayContaining(["roadmap", "dates", "goal"]));
 
       // Accepted in the Inbox, the ask is filed: Requests lists it.
       await page.goto("/inbox");
@@ -205,7 +233,54 @@ for (const phone of [false, true]) {
       await expect(page.getByText("Accepted: it is filed in Requests")).toBeVisible();
       await expect(page.getByRole("row").filter({ hasText: "Bulk export" }).filter({ hasText: "asked for by" })).toHaveCount(0);
       await page.goto("/requests");
-      await expect(page.getByTestId("request-row").filter({ hasText: "Bulk export" }).first()).toBeVisible();
+      const filed = page.getByTestId("request-row").filter({ hasText: "Bulk export" }).first();
+      await expect(filed).toBeVisible();
+      // Asked by the teammate who asked for it (the ask named no one else).
+      await expect(filed).toContainText("Theo Brandt");
+    });
+
+    // card: inbox-counts-at-once
+    test(`accepting on the roadmap takes it off the Inbox count at once (${where})`, async ({ page }) => {
+      test.setTimeout(150_000);
+      await login(page);
+      await readRoadmap(page);
+
+      /** From the Inbox, by the row's Open: the item where it is decided. */
+      const openFromInbox = async (name: string | RegExp) => {
+        await page.goto("/inbox");
+        await expect(page.getByTestId("inbox-proposals").first()).toBeVisible();
+        const link = page.getByTestId("inbox-proposals").getByRole("link", { name }).first();
+        if ((await link.count()) === 0) await tap(page.getByRole("tab", { name: /^Seen/ }));
+        await tap(link);
+      };
+
+      // Oracle's dates, accepted in their popover.
+      await openFromInbox(/^Open Oracle's dates for /);
+      const pop = page.getByTestId("suggestion-popover");
+      await expect(pop).toContainText("Oracle suggests");
+      const n0 = await inboxCount(page, phone);
+      expect(n0).toBeGreaterThan(0);
+      await tap(pop.getByRole("button", { name: "Accept" }));
+      await expect(page.getByText("Dates accepted in your working draft")).toBeVisible();
+      await expect.poll(() => inboxCount(page, phone)).toBe(n0 - 1);
+
+      // A goal's suggested feature, accepted on its card.
+      await openFromInbox("Open the suggestions for Keep alerts quiet");
+      const card = page.getByTestId("goal-suggestion").first();
+      await expect(card).toBeVisible();
+      const n1 = await inboxCount(page, phone);
+      await tap(card.getByRole("button", { name: "Accept" }));
+      await expect(page.getByText(/^Added .+ as a draft$/)).toBeVisible();
+      await expect.poll(() => inboxCount(page, phone)).toBe(n1 - 1);
+
+      // A teammate's proposal, accepted in Needs a decision.
+      await openFromInbox("Open Weekly alert digest on its roadmap");
+      const proposal = page.getByTestId("decision-tray").getByTestId("tray-proposal").filter({ hasText: "Weekly alert digest" }).first();
+      await expect(proposal).toBeVisible();
+      const n2 = await inboxCount(page, phone);
+      await tap(proposal.getByRole("button", { name: "Accept" }));
+      await expect(page.getByText("Accepted: it is in your working draft")).toBeVisible();
+      await expect.poll(() => inboxCount(page, phone)).toBe(n2 - 1);
     });
 
     // card: inbox-simple-approval

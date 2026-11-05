@@ -180,11 +180,11 @@ test("Questions asked of me: rail badge, Home and the Inbox count the same", asy
 });
 
 test("A Simple proposal waiting on me: rail badge, Home and the Inbox count the same", async ({ page }) => {
-  // inbox-meeting-proposals fix: a teammate's feature ask, on no roadmap, waits on the owners.
+  // inbox-meeting-proposals fix: a teammate's feature ask, on no roadmap, and their new name for an item wait on the owners.
   await openHome(page, "inbox-reviewer");
   const badge = page.getByTestId("nav-inbox-badge");
   const needs = page.getByTestId("home-needs");
-  await expect(needs.getByTestId("home-count-proposals")).toHaveText(/Proposals\s*1/);
+  await expect(needs.getByTestId("home-count-proposals")).toHaveText(/Proposals\s*2/);
   await expect(badge).toHaveText(/^\d+$/);
   const waiting = (await badge.textContent())!.trim();
   await expect(page.getByText(`${waiting} waiting`)).toBeVisible();
