@@ -792,6 +792,8 @@ function AddDependency({
         e.preventDefault();
         if (!key) return;
         setOpen(false);
+        setPick("");
+        setTyped("");
         void add(key);
       }}
     >

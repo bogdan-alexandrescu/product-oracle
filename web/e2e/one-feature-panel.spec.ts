@@ -155,7 +155,7 @@ for (const size of SIZES) {
       await tap(panel(page).getByRole("button", { name: "Add a dependency" }));
       await panel(page).getByLabel("Feature it depends on").selectOption({ label: "F-06 Weekly alert digest" });
       await tap(panel(page).getByRole("button", { name: "Save" }));
-      const dep = panel(page).getByTestId("card-depends-row").getByRole("button", { name: "F-06 Weekly alert digest" });
+      const dep = panel(page).getByTestId("card-depends-row").getByRole("button", { name: /^F-06\s*Weekly alert digest$/ });
       await expect(dep).toBeVisible();
       await expect(panel(page).getByTestId("card-depends")).not.toContainText("Feature F-06");
 
@@ -236,7 +236,8 @@ test.describe("Goal map", () => {
     await page.goto("/simple/goals");
     await expect(page.getByTestId("gm-page")).toBeVisible();
     const cards = page.getByTestId("gm-ladder").getByTestId("gm-feature");
-    await expect(cards.first()).toBeVisible();
+    // Each card's code chip, from its roadmap item.
+    await expect(cards.first().locator(".simple-code")).toHaveText(/^F-\d+$/);
     const n = await cards.count();
     expect(n).toBeGreaterThan(5);
     for (let i = 0; i < n; i++) {
