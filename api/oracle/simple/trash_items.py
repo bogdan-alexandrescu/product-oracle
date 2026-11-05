@@ -40,7 +40,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -406,14 +406,17 @@ _OWN = frozenset({"id", "roadmap_version_id", "draft_roadmap_id", "simple_draft_
 
 
 async def _onto_current(db: AsyncSession, entry: TrashEntry) -> list[dict[str, Any]]:
-    """A version published, opened in a draft or submitted while the feature was in Trash
+    """A version published, opened in a draft or proposed while the feature was in Trash
     was made without it: Restore puts a copy of its latest row on the roadmap's current
-    version, the working draft's base and the version in review, wherever it is missing,
-    with its goal, dependencies and milestones. A dependency on a key no longer on that
-    version (nor in Trash) is dropped, and said."""
+    version, the working draft's base and every newer version that has items, approved
+    or waiting for approval (a Simple draft in review, a Detailed change set's proposal),
+    wherever it is missing, with its goal, dependencies and milestones. A version
+    withdrawn from review or superseded is left as it is: it is never approved. A
+    dependency on a key no longer on that version (nor in Trash) is dropped, and said."""
     from oracle.docs.models import DocumentVersion
-    from oracle.roadmap.models import TrackMilestone
+    from oracle.roadmap.models import RoadmapChangeSet, TrackMilestone
     from oracle.simple.additions import _shown_version
+    from oracle.simple.drafts import _withdrawn
     from oracle.simple.models import SimpleDraft
 
     key = entry.root.get("slug")
@@ -443,6 +446,27 @@ async def _onto_current(db: AsyncSession, entry: TrashEntry) -> list[dict[str, A
     )
     targets = {await _shown_version(db, doc, draft=False)}
     targets |= {d.base_version_id if d.status == "working" else d.version_id for d in drafts_}
+    newest = await db.scalar(
+        select(func.max(DocumentVersion.number)).where(DocumentVersion.id.in_(have - {None}))
+    )
+    superseded = select(RoadmapChangeSet.proposed_version_id).where(
+        RoadmapChangeSet.status == "superseded", RoadmapChangeSet.proposed_version_id.is_not(None)
+    )
+    targets |= set(
+        await db.scalars(
+            select(DocumentVersion.id).where(
+                DocumentVersion.document_id == doc,
+                DocumentVersion.number > (newest or 0),
+                DocumentVersion.id.in_(
+                    select(RoadmapItem.roadmap_version_id).where(
+                        RoadmapItem.roadmap_document_id == doc
+                    )
+                ),
+                (DocumentVersion.approved_at.is_not(None))
+                | (~_withdrawn() & DocumentVersion.id.not_in(superseded)),
+            )
+        )
+    )
     targets -= {None, *have}
     if not targets:
         return []
