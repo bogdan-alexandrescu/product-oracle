@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, type Schemas } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { BTN, type Note } from "./goal-buckets";
+import { BTN, nextNoteId, type Note } from "./goal-buckets";
 
 /*
  * Tasks in the goal buckets (the owner, Nov 4: "edit, delete, add in place new tasks"). A task is
@@ -270,12 +270,12 @@ export function useTaskWrites(reload: () => Promise<void>, setNote: (n: Note | n
       const applied = made.filter((c) => c.status === "applied");
       const waiting = made.filter((c) => c.status !== "applied");
       const changes = applied.filter((c) => c.can_undo).map((c) => c.id);
-      if (made.length && !applied.length) setNote({ text: <>{proposed}: it waits for a decision.</> });
+      if (made.length && !applied.length) setNote({ id: nextNoteId(), text: <>{proposed}: it waits for a decision.</> });
       else if (waiting.length) {
         // Some applied, some proposed: the note names those proposed.
         const parts = [...new Set(waiting.map((c) => PART[c.op] ?? "a change"))];
-        setNote({ text: <>{`${done} Proposed ${andList(parts)}: ${parts.length === 1 ? "it waits" : "they wait"} for a decision.`}</>, changes });
-      } else setNote({ text: <>{done}</>, changes });
+        setNote({ id: nextNoteId(), text: <>{`${done} Proposed ${andList(parts)}: ${parts.length === 1 ? "it waits" : "they wait"} for a decision.`}</>, changes });
+      } else setNote({ id: nextNoteId(), text: <>{done}</>, changes });
       await reload();
       return true;
     } catch (e) {
@@ -310,7 +310,7 @@ export function useTaskWrites(reload: () => Promise<void>, setNote: (n: Note | n
       // Nothing changed: say so, and send nothing.
       if (!ins.length) {
         setError(null);
-        setNote({ text: <>No changes.</> });
+        setNote({ id: nextNoteId(), text: <>No changes.</> });
         return Promise.resolve(true);
       }
       return run(
@@ -344,7 +344,7 @@ export function useTaskWrites(reload: () => Promise<void>, setNote: (n: Note | n
           const { response, error } = await api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: id } } });
           if (!response.ok) throw new Error(String((error as { detail?: unknown } | undefined)?.detail ?? "Could not undo"));
         }
-        setNote({ text: <>Undone: the task is back as it was.</> });
+        setNote({ id: nextNoteId(), text: <>Undone: the task is back as it was.</> });
       } catch (e) {
         setError(said(e));
       }

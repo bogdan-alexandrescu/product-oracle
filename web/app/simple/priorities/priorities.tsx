@@ -2104,7 +2104,7 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
           </div>
         </figure>
       )}
-      {note && <UndoNote onUndo={note.undo ? () => void writes.undo(note.undo!) : note.changes?.length ? () => void tasks.undo(note.changes!) : undefined}>{note.text}</UndoNote>}
+      {note && <UndoNote id={note.id} onUndo={note.undo ? () => void writes.undo(note.undo!) : note.changes?.length ? () => void tasks.undo(note.changes!) : undefined}>{note.text}</UndoNote>}
       {error && (
         <p role="alert" className="mt-3 text-[15px] text-warn">
           {error}

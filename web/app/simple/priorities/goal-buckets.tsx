@@ -520,6 +520,9 @@ export type Note = { id: number; text: ReactNode; undo?: Undo; changes?: string[
 
 let noteId = 0;
 
+/** A new note's `id` (./task-edit's notes too). */
+export const nextNoteId = (): number => ++noteId;
+
 /** The writes, each answering with the note to show and what Undo puts back. */
 export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note | null) => void, setError: (e: string | null) => void) {
   async function run(go: () => Promise<{ undo: Undo }>, text: ReactNode): Promise<boolean> {
