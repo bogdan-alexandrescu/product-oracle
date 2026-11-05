@@ -174,6 +174,26 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("fit-change-summary")).toContainText("1 day sooner");
   });
 
+  for (const target of ["37", "25"] as const) {
+    test(`the default case with the goal lowered to ${target} on the Baseline reads the API engine's rows and date`, async ({ page }) => {
+      // The date is reached, so the panel offers no smaller goal: the goal is lowered on the Baseline.
+      await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "fit-date"] as const);
+      await login(page);
+      await page.goto("/baseline");
+      await page.getByRole("button", { name: "40 replied threads per agent per day" }).first().click();
+      const details = page.getByRole("dialog");
+      await details.getByRole("button", { name: "Edit", exact: true }).click();
+      await expect(details.getByLabel("Start value")).toHaveValue(String(plan.goal.start));
+      await details.getByLabel("Value", { exact: true }).fill(target);
+      await details.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(details.getByLabel("Value", { exact: true })).toBeHidden();
+      await page.goto("/simple/roadmap");
+      await page.getByRole("button", { name: "Bring this date in" }).click();
+      await expect(page.getByTestId("fit-smaller")).toContainText(`Counted against the smaller goal: At least ${target} threads`);
+      await readsTheEngine(page, `fit-date@${target}`);
+    });
+  }
+
   test("the default case reads the API engine's rows and date, and one person-week or one day reads singular", async ({ page }) => {
     await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "fit-date"] as const);
     await login(page);
