@@ -69,11 +69,14 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
       .then(([inbox, waiting, roadmap]) => {
         if (!alive) return;
         const links = roadmap?.broken_links ?? 0;
+        // Review: the dates to confirm too, so the count equals the roadmap's Needs a decision.
+        const dates = roadmap?.dates_to_confirm ?? 0;
         const asks = inbox.simple_proposals.length + inbox.simple_approvals.length;
         setCounts({
           Decisions: waiting.count,
-          Roadmap: links + asks,
+          Roadmap: links + dates + asks,
           "Roadmap links": links,
+          "Roadmap dates": dates,
           "Roadmap asks": asks,
         });
       })
@@ -108,8 +111,9 @@ function countWords(label: string, n: number, counts?: Record<string, number> | 
   // changes and drafts sent to you, and says so.
   if (label === "Roadmap") {
     const links = counts?.["Roadmap links"] ?? 0;
-    const asks = counts?.["Roadmap asks"] ?? n - links;
-    return `${links} broken ${links === 1 ? "link" : "links"}, ${asks} ${asks === 1 ? "change or draft" : "changes or drafts"} waiting on you`;
+    const dates = counts?.["Roadmap dates"] ?? 0;
+    const asks = counts?.["Roadmap asks"] ?? n - links - dates;
+    return `${links} broken ${links === 1 ? "link" : "links"}, ${dates} ${dates === 1 ? "date" : "dates"} to confirm, ${asks} ${asks === 1 ? "change or draft" : "changes or drafts"} waiting on you`;
   }
   return `${n} waiting on you`;
 }

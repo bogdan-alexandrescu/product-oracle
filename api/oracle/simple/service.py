@@ -200,20 +200,22 @@ def flags_out(e: Entry, may: Any = None) -> list[SimpleFlag]:
 LINK_KINDS = ("dependency_order", "cut_with_dependents")
 
 
-async def broken_links(db: AsyncSession, principal: Any) -> int:
-    """The broken links of the whole roadmap as ``principal`` reads it: a red dependency out
-    of order or a cut item others depend on, with a fix; done items left out (the read
-    without the rest of :func:`build`)."""
+async def waiting(db: AsyncSession, principal: Any) -> tuple[int, int]:
+    """The broken links and the dates to confirm of the whole roadmap as ``principal`` reads
+    it: a red dependency out of order or a cut item others depend on, with a fix; an open date
+    suggestion the reader may decide; done items left out (the read without the rest of
+    :func:`build`)."""
     from oracle.simple import drafts
 
     read = await load(db, (await drafts.reader(db, principal)).overlays)
-    return sum(
-        1
-        for e in read.entries
-        if e.status != "done"
-        for f in e.flags
-        if f.state == "red" and f.fixes and f.kind in LINK_KINDS
+    live = [e for e in read.entries if e.status != "done"]
+    links = sum(
+        1 for e in live for f in e.flags if f.state == "red" and f.fixes and f.kind in LINK_KINDS
     )
+    dates = sum(
+        1 for e in live if e.suggestion is not None and can_decide(principal, e, read.deciders)
+    )
+    return links, dates
 
 
 def owner_decides(entry: Entry) -> uuid.UUID | None:

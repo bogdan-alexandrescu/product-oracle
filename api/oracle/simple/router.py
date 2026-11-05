@@ -83,8 +83,10 @@ async def get_simple_roadmap(
 async def get_simple_roadmap_waiting(principal: Reader, db: TenantDB) -> SimpleRoadmapWaiting:
     """roadmap-decide review: the side menu's light count: the broken links of the whole
     roadmap as the caller sees it (the working draft's to who sees it), no filter; the same
-    ones the roadmap's strip, its Needs a decision and Home count."""
-    return SimpleRoadmapWaiting(broken_links=await service.broken_links(db, principal))
+    ones the roadmap's strip, its Needs a decision and Home count; and the dates the caller may
+    confirm, so the side menu's count equals Needs a decision."""
+    links, dates = await service.waiting(db, principal)
+    return SimpleRoadmapWaiting(broken_links=links, dates_to_confirm=dates)
 
 
 @router.get("/date-suggestions", response_model=list[DateSuggestionOut])

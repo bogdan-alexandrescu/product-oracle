@@ -78,9 +78,11 @@ class SimpleFlag(BaseModel):
 
 class SimpleRoadmapWaiting(BaseModel):
     """roadmap-decide review: the light count the side menu reads: the broken links of the
-    whole roadmap as the reader sees it (the working draft's to who sees it)."""
+    whole roadmap as the reader sees it (the working draft's to who sees it), and the dates
+    the reader may confirm in it (Needs a decision's Dates to confirm)."""
 
     broken_links: int
+    dates_to_confirm: int
 
 
 class SimpleDocRef(BaseModel):

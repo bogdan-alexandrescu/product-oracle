@@ -12231,7 +12231,8 @@ export interface paths {
          * Get Simple Roadmap Waiting
          * @description roadmap-decide review: the side menu's light count: the broken links of the whole
          *     roadmap as the caller sees it (the working draft's to who sees it), no filter; the same
-         *     ones the roadmap's strip, its Needs a decision and Home count.
+         *     ones the roadmap's strip, its Needs a decision and Home count; and the dates the caller may
+         *     confirm, so the side menu's count equals Needs a decision.
          */
         get: operations["get_simple_roadmap_waiting"];
         put?: never;
@@ -41026,11 +41027,14 @@ export interface components {
         /**
          * SimpleRoadmapWaiting
          * @description roadmap-decide review: the light count the side menu reads: the broken links of the
-         *     whole roadmap as the reader sees it (the working draft's to who sees it).
+         *     whole roadmap as the reader sees it (the working draft's to who sees it), and the dates
+         *     the reader may confirm in it (Needs a decision's Dates to confirm).
          */
         SimpleRoadmapWaiting: {
             /** Broken Links */
             broken_links: number;
+            /** Dates To Confirm */
+            dates_to_confirm: number;
         };
         /**
          * SimpleRunGroup

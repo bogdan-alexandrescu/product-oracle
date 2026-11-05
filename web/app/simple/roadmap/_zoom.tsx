@@ -20,7 +20,7 @@ import {
 import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
 import { addMonths } from "@/lib/dates";
 
-import { FixButtons, type Act } from "./_card";
+import { FixButtons, fixCount, type Act } from "./_card";
 import {
   addDays,
   barSpan,
@@ -307,8 +307,9 @@ export function ConflictPanel({
   // included: the same ones Needs a decision, Home and the side menu count.
   const list = data.items.flatMap((i) => brokenLinks(i).map((f) => ({ i, f })));
   const [shut, setShut] = useState(false);
-  // Review: a filter hides some: "1 broken link here, 3 in all", with Clear filters.
-  const elsewhere = all !== undefined && all > 0 && !!onAll;
+  // Review: a filter hides some: "1 broken link here, 3 in all", with Clear filters; only
+  // when the whole roadmap holds more than these filters show.
+  const elsewhere = all !== undefined && all !== list.length && !!onAll;
   const showAll = elsewhere ? (
     <span className="flex flex-none items-center gap-2 text-sm font-normal text-text2" data-testid="conflicts-all">
       {all} in all
@@ -351,32 +352,37 @@ export function ConflictPanel({
       </div>
       {!shut && (
         <ul className="divide-y divide-line border-t border-line">
-          {list.map(({ i, f }) => (
-            <li
-              key={`${i.id}-${f.kind}-${f.subject}`}
-              data-testid="conflict"
-              data-item={i.key}
-              className={`flex gap-3 px-3 py-2 ${phone ? "flex-col" : "flex-wrap items-center"}`}
-            >
-              <button
-                type="button"
-                onClick={() => onShow(i.key)}
-                className="min-w-0 flex-1 text-left text-sm text-text hover:underline"
+          {list.map(({ i, f }) => {
+            // Review: with more than the three fixes (a cut item's Remove the dependency per dependent),
+            // the fixes take their own line under the sentence, as the tray has them.
+            const stacked = phone || fixCount(f) > 3;
+            return (
+              <li
+                key={`${i.id}-${f.kind}-${f.subject}`}
+                data-testid="conflict"
+                data-item={i.key}
+                className={`flex px-3 py-2 ${stacked ? "flex-col gap-1" : "flex-wrap items-center gap-3"}`}
               >
-                {f.reason}
-              </button>
-              <div className="max-w-full min-w-0">
-                <FixButtons
-                  item={i}
-                  flag={f}
-                  items={byId}
-                  act={act}
-                  canChange={canChange}
-                  inline={!phone}
-                />
-              </div>
-            </li>
-          ))}
+                <button
+                  type="button"
+                  onClick={() => onShow(i.key)}
+                  className={`text-left text-sm text-text hover:underline ${stacked ? "" : "min-w-[16rem] flex-1"}`}
+                >
+                  {f.reason}
+                </button>
+                <div className="max-w-full min-w-0">
+                  <FixButtons
+                    item={i}
+                    flag={f}
+                    items={byId}
+                    act={act}
+                    canChange={canChange}
+                    inline={!stacked}
+                  />
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>

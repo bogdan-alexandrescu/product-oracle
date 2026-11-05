@@ -25,7 +25,7 @@ import { QuickAdd } from "./_add";
 import { MsCard, MsKey, MsLayer, MsProvider, MsToast, useMilestones, type MsLane, type MsRow } from "./_milestones";
 import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, MARK_WORDS, PM_LANE, type Horizon, type LegendEntry } from "./_board";
 import { useKeyBurst } from "./_burst";
-import { changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
+import { changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, ProposedFixes, SuggestionPopover, type Act } from "./_card";
 import { boardPicture, chartPicture, exportView, type Brand } from "./_export";
 import { KeyDatesEditor } from "./_keydates";
 import { Lanes, pmItem } from "./_lanes";
@@ -339,8 +339,16 @@ function prdWords(p: { prd: { title: string }; version?: number | null; items: n
 }
 
 /** The working-draft banner (D18 as amended: one shared draft per roadmap). */
-function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onReview, titleOf, nameOf }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; onApprove: (d: Draft[]) => void; onReview: (prdSlug: string) => void; titleOf: (id: string | null) => string | undefined; nameOf?: (id: string) => string }) {
+function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onReview, titleOf, nameOf, focus }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; onApprove: (d: Draft[]) => void; onReview: (prdSlug: string) => void; titleOf: (id: string | null) => string | undefined; nameOf?: (id: string) => string; focus?: string | null }) {
   const [open, setOpen] = useState(false);
+  // Review: Home's "Open draft to approve" (?draft=<id>) lands on that draft: in sight, its button focused, once.
+  const focused = useRef(false);
+  const onFocus = useCallback((el: HTMLElement | null) => {
+    if (!el || focused.current) return;
+    focused.current = true;
+    el.scrollIntoView({ block: "center" });
+    el.querySelector<HTMLButtonElement>("[data-step]")?.focus();
+  }, []);
   const working = drafts.filter((d) => d.status === "working" || d.status === "submitted");
   if (!working.length) {
     if (!inReview) return null;
@@ -365,12 +373,42 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onRe
   // roadmap-decide: what happens next and who acts, with that person's button (Send for review, or the decider's Approve).
   const next = draftNext({ ...working[0], published }, nameOf);
   const approvable = working.filter((d) => d.status === "submitted" && d.can_approve);
+  const many = working.length > 1;
+  // Review: with several working drafts, one line each: its roadmap, its own next step, its own button.
+  const step = (d: Draft) =>
+    ready(d) && d.can_publish ? (
+      <Button variant="solid" data-step className="max-[640px]:px-2.5" data-testid="draft-publish" onClick={() => onApprove([d])}>
+        Approve and publish
+      </Button>
+    ) : ready(d) && d.can_submit ? (
+      <Button variant="solid" data-step onClick={() => onSubmit([d])}>
+        Send for review
+      </Button>
+    ) : d.status === "submitted" && d.can_approve ? (
+      <Button variant="solid" data-step data-testid="draft-approve" onClick={() => onApprove([d])}>
+        Approve
+      </Button>
+    ) : null;
+  const mine = focus ? working.find((d) => d.id === focus) : undefined;
   return (
-    <section data-testid="draft-banner" className="rounded-xl border border-accent-mid bg-accent-soft px-4 py-2.5 text-accent-ink">
+    <section
+      data-testid="draft-banner"
+      ref={mine && !many ? onFocus : undefined}
+      data-focused={mine && !many ? "true" : undefined}
+      className="rounded-xl border border-accent-mid bg-accent-soft px-4 py-2.5 text-accent-ink"
+    >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 max-[640px]:gap-x-1.5">
         {/* fix4 qa-simple-roadmap-19: on a phone the sentence takes its own line(s), the three buttons a row under it. */}
         <p className="min-w-0 flex-1 text-[15px] max-[640px]:basis-full" data-testid="draft-words">
-          <b>Your working draft</b> · <span data-testid="draft-count">{changes}</span> {changes === 1 ? "change" : "changes"} since {time(since)} · <span data-testid="draft-next">{next.words}</span>
+          {many ? (
+            <>
+              <b>Your working drafts</b> · {working.length} roadmaps · <span data-testid="draft-count">{changes}</span> {changes === 1 ? "change" : "changes"} since {time(since)}
+            </>
+          ) : (
+            <>
+              <b>Your working draft</b> · <span data-testid="draft-count">{changes}</span> {changes === 1 ? "change" : "changes"} since {time(since)} · <span data-testid="draft-next">{next.words}</span>
+            </>
+          )}
         </p>
         {/* roadmap-decide: a hair tighter on a phone, so Approve and publish keeps the row. */}
         <Button variant="ghost" className="max-[640px]:px-1.5" disabled={!last} onClick={() => last && onUndo(last.id)}>
@@ -380,22 +418,40 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onRe
           See changes
         </Button>
         {/* Review: each draft's own next step: Approve and publish for the decider's, Send for review for the others. */}
-        {publishable.length > 0 && (
-          <Button variant="solid" className="max-[640px]:px-2.5" data-testid="draft-publish" onClick={() => onApprove(publishable)}>
+        {!many && publishable.length > 0 && (
+          <Button variant="solid" data-step className="max-[640px]:px-2.5" data-testid="draft-publish" onClick={() => onApprove(publishable)}>
             Approve and publish
           </Button>
         )}
-        {(submittable.length > 0 || !publishable.length) && (
-          <Button variant="solid" disabled={!submittable.length} onClick={() => onSubmit(submittable)}>
+        {!many && (submittable.length > 0 || !publishable.length) && (
+          <Button variant="solid" data-step disabled={!submittable.length} onClick={() => onSubmit(submittable)}>
             Send for review
           </Button>
         )}
-        {approvable.length > 0 && (
-          <Button variant="solid" data-testid="draft-approve" onClick={() => onApprove(approvable)}>
+        {!many && approvable.length > 0 && (
+          <Button variant="solid" data-step data-testid="draft-approve" onClick={() => onApprove(approvable)}>
             Approve
           </Button>
         )}
       </div>
+      {many && (
+        <ul className="mt-1.5 space-y-1.5">
+          {working.map((d) => (
+            <li
+              key={d.id}
+              data-testid="draft-line"
+              ref={d.id === focus ? onFocus : undefined}
+              data-focused={d.id === focus ? "true" : undefined}
+              className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border-t border-accent-mid pt-1.5 text-[15px] ${d.id === focus ? "bg-surface px-2 pb-1.5 ring-2 ring-accent-mid" : ""}`}
+            >
+              <span className="min-w-0 flex-1">
+                <b>{d.document.title}</b> · {d.changes} {d.changes === 1 ? "change" : "changes"} · <span data-testid="draft-next">{draftNext(d, nameOf).words}</span>
+              </span>
+              {step(d)}
+            </li>
+          ))}
+        </ul>
+      )}
       {fromPrds.length > 0 && (
         <ul className="mt-1.5 space-y-1 text-sm" data-testid="draft-from-prds">
           {fromPrds.map((p) => (
@@ -540,6 +596,7 @@ function DecisionTray({
   suggestions,
   top,
   allLinks,
+  allDates,
   onAll,
 }: {
   items: Item[];
@@ -556,6 +613,8 @@ function DecisionTray({
   top: number;
   /** Review: under a filter, the whole roadmap's broken links, and how to clear the filters. */
   allLinks?: number;
+  /** Review: under a filter, the whole roadmap's dates to confirm (the same basis as allLinks). */
+  allDates?: number;
   onAll?: () => void;
 }) {
   const twins = items.filter((i) => i.can_decide && i.looks_like.length > 0);
@@ -601,9 +660,11 @@ function DecisionTray({
   });
   const pulled = counts.pulled;
   const others = counts.proposals;
+  const here = counts.total;
+  const whole = counts.total - counts.links - counts.dates.length + (allLinks ?? counts.links) + (allDates ?? counts.dates.length);
   const counters: [string, number][] = [
     ["Broken links", allLinks ?? counts.links],
-    ["Dates to confirm", dateRows.length],
+    ["Dates to confirm", allDates ?? dateRows.length],
     ["Proposals", others.length],
     ["Pulled in", pulled.length],
   ];
@@ -642,11 +703,12 @@ function DecisionTray({
       </div>
       {/* roadmap-decide: what the button's count is, said in words; the broken links are the same ones Home and the side menu count. */}
       <p className="mt-1 text-sm text-text2" data-testid="tray-scope">
-        {counts.total - counts.links + (allLinks ?? counts.links)} to decide in this roadmap&apos;s working draft: broken links, dates to confirm, proposals and items pulled in.
+        {/* Review: under a filter, every kind on one basis: what these filters show, and the whole roadmap's. */}
+        {whole !== here ? `${here} here, ${whole} in all` : whole} to decide in this roadmap&apos;s working draft: broken links, dates to confirm, proposals and items pulled in.
         {allLinks !== undefined && allLinks !== counts.links && (
           <span data-testid="tray-links-here">
             {" "}
-            {counts.links} of the {allLinks} broken {allLinks === 1 ? "link is" : "links are"} in these filters.{" "}
+            {counts.links} of the {allLinks} broken {allLinks === 1 ? "link" : "links"} {counts.links === 1 ? "is" : "are"} in these filters.{" "}
             <button type="button" onClick={onAll} className="font-semibold text-accent-ink hover:underline">
               Clear filters
             </button>
@@ -870,11 +932,23 @@ export function SimpleRoadmap() {
   // Review: the whole roadmap's broken links (the side menu's light count), whatever the filters.
   const wholeLinks = useQuery("simple-roadmap-waiting", () => unwrap(api.GET("/v1/simple/roadmap/waiting")));
   // Review: the people a draft's next step names (who it waits on, who reviews it after the decider).
-  const draftIds = [...new Set((drafts.data ?? []).flatMap((d) => [...d.waiting_on, ...(d.required_reviewers ?? [])]))].sort();
+  // A proposed fix names whom it waits for too.
+  const asked = (proposals.data ?? []).filter((c) => c.op === "remove_dependency");
+  const draftIds = [...new Set([...(drafts.data ?? []).flatMap((d) => [...d.waiting_on, ...(d.required_reviewers ?? [])]), ...asked.flatMap((c) => c.routed_to)])].sort();
   const draftPeople = useQuery(
     `people|${draftIds.join(",")}`,
     () => (draftIds.length ? unwrap(api.GET("/v1/people", { params: { query: { ids: draftIds } } })) : Promise.resolve([] as Schemas["PersonOut"][])),
     { keepPrevious: true },
+  );
+  // Review: a Remove the dependency proposed already says whom it waits for, and is not offered again.
+  const proposedFix = useCallback(
+    (op: string, itemId: string, subject: string) => {
+      const c = asked.find((x) => x.op === op && String(x.target.item_id) === itemId && String(x.target.subject) === subject);
+      if (!c) return null;
+      const who = c.routed_to.map((id) => draftPeople.data?.find((p) => p.user_id === id)?.name).filter(Boolean);
+      return who.length ? who.join(", ") : "its decider";
+    },
+    [asked, draftPeople.data],
   );
   const reload = useCallback(async () => {
     await Promise.all([roadmap.reload(), proposals.reload(), drafts.reload(), wholeLinks.reload()]);
@@ -1193,10 +1267,13 @@ export function SimpleRoadmap() {
   // no PRD) sees no Start review at all, once the start options say so (busy until then).
   const startsReviews = mayStartReview || (!startOptions.data && !startOptions.error);
   // fix4 qa-simple-roadmap-8: the tray's own counts (one helper), so the button and its tiles agree.
-  // Review: under a filter, Needs a decision counts the whole roadmap's broken links, as the side menu does.
+  // Review: under a filter, Needs a decision counts the whole roadmap's broken links and dates to
+  // confirm, as the side menu does.
   const counted = decisionCounts(data.items, allProposals);
-  const allLinks = f.prd || f.goal || f.track || f.from || f.to || f.roadmap ? wholeLinks.data?.broken_links : undefined;
-  const waiting = counted.total - counted.links + (allLinks ?? counted.links);
+  const narrowed = !!(f.prd || f.goal || f.track || f.from || f.to || f.roadmap);
+  const allLinks = narrowed ? wholeLinks.data?.broken_links : undefined;
+  const allDates = narrowed ? wholeLinks.data?.dates_to_confirm : undefined;
+  const waiting = counted.total - counted.links - counted.dates.length + (allLinks ?? counted.links) + (allDates ?? counted.dates.length);
   const qList = quarters(data.windows.now.start, data.windows.later.end);
   // qa-shell-8: a new company's roadmap has nothing on it (no item, milestone or key date, and
   // no filter narrowing it): one line on what shows here and the next step, no empty chart and
@@ -1434,6 +1511,7 @@ export function SimpleRoadmap() {
   const draftBanner = (
     <DraftBanner
       drafts={drafts.data ?? []}
+      focus={params.get("draft")}
       titleOf={titleOf}
       nameOf={(id) => draftPeople.data?.find((p) => p.user_id === id)?.name ?? "a reviewer"}
       onReview={(slug) => pickFilter("prd", slug)}
@@ -1469,6 +1547,7 @@ export function SimpleRoadmap() {
 
   return (
     <GoalNumbers.Provider value={numbers}>
+    <ProposedFixes.Provider value={proposedFix}>
     <MsProvider value={ms!}>
     {/* A phone's page ends clear of the tab bar (#36: its filters lead the chart, not the foot). */}
     <div className="simple-mode space-y-3 px-4 py-4 max-[600px]:pb-[calc(var(--phone-tab-bar)+16px)] min-[641px]:px-6" data-testid="simple-roadmap" data-phone={phone ? "true" : "false"}>
@@ -1811,6 +1890,7 @@ export function SimpleRoadmap() {
           suggestions={suggestions}
           top={trayTop}
           allLinks={allLinks}
+          allDates={allDates}
           onAll={showAllLinks}
         />
       )}
@@ -1819,6 +1899,7 @@ export function SimpleRoadmap() {
       <MsCard />
       <MsToast />
     </MsProvider>
+    </ProposedFixes.Provider>
     </GoalNumbers.Provider>
   );
 }

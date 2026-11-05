@@ -42354,7 +42354,7 @@
           "simple"
         ],
         "summary": "Get Simple Roadmap Waiting",
-        "description": "roadmap-decide review: the side menu's light count: the broken links of the whole\nroadmap as the caller sees it (the working draft's to who sees it), no filter; the same\nones the roadmap's strip, its Needs a decision and Home count.",
+        "description": "roadmap-decide review: the side menu's light count: the broken links of the whole\nroadmap as the caller sees it (the working draft's to who sees it), no filter; the same\nones the roadmap's strip, its Needs a decision and Home count; and the dates the caller may\nconfirm, so the side menu's count equals Needs a decision.",
         "operationId": "get_simple_roadmap_waiting",
         "responses": {
           "200": {
@@ -122152,14 +122152,19 @@
           "broken_links": {
             "type": "integer",
             "title": "Broken Links"
+          },
+          "dates_to_confirm": {
+            "type": "integer",
+            "title": "Dates To Confirm"
           }
         },
         "type": "object",
         "required": [
-          "broken_links"
+          "broken_links",
+          "dates_to_confirm"
         ],
         "title": "SimpleRoadmapWaiting",
-        "description": "roadmap-decide review: the light count the side menu reads: the broken links of the\nwhole roadmap as the reader sees it (the working draft's to who sees it)."
+        "description": "roadmap-decide review: the light count the side menu reads: the broken links of the\nwhole roadmap as the reader sees it (the working draft's to who sees it), and the dates\nthe reader may confirm in it (Needs a decision's Dates to confirm)."
       },
       "SimpleRunGroup": {
         "properties": {

@@ -1299,10 +1299,11 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
     return out ? json(200, out) : json(422, { detail: "group: goal, track or prd" });
   }
   if (p[3] === "waiting" && !p[4] && m === "GET") {
-    // roadmap-decide review (GET /v1/simple/roadmap/waiting): the whole roadmap's broken links, no filter.
-    const items = roadmapOut(db, me.role, new URLSearchParams(), me)?.items ?? [];
-    const links = items.filter((i) => i.status !== "done").flatMap((i) => i.flags).filter((f) => f.state === "red" && f.fixes.length > 0 && (f.kind === "dependency_order" || f.kind === "cut_with_dependents"));
-    return json(200, { broken_links: links.length });
+    // roadmap-decide review (GET /v1/simple/roadmap/waiting): the whole roadmap's broken links and
+    // the dates the reader may confirm, no filter.
+    const items = (roadmapOut(db, me.role, new URLSearchParams(), me)?.items ?? []).filter((i) => i.status !== "done");
+    const links = items.flatMap((i) => i.flags).filter((f) => f.state === "red" && f.fixes.length > 0 && (f.kind === "dependency_order" || f.kind === "cut_with_dependents"));
+    return json(200, { broken_links: links.length, dates_to_confirm: items.filter((i) => !!i.suggestion?.can_decide).length });
   }
   const slugOf = (id: string) => Object.keys(ROADMAPS).find((r) => roadmapId(r) === id) ?? null;
   const ms = await routeMilestones(db, me, req, p, slugOf, (r) => canEditRoadmap(db, r, me));

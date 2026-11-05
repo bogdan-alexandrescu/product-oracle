@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Button, SegmentedControl } from "@/components/ds";
 import { FlowDetail, FlowThumb as FlowPicture } from "@/components/simple/Flow";
@@ -47,6 +47,13 @@ const FIX_WORDS: Record<Flag["fixes"][number], string> = {
 const fixWords = (f: Flag["fixes"][number], decides: boolean): string =>
   decides ? FIX_WORDS[f] : `Propose: ${FIX_WORDS[f][0].toLowerCase()}${FIX_WORDS[f].slice(1)}`;
 
+/** How many fixes a flag offers, a cut item's Remove the dependency counted once per dependent. */
+export const fixCount = (flag: Flag): number => flag.fixes.reduce((n, f) => n + (f === "remove_dependency" ? Math.max(1, flag.dependents?.length ?? 0) : 1), 0);
+
+/** Review: a fix proposed already and waiting on its decider: who it waits for ("Avery Stone"),
+ * or null. The roadmap page answers it from its open proposals. */
+export const ProposedFixes = createContext<(op: Flag["fixes"][number], itemId: string, subject: string) => string | null>(() => null);
+
 /** D14's one-click fixes of one flag: move the dependents, move the dependency, or accept
  * the risk with a note (the flag then stays amber). */
 export function FixButtons({
@@ -65,6 +72,7 @@ export function FixButtons({
   inline?: boolean;
 }) {
   const [note, setNote] = useState<string | null>(null);
+  const proposed = useContext(ProposedFixes);
   if (!canChange) return null;
   const dep = flag.subject ? items.get(flag.subject) : undefined;
   // roadmap-decide: a cut item others depend on: bring it back, or a dependent drops it. Review:
@@ -74,7 +82,7 @@ export function FixButtons({
     void act(`Brought back '${item.title}'`, { op: "restore", target: { item_id: item.id }, before: { cut: true }, after: { cut: false } });
   // Review: the API checks only that the item still depends on this one (a filter may hide its other dependencies).
   const unlink = (n: Flag["dependents"][number]) =>
-    void act(`Removed '${n.title}''s dependency on '${item.title}'`, {
+    void act(`Removed the dependency of ‘${n.title}’ on ‘${item.title}’`, {
       op: "remove_dependency",
       target: { item_id: n.id, subject: item.id },
       before: {},
@@ -145,7 +153,7 @@ export function FixButtons({
     );
   return (
     <div
-      className={inline ? "flex gap-1.5" : "mt-1 flex flex-wrap gap-1.5"}
+      className={inline ? "flex flex-wrap gap-1.5" : "mt-1 flex flex-wrap gap-1.5"}
       data-testid="fixes"
     >
       {flag.fixes.map((f) =>
@@ -162,11 +170,19 @@ export function FixButtons({
             {fixWords(f, item.can_decide)}
           </Button>
         ) : f === "remove_dependency" ? (
-          live.map((n) => (
-            <Button key={`${f}-${n.id}`} className={inline ? "!h-6 !px-2 !text-xs" : ""} onClick={() => unlink(n)}>
-              {live.length > 1 ? `${fixWords(f, n.can_decide)} of ‘${n.title}’` : fixWords(f, n.can_decide)}
-            </Button>
-          ))
+          live.map((n) => {
+            // Review: proposed already, it says who it waits for and is not offered again.
+            const waits = proposed(f, n.id, item.id);
+            return waits !== null ? (
+              <span key={`${f}-${n.id}`} data-testid="fix-proposed" className="self-center text-sm text-text2">
+                {live.length > 1 ? `Removing the dependency of ‘${n.title}’: proposed, waits for ${waits}` : `Proposed: waits for ${waits}`}
+              </span>
+            ) : (
+              <Button key={`${f}-${n.id}`} className={inline ? "!h-6 !px-2 !text-xs" : ""} onClick={() => unlink(n)}>
+                {live.length > 1 ? `${fixWords(f, n.can_decide)} of ‘${n.title}’` : fixWords(f, n.can_decide)}
+              </Button>
+            );
+          })
         ) : dep ? (
           <Button
             key={f}
