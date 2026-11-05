@@ -153,6 +153,8 @@ interface SimpleDb {
   goal_suggestions?: GoalSuggestionRow[];
   /** Goal buckets (./goal-buckets.ts): the goals and each feature's goal links. */
   goal_buckets?: import("./goal-buckets").GoalBucketsDb;
+  /** one-feature-panel: a roadmap goal edited through the goal edit (goal key -> its fields). */
+  goal_edits?: Record<string, RoadmapGoalFields>;
   goal_jobs?: Record<string, { until: number; job_id: string; origin: "auto" | "on_demand" }>;
   auto_done?: string[];
   /** S7: the seeds a merge changed, as they were (change id -> seeds), for its undo. */
@@ -336,6 +338,14 @@ function sectionLabel(section: string, heading: string | undefined, name: string
 const METRICS: Record<string, string> = { "grow-retention": "Teams active after 90 days", "faster-activation": "Days to the first alert", "quiet-alerts": "Teams muting alerts" };
 /** roadmap-gantt ("simple-plan-two"): a goal named like a plan goal ("Growth"), for the plan's items only. */
 const PLAN_GOALS: Record<string, string> = { growth: "Growth" };
+/** one-feature-panel: each goal's target and date (invented), as the goal edit reads them. */
+const TARGETS: Record<string, [string, string]> = { "grow-retention": ["70% of teams", "2027-03-31"], "faster-activation": ["2 days", "2027-02-26"], "quiet-alerts": ["Under 10% of teams", "2027-03-31"] };
+export type RoadmapGoalFields = { title: string; metric: string | null; target: string | null; due: string | null };
+/** A roadmap goal's key from its id (the goal edit takes either kind of goal, as the API's one goal entity). */
+export const roadmapGoalKey = (id: string): string | null => [...Object.keys(GOALS), ...Object.keys(PLAN_GOALS)].find((k) => stableUuid(`simple-goal/${k}`) === id) ?? null;
+/** The roadmap goal's fields as read: an edit, else its seed. */
+export const roadmapGoal = (db: Pick<SimpleDb, "goal_edits">, key: string): RoadmapGoalFields =>
+  db.goal_edits?.[key] ?? { title: GOALS[key] ?? PLAN_GOALS[key], metric: METRICS[key] ?? null, target: TARGETS[key]?.[0] ?? null, due: TARGETS[key]?.[1] ?? null };
 export const goalId = (key: string): string => stableUuid(`simple-goal/${key}`);
 export const roadmapId = (slug: string): string => stableUuid(`simple-doc/${slug}`);
 // A new company has no roadmap yet (qa-shell-8: oracle.simple.service reads none).
@@ -775,7 +785,7 @@ function itemPrd(s: SeedItem): Schemas["SimpleDocRef"] {
 }
 
 /** The PRD an item reads as its own: the one it was added from, else its roadmap's (the API's item.prd). */
-function ownPrd(s: SeedItem): Schemas["SimpleDocRef"] {
+export function ownPrd(s: SeedItem): Schemas["SimpleDocRef"] {
   if (s.prd_doc) return s.prd_doc;
   if (s.from_prd) return { id: stableUuid(`simple-prd/${s.from_prd.slug}`), slug: s.from_prd.slug, title: s.from_prd.title };
   return itemPrd(s);
@@ -911,7 +921,7 @@ function ownerOf(db: SimpleDb, s: SeedItem): Item["owner"] {
 }
 
 /** A chat card's set_owner / set_decider (the targets kept by item id), if any: the item's own owner or decider. */
-const namedOn = (db: SimpleDb, key: string, field: "owner_id" | "decider_id"): string | null | undefined => {
+export const namedOn = (db: SimpleDb, key: string, field: "owner_id" | "decider_id"): string | null | undefined => {
   const t = db.targets?.[db.ids[key]];
   return t && field in t ? ((t[field] as string | null) ?? null) : undefined;
 };
@@ -1185,7 +1195,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       code: prdCode(s.section),
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
       prd: ownPrd(s),
-      goal: s.goal && !inTrash(s.goal) ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, title: GOALS[s.goal] ?? PLAN_GOALS[s.goal], metric: METRICS[s.goal] ?? null, position: goalPositionOf(s.goal) } : null,
+      goal: s.goal && !inTrash(s.goal) ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, ...roadmapGoal(db, s.goal), position: goalPositionOf(s.goal) } : null,
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,
       status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),
@@ -1206,6 +1216,9 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       needed_by: seeds.filter((x) => x.depends?.includes(s.key)).map((x) => db.ids[x.key]),
       flags: flagsOf(s, r, all, w[s.horizon]),
       owner: ownerOf(db, s),
+      // one-feature-panel: the item's own owner (set_owner's before) and its stored dependency keys.
+      own_owner_id: namedOn(db, s.key, "owner_id") ?? null,
+      depends_keys: s.depends ?? [],
       can_decide: decides(s),
       deciders: deciders(s),
       reasons: [

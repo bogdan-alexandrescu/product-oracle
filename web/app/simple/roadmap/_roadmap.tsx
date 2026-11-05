@@ -1173,6 +1173,9 @@ export function SimpleRoadmap() {
       // fix4 qa-simple-roadmap-21: who decides, and where the proposal shows.
       else toast({ message: `Proposed ${title} (${w.label}): it waits for ${deciderWords(undefined)} in Needs a decision` });
       await reload();
+      // one-feature-panel: the added item opens its panel, to fill in the rest.
+      const added = c.status === "applied" ? c.target.item_id : null;
+      if (typeof added === "string") setCard({ id: added, ...anchorOf(added) });
       return true;
     } catch (e) {
       toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not add it" });
@@ -1552,6 +1555,7 @@ export function SimpleRoadmap() {
                 onDecide={(c, how) => void onDecide(c, how)}
                 onClose={onClose}
                 near={nearWords(it, data.key_dates ?? [])}
+                onOpen={(id) => setCard({ id, left: 0, top: 0 })}
               />
             )}
           />
@@ -1641,6 +1645,7 @@ export function SimpleRoadmap() {
             onDecide={(c, how) => void onDecide(c, how)}
             onClose={() => setCard(null)}
             near={nearWords(cardItem, data.key_dates ?? [])}
+            onOpen={(id) => setCard({ id, ...anchorOf(id) })}
             onHorizon={format === "board" && canChange && !closedItem(cardItem) ? (h) => onHorizon(cardItem, h) : undefined}
           />
         )}

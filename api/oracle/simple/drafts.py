@@ -110,8 +110,13 @@ FIELDS = (
     "decider_id",
     # Bring a date in: a resized item's date waits on a new estimate.
     "estimate_pending",
+    # one-feature-panel: set_confidence, set_track, set_prd, set_status.
+    "confidence",
+    "track_id",
+    "prd_document_id",
+    "shipped",
 )
-UUID_FIELDS = ("feature_id", "owner_id", "decider_id")
+UUID_FIELDS = ("feature_id", "owner_id", "decider_id", "track_id", "prd_document_id")
 DATES = ("start_date", "end_date")
 # Blockers of review_problems that the approval itself resolves.
 APPROVAL_CODES = ("version_not_approved", "mandatory_reviewer_pending")
@@ -976,6 +981,12 @@ OP_WORDS = {
     "merge_item": "Merged",
     "keep_both": "Kept beside its look-alikes:",
     "cut_with_dependents": "Cut with its dependents:",
+    "set_confidence": "New confidence for",
+    "set_track": "New track for",
+    "set_prd": "New PRD for",
+    "set_goal": "New goal for",
+    "set_depends": "New dependencies for",
+    "set_status": "New status for",
 }
 
 

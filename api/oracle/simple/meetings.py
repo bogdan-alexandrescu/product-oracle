@@ -691,6 +691,12 @@ PROPOSAL_WORDS = {
     "merge_item": "merge",
     "keep_both": "keep beside its look-alikes:",
     "cut_with_dependents": "cut with its dependents:",
+    "set_confidence": "new confidence for",
+    "set_track": "new track for",
+    "set_prd": "new PRD for",
+    "set_goal": "new goal for",
+    "set_depends": "new dependencies for",
+    "set_status": "new status for",
 }
 
 

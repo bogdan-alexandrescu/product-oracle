@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 import { Button, Sheet, toast } from "@/components/ds";
 import { FlowThumb } from "@/components/simple/Flow";
@@ -91,6 +91,9 @@ async function send(body: ChangeIn): Promise<Sent> {
     return { ok: false, status: 0, message: errorMessage(e), pushback: false };
   }
 }
+
+/** one-feature-panel: a ranked row's name opens the feature's panel (the roadmap's). */
+const OpenRow = createContext<((r: Row) => void) | null>(null);
 
 export function Priorities() {
   const params = useSearchParams();
@@ -209,6 +212,7 @@ export function Priorities() {
   // step, with no line or comparison to pick over nothing.
   const blank = !!data && !data.rows.length && !data.drafts.length && !data.proposals.length;
   const hasGoals = (suggestions.data?.goals.length ?? 0) > 0;
+  const [rowOpen, setRowOpen] = useState<Row | null>(null);
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 text-[length:var(--simple-text)] leading-[var(--simple-leading)] text-text" data-testid="simple-priorities">
@@ -302,8 +306,22 @@ export function Priorities() {
       )}
       {data && !blank && tab === "ranked" && (
         <FeatureMarks.Provider value={marks}>
-          <Ranked data={shownData ?? data} phone={phone} compare={compare} mayChange={mayChange} changed={changed} moved={moved} onDelete={removeFeature} />
+          <OpenRow.Provider value={setRowOpen}>
+            <Ranked data={shownData ?? data} phone={phone} compare={compare} mayChange={mayChange} changed={changed} moved={moved} onDelete={removeFeature} />
+          </OpenRow.Provider>
         </FeatureMarks.Provider>
+      )}
+      {rowOpen && (
+        <FeaturePanel
+          key={rowOpen.feature_id}
+          feature={{ id: rowOpen.item_id ?? null, code: rowOpen.code, name: rowOpen.title }}
+          phone={phone}
+          canChange={can("create_simple_change")}
+          onClose={() => {
+            setRowOpen(null);
+            void q.reload();
+          }}
+        />
       )}
       {data && !blank && tab === "value-effort" && <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} moved={moved} />}
       {data && !blank && tab === "buckets" && <Buckets data={data} suggestions={suggestions} reload={q.reload} />}
@@ -437,6 +455,7 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
   // A Home goal card opens the list for its goal (?goal=<its key>&name=<its name>): a row's own goal
   // by key, so two goals with one name keep apart; a row known only from the plan, by name.
   const params = useSearchParams();
+  const open = useContext(OpenRow);
   const goal = params.get("goal");
   const goalName = params.get("name") ?? goal;
   const rows = byLine(data).filter((r) => !goal || (r.goal ? r.goal.key === goal : goalOfRow(data)(r) === goalName));
@@ -588,7 +607,13 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
               {/* The Current-state pill sits right after the title (cs2-b, the owner's later pick), never pushed
                   to the far right; the title and its pill wrap as one group, so every title starts at one x. */}
               <span className="flex min-w-[12rem] flex-1 flex-wrap items-center gap-x-2 gap-y-1" data-testid="prio-name">
-                <span className="min-w-0 font-medium" data-testid="prio-title">{r.title}</span>
+                {open ? (
+                  <button type="button" className="min-w-0 text-left font-medium hover:underline" data-testid="prio-title" onClick={() => open(r)}>
+                    {r.title}
+                  </button>
+                ) : (
+                  <span className="min-w-0 font-medium" data-testid="prio-title">{r.title}</span>
+                )}
                 <MarkFor featureId={r.feature_id} />
               </span>
               {/* walkb-priorities: no ml-auto, so details that wrap under the title start at the left on every row. */}

@@ -9,7 +9,7 @@
  * the cell of its area under the milestone it serves (drawn once; its other places point to
  * it). A phone shows the milestones one by one. Every feature opens Simple's item panel.
  */
-import { useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
 import { Icon } from "@/components/ds/Icon";
 import { NewPrdSheet, useCanStartPrd } from "@/components/simple/NewPrd";
@@ -18,6 +18,9 @@ import type { GmArea, GmFeature, GmGoal, GmLift, GmMilestone, GmStatus, GoalMap 
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { FeaturePanel } from "./_panel";
+
+/** one-feature-panel: each feature's code (its roadmap item's), shown before its name. */
+const Codes = createContext<Map<string, string>>(new Map());
 
 type Edit = "propose" | "goal" | "attach" | "prd" | "area" | "gate" | null;
 
@@ -143,6 +146,7 @@ function FeatureCard({ f: all, milestone, area, tight, also, fresh, serves = "Al
   // In a milestone's cell: what it is expected to do for that milestone, and what it did.
   const link = all.links.find((l) => l.milestone === milestone);
   const f = link ? { ...all, expected: link.expected, confidence: link.confidence, measured: link.measured, lift: link.lift } : all;
+  const code = useContext(Codes).get(all.id);
   return (
     <div
       role="button"
@@ -159,7 +163,10 @@ function FeatureCard({ f: all, milestone, area, tight, also, fresh, serves = "Al
       data-feature={f.id}
       data-fresh={fresh ? "1" : undefined}
       className={`flex cursor-pointer flex-col gap-1 rounded-xl border border-line bg-surface hover:border-line-strong ${tight ? "px-2.5 py-1.5" : "px-3 py-2"} ${f.lift === "not_helping" ? "border-crit/50" : ""} ${fresh ? "border-accent! ring-2 ring-accent/40" : ""}`}>
-      <span className={`font-semibold ${tight ? "text-[16px] leading-6" : ""}`}>{f.name}</span>
+      <span className={`font-semibold ${tight ? "text-[16px] leading-6" : ""}`}>
+        {code && <span className="simple-code mr-1.5">{code}</span>}
+        {f.name}
+      </span>
       <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <LiftPill l={f.lift} />
         <span className="simple-small text-[14px]! leading-5">
@@ -295,6 +302,8 @@ export function GoalMapPage() {
   const [panel, setPanel] = useState<GmFeature | null>(null);
   const [prd, setPrd] = useState<{ name: string; problem: string } | null>(null);
   const map = q.data;
+  const roadmap = useQuery("simple-roadmap:goal-map-codes", () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } })));
+  const codes = useMemo(() => new Map((roadmap.data?.items ?? []).flatMap((i) => (i.code ? [[i.id, i.code] as [string, string]] : []))), [roadmap.data]);
 
   if (!map) return <div className="simple-page" role="status">{q.error ? errorMessage(q.error) : "Loading the goal map…"}</div>;
 
@@ -394,6 +403,7 @@ export function GoalMapPage() {
   const ctx: Ctx = { map, open, moveArea, onOpen: setPanel, week: weekOf(map.today) };
 
   return (
+    <Codes.Provider value={codes}>
     <div className="simple-page" data-testid="gm-page" style={{ maxWidth: "none" }}>
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1">
@@ -435,6 +445,7 @@ export function GoalMapPage() {
         />
       )}
     </div>
+    </Codes.Provider>
   );
 }
 

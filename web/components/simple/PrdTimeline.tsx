@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef,
 
 import { MarkFor, WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { FlowDiagram } from "@/components/simple/FlowViews";
+import { useOpenFeature } from "@/components/simple/OpenFeature";
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay, todayIn, useCompanyZone } from "@/lib/dates";
@@ -989,6 +990,7 @@ function Checks({ items, small }: { items: string[]; small?: boolean }) {
 const PM_KIND = "Product manager's work, no new engineering";
 
 export function MilestoneCard({ plan, m, today, phone, marked = [] }: { plan: Plan; m: Milestone; today: string; phone: boolean; marked?: string[] }) {
+  const open = useOpenFeature();
   const c = hue(plan, m.code);
   const st = stateOf(plan, m, today);
   const slices = plan.slices.filter((s) => s.milestone === m.code);
@@ -1068,7 +1070,14 @@ export function MilestoneCard({ plan, m, today, phone, marked = [] }: { plan: Pl
                       className={`grid list-none gap-x-2.5 border-t ${marked.includes(s.code) ? "bg-accent-soft" : ""} border-[var(--simple-rule)] py-1.5 text-[15px] leading-[21px] ${phone ? "grid-cols-[62px_minmax(0,1fr)] gap-y-0.5" : "grid-cols-[62px_250px_minmax(0,1fr)] gap-y-2.5"}`}>
                       <span className={`${CODE} border border-line bg-surface2 text-text`}>{s.code}</span>
                       <b className="font-[650]">
-                        <span data-testid="part-build-name">{keep(s.name)}</span>
+                        {/* one-feature-panel: the feature's name opens its panel where the page gives an opener. */}
+                        {open ? (
+                          <button type="button" data-testid="part-build-name" onClick={() => open({ code: s.feature_code, name: s.name })} className="text-left font-[650] hover:underline">
+                            {keep(s.name)}
+                          </button>
+                        ) : (
+                          <span data-testid="part-build-name">{keep(s.name)}</span>
+                        )}
                         {/* Its feature's Current-state pill, right after the name (cs2-b, the owner's later pick). */}
                         <span className="ml-2 inline-flex align-middle empty:hidden" data-testid="part-build-mark">
                           <SliceMark s={s} />

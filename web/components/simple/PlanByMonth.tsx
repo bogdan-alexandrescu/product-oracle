@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { MarkFor } from "@/components/current-state/CurrentState";
+import { useOpenFeature } from "@/components/simple/OpenFeature";
 import { calendarDay } from "@/lib/dates";
 import { PLAN_ROWS, type PlanStrip } from "@/lib/simple-home";
 
@@ -46,8 +47,9 @@ export function PlanByMonth({
   legend?: boolean;
   /** The one-pager (build-current-state review 2): its roadmap items (OnePagerOut.timeline),
    * listed under their row, one per line, each with its word pill (inside WithFeatureMarks). */
-  items?: { id: string; title: string }[];
+  items?: { id: string; title: string; code?: string | null }[];
 }) {
+  const open = useOpenFeature();
   const from = ms(plan.start);
   const span = ms(plan.end) + DAY - from;
   const pct = (day: string) => Math.max(0, Math.min(100, ((ms(day) - from) / span) * 100));
@@ -55,7 +57,7 @@ export function PlanByMonth({
   const today = plan.today ? pct(plan.today) : null;
   const shown = plan.rows.slice(0, PLAN_ROWS);
   const more = plan.rows.length - shown.length;
-  const titles = new Map((items ?? []).map((i) => [i.id, i.title]));
+  const titles = new Map((items ?? []).map((i) => [i.id, i]));
   // qa-simple-home-12: each month's line runs down through the rows, so a bar reads against the axis above it.
   const grid = plan.months.map((m) => (
     <span key={m} aria-hidden data-testid={`${testId}-gridline`} className="pointer-events-none absolute inset-y-0 w-0 border-l border-line" style={{ left: `${pct(m)}%` }} />
@@ -137,10 +139,23 @@ export function PlanByMonth({
                 // The row's items, one per line: the name wraps whole, its pill says what it is.
                 <ul data-testid={`${testId}-items`} aria-label={`${rowName(r)}: its roadmap items`} className="simple-small flex flex-col gap-1 pb-2 pl-3 pt-0.5">
                   {(r.item_ids ?? []).flatMap((id) => {
-                    const title = titles.get(id);
-                    return title ? [(
+                    const it = titles.get(id);
+                    // one-feature-panel: the name (its code first) opens the feature's panel.
+                    const name = (
+                      <>
+                        {it?.code && <span className="simple-code mr-1.5">{it.code}</span>}
+                        {it?.title}
+                      </>
+                    );
+                    return it ? [(
                       <li key={id} data-testid={`${testId}-item`} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                        <span className="min-w-0 break-words text-text">{title}</span>
+                        {open ? (
+                          <button type="button" data-testid={`${testId}-item-open`} onClick={() => open({ id, code: it.code ?? "", name: it.title })} className="min-w-0 break-words text-left text-text hover:underline">
+                            {name}
+                          </button>
+                        ) : (
+                          <span className="min-w-0 break-words text-text">{name}</span>
+                        )}
                         <MarkFor itemId={id} />
                       </li>
                     )] : [];
