@@ -43,8 +43,8 @@ async function snap(page: Page, name: string) {
       else d.setAttribute("value", (el as HTMLInputElement).value);
     });
     // Scrolled boxes keep where they were scrolled to.
-    const all = document.querySelectorAll("*");
-    const copy = doc.querySelectorAll("*");
+    const all = [document.documentElement, ...Array.from(document.documentElement.querySelectorAll("*"))];
+    const copy = [doc, ...Array.from(doc.querySelectorAll("*"))]; // MOCK-HOOK the clone itself first, as in all
     const head = doc.querySelector("head");
     all.forEach((el, i) => {
       if ((el.scrollTop || el.scrollLeft) && copy[i]) copy[i].setAttribute("data-mk-scroll", `${el.scrollLeft},${el.scrollTop}`);
@@ -71,7 +71,9 @@ async function snap(page: Page, name: string) {
     `<style>${css}</style>` +
     `<script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t)document.documentElement.setAttribute("data-theme",t);` +
     `addEventListener("DOMContentLoaded",function(){document.querySelectorAll("[data-mk-scroll]").forEach(function(e){var p=e.getAttribute("data-mk-scroll").split(",");e.scrollLeft=+p[0];e.scrollTop=+p[1];});});})();</script>`;
-  fs.writeFileSync(`${OUT}/frames/${name}.html`, "<!doctype html>" + r.html.replace("<head>", `<head>${extra}`));
+  const html = "<!doctype html>" + r.html.replace(/<head([^>]*)>/, (m) => m + extra); // MOCK-HOOK
+  expect(html.includes("<style>") && html.includes('name="mockup-viewport"'), `${name}: styles and viewport inlined`).toBe(true); // MOCK-HOOK
+  fs.writeFileSync(`${OUT}/frames/${name}.html`, html);
   await page.screenshot({ path: `${OUT}/frames/${name}.png` });
 }
 
@@ -84,7 +86,8 @@ async function signIn(page: Page, role?: "commenter" | "viewer") {
     if (role) localStorage.setItem("po-mock-role", role);
   }, role ?? null);
   await page.reload();
-  await page.getByLabel("Email").fill("admin@example.com");
+  // MOCK-HOOK: a commenter or viewer is another invented person than the feature's decider (Avery Stone).
+  await page.getByLabel("Email").fill(role ? `${role}@example.com` : "admin@example.com");
   await page.getByLabel("Password").fill(["de", "mo"].join(""));
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/home$/);
@@ -106,11 +109,14 @@ async function openDigest(page: Page, q: string) {
   await tasksInView(page);
 }
 const tasksInView = (page: Page) =>
+  // MOCK-HOOK: the panel's own scroll box puts the Tasks heading just under its sticky header, no half line above it.
   page.getByTestId("card-tasks").first().evaluate((el) => {
-    el.scrollIntoView({ block: "start" });
     let p = el.parentElement;
-    while (p && p.scrollHeight <= p.clientHeight + 2) p = p.parentElement;
-    if (p) p.scrollTop -= 24;
+    while (p && !(p.scrollHeight > p.clientHeight + 2 && /(auto|scroll)/.test(getComputedStyle(p).overflowY))) p = p.parentElement;
+    if (!p) return;
+    const sticky = Array.from(p.querySelectorAll("*")).find((e) => getComputedStyle(e).position === "sticky" && !e.contains(el));
+    const top = sticky ? sticky.getBoundingClientRect().bottom : p.getBoundingClientRect().top;
+    p.scrollTop += el.getBoundingClientRect().top - top - 8;
   });
 const tasks = (page: Page) => page.getByTestId("card-tasks").first();
 const NEW = "Send a test digest to the support team"; // MOCK-HOOK
@@ -127,9 +133,9 @@ const EC1: Record<string, { open: (p: Page) => Promise<void>; mid: (p: Page) => 
     done: async (p) => tasks(p).getByLabel("New task").press("Enter"),
   },
   b: {
-    open: async (p) => tasks(p).getByRole("button", { name: "More for Add an unsubscribe link to each digest" }).click(),
+    open: async (p) => tasks(p).getByRole("button", { name: "More for Check how it reads on a phone" }).click(),
     mid: async (p) => {
-      await tasks(p).getByRole("button", { name: "More for Add an unsubscribe link to each digest" }).click();
+      await tasks(p).getByRole("button", { name: "More for Check how it reads on a phone" }).click();
       await tasks(p).getByLabel("New task").fill(NEW);
     },
     done: async (p) => tasks(p).getByLabel("New task").press("Enter"),
@@ -141,7 +147,7 @@ const EC1: Record<string, { open: (p: Page) => Promise<void>; mid: (p: Page) => 
       await tasks(p).getByRole("button", { name: "Add a task" }).click();
       await tasks(p).getByLabel("Task", { exact: true }).fill(NEW);
       await tasks(p).getByLabel("Owner").selectOption({ label: "Lena Ortiz" }, { timeout: 3000 }).catch(() => undefined);
-      await tasks(p).getByLabel("Due").fill("2026-11-02");
+      await tasks(p).getByLabel("Due").fill("Nov 2");
     },
     done: async (p) => tasks(p).getByRole("button", { name: /^(Add|Propose)$/ }).click(),
   },
@@ -174,8 +180,20 @@ for (const v of Object.keys(EC1)) {
     await expect(tasks(page).getByText(NEW).first()).toBeVisible();
     await tasksInView(page);
     await snap(page, `ec1-${v}-result`);
-    // A phone: the panel is a bottom sheet.
+    if (v === "a") {
+      // MOCK-HOOK: dropping a task: the status picker's last choice; the toast says it went to Trash, with Undo.
+      await page.getByRole("button", { name: "Dismiss" }).first().click();
+      await tasks(page).getByRole("button", { name: "Status of Check how it reads on a phone" }).click();
+      await snap(page, "ec1-a-drop-open");
+      await tasks(page).getByRole("option", { name: "Drop this task" }).click();
+      await expect(page.getByText("“Check how it reads on a phone” went to Trash").first()).toBeVisible();
+      await expect(tasks(page).getByText("Check how it reads on a phone")).toHaveCount(0);
+      await snap(page, "ec1-a-drop-result");
+    }
+    // A phone: the panel is a bottom sheet, on a fresh start.
     await page.setViewportSize(PHONE);
+    await page.context().clearCookies();
+    await signIn(page);
     await openDigest(page, `ec1=${v}`);
     await s.open(page);
     await snap(page, `ec1-${v}-open-phone`);
@@ -204,7 +222,14 @@ async function signOutIn(page: Page, role: "commenter" | "viewer") {
   await page.evaluate(() => localStorage.clear());
   await signIn(page, role);
 }
-const center = (page: Page, testId: string) => page.getByTestId(testId).first().evaluate((el) => el.scrollIntoView({ block: "center" }));
+// MOCK-HOOK: the page at its top when the part fits there (the heading whole), else the part at the top.
+const center = (page: Page, testId: string) =>
+  page.getByTestId(testId).first().evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    if (r.top + scrollY < innerHeight * 0.4) return window.scrollTo(0, 0);
+    el.scrollIntoView({ block: "start" });
+    window.scrollBy(0, -72);
+  });
 
 test("ec2 a", async ({ page }) => {
   await page.setViewportSize(DESK);
@@ -263,6 +288,7 @@ test("ec2 b", async ({ page }) => {
 });
 
 test("ec2 c", async ({ page }) => {
+  // MOCK-HOOK: restore from the Removed list; a cut feature's panel only says who cut it (its Restore is in the header menu another set draws).
   await page.setViewportSize(DESK);
   await signIn(page);
   await page.goto("/simple/roadmap?roadmap=alerts-roadmap&ec2=c");
@@ -276,59 +302,25 @@ test("ec2 c", async ({ page }) => {
   await page.getByRole("dialog", { name: "Removed" }).getByRole("button", { name: "Alert routing by team" }).click();
   await page.getByTestId("item-cut").first().waitFor();
   await snap(page, "ec2-c-mid");
-  await page.getByTestId("item-cut").getByRole("button", { name: "Restore" }).click();
+  await page.getByRole("button", { name: "Close" }).first().click();
+  await page.getByTestId("mk-removed-button").getByRole("button", { name: /^Removed/ }).click();
+  await page.getByRole("dialog", { name: "Removed" }).getByRole("button", { name: "Restore" }).first().click();
   await expect(page.getByText("Restored Alert routing by team").first()).toBeVisible();
+  await expect(page.getByTestId("mk-removed-button").getByRole("button", { name: "Removed · 5" })).toBeVisible();
   await snap(page, "ec2-c-result");
   await page.setViewportSize(PHONE);
+  await page.context().clearCookies();
+  await signIn(page);
   await page.goto("/simple/roadmap?roadmap=alerts-roadmap&ec2=c&open=1");
   await page.getByTestId("mk-removed-button").evaluate((el) => el.scrollIntoView({ block: "start" }));
   await snap(page, "ec2-c-open-phone");
   await page.setViewportSize(DESK);
   await signOutIn(page, "commenter");
   await page.goto("/simple/roadmap?roadmap=alerts-roadmap&ec2=c&open=1");
-  await page.getByRole("dialog", { name: "Removed" }).getByRole("button", { name: "Alert routing by team" }).click();
-  await page.getByTestId("item-cut").first().waitFor();
+  await page.getByRole("dialog", { name: "Removed" }).waitFor();
   await snap(page, "ec2-c-propose");
   await signOutIn(page, "viewer");
   await page.goto("/simple/roadmap?roadmap=alerts-roadmap&ec2=c&open=1");
   await page.getByRole("dialog", { name: "Removed" }).waitFor();
   await snap(page, "ec2-c-readonly");
-});
-
-test("ec2 d", async ({ page }) => {
-  await page.setViewportSize(DESK);
-  await signIn(page);
-  await openDigest(page, "ec2=d");
-  await center(page, "mk-cut-delete");
-  await snap(page, "ec2-d-rest");
-  await page.getByRole("button", { name: "More…" }).click();
-  await snap(page, "ec2-d-open");
-  await page.getByRole("menuitem", { name: /^Delete/ }).click();
-  await center(page, "mk-cut-delete");
-  await snap(page, "ec2-d-mid");
-  await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
-  await expect(page.getByText("Weekly alert digest is in Trash").first()).toBeVisible();
-  await snap(page, "ec2-d-result");
-  await page.goto("/settings/trash?ec2=d");
-  await expect(page.getByText("Deleted from plans")).toBeVisible();
-  await snap(page, "ec2-d-trash");
-  await page.setViewportSize(WIDE);
-  await page.getByText("Deleted from plans").evaluate((el) => el.scrollIntoView({ block: "start" }));
-  await snap(page, "ec2-d-trash-1512");
-  await page.setViewportSize(PHONE);
-  await openDigest(page, "ec2=d&menu=1");
-  await center(page, "mk-cut-delete");
-  await snap(page, "ec2-d-open-phone");
-});
-
-test("ec2 d roles", async ({ page }) => {
-  await page.setViewportSize(DESK);
-  await signIn(page, "commenter");
-  await openDigest(page, "ec2=d&menu=1");
-  await center(page, "mk-cut-delete");
-  await snap(page, "ec2-d-propose");
-  await signOutIn(page, "viewer");
-  await openDigest(page, "ec2=d");
-  await page.getByTestId("fp-read-only").first().waitFor();
-  await snap(page, "ec2-d-readonly");
 });

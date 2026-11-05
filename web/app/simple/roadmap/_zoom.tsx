@@ -1024,6 +1024,7 @@ function QuarterList(props: TimelineProps) {
     <div data-testid="timeline-list" className="space-y-3">
       {qs.map((q) => {
         const items = data.items
+          .filter((i) => !(i.status === "cut" && typeof window !== "undefined" && new URLSearchParams(window.location.search).has("ec2"))) // MOCK-HOOK mk-edit-tasks-restore: a cut feature is not in a quarter's list
           .filter(
             (i) =>
               (q.start <= i.start.date && i.start.date <= q.end) ||

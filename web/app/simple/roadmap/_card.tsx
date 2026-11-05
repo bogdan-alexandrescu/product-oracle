@@ -9,8 +9,8 @@ import { FlowPanel, type FlowSubject } from "@/components/simple/FlowVisual";
 import { flagKey } from "@/components/simple/chat/ChatCard";
 import { ItemTalk } from "@/components/simple/chat/ItemTalk";
 import { FeaturePanel } from "@/components/simple/FeaturePanel";
-import { MkTasks, useEc1 } from "./_mk_tasks"; // MOCK-HOOK
-import { MkCutOrDelete, MkRemovedLine, useEc2 } from "./_mk_removed"; // MOCK-HOOK
+import { MkTasks, mkTaskWords, useEc1 } from "./_mk_tasks"; // MOCK-HOOK
+import { MkRemovedLine, useEc2 } from "./_mk_removed"; // MOCK-HOOK
 import { askThread, itemTalkPage, type ChatCard } from "@/lib/api/simple-chat";
 import { DecidedWho } from "@/components/simple/DecidedWho";
 import { formatDay } from "@/lib/format";
@@ -991,7 +991,7 @@ export function FloatingCard({
                       />
                     )}
                     <span className="min-w-0 flex-1">
-                      {opWords(c.op)} ·{" "}
+                      {(ec1 && mkTaskWords(c)) /* MOCK-HOOK */ || opWords(c.op)} ·{" "}
                       <span className="text-text2">proposed by {c.by_name}</span>
                       {c.from_meeting && <span className="block text-sm text-text2" data-testid="proposal-from-meeting">Asked for by the meeting {c.from_meeting.title}</span>}
                     </span>
@@ -1082,7 +1082,7 @@ export function FloatingCard({
       onClose={onClose}
       talk={talkPanel}
       testId="floating-card"
-      headExtra={cut && ec2 && ec2 !== "b" ? <MkRemovedLine item={item} act={act} canChange={canChange} /> : ec2 === "d" ? <MkCutOrDelete item={item} act={act} canChange={canChange} /> : null} // MOCK-HOOK
+      headExtra={cut && ec2 && ec2 !== "b" ? <MkRemovedLine item={item} /> : null} // MOCK-HOOK
       more={<section ref={ref} className="py-3" data-testid="fp-more" data-wide={wide ? "true" : "false"} data-flow-open={flowOpen ? "true" : "false"}>{details}</section>}
     />
   );

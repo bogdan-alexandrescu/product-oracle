@@ -3417,6 +3417,7 @@ function load(): Db {
                 ? () => {
                     const db = seed(); // MOCK-HOOK
                     db.simple_roadmap = mkSeed(seedSimpleRoadmap(), db.members); // MOCK-HOOK
+                    for (const m of db.members) if (m.email === "former.pm@example.com") (m as { name?: string | null }).name = "Robin Hale"; // MOCK-HOOK an invented name for the removed member
                     return db; // MOCK-HOOK
                   }
               : scenario === "simple-unapproved-roadmap"

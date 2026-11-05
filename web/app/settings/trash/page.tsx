@@ -102,7 +102,7 @@ export default function TrashPage() {
           )}
         </Panel>
       )}
-      {!loading && owner && (ec2 === "b" || ec2 === "d") && <MkTrashPlans v={ec2} owner={owner} /> /* MOCK-HOOK */}
+      {!loading && owner && ec2 === "b" && <MkTrashPlans owner={owner} /> /* MOCK-HOOK */}
     </>
   );
 }
