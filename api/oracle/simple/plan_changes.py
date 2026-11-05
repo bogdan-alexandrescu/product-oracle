@@ -320,11 +320,14 @@ async def _apply(db: AsyncSession, principal: Any, c: SimpleChange) -> None:
 
 
 async def _holds_anything(db: AsyncSession, track_id: uuid.UUID) -> bool:
-    """A track holds a milestone, a tracker link or a feature (one in Trash too)."""
-    from oracle.roadmap.models import RoadmapItem, TrackerRecord
+    """Anything references the track (one in Trash too): a milestone, a tracker link, a
+    feature, an alert (deleted with it), a launch or an outcome (unlinked by a delete)."""
+    from oracle.launches.models import Launch
+    from oracle.quality.models import OutcomeRecord
+    from oracle.roadmap.models import RoadmapItem, TrackAlert, TrackerRecord
     from oracle.trash.filter import INCLUDE_TRASHED
 
-    for model in (TrackMilestone, TrackerRecord, RoadmapItem):
+    for model in (TrackMilestone, TrackerRecord, RoadmapItem, TrackAlert, Launch, OutcomeRecord):
         found = await db.scalar(
             select(model.id)
             .where(model.track_id == track_id)
