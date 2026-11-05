@@ -506,6 +506,28 @@ async def test_a_run_item_that_names_a_milestone_takes_that_milestones_place(cli
     assert await _landed(ctx, ids, MILESTONE_ITEMS) == _planned(queued)
 
 
+NUMBER_MILESTONE_ITEMS = MILESTONE_ITEMS.replace("{name: Beta}", "{name: 2026}")
+
+
+async def test_a_run_item_whose_milestone_name_reads_as_a_number_keeps_it_as_text(client):
+    """A milestone named 2026 in a run's YAML reads as a number: the run's items are read with
+    the items file's own text helper, so it is the "2026" milestone, as once it lands."""
+    from oracle.roadmap import company
+
+    ctx, ids = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        replicas = await s.scalar(select(RoadmapItem).where(
+            RoadmapItem.item_key == "read-replicas"))  # fmt: skip
+        replicas.milestone = {"name": "2026"}
+        await s.commit()
+        rows = await company.run_queue(s, ids["safety"])
+    queued = company.with_run_items(rows, check_items(NUMBER_MILESTONE_ITEMS).items)
+    # Block list names 2026, as read replicas does: it takes 2026's place, before report button.
+    assert [r["key"] for r in queued] == ["block-list", "read-replicas", "report-button"]
+    assert company._milestone_name({"name": 3}) == "3"
+    assert company._milestone_name({"name": 2026}) == "2026"
+
+
 async def _landed(ctx: Ctx, ids: dict, text: str) -> list[tuple[str, str, str]]:
     """The company queue once the run's items file lands as the roadmap's next version."""
     from oracle.roadmap import company
