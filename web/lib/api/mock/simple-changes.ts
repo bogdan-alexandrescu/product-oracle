@@ -505,6 +505,9 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
     if (!canEditRoadmap(db, d.roadmap, ctx)) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
     // No required reviewers in the mock: the approval publishes the version.
     Object.assign(d.out, { decider_approved: true, status: "approved", approved_at: now });
+    // trash-features-goals review 4: the version is made without the features in Trash.
+    const without = db.items.filter((s) => s.trashed && s.roadmap === d.roadmap).map((s) => s.key);
+    (db.versions ??= []).push({ roadmap: d.roadmap, number: d.out.version ?? (d.out.base_version ?? 1) + 1, without });
     return json(200, draftOut(db, ctx, d));
   }
   if (p[4] === "withdraw") {

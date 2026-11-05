@@ -7,7 +7,7 @@ import { expect, test, type Page } from "./test";
  * listed in Settings › Trash beside documents (their kind in words, their name, who deleted them,
  * the days left), and Restore puts each back where it was. The screens that delete them are still
  * being drawn, so the delete is made through the mock API's own routes (as the API would get it);
- * Settings › Trash is driven as a person would.
+ * Settings › Trash, and every other step a screen offers, is driven as a person would.
  *
  * Card tfg-list-restore: protects = Settings › Trash lists "Feature <name>" and "Goal <name>"
  * with "Deleted by" and "30 days left"; Restore on each takes it out of Trash and the roadmap and
@@ -28,9 +28,11 @@ import { expect, test, type Page } from "./test";
  *
  * Card tfg-restore-after-version (review round 3): protects = a feature deleted before another
  * edit is submitted and approved shows on Simple's roadmap again after Restore in Settings › Trash;
- * fails_when = Restore empties the Trash row and the feature stays off the roadmap; no_claim = the
- * API's copy onto the new version (the mock keeps no versions; pytest
- * test_restore_after_a_new_version_puts_the_feature_on_the_current_roadmap).
+ * fails_when = Restore empties the Trash row and the feature stays off the roadmap (review round 4:
+ * the mock keeps each roadmap's published versions with the features in Trash when each was made,
+ * so a Restore that leaves the newer version alone fails here); no_claim = the API's copy onto
+ * versions waiting for approval (pytest test_restore_after_a_new_version_puts_the_feature_on_the_
+ * current_roadmap and test_restore_reaches_a_version_proposed_from_a_detailed_change_set).
  */
 
 type Call = { status: number; body: unknown };
@@ -141,28 +143,34 @@ test("whoever deleted a feature or a goal sees it in Trash and restores it, with
 
 test("a feature deleted before the roadmap's next version is published comes back on it from Trash", async ({ page }) => {
   await login(page);
-  const all = await items(page);
-  const feature = all.find((i) => i.can_decide && i.code)!;
-  const other = all.find((i) => i.can_decide && i.id !== feature?.id)!;
+  const all = (await call(page, "GET", "/v1/simple/roadmap")).body as { items: (Item & { key: string; roadmap: { slug: string } })[] };
+  const feature = all.items.find((i) => i.can_decide && i.code)!;
+  const other = all.items.find((i) => i.can_decide && i.id !== feature?.id && i.roadmap.slug === feature?.roadmap.slug)!;
   expect(feature && other).toBeTruthy();
+  // No screen deletes a feature yet: the delete goes through the mock API's route.
   expect((await call(page, "DELETE", `/v1/simple/roadmap/items/${feature.id}`)).status).toBe(200);
-  // Another feature renamed, its draft submitted and approved: the next version is published.
-  const edit = { op: "edit_title", target: { item_id: other.id }, before: { title: other.title }, after: { title: "Faster example checkout" } };
-  expect((await call(page, "POST", "/v1/simple/changes", edit)).status).toBe(201);
-  const [draft] = (await call(page, "GET", "/v1/simple/drafts")).body as { id: string }[];
-  expect((await call(page, "POST", `/v1/simple/drafts/${draft.id}/submit`)).status).toBe(200);
-  expect((await call(page, "POST", `/v1/simple/drafts/${draft.id}/approve`)).status).toBe(200);
 
+  // Another feature's dates moved on the Timeline and the draft sent for review.
   await page.goto("/simple/roadmap");
   const roadmap = page.getByTestId("simple-roadmap");
-  await expect(roadmap).toContainText("Faster example checkout");
+  await expect(page.getByTestId("simple-chart")).toBeVisible();
   await expect(roadmap).not.toContainText(feature.title);
+  await page.locator(`[data-testid="timeline-row"][data-item="${other.key}"] [data-testid="timeline-bar"]`).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByTestId("draft-count")).toHaveText("1");
+  await page.getByTestId("draft-banner").getByRole("button", { name: "Send for review" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Sent for review" })).toBeVisible();
+  // The decider's approval publishes the next version, made without the feature in Trash (the
+  // approve button is on Home's waiting list, for the reviewers the draft waits on only).
+  const [draft] = (await call(page, "GET", "/v1/simple/drafts")).body as { id: string }[];
+  expect((await call(page, "POST", `/v1/simple/drafts/${draft.id}/approve`)).status).toBe(200);
 
   await page.goto("/settings/trash");
   const row = page.getByTestId("trash-entry").filter({ hasText: feature.title });
   await row.getByRole("button", { name: `Restore ${feature.title}` }).click();
   await expect(row).toHaveCount(0);
   await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-chart")).toBeVisible();
   await expect(roadmap).toContainText(feature.title);
-  await expect(roadmap).toContainText("Faster example checkout");
+  await expect(roadmap).toContainText(other.title);
 });

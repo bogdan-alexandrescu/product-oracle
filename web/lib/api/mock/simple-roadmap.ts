@@ -112,6 +112,14 @@ interface SeedItem {
   basis?: string;
 }
 
+export type MockVersion = { roadmap: string; number: number; without: string[] };
+
+/** trash-features-goals review 4: off its roadmap's latest version (published while it was in Trash). */
+function offLatest(db: SimpleDb, s: SeedItem): boolean {
+  const latest = (db.versions ?? []).filter((v) => v.roadmap === s.roadmap).at(-1);
+  return !!latest?.without.includes(s.key);
+}
+
 interface SimpleDb {
   items: SeedItem[];
   ids: Record<string, string>;
@@ -126,6 +134,10 @@ interface SimpleDb {
   meeting_proposals?: string[];
   /** Simple S3b (./simple-changes.ts): working drafts, each with its roadmap's published items. */
   drafts?: MockDraft[];
+  /** trash-features-goals review 4: each roadmap's versions published in the mock, each with the
+   * keys of the features that were in Trash when it was published (made without them). The
+   * roadmap reads its latest; Restore puts the feature back on every one (trash.restoreFromTrash). */
+  versions?: MockVersion[];
   /** walkb-roadmap review 5a: roadmaps built from a PRD with no approved version yet (their drafts' `published` is false). */
   unapproved?: string[];
   /** S3b: non-versioned targets (item tasks, action items, overrides, launch tasks) by id. */
@@ -912,7 +924,7 @@ export function fileUnderCurrentPrd(db: SimpleDb, s: SeedItem): void {
 
 function visibleItems(db: SimpleDb, role: Role): SeedItem[] {
   const restricted = role === "commenter" || role === "viewer";
-  return db.items.filter((s) => !s.trashed && (!db.company_roadmap || s.roadmap === db.company_roadmap) && (!restricted || ROADMAPS[s.roadmap].visibility === "company") && !ofReplacedPrd(db, s));
+  return db.items.filter((s) => !s.trashed && !offLatest(db, s) && (!db.company_roadmap || s.roadmap === db.company_roadmap) && (!restricted || ROADMAPS[s.roadmap].visibility === "company") && !ofReplacedPrd(db, s));
 }
 
 /** plan-model (suggestions._planned): the item's dated slices in its PRD's plan; none when the plan does not place it. */

@@ -182,6 +182,8 @@ export type TrashedSimple = {
   goal_buckets?: { goals: { id: string; trashed?: boolean }[]; features?: { id: string; goal_ids: string[] }[] };
   /** build-milestones-on-roadmap: each roadmap's goal milestones, their gates the item keys they wait on. */
   goal_milestones?: { roadmap: string; gates: string[] }[];
+  /** trash-features-goals review 4: the roadmaps' versions, each with the features it was made without. */
+  versions?: { roadmap: string; without: string[] }[];
 };
 
 /** trash-features-goals: takes `entry` out of Trash, putting back the feature or the goal it
@@ -191,6 +193,9 @@ export function restoreFromTrash(db: TrashDb, entry: TrashEntryRow, now: string,
   // Only that roadmap's rows of the key (another roadmap may use the same key).
   if (root.type === "feature") simple?.items.filter((s) => s.key === root.slug && (!entry.roadmap || s.roadmap === entry.roadmap)).forEach((s) => (s.trashed = false));
   if (root.type === "goal") simple?.goal_buckets?.goals.filter((g) => g.id === root.id).forEach((g) => (g.trashed = false));
+  // trash_items._onto_current: back on every version published while it was in Trash.
+  if (root.type === "feature")
+    for (const v of simple?.versions ?? []) if (!entry.roadmap || v.roadmap === entry.roadmap) v.without = v.without.filter((k) => k !== root.slug);
   // trash_items.after_restore: the features a delete moved get their goals back exactly.
   for (const l of entry.goal_links ?? []) {
     const f = simple?.goal_buckets?.features?.find((x) => x.id === l.id);
