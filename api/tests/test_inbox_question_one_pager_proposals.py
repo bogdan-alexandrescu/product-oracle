@@ -9,7 +9,8 @@ Test cards (protects / fails_when / no_claim):
   name_decider): protects=a commenter's proposal on Q3 is in the question decider's
   ``simple_proposals`` with its PRD's ``document_id``, the question's id and a ``subject``
   of its code and title, counted in ``total``; Accept removes it; fails_when=no row, no
-  subject or question id, not counted, or it stays once accepted; no_claim=the web
+  subject or question id, ``asked`` reads as decided rather than proposed, not counted, or
+  it stays once accepted; no_claim=the web
   (e2e/inbox-question-one-pager.spec.ts).
 - test_a_proposed_one_pager_wording_waits_named_by_its_line: protects=an approver's new
   wording for a one-pager line is in the PRD decider's ``simple_proposals`` with the
@@ -65,7 +66,12 @@ async def test_a_proposed_question_answer_waits_named_by_its_question(client, op
     assert row["document_id"] == q3["prd"]["id"]
     assert row["question_id"] == q3["id"]
     assert row["subject"] == f"Q3 {q3['title']}"
-    assert f"Q3 {q3['title']}" in row["asked"]
+    # Still to decide: it reads as proposed, never as done ("Decided Q3 ...").
+    assert row["asked"] == (
+        f"proposed deciding Q3 {q3['title']}"
+        if op == "decide_question"
+        else f"proposed who decides Q3 {q3['title']}"
+    )
     assert row["item_id"] is None
     assert row["can_decide"] is True
     assert inbox["total"] == before + 1

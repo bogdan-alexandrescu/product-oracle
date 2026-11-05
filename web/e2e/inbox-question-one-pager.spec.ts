@@ -18,8 +18,20 @@ import { expect, test, type Locator, type Page } from "./test";
  * Accept; accepting removes the row and the count drops by one; fails_when = no row, Open goes
  * to a roadmap, or the row stays.
  *
- * Card more-counts-the-inbox: protects = on a phone, More's badge counts what waits in the Inbox
- * beyond the tabs' own counts (here the one-pager proposal); fails_when = More shows no count.
+ * Card more-counts-the-inbox (and fix 4): protects = on a phone, More's badge counts what waits in the Inbox
+ * beyond the tabs' own counts (here the one-pager proposal), and Accept on the one-pager drops the
+ * rail's Inbox count (More's badge and its Inbox count on a phone) at once, before any navigation;
+ * fails_when = More shows no count, or a count stays until the person moves to another page.
+ *
+ * Card rail-first-count: protects = on the owner's first Simple visit (no roadmap read yet) the
+ * rail's Inbox count equals the Inbox's "N waiting" (Oracle's date and goal suggestions counted);
+ * fails_when = the rail counts fewer.
+ *
+ * Card inbox-question-accept-words: protects = Accept on a question's proposal in the Inbox says
+ * the question is decided; fails_when = it says the change is in a working draft.
+ *
+ * Card inbox-question-decided-since: protects = the Inbox's Open on a question decided since
+ * lands on Decisions with a note that it is decided already; fails_when = no note.
  */
 
 async function tap(l: Locator) {
@@ -102,7 +114,7 @@ for (const phone of [false, true]) {
       const row = page.getByRole("row").filter({ hasText: QUESTION }).first();
       await expect(row).toBeVisible();
       await expect(row).not.toContainText("An item");
-      await expect(row.getByTestId("meeting-proposal-context")).toContainText(`Decided ${QUESTION} · asked for by Theo Brandt on`);
+      await expect(row.getByTestId("meeting-proposal-context")).toContainText(`Proposed deciding ${QUESTION} · asked for by Theo Brandt on`);
       await tap(row.getByRole("link", { name: `Open ${QUESTION} in Decisions` }));
       await expect(page).toHaveURL(/\/simple\/decisions\?prd=[^&]+&question=/);
       const question = page.locator('[data-testid="question-row"][data-code="Q6"]');
@@ -117,6 +129,16 @@ for (const phone of [false, true]) {
       expect(after).toBe(n - 1);
       expect(await waiting(page)).toBe(after);
       await expect(page.getByRole("row").filter({ hasText: QUESTION })).toHaveCount(0);
+    });
+
+    // card: rail-first-count
+    test(`the rail's Inbox count on a first Simple visit is the Inbox's own (${where})`, async ({ page }) => {
+      test.setTimeout(120_000);
+      await login(page);
+      await page.setViewportSize(size);
+      // Straight to Simple: no roadmap read first.
+      const n = await openInboxFromRail(page, phone);
+      expect(await waiting(page)).toBe(n);
     });
 
     // card: inbox-one-pager-proposal, more-counts-the-inbox
@@ -146,8 +168,21 @@ for (const phone of [false, true]) {
       const line = page.locator('[data-line="bets-2"]');
       await expect(line).toBeInViewport();
       const note = page.getByRole("note").filter({ hasText: "proposed new wording for “Invite suggestions" }).filter({ visible: true });
+      // Before Accept, on the one-pager: the rail's Inbox count, or on a phone More's badge and its Inbox count.
+      const moreBadge = page.getByTestId("simple-tab-more-count");
+      const more = phone ? Number((await moreBadge.textContent())!.trim()) : 0;
       await tap(note.getByRole("button", { name: "Accept" }));
       await expect(line).toContainText("Invite suggestions from shared contacts");
+      // Accepted, the counts drop at once, on this page, before going anywhere.
+      if (phone) {
+        if (more > 1) await expect(moreBadge).toHaveText(String(more - 1));
+        else await expect(moreBadge).toHaveCount(0);
+        await tap(page.getByTestId("simple-tab-more"));
+        await expect(page.getByRole("dialog", { name: "More" }).getByTestId("simple-more-inbox-count")).toHaveText(String(n - 1));
+        await page.keyboard.press("Escape");
+      } else {
+        await expect(page.getByTestId("simple-nav").getByTestId("simple-nav-inbox-count")).toHaveText(String(n - 1));
+      }
 
       const after = await openInboxFromRail(page, phone);
       expect(after).toBe(n - 1);
@@ -156,3 +191,45 @@ for (const phone of [false, true]) {
     });
   });
 }
+
+/** Commenter Theo Brandt proposes Q6's recommended answer; then the owner is signed in. */
+async function proposeQ6(page: Page) {
+  await login(page, "commenter@example.com");
+  await page.goto("/simple/decisions");
+  const asked = page.getByTestId("question-row").filter({ hasText: QUESTION });
+  await tap(asked.getByRole("button", { name: "Propose as recommended" }));
+  await expect(page.getByText("Sent to Avery Stone to decide")).toBeVisible();
+  await as(page, undefined, DESKTOP);
+}
+
+test.describe("a question's proposal in the Inbox", () => {
+  test.use({ viewport: DESKTOP });
+
+  // card: inbox-question-accept-words
+  test("accepting it says the question is decided, not that it went into a working draft", async ({ page }) => {
+    test.setTimeout(120_000);
+    await proposeQ6(page);
+    await page.goto("/inbox");
+    const row = page.getByRole("row").filter({ hasText: QUESTION }).first();
+    await tap(row.getByRole("button", { name: "Accept" }));
+    await expect(page.getByText("Accepted: the question is decided")).toBeVisible();
+    await expect(page.getByText("in your working draft")).toHaveCount(0);
+  });
+
+  // card: inbox-question-decided-since
+  test("an Open from before it was decided lands on Decisions saying it is decided already", async ({ page }) => {
+    test.setTimeout(120_000);
+    await proposeQ6(page);
+    await page.goto("/inbox");
+    const open = page.getByRole("row").filter({ hasText: QUESTION }).first().getByRole("link", { name: `Open ${QUESTION} in Decisions` });
+    const href = (await open.getAttribute("href"))!;
+    // Decided on Decisions meanwhile.
+    await page.goto("/simple/decisions");
+    const question = page.locator('[data-testid="question-row"][data-code="Q6"]');
+    await tap(question.getByRole("button", { name: "Decide as recommended" }));
+    await expect(page.getByText("Decided Q6: 5 invites")).toBeVisible();
+    // The Inbox's old link, followed now.
+    await page.goto(href);
+    await expect(page.getByTestId("linked-decided")).toContainText(`${QUESTION} is decided already`);
+  });
+});
