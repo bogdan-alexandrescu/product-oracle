@@ -731,3 +731,16 @@ def test_agents_read_blockers_but_never_decide():
     for method, path in NEW_ROUTES:
         if method != "GET":
             assert required_scope(method, path) is None, (method, path)
+
+
+async def test_the_gate_reason_names_the_blocker_by_its_statement_never_its_key(client):
+    """Visual QA pass B: the gate's reason is a sentence people read in the blocker panel;
+    it names the blocker by what it says, never by its internal key in brackets."""
+    ctx = await make_ctx()
+    b = (await create_blocker(client, ctx))["blocker"]
+    got = (await client.get(f"/v1/blockers/{b['id']}", headers=ctx.as_("viewer"))).json()
+    rationale = got["gate"]["rationale"]
+    assert "'The partner API allows 100 requests a minute per company'" in rationale
+    assert "partner-api-rate-limit" not in rationale
+    assert b["key"] not in rationale
+    assert "(blocker" not in rationale
