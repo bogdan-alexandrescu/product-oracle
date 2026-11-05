@@ -80,8 +80,9 @@ for (const view of [...DESKTOP, ...PHONE]) {
       await page.getByTestId("blocker-row").filter({ hasText: "The address lookup service" }).click();
       const insp = page.getByTestId("blocker-inspector");
       await expect(insp.getByRole("heading", { name: "The address lookup service allows 100 requests a minute per company" })).toBeVisible();
-      await expect(insp.getByText("Blocker", { exact: true }).first()).toBeVisible();
-      expect(await insp.innerText()).not.toContain("address-lookup-rate-limit");
+      const head = insp.locator("[data-inspector-head]");
+      await expect(head.getByText("Blocker", { exact: true })).toBeVisible();
+      expect(await head.innerText()).not.toContain("address-lookup-rate-limit");
       await insp.scrollIntoViewIfNeeded();
       await shot(page, `gt2-blocker-${tag}`);
     });
