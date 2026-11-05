@@ -3998,9 +3998,10 @@ type RunMaps = { ids: string[]; repos: string[] };
 /**
  * As oracle.engineering.check._summarize. `elsewhere`: the keys outside the feature set a brief may
  * depend on, named with their PRD (features of other PRDs on the company roadmap, or waived at the
- * feature set stop); any other dependency outside the set is unknown_dependency.
+ * feature set stop); `noPrd`: the Ground Truth features no PRD holds, by name (a brief depending on
+ * one is told "Export logs is in no PRD yet"); any other dependency outside the set is unknown_dependency.
  */
-export function briefsCheckOf(briefs: Brief[], file?: BriefsMaps, maps?: RunMaps, elsewhere: Record<string, string> = {}): BriefsCheck {
+export function briefsCheckOf(briefs: Brief[], file?: BriefsMaps, maps?: RunMaps, elsewhere: Record<string, string> = {}, noPrd: Record<string, string> = {}): BriefsCheck {
   const cited: Record<string, Record<string, string[]>> = {};
   for (const b of briefs) {
     for (const [ref, at] of file?.cites[b.key] ?? []) {
@@ -4020,16 +4021,18 @@ export function briefsCheckOf(briefs: Brief[], file?: BriefsMaps, maps?: RunMaps
   const keys = new Set(briefs.map((b) => b.key));
   const named: Record<string, string> = {};
   const unknown: BriefsCheck["problems"] = [];
-  briefs.forEach((b, i) => {
+  const inNoPrd: BriefsCheck["problems"] = [];
+  for (const b of briefs) {
     for (const d of b.depends_on) {
       if (keys.has(d)) continue;
       if (d in elsewhere) named[d] = elsewhere[d];
-      else unknown.push({ code: "unknown_dependency", feature: b.key, message: `features[${i}] (${b.key}): depends on '${d}', not a feature of the feature set or the company roadmap` });
+      else if (d in noPrd) inNoPrd.push({ code: "dependency_in_no_prd", feature: b.key, message: `${noPrd[d]} is in no PRD yet: ${b.title} depends on it` });
+      else unknown.push({ code: "unknown_dependency", feature: b.key, message: `${b.title.trim() ? `${b.title.trim()} (${b.key})` : b.key} depends on "${d}", a feature Oracle cannot find in any PRD or in Ground Truth` });
     }
-  });
+  }
   return {
     features: briefs,
-    problems: [...unknown, ...problems],
+    problems: [...unknown, ...inNoPrd, ...problems],
     code_map_used: !!file?.repos.length,
     unmapped_repos,
     unnamed_repo: !unmapped_repos.length && problems.length > 0,

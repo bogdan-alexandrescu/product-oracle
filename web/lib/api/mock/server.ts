@@ -2004,6 +2004,18 @@ const seedEngCheckCrossPrd = () =>
     Object.assign(check, briefsCheckOf(linked, undefined, undefined, { "account-health-ledger": "Account health ledger (Safety PRD)" }));
   });
 
+/**
+ * cross-prd-followups "eng-check-no-prd" scenario: the "eng-check" run whose first brief also
+ * depends on Export logs, a Ground Truth feature no PRD holds, and whose second depends on a code
+ * Oracle cannot find: the check names both plainly, as oracle.engineering.check does.
+ */
+const seedEngCheckNoPrd = () =>
+  seedEngCheckWith("eng-check-no-prd", (check) => {
+    const briefs = (check as unknown as { features: Parameters<typeof briefsCheckOf>[0] }).features;
+    const linked = briefs.map((b, i) => (i === 0 ? { ...b, depends_on: [...b.depends_on, "export-logs"] } : i === 1 ? { ...b, depends_on: [...b.depends_on, "made-up-feature"] } : b));
+    Object.assign(check, briefsCheckOf(linked, undefined, undefined, {}, { "export-logs": "Export logs" }));
+  });
+
 /** "eng-check-long-key" scenario: the "eng-check" run whose first brief has a long key with no break in it. */
 const seedEngCheckLongKey = () =>
   seedEngCheckWith("eng-check-long-key", (check) => {
@@ -3520,6 +3532,8 @@ function load(): Db {
             ? seedEngCheckUnreadable
           : scenario === "eng-check-cross-prd"
             ? seedEngCheckCrossPrd
+          : scenario === "eng-check-no-prd"
+            ? seedEngCheckNoPrd
           : scenario === "eng-check-long-key"
             ? seedEngCheckLongKey
           : scenario === "eng-check-shop"
