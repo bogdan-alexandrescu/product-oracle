@@ -993,8 +993,10 @@ export function approveRunReview(ctx: RunsContext, runId: string, checkpointId: 
   const r = ctx.db.runs.find((x) => x.id === runId);
   const cp = r?.checkpoints.find((c) => c.id === checkpointId);
   if (!r || !cp || cp.status !== "pending" || r.status !== "awaiting_checkpoint") return;
-  Object.assign(cp, { status: "approved", note: null, decided_by: ctx.userId, decided_at: ctx.now() });
-  cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: "oracle", by: ctx.userId } };
+  // As the API: the signed-in member decided.
+  const by = ctx.member?.id ?? ctx.userId;
+  Object.assign(cp, { status: "approved", note: null, decided_by: by, decided_at: ctx.now() });
+  cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: "oracle", by } };
   next(ctx, r, r.segments.find((x) => x.seq === cp.segment_seq)!);
   refresh(r);
 }
@@ -2128,7 +2130,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       theme: roadmap ? (input.theme ?? doc?.theme ?? ROADMAP_DEFAULTS.theme) : templated ? (input.theme ?? doc?.theme ?? null) : null,
       estimate_usd: null,
       spent_usd: 0,
-      created_by: ctx.userId,
+      created_by: ctx.member?.id ?? ctx.userId,
       created_at: ctx.now(),
       started_at: null,
       finished_at: null,
@@ -2273,7 +2275,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (r.status !== "awaiting_approval") return fail(409, `run is ${r.status}, not awaiting approval`);
     const changed = itemsChanged(ctx, r);
     if (changed) return changed;
-    r.approved_by = ctx.userId;
+    r.approved_by = ctx.member?.id ?? ctx.userId;
     r.approved_at = ctx.now();
     launch(ctx, r);
     return done();
@@ -2432,8 +2434,10 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const status = confirming ? "approved" : (decision as "approved" | "changes_requested");
     // A confirmed console answer is its author's, as the API names it, not the confirmer's.
     const answerer = confirming ? (ctx.members ?? []).find((x) => x.email === cp.console?.answered_by) : undefined;
-    const author = confirming ? (answerer?.id ?? null) : ctx.userId;
-    Object.assign(cp, { status, note: text, decided_by: ctx.userId, decided_at: ctx.now(), console: null });
+    // As the API: the signed-in member decided (and confirmed a console answer).
+    const me = ctx.member?.id ?? ctx.userId;
+    const author = confirming ? (answerer?.id ?? null) : me;
+    Object.assign(cp, { status, note: text, decided_by: me, decided_at: ctx.now(), console: null });
     if (decision === "changes_requested") cp.review = reviewed ? documentReview(ctx, r, cp, reviewed, text) : buildReview(ctx, r, cp, staged, text);
     if (edited) {
       // D7: the edited file replaces the agents' (kept for ?agents=1), and its check is re-run.
@@ -2455,10 +2459,10 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (cp.kind === "feature_set") {
       // C7: Approve with edits writes the requirements a person added to the baseline as theirs.
       const scope = latestScope(ctx.db, r.id);
-      if (status === "approved" && scope?.status === "proposed") ctx.scopeApproved?.(scope, ctx.member?.id ?? ctx.userId);
-      decideScope(ctx, r, status, ctx.userId);
+      if (status === "approved" && scope?.status === "proposed") ctx.scopeApproved?.(scope, me);
+      decideScope(ctx, r, status, me);
     }
-    if (cp.kind === "priority_order" && (decision === "approved" || decision === "changes_requested")) decideOrder(ctx, r, cp, decision, ctx.userId);
+    if (cp.kind === "priority_order" && (decision === "approved" || decision === "changes_requested")) decideOrder(ctx, r, cp, decision, me);
     if (cp.kind === "eng_review" && decision === "approved") approveEngCheck(ctx, r, cp, staged);
     if (cp.kind === "eng_dates" && decision === "approved") approveEngDates(cp, staged);
     cp.payload = { ...cp.payload, decided: { role: (confirming ? answerer?.role : ctx.userRole) ?? null, via: confirming ? "swarmcloud_console" : "oracle", by: author } };
@@ -2956,6 +2960,24 @@ export function seedEngCheckRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOu
   tick(full);
   refresh(r);
   db.runs.push(r);
+  return r;
+}
+
+/**
+ * The "eng-check-answered-by-id" scenario: the "eng-check" run, its Engineering check approved
+ * by `by` with one answer recorded by its question's id only (no question text), as an older
+ * check recorded it.
+ */
+export function seedEngCheckAnsweredByIdRun(db: RunsDb, ctx: Omit<RunsContext, "db">, by: string): RunOut {
+  const r = seedEngCheckRun(db, ctx);
+  const cp = r.checkpoints.find((c) => c.status === "pending" && c.kind === "eng_review")!;
+  const at = "2026-10-17T15:20:00Z";
+  const answers: Record<string, EngAnswer[]> = {
+    "f.guided-setup": [{ question_id: "q1", answer: "Yes, the sandbox takes test orders.", by, at }],
+  };
+  Object.assign(cp, { status: "approved", decided_by: by, decided_at: at });
+  cp.payload = { ...cp.payload, briefs: { verdicts: {}, sizes: {}, answers }, decided: { role: "commenter", via: "oracle", by } };
+  refresh(r);
   return r;
 }
 
@@ -3946,7 +3968,7 @@ function engInvalid(cp: CheckpointOut, a: Schemas["ActionIn"]): string | null {
 }
 
 /** An answer to an architect's question as the approved check records it (who answered and when). */
-type EngAnswer = { question_id: string; question: string; answer: unknown; by: string | null; at: string };
+type EngAnswer = { question_id: string; question?: string | null; answer: unknown; by: string | null; at: string };
 
 /**
  * As oracle.runs.stop_answers: the questions answered at a decided stop, the architect's at the
@@ -3960,13 +3982,16 @@ function stopAnswers(ctx: RunsContext, c: CheckpointOut, people: Map<string, str
   const check = c.status === "approved" ? briefsOf(c) : null;
   const recorded = (c.payload.briefs as { answers?: Record<string, EngAnswer[]> } | undefined)?.answers ?? {};
   for (const [key, listed] of Object.entries(check ? recorded : {})) {
-    const title = check?.features.find((f) => f.key === key)?.title;
+    const feature = check?.features.find((f) => f.key === key);
+    const title = feature?.title;
     for (const a of listed) {
-      // As the API: a non-text answer is dropped, a text one stripped.
+      // As the API: a non-text answer is dropped, a text one stripped; an answer recorded
+      // without its question's text reads it from the feature by the question's id.
       const answer = typeof a.answer === "string" ? a.answer.trim() : "";
-      if (!a.question || !answer) continue;
+      const question = a.question || feature?.questions.find((q) => q.id === a.question_id)?.question;
+      if (!question || !answer) continue;
       const by = a.by ?? c.decided_by ?? null;
-      out.push({ question: a.question, answer, feature_key: key, feature_title: title && title !== key ? title : null, answered_by_name: (by && people.get(by)) || null, answered_at: a.at ?? c.decided_at ?? null });
+      out.push({ question, answer, feature_key: key, feature_title: title && title !== key ? title : null, answered_by_name: (by && people.get(by)) || null, answered_at: a.at ?? c.decided_at ?? null });
     }
   }
   // A card names its feature by key: its name is the run's feature set's (the latest scope listing it).

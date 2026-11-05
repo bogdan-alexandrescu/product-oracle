@@ -74,6 +74,7 @@ import {
   routeRuns,
   scopeStop,
   seedEngCheckRun,
+  seedEngCheckAnsweredByIdRun,
   seedEngCheckUnmappedRun,
   shopBriefsCheck,
   seedRunDecisions,
@@ -1855,6 +1856,18 @@ function seedEngDates(): Db {
   return db;
 }
 
+/**
+ * "eng-check-answered-by-id" scenario: as "eng-check", its Engineering check approved by the
+ * engineering lead (Theo Brandt) with an answer recorded by its question's id only.
+ */
+function seedEngCheckAnsweredById(): Db {
+  const db = seed();
+  const lead = db.members.find((x) => x.email === "commenter@example.com")!;
+  lead.engineering_lead = true;
+  seeded("eng-check-answered-by-id", () => seedEngCheckAnsweredByIdRun(db.runs!, runsContext(db), lead.id));
+  return db;
+}
+
 /** "eng-check-unmapped" scenario: the "eng-check" run whose briefs cite ids of a repository with no code map. */
 function seedEngCheckUnmapped(): Db {
   const db = seed();
@@ -3388,6 +3401,8 @@ function load(): Db {
             ? seedEngCheck
           : scenario === "run-decisions" || scenario === "run-decisions-many"
             ? () => seedRunDecisionsScenario(scenario === "run-decisions-many")
+          : scenario === "eng-check-answered-by-id"
+            ? seedEngCheckAnsweredById
           : scenario === "eng-check-no-lead"
             ? seedEngCheckNoLead
           : scenario === "eng-check-unmapped"
