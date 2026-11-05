@@ -631,6 +631,11 @@ async def _plan(
         after = {str(e.row.id): {"cut": True} for e in cut}
         return entry, target, before, after
     fields = FIELDS[op]
+    if op == "remove_dependency":
+        # roadmap-decide review: the page may not see every stored key (a filter, a key that
+        # matches no item): only target.subject still being a dependency is checked, below,
+        # and ``before`` is the stored list.
+        body.before = read(row, fields, target)
     missing = [f for f in fields if f not in body.before]
     if missing:
         raise ChangeError(422, f"before: {', '.join(missing)} as you saw them")

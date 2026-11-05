@@ -12220,6 +12220,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/roadmap/waiting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Simple Roadmap Waiting
+         * @description roadmap-decide review: the side menu's light count: the broken links of the whole
+         *     roadmap as the caller sees it (the working draft's to who sees it), no filter; the same
+         *     ones the roadmap's strip, its Needs a decision and Home count.
+         */
+        get: operations["get_simple_roadmap_waiting"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/roadmap/date-suggestions": {
         parameters: {
             query?: never;
@@ -38959,6 +38981,11 @@ export interface components {
              */
             can_publish: boolean;
             /**
+             * Required Reviewers
+             * @default []
+             */
+            required_reviewers: string[];
+            /**
              * Change Log
              * @default []
              */
@@ -39117,6 +39144,29 @@ export interface components {
              * @default []
              */
             moves: string[];
+            /**
+             * Dependents
+             * @default []
+             */
+            dependents: components["schemas"]["SimpleFlagDependent"][];
+        };
+        /**
+         * SimpleFlagDependent
+         * @description An item not cut or done that depends on a cut item, wherever the view's filters are.
+         */
+        SimpleFlagDependent: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
         };
         /**
          * SimpleFlow
@@ -40972,6 +41022,15 @@ export interface components {
              * @default []
              */
             applied_versions: components["schemas"]["SimpleAppliedVersion"][];
+        };
+        /**
+         * SimpleRoadmapWaiting
+         * @description roadmap-decide review: the light count the side menu reads: the broken links of the
+         *     whole roadmap as the reader sees it (the working draft's to who sees it).
+         */
+        SimpleRoadmapWaiting: {
+            /** Broken Links */
+            broken_links: number;
         };
         /**
          * SimpleRunGroup
@@ -70611,6 +70670,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_simple_roadmap_waiting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleRoadmapWaiting"];
                 };
             };
         };

@@ -42348,6 +42348,37 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/simple/roadmap/waiting": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Roadmap Waiting",
+        "description": "roadmap-decide review: the side menu's light count: the broken links of the whole\nroadmap as the caller sees it (the working draft's to who sees it), no filter; the same\nones the roadmap's strip, its Needs a decision and Home count.",
+        "operationId": "get_simple_roadmap_waiting",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleRoadmapWaiting"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/simple/roadmap/date-suggestions": {
       "get": {
         "tags": [
@@ -117070,6 +117101,15 @@
             "title": "Can Publish",
             "default": false
           },
+          "required_reviewers": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Required Reviewers",
+            "default": []
+          },
           "change_log": {
             "items": {
               "$ref": "#/components/schemas/SimpleDraftChange"
@@ -117421,6 +117461,14 @@
             "type": "array",
             "title": "Moves",
             "default": []
+          },
+          "dependents": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleFlagDependent"
+            },
+            "type": "array",
+            "title": "Dependents",
+            "default": []
           }
         },
         "type": "object",
@@ -117431,6 +117479,31 @@
           "state"
         ],
         "title": "SimpleFlag"
+      },
+      "SimpleFlagDependent": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SimpleFlagDependent",
+        "description": "An item not cut or done that depends on a cut item, wherever the view's filters are."
       },
       "SimpleFlow": {
         "properties": {
@@ -122073,6 +122146,20 @@
           "milestones"
         ],
         "title": "SimpleRoadmapOut"
+      },
+      "SimpleRoadmapWaiting": {
+        "properties": {
+          "broken_links": {
+            "type": "integer",
+            "title": "Broken Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "broken_links"
+        ],
+        "title": "SimpleRoadmapWaiting",
+        "description": "roadmap-decide review: the light count the side menu reads: the broken links of the\nwhole roadmap as the reader sees it (the working draft's to who sees it)."
       },
       "SimpleRunGroup": {
         "properties": {

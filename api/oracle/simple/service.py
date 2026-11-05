@@ -56,6 +56,7 @@ from oracle.simple.schemas import (
     SimpleDate,
     SimpleDocRef,
     SimpleFlag,
+    SimpleFlagDependent,
     SimpleGoalRef,
     SimpleGroup,
     SimpleItemMilestone,
@@ -101,6 +102,8 @@ class Entry:
     flags: list[constraints.Flag] = field(default_factory=list)
     # The items each order flag's "Move the dependents" moves, by the flag's subject.
     shift_moves: dict[str, list[uuid.UUID]] = field(default_factory=dict)
+    # roadmap-decide review: a cut item's live dependents, read before any filter.
+    cut_dependents: list["Entry"] = field(default_factory=list)
     # The track owner's role now (None: no owner, or a disabled one): D-a.
     owner_role: str | None = None
     # S4: the track owner's name (or e-mail) when enabled.
@@ -173,8 +176,12 @@ def shift_plan(
     return moves
 
 
-def flags_out(e: Entry) -> list[SimpleFlag]:
-    """The item's flags as the API shows them."""
+def flags_out(e: Entry, may: Any = None) -> list[SimpleFlag]:
+    """The item's flags as the API shows them; ``may(entry)``: the reader decides it."""
+    dependents = [
+        SimpleFlagDependent(id=d.row.id, title=d.row.title, can_decide=bool(may and may(d)))
+        for d in e.cut_dependents
+    ]
     return [
         SimpleFlag(
             kind=f.kind,
@@ -184,9 +191,29 @@ def flags_out(e: Entry) -> list[SimpleFlag]:
             subject=f.subject,
             risk_note=f.risk_note,
             moves=e.shift_moves.get(f.subject or "", []) if f.kind == "dependency_order" else [],
+            dependents=dependents if f.kind == "cut_with_dependents" else [],
         )  # fmt: skip
         for f in e.flags
     ]
+
+
+LINK_KINDS = ("dependency_order", "cut_with_dependents")
+
+
+async def broken_links(db: AsyncSession, principal: Any) -> int:
+    """The broken links of the whole roadmap as ``principal`` reads it: a red dependency out
+    of order or a cut item others depend on, with a fix; done items left out (the read
+    without the rest of :func:`build`)."""
+    from oracle.simple import drafts
+
+    read = await load(db, (await drafts.reader(db, principal)).overlays)
+    return sum(
+        1
+        for e in read.entries
+        if e.status != "done"
+        for f in e.flags
+        if f.state == "red" and f.fixes and f.kind in LINK_KINDS
+    )
 
 
 def owner_decides(entry: Entry) -> uuid.UUID | None:
@@ -481,6 +508,12 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
             if dep is not None:
                 moved = list(shift_plan(e, dep, by_id))
                 e.shift_moves[f.subject] = sorted(moved, key=lambda i: i != e.row.id)
+        if any(f.kind == "cut_with_dependents" for f in e.flags):
+            e.cut_dependents = [
+                by_id[d]
+                for d in e.needed_by
+                if d in by_id and by_id[d].status not in ("cut", "done")
+            ]
     shown_tracks = {e.track.id for e in entries if e.track is not None} | {
         t.id for t in tracks.values() if t.roadmap_document_id in docs
     }
@@ -896,7 +929,7 @@ def item_out(
         ],
         depends_on=e.depends_on,
         needed_by=e.needed_by,
-        flags=flags_out(e),
+        flags=flags_out(e, lambda d: can_decide(principal, d, deciders)),
         owner=SimpleOwnerRef(id=e.track.owner_id, name=e.owner_name)  # type: ignore[arg-type]
         if e.track is not None and e.track.owner_id is not None and e.owner_name
         else None,

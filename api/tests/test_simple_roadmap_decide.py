@@ -171,24 +171,31 @@ async def test_remove_dependency_under_a_filter(client):
     assert (await w.item("cut-b")).depends_on == ["elsewhere-key"]
 
 
+async def _links_in_read(client, ctx, who: str, **query) -> int:
+    r = await client.get(ROADMAP, params=query, headers=ctx.as_(who))
+    assert r.status_code == 200, r.text
+    return len([f for i in r.json()["items"] if i["status"] != "done" for f in i["flags"]
+                if f["state"] == "red" and f["fixes"]
+                and f["kind"] in ("dependency_order", "cut_with_dependents")])  # fmt: skip
+
+
 async def test_waiting_count_reads_the_whole_roadmap(client):
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["cut"])
     r = await client.get(f"{ROADMAP}/waiting", headers=ctx.as_("decider"))
     assert r.status_code == 200, r.text
-    assert r.json() == {"broken_links": 0}
+    # The dependent starts before its dependency ends: one order link.
+    assert r.json() == {"broken_links": 1} == {"broken_links": await _links_in_read(
+        client, ctx, "decider")}  # fmt: skip
     r = await w.post(client, "decider", "cut")
     assert r.status_code == 201, r.text
+    # Cut, the item has a dependent instead; a filter hiding the dependent changes nothing.
     r = await client.get(f"{ROADMAP}/waiting", headers=ctx.as_("decider"))
-    assert r.json() == {"broken_links": 1}
-    # Seen without the working draft, the approved roadmap has none.
+    assert r.json() == {"broken_links": await _links_in_read(client, ctx, "decider")}
+    assert await _links_in_read(client, ctx, "decider", to="2026-11-05") == 1
     r = await client.get(f"{ROADMAP}/waiting", headers=ctx.as_("viewer"))
     assert r.status_code == 200, r.text
-    full = await client.get(ROADMAP, headers=ctx.as_("viewer"))
-    links = [f for i in full.json()["items"] if i["status"] != "done" for f in i["flags"]
-             if f["state"] == "red" and f["fixes"]
-             and f["kind"] in ("dependency_order", "cut_with_dependents")]  # fmt: skip
-    assert r.json() == {"broken_links": len(links)}
+    assert r.json() == {"broken_links": await _links_in_read(client, ctx, "viewer")}
 
 
 async def test_draft_change_list_names_the_item(client):

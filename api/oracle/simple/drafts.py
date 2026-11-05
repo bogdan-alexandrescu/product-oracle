@@ -356,6 +356,16 @@ def _approver_of(principal: Any, d: SimpleDraft, w: Who) -> bool:
     )
 
 
+def can_publish(principal: Any, d: SimpleDraft, w: Who) -> bool:
+    """Approve and publish on a working draft (its button and POST .../approve alike): the
+    draft's final approver, who may also send it."""
+    return (
+        d.status == "working"
+        and _approver_of(principal, d, w)
+        and can_edit(principal, d.document_id, w)
+    )
+
+
 # --------------------------------------------------------------------------- reading
 
 
@@ -832,9 +842,10 @@ async def outs(
                 and me in (d.created_by, w.deciders.get(d.document_id)),
                 can_approve=d.status == "submitted"
                 and (_approver_of(principal, d, w) or me in (d.waiting_on or [])),
-                can_publish=d.status == "working"
-                and _approver_of(principal, d, w)
-                and can_edit(principal, d.document_id, w),
+                can_publish=can_publish(principal, d, w),
+                required_reviewers=[r for r in w.reviewers.get(d.document_id, []) if r != me]
+                if d.status == "working"
+                else [],
                 change_log=logs.get(d.id, []),
                 published=d.document_id in approved,
                 can_withdraw=d.status == "submitted"
@@ -1401,7 +1412,9 @@ async def approve(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) -
     the decider's approval of a working draft sends it first (Approve and publish), as a
     meeting's approval does."""
     d, w = await _get(db, principal, draft_id)
-    if d.status == "working" and _approver_of(principal, d, w):
+    if d.status == "working":
+        if not can_publish(principal, d, w):
+            raise DraftError(403, "Only the roadmap's decider approves and publishes this draft")
         await submit(db, principal, d.id)
     other = await _approve(db, principal.tenant_id, d, w, principal, [], None)
     return (await outs(db, principal, [d], other))[0]

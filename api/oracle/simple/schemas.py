@@ -49,6 +49,15 @@ class SimplePhase(BaseModel):
     estimated: bool
 
 
+class SimpleFlagDependent(BaseModel):
+    """An item not cut or done that depends on a cut item, wherever the view's filters are."""
+
+    id: uuid.UUID
+    title: str
+    # The reader decides that item (else its Remove the dependency is a proposal).
+    can_decide: bool = False
+
+
 class SimpleFlag(BaseModel):
     kind: FlagKind
     # One line, in words.
@@ -62,6 +71,16 @@ class SimpleFlag(BaseModel):
     # qa-simple-home-1: the items "Move the dependents" (shift_dependents) moves, the
     # flagged item first, as the change engine moves them; empty for other flags.
     moves: list[uuid.UUID] = []
+    # roadmap-decide review: cut_with_dependents' live dependents across the whole roadmap
+    # (one a filter hides too), each with its own Remove the dependency; empty otherwise.
+    dependents: list[SimpleFlagDependent] = []
+
+
+class SimpleRoadmapWaiting(BaseModel):
+    """roadmap-decide review: the light count the side menu reads: the broken links of the
+    whole roadmap as the reader sees it (the working draft's to who sees it)."""
+
+    broken_links: int
 
 
 class SimpleDocRef(BaseModel):
@@ -839,6 +858,9 @@ class SimpleDraftOut(BaseModel):
     # roadmap-decide (owner, Nov 4: draft, shown live): the decider's Approve and publish on a
     # working draft, in place of Send for review (POST .../approve sends it and approves it).
     can_publish: bool = False
+    # roadmap-decide review: a working draft's required reviewers who still review it after
+    # the decider's approval (the reader left out), named before Approve and publish.
+    required_reviewers: list[uuid.UUID] = []
     # D-d: every applied change it holds, not undone, oldest first (one shared draft per
     # roadmap: approving it publishes them all).
     change_log: list[SimpleDraftChange] = []
