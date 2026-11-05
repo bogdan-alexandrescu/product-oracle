@@ -88,6 +88,13 @@ test("the update's Oracle source 'oracle://baseline/goals' says no 'baseline' in
 test("an Ask Oracle answer about the Ground Truth, and a decision on its review, say no 'baseline'", async ({ page }) => {
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "baseline-review"] as const);
   await login(page);
+  // A decision on the review, and whatever it says back (a notice or a toast).
+  await page.goto("/ground-truth?run=7a11c0de-0000-4000-8000-0000000000b2");
+  const row = page.getByTestId("from-run-row").filter({ hasText: "Guided setup" });
+  await row.getByRole("button", { name: "Accept" }).click();
+  await expect(row).toContainText("Accepted");
+  expect(await page.locator("body").innerText()).not.toMatch(OLD_NAME);
+
   await page.goto("/home");
   await expect(page.getByTestId("hop-strip")).toBeVisible();
   await page.keyboard.press("ControlOrMeta+j");
@@ -104,11 +111,4 @@ test("an Ask Oracle answer about the Ground Truth, and a decision on its review,
     const card = page.getByRole("tooltip");
     if (await card.count()) expect(await card.first().innerText()).not.toMatch(OLD_NAME);
   }
-
-  // A decision on the review, and whatever it says back (a notice or a toast).
-  await page.goto("/ground-truth?run=7a11c0de-0000-4000-8000-0000000000b2");
-  const row = page.getByTestId("from-run-row").filter({ hasText: "Guided setup" });
-  await row.getByRole("button", { name: "Accept" }).click();
-  await expect(row).toContainText("Accepted");
-  expect(await page.locator("body").innerText()).not.toMatch(OLD_NAME);
 });
