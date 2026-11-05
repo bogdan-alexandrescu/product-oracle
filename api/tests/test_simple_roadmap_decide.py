@@ -14,6 +14,13 @@ Test cards (protects / fails_when / no_claim):
 - test_remove_dependency_and_restore_from_a_cut_item: protects=Remove the dependency drops
   the link in the working draft (the cut flag clears), Undo puts it back, Bring it back
   restores the item; fails_when=the link stays or undo misses it; no_claim=the web.
+- test_remove_dependency_under_a_filter: protects=with a filter on, a cut item's flag names
+  every live dependent (one outside the view too), and Remove the dependency applies when the
+  dependent also depends on a key the view cannot resolve, its before built by the API;
+  fails_when=the dependent is missing or the change is refused as changed; no_claim=the web.
+- test_waiting_count_reads_the_whole_roadmap: protects=GET /v1/simple/roadmap/waiting counts
+  the broken links of the whole roadmap as the reader sees it, the same number as the
+  unfiltered read; fails_when=the route is missing or counts another number; no_claim=the web.
 - test_draft_change_list_names_the_item: protects=each line of the working draft's change
   list carries the item's name, fixes included; fails_when=a line has no name;
   no_claim=the web's wording.
@@ -127,6 +134,61 @@ async def test_remove_dependency_and_restore_from_a_cut_item(client):
         "op": "remove_dependency", "target": {"item_id": ids["a"], "subject": ids["b"]},
         "before": {"depends_on": []}, "after": {"depends_on": []}})  # fmt: skip
     assert r.status_code == 422, r.text
+
+
+async def test_remove_dependency_under_a_filter(client):
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, ops=["cut"])
+    ids = {"a": w.ids["cut-a"], "b": w.ids["cut-b"]}
+    async with tenant_session(ctx.tenant_id) as s:
+        b = await s.get(RoadmapItem, uuid.UUID(ids["b"]))
+        b.depends_on = ["cut-a", "elsewhere-key"]
+        await s.commit()
+    r = await w.post(client, "decider", "cut")
+    assert r.status_code == 201, r.text
+    # The dependent starts Nov 10: a view to Nov 5 shows the cut item alone.
+    r = await client.get(ROADMAP, params={"to": "2026-11-05"}, headers=ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    shown = {i["id"]: i for i in r.json()["items"]}
+    assert ids["b"] not in shown
+    cut = next(f for f in shown[ids["a"]]["flags"] if f["kind"] == "cut_with_dependents")
+    assert [(d["id"], d["can_decide"]) for d in cut["dependents"]] == [(ids["b"], True)]
+    assert cut["dependents"][0]["title"]
+    # The page knows only the keys it can resolve: the API checks the subject alone.
+    r = await client.post(CHANGES, headers=ctx.as_("decider"), json={
+        "op": "remove_dependency", "target": {"item_id": ids["b"], "subject": ids["a"]},
+        "before": {"depends_on": ["cut-a"]}, "after": {"depends_on": []}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    assert (await w.item("cut-b")).depends_on == ["elsewhere-key"]
+    r = await client.post(f"{CHANGES}/{r.json()['change']['id']}/undo",
+                          headers=ctx.as_("decider"))  # fmt: skip
+    assert r.status_code == 201, r.text
+    assert (await w.item("cut-b")).depends_on == ["cut-a", "elsewhere-key"]
+    r = await client.post(CHANGES, headers=ctx.as_("decider"), json={
+        "op": "remove_dependency", "target": {"item_id": ids["b"], "subject": ids["a"]},
+        "before": {}, "after": {}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    assert (await w.item("cut-b")).depends_on == ["elsewhere-key"]
+
+
+async def test_waiting_count_reads_the_whole_roadmap(client):
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, ops=["cut"])
+    r = await client.get(f"{ROADMAP}/waiting", headers=ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    assert r.json() == {"broken_links": 0}
+    r = await w.post(client, "decider", "cut")
+    assert r.status_code == 201, r.text
+    r = await client.get(f"{ROADMAP}/waiting", headers=ctx.as_("decider"))
+    assert r.json() == {"broken_links": 1}
+    # Seen without the working draft, the approved roadmap has none.
+    r = await client.get(f"{ROADMAP}/waiting", headers=ctx.as_("viewer"))
+    assert r.status_code == 200, r.text
+    full = await client.get(ROADMAP, headers=ctx.as_("viewer"))
+    links = [f for i in full.json()["items"] if i["status"] != "done" for f in i["flags"]
+             if f["state"] == "red" and f["fixes"]
+             and f["kind"] in ("dependency_order", "cut_with_dependents")]  # fmt: skip
+    assert r.json() == {"broken_links": len(links)}
 
 
 async def test_draft_change_list_names_the_item(client):

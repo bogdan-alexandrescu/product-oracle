@@ -130,7 +130,9 @@ async def test_decider_approves_and_publishes_a_working_draft(client):
     assert owner["can_publish"] is False and owner["can_submit"] is True
     # The owner, not the decider, may not approve a working draft.
     r = await client.post(f"{DRAFTS}/{d['id']}/approve", headers=w.ctx.as_("owner"))
-    assert r.status_code in (403, 409), r.text
+    # Review minor 6: one rule (can_publish) for the button and the endpoint.
+    assert r.status_code == 403, r.text
+    assert d["required_reviewers"] == []
     r = await client.post(f"{DRAFTS}/{d['id']}/approve", headers=w.ctx.as_("decider"))
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "approved" and r.json()["version"] == 2
@@ -146,6 +148,8 @@ async def test_publish_waits_for_required_reviewers(client):
     await edit_title(client, w, "decider")
     d = await the_draft(client, w)
     assert d["can_publish"] is True
+    # Review minor 3: who still reviews it after the decider's approval, before the click.
+    assert d["required_reviewers"] == [str(w.ctx.users["approver"].id)]
     r = await client.post(f"{DRAFTS}/{d['id']}/approve", headers=w.ctx.as_("decider"))
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "submitted" and r.json()["decider_approved"]
