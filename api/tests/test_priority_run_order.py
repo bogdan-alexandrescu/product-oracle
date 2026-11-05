@@ -873,11 +873,7 @@ async def test_approved_new_features_carry_their_goal_links_and_attrs(client, ow
     assert row["depends_on"] == ["address-lookup"]
 
 
-async def test_a_new_feature_with_no_open_create_is_added_from_the_feature_set(
-    client,
-    owner,
-    runtime,  # noqa: F811
-):
+async def test_a_new_feature_with_no_open_create_is_still_added(client, owner, runtime):  # noqa: F811
     """Review of PR 1244: a new key the run left no open create proposal for is added from
     the approved feature set's entry, never skipped."""
     tenant_id, _ = owner

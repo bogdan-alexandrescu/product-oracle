@@ -592,36 +592,136 @@ def approve(snapshot: PrioritySnapshot, by: uuid.UUID | None, document_id: uuid.
 async def accept_new(db: AsyncSession, snapshot: PrioritySnapshot, principal: Any) -> int:
     """An approved order adds the features new in its PRD to the baseline as proposed: the
     run's open proposals that create them are accepted (RP1), one per feature; another open
-    create of a feature already added is rejected as the same feature. Returns how many
-    were added."""
+    create of a feature already added is rejected as the same feature. A new feature the
+    run left no open create for is made from its ranking row and the approved feature set's
+    entry, never skipped. Each carries the run's effort and confidence, and, as proposed
+    links a person confirms, the goals it serves and what it depends on (review of PR 1244:
+    every feature traces to its goal). Returns how many were added."""
     from oracle.baseline.models import Proposal
-    from oracle.baseline.service import decide_proposal
+    from oracle.baseline.service import Writer, create_entity, decide_proposal, find_entity
 
-    keys = {r["key"] for r in snapshot.ranking or [] if r.get("new")}
-    if not keys or snapshot.run_id is None:
+    rows = {r["key"]: r for r in snapshot.ranking or [] if r.get("new")}
+    if not rows or snapshot.run_id is None:
         return 0
+    items = await _scope_features(db, snapshot.scope_id)
     open_ = await db.scalars(
         select(Proposal)
         .where(Proposal.run_id == snapshot.run_id, Proposal.status == "open")
         .order_by(Proposal.created_at, Proposal.id)
     )
-    first: dict[str, Proposal] = {}
+    creates: dict[str, list[Proposal]] = {}
     for p in list(open_):
         fields = (p.payload or {}).get("fields") or {}
         key = fields.get("key")
-        if (p.payload or {}).get("op") != "create" or key not in keys:
-            continue
-        if key in first:
-            # Rejected before the first is accepted, which would close it as already done.
+        if (p.payload or {}).get("op") == "create" and fields.get("type", "feature") == "feature":
+            if key in rows:
+                creates.setdefault(key, []).append(p)
+    added: list[str] = []
+    for key, row in rows.items():
+        mine = creates.get(key, [])
+        exists = await find_entity(db, "feature", key) is not None
+        # Rejected before the first is accepted, which would close it as already done.
+        for p in mine[0 if exists else 1 :]:
             await decide_proposal(db, p.id, principal, False, SAME_FEATURE)
+        if exists:
             continue
-        first[key] = p
-    for p in first.values():
-        # As proposed: an accepted create is confirmed unless its fields say otherwise.
-        fields = (p.payload or {}).get("fields") or {}
-        p.payload = {**p.payload, "fields": {**fields, "status": "proposed"}}
-        await decide_proposal(db, p.id, principal, True, "Added by the approved order")
-    return len(first)
+        attrs = _new_attrs(row)
+        if mine:
+            # As proposed: an accepted create is confirmed unless its fields say otherwise.
+            p = mine[0]
+            fields = (p.payload or {}).get("fields") or {}
+            fields = {**fields, "attrs": {**(fields.get("attrs") or {}), **attrs}}
+            p.payload = {**p.payload, "fields": {**fields, "status": "proposed"}}
+            await decide_proposal(db, p.id, principal, True, "Added by the approved order")
+        else:
+            item = items.get(key)
+            writer = Writer(
+                principal, "user", run_id=snapshot.run_id, reason="Added by the approved order"
+            )
+            await create_entity(
+                db,
+                writer,
+                type_="feature",
+                key=key,
+                title=row.get("title") or (item.title if item else None) or key,
+                body=item.text if item else None,
+                attrs=attrs,
+                status="proposed",
+            )
+        added.append(key)
+    for key in added:
+        await _propose_links(db, snapshot.run_id, key, rows[key], items.get(key))
+    return len(added)
+
+
+async def _scope_features(db: AsyncSession, scope_id: uuid.UUID | None) -> dict[str, Any]:
+    """The approved feature set's included features by key ({} without one)."""
+    if scope_id is None:
+        return {}
+    from oracle.runs import feature_set
+
+    return {
+        i.key: i
+        for i in await feature_set.scope_items(db, scope_id)
+        if i.kind == "feature" and i.decision == "include"
+    }
+
+
+def _new_attrs(row: dict[str, Any]) -> dict[str, Any]:
+    """The effort and confidence the run set for a new feature (its ranking row)."""
+    e = row.get("explanation") or {}
+    out: dict[str, Any] = {}
+    effort = ((e.get("inputs") or {}).get("effort") or {}).get("value")
+    if effort is not None:
+        out["effort"] = effort
+    confidence = e.get("confidence") or {}
+    if confidence.get("source") == "attrs" and confidence.get("value") is not None:
+        out["confidence"] = confidence["value"]
+    return out
+
+
+def _contribution(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int | float) or value != int(value):
+        return None
+    return int(value) if 0 <= value <= 3 else None
+
+
+async def _propose_links(
+    db: AsyncSession, run_id: uuid.UUID, key: str, row: dict[str, Any], item: Any
+) -> None:
+    """A new feature's supports links to the goals it serves (its ranking row's, then the
+    feature set's) and depends_on links to the features it needs, proposed by the run."""
+    from oracle.baseline.service import Writer, create_edge, find_edge, find_entity
+
+    feature = await find_entity(db, "feature", key)
+    if feature is None:
+        return
+    writer = Writer(None, "agent", run_id=run_id, reason="Proposed by the approved order")
+    goals: dict[str, int] = {}
+    terms = (row.get("explanation") or {}).get("goals") or []
+    for g in [*terms, *[{**g, "goal": g.get("key")} for g in (item.goals if item else [])]]:
+        contribution = _contribution(g.get("contribution"))
+        if g.get("goal") and contribution is not None:
+            goals.setdefault(str(g["goal"]), contribution)
+    links: list[tuple[str, str, str, dict[str, Any]]] = [
+        ("goal", goal, "supports", {"contribution": c}) for goal, c in goals.items()
+    ]
+    depends = {*(row.get("depends_on") or []), *(item.depends_on if item else [])}
+    links += [("feature", d, "depends_on", {}) for d in sorted(depends) if d != key]
+    for type_, other_key, edge_type, attrs in links:
+        other = await find_entity(db, type_, other_key)
+        if other is None or other.status == "rejected":
+            continue
+        if await find_edge(db, feature.id, other.id, edge_type) is None:
+            await create_edge(
+                db,
+                writer,
+                src_id=feature.id,
+                dst_id=other.id,
+                type_=edge_type,
+                attrs=attrs,
+                status="proposed",
+            )
 
 
 # Why an approved order rejects a second open create of a feature it already added.
