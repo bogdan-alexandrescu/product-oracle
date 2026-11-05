@@ -116,6 +116,9 @@ class Known:
     new_goals: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     # The Ground Truth's non-rejected goals: key -> title. Only these count as served.
     goals: dict[str, str] = field(default_factory=dict)
+    # Every goal the Ground Truth has, rejected ones too: key -> title. A problem names a
+    # goal by it, never by its key (:func:`goal_words`).
+    goal_names: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -343,18 +346,24 @@ def _check_new_goals(out: OrderCheck, row: dict[str, Any], known: Known) -> None
     zero = {str(g["key"]) for g in named if g.get("key") and g.get("contribution") == 0}
     unknown = [k for k in dict.fromkeys(keys) if k not in known.goals]
     for goal in unknown:
-        out.add(
-            "unknown_goal",
-            f"{title} names the goal {goal}, which is not a goal in the Ground Truth: "
-            "the run must name one that is",
-            key,
-        )
+        out.add("unknown_goal", unknown_goal_message(title, known.goal_names.get(goal)), key)
     if not unknown and not any(k in known.goals and k not in zero for k in keys):
         out.add(
             "new_feature_no_goal",
             f"{title} is new and names no goal it serves: the run must name one",
             key,
         )
+
+
+def unknown_goal_message(feature: str, goal: str | None) -> str:
+    """A new feature names a goal that is not one of the Ground Truth, said by the goal's last
+    known name; with none (the goal was deleted, or never was one), never by its key."""
+    if goal:
+        return (
+            f"{feature} names the goal {goal}, which is not a goal in the Ground Truth: "
+            "the run must name one that is"
+        )
+    return f"{feature} names a goal that was deleted: the run must name a goal of the Ground Truth"
 
 
 async def check_order_async(text: str, **kwargs: Any) -> OrderCheck:
@@ -391,14 +400,13 @@ async def known_for_run(db: AsyncSession, run: Any) -> tuple[Known, uuid.UUID | 
     from oracle.runs import feature_set
 
     features = await service.load_features(db)
-    goals = await db.scalars(
-        select(Entity).where(Entity.type == "goal", Entity.status != "rejected")
-    )
+    goals = list(await db.scalars(select(Entity).where(Entity.type == "goal")))
     known = Known(
         features={f.key: f.title for f in features},
         depends_on={f.key: set(f.depends_on) for f in features},
         live={m: list(rank(features, m)["features"]) for m in PRIORITY_METHODS},
-        goals={g.key: g.title for g in goals},
+        goals={g.key: g.title for g in goals if g.status != "rejected"},
+        goal_names={g.key: g.title for g in goals},
     )
     scope = await feature_set.approved_scope(db, run_id=run.id, document_id=run.document_id)
     if scope is None:
@@ -444,7 +452,11 @@ def ranking_of(check: OrderCheck, known: Known) -> list[dict[str, Any]]:
     return rows
 
 
-def _goal_title(key: str | None, live_rows: list[dict[str, Any]]) -> str | None:
+def _goal_title(
+    key: str | None, live_rows: list[dict[str, Any]], names: dict[str, str] | None = None
+) -> str | None:
+    if key is not None and names and key in names:
+        return names[key]
     for f in live_rows:
         for g in (f.get("explanation") or {}).get("goals") or []:
             if g.get("goal") == key:
@@ -490,7 +502,7 @@ def new_feature(
         weight = next(w for w in (given_weight, live_weight, DEFAULT_WEIGHT) if w is not None)
         contribution = given if given is not None else DEFAULT_CONTRIBUTION
         value = weight * contribution
-        goal_title = _goal_title(goal, live_rows)
+        goal_title = _goal_title(goal, live_rows, known.goal_names if known else None)
         goals.append(
             {
                 "goal": goal,
@@ -659,11 +671,26 @@ def approve(snapshot: PrioritySnapshot, by: uuid.UUID | None, document_id: uuid.
         snapshot.document_id = document_id
 
 
-async def stale_goals(db: AsyncSession, snapshot: PrioritySnapshot) -> list[dict[str, Any]]:
+# The mark on a problem :func:`stale_goals` added: the goal's key, so a later read drops the
+# problem once the goal is a goal of the Ground Truth again.
+STALE_GOAL = "stale_goal"
+# How a stale-goal problem stored before the mark reads (a rejected goal, by its title).
+_STALE_TEXT = "after the order was checked"
+
+
+def _is_stale(problem: dict[str, Any]) -> bool:
+    return bool(problem.get(STALE_GOAL)) or _STALE_TEXT in str(problem.get("message") or "")
+
+
+async def stale_goals(
+    db: AsyncSession, snapshot: PrioritySnapshot, problems: list[dict[str, Any]] | None = None
+) -> list[dict[str, Any]]:
     """The goals the order's new features serve that the Ground Truth rejected (or lost)
-    since the order was checked, as blocking ``unknown_goal`` problems its check does not
-    have yet: approving would add the feature with no supports link (review of PR 1244,
-    round 4). The goals read as :func:`_propose_links` reads them."""
+    since the order was checked, as blocking ``unknown_goal`` problems ``problems`` (the
+    order's check by default) do not have yet: approving would add the feature with no
+    supports link (review of PR 1244, round 4). The goals read as :func:`_propose_links`
+    reads them. A goal no longer in the Ground Truth is named by its last known name (the
+    order's row kept it), else as a goal that was deleted: never by its key."""
     from oracle.baseline.models import Entity
 
     rows = [r for r in snapshot.ranking or [] if r.get("new")]
@@ -671,7 +698,9 @@ async def stale_goals(db: AsyncSession, snapshot: PrioritySnapshot) -> list[dict
         return []
     items = await _scope_features(db, snapshot.scope_id)
     goals = {g.key: g for g in await db.scalars(select(Entity).where(Entity.type == "goal"))}
-    known = {p.get("message") for p in (snapshot.check_result or {}).get("problems") or []}
+    if problems is None:
+        problems = (snapshot.check_result or {}).get("problems") or []
+    known = {p.get("message") for p in problems}
     out: list[dict[str, Any]] = []
     for row in rows:
         key = row["key"]
@@ -686,23 +715,52 @@ async def stale_goals(db: AsyncSession, snapshot: PrioritySnapshot) -> list[dict
             found = goals.get(goal)
             if found is not None and found.status != "rejected":
                 continue
+            feature = row.get("title") or key
             if found is None:
-                message = (
-                    f"{row.get('title') or key} names the goal {goal}, which is not a goal in "
-                    "the Ground Truth: the run must name one that is"
+                # Its last known name: a term's title, when the row kept one (not the key).
+                name = next(
+                    (
+                        str(g["title"])
+                        for g in named
+                        if g.get("goal") == goal and g.get("title") and g["title"] != goal
+                    ),
+                    None,
                 )
+                message = unknown_goal_message(feature, name)
             else:
                 message = (
-                    f"{row.get('title') or key} serves the goal {found.title}, which was "
+                    f"{feature} serves the goal {found.title}, which was "
                     "rejected after the order was checked: the run must name a goal of the "
                     "Ground Truth"
                 )
             if message not in known:
                 known.add(message)
                 out.append(
-                    {"code": "unknown_goal", "blocking": True, "feature": key, "message": message}
+                    {
+                        "code": "unknown_goal",
+                        "blocking": True,
+                        "feature": key,
+                        "message": message,
+                        STALE_GOAL: goal,
+                    }
                 )
     return out
+
+
+async def recheck_goals(
+    db: AsyncSession, snapshot: PrioritySnapshot, *, add: bool = True
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """The order's check with its stale-goal problems (:func:`stale_goals`) as of now, and
+    those problems. One whose goal is a goal of the Ground Truth again (restored, confirmed)
+    is dropped; ``add``: one newly stale is added too (Approve order), else only what the
+    order already said is kept (a read: the band, the gate, the Inbox)."""
+    check = dict(snapshot.check_result or {})
+    problems = list(check.get("problems") or [])
+    kept = [p for p in problems if not _is_stale(p)]
+    said = {p.get("message") for p in problems if _is_stale(p)}
+    stale = [p for p in await stale_goals(db, snapshot, kept) if add or p["message"] in said]
+    check["problems"] = [*kept, *stale]
+    return check, stale
 
 
 async def accept_new(db: AsyncSession, snapshot: PrioritySnapshot, principal: Any) -> int:

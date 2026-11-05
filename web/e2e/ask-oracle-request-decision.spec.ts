@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from "./test";
 
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { SLACK_SCENARIO } from "../lib/api/mock/slack";
 import { ADMIN } from "./helpers";
 
 /*
@@ -13,7 +15,9 @@ import { ADMIN } from "./helpers";
 
 const APPROVER = "Priya Raman";
 const TITLE = "whether to ship the weekly digest";
-const SUMMARY = `Request a decision: title “${TITLE}”, approver “${APPROVER}”. Sends a Slack message to ${APPROVER} asking for a decision. This cannot be undone.`;
+// The mock's company has no Slack connected: the card says so, truthfully (chat-latest-card fix round 2).
+const SUMMARY = `Request a decision: title “${TITLE}”, approver “${APPROVER}”. ${APPROVER} sees it in their Inbox; Slack is not connected. This cannot be undone.`;
+const SLACK_SUMMARY = `Request a decision: title “${TITLE}”, approver “${APPROVER}”. ${APPROVER} gets a Slack message asking for a decision and sees it in their Inbox. This cannot be undone.`;
 
 async function tap(l: Locator) {
   await l.evaluate((el) => el.scrollIntoView({ block: "center" }));
@@ -40,8 +44,8 @@ test.beforeEach(async ({ page }) => {
 
 /**
  * Card ask-actions-request-decision: protects = "ask <person> to decide <title>" in the Ask
- * Oracle panel is one card naming the person Slack pings ("Sends a Slack message to Priya
- * Raman asking for a decision"), with no Undo once applied, and Apply puts the request on the
+ * Oracle panel is one card naming the person it asks and truly whether Slack messages them
+ * ("Priya Raman sees it in their Inbox; Slack is not connected"), with no Undo once applied, and Apply puts the request on the
  * Decisions page with Priya Raman as its approver, waiting for a decider; a person the company
  * does not have gets no card; fails_when = no card, a card that does not name who is pinged,
  * an Undo on the applied card, or the request missing from the Decisions page; no_claim = the
@@ -71,4 +75,21 @@ test("the owner asks Oracle to request a decision, and it waits on the Decisions
   await expect(row).toHaveCount(1);
   await expect(row).toContainText(APPROVER);
   await expect(row).toContainText("waiting for a decider");
+});
+
+/**
+ * Card ask-actions-slack-truthful (chat-latest-card fix round 2, from PR 1229's review):
+ * protects = with the company's Slack connected (the "slack-bridge" scenario) and Priya's
+ * review pings on, the card says she gets a Slack message and sees it in her Inbox; without
+ * Slack (the test above) it says Slack is not connected; fails_when = a card promises a Slack
+ * message Slack will not send, or hides one it will.
+ */
+test("with Slack connected the request card says Slack messages the approver", async ({ page }) => {
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, SLACK_SCENARIO]);
+  await signIn(page, "/simple/roadmap");
+  await tap(page.getByTestId("simple-ask").filter({ visible: true }).first());
+  const ask = page.getByTestId("ask-chat").filter({ visible: true });
+  await say(ask, `ask ${APPROVER} to decide ${TITLE}`);
+  const card = ask.getByTestId("chat-message").last().getByTestId("chat-card");
+  await expect(card.getByTestId("chat-card-summary")).toHaveText(SLACK_SUMMARY);
 });

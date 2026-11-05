@@ -1112,6 +1112,9 @@ async def _live_reasons(
 
     out: dict[uuid.UUID, list[dict[str, Any]]] = {}
     for c in checkpoints:
+        # A priority order's stale-goal problem is read as of now too: gone once its goal
+        # is back (it is stored, so the gate below reads the refreshed check).
+        await _recheck_order_goals(db, c, add=False)
         if c.status == "pending" and c.kind in gate.LIVE_KINDS:
             out[c.id] = await from_run.gate_reasons(db, c.run_id)
     return out
@@ -10246,17 +10249,22 @@ async def _recheck_scope(db: AsyncSession, cp: Checkpoint) -> int:
     return feature_set.blocking_of(check)
 
 
-async def _recheck_order_goals(db: AsyncSession, cp: Checkpoint) -> list[dict[str, Any]]:
-    """Re-check, at approval, the goals a priority order's new features serve (C8): one
-    rejected since the order was checked is a blocking problem added to the order's check
-    and the checkpoint's, so every approval path refuses on it. Returns the new problems."""
+async def _recheck_order_goals(
+    db: AsyncSession, cp: Checkpoint, *, add: bool = True
+) -> list[dict[str, Any]]:
+    """Re-check the goals a priority order's new features serve (C8), as of now: one
+    rejected or deleted since the order was checked is a blocking problem kept on the
+    order's check and the checkpoint's, so every approval path refuses on it; one whose goal
+    is back (restored, confirmed again) is dropped, so Approve order accepts it. ``add``
+    (approval): a newly stale goal is added; a read only drops what no longer holds.
+    Returns the stale-goal problems open now."""
+    if cp.kind != "priority_order" or cp.status != "pending":
+        return []
     snapshot = await run_order.snapshot_for(db, cp)
     if snapshot is None or snapshot.status != "proposed":
         return []
-    stale = await run_order.stale_goals(db, snapshot)
-    if stale:
-        check = dict(snapshot.check_result or {})
-        check["problems"] = [*(check.get("problems") or []), *stale]
+    check, stale = await run_order.recheck_goals(db, snapshot, add=add)
+    if check != (snapshot.check_result or {}):
         snapshot.check_result = check
         cp.payload = {**(cp.payload or {}), "priority_check": check}
     return stale
@@ -11722,11 +11730,20 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
 
     simple_proposals, simple_decisions = await simple_rows(db, principal, seen)
     counted += len(simple_proposals)
-    # Simple S3b: versions from Simple drafts waiting for my approval as a required reviewer.
+    # Simple S3b: versions from Simple drafts waiting for my approval as a required reviewer;
+    # inbox-meeting-proposals fix: open date and goal suggestions I may decide. The three
+    # are read together, in one read.
+    from oracle.simple.additions import inbox_rows as goal_suggestion_rows
     from oracle.simple.drafts import inbox_rows as simple_approval_rows
+    from oracle.simple.drafts import waiting as simple_waiting
+    from oracle.simple.suggestions import inbox_rows as date_suggestion_rows
 
-    simple_approvals = await simple_approval_rows(db, principal, seen)
+    simple_open = await simple_waiting(db)
+    simple_approvals = await simple_approval_rows(db, principal, seen, simple_open.drafts)
     counted += len(simple_approvals)
+    simple_date_suggestions = await date_suggestion_rows(db, principal, seen, simple_open.dates)
+    simple_goal_suggestions = await goal_suggestion_rows(db, principal, seen, simple_open.goals)
+    counted += len(simple_date_suggestions) + len(simple_goal_suggestions)
     # Simple S8: meeting minutes sent to me as an attendee (nothing to decide: not counted).
     from oracle.simple.meetings import inbox_rows as simple_minutes_rows
 
@@ -11798,6 +11815,8 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         simple_proposals=simple_proposals,
         simple_decisions=simple_decisions,
         simple_approvals=simple_approvals,
+        simple_date_suggestions=simple_date_suggestions,
+        simple_goal_suggestions=simple_goal_suggestions,
         simple_minutes=simple_minutes,
     )
 
