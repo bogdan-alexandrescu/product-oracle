@@ -301,7 +301,8 @@ export function GoalMapPage() {
   const [panel, setPanel] = useState<GmFeature | null>(null);
   const [prd, setPrd] = useState<{ name: string; problem: string } | null>(null);
   const map = q.data;
-  const roadmap = useQuery("simple-roadmap:goal-map-codes", () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } })));
+  // Read after the map: its features are roadmap items once the map is read.
+  const roadmap = useQuery(`simple-roadmap:goal-map-codes:${map ? 1 : 0}`, () => (map ? unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } })) : Promise.resolve(null)));
   const codes = useMemo(() => new Map((roadmap.data?.items ?? []).flatMap((i) => (i.code ? [[i.id, i.code] as [string, string]] : []))), [roadmap.data]);
 
   if (!map) return <div className="simple-page" role="status">{q.error ? errorMessage(q.error) : "Loading the goal map…"}</div>;
@@ -432,7 +433,7 @@ export function GoalMapPage() {
       {edit && draft && (
         <Editor map={map} edit={edit} draft={draft} setDraft={setDraft} goal={map.goals.find((g) => g.id === goalId) ?? map.goals[0]} onClose={close} onSave={() => void save()} />
       )}
-      {panel && <FeaturePanel id={panel.id} name={panel.name} onClose={() => setPanel(null)} />}
+      {panel && <FeaturePanel id={panel.id} code={codes.get(panel.id)} name={panel.name} onClose={() => setPanel(null)} />}
       {prd && (
         <NewPrdSheet
           prefill={prd}

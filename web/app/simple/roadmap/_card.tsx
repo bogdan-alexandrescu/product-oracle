@@ -403,6 +403,7 @@ const OP_WORDS: Record<string, string> = {
   set_depends: "Change what it depends on",
   set_status: "Change the status",
   set_owner: "Change the owner",
+  set_goal_measure: "Change how its goal is measured",
 };
 
 /** S7: a draft's likely duplicates, "Looks like <code> <title>", with Merge and Keep both

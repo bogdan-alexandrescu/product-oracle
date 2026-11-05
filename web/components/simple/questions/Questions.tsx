@@ -6,7 +6,7 @@ import { Icon } from "@/components/ds/Icon";
 import { askWith } from "@/components/hop/open-state";
 import { toast } from "@/components/ds/Toast";
 import { meetingMoment } from "@/components/simple/FlowVisual";
-import { useOpenFeature } from "@/components/simple/OpenFeature";
+import { useFeatureFound, useOpenFeature } from "@/components/simple/OpenFeature";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
@@ -293,6 +293,7 @@ export function plainBlocks(blocks: Schemas["SimpleQuestion"]["blocks"] & object
 /** The blocks line where the page opens features (Decisions): each feature, its code first, opens its panel. */
 function BlocksLine({ q }: { q: Question }) {
   const open = useOpenFeature();
+  const found = useFeatureFound();
   const blocks = q.blocks!;
   const features = blocks.features ?? [];
   if (!open || !features.length) return <>{plainBlocks(blocks)}</>;
@@ -300,14 +301,24 @@ function BlocksLine({ q }: { q: Question }) {
   return (
     <>
       Blocks{" "}
-      {features.map((f, i) => (
-        <span key={f.code}>
-          {i > 0 && ", "}
-          <button type="button" data-testid="question-blocks-feature" onClick={() => open({ code: f.code, name: f.title, prd: q.prd })} className="hover:underline">
-            <span className="simple-code">{f.code}</span> {f.title}
-          </button>
-        </span>
-      ))}
+      {features.map((f, i) => {
+        const feature = { code: f.code, name: f.title, prd: q.prd };
+        return (
+          <span key={f.code}>
+            {i > 0 && ", "}
+            {/* Opens its panel when the roadmap has its item; else read as its code and name. */}
+            {found && !found(feature) ? (
+              <span data-testid="question-blocks-feature">
+                <span className="simple-code">{f.code}</span> {f.title}
+              </span>
+            ) : (
+              <button type="button" data-testid="question-blocks-feature" onClick={() => open(feature)} className="hover:underline">
+                <span className="simple-code">{f.code}</span> {f.title}
+              </button>
+            )}
+          </span>
+        );
+      })}
       {rest ? `, ${rest}` : ""}
     </>
   );

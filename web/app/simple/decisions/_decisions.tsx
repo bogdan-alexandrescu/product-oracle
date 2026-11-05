@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { Icon } from "@/components/ds/Icon";
 import { toast } from "@/components/ds/Toast";
-import { OpenFeatureContext, type OpenFeature } from "@/components/simple/OpenFeature";
+import { FeatureFoundContext, OpenFeatureContext, type OpenFeature } from "@/components/simple/OpenFeature";
 import { usePhone } from "@/components/simple/PrdTimeline";
 import { useMe } from "@/lib/me";
-import { FeaturePanel } from "../roadmap/_panel";
+import { FeaturePanel, itemFor } from "../roadmap/_panel";
 import { QuestionRow, useQuestionActions, useSourceLine, type Question } from "@/components/simple/questions/Questions";
 import { SimpleEmpty, SimplePage } from "@/components/simple/SimplePage";
 import { ErrorNote, Loading } from "@/components/ui";
@@ -106,9 +106,12 @@ export function SimpleDecisions() {
   const [feature, setFeature] = useState<Parameters<OpenFeature>[0] | null>(null);
   const phone = usePhone();
   const { can } = useMe();
+  const roadmap = useQuery("simple-roadmap:decisions", () => unwrap(api.GET("/v1/simple/roadmap", {})));
+  const found = useCallback((f: Parameters<OpenFeature>[0]) => !!itemFor(roadmap.data?.items ?? [], f), [roadmap.data]);
   return (
     <SimplePage title="Decisions" lead={`${LEADS[view]} Dates are in ${zoneName(zone)}.`}>
       <OpenFeatureContext.Provider value={setFeature}>
+      <FeatureFoundContext.Provider value={found}>
       {feature && (
         <FeaturePanel key={`${feature.code}|${feature.name}`} feature={feature} phone={phone} canChange={can("create_simple_change")} onClose={() => setFeature(null)} />
       )}
@@ -169,6 +172,7 @@ export function SimpleDecisions() {
           </span>
         </p>
       )}
+      </FeatureFoundContext.Provider>
       </OpenFeatureContext.Provider>
     </SimplePage>
   );

@@ -13,6 +13,7 @@ import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 import { FloatingCard, type Act } from "../roadmap/_card";
+import { usePanelItem } from "../roadmap/_panel";
 import { ChangeFailed, changedWords, decide, propose, resultWords, undo, type Change } from "../roadmap/_lib";
 
 const toast = (ask: ToastAsk) => dsToast({ place: "corner", ...ask });
@@ -30,7 +31,7 @@ function usePhone(): boolean {
   );
 }
 
-export function FeaturePanel({ id, name, onClose }: { id: string; name: string; onClose: () => void }) {
+export function FeaturePanel({ id, code, name, onClose }: { id: string; code?: string; name: string; onClose: () => void }) {
   const { can } = useMe();
   const phone = usePhone();
   const roadmap = useQuery("simple-roadmap:goal-map", () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } })));
@@ -41,7 +42,8 @@ export function FeaturePanel({ id, name, onClose }: { id: string; name: string; 
   const byId = useMemo(() => new Map((roadmap.data?.items ?? []).map((i) => [i.id, i])), [roadmap.data]);
   // one-feature-panel: a dependency (or a feature that needs this one) opens in its place.
   const [opened, setOpened] = useState<string | null>(null);
-  const item = byId.get(opened ?? id);
+  // one-feature-panel: the card's own item (its name checked; else its code, then its name).
+  const item = usePanelItem(roadmap.data?.items ?? [], { id, code: code ?? "", name }, opened);
   const act: Act = useCallback(
     async (what, body) => {
       try {
