@@ -163,7 +163,7 @@ import {
 import { routeGoalBuckets, seedGoalBucketsHard } from "./goal-buckets";
 import { routeSimpleChanges, seedFeatureAskProposal, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
-import { goalSuggestionInboxRows, seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
+import { goalSuggestionInboxRows, seedGoalSuggestions, seedHeldGoalSuggestion, seedPersonGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
 import { questionInboxRows } from "./simple-questions";
 import { onePagerInboxRows, planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
@@ -960,6 +960,21 @@ function seedInboxReviewerScenario(): Db {
   const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
   const owners = db.members.filter((m) => m.role === "owner").map((m) => m.id);
   seedFeatureAskProposal(db.simple_roadmap!, { id: commenter.id, name: commenter.name ?? commenter.email, owners }, "Bulk export", "2026-10-26T15:00:00Z");
+  return db;
+}
+
+/**
+ * inbox-meeting-proposals fix "inbox-unknown-proposer" scenario: "inbox-reviewer" plus a
+ * feature suggested for Keep alerts quiet by someone whose account is no longer there (no
+ * member has their id), so the API sends no name for them. Invented data.
+ */
+export const INBOX_UNKNOWN_PROPOSER_SCENARIO = "inbox-unknown-proposer";
+function seedInboxUnknownProposerScenario(): Db {
+  const db = seedInboxReviewerScenario();
+  db.simple_roadmap!.goal_suggestions = [
+    ...seedGoalSuggestions(),
+    seedPersonGoalSuggestion("quiet-alerts", "Snooze digest", "People pause the alert digest for a day", stableUuid("mock-user/gone-teammate")),
+  ];
   return db;
 }
 
@@ -3348,6 +3363,8 @@ function load(): Db {
                 ? seedMeetingAgendaScenario
               : scenario === "inbox-reviewer"
                 ? seedInboxReviewerScenario
+              : scenario === INBOX_UNKNOWN_PROPOSER_SCENARIO
+                ? seedInboxUnknownProposerScenario
               : scenario === "meeting-agenda-owner"
                 ? seedMeetingAgendaOwnerScenario
               : scenario === "simple-home"

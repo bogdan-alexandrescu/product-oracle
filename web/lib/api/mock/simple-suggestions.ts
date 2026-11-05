@@ -95,6 +95,12 @@ export function seedGoalSuggestions(): GoalSuggestionRow[] {
   ];
 }
 
+/** A person's suggestion for `goal`, filed by `by` a day ago (a scenario's, as the drawer's form files one). */
+export function seedPersonGoalSuggestion(goal: string, title: string, outcome: string, by: string): GoalSuggestionRow {
+  const at = new Date(mockNowMs() - 86_400_000).toISOString();
+  return { ...row(goal, { title, outcome, why: "", evidence: [] }, "person", at, `person/${by}`), proposed_by: by, flow: null };
+}
+
 /** Oracle's suggestion that failed its checks twice (its goal not named): owners only. */
 export function seedHeldGoalSuggestion(): GoalSuggestionRow {
   const idea = POOL["grow-retention"][1];
