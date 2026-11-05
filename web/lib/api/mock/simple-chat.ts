@@ -1633,17 +1633,23 @@ function cardTopics(cards: StoredCard[]): string[] {
   return keys;
 }
 
-/** card_order.redo_line: the change a line asks for when it answers the previous card to change it ("no, note: ..."), else null. */
-const REDO = /^(?:no|nope|rather|instead)\b[,:;.!]?\s+(.+)$|^(.+?),?\s+instead[.!]?$/i;
+/**
+ * card_order.redo_line: the change a line asks for when it answers the previous card to change it ("no, note: ...": what
+ * follows; a short change request ending "instead" with no record prefix, "make it April instead": the line itself), else null.
+ */
+const REDO = /^(?:no|nope|rather|instead)\b[,:;.!]?\s+(.+)$/i;
+const INSTEAD = /^(?!(?:note|decided|decision|open|question|suggest|add|idea)\b)(?:[^\s:]+\s+){0,4}[^\s:]+,?\s+instead[.!]?$/i;
 function redoLine(text: string): string | null {
-  const m = REDO.exec(text.split(/\s+/).filter(Boolean).join(" "));
-  return m ? (m[1] ?? m[2]) : null;
+  const line = text.split(/\s+/).filter(Boolean).join(" ");
+  const m = REDO.exec(line);
+  if (m) return m[1];
+  return INSTEAD.test(line) ? line : null;
 }
 
 /**
  * card_order.redo_of: the earlier open draft a new record's card redoes: the one the reader named (the draft's redo_of,
  * an open draft of the same op on an earlier line of this thread), else, when the line asks to change the previous card
- * (`explicit`), that reply's open draft of the same op. Else null: the card is its own topic.
+ * (`explicit`), the open draft of the same op on the reply right before (none if it has none). Else null: its own topic.
  */
 function redoOf(chat: ChatDb, key: string, messageId: string, d: Draft, explicit: boolean): string | null {
   if (d.item_id || !NEW_OPS.has(d.op)) return null;
@@ -1654,7 +1660,9 @@ function redoOf(chat: ChatDb, key: string, messageId: string, d: Draft, explicit
   const earlier = (at < 0 ? t.messages : t.messages.slice(0, at)).filter((m) => m.card_ids.length);
   const draft = (c: StoredCard | undefined): c is StoredCard => !!c && c.status === "open" && c.op === d.op && !c.item_id;
   if (named) return earlier.some((m) => m.card_ids.includes(named)) && draft(chat.cards[named]) ? named : null;
-  const same = (earlier[earlier.length - 1]?.card_ids ?? []).map((id) => chat.cards[id]).filter(draft);
+  // The reply right before this one, cards or not ("no, ..." after a plain answer: a new card).
+  const before = (at < 0 ? t.messages : t.messages.slice(0, at)).filter((m) => m.author_kind === "oracle");
+  const same = (before[before.length - 1]?.card_ids ?? []).map((id) => chat.cards[id]).filter(draft);
   return same.length ? same[same.length - 1].id : null;
 }
 
