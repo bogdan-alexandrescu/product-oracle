@@ -66,8 +66,14 @@ function CodeMapLine({ repo, map, onChange, sourceId }: { repo: string; map?: Co
   return (
     <li className="flex min-w-0 flex-col gap-1" data-testid={`code-map-${repo}`}>
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-        <span className="min-w-0 max-w-full truncate font-mono text-[13px] text-text" title={repo}>
-          {repo}
+        {/* Visual QA ST-7: what a code map is, beside the repository it maps (whatever buttons the role has). */}
+        <span className="flex min-w-0 max-w-full items-center gap-1">
+          <span className="min-w-0 truncate font-mono text-[13px] text-text" title={repo} data-testid="code-map-repo">
+            {repo}
+          </span>
+          <InfoTip label="code maps" align="start">
+            Oracle&apos;s short guide to a repository: its parts and where things live. Oracle reads it before changing the code.
+          </InfoTip>
         </span>
         {!map && <span className="text-text2">No code map yet</span>}
         {map && state && (
@@ -90,10 +96,6 @@ function CodeMapLine({ repo, map, onChange, sourceId }: { repo: string; map?: Co
               Map the code
             </Button>
           )}
-          {/* Visual QA ST-7: what a code map is, in one line. */}
-          <InfoTip label="code maps" align="end">
-            A code map is Oracle&apos;s short guide to a repository&apos;s code (its parts and where things live) that runs read before they change it.
-          </InfoTip>
           {usable && map.mine && map.sharing === "private" && can("share_code_map") && (
             <Button disabled={busy} onClick={() => void share("full")}>
               Share with the company

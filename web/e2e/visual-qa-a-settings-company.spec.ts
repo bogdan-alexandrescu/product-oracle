@@ -105,10 +105,26 @@ test("ST-7: Map the code and the Analytics title each have an (i)", async ({ pag
   await expect(line.getByRole("button", { name: "Map the code" })).toBeVisible();
   const tip = line.getByRole("button", { name: "About code maps" });
   await tip.click();
-  await expect(line.getByRole("tooltip")).toContainText("A code map is");
+  // Plain words: what it is and what Oracle does with it.
+  await expect(line.getByRole("tooltip")).toHaveText(
+    "Oracle's short guide to a repository: its parts and where things live. Oracle reads it before changing the code.",
+  );
   await page.goto("/settings/analytics");
   await expect(page.getByRole("heading", { level: 1, name: "Analytics" })).toBeVisible();
   await expect(page.getByRole("button", { name: "About analytics" })).toBeVisible();
+});
+
+test("ST-7: for a viewer on a phone the code map's (i) sits beside the repository's name", async ({ page }) => {
+  await page.setViewportSize(PHONE);
+  await login(page, VIEWER);
+  await page.goto("/settings/sources");
+  const line = page.getByRole("listitem", { name: "Example repo" }).getByTestId("code-map-example-org/example-app");
+  const name = await line.getByTestId("code-map-repo").boundingBox();
+  const tip = await line.getByRole("button", { name: "About code maps" }).boundingBox();
+  expect(name && tip).toBeTruthy();
+  // Right after the name, on its line, not pushed to the row's far end.
+  expect(tip!.x - (name!.x + name!.width)).toBeLessThan(12);
+  expect(Math.abs(tip!.y + tip!.height / 2 - (name!.y + name!.height / 2))).toBeLessThan(8);
 });
 
 test("CO-1: in a large company every decision number shows whole", async ({ page }) => {
