@@ -67,6 +67,16 @@ class NoBrief(ValueError):
 
 
 LAYER_LABEL = {"full": "Full", "brief": "Brief", "deck": "Deck"}
+# A document's kind as a sentence names it ("export the full PRD instead", E-15).
+KIND_LABEL = {
+    "prd": "PRD",
+    "roadmap": "roadmap",
+    "spec": "spec",
+    "vision": "vision",
+    "strategy": "strategy",
+    "update": "update",
+    "pricing": "pricing memo",
+}
 
 
 @dataclass
@@ -243,8 +253,8 @@ def apply_layer(ev: ExportVersion, layer: str) -> ExportVersion:
     brief = [s for s in ev.all_sections if s.layer == layers.BRIEF]
     if not brief:
         raise NoBrief(
-            f"version {ev.version.number} of '{ev.document.slug}' has no brief sections; "
-            "export the full document instead"
+            f"Version {ev.version.number} of {ev.document.title} has no brief: export the "
+            f"full {KIND_LABEL.get(ev.document.kind, 'document')} instead."
         )
     appendix = sources_keys(ev.all_sections)
     ev.sections = [
@@ -793,6 +803,22 @@ def _format_dt(value: datetime | None, zone: str) -> str:
     return company_time.stamp(value, zone) if value is not None else ""
 
 
+def snapshot_in_words(snapshot: str | None, zone: str, when=None) -> str:
+    """The version's sources snapshot as people read it (visual QA E-6): a moment through
+    ``when`` (the approval's own format; :func:`_format_dt` by default), a day as "Oct 16,
+    2026"; text that is neither keeps its words, its days month first."""
+    if not snapshot:
+        return ""
+    text = snapshot.strip()
+    try:
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+            return company_time.calendar_day_with_year(date.fromisoformat(text))
+        moment = datetime.fromisoformat(text)
+    except ValueError:
+        return days_in_words(text)
+    return (when or (lambda v: _format_dt(v, zone)))(moment)
+
+
 @dataclass
 class RenderedSection:
     key: str
@@ -877,7 +903,7 @@ def build_context(ev: ExportVersion) -> dict:
         "date": _format_dt(ev.date, ev.zone),
         "imported_at": _format_dt(v.created_at, ev.zone),
         "approved_at": _format_dt(v.approved_at, ev.zone),
-        "snapshot": v.snapshot,
+        "snapshot": snapshot_in_words(v.snapshot, ev.zone),
         "has_title_section": any(s.level == 1 for s in ev.sections),
         "sections": sections,
         "footnotes": [f for f in footnotes if f.key not in ev.added_citations],
@@ -1205,10 +1231,10 @@ def build_themed_context(ev: ExportVersion) -> dict:
         "number": v.number,
         "latest_number": ev.latest_number,
         "status": ev.status,
-        "as_of": v.snapshot or when(ev.date),
+        "as_of": snapshot_in_words(v.snapshot, ev.zone, when) or when(ev.date),
         "imported_at": when(v.created_at),
         "approved_at": when(v.approved_at),
-        "snapshot": v.snapshot,
+        "snapshot": snapshot_in_words(v.snapshot, ev.zone, when),
         "template": ev.document.template,
         "template_name": ev.template_name,
         "template_version": ev.document.template_version,

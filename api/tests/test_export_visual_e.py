@@ -126,7 +126,10 @@ async def test_e8_a_long_title_fits_the_title_slide_and_the_footer_the_slide(cli
     assert title.top + title.height <= sub.top, "the title runs over the subtitle"
     for slide in prs.slides:
         footer = next(
-            sh for sh in slide.shapes if sh.has_text_frame and "Version 1" in sh.text_frame.text
+            sh
+            for sh in slide.shapes
+            if sh.has_text_frame
+            and "Version 1" in sh.text_frame.text
             and sh.top >= pptx_module.FOOTER_TOP
         )
         text = footer.text_frame.text
@@ -140,9 +143,12 @@ async def test_e8_a_long_title_fits_the_title_slide_and_the_footer_the_slide(cli
 async def test_e9_a_long_section_goes_on_continuation_slides(client, long_doc):
     deck = (await client.get(f"{BASE}/deck", headers=long_doc)).json()
     headings = [s["heading"] for s in deck["slides"]]
-    assert "Top risks (1 of 2)" in headings and "Top risks (2 of 2)" in headings
     risks = [s for s in deck["slides"] if s["heading"].startswith("Top risks")]
-    assert [s["section_key"] for s in risks] == ["top-risks", "top-risks"]
+    n = len(risks)
+    assert n >= 2 and [s["heading"] for s in risks] == [
+        f"Top risks ({i} of {n})" for i in range(1, n + 1)
+    ], headings
+    assert {s["section_key"] for s in risks} == {"top-risks"}
     shown = " ".join(_visible(s["html"]) for s in risks)
     for i in range(1, 14):
         assert shown.count(f"Risk {i}:") == 1, i
@@ -153,7 +159,7 @@ async def test_e9_a_long_section_goes_on_continuation_slides(client, long_doc):
     resp = await client.get(f"{BASE}/export?layer=deck&format=pptx", headers=long_doc)
     prs = Presentation(io.BytesIO(resp.content))
     titles = [_pptx_texts(resp.content)[i][0] for i in range(1, len(prs.slides))]
-    assert "Top risks (1 of 2)" in titles and "Top risks (2 of 2)" in titles
+    assert [t for t in titles if t.startswith("Top risks")] == [s["heading"] for s in risks]
     for n, slide in enumerate(prs.slides, start=1):
         for sh in slide.shapes:
             if sh.top < pptx_module.FOOTER_TOP:

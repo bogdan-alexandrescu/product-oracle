@@ -36,7 +36,9 @@ from oracle.export.render import (
     _themed_markdown,
     absolute_doc_links,
     brand_dark,
+    days_in_words,
     section_body_html,
+    snapshot_in_words,
     sources_keys,
     token_vars,
     unlink_missing,
@@ -49,6 +51,12 @@ SOURCES_PER_SLIDE = 8
 # Past these, a slide's type is set smaller so the section still fits.
 DENSE_CHARS = 520
 DENSE_ROWS = 6
+# A slide holds about this many lines of its smaller (dense) type below its title, in the
+# PPTX (16 pt across 11.7 in, 5.4 in high) and the HTML deck (17 px across 840 px, 394 px
+# high), whichever is tighter; a section past it goes on continuation slides ("Top risks
+# (2 of 2)", visual QA E-9), never past the slide's edge or clipped.
+SLIDE_LINES = 15
+LINE_CHARS = 95
 
 
 @dataclass
@@ -188,6 +196,175 @@ def _banner(ev: ExportVersion) -> str:
     return " · ".join(parts)
 
 
+_FENCE = re.compile(r"^\s*(```|~~~)")
+_ITEM = re.compile(r"^(?:[-*+]|\d{1,3}[.)])\s")
+_TABLE_SEP = re.compile(r"^\s*\|?\s*:?-{2,}")
+
+
+@dataclass
+class _Unit:
+    """A piece of a slide body that is never split: a paragraph, a top-level list item
+    (with its sub-items), a table row, a code block; a heading goes with what follows."""
+
+    text: str
+    cost: float
+    group: int
+    kind: str  # block | item | row
+    header: str = ""  # a row's table header and separator, repeated on a continuation
+
+
+def _lines(text: str, chars: int = LINE_CHARS) -> float:
+    text = strip_citations(re.sub(r"\]\([^)]*\)", "]", text))
+    return sum(max(1, -(-len(line.strip()) // chars)) for line in text.splitlines() if line.strip())
+
+
+def _units(body: str) -> list[_Unit]:
+    units: list[_Unit] = []
+    group = 0
+    lines = body.splitlines()
+    i = 0
+    heading = ""
+    while i < len(lines):
+        line = lines[i]
+        if not line.strip():
+            group += 1
+            i += 1
+            continue
+        if _FENCE.match(line):
+            j = i + 1
+            while j < len(lines) and not _FENCE.match(lines[j]):
+                j += 1
+            text = "\n".join(lines[i : j + 1])
+            units.append(_Unit(heading + text, len(text.splitlines()) + 0.4, group, "block"))
+            heading = ""
+            i = j + 1
+            group += 1
+            continue
+        if line.lstrip().startswith("#"):
+            heading += line + "\n\n"
+            i += 1
+            group += 1
+            continue
+        if line.lstrip().startswith("|"):
+            j = i
+            while j < len(lines) and lines[j].lstrip().startswith("|"):
+                j += 1
+            rows = lines[i:j]
+            head = rows[:2] if len(rows) > 1 and _TABLE_SEP.match(rows[1]) else []
+            header = "\n".join(head)
+            cols = max(1, rows[0].strip().strip("|").count("|") + 1)
+            for k, row in enumerate(rows[len(head) :]):
+                longest = max(
+                    (len(c.strip()) for c in row.strip().strip("|").split("|")), default=0
+                )
+                cost = 1.2 * max(1, -(-longest // max(1, LINE_CHARS // cols)))
+                text = (heading + header + "\n" if k == 0 and header else "") + row
+                units.append(
+                    _Unit(text, cost + (1.2 if k == 0 and header else 0), group, "row", header)
+                )
+                heading = ""
+            i = j
+            group += 1
+            continue
+        j = i + 1
+        if _ITEM.match(line):
+            while j < len(lines) and lines[j].strip() and (lines[j][:1].isspace()):
+                j += 1
+            kind = "item"
+        else:
+            while (
+                j < len(lines)
+                and lines[j].strip()
+                and not lines[j].lstrip().startswith(("|", "#"))
+                and not _ITEM.match(lines[j])
+                and not _FENCE.match(lines[j])
+            ):
+                j += 1
+            kind = "block"
+        text = "\n".join(lines[i:j])
+        units.append(
+            _Unit(heading + text, _lines(text) + 0.4 + (1.5 if heading else 0), group, kind)
+        )
+        heading = ""
+        i = j
+    if heading:
+        units.append(_Unit(heading.strip(), 1.5, group + 1, "block"))
+    return units
+
+
+def _pack(units: list[_Unit], budget: float) -> list[list[_Unit]]:
+    pages: list[list[_Unit]] = [[]]
+    used = 0.0
+    for u in units:
+        if pages[-1] and used + u.cost > budget:
+            pages.append([])
+            used = 0.0
+        pages[-1].append(u)
+        used += u.cost
+    return pages
+
+
+def _join(page: list[_Unit]) -> str:
+    out = ""
+    prev: _Unit | None = None
+    for u in page:
+        text = u.text
+        if prev is None and u.kind == "row" and u.header and u.header not in text:
+            text = u.header + "\n" + text
+        if prev is not None:
+            close = prev.group == u.group and u.kind == prev.kind and u.kind in ("item", "row")
+            out += "\n" if close else "\n\n"
+        out += text
+        prev = u
+    return out
+
+
+def slide_pages(body: str, budget: float = SLIDE_LINES) -> list[str]:
+    """``body`` as the slides it needs (E-9): itself when it fits one slide, else split
+    between paragraphs, list items or table rows (a table's header on each), as evenly as
+    the pieces allow."""
+    units = _units(body)
+    total = sum(u.cost for u in units)
+    if total <= budget or len(units) < 2:
+        return [body]
+    count = len(_pack(units, budget))
+    # The same number of slides, filled evenly: never one full slide and a last line.
+    even = max(total / count, max(u.cost for u in units))
+    while len(pages := _pack(units, even)) > count:
+        even += 0.5
+    return [_join(p) for p in pages if p]
+
+
+# A goal's code and its name where the PRD names it: "**G2 (retention)**", "G2 (Retention)".
+_GOAL_NAMED = re.compile(r"\b(G\d{1,3})\b\**\s*\(([A-Za-z][^()\n]{0,40})\)")
+_GOAL_CELL = re.compile(r"(?<=\|)([ \t]*)(G\d{1,3})([ \t]*)(?=\|)")
+
+
+def goal_names(sections: list[Section]) -> dict[str, str]:
+    """Each goal code the version names, with its name ("G2" -> "Retention"): what the Goal
+    trace says, read once for the deck."""
+    out: dict[str, str] = {}
+    for s in sections:
+        for m in _GOAL_NAMED.finditer(f"{s.heading}\n{s.body_md or ''}"):
+            name = m.group(2).strip()
+            out.setdefault(m.group(1), name[:1].upper() + name[1:])
+    return out
+
+
+def with_goal_names(body: str, names: dict[str, str]) -> str:
+    """A table cell holding only a goal's code shows its name too ("G2 Retention", E-12)."""
+    if not names:
+        return body
+    return _GOAL_CELL.sub(
+        lambda m: (
+            f"{m.group(1)}{m.group(2)} {names[m.group(2)]}{m.group(3)}"
+            if m.group(2) in names
+            else m.group(0)
+        ),
+        body,
+    )
+
+
 def _state_kind(state) -> str:
     return "added" if state.added else ("decided" if state.decided else "proposed")
 
@@ -234,6 +411,65 @@ def _grouped(ev: ExportVersion, brief: list[Section]) -> list[tuple[Section, str
     return out
 
 
+def _section_slide(
+    ev: ExportVersion,
+    s: Section,
+    raw: str,
+    body: str,
+    heading: str,
+    index: int,
+    *,
+    dense: bool,
+    refs: list,
+    by_key: dict[str, Section],
+    on_slides: set[str],
+    detail_keys: set[str],
+) -> Slide:
+    """One slide of a brief section: ``body`` (all of it, or one page of it); its notes
+    from ``raw`` (the first page's only), its Expand items for the details ``body`` links."""
+    all_keys = set(by_key)
+    expand = []
+    for key in layers.linked_sections(body):
+        if key not in detail_keys:
+            continue
+        parts = []
+        for sub in layers.subtree(refs, key):
+            d = by_key[sub]
+            level = min(max(d.level, 2), 4)
+            body_html = section_body_html(
+                ev,
+                sub,
+                layers.slide_body(d.body_md or ""),
+                lambda text: str(_render_md(text, all_keys)),
+            )
+            parts.append(
+                f'<section class="expand-section" data-section-key="{escape(sub)}">'
+                f"<h{level}>{escape(_plain_heading(d))}</h{level}>"
+                f"{body_html}</section>"
+            )
+        expand.append(ExpandItem(key, _plain_heading(by_key[key]), Markup("".join(parts))))
+    rows = body.count("\n|")
+    states = ev.spec_states.get(s.section_key) or []
+    notes = layers.presenter_notes(raw) if raw else None
+    return Slide(
+        index=index,
+        kind="section",
+        heading=heading,
+        body_md=body,
+        section_key=s.section_key,
+        notes=days_in_words(notes) if notes else None,
+        body_html=Markup(
+            section_body_html(
+                ev, s.section_key, body, lambda text: str(_render_md(text, on_slides))
+            )
+        ),
+        expand=expand,
+        dense=dense or len(body) > DENSE_CHARS or rows > DENSE_ROWS,
+        state=states[0].label if states else None,
+        state_kind=_state_kind(states[0]) if states else None,
+    )
+
+
 def build_deck(ev: ExportVersion) -> Deck:
     """Slides for ``ev`` (already restricted to the brief layer by ``apply_layer``)."""
     appendix = sources_keys(ev.all_sections)
@@ -241,53 +477,23 @@ def build_deck(ev: ExportVersion) -> Deck:
     refs = [layers.SectionRef(s.section_key, s.level) for s in ev.all_sections]
     by_key = {s.section_key: s for s in ev.all_sections}
     on_slides = {s.section_key for s in brief}
-    all_keys = set(by_key)
     detail_keys = {s.section_key for s in ev.all_sections if s.layer != layers.BRIEF} - appendix
 
+    goals = goal_names(ev.all_sections)
     slides: list[Slide] = [Slide(index=1, kind="title", heading=ev.title)]
     for s, raw in _grouped(ev, brief):
-        body = layers.slide_body(raw)
-        expand = []
-        for key in layers.linked_sections(raw):
-            if key not in detail_keys:
-                continue
-            parts = []
-            for sub in layers.subtree(refs, key):
-                d = by_key[sub]
-                level = min(max(d.level, 2), 4)
-                body_html = section_body_html(
-                    ev,
-                    sub,
-                    layers.slide_body(d.body_md or ""),
-                    lambda text: str(_render_md(text, all_keys)),
-                )
-                parts.append(
-                    f'<section class="expand-section" data-section-key="{escape(sub)}">'
-                    f"<h{level}>{escape(_plain_heading(d))}</h{level}>"
-                    f"{body_html}</section>"
-                )
-            expand.append(ExpandItem(key, _plain_heading(by_key[key]), Markup("".join(parts))))
-        rows = body.count("\n|")
         states = ev.spec_states.get(s.section_key) or []
-        slides.append(
-            Slide(
-                index=len(slides) + 1,
-                kind="section",
-                heading=_plain_heading(s),
-                body_md=body,
-                section_key=s.section_key,
-                notes=layers.presenter_notes(raw),
-                body_html=Markup(
-                    section_body_html(
-                        ev, s.section_key, body, lambda text: str(_render_md(text, on_slides))
-                    )
-                ),
-                expand=expand,
-                dense=len(body) > DENSE_CHARS or rows > DENSE_ROWS,
-                state=states[0].label if states else None,
-                state_kind=_state_kind(states[0]) if states else None,
-            )
-        )
+        whole = with_goal_names(layers.slide_body(raw), goals)
+        pages = slide_pages(whole, SLIDE_LINES - (2 if states else 0))
+        for page, body in enumerate(pages, start=1):
+            heading = days_in_words(_plain_heading(s))
+            if len(pages) > 1:
+                heading += f" ({page} of {len(pages)})"
+            slides.append(
+                _section_slide(ev, s, raw if page == 1 else "", body, heading, len(slides) + 1,
+                               dense=len(pages) > 1, refs=refs, by_key=by_key,
+                               on_slides=on_slides, detail_keys=detail_keys)
+            )  # fmt: skip
 
     if ev.citations:
         cited = []
@@ -358,7 +564,8 @@ def build_deck(ev: ExportVersion) -> Deck:
         number=ev.version.number,
         latest_number=ev.latest_number,
         status=ev.status,
-        as_of=ev.version.snapshot or _moment(ev.date, ev.zone),
+        as_of=snapshot_in_words(ev.version.snapshot, ev.zone, lambda v: _moment(v, ev.zone))
+        or _moment(ev.date, ev.zone),
         banner=_banner(ev),
         source_label=ev.source_label,
         theme_key=theme.key if theme else None,
