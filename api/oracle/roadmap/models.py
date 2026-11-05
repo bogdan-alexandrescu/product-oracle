@@ -320,7 +320,12 @@ class RoadmapItem(Trashable, TenantScoped, Base):
     added items). One exception: restoring a feature from Trash adds its row to the
     published version and the one waiting for approval, when made while it was in Trash
     (so without it); older approved versions are left as approved
-    (oracle.simple.trash_items._onto_current); no existing row is changed.
+    (oracle.simple.trash_items._onto_current); no existing row is changed. A feature only
+    ever in a Simple draft is back in its draft and on no version, or, when that draft was
+    sent for review meanwhile, only on its version in review; when that draft was approved
+    meanwhile, in the roadmap's working draft (opened if needed), never the published
+    version. Approving a draft leaves its rows in Trash as they are: only the purge
+    deletes one.
     """
 
     __tablename__ = "roadmap_items"

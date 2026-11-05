@@ -715,6 +715,17 @@ async def test_a_feature_only_in_the_draft_is_restored_to_the_draft_only(client,
     assert [(str(r.id), r.roadmap_version_id) for r in rows] == [(iid, None)]
     # Back in the roadmap's working draft (when its own was approved, a new one).
     assert [d.status for d in drafts] == ["working"]
+    if then == "draft_approved":
+        # That draft is sent with it, and approving it publishes the feature.
+        assert drafts[0].id != uuid.UUID(d["id"])
+        url = f"/v1/simple/drafts/{drafts[0].id}"
+        r = await client.post(f"{url}/submit", headers=w.as_("decider"))
+        assert r.status_code == 200 and r.json()["status"] == "submitted", r.text
+        for who in ("decider", "approver"):
+            r = await client.post(f"{url}/approve", headers=w.as_(who))
+            assert r.status_code == 200, r.text
+        assert r.json()["status"] == "approved", r.text
+        assert "Guided setup" in {i["title"] for i in (await w.items(client, "viewer")).values()}
 
 
 @pytest.mark.asyncio

@@ -375,7 +375,9 @@ async def before_restore(db: AsyncSession, entry: TrashEntry) -> None:
             )
 
 
-async def after_restore(db: AsyncSession, entry: TrashEntry) -> list[dict[str, Any]]:
+async def after_restore(
+    db: AsyncSession, entry: TrashEntry, principal: Any = None
+) -> list[dict[str, Any]]:
     """A feature back on its roadmap's current version (:func:`_onto_current`); a goal's
     features' links and the items' goal_ids, exactly as before its delete moved them
     (``links`` and ``goal_ids`` on the entry; none when nothing was moved). Returns what
@@ -383,7 +385,7 @@ async def after_restore(db: AsyncSession, entry: TrashEntry) -> list[dict[str, A
     from oracle.simple import goal_buckets
 
     if entry.root_type == "feature":
-        return await _onto_current(db, entry)
+        return await _onto_current(db, entry, principal)
     if entry.root_type != "goal":
         return []
     for snap in entry.root.get("links") or []:
@@ -405,7 +407,46 @@ _OWN = frozenset({"id", "roadmap_version_id", "draft_roadmap_id", "simple_draft_
                   "trash_entry_id"})  # fmt: skip
 
 
-async def _onto_current(db: AsyncSession, entry: TrashEntry) -> list[dict[str, Any]]:
+async def _reopened(db: AsyncSession, row: RoadmapItem, principal: Any, entry: TrashEntry) -> Any:
+    """A feature only ever in a Simple draft that was approved while it was in Trash (so
+    without it): its row moves to the roadmap's open draft, the working one (opened on the
+    published version when there is none) or, while one waits for approval, that one; the
+    change that added it counts in that draft too, so the draft can be sent with it."""
+    from oracle.simple.additions import _shown_version
+    from oracle.simple.drafts import OPEN
+    from oracle.simple.models import SimpleChange, SimpleDraft
+
+    doc = row.roadmap_document_id
+    open_ = list(
+        await db.scalars(
+            select(SimpleDraft)
+            .where(SimpleDraft.document_id == doc, SimpleDraft.status.in_(OPEN))
+            .with_for_update()
+        )
+    )
+    d = next((x for x in open_ if x.status == "working"), None) or next(iter(open_), None)
+    if d is None:
+        me = getattr(principal, "id", None) or entry.deleted_by
+        base = await _shown_version(db, doc, draft=False)
+        d = SimpleDraft(document_id=doc, base_version_id=base, status="working", overlay={},
+                        created_by=me, participant_ids=[me])  # fmt: skip
+        db.add(d)
+        await db.flush()
+    row.simple_draft_id = d.id
+    for c in await db.scalars(
+        select(SimpleChange).where(
+            SimpleChange.op == "add_item", SimpleChange.target["item_id"].astext == str(row.id)
+        )
+    ):
+        if d.id not in (c.draft_ids or []):
+            c.draft_ids = [*(c.draft_ids or []), d.id]
+    await db.flush()
+    return d
+
+
+async def _onto_current(
+    db: AsyncSession, entry: TrashEntry, principal: Any = None
+) -> list[dict[str, Any]]:
     """A version published or proposed while the feature was in Trash was made without it:
     Restore puts a copy of its latest row on the roadmap's published version and on the
     version waiting for approval (a Simple draft in review, a Detailed change set's
@@ -414,8 +455,10 @@ async def _onto_current(db: AsyncSession, entry: TrashEntry) -> list[dict[str, A
     with; a version that can no longer be approved (withdrawn from review, superseded, or
     no longer the latest: only the latest is approved) is left as it is. A feature only
     ever in a Simple draft goes back to that draft and onto no version but the draft's
-    own version in review, when it was sent for review since. A dependency on a
-    key no longer on that version (nor in Trash) is dropped, and said."""
+    own version in review, when it was sent for review since; when that draft was approved
+    meanwhile, to the roadmap's open draft (:func:`_reopened`), never the published
+    version. A dependency on a key no longer on that version (nor in Trash) is dropped,
+    and said."""
     from oracle.docs.models import DocumentVersion
     from oracle.roadmap.models import RoadmapChangeSet, TrackMilestone
     from oracle.simple.additions import _shown_version
@@ -447,7 +490,9 @@ async def _onto_current(db: AsyncSession, entry: TrashEntry) -> list[dict[str, A
         # (approving it keeps the version's rows, not the draft's).
         own = rows[0].simple_draft_id
         sent = await db.get(SimpleDraft, own) if own else None
-        if sent is None or sent.status != "submitted" or sent.version_id is None:
+        if sent is None or sent.status not in ("working", "submitted"):
+            sent = await _reopened(db, rows[0], principal, entry)
+        if sent.status != "submitted" or sent.version_id is None:
             return []
         have, only = {sent.base_version_id} - {None}, {sent.version_id}
     newest = (

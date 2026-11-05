@@ -474,7 +474,7 @@ async def restore_entry(
         )
     from oracle.roadmap import alerts
 
-    dropped = await trash_items.after_restore(db, entry)
+    dropped = await trash_items.after_restore(db, entry, principal)
     await alerts.reopen_after_trash(db, entry.root.get("closed_alerts") or [])
     from oracle.requests import service as requests_service
 
