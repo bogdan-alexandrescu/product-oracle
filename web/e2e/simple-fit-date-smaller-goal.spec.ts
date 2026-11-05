@@ -25,7 +25,11 @@ async function readsTheEngine(page: Page, scenarioAt: keyof typeof plan.expect) 
   const want = plan.expect[scenarioAt];
   const rows = page.getByTestId("fit-ranked").locator('[data-testid^="fit-change-"]:not([data-testid="fit-change-lock"])');
   await expect(rows).toHaveCount(want.changes.length);
-  expect(await rows.evaluateAll((els) => els.map((el) => el.getAttribute("data-testid")))).toEqual(want.changes.map(([id]) => `fit-change-${id}`));
+  // Read until the answer settles: just after a goal is saved the sheet has closed while the
+  // previous target's rows (as many) still show, until the reloaded answer replaces them.
+  await expect
+    .poll(() => rows.evaluateAll((els) => els.map((el) => el.getAttribute("data-testid"))))
+    .toEqual(want.changes.map(([id]) => `fit-change-${id}`));
   for (const [id, days] of want.changes) await expect(page.getByTestId(`fit-change-${id}`)).toContainText(sooner(days as number));
   await expect(page.getByTestId("fit-meter-date")).toHaveText(words(want.pick_date));
 }
