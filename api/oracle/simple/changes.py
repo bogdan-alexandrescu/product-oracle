@@ -95,7 +95,13 @@ from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap import company as roadmap_company
 from oracle.roadmap.models import HORIZONS, RoadmapItem
 from oracle.simple import drafts, service
-from oracle.simple.models import RoadmapDateSuggestion, SimpleChange, SimpleDraft, SimpleSession
+from oracle.simple.models import (
+    RoadmapDateSuggestion,
+    SimpleChange,
+    SimpleChatCard,
+    SimpleDraft,
+    SimpleSession,
+)
 from oracle.simple.schemas import (
     InboxSimpleChange,
     SimpleChangeIn,
@@ -1631,6 +1637,21 @@ async def listing(
     return [_out(c, v, names) for c in shown]
 
 
+def _subject(c: SimpleChange, questions: dict[str, Any]) -> dict[str, Any]:
+    """What a proposal on no item is on (InboxSimpleChange's subject, question_id, line_id):
+    its PRD question by code and title, or its one-pager line as it read."""
+    if c.op in QUESTION_OPS:
+        d = questions.get(str(c.target.get("decision_id")))
+        if d is None:
+            return {}
+        code = (d.prd_question or {}).get("code") or ""
+        return {"subject": f"{code} {d.title}".strip(), "question_id": d.id}
+    if c.op == "edit_line":
+        line = " ".join(str((c.before or {}).get("line") or "").split())
+        return {"subject": line or None, "line_id": c.target.get("line_id")}
+    return {}
+
+
 async def _on_replaced_prds(db: AsyncSession, changes: list[SimpleChange]) -> set[uuid.UUID]:
     """simple-replaced-prds: the proposals waiting on an item of a replaced PRD, which leave
     Simple with the item (service.load); decided ones stay as history."""
@@ -1693,6 +1714,12 @@ async def inbox_rows(
             c
             for c in waiting
             if me in current_route(c, by_id, read_.deciders, owners, qs, c.session_id in met)
+            # A question decided since (on Decisions, in a meeting) leaves nothing to decide.
+            and not (
+                c.op in QUESTION_OPS
+                and (d := qs.get(str(c.target.get("decision_id")))) is not None
+                and d.status != "proposed"
+            )
         ]
     decided = [c for c in rows if c.status != "proposed"]
     if not waiting and not decided:
@@ -1707,16 +1734,56 @@ async def inbox_rows(
         r.id: r.title
         for r in await db.scalars(select(RoadmapItem).where(RoadmapItem.id.in_(item_ids)))
     }
+    # inbox-meeting-proposals fix: the PRD questions they are on (their code and title).
+    on_questions = await _questions(db, waiting + decided)
     names = await _names(db, {c.by for c in waiting + decided})
-    from oracle.simple import agenda
+    from oracle.simple import agenda, change_words
 
     asked = await agenda.meetings_of(db, {c.session_id for c in waiting + decided})
+    # inbox-meeting-proposals: whether I may accept or decline each waiting one now.
+    v = await _view(db, principal, waiting) if waiting else None
+    # inbox-meeting-proposals owner: the waiting ones asked through Ask Oracle (a card
+    # applied outside a meeting became the proposal).
+    via_ask = (
+        set(
+            await db.scalars(
+                select(SimpleChatCard.change_id).where(
+                    SimpleChatCard.change_id.in_([c.id for c in waiting]),
+                    SimpleChatCard.meeting_id.is_(None),
+                )
+            )
+        )
+        if waiting
+        else set()
+    )
+
+    def asked_of(c: SimpleChange, named: str | None) -> str:
+        if c.status == "proposed" and c.op in ("decide_question", "name_decider"):
+            how = "deciding" if c.op == "decide_question" else "who decides"
+            return f"proposed {how} {named or 'a question'}"
+        if c.status == "proposed" and c.op == "edit_line":
+            line = change_words._quoted((c.after or {}).get("line"))
+            return f"proposed new wording for a one-pager line{f': {line}' if line else ''}"
+        if c.status in ("proposed", "declined") and c.op == "add_feature_ask":
+            # Not filed in Requests until it is accepted.
+            ask = change_words._quoted((c.after or {}).get("title"))
+            return f"proposed the feature ask {ask}" if ask else "proposed a feature ask"
+        return change_words.phrase(c.op, c.target, c.before, c.after, named)
 
     def row(c: SimpleChange, at: datetime | None, state: str | None = None) -> InboxSimpleChange:
         iid = uuid.UUID(str(c.target["item_id"])) if c.target.get("item_id") else None
         m = asked.get(c.session_id) if c.session_id else None
+        title = titles.get(iid) if iid else None
+        on = _subject(c, on_questions)
+        named = title or (on.get("subject") if "question_id" in on else None)
         return InboxSimpleChange(
             from_meeting=SimpleChangeMeeting(id=m.id, title=m.title) if m else None,
+            # A question's proposal says the question; still to decide, it reads as proposed
+            # ("proposed deciding Q3 Offline mode scope"), once decided as done.
+            asked=asked_of(c, named),
+            can_decide=v is not None and c.status == "proposed" and v.may_decide(c),
+            from_ask=c.id in via_ask and m is None,
+            **on,
             id=c.id, op=c.op, status=c.status, item_id=iid,  # type: ignore[arg-type]
             item_title=titles.get(iid) if iid else None, document_id=c.document_id, by=c.by,
             by_name=names.get(c.by, "someone"), at=c.at, decided_by=c.decided_by,

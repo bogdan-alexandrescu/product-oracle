@@ -14,7 +14,7 @@ import { setPanelOpen, usePanelOpen } from "@/components/hop/open-state";
 import { SIMPLE_HOME, switchTarget } from "@/lib/experience";
 import { useMe } from "@/lib/me";
 import { api, unwrap } from "@/lib/api/client";
-import { loadWaiting, onWaitingChanged } from "@/lib/waiting";
+import { loadInbox, loadMyQuestions, loadWaiting, onWaitingChanged, waitingCount } from "@/lib/waiting";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string };
 
@@ -32,6 +32,8 @@ export const SIMPLE_DESTINATIONS: Dest[] = [
   { label: "Priorities", href: "/simple/priorities", icon: "priorities", testId: "simple-nav-priorities" },
   { label: "Meetings", href: "/simple/meetings", icon: "clock", testId: "simple-nav-meetings" },
   { label: "Decisions", href: "/simple/decisions", icon: "flag", testId: "simple-nav-decisions" },
+  // inbox-meeting-proposals owner: the one Inbox (Detailed's too), with every proposal waiting on me.
+  { label: "Inbox", href: "/inbox", icon: "inbox", testId: "simple-nav-inbox" },
 ];
 
 /** Phone tab bar: Home, One-pagers, Roadmap, Decisions, More (Detailed's pattern). */
@@ -44,11 +46,14 @@ function isActive(pathname: string, d: Dest): boolean {
 
 /**
  * The rail's yellow counts (S1 restyle, the owner's pick): only what waits on the signed-in
- * person, from the one list Home and Decisions read (home-waiting-one-list, GET
- * /v1/simple/decisions/waiting `items`), so a count always matches its page: Decisions counts
- * everything in it (its "Waiting for you"); Roadmap the roadmap's part (items with a broken
- * link, dates to confirm, proposals on my items, drafts for my approval); Meetings only a
- * meeting live now (an upcoming one waits on nobody). Read when the rail mounts, on a route
+ * person. Decisions and Roadmap read the one list Home and Decisions read (home-waiting-one-list,
+ * GET /v1/simple/decisions/waiting `items`), so a count always matches its page: Decisions counts
+ * everything in it (its "Waiting for you"); Roadmap the roadmap's part, its "Needs a decision"
+ * (items with a broken link once each, dates to confirm, proposals on my items). Meetings counts
+ * only a meeting live now (an upcoming one waits on nobody). Inbox counts what waits on me as
+ * /inbox's "N waiting" does (lib/waiting, inbox-meeting-proposals); what of it the Roadmap tab
+ * does not count already (Oracle's dates, goal suggestions, one-pager wordings, question
+ * proposals, versions waiting for my approval) is "Inbox beyond the tabs", which More sums. Read when the rail mounts, on a route
  * change and whenever something waiting changes.
  */
 function useSimpleCounts(enabled: boolean): Record<string, number> | null {
@@ -60,16 +65,25 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
-    loadWaiting()
-      .then((waiting) => {
+    // prd-questions: the Inbox counts the product decisions waiting for me too (Oracle's run approvals never).
+    Promise.all([loadWaiting(), loadInbox().catch(() => null), loadMyQuestions().catch(() => [])])
+      .then(([waiting, inbox, questions]) => {
         if (!alive) return;
         const items = waiting.items;
         // The Roadmap's count is its "Needs a decision" count: the items with broken links (one
         // per item, however many links), the dates to confirm and the proposals on my items.
         const broken = new Set(items.filter((i) => i.kind === "broken_link").map((i) => i.ref_id));
+        // What of the Inbox the Roadmap tab counts already: its proposals (inbox-meeting-proposals fix:
+        // a proposal on a PRD question or a one-pager line is not the roadmap's); a version waiting
+        // for my approval is not in Needs a decision, so it lights More.
+        const inboxRoadmap = inbox ? inbox.simple_proposals.filter((x) => !["decide_question", "name_decider", "edit_line"].includes(x.op)).length : 0;
+        const all = inbox ? waitingCount(inbox, questions) : 0;
         setCounts({
           Decisions: items.length,
           Roadmap: broken.size + items.filter((i) => i.kind === "date" || i.kind === "proposal").length,
+          Inbox: all,
+          // What waits in the Inbox beyond what the tabs count (More sums it).
+          "Inbox beyond the tabs": Math.max(0, all - inboxRoadmap),
         });
       })
       .catch(() => undefined);
@@ -214,11 +228,15 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
   const moreActive = moreDests.some((d) => isActive(pathname, d));
   // qa-simple-home-29: the phone shows the rail's counts too; More sums the counts in its sheet.
   const countOf = (d: Dest) => counts?.[d.label] ?? 0;
-  const moreCount = moreDests.reduce((sum, d) => sum + countOf(d), 0);
+  // inbox-meeting-proposals owner: the Inbox's count repeats what the tabs count (Roadmap's proposals), so More's sum takes
+  // only the rest of it (fix: Oracle's dates, a goal's suggestions, a one-pager wording, a question's proposal light More).
+  const summed = moreDests.filter((d) => d.label !== "Inbox");
+  const inboxRest = moreDests.some((d) => d.label === "Inbox") ? (counts?.["Inbox beyond the tabs"] ?? 0) : 0;
+  const moreCount = summed.reduce((sum, d) => sum + countOf(d), 0) + inboxRest;
   // qa4-simple-home-22: a count that needs nothing from you (Meetings with none live) is grey on the phone as on the rail; More is
   // yellow only when something in it waits on you.
   const quietOf = (d: Dest) => d.label === "Meetings" && !counts?.["Meetings live"];
-  const moreQuiet = moreDests.every((d) => countOf(d) === 0 || quietOf(d));
+  const moreQuiet = inboxRest === 0 && summed.every((d) => countOf(d) === 0 || quietOf(d));
   const tabBadge = (id: string, n: number, words: string, quiet = false) =>
     n > 0 && (
       <span id={id} data-testid={id} aria-label={words} title={words} className={`simple-count simple-count-tab tnum${quiet ? " simple-count-quiet" : ""}`}>

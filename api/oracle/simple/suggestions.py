@@ -191,6 +191,53 @@ async def visible(
     return out
 
 
+async def inbox_rows(
+    db: AsyncSession, principal: Any, seen: Any, rows: list[RoadmapDateSuggestion] | None = None
+) -> list[Any]:
+    """inbox-meeting-proposals fix: the open suggestions I may decide, one row per item (its
+    slices' span), newest first, for the Inbox. ``rows``: the open suggestions, newest
+    first, when the Inbox read them already (drafts.waiting)."""
+    from oracle.simple.schemas import InboxSimpleDateSuggestion
+
+    if getattr(principal, "user_id", None) is None or getattr(principal, "is_run", False):
+        return []
+    if rows is None:
+        rows = list(
+            await db.scalars(
+                select(RoadmapDateSuggestion)
+                .where(RoadmapDateSuggestion.status == "open")
+                .order_by(RoadmapDateSuggestion.created_at.desc())
+            )
+        )
+    if not rows:
+        return []
+    read = await service.load(db)
+    by_id = read.by_id()
+    per_item: dict[uuid.UUID, list[RoadmapDateSuggestion]] = defaultdict(list)
+    for s in rows:
+        per_item[s.item_id].append(s)
+    out = []
+    for item_id, ss in per_item.items():
+        e = by_id.get(item_id)
+        if e is None or not service.can_decide(principal, e, read.deciders):
+            continue
+        first = ss[0]
+        out.append(
+            InboxSimpleDateSuggestion(
+                id=first.id,
+                item_id=item_id,
+                item_title=e.row.title,
+                document_id=e.roadmap.id,
+                start_date=min(s.start_date for s in ss),
+                end_date=max(s.end_date for s in ss),
+                basis=first.basis,
+                at=first.created_at,
+                state="new" if seen is None or first.created_at > seen else "open",
+            )
+        )
+    return out
+
+
 async def accept(
     db: AsyncSession, principal: Any, suggestion_id: uuid.UUID, start: Any = None, end: Any = None
 ) -> Any:

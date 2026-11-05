@@ -53,7 +53,19 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
-from sqlalchemy import String, cast, delete, func, or_, select, update
+from sqlalchemy import (
+    Integer,
+    String,
+    and_,
+    cast,
+    column,
+    delete,
+    func,
+    or_,
+    select,
+    update,
+    values,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -68,6 +80,7 @@ from oracle.simple.models import (
     RoadmapDateSuggestion,
     SimpleChange,
     SimpleDraft,
+    SimpleGoalSuggestion,
     SimpleSession,
     SimpleSessionDraft,
 )
@@ -1559,21 +1572,78 @@ async def resume(db: AsyncSession, principal: Principal, draft_id: uuid.UUID):
 # --------------------------------------------------------------------------- inbox
 
 
-async def inbox_rows(db: AsyncSession, principal: Any, seen: Any) -> list[InboxSimpleApproval]:
-    """Versions from Simple drafts waiting for my approval as a required reviewer."""
+@dataclass
+class Waiting:
+    """What waits in Simple for someone to decide, read together for the Inbox."""
+
+    drafts: list[SimpleDraft] = field(default_factory=list)
+    dates: list[RoadmapDateSuggestion] = field(default_factory=list)
+    goals: list[SimpleGoalSuggestion] = field(default_factory=list)
+
+
+async def waiting(db: AsyncSession) -> Waiting:
+    """In one read: the submitted drafts (oldest first), Oracle's open date suggestions
+    (newest first) and the goals' open suggestions (oldest first). Each kind is outer-joined
+    on its own row of a three-row list, so none multiplies another and an empty kind leaves
+    one row of nulls; the tenant's and the trash's criteria land in each join's ON."""
+    kind = values(column("kind", Integer), name="kind").data([(1,), (2,), (3,)])
+    rows = await db.execute(
+        select(SimpleDraft, RoadmapDateSuggestion, SimpleGoalSuggestion)
+        .select_from(kind)
+        .outerjoin(SimpleDraft, and_(kind.c.kind == 1, SimpleDraft.status == "submitted"))
+        .outerjoin(
+            RoadmapDateSuggestion,
+            and_(kind.c.kind == 2, RoadmapDateSuggestion.status == "open"),
+        )
+        .outerjoin(
+            SimpleGoalSuggestion,
+            and_(kind.c.kind == 3, SimpleGoalSuggestion.status == "open"),
+        )
+    )
+    out = Waiting()
+    for d, s, g in rows:
+        if d is not None:
+            out.drafts.append(d)
+        if s is not None:
+            out.dates.append(s)
+        if g is not None:
+            out.goals.append(g)
+    out.drafts.sort(key=lambda d: (d.submitted_at is None, d.submitted_at or 0))
+    out.dates.sort(key=lambda s: s.created_at, reverse=True)
+    out.goals.sort(key=lambda g: (g.created_at, g.id))
+    return out
+
+
+async def inbox_rows(
+    db: AsyncSession, principal: Any, seen: Any, submitted: list[SimpleDraft] | None = None
+) -> list[InboxSimpleApproval]:
+    """Versions from Simple drafts waiting for my approval: as a required reviewer, or as
+    the decider (_approver_of) whose approval is not in yet. ``submitted``: the submitted
+    drafts, when :func:`waiting` read them already."""
     me = _me(principal)
     if me is None or getattr(principal, "run_token_id", None) is not None:
         return []
-    ds = list(
-        await db.scalars(
-            select(SimpleDraft)
-            .where(SimpleDraft.status == "submitted", SimpleDraft.waiting_on.contains([me]))
-            .order_by(SimpleDraft.submitted_at)
+    if submitted is None:
+        submitted = list(
+            await db.scalars(
+                select(SimpleDraft)
+                .where(SimpleDraft.status == "submitted")
+                .order_by(SimpleDraft.submitted_at)
+            )
         )
-    )
+    w = await who(db, {d.document_id for d in submitted})
+    ds = [
+        d
+        for d in submitted
+        if me in (d.waiting_on or [])
+        or (d.decider_approval is None and _approver_of(principal, d, w))
+    ]
     if not ds:
         return []
     docs, numbers = await _refs(db, ds)
+    from oracle.simple import changes
+
+    names = await changes._names(db, {d.submitted_by for d in ds if d.submitted_by})
     return [
         InboxSimpleApproval(
             draft_id=d.id,
@@ -1584,6 +1654,7 @@ async def inbox_rows(db: AsyncSession, principal: Any, seen: Any) -> list[InboxS
             ),
             version=numbers.get(d.version_id),
             submitted_by=d.submitted_by,
+            submitted_by_name=names.get(d.submitted_by) if d.submitted_by else None,
             submitted_at=d.submitted_at,
             decider_approved=d.decider_approval is not None,
             state="new" if seen is None or (d.submitted_at and d.submitted_at > seen) else "open",

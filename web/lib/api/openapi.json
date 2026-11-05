@@ -81742,6 +81742,22 @@
             "title": "Simple Approvals",
             "default": []
           },
+          "simple_date_suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/InboxSimpleDateSuggestion"
+            },
+            "type": "array",
+            "title": "Simple Date Suggestions",
+            "default": []
+          },
+          "simple_goal_suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/InboxSimpleGoalSuggestion"
+            },
+            "type": "array",
+            "title": "Simple Goal Suggestions",
+            "default": []
+          },
           "simple_minutes": {
             "items": {
               "$ref": "#/components/schemas/InboxSimpleMinutes"
@@ -82446,6 +82462,17 @@
             ],
             "title": "Submitted By"
           },
+          "submitted_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted By Name"
+          },
           "submitted_at": {
             "anyOf": [
               {
@@ -82667,6 +82694,61 @@
                 "type": "null"
               }
             ]
+          },
+          "asked": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asked"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          },
+          "from_ask": {
+            "type": "boolean",
+            "title": "From Ask",
+            "default": false
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "question_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Id"
+          },
+          "line_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line Id"
           }
         },
         "type": "object",
@@ -82688,6 +82770,142 @@
         ],
         "title": "InboxSimpleChange",
         "description": "A proposal waiting for me (``simple_proposals``) or a decision on my proposal\n(``simple_decisions``)."
+      },
+      "InboxSimpleDateSuggestion": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Item Id"
+          },
+          "item_title": {
+            "type": "string",
+            "title": "Item Title"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "title": "End Date"
+          },
+          "basis": {
+            "type": "string",
+            "title": "Basis"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "open"
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "item_id",
+          "item_title",
+          "document_id",
+          "start_date",
+          "end_date",
+          "basis",
+          "at",
+          "state"
+        ],
+        "title": "InboxSimpleDateSuggestion",
+        "description": "inbox-meeting-proposals fix: Oracle's open date suggestion on an item I may decide\n(``simple_date_suggestions``, counted in ``total``): one row per item, its slices'\nspan; decided on the item's roadmap."
+      },
+      "InboxSimpleGoalSuggestion": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "goal": {
+            "$ref": "#/components/schemas/SimpleGoalBrief"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "outcome": {
+            "type": "string",
+            "title": "Outcome"
+          },
+          "from_oracle": {
+            "type": "boolean",
+            "title": "From Oracle"
+          },
+          "proposed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Name"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "open"
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "goal",
+          "title",
+          "outcome",
+          "from_oracle",
+          "at",
+          "state"
+        ],
+        "title": "InboxSimpleGoalSuggestion",
+        "description": "inbox-meeting-proposals fix: an open feature suggested for a goal whose suggestions\nI decide (``simple_goal_suggestions``, counted in ``total``)."
       },
       "InboxSimpleMinutes": {
         "properties": {

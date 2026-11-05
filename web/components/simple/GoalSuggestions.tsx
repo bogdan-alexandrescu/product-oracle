@@ -9,6 +9,7 @@ import { openFeaturePanel } from "@/components/simple/FeaturePanelHost";
 import { useCompanyZone, zoneDateTime } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
+import { reloadWaiting } from "@/lib/waiting";
 
 import { FlowDetail } from "./Flow";
 
@@ -68,17 +69,21 @@ export function useGoalSuggestions(onChanged?: () => unknown): GoalSuggestionsAp
     return () => window.clearTimeout(t);
   }, [pending, q.data, reload]);
 
-  const after = async () => {
-    await q.reload();
-    await onChanged?.();
-  };
+  // An open suggestion waits in the Inbox: after an accept, a reject or an undo, the rail's
+  // and More's counts read again at once.
+  const after = () =>
+    reloadWaiting(async () => {
+      await q.reload();
+      await onChanged?.();
+    });
+  const reloadList = () => reloadWaiting(() => q.reload());
   // Undo of a decline: the suggestion is open again.
   const undo = (s: GoalSuggestion) => ({
     label: "Undo",
     onClick: () =>
       void api.POST("/v1/simple/goal-suggestions/{suggestion_id}/reopen", { params: { path: { suggestion_id: s.id } } }).then(async (r) => {
         if (!r.data) toast({ message: detailOf(r.error) });
-        await q.reload();
+        await reloadList();
       }),
   });
 
@@ -124,13 +129,13 @@ export function useGoalSuggestions(onChanged?: () => unknown): GoalSuggestionsAp
     duplicate: async (s, m) => {
       const r = await api.POST("/v1/simple/goal-suggestions/{suggestion_id}/reject", { params: { path: { suggestion_id: s.id } }, body: { reason: `Same as ${lookName(m)}` } });
       toast({ place: "rail", message: r.data ? `Declined ${s.title} as a duplicate of ${lookName(m)}` : detailOf(r.error), action: r.data ? undo(s) : undefined });
-      await q.reload();
+      await reloadList();
     },
     reject: async (s, reason) => {
       const r = await api.POST("/v1/simple/goal-suggestions/{suggestion_id}/reject", { params: { path: { suggestion_id: s.id } }, body: { reason: reason.trim() || null } });
       // Every decline can be undone; the message sits top left, clear of an open drawer.
       toast({ place: "rail", message: r.data ? `Rejected ${s.title}: Oracle will not suggest it again` : detailOf(r.error), action: r.data ? undo(s) : undefined });
-      await q.reload();
+      await reloadList();
     },
   };
 }

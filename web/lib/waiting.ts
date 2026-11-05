@@ -81,3 +81,14 @@ export function onWaitingChanged(fn: () => void): () => void {
 export function invalidateWaiting() {
   cache.clear();
 }
+
+/**
+ * After an action that changed what waits on me: the page's own `reload` and the rail's and
+ * More's counts read again at once, sharing one Inbox call.
+ */
+export async function reloadWaiting(reload: () => Promise<unknown>): Promise<void> {
+  invalidateWaiting();
+  const reloaded = reload();
+  waitingChanged();
+  await reloaded;
+}
