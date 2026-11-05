@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
@@ -173,14 +174,18 @@ export function EngReview({
   // Only who can decide: the engineering lead once one is named, else the stop's role.
   const waitsFor = cp.lead_stop ? "Waits for the engineering lead" : `Waits for an ${cp.approver_role}`;
 
-  // Every briefs problem is file-level (oracle.engineering.check): nothing to decide, only Send back.
-  const unreadable = check.problems.length > 0;
+  // Every briefs problem is file-level (oracle.engineering.check): nothing to decide. A feature in no
+  // PRD yet is added to one from its Ground Truth feature; any other problem means Send back.
+  const noPrd = check.problems.filter((p) => p.code === "dependency_in_no_prd");
+  const unreadable = check.problems.length > noPrd.length;
   const tally = unreadable
     ? "The briefs could not be read"
     : `${decided} of ${check.features.length} decided${blockingQuestions ? ` · ${plural(blockingQuestions, "blocking question")}` : ""}`;
   const approveWhy = unreadable
     ? "Send the briefs back to the architect to write them again"
-    : !gateOpen
+    : noPrd.length
+      ? "Add each feature in no PRD yet to a PRD first"
+      : !gateOpen
       ? "Give each feature a verdict and answer each blocking question first"
       : null;
 
@@ -201,12 +206,34 @@ export function EngReview({
           </>
         }
       />
-      {check.problems.length > 0 && (
+      {unreadable && (
         <div role="alert" data-testid="briefs-problem" className="mb-4 rounded-panel border border-crit bg-crit-soft px-4 py-3 text-[15px]">
           <p className="font-semibold">The briefs could not be read: send them back to the architect.</p>
           <ul className="mt-1 list-disc pl-5">
-            {check.problems.map((p, i) => (
-              <li key={i}>{p.message}</li>
+            {check.problems
+              .filter((p) => p.code !== "dependency_in_no_prd")
+              .map((p, i) => (
+                <li key={i}>{p.message}</li>
+              ))}
+          </ul>
+        </div>
+      )}
+      {noPrd.length > 0 && (
+        <div role="alert" data-testid="briefs-no-prd" className="mb-4 rounded-panel border border-warn bg-warn-bg px-4 py-3 text-[15px]">
+          <p className="font-semibold">Features in no PRD yet</p>
+          <ul className="mt-1 list-disc pl-5">
+            {noPrd.map((p, i) => (
+              <li key={i} data-testid="no-prd-item">
+                {p.message}
+                {p.entity && (
+                  <>
+                    {" · "}
+                    <Link href={`/baseline?entity=${encodeURIComponent(p.entity)}`} className="font-semibold text-accent-ink hover:underline">
+                      Add it to a PRD
+                    </Link>
+                  </>
+                )}
+              </li>
             ))}
           </ul>
         </div>

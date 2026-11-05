@@ -2007,14 +2007,20 @@ const seedEngCheckCrossPrd = () =>
 /**
  * cross-prd-followups "eng-check-no-prd" scenario: the "eng-check" run whose first brief also
  * depends on Export logs, a Ground Truth feature no PRD holds, and whose second depends on a code
- * Oracle cannot find: the check names both plainly, as oracle.engineering.check does.
+ * Oracle cannot find: the check names both plainly, as oracle.engineering.check does, and links
+ * Export logs to its Ground Truth feature (where it is added to a PRD).
  */
-const seedEngCheckNoPrd = () =>
-  seedEngCheckWith("eng-check-no-prd", (check) => {
+const seedEngCheckNoPrd = () => {
+  const entity = stableUuid("eng-check-no-prd/export-logs");
+  const db = seedEngCheckWith("eng-check-no-prd", (check) => {
     const briefs = (check as unknown as { features: Parameters<typeof briefsCheckOf>[0] }).features;
     const linked = briefs.map((b, i) => (i === 0 ? { ...b, depends_on: [...b.depends_on, "export-logs"] } : i === 1 ? { ...b, depends_on: [...b.depends_on, "made-up-feature"] } : b));
-    Object.assign(check, briefsCheckOf(linked, undefined, undefined, {}, { "export-logs": "Export logs" }));
+    Object.assign(check, briefsCheckOf(linked, undefined, undefined, {}, { "export-logs": { name: "Export logs", entity } }));
   });
+  const at = "2026-10-20T15:00:00Z";
+  db.baseline.entities.push({ id: entity, type: "feature", key: "export-logs", title: "Export logs", body: "People download their activity log as a file.", attrs: {}, status: "confirmed", origin: "user", locked: false, locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: at, updated_at: at });
+  return db;
+};
 
 /** "eng-check-long-key" scenario: the "eng-check" run whose first brief has a long key with no break in it. */
 const seedEngCheckLongKey = () =>

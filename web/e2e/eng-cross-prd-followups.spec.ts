@@ -15,6 +15,11 @@ import { login } from "./helpers";
  *   it later) or names it by its key.
  * - "unknown": protects=an unknown dependency names the brief's feature by name and code and what
  *   was not found; fails_when=it reads "features[1] (f.sample-data): depends on ...".
+ * - "own heading": protects=a feature in no PRD yet is listed under its own heading, "Features in no
+ *   PRD yet", with a link that adds it to a PRD, and not under "The briefs could not be read: send
+ *   them back"; fails_when=it is listed with the unreadable briefs (PR 1284 review).
+ * - "add to a PRD": protects=the link opens the Ground Truth feature, where it is added to a PRD;
+ *   fails_when=there is no way from the check to the feature.
  * - "phone": the same at 390 px, with nothing scrolling sideways.
  */
 
@@ -30,16 +35,29 @@ async function openCheck(page: Page) {
 }
 
 async function checkProblems(page: Page) {
+  const noPrd = page.getByTestId("briefs-no-prd");
+  await expect(noPrd.getByText("Features in no PRD yet", { exact: true })).toBeVisible();
+  const item = noPrd.getByTestId("no-prd-item");
+  await expect(item).toHaveCount(1);
+  await expect(item).toContainText("Export logs is in no PRD yet: Guided setup depends on it");
+  await expect(item.getByRole("link", { name: "Add it to a PRD" })).toBeVisible();
   const problems = page.getByTestId("briefs-problem");
-  await expect(problems.filter({ hasText: "Export logs is in no PRD yet: Guided setup depends on it" })).toHaveCount(1);
+  await expect(problems).not.toContainText("Export logs");
   await expect(problems.filter({ hasText: 'Sample data (f.sample-data) depends on "made-up-feature", a feature Oracle cannot find in any PRD or in Ground Truth' })).toHaveCount(1);
   await expect(page.getByText(/features\[\d\]/)).toHaveCount(0);
   await expect(page.getByText("export-logs")).toHaveCount(0);
 }
 
-test("no PRD and unknown: the Engineering check names a feature in no PRD and an unknown dependency in words", async ({ page }) => {
+test("no PRD, unknown and own heading: the Engineering check names a feature in no PRD under its own heading and an unknown dependency in words", async ({ page }) => {
   await openCheck(page);
   await checkProblems(page);
+});
+
+test("add to a PRD: the link opens Export logs in Ground Truth", async ({ page }) => {
+  await openCheck(page);
+  await page.getByTestId("no-prd-item").getByRole("link", { name: "Add it to a PRD" }).click();
+  await expect(page).toHaveURL(/\/baseline\?entity=[0-9a-f-]+$/);
+  await expect(page.getByRole("dialog", { name: "Export logs" })).toBeVisible();
 });
 
 test("phone: at 390 px both problems read in words and nothing scrolls sideways", async ({ page }) => {

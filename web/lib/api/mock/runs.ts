@@ -3961,7 +3961,7 @@ export const ROADMAP_FILE_PROBLEM_RUN: { run: RunOut; artifacts: Record<string, 
 // ---------------------------------------------------------------- F4 Engineering check
 
 type Brief = { key: string; title: string; approach: string; size: string; depends_on: string[]; questions: { id: string; question: string; blocking: boolean }[] };
-type BriefsCheck = { features: Brief[]; problems: { code: string; message: string; feature?: string | null; features?: string[] }[]; code_map_used: boolean; unmapped_repos: string[]; unnamed_repo: boolean; elsewhere?: Record<string, string> };
+type BriefsCheck = { features: Brief[]; problems: { code: string; message: string; feature?: string | null; features?: string[]; entity?: string }[]; code_map_used: boolean; unmapped_repos: string[]; unnamed_repo: boolean; elsewhere?: Record<string, string> };
 const SIZES = ["xs", "s", "m", "l", "xl"];
 const VERDICTS = ["feasible", "feasible_with_changes", "not_feasible"];
 const VERDICT_WORDS: Record<string, string> = { feasible: "Feasible", feasible_with_changes: "Feasible with changes", not_feasible: "Not feasible as scoped" };
@@ -3998,10 +3998,12 @@ type RunMaps = { ids: string[]; repos: string[] };
 /**
  * As oracle.engineering.check._summarize. `elsewhere`: the keys outside the feature set a brief may
  * depend on, named with their PRD (features of other PRDs on the company roadmap, or waived at the
- * feature set stop); `noPrd`: the Ground Truth features no PRD holds, by name (a brief depending on
- * one is told "Export logs is in no PRD yet"); any other dependency outside the set is unknown_dependency.
+ * feature set stop); `noPrd`: the Ground Truth features no PRD holds, by name and entity id (a brief
+ * depending on one is told "Export logs is in no PRD yet", with a link to it); any other dependency
+ * outside the set is unknown_dependency. Problems in the API's order: the briefs' own in file order,
+ * then the features in no PRD yet, then each unknown code map id once.
  */
-export function briefsCheckOf(briefs: Brief[], file?: BriefsMaps, maps?: RunMaps, elsewhere: Record<string, string> = {}, noPrd: Record<string, string> = {}): BriefsCheck {
+export function briefsCheckOf(briefs: Brief[], file?: BriefsMaps, maps?: RunMaps, elsewhere: Record<string, string> = {}, noPrd: Record<string, { name: string; entity: string }> = {}): BriefsCheck {
   const cited: Record<string, Record<string, string[]>> = {};
   for (const b of briefs) {
     for (const [ref, at] of file?.cites[b.key] ?? []) {
@@ -4026,7 +4028,7 @@ export function briefsCheckOf(briefs: Brief[], file?: BriefsMaps, maps?: RunMaps
     for (const d of b.depends_on) {
       if (keys.has(d)) continue;
       if (d in elsewhere) named[d] = elsewhere[d];
-      else if (d in noPrd) inNoPrd.push({ code: "dependency_in_no_prd", feature: b.key, message: `${noPrd[d]} is in no PRD yet: ${b.title} depends on it` });
+      else if (d in noPrd) inNoPrd.push({ code: "dependency_in_no_prd", feature: b.key, entity: noPrd[d].entity, message: `${noPrd[d].name} is in no PRD yet: ${b.title} depends on it` });
       else unknown.push({ code: "unknown_dependency", feature: b.key, message: `${b.title.trim() ? `${b.title.trim()} (${b.key})` : b.key} depends on "${d}", a feature Oracle cannot find in any PRD or in Ground Truth` });
     }
   }

@@ -131,8 +131,8 @@ export const STOP_HELP: Record<string, string> = {
 /** F4: the Engineering check of a Baseline to PRD run, as its checkpoint stores it (briefs_check). */
 export type BriefsCheck = {
   features: { key: string; title: string; approach: string; size: string; depends_on: string[]; questions: { id: string; question: string; blocking: boolean }[] }[];
-  /** An unknown code map id is one problem, with the features citing it. */
-  problems: { code: string; message: string; feature?: string | null; features?: string[] }[];
+  /** An unknown code map id is one problem, with the features citing it; a feature in no PRD yet (dependency_in_no_prd) its Ground Truth feature's id. */
+  problems: { code: string; message: string; feature?: string | null; features?: string[]; entity?: string }[];
   code_map_used: boolean;
   /** The repositories the briefs name that none of the run's code maps covers. */
   unmapped_repos?: string[];
