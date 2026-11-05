@@ -30,6 +30,9 @@ depends_on: str | Sequence[str] | None = None
 LOCK_TIMEOUT = "SET LOCAL lock_timeout = '5s'"
 TABLES = ("roadmap_items", "entities")
 CHECK = "ck_trash_entries_root_type"
+# 0046 named it through the naming convention, which prefixed it once more; a database the
+# models made carries CHECK. Either is dropped, and CHECK (the models' name) is added.
+OLD_CHECKS = ("ck_trash_entries_ck_trash_entries_root_type", CHECK)
 
 
 def upgrade() -> None:
@@ -53,7 +56,8 @@ def upgrade() -> None:
             ["tenant_id", "id"],
             postgresql_where=sa.text("deleted_at IS NOT NULL"),
         )
-    op.drop_constraint(CHECK, "trash_entries", type_="check")
+    for name in OLD_CHECKS:
+        op.execute(f"ALTER TABLE trash_entries DROP CONSTRAINT IF EXISTS {name}")
     op.execute(
         f"ALTER TABLE trash_entries ADD CONSTRAINT {CHECK} CHECK "
         "(root_type IN ('document', 'intake', 'run', 'feature', 'goal')) NOT VALID"
@@ -69,7 +73,8 @@ def downgrade() -> None:
         for name in ("trash_entry_id", "deleted_reason", "deleted_by", "deleted_at"):
             op.drop_column(table, name)
     op.execute("DELETE FROM trash_entries WHERE root_type IN ('feature', 'goal')")
-    op.drop_constraint(CHECK, "trash_entries", type_="check")
+    for name in OLD_CHECKS:
+        op.execute(f"ALTER TABLE trash_entries DROP CONSTRAINT IF EXISTS {name}")
     op.execute(
         f"ALTER TABLE trash_entries ADD CONSTRAINT {CHECK} CHECK "
         "(root_type IN ('document', 'intake', 'run'))"
