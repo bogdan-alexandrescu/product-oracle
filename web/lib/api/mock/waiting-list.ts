@@ -62,7 +62,8 @@ export async function waitingItems(get: (path: string) => Promise<unknown>, meId
   for (const i of roadmap?.items ?? []) {
     if (!i.can_decide) continue;
     for (const f of i.flags) {
-      if (f.state !== "red" || !f.fixes.length) continue;
+      // roadmap-decide: a broken link is a dependency link alone (waiting_list._roadmap, isBrokenLink).
+      if (f.state !== "red" || !f.fixes.length || (f.kind !== "dependency_order" && f.kind !== "cut_with_dependents")) continue;
       const dep = f.subject ? titles.get(f.subject) : undefined;
       out.push({
         kind: "broken_link",
