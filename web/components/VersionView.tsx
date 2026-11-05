@@ -1232,7 +1232,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
               {dateWarnings.length > 0 && (
                 <Link href={datesHref(lackingDays)} data-testid="dates-lacking" className="inline-flex">
                   <Chip kind="warn">
-                    {lackingCount} date{lackingCount === 1 ? " lacks" : "s lack"} a basis
+                    {lackingCount} date{lackingCount === 1 ? " lacks" : "s lack"} a date source
                   </Chip>
                 </Link>
               )}

@@ -8,6 +8,7 @@ import {
   Button,
   Chip,
   confirmInPage,
+  InfoTip,
   Inspector,
   InspectorSection,
   Notice,
@@ -469,13 +470,17 @@ export function TrackPanel({
               )}
               {starting && <StartRunDialog trackId={track.id} prdTitle={track.title} onClose={() => setStarting(false)} />}
               {may.push && pushOff && (
-                <span className="flex basis-full flex-wrap items-center gap-2">
+                // B-24: the disabled button keeps its reason, in its tooltip and (i), not inline.
+                <span className="inline-flex items-center gap-1" title={pushOff}>
                   <Button disabled aria-describedby={pushWhy} data-testid="track-push">
                     Push to tracker
                   </Button>
-                  <span id={pushWhy} className="text-sm text-text2">
+                  <span id={pushWhy} className="sr-only">
                     {pushOff}
                   </span>
+                  <InfoTip label="Push to tracker" testId="track-push-why">
+                    {pushOff}
+                  </InfoTip>
                 </span>
               )}
               {may.push && !pushOff && (

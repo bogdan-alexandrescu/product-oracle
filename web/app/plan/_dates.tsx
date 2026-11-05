@@ -78,6 +78,9 @@ export function DatesTab() {
     return named.find((i) => i.prd?.id === prd)?.title ?? (titles.size === 1 ? named[0].title : undefined);
   };
   const prdTitle = (id: string) => prds.data?.find((d) => d.id === id)?.title ?? "PRD";
+  // B-07: what a date source's date is for, as people know it; its reference comes second.
+  const subjectOf = (b: Basis) =>
+    b.item_key ? (itemTitle(b.prd_document_id, b.item_key) ?? b.item_key) : b.tracker_key ? `Items of ${b.tracker_key}` : prdTitle(b.prd_document_id);
   const who = (id: string | null | undefined) => (id ? (names.get(id) ?? "a member") : "a member");
 
   async function verify(b: Basis) {
@@ -93,10 +96,17 @@ export function DatesTab() {
   const allColumns: Column<Basis>[] = [
     {
       key: "reference",
-      header: "Reference",
+      header: "Date source",
       phone: "title",
       wrap: true,
-      cell: (b) => <span className="font-semibold">{b.reference}</span>,
+      cell: (b) => (
+        <span data-testid="basis-title">
+          <span className="font-semibold">
+            {formatDay(b.supports_date)} · {subjectOf(b)}
+          </span>{" "}
+          <span className="text-text2">({b.reference})</span>
+        </span>
+      ),
     },
     {
       key: "kind",
@@ -226,7 +236,7 @@ export function DatesTab() {
         <p role="status" data-testid="dates-lacking-filter" className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn">
           <span className="min-w-0 flex-1 font-medium">
             {lacking.length > 0
-              ? `${lacking.length} date${lacking.length === 1 ? " needs" : "s need"} a basis: ${lacking.map(formatDay).join(", ")}. Add a date source for ${lacking.length === 1 ? "it" : "each"}, or take ${lacking.length === 1 ? "it" : "them"} out of the roadmap.`
+              ? `${lacking.length} date${lacking.length === 1 ? " needs" : "s need"} a date source: ${lacking.map(formatDay).join(", ")}. Add a date source for ${lacking.length === 1 ? "it" : "each"}, or take ${lacking.length === 1 ? "it" : "them"} out of the roadmap.`
               : ""}
             {wantedPrd && `${lacking.length > 0 ? " " : ""}Showing the date sources of ${prdTitle(wantedPrd)}.`}
           </span>
@@ -238,7 +248,7 @@ export function DatesTab() {
       {error && <Notice tone="error">{error}</Notice>}
       {bases.error && <Notice tone="error">{bases.error}</Notice>}
       <DataTable<Basis>
-        label="Date bases"
+        label="Date sources"
         testId="dates-table"
         columns={columns}
         rows={rows ? shown : undefined}
@@ -251,13 +261,13 @@ export function DatesTab() {
           "data-status": b.status,
         })}
         detail={(b) => (reasonOf(b) ? <Reason basis={b} /> : null)}
-        empty="No date bases here yet."
+        empty="No date sources yet."
       />
       {dialog?.kind === "record" && rights.data && (
         <DateBasisDialog rights={rights.data} onClose={() => setDialog(null)} onSaved={done} />
       )}
-      {dialog?.kind === "withdraw" && <WithdrawBasisDialog basis={dialog.basis} onClose={() => setDialog(null)} onDone={done} />}
-      {dialog?.kind === "reject" && <RejectBasisDialog basis={dialog.basis} onClose={() => setDialog(null)} onDone={done} />}
+      {dialog?.kind === "withdraw" && <WithdrawBasisDialog basis={dialog.basis} subject={subjectOf(dialog.basis)} onClose={() => setDialog(null)} onDone={done} />}
+      {dialog?.kind === "reject" && <RejectBasisDialog basis={dialog.basis} subject={subjectOf(dialog.basis)} onClose={() => setDialog(null)} onDone={done} />}
     </Page>
   );
 }

@@ -280,12 +280,15 @@ export function impactSentence(basis: Basis, impact: Schemas["BasisImpactOut"]):
     parts.push(`${plural(impact.items.length, "roadmap item", "roadmap items")} (they will be marked for review)`);
   for (const d of impact.documents)
     parts.push(`1 roadmap document (v${d.version}: ${plural(d.marks, "place", "places")} will show 'date withdrawn')`);
-  if (!parts.length) return `Nothing rests on ${shortDay(basis.supports_date)} through ${basis.reference} now.`;
+  if (!parts.length) return `Nothing rests on ${shortDay(basis.supports_date)} through this date source now.`;
   return `This removes ${shortDay(basis.supports_date)} from: ${parts.join(", ")}.`;
 }
 
+/** B-07: a dialog names the date and what it is for ("the Nov 30 date for Usage alerts PRD"), never only its reference. */
+const dateFor = (basis: Basis, subject: string) => `the ${shortDay(basis.supports_date)} date for ${subject}`;
+
 /** F3 Withdraw: the impact first, then a required reason. */
-export function WithdrawBasisDialog({ basis, onClose, onDone }: { basis: Basis; onClose: () => void; onDone: () => void }) {
+export function WithdrawBasisDialog({ basis, subject, onClose, onDone }: { basis: Basis; subject: string; onClose: () => void; onDone: () => void }) {
   const id = useId();
   const impact = useQuery(`schedule-bases|impact|${basis.id}`, () =>
     unwrap(
@@ -317,13 +320,13 @@ export function WithdrawBasisDialog({ basis, onClose, onDone }: { basis: Basis; 
 
   return (
     <Dialog
-      title={`Withdraw ${basis.reference}`}
+      title={`Withdraw ${dateFor(basis, subject)}`}
       onClose={onClose}
       testId="withdraw-basis-dialog"
       dirty={!!reason}
       actions={
         <Button variant="danger" disabled={!reason.trim() || !impact.data || busy} onClick={submit}>
-          Withdraw date basis
+          Withdraw date source
         </Button>
       }
     >
@@ -339,7 +342,7 @@ export function WithdrawBasisDialog({ basis, onClose, onDone }: { basis: Basis; 
 }
 
 /** F3 Reject: a required reason. */
-export function RejectBasisDialog({ basis, onClose, onDone }: { basis: Basis; onClose: () => void; onDone: () => void }) {
+export function RejectBasisDialog({ basis, subject, onClose, onDone }: { basis: Basis; subject: string; onClose: () => void; onDone: () => void }) {
   const id = useId();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -361,7 +364,7 @@ export function RejectBasisDialog({ basis, onClose, onDone }: { basis: Basis; on
   }
   return (
     <Dialog
-      title={`Reject ${basis.reference}`}
+      title={`Reject ${dateFor(basis, subject)}`}
       onClose={onClose}
       testId="reject-basis-dialog"
       dirty={!!reason}

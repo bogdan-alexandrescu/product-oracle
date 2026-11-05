@@ -120,6 +120,13 @@ function Launches() {
   const noRoadmap = !!tracksQ.data && !tracks.some((t) => approvedRoadmap(t));
 
   const rows = q.data ?? [];
+  // B-11: on a phone, the launch the URL names (an Inbox link) opens in its sheet once the
+  // list has it; once only, so closing the sheet keeps it closed.
+  const [opened, setOpened] = useState<string | null>(null);
+  if (phone && wanted && wanted !== opened && rows.some((l) => l.id === wanted)) {
+    setOpened(wanted);
+    setSheet(true);
+  }
   const count = (s: Summary["state"]) => rows.filter((l) => l.state === s).length;
   // Ready is the default while any launch is ready.
   const current: Filter = filter ?? (count("ready") > 0 ? "ready" : "all");

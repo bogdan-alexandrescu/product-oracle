@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 
 import { ArtifactMenu } from "@/components/ArtifactMenu";
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
+import { LoadError } from "@/components/ui";
 import {
   Chip,
   DataTable,
@@ -14,7 +15,6 @@ import {
   InspectorRow,
   InspectorSection,
   LinkButton,
-  Notice,
   Page,
   PageHeader,
   Panel,
@@ -413,8 +413,17 @@ function RoadmapDocuments() {
         }
       />
       <div className="flex flex-col gap-3">
-        {q.error && <Notice tone="error">{q.error}</Notice>}
-        {prds.error && <Notice tone="error">{prds.error}</Notice>}
+        {(q.error || prds.error) && (
+          // B-08: one notice for both lists, with Try again reloading both.
+          <LoadError
+            what="your roadmaps"
+            error={q.error || prds.error || ""}
+            onRetry={() => {
+              void q.reload();
+              void prds.reload();
+            }}
+          />
+        )}
         <Split
           inspector={
             current &&
