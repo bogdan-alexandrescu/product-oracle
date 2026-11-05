@@ -11,7 +11,7 @@ sheet"): an open decision and a PRD's open question are changed from Simple's sh
   them (oracle.simple.questions.import_answer).
 - ``withdraw_decision``: either one withdrawn, the "not now": it stays in the history, with
   Undo in the change's session.
-- ``add_question`` (``target.document_id``; ``after`` title, recommendation,
+- ``add_question`` (``target.document_id``, the PRD's id or slug; ``after`` title, recommendation,
   alternatives): a question added to the PRD (the next code, "Q17"), with no decider named.
 
 Who: a decision's creator, its decider or an owner (a question's decider or an owner; the
@@ -312,11 +312,15 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
 async def _prd(db: AsyncSession, principal: Any, target: dict[str, Any]) -> Document:
     from oracle.simple import meetings
 
+    ref = str(target.get("document_id") or "")
+    if not ref:
+        raise ChangeError(422, "target.document_id: the PRD")
     try:
-        doc_id = uuid.UUID(str(target.get("document_id")))
-    except ValueError as e:
-        raise ChangeError(422, "target.document_id: the PRD") from e
-    doc = await db.get(Document, doc_id)
+        doc = await db.get(Document, uuid.UUID(ref))
+    except ValueError:
+        # Decisions' PRD list (+ Ask a question) names each PRD by its slug.
+        doc = await db.scalar(select(Document).where(Document.slug == ref, Document.kind == "prd",
+                                                     Document.deleted_at.is_(None)))  # fmt: skip
     if doc is None or doc.kind != "prd" or not await meetings._readable(db, principal, doc):
         raise ChangeError(404, "No such PRD")
     return doc
