@@ -1319,7 +1319,7 @@ export function SimpleRoadmap() {
   const narrowed = [data.roadmap ? "roadmap" : "", f.prd, f.goal, f.track, f.from, f.to].filter(Boolean).length;
   const filters = (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="filters">
-      <RemovedButton canChange={canChange} onOpen={(id) => (setPop(null), setCard({ id, ...anchorOf(id) }))} onChanged={reload} />
+      <RemovedButton items={data.items} canChange={canChange} onOpen={(id) => (setPop(null), setCard({ id, ...anchorOf(id) }))} onChanged={reload} />
       {phone ? (
         <Button data-filters-toggle="" data-testid="filters-toggle" aria-expanded={pickersOpen} aria-controls="roadmap-pickers" onClick={() => setPickersOpen(!pickersOpen)}>
           {narrowed ? `Filters · ${narrowed}` : "Filters"}

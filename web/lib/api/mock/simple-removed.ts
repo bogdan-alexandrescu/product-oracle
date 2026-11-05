@@ -9,7 +9,7 @@ import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { seedGoalBuckets } from "./goal-buckets";
 import { stableUuid } from "./ids";
-import { GOALS, ROADMAPS, TRACKS, type SimpleDb } from "./simple-roadmap";
+import { closed, GOALS, ROADMAPS, TRACKS, type SimpleDb } from "./simple-roadmap";
 import type { MockMilestone } from "./simple-milestones";
 import type { TrashEntryRow } from "./trash";
 
@@ -31,8 +31,10 @@ type Db = SimpleDb & {
   removed_log?: Log;
   track_state?: Record<string, TrackState>;
   /** A track in Trash: its title, state and the items that were on it. */
-  /** Applied plan changes, for Undo: what to put back. */
-  plan_done?: Record<string, () => void>;
+  /** Applied plan changes, for Undo: what to put back (an undone change's after, when it says more). */
+  plan_done?: Record<string, () => Record<string, unknown> | void>;
+  /** Plan changes proposed and not decided, for Withdraw. */
+  plan_proposed?: string[];
   /** Track names as Simple changed them (TRACKS is the module's; it is rebuilt on a reload). */
   track_titles?: Record<string, string>;
   trashed_tracks?: Record<string, { title: string; state: TrackState; owner?: string; items: string[] }>;
@@ -129,16 +131,25 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
       const own = db.track_owners?.[k];
       const decides = owner || (own === ctx.id && RANK[ctx.role] >= RANK.approver);
       const st = states[k];
-      return { id: trackId(k), title, status: st.status, owner_id: own ?? null, owner_name: name(own), prd_id: prdId(st.prd), prd_title: st.prd || null, can_decide: decides, decider_name: decides ? null : (name(own) ?? deciderName) };
+      return { id: trackId(k), title, status: st.status, owner_id: own ?? null, owner_name: name(own), prd_id: prdId(st.prd), prd_title: st.prd || null, can_decide: decides, decider_name: decides ? null : (name(own) ?? deciderName), feature_count: db.items.filter((s) => s.track === k && !closed(s)).length };
     });
-    const prds = [...new Set(Object.values(ROADMAPS).map((r) => r.prd))].map((t) => ({ id: prdId(t), title: t }));
+    // As free_prds: only PRDs with no track (one in Trash takes its PRD too).
+    const taken = new Set([...Object.keys(TRACKS).map((k) => states[k].prd), ...Object.values(db.trashed_tracks ?? {}).map((x) => x.state.prd)]);
+    const prds = [...new Set(Object.values(ROADMAPS).map((r) => r.prd))]
+      .filter((t) => !taken.has(t))
+      .sort()
+      .map((t) => ({ id: prdId(t), title: t }));
     const people = Object.entries(ctx.names).map(([id, n]) => ({ id, name: n }));
     return json(200, { tracks, can_add: owner, add_decider_name: owner ? null : deciderName, people, prds });
   }
   if (p[2] === "changes" && m === "POST" && p[4] === "undo" && db.plan_done?.[p[3]]) {
-    db.plan_done[p[3]]();
+    const after = db.plan_done[p[3]]() ?? {};
     delete db.plan_done[p[3]];
-    return json(200, { change: { id: crypto.randomUUID(), status: "applied" }, flags: [] });
+    return json(201, { change: { id: crypto.randomUUID(), status: "undone", after }, flags: [] });
+  }
+  if (p[2] === "changes" && m === "POST" && p[4] === "withdraw" && db.plan_proposed?.includes(p[3])) {
+    db.plan_proposed.splice(db.plan_proposed.indexOf(p[3]), 1);
+    return json(200, { change: { id: p[3], status: "declined" }, flags: [] });
   }
   if (p[2] !== "changes" || m !== "POST" || p[3]) return null;
   const body = (await req.clone().json().catch(() => ({}))) as Schemas["SimpleChangeIn"];
@@ -146,22 +157,37 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
   if (ctx.role === "viewer") return json(403, { detail: "Requires the commenter role" });
   const t = (body.target ?? {}) as Record<string, string>;
   const a = (body.after ?? {}) as Record<string, string | null>;
-  const done = (res: Schemas["SimpleChangeResult"], back: () => void) => {
+  const done = (res: Schemas["SimpleChangeResult"], back: () => Record<string, unknown> | void) => {
     if (res.change.status === "applied") (db.plan_done ??= {})[res.change.id] = back;
+    else (db.plan_proposed ??= []).push(res.change.id);
     return json(201, res);
+  };
+  /** A track to Settings › Trash: its features go to no track, kept for a restore. */
+  const trashTrack = (k: string) => {
+    const title = TRACKS[k];
+    const own = db.track_owners?.[k];
+    const items = db.items.filter((s) => s.track === k);
+    for (const s of items) s.track = undefined;
+    (db.trashed_tracks ??= {})[k] = { title, state: states[k], owner: own, items: items.map((s) => s.key) };
+    delete TRACKS[k];
+    const at = now();
+    trash().push({
+      out: { id: crypto.randomUUID(), root: { type: "track", id: trackId(k), title, kind: "Track" }, items: [{ type: "track", id: trackId(k), title, kind: "Track" }], deleted_by: ctx.id, deleted_by_name: ctx.names[ctx.id] ?? null, deleted_at: at, reason: null, published: false, purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString() } as never,
+      documents: [], versions: [], runs: [], intakes: [], released: { track: k },
+    });
   };
   const keyOf = (id: string) => Object.keys(TRACKS).find((k) => trackId(k) === id);
   if (body.op === "unarchive_goal") {
     const g = (db.goal_buckets ?? seedGoalBuckets()).goals.find((x) => x.id === t.goal_id && x.archived);
     if (!g) return json(404, { detail: "No such archived goal" });
     if (owner) g.archived = false;
-    return done(change(ctx, body, owner, ctx.owners, `restored the goal ${g.title}`), () => (g.archived = true));
+    return done(change(ctx, body, owner, ctx.owners, `restored the goal ${g.title}`), () => void (g.archived = true));
   }
   if (body.op === "restore_goal_milestone") {
     const ms = ((db.goal_milestones ?? []) as MockMilestone[]).find((x) => x.id === t.milestone_id && x.deleted);
     if (!ms) return json(404, { detail: "No such removed milestone" });
     if (owner) ms.deleted = false;
-    return done(change(ctx, body, owner, ctx.owners, `restored the milestone ${ms.name}`), () => (ms.deleted = true));
+    return done(change(ctx, body, owner, ctx.owners, `restored the milestone ${ms.name}`), () => void (ms.deleted = true));
   }
   if (body.op === "add_track") {
     const title = (a.title ?? "").trim();
@@ -175,7 +201,15 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
       states[k] = { status: "active", prd };
       if (a.owner_id) (db.track_owners ??= {})[k] = a.owner_id;
     }
-    return done(change(ctx, body, owner, ctx.owners, `added the track ${title}`), () => (delete TRACKS[added], delete db.track_titles?.[added]));
+    // Undo removes the track while it holds nothing; one that holds features since goes to Trash.
+    return done(change(ctx, body, owner, ctx.owners, `added the track ${title}`), () => {
+      if (!(added in TRACKS)) return;
+      if (db.items.some((s) => s.track === added)) return (trashTrack(added), { in_trash: true });
+      delete TRACKS[added];
+      delete db.track_titles?.[added];
+      delete states[added];
+      delete db.track_owners?.[added];
+    });
   }
   const k = keyOf(t.track_id ?? "");
   if (!k) return json(404, { detail: "No such track" });
@@ -184,17 +218,7 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
   const route = own && own !== ctx.id ? [own] : ctx.owners;
   const title = TRACKS[k];
   if (body.op === "delete_track") {
-    if (decides) {
-      const items = db.items.filter((s) => s.track === k);
-      for (const s of items) s.track = undefined;
-      (db.trashed_tracks ??= {})[k] = { title, state: states[k], owner: own, items: items.map((s) => s.key) };
-      delete TRACKS[k];
-      const at = now();
-      trash().push({
-        out: { id: crypto.randomUUID(), root: { type: "track", id: trackId(k), title, kind: "Track" }, items: [{ type: "track", id: trackId(k), title, kind: "Track" }], deleted_by: ctx.id, deleted_by_name: ctx.names[ctx.id] ?? null, deleted_at: at, reason: null, published: false, purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString() } as never,
-        documents: [], versions: [], runs: [], intakes: [], released: { track: k },
-      });
-    }
+    if (decides) trashTrack(k);
     return done(change(ctx, body, decides, route, `moved the track ${title} to Trash`), () => {
       const e = trash().find((x) => (x.released as { track?: string } | undefined)?.track === k);
       if (e && restoreTrack(db, e.released)) trash().splice(trash().indexOf(e), 1);

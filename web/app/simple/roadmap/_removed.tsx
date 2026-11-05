@@ -7,7 +7,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDay } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
 
-import { ChangeFailed, propose, undo } from "./_lib";
+import { ChangeFailed, propose, undo, type Item } from "./_lib";
 
 type Removed = Schemas["SimpleRemovedItem"];
 
@@ -31,10 +31,15 @@ function restoreBody(r: Removed): Schemas["SimpleChangeIn"] {
  * of what left the plans (cut features, archived goals, removed goal milestones), who and when,
  * each with Restore; an approver who does not decide proposes it to the decider; a viewer reads.
  */
-export function RemovedButton({ canChange, onOpen, onChanged }: { canChange: boolean; onOpen: (id: string) => void; onChanged: () => Promise<unknown> }) {
+export function RemovedButton({ items, canChange, onOpen, onChanged }: { items: Item[]; canChange: boolean; onOpen: (id: string) => void; onChanged: () => Promise<unknown> }) {
   const [open, setOpen] = useState(false);
   const [n, setN] = useState(0);
-  const removed = useQuery(`simple-removed:${n}`, () => unwrap(api.GET("/v1/simple/removed")));
+  // Read again when the roadmap's cut features change (one cut or put back from its card or chat).
+  const cut = items
+    .filter((i) => i.status === "cut")
+    .map((i) => i.id)
+    .join(",");
+  const removed = useQuery(`simple-removed:${n}:${cut}`, () => unwrap(api.GET("/v1/simple/removed")), { keepPrevious: true });
   const rows = removed.data?.items ?? [];
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {

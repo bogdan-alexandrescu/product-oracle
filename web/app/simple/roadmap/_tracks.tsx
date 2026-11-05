@@ -16,9 +16,26 @@ const FIELD = "h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-[
 const PRIMARY = "inline-flex h-8 items-center gap-1 rounded-lg bg-accent px-3 text-sm font-medium text-on-accent hover:brightness-110 disabled:opacity-50";
 const ROW = "grid grid-cols-[84px_minmax(0,1fr)] items-center gap-2 py-1";
 
-/** A track's features as the Gantt's track lane draws them: the roadmap's items on it, cut ones left out. */
-export function trackFeatures(items: Item[], id: string): number {
-  return items.filter((i) => i.track?.id === id && i.status !== "cut" && i.status !== "merged").length;
+/** What a proposal asks, as its toast names it ("Rename proposed · waits for …"). */
+function asking(after: Record<string, string | null>): string {
+  if ("title" in after) return "Rename";
+  if ("owner_id" in after) return "Owner change";
+  return after.status === "paused" ? "Pause" : after.status === "closed" ? "Close" : "Resume";
+}
+
+async function withdraw(id: string): Promise<void> {
+  const { error } = await api.POST("/v1/simple/changes/{change_id}/withdraw", { params: { path: { change_id: id } } });
+  const detail = (error as { detail?: unknown } | undefined)?.detail;
+  if (error) throw new ChangeFailed(typeof detail === "string" ? detail : "Oracle could not withdraw it", 409);
+}
+
+const features = (n: number) => `${n} ${n === 1 ? "feature" : "features"}`;
+
+/** A short stamp of the roadmap's items: the sheet reads its tracks again when the roadmap reloads. */
+function stampOf(items: Item[]): string {
+  let h = 0;
+  for (const i of items) for (const c of `${i.id}:${i.track?.id ?? ""}:${i.status};`) h = (h * 31 + c.charCodeAt(0)) | 0;
+  return `${items.length}.${h}`;
 }
 
 /**
@@ -29,8 +46,10 @@ export function trackFeatures(items: Item[], id: string): number {
 export function TracksButton({ items, canChange, onChanged }: { items: Item[]; canChange: boolean; onChanged: () => Promise<unknown> }) {
   const [open, setOpen] = useState(false);
   const [n, setN] = useState(0);
-  const q = useQuery(`simple-tracks:${n}`, () => unwrap(api.GET("/v1/simple/tracks")));
+  // A track's count is the API's, over the whole roadmap: never the filtered items on screen.
+  const q = useQuery(`simple-tracks:${n}:${stampOf(items)}`, () => unwrap(api.GET("/v1/simple/tracks")), { keepPrevious: true });
   const [opened, setOpened] = useState<string | null>(null);
+  const [trashing, setTrashing] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const data = q.data;
   const tracks = data?.tracks ?? [];
@@ -38,16 +57,24 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
     setN((x) => x + 1);
     await onChanged();
   };
-  const send = async (body: Schemas["SimpleChangeIn"], done: string, decider: string | null) => {
+  const failed = (fallback: string) => (e: unknown) => toast({ message: e instanceof ChangeFailed ? e.message : fallback });
+  const takeBack = async (id: string, title: string) => {
+    const res = await undo(id);
+    await refresh();
+    // Undo of an add never deletes a track that holds something since: it goes to Trash.
+    if ((res.change.after as { in_trash?: boolean } | null)?.in_trash) toast({ message: `Moved ${title} to Trash, as it holds work now` });
+  };
+  const send = async (body: Schemas["SimpleChangeIn"], done: string, decider: string | null, asked = "Change", title = "") => {
     try {
       const res = await propose(body);
       await refresh();
       if (res.change.status === "applied")
+        toast({ message: done, action: { label: "Undo", onClick: () => void takeBack(res.change.id, title).catch(failed("Oracle could not undo it")) } });
+      else
         toast({
-          message: done,
-          action: { label: "Undo", onClick: () => void undo(res.change.id).then(refresh, (e) => toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not undo it" })) },
+          message: `${asked} proposed · waits for ${decider ?? "an owner"}`,
+          action: { label: "Withdraw", onClick: () => void withdraw(res.change.id).then(() => toast({ message: "Withdrawn" }), failed("Oracle could not withdraw it")) },
         });
-      else toast({ message: `Proposed · waits for ${decider ?? "an owner"}` });
       return true;
     } catch (e) {
       toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not change the track" });
@@ -55,7 +82,12 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
     }
   };
   const edit = (t: Track, after: Record<string, string | null>, done: string) =>
-    send({ op: "edit_track", target: { track_id: t.id }, before: {}, after } as Schemas["SimpleChangeIn"], done, t.decider_name ?? null);
+    send({ op: "edit_track", target: { track_id: t.id }, before: {}, after } as Schemas["SimpleChangeIn"], done, t.decider_name ?? null, asking(after), t.title);
+  const toTrash = (t: Track) => {
+    const n = t.feature_count ?? 0;
+    const done = n ? `Moved ${t.title} to Trash · ${features(n)} now ${n === 1 ? "has" : "have"} no track` : `Moved ${t.title} to Trash`;
+    void send({ op: "delete_track", target: { track_id: t.id }, before: {}, after: {} } as Schemas["SimpleChangeIn"], done, t.decider_name ?? null, "Move to Trash", t.title).then((ok) => ok && (setOpened(null), setTrashing(null)));
+  };
   return (
     <>
       <Button className="!h-8" data-testid="tracks-open" aria-haspopup="dialog" onClick={() => setOpen(true)}>
@@ -70,36 +102,50 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
               </button>
             </div>
           )}
-          {adding && data && <AddTrack data={data} onCancel={() => setAdding(false)} onAdd={async (after) => (await send({ op: "add_track", target: {}, before: {}, after } as Schemas["SimpleChangeIn"], `Added ${after.title}`, data.add_decider_name ?? null)) && setAdding(false)} />}
+          {adding && data && <AddTrack data={data} onCancel={() => setAdding(false)} onAdd={async (after) => (await send({ op: "add_track", target: {}, before: {}, after } as Schemas["SimpleChangeIn"], `Added ${after.title}`, data.add_decider_name ?? null, "New track", after.title)) && setAdding(false)} />}
           <ul className="flex flex-col">
             {tracks.map((t) => {
               const expanded = opened === t.id;
-              const count = trackFeatures(items, t.id);
+              const count = t.feature_count ?? 0;
               return (
                 <li key={t.id} data-testid="track-row" className={`border-b border-line py-2 ${expanded ? "-mx-2 rounded-lg bg-surface2 px-2" : ""}`}>
                   <div className="flex items-start gap-2">
                     <div className="min-w-0 flex-1">
                       <p className={`font-medium break-words ${t.status === "closed" ? "text-text2" : ""}`}>{t.title}</p>
                       <p className="text-sm text-text2">
-                        {t.owner_name ?? "No owner"} · {count} {count === 1 ? "feature" : "features"}
+                        {t.owner_name ?? "No owner"} · {features(count)}
                         {t.status !== "active" ? ` · ${STATE[t.status]}` : ""}
                       </p>
                     </div>
-                    <button type="button" aria-expanded={expanded} aria-label={`${expanded ? "Hide" : canChange ? "Change" : "Open"} ${t.title}`} onClick={() => setOpened(expanded ? null : t.id)} className="h-8 rounded px-2 text-sm text-accent-ink hover:bg-surface">
+                    <button type="button" aria-expanded={expanded} aria-label={`${expanded ? "Hide" : canChange ? "Change" : "Open"} ${t.title}`} onClick={() => (setOpened(expanded ? null : t.id), setTrashing(null))} className="h-8 rounded px-2 text-sm text-accent-ink hover:bg-surface">
                       {expanded ? "Hide" : canChange ? "Change" : "Open"}
                     </button>
                   </div>
                   {expanded && (
                     <div className="mt-1">
                       <TrackFields t={t} may={canChange} people={data?.people ?? []} onEdit={(after, done) => edit(t, after, done)} />
-                      {canChange && t.can_decide && (
+                      {canChange && t.can_decide && trashing !== t.id && (
                         <button
                           type="button"
                           className="mt-1 text-sm font-medium text-crit hover:underline"
-                          onClick={() => void send({ op: "delete_track", target: { track_id: t.id }, before: {}, after: {} } as Schemas["SimpleChangeIn"], `Moved ${t.title} to Trash`, t.decider_name ?? null).then((ok) => ok && setOpened(null))}
+                          // A track with features asks once, saying where they go; an empty one moves at once.
+                          onClick={() => (count ? setTrashing(t.id) : toTrash(t))}
                         >
                           Move to Trash
                         </button>
+                      )}
+                      {canChange && t.can_decide && trashing === t.id && (
+                        <div className="mt-1 grid gap-1.5" data-testid="track-trash-confirm">
+                          <p className="text-sm">Its {features(count)} move to No track.</p>
+                          <div className="flex gap-1.5">
+                            <Button variant="danger" onClick={() => toTrash(t)}>
+                              Move to Trash
+                            </Button>
+                            <Button className="!h-8" onClick={() => setTrashing(null)}>
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
                       )}
                       {canChange && !t.can_decide && t.decider_name && (
                         <p className="mt-2">
@@ -203,13 +249,18 @@ function AddTrack({ data, onAdd, onCancel }: { data: Schemas["SimpleTracks"]; on
   return (
     <div className="mb-2 grid gap-1.5 rounded-lg border border-line p-2" data-testid="track-new">
       <input aria-label="New track name" autoFocus placeholder="Track name" value={title} onChange={(e) => setTitle(e.target.value)} className={FIELD} />
-      <select aria-label="PRD" value={prd} onChange={(e) => setPrd(e.target.value)} className={FIELD}>
-        {data.prds.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.title}
-          </option>
-        ))}
-      </select>
+      {/* A PRD has one track: only PRDs with none are offered. */}
+      {data.prds.length ? (
+        <select aria-label="PRD" value={prd} onChange={(e) => setPrd(e.target.value)} className={FIELD}>
+          {data.prds.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.title}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <p className="text-sm text-text2">Every PRD has a track</p>
+      )}
       <select aria-label="New track owner" value={owner} onChange={(e) => setOwner(e.target.value)} className={FIELD}>
         <option value="">No owner</option>
         {data.people.map((p) => (
