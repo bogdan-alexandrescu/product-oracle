@@ -946,16 +946,20 @@ export function acceptNewFeatures(s: BaselineState, runId: string | null | undef
       updated_at: at,
     };
     s.entities.push(entity);
-    for (const dep of row.depends_on) {
-      const target = s.entities.find((e) => e.type === "feature" && e.key === dep);
+    // What it depends on, and the goals it serves (proposed links, as the order's row has them).
+    const links = [
+      ...row.depends_on.map((dep) => ({ target: s.entities.find((e) => e.type === "feature" && e.key === dep), type: "depends_on" as const, attrs: {}, status: "confirmed" as const })),
+      ...row.explanation.goals.map((g) => ({ target: s.entities.find((e) => e.type === "goal" && e.key === g.goal), type: "supports" as const, attrs: { contribution: g.contribution }, status: "proposed" as const })),
+    ];
+    for (const { target, type, attrs, status } of links) {
       if (target) {
         s.edges.push({
           id: newId(),
           src_id: entity.id,
           dst_id: target.id,
-          type: "depends_on",
-          attrs: {},
-          status: "confirmed",
+          type,
+          attrs,
+          status,
           origin: "agent",
           locked: false,
           locked_by: null,

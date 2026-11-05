@@ -86,9 +86,11 @@ test.describe("EC1 b and EC2 b: the Engineering check", () => {
     const lastRow = await box(page.getByTestId("brief-row").last());
     const card = await box(list);
     expect(card.y + card.height - (lastRow.y + lastRow.height), "the card ends at its last row").toBeLessThan(4);
-    // A longer list still scrolls on its own, above the bar.
-    await page.reload();
+  });
+
+  test("a longer list still scrolls on its own and stops above the decision bar", async ({ page }) => {
     await openCheck(page, "eng-check-shop-15", 15);
+    const list = page.getByRole("region", { name: "Features" });
     const long = await box(list);
     const barBox = await box(bar(page));
     expect(long.y + long.height).toBeLessThanOrEqual(barBox.y + 1);
@@ -138,10 +140,12 @@ test.describe("RP1 a: the run's priority order", () => {
     await expect(page.locator("main").getByText("Address book per account").first()).toBeVisible();
     await expect(page.locator("main").getByText("Import addresses from a spreadsheet, with a preview before saving").first()).toBeVisible();
 
+    // The Ground Truth: proposed, serving the goal the order scored it on.
     await page.goto("/baseline");
-    const main = page.locator("main");
-    await expect(main.getByText("Address book per account").first()).toBeVisible();
-    await expect(main.getByText("Address labels and notes").first()).toBeVisible();
+    const added = page.locator("main").getByRole("row", { name: /^Address book per account Proposed/ }).filter({ visible: true });
+    await expect(added).toHaveCount(1);
+    await expect(added).not.toContainText("Serves no goal");
+    await expect(page.locator("main").getByRole("row", { name: /^Address labels and notes Proposed/ }).filter({ visible: true })).toHaveCount(1);
   });
 });
 
