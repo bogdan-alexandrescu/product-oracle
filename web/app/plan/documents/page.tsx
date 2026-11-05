@@ -414,9 +414,9 @@ function RoadmapDocuments() {
       />
       <div className="flex flex-col gap-3">
         {(q.error || prds.error) && (
-          // B-08: one notice for both lists, with Try again reloading both.
+          // B-08: one notice for both lists, naming the one that failed, with Try again reloading both.
           <LoadError
-            what="your roadmaps"
+            what={q.error && prds.error ? "your roadmaps and approved PRDs" : q.error ? "your roadmaps" : "your approved PRDs"}
             error={q.error || prds.error || ""}
             onRetry={() => {
               void q.reload();
@@ -445,7 +445,8 @@ function RoadmapDocuments() {
                 selected={current ? keyOf(current) : null}
                 onSelect={(k) => setSelected(k)}
                 loading={loading}
-                empty="No roadmaps yet. Build one from an approved PRD."
+                // A list that failed has no empty line: the notice above says so.
+                empty={q.error ? null : "No roadmaps yet. Build one from an approved PRD."}
                 rowProps={() => ({ "data-testid": "roadmap-row" })}
               />
             </Panel>
@@ -459,7 +460,7 @@ function RoadmapDocuments() {
                 selected={current ? keyOf(current) : null}
                 onSelect={(k) => setSelected(k)}
                 loading={loading}
-                empty="No approved PRDs yet. A roadmap is built from an approved PRD."
+                empty={prds.error ? null : "No approved PRDs yet. A roadmap is built from an approved PRD."}
                 rowProps={() => ({ "data-testid": "approved-prd" })}
               />
             </Panel>

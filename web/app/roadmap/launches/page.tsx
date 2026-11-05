@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState, useSyncExternalStore } from "react";
+import { Suspense, useEffect, useState, useSyncExternalStore } from "react";
 
 import {
   Button,
@@ -121,10 +121,18 @@ function Launches() {
 
   const rows = q.data ?? [];
   // B-11: on a phone, the launch the URL names (an Inbox link) opens in its sheet once the
-  // list has it; once only, so closing the sheet keeps it closed.
+  // list has it; once a visit, so closing the sheet keeps it closed, and following the same
+  // link again opens it again. The router keeps this page's state between visits (its effects
+  // run again on each), so the guard is keyed on the visit, not only the launch.
+  const [visit, setVisit] = useState(0);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- a visit is when the effects run again.
+    setVisit((v) => v + 1);
+  }, []);
   const [opened, setOpened] = useState<string | null>(null);
-  if (phone && wanted && wanted !== opened && rows.some((l) => l.id === wanted)) {
-    setOpened(wanted);
+  const opening = `${visit}|${wanted}`;
+  if (phone && wanted && opening !== opened && rows.some((l) => l.id === wanted)) {
+    setOpened(opening);
     setSheet(true);
   }
   const count = (s: Summary["state"]) => rows.filter((l) => l.state === s).length;

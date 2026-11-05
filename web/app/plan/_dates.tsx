@@ -27,18 +27,29 @@ const STATUS: Record<Basis["status"], { label: string; kind: ChipKind }> = {
   rejected: { label: "Rejected", kind: "na" },
 };
 
-function forLabel(b: Basis, itemTitle: (prd: string, key: string) => string | undefined): string {
-  if (b.item_key) return `Item: ${itemTitle(b.prd_document_id, b.item_key) ?? b.item_key}`;
-  if (b.tracker_key) return `Items of ${b.tracker_key}`;
-  return "The whole PRD";
+/** What a date source applies to, in the Add dialog's words; the row's title names it. */
+function forLabel(b: Basis) {
+  if (b.item_key) return "One item";
+  if (!b.tracker_key) return "Whole PRD";
+  return (
+    <span className="inline-flex items-center gap-1">
+      Items of one tracker issue
+      <InfoTip label="tracker issue">{b.tracker_key}</InfoTip>
+    </span>
+  );
 }
+
+/** A name still loading: the table's own loading bar, in place of the words. */
+const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+const NameLoading = () => <span data-testid="name-loading" aria-label="Loading" className="inline-block h-3 w-24 animate-pulse rounded bg-line-strong align-middle" />;
 
 /** F3 Plan › Dates: every schedule basis, grouped by PRD, with Verify, Reject and Withdraw. */
 export function DatesTab() {
   const bases = useQuery("schedule-bases", () => unwrap(api.GET("/v1/schedule-bases")));
   const prds = useQuery("documents|prd", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
   const rights = useDateRights();
-  // The items' titles, so Applies to names an item as people know it (not its key).
+  // The items' titles, so a row names its item as people know it (not its key).
   // Every row's title, a draft's too: a roadmap still in review has no approved rows, and a
   // basis on one of its items is named, never shown by its key (qa4-plan-3).
   const plan = useQuery("plan|all|basis", () => unwrap(api.GET("/v1/plan", { params: { query: { scope: "all" } } })));
@@ -77,10 +88,28 @@ export function DatesTab() {
     const titles = new Set(named.map((i) => i.title));
     return named.find((i) => i.prd?.id === prd)?.title ?? (titles.size === 1 ? named[0].title : undefined);
   };
-  const prdTitle = (id: string) => prds.data?.find((d) => d.id === id)?.title ?? "PRD";
-  // B-07: what a date source's date is for, as people know it; its reference comes second.
+  // A PRD the documents list lacks is "a PRD" (a date source carries no name of its own).
+  const prdTitle = (id: string) => prds.data?.find((d) => d.id === id)?.title ?? "a PRD";
+  // The items a tracker issue's date source dates: those whose engineering records it.
+  const trackerTitle = (key: string) => {
+    const titles = new Set((plan.data?.items ?? []).filter((i) => i.engineering.records.some((r) => r.external_ref === key)).map((i) => i.title));
+    return titles.size ? [...titles].join(", ") : undefined;
+  };
+  const namesLoading = plan.loading || simple.loading;
+  // B-07: what a date source's date is for, as people know it; never a bare code.
   const subjectOf = (b: Basis) =>
-    b.item_key ? (itemTitle(b.prd_document_id, b.item_key) ?? b.item_key) : b.tracker_key ? `Items of ${b.tracker_key}` : prdTitle(b.prd_document_id);
+    b.item_key
+      ? (itemTitle(b.prd_document_id, b.item_key) ?? "an item")
+      : b.tracker_key
+        ? (trackerTitle(b.tracker_key) ?? "a tracker item")
+        : prdTitle(b.prd_document_id);
+  // The row's title: the date is in the Date column and the PRD in the group header, so a
+  // whole-PRD source reads "The whole PRD"; a name still loading shows the loading bar.
+  const rowSubject = (b: Basis) => {
+    if (!b.item_key && !b.tracker_key) return "The whole PRD";
+    if (namesLoading && !(b.item_key ? itemTitle(b.prd_document_id, b.item_key) : trackerTitle(b.tracker_key!))) return <NameLoading />;
+    return capital(subjectOf(b));
+  };
   const who = (id: string | null | undefined) => (id ? (names.get(id) ?? "a member") : "a member");
 
   async function verify(b: Basis) {
@@ -101,9 +130,7 @@ export function DatesTab() {
       wrap: true,
       cell: (b) => (
         <span data-testid="basis-title">
-          <span className="font-semibold">
-            {formatDay(b.supports_date)} · {subjectOf(b)}
-          </span>{" "}
+          <span className="font-semibold">{rowSubject(b)}</span>{" "}
           <span className="text-text2">({b.reference})</span>
         </span>
       ),
@@ -121,7 +148,7 @@ export function DatesTab() {
       phone: "meta",
       cell: (b) => formatDay(b.supports_date),
     },
-    { key: "for", header: "Applies to", phone: "meta", wrap: true, cell: (b) => forLabel(b, itemTitle) },
+    { key: "for", header: "Applies to", phone: "meta", wrap: true, cell: (b) => forLabel(b) },
     {
       key: "status",
       header: "Status",
@@ -238,7 +265,11 @@ export function DatesTab() {
             {lacking.length > 0
               ? `${lacking.length} date${lacking.length === 1 ? " needs" : "s need"} a date source: ${lacking.map(formatDay).join(", ")}. Add a date source for ${lacking.length === 1 ? "it" : "each"}, or take ${lacking.length === 1 ? "it" : "them"} out of the roadmap.`
               : ""}
-            {wantedPrd && `${lacking.length > 0 ? " " : ""}Showing the date sources of ${prdTitle(wantedPrd)}.`}
+            {wantedPrd && (
+              <>
+                {lacking.length > 0 ? " " : ""}Showing the date sources of {prds.loading && !prds.data ? <NameLoading /> : prdTitle(wantedPrd)}.
+              </>
+            )}
           </span>
           <Link href="/plan/dates" className="font-medium underline underline-offset-2">
             Show every date source
@@ -255,7 +286,7 @@ export function DatesTab() {
         loading={bases.loading}
         rowKey={(b) => b.id}
         group={(b) => b.prd_document_id}
-        groupLabel={(g) => prdTitle(g)}
+        groupLabel={(g) => (prds.loading && !prds.data ? <NameLoading /> : capital(prdTitle(g)))}
         rowProps={(b) => ({
           "data-basis": b.reference,
           "data-status": b.status,

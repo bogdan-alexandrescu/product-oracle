@@ -470,8 +470,8 @@ export function TrackPanel({
               )}
               {starting && <StartRunDialog trackId={track.id} prdTitle={track.title} onClose={() => setStarting(false)} />}
               {may.push && pushOff && (
-                // B-24: the disabled button keeps its reason, in its tooltip and (i), not inline.
-                <span className="inline-flex items-center gap-1" title={pushOff}>
+                // B-24: the disabled button keeps its reason in its (i) (one tooltip), not inline.
+                <span className="inline-flex items-center gap-1">
                   <Button disabled aria-describedby={pushWhy} data-testid="track-push">
                     Push to tracker
                   </Button>
