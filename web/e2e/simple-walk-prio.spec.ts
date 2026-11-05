@@ -235,6 +235,48 @@ for (const [where, size] of [
           expect(Date.now() - opened).toBeLessThan(7000);
           await page.evaluate(([slow, ms]) => [slow, ms].forEach((k) => localStorage.removeItem(k)), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
         });
+
+        /**
+         * Card walk-prio-home-late-rebuilds: protects = a rebuild read slower than the sign's give-up
+         * (READ_LIMIT_MS, 10 s) still lands: with every read of the rebuild list taking 15 s, the
+         * goal band shows within Home's cap (1.2 s) and the "Being rebuilt" card appears once the
+         * slow answer arrives, in the owner's picked place (pick A: under the greeting and its
+         * buttons, above the band's Change order); fails_when = the late answer is thrown away
+         * because a newer read started, so the card never appears; no_claim = what the card lists
+         * (rebuild-sign spec).
+         */
+        test(`a rebuild read slower than the give-up still lands its card under the greeting (${role})`, async ({ page, context }) => {
+          test.setTimeout(60_000);
+          await login(page, email);
+          await page.goto("/home");
+          await context.addInitScript(
+            ([slow, ms]) => {
+              localStorage.setItem(slow, "/v1/rebuilds");
+              localStorage.setItem(ms, "15000");
+            },
+            [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY],
+          );
+          const opened = Date.now();
+          await page.goto("/simple");
+          await expect(page.getByTestId("home-greeting")).toBeVisible();
+          await expect(page.getByTestId("home-goals")).toBeVisible({ timeout: 2500 });
+          expect(Date.now() - opened).toBeLessThan(4000);
+          await expect(page.getByTestId("home-goal").first()).toBeVisible();
+          await expect(page.getByTestId("rb-home")).toHaveCount(0);
+          // The first read answers at 15 s, after the sign gave it up at 10 s and started another.
+          const card = page.getByTestId("rb-home");
+          await expect(card).toBeVisible({ timeout: 25_000 });
+          await expect(card).toContainText("Being rebuilt");
+          const greeting = (await page.getByTestId("home-greeting").boundingBox())!;
+          const box = (await card.boundingBox())!;
+          const band = (await page.getByTestId("home-goals").boundingBox())!;
+          expect(box.y).toBeGreaterThanOrEqual(greeting.y + greeting.height - 1);
+          expect(box.y - (greeting.y + greeting.height)).toBeLessThan(40);
+          expect(box.y + box.height).toBeLessThanOrEqual(band.y + 1);
+          const order = page.getByTestId("goal-order-open");
+          if (await order.count()) expect(box.y + box.height).toBeLessThanOrEqual((await order.boundingBox())!.y + 1);
+          await page.evaluate(([slow, ms]) => [slow, ms].forEach((k) => localStorage.removeItem(k)), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
+        });
       }
     });
   }
