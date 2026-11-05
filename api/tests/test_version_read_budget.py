@@ -33,10 +33,11 @@ SOURCES = 50
 VERSIONS = 7
 # The company's audit log: other companies' work and older events, none about this PRD.
 AUDIT_EVENTS = 300_000
-# Each read's statements, the sign-in's two included (measured 15 and 10): the same
-# whatever the number of sections, citations, versions, comments or feedback items.
+# Each read's statements, the sign-in's two included (measured 15 and 11, the feedback's
+# with the verdicts of its changes asked): the same whatever the number of sections,
+# citations, versions, comments or feedback items.
 MAX_VERSION_READS = 15
-MAX_FEEDBACK_READS = 10
+MAX_FEEDBACK_READS = 11
 # Each read's budget at this size (measured, after the fix, about 0.05 s and 0.08 s).
 MAX_SECONDS = 1.0
 

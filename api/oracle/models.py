@@ -7,7 +7,7 @@ Importing this module imports every model, so ``Base.metadata`` is complete
 import uuid
 from typing import Any
 
-from sqlalchemy import Text, Uuid
+from sqlalchemy import Index, Text, Uuid
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -25,6 +25,12 @@ class Tenant(IdMixin, Base):
 
 class AuditEvent(TenantScoped, Base):
     __tablename__ = "audit_events"
+    # An event looked up by what happened and to what (who imported a version, whether a
+    # run's draft was imported again) reads its own rows, never every event the company
+    # ever wrote (0107_audit_action_entity).
+    __table_args__ = (
+        Index("ix_audit_events_tenant_id_action_entity_id", "tenant_id", "action", "entity_id"),
+    )
 
     # "user:<uuid>", "token:<uuid>", "oracle" (oracle.audit.ORACLE) or "system".
     actor: Mapped[str] = mapped_column(Text, nullable=False)
