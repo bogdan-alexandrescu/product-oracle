@@ -1,7 +1,7 @@
 """Cross-PRD dependencies follow-ups (PR 1240 review minors).
 
-- A Ground Truth feature in no PRD is caught at the Engineering check, named: "Export logs
-  is in no PRD yet", not first at the roadmap items stop.
+- A Ground Truth feature in no PRD is caught at the Engineering check, named and linked:
+  "Export logs is in no PRD yet", not first at the roadmap items stop.
 - An unknown dependency reads in words: the brief's feature by name and code, and what was
   not found, never ``features[0] (key)``.
 - A cancelled or failed run's scope is not on the company roadmap; an earlier scope of a
@@ -16,6 +16,8 @@ Against Postgres. Invented data only.
 """
 
 from datetime import UTC, datetime
+
+from sqlalchemy import select
 
 from oracle.baseline.models import Entity
 from oracle.engineering import check
@@ -44,6 +46,10 @@ async def test_a_ground_truth_feature_in_no_prd_is_caught_at_the_engineering_che
     assert problem["message"] == "Export logs is in no PRD yet: Observability depends on it"
     assert problem["feature"] == "observability"
     assert "export-logs" not in summary["elsewhere"]
+    # It names the Ground Truth feature, so the stop links to it (add it to a PRD there).
+    async with tenant_session(w["tenant"]) as s:
+        gt = await s.scalar(select(Entity.id).where(Entity.key == "export-logs"))
+    assert problem["entity"] == str(gt)
     # Another PRD's feature is still accepted, named with its PRD.
     on = await _summary(await world(), "account-health-ledger")
     assert on["problems"] == []
