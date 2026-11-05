@@ -94,6 +94,9 @@ function purge(db: TrashDb, entry: TrashEntryRow, now: string, simple?: TrashedS
     for (const s of simple.items) {
       if ((!entry.roadmap || s.roadmap === entry.roadmap) && s.depends?.includes(root.slug!)) s.depends = s.depends.filter((k) => k !== root.slug);
     }
+    for (const gm of simple.goal_milestones ?? []) {
+      if ((!entry.roadmap || gm.roadmap === entry.roadmap) && gm.gates.includes(root.slug!)) gm.gates = gm.gates.filter((k) => k !== root.slug);
+    }
   }
   if (simple?.goal_buckets && root.type === "goal") {
     const gb = simple.goal_buckets;
@@ -177,6 +180,8 @@ export function mayRestore(entry: TrashEntryRow, me: { id: string; role: string 
 export type TrashedSimple = {
   items: { key: string; roadmap?: string; depends?: string[]; trashed?: boolean }[];
   goal_buckets?: { goals: { id: string; trashed?: boolean }[]; features?: { id: string; goal_ids: string[] }[] };
+  /** build-milestones-on-roadmap: each roadmap's goal milestones, their gates the item keys they wait on. */
+  goal_milestones?: { roadmap: string; gates: string[] }[];
 };
 
 /** trash-features-goals: takes `entry` out of Trash, putting back the feature or the goal it

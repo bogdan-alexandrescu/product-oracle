@@ -382,7 +382,7 @@ function view(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): Change {
     undone,
     can_decide: c.status === "proposed" && decidesChange(db, ctx, c),
     can_undo: c.status === "applied" && c.by === ctx.id && !undone && !!s && !s.closed_at && !idle(s),
-    words: changeSentence(c, c.by_name, itemLabel(db, c.target.item_id), undone),
+    words: changeSentence(c, c.by_name, c.op === "delete_goal" ? goalLabel(db, c.target.goal_id) : itemLabel(db, c.target.item_id), undone),
   };
 }
 
@@ -393,6 +393,14 @@ function itemLabel(db: SimpleDb, id: unknown): string | null {
   const s = key ? db.items.find((x) => x.key === key) : undefined;
   if (!s) return null;
   return s.trashed ? `${s.title} (deleted)` : `${prdCode(s.section) ?? ""} ${s.title}`.trim();
+}
+
+/** trash-features-goals: a `delete_goal` change names the goal with "(deleted)" once it is
+ * in Trash (changes.deleted_names); still live (a proposal waiting), the sentence's own
+ * fallback (target.title) names it instead. */
+function goalLabel(db: SimpleDb, id: unknown): string | null {
+  const g = (db.goal_buckets?.goals ?? []).find((x) => x.id === id);
+  return g?.trashed ? `${g.title} (deleted)` : null;
 }
 
 /** simple-replaced-prds (changes.listing): a proposal waiting on a replaced PRD's item leaves Simple with the item. */

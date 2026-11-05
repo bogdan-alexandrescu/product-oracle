@@ -11,10 +11,13 @@ import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRo
 import { planGoalNames, planSlices } from "./simple-plan";
 
 // trash-features-goals: `trashed` while in Settings › Trash (left out of every read, kept for Restore).
-type Goal = { id: string; title: string; order: number; measure: string | null; target: string | null; due: string | null; archived: boolean; trashed?: boolean };
+// `key`: the Entity.key the API gives a goal at creation (goal_buckets._slug), named in its Trash entry.
+type Goal = { id: string; key: string; title: string; order: number; measure: string | null; target: string | null; due: string | null; archived: boolean; trashed?: boolean };
 type Feature = { id: string; key: string; title: string; goal_ids: string[] };
 export type GoalBucketsDb = { goals: Goal[]; features: Feature[] };
 type Undo = Schemas["GoalBucketsUndo"];
+
+const keyOf = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "goal";
 
 /** Invented measures for the plan's goals. */
 const MEASURES: Record<string, [string, string, string]> = {
@@ -27,7 +30,7 @@ const MEASURES: Record<string, [string, string, string]> = {
 export function seedGoalBuckets(): GoalBucketsDb {
   const goals = planGoalNames().map((title, i) => {
     const [measure, target, due] = MEASURES[title] ?? [null, null, null];
-    return { id: stableUuid(`goal-bucket/${title}`), title, order: i + 1, measure, target, due, archived: false };
+    return { id: stableUuid(`goal-bucket/${title}`), key: keyOf(title), title, order: i + 1, measure, target, due, archived: false };
   });
   const features: Feature[] = [];
   for (const s of planSlices()) {
@@ -54,7 +57,7 @@ export function seedGoalBuckets(): GoalBucketsDb {
 export function seedGoalBucketsHard(): GoalBucketsDb {
   const base = seedGoalBuckets();
   const bigId = stableUuid("goal-bucket/grow-partner-network");
-  const big: Goal = { id: bigId, title: "Grow partner network", order: base.goals.length + 1, measure: "Live partner integrations", target: "40 partners", due: "2027-03-31", archived: false };
+  const big: Goal = { id: bigId, key: keyOf("Grow partner network"), title: "Grow partner network", order: base.goals.length + 1, measure: "Live partner integrations", target: "40 partners", due: "2027-03-31", archived: false };
   const growth = base.goals.find((g) => g.title === "Growth")!;
   const codes = ["F-07", "F-08", "F-09", "F-10", "F-11", "F-12", "F-13", "F-14", "F-15", "F-16", "F-17", "F-18", "F-19", "F-20", "F-22"];
   const also = new Set(["F-09", "F-12", "F-15", "F-19"]);
@@ -77,7 +80,7 @@ export function seedGoalBucketsWith(
   const goalOf = (name: string): string => {
     let g = goals.find((x) => x.title.toLowerCase() === name.toLowerCase());
     if (!g) {
-      g = { id: stableUuid(`goal-bucket/${name}`), title: name, order: goals.length + 1, measure: null, target: null, due: null, archived: false };
+      g = { id: stableUuid(`goal-bucket/${name}`), key: keyOf(name), title: name, order: goals.length + 1, measure: null, target: null, due: null, archived: false };
       goals.push(g);
     }
     return g.id;
@@ -161,7 +164,7 @@ export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, g: Goal, to:
   const row: TrashEntryRow = {
     out: {
       id: crypto.randomUUID(),
-      root: { type: "goal", id: g.id, slug: null, title: g.title, kind: "goal", code: null },
+      root: { type: "goal", id: g.id, slug: g.key, title: g.title, kind: "goal", code: null },
       items: [], deleted_by: bin.id, deleted_by_name: bin.name, deleted_at: at, reason,
       published: false, purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
     },
@@ -191,7 +194,8 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
   }
   // trash-features-goals: DELETE .../goals/{id}?to_goal_id=: approvers and owners delete it (and
   // restore it); a commenter proposes it to the owners; viewers are refused.
-  if (bin && p[3] === "goals" && p[4] && !p[5] && m === "DELETE" && role !== "viewer") {
+  if (bin && p[3] === "goals" && p[4] && !p[5] && m === "DELETE") {
+    if (role === "viewer") return json(403, { detail: "Requires the commenter role" });
     const g = db.goals.find((x) => x.id === p[4] && !x.trashed);
     if (!g) return json(404, { detail: "No such goal" });
     const q = new URL(req.url).searchParams;
@@ -212,7 +216,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
     const b = body as GoalIn;
     if (!complete(b)) return json(422, { detail: "A goal needs a measure, a target and a date" });
     const order = Math.max(0, ...db.goals.map((g) => g.order)) + 1;
-    const g: Goal = { id: crypto.randomUUID(), title: b.title!.trim(), order, measure: b.measure!.trim(), target: b.target!.trim(), due: b.due!, archived: false };
+    const g: Goal = { id: crypto.randomUUID(), key: keyOf(b.title!.trim()), title: b.title!.trim(), order, measure: b.measure!.trim(), target: b.target!.trim(), due: b.due!, archived: false };
     db.goals.push(g);
     return json(201, { goal: goalOut(g), undo: signed({ goals: [], features: [], added_goal_id: g.id }) });
   }
