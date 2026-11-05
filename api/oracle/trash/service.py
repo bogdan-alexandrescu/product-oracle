@@ -474,14 +474,14 @@ async def restore_entry(
         )
     from oracle.roadmap import alerts
 
-    await trash_items.after_restore(db, entry)
+    dropped = await trash_items.after_restore(db, entry)
     await alerts.reopen_after_trash(db, entry.root.get("closed_alerts") or [])
     from oracle.requests import service as requests_service
 
     await requests_service.relink_documents(
         db, principal, entry.root.get("released_requests") or []
     )
-    not_restored = await _not_restored(db, entry)
+    not_restored = [*dropped, *await _not_restored(db, entry)]
     await audit.record(
         db,
         principal,

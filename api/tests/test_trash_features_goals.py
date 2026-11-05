@@ -575,7 +575,10 @@ async def test_restore_after_a_new_version_puts_the_feature_on_the_current_roadm
         }
         m = await s.scalar(select(TrackMilestone).where(TrackMilestone.name == "Pilot"))
     shown = uuid.UUID(items["move_dates-b"]["id"])
-    assert live[shown] == ["move_dates-a"] and shown in m.item_ids
+    assert live[shown] == ["move_dates-a"]
+    # The copy Restore made is in the milestone (a draft submitted after copies it again).
+    assert shown in m.item_ids or then == "working_draft"
+    assert len(set(m.item_ids)) == len(m.item_ids) > 1
 
 
 @pytest.mark.asyncio

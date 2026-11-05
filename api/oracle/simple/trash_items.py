@@ -23,7 +23,11 @@ for "not now"; Delete is for "this should not be here".
 - Item keys: a feature in Trash keeps its key (``trashed_keys``: new features never take
   it), so the items that depend on it still point at it; Restore refuses (409) if another
   live item holds its key all the same. A purge takes its id out of milestones and its key
-  out of the items that depended on it.
+  out of the items that depended on it. A version published, drafted or submitted while it
+  was in Trash was made without it: Restore puts it on the roadmap's current version, the
+  working draft's and the one in review too, with its goal, dependencies and milestones
+  (a dependency no longer on the roadmap is dropped, and the answer's ``not_restored``
+  says which). The approved-roadmap import never gives a new item a trashed key either.
 - ``POST .../restore``: an owner, or whoever deleted it (owner's answer, Nov 5;
   oracle.trash.service.may_restore), restores one; ``/v1/trash`` lists and restores them
   beside documents (to those below owner, only what they deleted), and the ticker purges
@@ -371,13 +375,17 @@ async def before_restore(db: AsyncSession, entry: TrashEntry) -> None:
             )
 
 
-async def after_restore(db: AsyncSession, entry: TrashEntry) -> None:
-    """A goal's features' links and the items' goal_ids, exactly as before its delete moved
-    them (``links`` and ``goal_ids`` on the entry; none when nothing was moved)."""
+async def after_restore(db: AsyncSession, entry: TrashEntry) -> list[dict[str, Any]]:
+    """A feature back on its roadmap's current version (:func:`_onto_current`); a goal's
+    features' links and the items' goal_ids, exactly as before its delete moved them
+    (``links`` and ``goal_ids`` on the entry; none when nothing was moved). Returns what
+    did not come back with it (a dependency no longer on the roadmap)."""
     from oracle.simple import goal_buckets
 
+    if entry.root_type == "feature":
+        return await _onto_current(db, entry)
     if entry.root_type != "goal":
-        return
+        return []
     for snap in entry.root.get("links") or []:
         await goal_buckets._restore_links(db, goal_buckets.FeatureSnap.model_validate(snap))
     for item_id, ids in (entry.root.get("goal_ids") or {}).items():
@@ -388,6 +396,94 @@ async def after_restore(db: AsyncSession, entry: TrashEntry) -> None:
         if row is not None:
             row.goal_ids = [uuid.UUID(i) for i in ids]
     await db.flush()
+    return []
+
+
+# Not copied when a restored feature goes onto a version it is not on.
+_OWN = frozenset({"id", "roadmap_version_id", "draft_roadmap_id", "simple_draft_id",
+                  "created_at", "updated_at", "deleted_at", "deleted_by", "deleted_reason",
+                  "trash_entry_id"})  # fmt: skip
+
+
+async def _onto_current(db: AsyncSession, entry: TrashEntry) -> list[dict[str, Any]]:
+    """A version published, opened in a draft or submitted while the feature was in Trash
+    was made without it: Restore puts a copy of its latest row on the roadmap's current
+    version, the working draft's base and the version in review, wherever it is missing,
+    with its goal, dependencies and milestones. A dependency on a key no longer on that
+    version (nor in Trash) is dropped, and said."""
+    from oracle.docs.models import DocumentVersion
+    from oracle.roadmap.models import TrackMilestone
+    from oracle.simple.additions import _shown_version
+    from oracle.simple.models import SimpleDraft
+
+    key = entry.root.get("slug")
+    doc = entry.root.get("roadmap_id")
+    if not key or not doc:
+        return []
+    doc = uuid.UUID(doc)
+    rows = list(
+        await db.scalars(
+            select(RoadmapItem)
+            .outerjoin(DocumentVersion, DocumentVersion.id == RoadmapItem.roadmap_version_id)
+            .where(RoadmapItem.roadmap_document_id == doc, RoadmapItem.item_key == key,
+                   RoadmapItem.draft_roadmap_id.is_(None))
+            .order_by(DocumentVersion.number.desc().nulls_last())
+            .execution_options(populate_existing=True)
+        )
+    )  # fmt: skip
+    if not rows:
+        return []
+    have = {r.roadmap_version_id for r in rows}
+    drafts_ = list(
+        await db.scalars(
+            select(SimpleDraft).where(
+                SimpleDraft.document_id == doc, SimpleDraft.status.in_(("working", "submitted"))
+            )
+        )
+    )
+    targets = {await _shown_version(db, doc, draft=False)}
+    targets |= {d.base_version_id if d.status == "working" else d.version_id for d in drafts_}
+    targets -= {None, *have}
+    if not targets:
+        return []
+    src, kept = rows[0], await trashed_keys(db, doc)
+    added = {d.base_version_id: d.id for d in drafts_ if d.status == "working"}
+    dropped: dict[str, str] = {}
+    copies = []
+    for version in sorted(targets):
+        on_it = RoadmapItem.roadmap_version_id == version
+        if version in added:
+            on_it |= RoadmapItem.simple_draft_id == added[version]
+        on = set(await db.scalars(select(RoadmapItem.item_key).where(on_it)))
+        deps = [k for k in src.depends_on or [] if k in on or k in kept]
+        dropped |= {k: k for k in src.depends_on or [] if k not in deps}
+        fields = {
+            c.key: getattr(src, c.key)
+            for c in RoadmapItem.__mapper__.column_attrs
+            if c.key not in _OWN
+        }
+        copy = RoadmapItem(**fields | {"roadmap_version_id": version, "depends_on": deps})
+        db.add(copy)
+        copies.append(copy)
+    await db.flush()
+    ids = {r.id for r in rows}
+    for m in await db.scalars(
+        select(TrackMilestone).where(TrackMilestone.item_ids.overlap(list(ids)))
+    ):
+        m.item_ids = [*m.item_ids, *(c.id for c in copies if c.id not in m.item_ids)]
+    for k in dropped:
+        title = await db.scalar(
+            select(RoadmapItem.title)
+            .where(RoadmapItem.roadmap_document_id == doc, RoadmapItem.item_key == k)
+            .execution_options(**ALL).limit(1)
+        )  # fmt: skip
+        dropped[k] = title or k
+    await db.flush()
+    return [
+        {"item": entry.root, "reason": f"It depended on '{name}', which is no longer on the "
+                                       "roadmap: it is back without that dependency"}
+        for name in dropped.values()
+    ]  # fmt: skip
 
 
 async def before_purge(db: AsyncSession, entry: TrashEntry) -> None:
