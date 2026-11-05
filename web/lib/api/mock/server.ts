@@ -21,6 +21,7 @@ import { accountRoute, liveCredentials, openTokens, passwordOk, revokeMemberToke
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief, subtree } from "./brief";
 import { brandHeaderHtml, brandStyleHtml, emptyBranding, routeBranding, type BrandingDb } from "./branding";
 import { capabilitiesOut } from "./capabilities";
+import { daysInWords } from "./days";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
@@ -4669,15 +4670,18 @@ function banner(doc: DocumentRow, v: VersionRow, audience?: string | null) {
 function inlineHtml(nodes: Inline[]): string {
   return nodes
     .map((n) =>
-      n.t === "text" || n.t === "code"
-        ? escapeHtml(n.v)
-        : n.t === "cite" || n.t === "img"
-          ? ""
-          : n.t === "strong"
-            ? `<strong>${inlineHtml(n.c)}</strong>`
-            : n.t === "em"
-              ? `<em>${inlineHtml(n.c)}</em>`
-              : inlineHtml(n.c),
+      // As the API's render: a day in the text reads month first ("As of Oct 2, 2026"); code keeps it as written.
+      n.t === "text"
+        ? escapeHtml(daysInWords(n.v))
+        : n.t === "code"
+          ? escapeHtml(n.v)
+          : n.t === "cite" || n.t === "img"
+            ? ""
+            : n.t === "strong"
+              ? `<strong>${inlineHtml(n.c)}</strong>`
+              : n.t === "em"
+                ? `<em>${inlineHtml(n.c)}</em>`
+                : inlineHtml(n.c),
     )
     .join("");
 }
