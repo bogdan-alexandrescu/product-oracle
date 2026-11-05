@@ -1320,11 +1320,15 @@ function baselineLabel(title: string, summary: { need_you: number; blocking: num
   return `${title}: ${parts.join(", ")}`;
 }
 
+/** A group's name where the stop's own label says baseline: people read the Ground Truth. */
+const GROUP_LABEL: Partial<Record<InboxOut["checkpoints"][number]["kind"], string>> = { baseline_confirm: "Confirm the Ground Truth" };
+
 /**
  * B-22: three or more runs of one flow waiting at the same stop read as one row, "Confirm the
- * baseline · 11 runs", each run under it with its own action. A row with its own rows under it
- * (a Roadmap items review) stays as it is. The group is New while any of its runs is new: its
- * new runs show under New, its seen runs under Seen, each tab counting the runs it lists.
+ * Ground Truth · 11 runs", each run under it with its own action. A row with its own rows under
+ * it (a Roadmap items review) stays as it is. The group is New while any of its runs is new: its
+ * new runs show under New, its seen runs under Seen, each tab counting the runs it lists; a
+ * part of fewer than three runs is its runs' own rows, never a group.
  */
 function groupCheckpoints(rows: InboxOut["checkpoints"], needs: Need[], seenBefore: string | null | undefined): Need[] {
   const keyOf = (c: InboxOut["checkpoints"][number]) => [c.kind, c.flow, c.can_decide].join("|");
@@ -1345,11 +1349,12 @@ function groupCheckpoints(rows: InboxOut["checkpoints"], needs: Need[], seenBefo
       { state: "new", runs: same.filter((x) => isNew(x.at, seenBefore)) },
       { state: "open", runs: same.filter((x) => !isNew(x.at, seenBefore)) },
     ].filter((p) => p.runs.length > 0);
-    return parts.map(({ state, runs }) => {
+    return parts.flatMap(({ state, runs }) => {
+      if (runs.length < 3) return runs.map((x) => ({ ...x, state }));
       const members = rows.filter((r) => runs.some((x) => x.key === r.id));
       const docs = new Set(members.map((r) => r.document_title ?? r.document_slug));
       const where = docs.size === 1 && members[0].document_title ? `${c.flow_title} · ${members[0].document_title}` : c.flow_title;
-      const title = `${CHECKPOINT_LABEL[c.kind]} · ${plural(runs.length, "run")}`;
+      const title = `${GROUP_LABEL[c.kind] ?? CHECKPOINT_LABEL[c.kind]} · ${plural(runs.length, "run")}`;
       const latest = runs.map((x) => x.at ?? "").sort().at(-1) || null;
       return {
         ...n,

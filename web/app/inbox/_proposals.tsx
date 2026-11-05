@@ -152,7 +152,8 @@ export function dateSuggestionRows(rows: DateSuggestion[], seenBefore: string | 
               <Chip kind="warn" className="align-middle" data-testid="date-suggestion-far-out">
                 Far out
               </Chip>{" "}
-              <InfoTip label="Far out" align="start" testId="date-suggestion-far-out-tip">
+              {/* Below its chip: over neither its own date line nor the row above's Open. */}
+              <InfoTip label="Far out" align="start" side="bottom" testId="date-suggestion-far-out-tip">
                 Low confidence, after the planning horizon ({calendarDay(PLANNING_HORIZON_END, { month: "short", day: "numeric", year: "numeric" })})
               </InfoTip>
             </>
