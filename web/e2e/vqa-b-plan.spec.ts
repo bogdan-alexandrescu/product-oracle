@@ -177,7 +177,7 @@ test("review 1: an item without a known title reads An item", async ({ page }) =
   await openDates(page);
   await page.getByTestId("dates-filter").getByRole("button", { name: /^All/ }).click();
   const row = dateRow(page, "ENG-402");
-  await expect(row.getByTestId("basis-title")).toHaveText(/^(An item|Threshold alerts on spend) \(ENG-402\)$/);
+  await expect(row.getByTestId("basis-title")).toHaveText("An item (ENG-402)");
   await expect(row).not.toContainText("threshold-alerts");
 });
 
@@ -255,19 +255,18 @@ test("review 7: on a phone, the same Inbox launch link opens the sheet each time
   await scenario(page, "oracle-did-launch-ritual");
   await login(page);
   await page.setViewportSize(PHONE);
-  const follow = async () => {
-    await page.goto("/inbox");
-    const did = page.getByTestId("inbox-oracle-actions").filter({ visible: true }).getByRole("row").filter({ hasText: "Usage export launched" });
-    await did.getByRole("link", { name: /^Usage export launched: Oracle published/ }).click();
-    await expect(page).toHaveURL(/\/roadmap\/launches\?launch=[0-9a-f-]{36}$/);
-  };
-  await follow();
+  await page.goto("/inbox");
+  const first = page.getByTestId("inbox-oracle-actions").filter({ visible: true }).getByRole("row").filter({ hasText: "Usage export launched" });
+  await first.getByRole("link", { name: /^Usage export launched: Oracle published/ }).click();
+  await expect(page).toHaveURL(/\/roadmap\/launches\?launch=[0-9a-f-]{36}$/);
   const sheet = page.getByTestId("launch-sheet");
   await expect(sheet).toBeVisible();
   await sheet.getByRole("button", { name: /close/i }).first().click();
   await expect(sheet).toBeHidden();
   await page.goBack();
   await expect(page).toHaveURL(/\/inbox/);
+  // Opened once, the line is no longer new: it is under Seen.
+  await page.getByRole("tab", { name: /^Seen/ }).click();
   const did = page.getByTestId("inbox-oracle-actions").filter({ visible: true }).getByRole("row").filter({ hasText: "Usage export launched" });
   await did.getByRole("link", { name: /^Usage export launched: Oracle published/ }).click();
   await expect(page).toHaveURL(/\/roadmap\/launches\?launch=/);
