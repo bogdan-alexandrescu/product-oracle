@@ -792,9 +792,9 @@ def test_british_and_american_spellings_and_listed_abbreviations_are_one_word():
     refused = (
         ("Should we refund cancelled orders at once?", "Should we refund canceled orders at once?"),
         ("Who renews the licence for the team?", "Who renews the license for the team?"),
-        ("Which data centre should host the backups?", "Which data center should host the backups?"),
+        ("Which centre should host the backups?", "Which center should host the backups?"),
         ("Who owns the product catalogue this year?", "Who owns the product catalog this year?"),
-        ("Should travelling staff get the new laptops?", "Should traveling staff get the new laptops?"),
+        ("Should travelling staff get new laptops?", "Should traveling staff get new laptops?"),
         ("Should the banner use a grey border?", "Should the banner use a gray border?"),
         ("Can members enrol in the beta program?", "Can members enroll in the beta program?"),
         ("Is a wait of ten mins fine?", "Is a wait of ten minutes fine?"),

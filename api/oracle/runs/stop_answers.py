@@ -571,7 +571,7 @@ _NEGATIONS = frozenset({"not", "no", "never", "nor", "without", "dont", "doesnt"
 
 
 # Words that name one thing two ways: a question with one in the place of the other is the
-# same question. Other abbreviations are read by their letters (see _variants).
+# same question. A plural of one ("dbs", "databases") is read as the word (see _variants).
 _SYNONYMS = (
     frozenset({"database", "datastore", "db"}),
     frozenset({"app", "application"}),
@@ -581,32 +581,118 @@ _SYNONYMS = (
     frozenset({"prod", "production"}),
     frozenset({"info", "information"}),
     frozenset({"docs", "documentation"}),
+    # British and American spellings no ending rule covers.
+    frozenset({"grey", "gray"}),
+    frozenset({"enrol", "enroll"}),
+    frozenset({"enrolment", "enrollment"}),
+    frozenset({"fulfil", "fulfill"}),
+    frozenset({"fulfilment", "fulfillment"}),
+    frozenset({"instalment", "installment"}),
+    frozenset({"skilful", "skillful"}),
+    frozenset({"programme", "program"}),
+    frozenset({"judgement", "judgment"}),
+    frozenset({"ageing", "aging"}),
+    frozenset({"jewellery", "jewelry"}),
+    frozenset({"aluminium", "aluminum"}),
 )
+
+# Common abbreviations, each beside the word it stands for (plurals as for _SYNONYMS).
+_ABBREVIATIONS = (
+    frozenset({"yr", "year"}),
+    frozenset({"hr", "hour"}),
+    frozenset({"min", "minute"}),
+    frozenset({"sec", "second"}),
+    frozenset({"wk", "week"}),
+    frozenset({"mth", "month"}),
+    frozenset({"mgmt", "management"}),
+    frozenset({"mgr", "manager"}),
+    frozenset({"dept", "department"}),
+    frozenset({"acct", "account"}),
+    frozenset({"msg", "message"}),
+    frozenset({"pw", "pwd", "password"}),
+    frozenset({"qty", "quantity"}),
+    frozenset({"amt", "amount"}),
+    frozenset({"approx", "approximately"}),
+    frozenset({"govt", "government"}),
+    frozenset({"intl", "international"}),
+    frozenset({"ppl", "people"}),
+)
+
+# Acronyms that are words of their own, never a longer word by its consonants ("SMS" is not
+# "systems", "MRR" is not "mirror").
+_ACRONYMS = frozenset({"sms", "mms", "mrr", "arr", "css", "scss", "html", "http", "https", "xml",
+                       "sql", "ssl", "tls", "ssh", "dns", "cdn", "crm", "cms", "pdf", "png",
+                       "jpg", "svg", "csv", "tsv", "mvp", "ltv", "cpm", "cpc", "ctr", "nps",
+                       "sdk", "jwt", "ttl", "rpm", "rps", "tps", "qps", "ssd", "hdd", "gdpr",
+                       "pst", "pdt", "est", "edt", "cst", "cdt", "mst", "mdt", "gmt", "bst",
+                       "utc", "nyc", "ytd", "mtd", "qtd", "tbd", "lgtm"})  # fmt: skip
+
+# A word and the word with -s or -es that is a different word ("news" is not more "new").
+_NOT_PLURALS = frozenset({("new", "news"), ("good", "goods"), ("custom", "customs"),
+                          ("us", "uses"), ("mean", "means"), ("manner", "manners"),
+                          ("damage", "damages"), ("saving", "savings"), ("arm", "arms"),
+                          ("her", "hers"), ("our", "ours"), ("his", "hiss")})  # fmt: skip
 _VOWELS = frozenset("aeiou")
+
+# British endings and their American spelling, from five letters ("four" is not "for").
+_SPELLINGS = (
+    (re.compile(r"^([a-z]{2,}[aeiou])ll(ed|ing|ers?)$"), r"\1l\2"),  # cancelled, travelling
+    (re.compile(r"(?<=[^aeiou])re$"), "er"),  # centre
+    (re.compile(r"ogue$"), "og"),  # catalogue
+    (re.compile(r"ence$"), "ense"),  # licence
+    (re.compile(r"our"), "or"),  # colour
+    (re.compile(r"is(e|ed|es|ing|ation|ations)$"), r"iz\1"),  # organise, organisation
+    (re.compile(r"ys(e|ed|es|ing)$"), r"yz\1"),  # analyse
+)
+
+
+def _american(word: str) -> str:
+    if len(word) < 5:
+        return word
+    for pattern, spelt in _SPELLINGS:
+        word = pattern.sub(spelt, word)
+    return word
 
 
 def _variants(x: str, y: str) -> bool:
     """``x`` and ``y`` are one word spelt two ways: a known synonym ("datastore",
-    "database"), an abbreviation by its consonants ("yrs", "years"; "mgmt", "management"),
-    a plural ("export", "exports") or a British or American spelling ("colour", "color";
-    "organise", "organize"). Two different words ("Safari", "Firefox"; "fast", "slow";
-    "export", "expert") are not."""
-    if any(x in s and y in s for s in _SYNONYMS):
+    "database"), a listed abbreviation ("yrs", "years"; "pw", "password"), a longer
+    abbreviation by its consonants ("mgmt", "management"), a plural ("export", "exports") or a
+    British or American spelling ("colour", "color"; "organise", "organize"; "licence",
+    "license"; "centre", "center"; "catalogue", "catalog"; "cancelled", "canceled"). Two
+    different words ("Safari", "Firefox"; "fast", "slow"; "export", "expert"; "new", "news"),
+    a two-letter word ("us", "users"; "ms", "months") or an acronym ("SMS", "systems") are
+    not."""
+    if x == y:
         return True
     short, long = sorted((x, y), key=len)
     if not short.isalpha() or not long.isalpha():
         return False
-    if long in (short + "s", short + "es"):
-        return True
-    if len(short) >= 2 and short[0] == long[0] and short[-1] == long[-1] and short != long:
-        rest = iter(long)
-        if not _VOWELS & set(short[1:]) and all(c in rest for c in short):
+    # "dbs" and "databases" are "db" and "database"; "licences" and "licenses" one spelling.
+    forms = [(x, y)]
+    if x.endswith("s") and y.endswith("s") and len(short) > 2:
+        forms.append((x[:-1], y[:-1]))
+    for a, b in forms:
+        if any(a in s and b in s for s in (*_SYNONYMS, *_ABBREVIATIONS)):
             return True
-    # "four" is not "for": a spelling only from five letters.
-    return len(long) >= 5 and any(
-        a in x + y and x.replace(a, b) == y.replace(a, b)
-        for a, b in (("our", "or"), ("ise", "ize"), ("isation", "ization"), ("yse", "yze"))
+        if len(max(a, b, key=len)) >= 5 and _american(a) == _american(b):
+            return True
+    if len(short) >= 3 and long in (short + "s", short + "es"):
+        return (short, long) not in _NOT_PLURALS
+    return (
+        len(short) >= 3
+        and len(long) >= len(short) + 2
+        and short not in _ACRONYMS
+        and short[0] == long[0]
+        and short[-1] == long[-1]
+        and not _VOWELS & set(short[1:])
+        and _in_order(short, long)
     )
+
+
+def _in_order(letters: str, word: str) -> bool:
+    rest = iter(word)
+    return all(c in rest for c in letters)
 
 
 def same_question(asked: str, listed: str) -> bool:

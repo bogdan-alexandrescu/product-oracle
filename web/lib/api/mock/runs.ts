@@ -2127,7 +2127,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       theme: roadmap ? (input.theme ?? doc?.theme ?? ROADMAP_DEFAULTS.theme) : templated ? (input.theme ?? doc?.theme ?? null) : null,
       estimate_usd: null,
       spent_usd: 0,
-      created_by: ctx.userId,
+      created_by: ctx.member?.id ?? ctx.userId,
       created_at: ctx.now(),
       started_at: null,
       finished_at: null,
@@ -2272,7 +2272,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (r.status !== "awaiting_approval") return fail(409, `run is ${r.status}, not awaiting approval`);
     const changed = itemsChanged(ctx, r);
     if (changed) return changed;
-    r.approved_by = ctx.userId;
+    r.approved_by = ctx.member?.id ?? ctx.userId;
     r.approved_at = ctx.now();
     launch(ctx, r);
     return done();
