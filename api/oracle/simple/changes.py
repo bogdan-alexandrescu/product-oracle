@@ -634,7 +634,15 @@ async def _plan(
     current = read(row, fields, target)
     # A suggestion accepted after the item got dates is "outdated" (S2-minor).
     lead = "outdated" if op == "accept_date_suggestion" else "Changed since you saw it"
-    if _normal(fields, body.before) != current:
+    seen_ = _normal(fields, body.before)
+    if op == "move_dates" and seen_ != current:
+        # hotfix-2: a move's ``before`` is the dates the read shows (a date source's, an
+        # estimated start, a folded PRD copy's); the stored ones still pass (older pages).
+        r = entry.resolved
+        shown = {"start_date": _iso(r.start.date), "end_date": _iso(r.end.date)}
+        if seen_ != shown:
+            raise await _conflict(db, shown, {str(row.id)}, lead)
+    elif seen_ != current:
         raise await _conflict(db, current, {str(row.id)}, lead)
     a = body.after
     after: dict[str, Any]

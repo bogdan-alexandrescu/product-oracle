@@ -50,6 +50,7 @@ import {
   roadmapOut,
   draftPrds,
   readableRoadmap,
+  readDates,
   seesDraft,
   settleDrafting,
   simpleWindows,
@@ -260,7 +261,7 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     // The API's stored dates: typed or accepted ones (storedDates), never estimates.
     if (f === "start_date") out[f] = storedDates(db, key).start;
     else if (f === "end_date") out[f] = storedDates(db, key).end;
-    else if (f === "date_source") out[f] = own ? (own.source ?? "accepted") : s.source === "typed" || s.source === "accepted" ? s.source : null;
+    else if (f === "date_source") out[f] = own ? (own.source ?? "accepted") : s.dates ? s.dates.source : s.source === "typed" || s.source === "accepted" ? s.source : null;
     else if (f === "horizon") out[f] = s.horizon;
     else if (f === "position") out[f] = s.position ?? db.items.indexOf(s);
     else if (f === "cut") out[f] = s.status === "cut";
@@ -694,7 +695,13 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     const now_ = read(seen, key, fields, target);
     // A suggestion accepted after the item got dates is "outdated" (S2-minor).
     const lead = body.op === "accept_date_suggestion" ? "outdated" : "Changed since you saw it";
-    if (!same(normal(fields, body.before), now_)) return conflict(db, ctx, now_, [String(target.item_id)], lead);
+    const seenNow = normal(fields, body.before);
+    if (body.op === "move_dates" && !same(seenNow, now_)) {
+      // hotfix-2 (changes._plan): a move's before is the dates the read shows; the stored ones still pass.
+      const r = readDates(seen, key);
+      const shown = { start_date: r.start, end_date: r.end };
+      if (!same(seenNow, shown)) return conflict(db, ctx, shown, [String(target.item_id)], lead);
+    } else if (!same(seenNow, now_)) return conflict(db, ctx, now_, [String(target.item_id)], lead);
     const a = body.after ?? {};
     let stored = fields;
     if (body.op === "move_dates") {

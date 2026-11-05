@@ -717,3 +717,56 @@ def test_a_proposal_on_a_folded_item_reads_as_applied_on_both_layers():
     out = drafts.simulate(c, {"cut": False}, {str(shown.id): folded}, overlays, changes.KEYED,
                           changes.write, {str(shown.id): copy})  # fmt: skip
     assert drafts.fold(shown, copy, out[rm]).cut is False
+
+
+# HOTFIX 2 (moving a dated roadmap item is refused): an item dated only by a verified date
+# source, whose PRD copy on the draft holds that end ("engineering"), read with its
+# effort's estimated start, moves from the dates the read shows.
+
+
+async def test_moving_an_item_dated_by_its_date_source_takes_the_dates_the_read_shows(client):
+    """protects=moving an item whose dates come from a verified date source (end-only, its
+    feature's effort 4 weeks), folded with its PRD copy on the draft, from the dates the read
+    shows is accepted and the next read shows the new dates once, as the item's own;
+    fails_when=the move is refused 'Changed since you saw it' (its dates) though nobody
+    changed it, or the item shows twice or keeps its date source's dates."""
+    from oracle.baseline.models import Entity
+
+    ctx, ids = await unapproved_world()
+    async with tenant_session(ctx.tenant_id) as s:
+        feature = await _add(s, Entity(type="feature", key="route-search", title="Route search",
+                                       status="confirmed", origin="user",
+                                       attrs={"effort": "L"}))  # fmt: skip
+        rv2 = await s.get(DocumentVersion, ids["v2"])
+        s.add(RoadmapItem(roadmap_document_id=ids["roadmap"], roadmap_version_id=rv2.id,
+                          item_key="route-search", title="Route search", horizon="now",
+                          position=5, feature_id=feature.id, prd_document_id=ids["prd"],
+                          prd_version_id=ids["pv2"]))  # fmt: skip
+        # What approving the PRD writes: the copy holds the date source's end, no start.
+        copy = await _add(s, RoadmapItem(
+            roadmap_document_id=ids["roadmap"], simple_draft_id=ids["draft"],
+            item_key="route-search", title="Route search", horizon="now", position=12,
+            feature_id=feature.id, end_date=date(2027, 1, 8), date_source="engineering",
+            prd_document_id=ids["prd"], prd_version_id=ids["pv2"],
+            note="From Trail maps (version 2)"))  # fmt: skip
+        s.add(ScheduleBasis(kind="estimate", reference="Lead estimate", status="verified",
+                            supports_date=date(2027, 1, 8), prd_document_id=ids["prd"],
+                            item_key="route-search", verified_by=ctx.users["owner"].id,
+                            verified_at=NOW))  # fmt: skip
+        d = await s.get(SimpleDraft, ids["draft"])
+        d.overlay = {"from_prds": {str(ids["prd"]): {"version": 2, "items": [str(copy.id)],
+                                                     "key_dates": [], "wrote": {}}}}  # fmt: skip
+        await s.commit()
+    out = await read(client, ctx)
+    assert keys_once(out) == ["offline-sync", "route-search", "trip-reports"]
+    item = by_key(out)["route-search"]
+    shown = {"start_date": item["start"]["date"], "end_date": item["end"]["date"]}
+    assert shown == {"start_date": "2026-12-11", "end_date": "2027-01-08"}
+    assert item["end"]["source"] == "engineering"
+    await change(client, ctx, "move_dates", {"item_id": item["id"]}, shown,
+                 {"start_date": "2026-12-04", "end_date": "2027-01-01"})  # fmt: skip
+    out = await read(client, ctx)
+    assert keys_once(out) == ["offline-sync", "route-search", "trip-reports"]
+    item = by_key(out)["route-search"]
+    assert (item["start"]["date"], item["end"]["date"]) == ("2026-12-04", "2027-01-01")
+    assert item["start"]["source"] == item["end"]["source"] == "typed"

@@ -265,3 +265,26 @@ test("plan inspector: an unverified date offers Verify date; the dialog picks th
   await page.getByTestId("dates-filter").getByRole("button", { name: "Verified" }).click();
   await expect(row(page, "ENG-431")).toContainText("Item: Alerts in the team chat");
 });
+
+test("Add a date source, One item: the PRD's roadmap items are listed by name, the draft's too", async ({ page }) => {
+  // protects=hotfix-2: For = One item lists the PRD's roadmap items people see on the roadmap
+  // (the Simple roadmap's draft and the approved plan, one per key, by name), so a date source
+  // can be tied to an item only the draft holds (Alert replay engine, from the Usage alerts PRD);
+  // fails_when=the list reads only the approved plan (the draft's items are missing) or names an
+  // item twice; no_claim=the API's checks of the item (api/tests/test_schedule_bases_verify.py).
+  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "simple-dated-move"]);
+  await login(page);
+  await openDates(page);
+  await page.getByRole("button", { name: "Add a date source" }).click();
+  const dialog = page.getByTestId("date-basis-dialog");
+  await dialog.getByLabel("PRD").selectOption({ label: "Usage alerts PRD" });
+  await dialog.getByLabel("For").selectOption("item");
+  const picker = dialog.getByLabel("Item");
+  await expect(picker.locator("option", { hasText: "Alert replay engine" })).toHaveCount(1);
+  const names = (await picker.locator("option").allTextContents()).slice(1);
+  expect(names.length).toBeGreaterThan(1);
+  expect(new Set(names).size, "each item once").toBe(names.length);
+  expect(names, "by name").toEqual([...names].sort((a, b) => a.localeCompare(b)));
+  await picker.selectOption({ label: "Alert replay engine" });
+  await expect(picker).toHaveValue("alert-replay");
+});
