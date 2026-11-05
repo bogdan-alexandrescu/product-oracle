@@ -18,6 +18,16 @@ Test cards (protects / fails_when / no_claim):
   is archived (its features moved as asked) or in Trash; a declined ask leaves it; an
   approver's change applies at once; a viewer is 403; fails_when=an ask applies at once,
   goes to no one, or an accept does nothing; no_claim=the feature delete ask.
+- test_ask_to_restore_goes_to_the_decider: protects=a commenter asks to restore an
+  archived goal (op ``unarchive_goal``), routed to the owners; an owner's accept puts it
+  back in the buckets; a live goal's ask is 409; an approver's applies at once and only an
+  owner, as ``asks_to`` says, decides a goal ask; fails_when=a commenter may only ask to
+  delete an archived goal, or an approver decides an ask sent to the owners;
+  no_claim=Restore from Trash.
+- test_delete_goal_undo_brings_links_back: protects=Delete goal answers with its Trash
+  entry and an ``undo`` for the links it moved; Restore and that Undo put the goal and
+  every link back; fails_when=the delete's note has nothing to undo the links with;
+  no_claim=Settings > Trash's own Restore of links.
 """
 
 import uuid
@@ -169,3 +179,62 @@ async def test_ask_to_archive_and_delete_goes_to_the_decider(client):
     assert r.status_code == 201, r.text
     assert r.json()["change"]["status"] == "applied"
     assert _goal(await w.read(client), made) is None
+
+
+@pytest.mark.asyncio
+async def test_ask_to_restore_goes_to_the_decider(client):
+    w = await World().build()
+    await _named(w)
+    grow, quiet = w.goals["grow"], w.goals["quiet"]
+    owner = str(w.ctx.users["owner"].id)
+    r = await client.post(f"{URL}/goals/{grow}/archive", headers=w.as_("owner"),
+                          json={"to_goal_id": quiet})  # fmt: skip
+    assert r.status_code == 200, r.text
+
+    ask = {"op": "unarchive_goal", "target": {"goal_id": quiet}, "before": {}, "after": {}}
+    r = await client.post(CHANGES, headers=w.as_("commenter"), json=ask)
+    assert r.status_code == 409, r.text
+    ask["target"] = {"goal_id": grow}
+    r = await client.post(CHANGES, headers=w.as_("commenter"), json=ask)
+    assert r.status_code == 201, r.text
+    change = r.json()["change"]
+    assert change["status"] == "proposed" and change["routed_to"] == [owner]
+    assert "proposed: restore the goal “Grow”" in change["words"]
+    assert _goal(await w.read(client), grow) is None
+
+    # Only an owner decides, as the ask was sent to the owners.
+    r = await client.post(f"{CHANGES}/{change['id']}/accept", headers=w.as_("approver"), json={})
+    assert r.status_code == 403
+    r = await client.post(f"{CHANGES}/{change['id']}/accept", headers=w.as_("owner"), json={})
+    assert r.status_code == 200, r.text
+    out = await w.read(client)
+    assert _goal(out, grow) is not None and out["archived"] == []
+
+    # An approver's own restore applies at once.
+    r = await client.post(f"{URL}/goals/{grow}/archive", headers=w.as_("owner"), json={})
+    assert r.status_code == 200, r.text
+    r = await client.post(CHANGES, headers=w.as_("approver"), json=ask)
+    assert r.status_code == 201, r.text
+    assert r.json()["change"]["status"] == "applied"
+    assert _goal(await w.read(client), grow) is not None
+
+
+@pytest.mark.asyncio
+async def test_delete_goal_undo_brings_links_back(client):
+    w = await World().build()
+    grow, quiet = w.goals["grow"], w.goals["quiet"]
+    before = await w.links(client)
+    assert before == {"both": ["grow", "quiet"], "solo": ["grow"]}
+    r = await client.delete(f"{URL}/goals/{grow}", headers=w.as_("approver"),
+                            params={"to_goal_id": quiet})  # fmt: skip
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["undo"]["features"] and out["undo"]["sig"]
+    assert (await w.links(client))["solo"] == ["quiet"]
+
+    r = await client.post(f"/v1/trash/{out['entry']['id']}/restore", headers=w.as_("approver"))
+    assert r.status_code == 200, r.text
+    r = await client.post(f"{URL}/undo", headers=w.as_("approver"), json=out["undo"])
+    assert r.status_code == 200, r.text
+    assert _goal(r.json(), grow) is not None
+    assert await w.links(client) == before
