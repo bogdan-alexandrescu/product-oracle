@@ -340,6 +340,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   const latest = versions.at(-1)?.number;
   // #255: a PRD still on its template's skeleton is drafted first, then published.
   const templateOnly = isTemplateOnly(document_?.kind, versions);
+  // one-roadmap-many-prds: a replaced PRD is read-only: no edit or change writes it a new version.
+  const replaced = (document_?.replaced_by?.length ?? 0) > 0;
   const refine = useMemo(() => ({ doc, n }), [doc, n]);
   const sectionStates = useMemo(
     () => new Map((statesQ.data?.sections ?? []).map((st) => [st.section_key, st])),
@@ -882,11 +884,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     placeholder: isUpdate && s.section_key === "asks" && /^\s*Owner to fill/m.test(s.body_md),
     changedLock: changedLocks.has(s.section_key),
     evidenceTargets: canComment ? graphQ.data?.entities : undefined,
-    refine: canDecide && !readOnly && n === latest ? refine : undefined,
+    refine: canDecide && !readOnly && !replaced && n === latest ? refine : undefined,
     // Approvers edit any section by hand; a section's owner edits their own from the commenter
     // role up (the API's floor), so a viewer never can and is not offered it (#370).
     edit:
       !readOnly &&
+      !replaced &&
       n === latest &&
       (canDecide || (canComment && !!me?.user_id && sectionStates.get(s.section_key)?.owner_id === me.user_id))
         ? refine
@@ -1239,7 +1242,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
               {document_?.kind === "prd" && <BuildDraftButton doc={doc} />}
               {/* H9: an approved pricing memo's Decide (the pricing owner), or who it waits for. */}
               {document_?.kind === "pricing" && n === latest && <PricingDecide slug={document_.slug} />}
-              {templateOnly && document_ && <DraftWithOracleButton slug={document_.slug} />}
+              {templateOnly && !replaced && document_ && <DraftWithOracleButton slug={document_.slug} />}
               {version &&
                 (version.approved_at || canApprove) &&
                 (document_?.kind === "prd" && !version.approved_at ? (

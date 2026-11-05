@@ -71,7 +71,7 @@ async def test_a_roadmap_version_import_does_not_swallow_parse_busy(monkeypatch)
         async def __aexit__(self, *exc):
             return False
 
-    async def found(db, document):
+    async def found(db, document, version=None):
         return "items", SimpleNamespace(id=1)
 
     async def busy(*args, **kwargs):

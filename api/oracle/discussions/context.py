@@ -39,8 +39,6 @@ MAX_CHARS = 60_000
 # The document a discussion is on: its share of the context, so the conversation still fits.
 MAX_DOCUMENT_CHARS = 18_000
 MAX_SECTION_CHARS = 6_000
-# ask-page-context: what the open page shows, its share, so the conversation still fits.
-MAX_VIEW_CHARS = 16_000
 MAX_MESSAGES = 40
 MAX_CONVERSATION_CHARS = 40_000
 MAX_ENTITIES = 40
@@ -310,56 +308,9 @@ async def _subject(db: AsyncSession, ctx: Context, d: Discussion) -> set[uuid.UU
                     "finding", str(gap.id), f"Gap ({gap.category})",
                     sharing.one_line(view.statement),
                 )  # fmt: skip
-    elif kind in ("checkpoint", "checkpoint_item"):
-        await _stop(db, ctx, s)
     elif kind == "screen":
         await _screen(db, ctx, s["path"])
     return linked
-
-
-async def _stop(db: AsyncSession, ctx: Context, s: dict[str, Any]) -> None:
-    """A run's stop (ask-page-context): the run, its flow and status, the stop and its
-    status; the page's items come with its view (:func:`_view`)."""
-    from oracle.discussions.service import CHECKPOINT_LABEL
-    from oracle.runs import flows
-    from oracle.runs.models import Checkpoint, Run
-
-    run = await db.get(Run, uuid.UUID(s["run_id"]))
-    cp = await db.get(Checkpoint, uuid.UUID(s["checkpoint_id"]))
-    if run is None or cp is None:
-        return
-    flow = flows.FLOWS.get(run.flow)
-    ctx.note(f"The run: {flow.title if flow else run.flow}, status {run.status}")
-    stop = CHECKPOINT_LABEL.get(cp.kind, cp.kind.replace("_", " ").capitalize())
-    ctx.note(f"The stop: {stop}, status {cp.status}")
-
-
-def _view(ctx: Context, d: Discussion) -> None:
-    """ask-page-context: what the page showed when the person asked in "This page": its
-    name, the filters in use and its main content, line by line. Only in the person's own
-    private panel chat: it is what they saw (a shared discussion never carries it)."""
-    view = (d.subject or {}).get("view")
-    if not view or d.origin != "panel" or d.visibility != "private":
-        return
-    from oracle.discussions.service import name_only
-
-    if d.subject_kind == "screen" and name_only(d.subject.get("path", "")):
-        return  # AUD-9: a person's own page, its name only
-    if view.get("name"):
-        ctx.note(f"The page shows: {view['name']}")
-    if view.get("filters"):
-        ctx.note("Filters in use: " + "; ".join(view["filters"]))
-    lines = [str(x) for x in view.get("lines") or [] if str(x).strip()]
-    if lines:
-        ctx.note("On the page, as shown:")
-        size = 0
-        for i, line in enumerate(lines):
-            text = f"- {sharing.one_line(line, 1000)}"
-            if size + len(text) > MAX_VIEW_CHARS:
-                ctx.note(f"{len(lines) - i} more lines of the page not shown")
-                break
-            ctx.note(text)
-            size += len(text) + 1
 
 
 # G7 Head-of-product panel (3.4): a ``screen`` subject's page names, by first path segment.
@@ -607,7 +558,6 @@ async def build(db: AsyncSession, d: Discussion, reply_id: uuid.UUID) -> Context
     if plan.simple_page(d):  # Simple's Ask reads the company's plan first
         await plan.add(db, ctx)
     linked = await _subject(db, ctx, d)
-    _view(ctx, d)
     if d.subject_kind != "screen":  # a screen's own builder says what it reads (3.4)
         await _baseline(db, ctx, linked)
     await _conversation(db, ctx, d, reply_id)

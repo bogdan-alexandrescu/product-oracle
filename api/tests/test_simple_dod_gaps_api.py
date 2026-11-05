@@ -180,6 +180,8 @@ async def test_chat_agenda_moves_record_who_and_when(client):
 async def test_chat_agenda_next_undo_restores_exactly(client):
     w = await mt.world()
     mid = (await mt.start(client, w))["id"]
+    # The roadmap the meeting reviews is pinned in its agenda (meeting scope) and stays.
+    pinned = {"roadmap_id": (await meeting_row(w, mid)).agenda["roadmap_id"]}
     # From a fresh meeting: the undo puts back an empty agenda.
     first = await ca.one_card(client, w, "commenter", "next: Cut A", mid)
     shown = (await mt.get(client, w, mid))["agenda"]
@@ -193,11 +195,15 @@ async def test_chat_agenda_next_undo_restores_exactly(client):
         c = await ca.one_card(client, w, "commenter", line, mid)
         await applied_by(client, w, "commenter", c)
     stored = (await meeting_row(w, mid)).agenda
-    assert stored == {"next": str(w.ids["cut-a"]), "skipped": [str(w.ids["cut-b"])]}
+    assert stored == {**pinned, "next": str(w.ids["cut-a"]), "skipped": [str(w.ids["cut-b"])]}
     shown = (await mt.get(client, w, mid))["agenda"]
     nxt = await ca.one_card(client, w, "commenter", "next: Cut B", mid)
     await applied_by(client, w, "commenter", nxt)
-    assert (await meeting_row(w, mid)).agenda == {"next": str(w.ids["cut-b"]), "skipped": []}
+    assert (await meeting_row(w, mid)).agenda == {
+        **pinned,
+        "next": str(w.ids["cut-b"]),
+        "skipped": [],
+    }
     r = await ca.undo(client, w, "commenter", nxt["id"])
     assert r.status_code == 200 and r.json()["status"] == "undone", r.text
     assert (await meeting_row(w, mid)).agenda == stored

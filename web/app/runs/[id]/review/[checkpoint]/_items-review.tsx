@@ -16,7 +16,6 @@ import { datesInWords } from "@/lib/dates";
 import { formatCount } from "@/lib/format";
 import { docLabel } from "@/lib/labels";
 import { useMe } from "@/lib/me";
-import { usePageView } from "@/lib/screen-subject";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
@@ -30,7 +29,6 @@ import {
   fieldWords,
   horizonLabel,
   HORIZONS,
-  itemsPageLines,
   itemsText,
   openReasons,
   openText,
@@ -51,7 +49,6 @@ import { draftKey, loadDraft } from "./_draft";
 import type { ReviewViewProps } from "./_shell";
 
 type Filter = "needs" | "all" | "changed";
-const FILTER_WORDS: Record<Filter, string> = { needs: "Needs you", all: "All", changed: "Changed" };
 type Group = "horizon" | "reason";
 type ActionBody = Schemas["ActionIn"];
 /** What a row or the inspector does to the shared draft (D8). */
@@ -240,8 +237,6 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
     return [...list].sort((a, b) => (a.position ?? 1e9) - (b.position ?? 1e9));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, filter]);
-  // ask-page-context: "This page" reads the items listed and the filters in use.
-  usePageView(review ? { filters: [`Show: ${FILTER_WORDS[filter]}`, `Group: ${group === "horizon" ? "Horizon" : "Reason"}`], lines: itemsPageLines(rows, counts) } : null);
 
   if (reviewQ.error) return <Page className="py-6"><ErrorNote>{reviewQ.error}</ErrorNote></Page>;
   // The rows wait for what the role may do too: drawn before it they are a viewer's, and Enter

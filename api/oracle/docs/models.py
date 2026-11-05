@@ -71,6 +71,13 @@ class Document(Trashable, TenantScoped, Base):
             "visibility",
             postgresql_where=text("visibility <> 'company'"),
         ),
+        # one-roadmap-many-prds: at most one company roadmap not in Trash.
+        Index(
+            "uq_documents_company_roadmap",
+            "tenant_id",
+            unique=True,
+            postgresql_where=text("company_roadmap AND deleted_at IS NULL"),
+        ),
     )
 
     slug: Mapped[str] = mapped_column(Text, nullable=False)
@@ -98,6 +105,12 @@ class Document(Trashable, TenantScoped, Base):
     )
     # E1: a PRD's "Derive for each new draft" switch (an owner's); on by default.
     draft_roadmap_auto: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=true())
+    # one-roadmap-many-prds: the company's one roadmap (oracle.roadmap.company), which every
+    # PRD feeds; a PRD's ``replaced_by``: the PRDs that replace it (read-only, in order).
+    company_roadmap: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=false())
+    replaced_by: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(Uuid), nullable=False, server_default="{}"
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )

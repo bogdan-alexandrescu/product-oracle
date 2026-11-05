@@ -226,7 +226,27 @@ def _default_files(
     document = document_of(prompt)
     for name in names:
         files[name] = _default_content(name, segment, attempt, document, scope_order_of(prompt))
+    if "roadmap.md" in files:
+        files["roadmap.md"] = _with_plan_tables(files["roadmap.md"], prompt)
     return files
+
+
+_PLAN_TABLES = re.compile(r"^--- plan tables ---\n(.*?)\n--- end of plan tables ---$", re.M | re.S)
+
+
+def _with_plan_tables(draft: str, prompt: str) -> str:
+    """A roadmap draft carries the plan tables its brief gives, copied as they are, before
+    Sources and data points (as the writer is told to)."""
+    found = _PLAN_TABLES.search(prompt)
+    if found is None:
+        return draft
+    items, _, milestones = found.group(1).partition("\n\n")
+    tables = (
+        f"## Plan {{#plan}}\n\n{items}\n\n## Milestones {{#plan-milestones}}\n\n{milestones}\n\n"
+    )
+    return draft.replace(
+        "## Sources and data points {#sources}", tables + "## Sources and data points {#sources}", 1
+    )
 
 
 _REPO_LINE = re.compile(r"^Repository: (\S+?)[ .]", re.M)

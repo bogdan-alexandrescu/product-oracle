@@ -169,7 +169,11 @@ async def test_markdown_export_is_the_draft_with_a_banner_after_front_matter(cli
         r" [A-Z]{2,5} -->",
         banner,
     )
-    assert rest.strip() == body.strip()
+    # raw-tokens-everywhere (owner's pick, Nov 3): the export writes each [c:id] as a numbered
+    # footnote and lists the sources at the end, so it is the draft's words with footnotes.
+    text, _, notes = rest.strip().partition("\n\n[^1]: ")
+    assert "[c:" not in rest and notes
+    assert re.sub(r"\[\^\d+\]", "", text) == re.sub(r" ?\[c:[^\]]+\]", "", body.strip())
 
 
 async def test_html_full_export_keeps_citations_out_of_the_body(client):

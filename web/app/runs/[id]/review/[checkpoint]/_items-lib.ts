@@ -178,26 +178,3 @@ export function showValue(field: string, v: unknown): string {
   if (ONLY_DAY.test(text)) return formatDate(text);
   return KEY_FIELDS.includes(field) ? text : datesInWords(text);
 }
-
-/**
- * ask-page-context: what a Roadmap items review shows, for Ask Oracle's "This page": the count
- * line, then each listed item with its horizon, milestone and date, confidence, outcome and why
- * it needs the owner (dates month first).
- */
-export function itemsPageLines(rows: Item[], counts: ReviewCounts): string[] {
-  const line = (it: Item) => {
-    const m = it.milestone;
-    const milestone = m?.name || m?.date ? [m.name, m.date ? day(m.date) : null].filter(Boolean).join(", ") : "none";
-    const why = it.reasons.map((r) => `${r.label}: ${datesInWords(r.text)}`).join("; ");
-    return [
-      it.title ?? it.key,
-      `horizon ${horizonLabel(it.horizon)}`,
-      `milestone ${milestone}`,
-      `confidence ${it.confidence ?? "not given"}`,
-      ...(it.outcome ? [`outcome ${datesInWords(it.outcome)}`] : []),
-      ...(it.position == null ? ["dropped from the file"] : []),
-      why ? `needs you because ${why}` : "nothing needs you",
-    ].join(" · ");
-  };
-  return [`${itemsText(counts)} · ${openText(counts)}; listed: ${plural(rows.length, "item")}`, ...rows.map(line)];
-}

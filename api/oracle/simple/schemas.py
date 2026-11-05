@@ -414,6 +414,57 @@ class SimpleKeyDateRoadmap(BaseModel):
     can_change: bool = False
 
 
+class SimpleMilestonePending(BaseModel):
+    """build-milestones-on-roadmap: an edit to a PRD's milestone, waiting on its owner's
+    decision through the change engine (the milestone's date and ``counts_when`` stay as
+    the PRD has them until it is accepted)."""
+
+    date: dt.date | None = None
+    counts_when: str | None = None
+    asked_of: str | None = None
+    change_id: uuid.UUID | None = None
+
+
+MilestoneProgress = Literal["on_track", "at_risk", "not_started", "met"]
+
+
+class SimpleGoalMilestone(BaseModel):
+    """build-milestones-on-roadmap: a milestone on the Simple roadmap, per goal. ``prd``
+    set: read from that PRD's own milestones (read-only except through ``pending``);
+    ``prd_owner``: its display name. ``date`` null: no date yet."""
+
+    id: uuid.UUID
+    roadmap_id: uuid.UUID
+    code: str
+    name: str
+    date: dt.date | None = None
+    goal_id: uuid.UUID | None = None
+    item_ids: list[uuid.UUID] = []
+    counts_when: str = ""
+    progress: MilestoneProgress = "not_started"
+    prd: "SimpleDocRef | None" = None
+    prd_owner: str | None = None
+    pending: SimpleMilestonePending | None = None
+    can_change: bool = False
+
+
+class SimpleGoalMilestoneIn(BaseModel):
+    roadmap_id: uuid.UUID
+    name: str = Field(min_length=1, max_length=120)
+    date: dt.date
+    goal_id: uuid.UUID | None = None
+    item_ids: list[uuid.UUID] = []
+    counts_when: str = ""
+
+
+class SimpleGoalMilestonePatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    date: dt.date | None = None
+    goal_id: uuid.UUID | None = None
+    item_ids: list[uuid.UUID] | None = None
+    counts_when: str | None = None
+
+
 class SimpleRoadmapOut(BaseModel):
     today: dt.date
     group: RoadmapGroup
@@ -421,6 +472,9 @@ class SimpleRoadmapOut(BaseModel):
     groups: list[SimpleGroup]
     items: list[SimpleRoadmapItem]
     milestones: list[SimpleMilestone]
+    # build-milestones-on-roadmap: each shown roadmap's milestones per goal (its own, and
+    # those read from the PRDs its items come from).
+    goal_milestones: list[SimpleGoalMilestone] = []
     # S3b: changes waiting in working drafts and proposals of roadmaps whose drafts the
     # reader may not see (the banner's count, no details: they read the published version).
     changes_in_review: int = 0
@@ -512,6 +566,9 @@ ChangeOp = Literal[
     # fix5-cut-dependents: an item cut with every item that waits on it (transitively), as
     # one change keyed by item id (oracle.simple.changes).
     "cut_with_dependents",
+    # build-milestones-on-roadmap: a proposed date/counts_when on a PRD's own goal
+    # milestone, on the PRD document, routed to its owner (oracle.simple.goal_milestones).
+    "edit_goal_milestone",
 ]
 # chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
 # the change engine (oracle.simple.chat_actions).
@@ -1268,7 +1325,7 @@ class OnePagerDraft(BaseModel):
     # "Sections Scope need a reviewer"), as the meeting's banner says it.
     blocked_by: list[str] = []
     # decisions-reversed-or-trashed: decisions this draft cited that were reversed since
-    # ("D-4 Cut bulk export was reversed: ...").
+    # ("D-4 Cut bulk export was reversed on Nov 3: ...").
     decision_notes: list[str] = []
 
 

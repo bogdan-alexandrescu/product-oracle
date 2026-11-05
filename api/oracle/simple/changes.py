@@ -1033,7 +1033,7 @@ async def decide(
     session_id: uuid.UUID | None = None,
 ) -> SimpleChangeResult:
     """Accept (apply the proposal, unless outdated) or decline it."""
-    from oracle.simple import additions, key_dates, one_pager, questions, targets
+    from oracle.simple import additions, goal_milestones, key_dates, one_pager, questions, targets
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
@@ -1048,6 +1048,8 @@ async def decide(
         return await targets.decide(db, principal, c, action, reason)
     if c.op in one_pager.OPS:
         return await one_pager.decide(db, principal, c, action, reason, session_id)
+    if c.op in goal_milestones.OPS:
+        return await goal_milestones.decide(db, principal, c, action, reason)
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     entry = read_.by_id().get(uuid.UUID(c.target["item_id"]))
     if entry is None:
@@ -1112,14 +1114,20 @@ async def off_agenda_bar(db: AsyncSession, c: SimpleChange, session_id: uuid.UUI
 async def withdraw(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> SimpleChangeResult:
     """qa-simple-plan-30: the person who proposed a change takes it back while it still waits
     for a decision; nothing changes and it is closed as declined, "Withdrawn"."""
-    from oracle.simple import additions, one_pager, questions
+    from oracle.simple import additions, goal_milestones, one_pager, questions
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
     if c.by != me:
         raise ChangeError(403, "Only the person who proposed it withdraws it")
-    if c.op in additions.OPS or c.op in questions.OPS or c.op in one_pager.OPS:
-        # Their decline does more than close the proposal (a suggestion reopens, ...).
+    if (
+        c.op in additions.OPS
+        or c.op in questions.OPS
+        or c.op in one_pager.OPS
+        or (c.op in goal_milestones.OPS)
+    ):
+        # Their decline does more than close the proposal (a suggestion reopens, the
+        # milestone's pending_change needs clearing, ...).
         raise ChangeError(409, "This kind of proposal is not withdrawn here")
     if c.status != "proposed":
         raise ChangeError(409, f"This change is {c.status} already")
@@ -1241,7 +1249,14 @@ class _View:
             return None
 
     def may_decide(self, c: SimpleChange) -> bool:
-        from oracle.simple import additions, key_dates, one_pager, questions, targets
+        from oracle.simple import (
+            additions,
+            goal_milestones,
+            key_dates,
+            one_pager,
+            questions,
+            targets,
+        )
 
         if c.op in questions.OPS:
             return questions.may_decide_change(self.principal, c, self.questions)
@@ -1253,6 +1268,10 @@ class _View:
             return targets.may_decide(self.principal, c, self)
         if c.op in one_pager.OPS:
             return one_pager.may_decide(self.principal, c)
+        if c.op in goal_milestones.OPS:
+            return has_role(self.principal.role, "owner") or self.me in self.owners.get(
+                c.document_id, set()
+            )
         if c.op == CUT_ALL:
             return decides_all(self.principal, cut_entries(c, self.by_id), self.deciders)
         e = self.entry(c)

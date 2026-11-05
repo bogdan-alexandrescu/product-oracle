@@ -55,6 +55,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, company_time, wording
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.baseline.goal_order import sort_goals
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError as ImportRejected
@@ -2205,13 +2206,16 @@ async def decided_in(
     if not subjects:
         return out
     wanted = {(s["kind"], s["id"], s.get("ref")) for s in subjects}
+    from oracle.decisions import standing
+
+    # Lapsed ones (reversed, withdrawn, replaced) are read too, so standing.split names them
+    # in the left-out line; only decided ones are kept.
     rows = await db.scalars(
         select(Decision)
-        .where(Decision.status == "decided")
+        .where(Decision.status.in_(("decided", *standing.LAPSED)))
         .where(or_(*[Decision.subjects.contains([{"kind": k, "id": i}]) for k, i, _ in wanted]))
         .order_by(Decision.number.desc())
     )
-    from oracle.decisions import standing
 
     # None about something in Trash (decisions-reversed-or-trashed).
     kept, gone = await standing.split(db, list(rows))
@@ -2461,8 +2465,9 @@ async def decisions_page(
         other=[_row(d, names) for d in others],
         prds=[SimpleFilterOption(id=d.slug, title=d.title)
               for d in sorted(docs.values(), key=lambda d: d.title) if d.id in readable],
+        # goal-order: the Goal filter lists the goals in the one goal order.
         goals=[SimpleFilterOption(id=g.key, title=g.title)
-               for g in sorted(goals.values(), key=lambda g: g.key)],
+               for g in sort_goals(goals.values())],
         meeting_options=[SimpleFilterOption(id=str(m.id), title=_meeting_option_title(m))
                          for m in ms],  # fmt: skip
         runs=run_groups,

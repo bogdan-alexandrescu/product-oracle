@@ -410,7 +410,19 @@ def _summary_lines(base_number: int, changes: list[Any], titles: dict[str, str])
     return "\n".join(lines)
 
 
-async def _markdown(db: AsyncSession, base: DocumentVersion, body: str) -> str:
+def _without_rows(body: str, keys: set[str]) -> str:
+    """A plan table (oracle.runs.plan_tables) without the rows of ``keys``."""
+    return "\n".join(
+        line
+        for line in body.split("\n")
+        if not line.lstrip().startswith("|")
+        or line.strip().strip("|").split("|")[0].strip() not in keys
+    )
+
+
+async def _markdown(
+    db: AsyncSession, base: DocumentVersion, body: str, cut: set[str] | frozenset = frozenset()
+) -> str:
     from oracle.jobs.service import compose_markdown
 
     sections = [
@@ -420,10 +432,17 @@ async def _markdown(db: AsyncSession, base: DocumentVersion, body: str) -> str:
         )
         if s.section_key != SECTION_KEY
     ]
+    # roadmap-plan-tables: approving the version applies its Plan table to Simple; a cut
+    # item's row would bring the item back.
+    replace = {
+        s.section_key: (s.heading, _without_rows(s.body_md or "", set(cut)))
+        for s in sections
+        if s.section_key == "plan" and cut
+    }
     added = SimpleNamespace(section_key=SECTION_KEY, level=2, heading="Plan changes", body_md=body)
     at = next((n for n, s in enumerate(sections) if s.section_key == "sources"), len(sections))
     return compose_markdown(
-        base.front_matter or {}, [*sections[:at], added, *sections[at:]], {}, []
+        base.front_matter or {}, [*sections[:at], added, *sections[at:]], replace, []
     )
 
 
@@ -441,7 +460,8 @@ async def propose(
     base_rows = await views.version_items(db, base)
     applied = apply(base_rows, changes)
     titles = {r.item_key: r.title for r in base_rows}
-    markdown = await _markdown(db, base, _summary_lines(base.number, changes, titles))
+    cut = {c.key for c in changes if isinstance(c, CutChange)}
+    markdown = await _markdown(db, base, _summary_lines(base.number, changes, titles), cut)
     latest = await db.scalar(
         select(DocumentVersion.number)
         .where(DocumentVersion.document_id == document.id)

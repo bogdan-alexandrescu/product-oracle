@@ -9452,6 +9452,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/roadmaps/company": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Company Roadmap
+         * @description The company's one roadmap, which every PRD feeds.
+         */
+        get: operations["get_company_roadmap"];
+        put?: never;
+        /**
+         * Create Company Roadmap
+         * @description Create the company roadmap ('Product roadmap') empty when none exists (the first-run
+         *     step); with one, return it (200). Approvers and owners.
+         */
+        post: operations["create_company_roadmap"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/company/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Company Queue
+         * @description Every item on the company roadmap planned as one team's capacity queue (team size x
+         *     focus; milestone order, then the company goal order, then priority). ``prd`` (slug or
+         *     id): only that PRD's items, with their places in the shared queue.
+         */
+        get: operations["get_company_queue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/replaced-by": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Replaced By
+         * @description Mark a PRD replaced by one or more PRDs (one per area of focus): it turns read-only,
+         *     names them at its top, its items stop feeding the roadmap, and its verified schedule
+         *     bases follow their items to the replacing PRDs ('carried from <title>').
+         */
+        post: operations["set_replaced_by"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/roadmaps/{doc}/items": {
         parameters: {
             query?: never;
@@ -12275,6 +12344,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/roadmap/milestones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Goal Milestone
+         * @description Add a milestone to a goal on a roadmap: coded the next "M<n>" in that goal on that
+         *     roadmap. Who may change the roadmap directly (an owner, its decider, with none its
+         *     owner while an approver, same as a key date); a commenter is refused (403: milestones
+         *     are not proposed here, unlike key dates).
+         */
+        post: operations["create_goal_milestone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/milestones/{milestone_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Goal Milestone
+         * @description Delete one of the roadmap's own milestones (undo: PATCH the old values back, or
+         *     restore). A PRD's own milestone is 409: it is not deleted here.
+         */
+        delete: operations["delete_goal_milestone"];
+        options?: never;
+        head?: never;
+        /**
+         * Patch Goal Milestone
+         * @description Edit a milestone's name, date, goal, items it waits on or counts-when rule. A PRD's
+         *     own milestone is read-only here: a date or counts-when edit instead proposes a change
+         *     to the PRD's owner (``pending`` filled, the milestone unchanged) through the change
+         *     engine (``POST /v1/simple/changes/{id}/accept|decline``); its name, goal and items are
+         *     the PRD's own and are 422 here.
+         */
+        patch: operations["patch_goal_milestone"];
+        trace?: never;
+    };
+    "/v1/simple/roadmap/milestones/{milestone_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Goal Milestone
+         * @description Undo a delete: clears the milestone's ``deleted_at``.
+         */
+        post: operations["restore_goal_milestone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/prds/{prd}/plan": {
         parameters: {
             query?: never;
@@ -12309,6 +12450,126 @@ export interface paths {
          * @description Read the plan again from the approved version (its tables, else Oracle's job).
          */
         post: operations["read_simple_prd_plan_again"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-buckets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Goal Buckets
+         * @description The goals in order and each feature's goal links.
+         */
+        get: operations["list_goal_buckets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-buckets/goals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Bucket Goal
+         * @description A new goal, after the others.
+         */
+        post: operations["create_bucket_goal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-buckets/goals/{goal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Bucket Goal
+         * @description Edit a goal's name, measure, target and date (its order stays Baseline's).
+         */
+        patch: operations["update_bucket_goal"];
+        trace?: never;
+    };
+    "/v1/simple/goal-buckets/goals/{goal_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive Bucket Goal
+         * @description Archive a goal and move its features' links in one step.
+         */
+        post: operations["archive_bucket_goal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-buckets/features/{feature_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move Bucket Feature
+         * @description The feature's first goal link becomes the goal it was dropped on.
+         */
+        post: operations["move_bucket_feature"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-buckets/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo Goal Buckets
+         * @description Puts back every goal and link a write changed.
+         */
+        post: operations["undo_goal_buckets"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15704,6 +15965,11 @@ export interface components {
             document_status: "draft" | "in_review" | "approved";
             version: components["schemas"]["VersionSummary"];
         };
+        /** ArchiveIn */
+        ArchiveIn: {
+            /** To Goal Id */
+            to_goal_id?: string | null;
+        };
         /** ArtifactDependencyOut */
         ArtifactDependencyOut: {
             /**
@@ -18028,7 +18294,7 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             /** Op */
-            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped");
+            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped");
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -18144,7 +18410,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -19063,6 +19329,18 @@ export interface components {
             member: components["schemas"]["CompanyMember"];
             /** Kinds */
             kinds: components["schemas"]["CompanyKindCoverage"][];
+        };
+        /** CompanyRoadmapOut */
+        CompanyRoadmapOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
         };
         /** CompareCheckpoint */
         CompareCheckpoint: {
@@ -21802,6 +22080,11 @@ export interface components {
             approved_version?: number | null;
             source?: components["schemas"]["VersionSource"] | null;
             /**
+             * Company Roadmap
+             * @default false
+             */
+            company_roadmap: boolean;
+            /**
              * Created At
              * Format: date-time
              */
@@ -21816,6 +22099,11 @@ export interface components {
              * @default []
              */
             versions: components["schemas"]["VersionSummary"][];
+            /**
+             * Replaced By
+             * @default []
+             */
+            replaced_by: components["schemas"]["PrdRef"][];
             /**
              * Changes In Review
              * @default 0
@@ -21953,6 +22241,11 @@ export interface components {
             /** Approved Version */
             approved_version?: number | null;
             source?: components["schemas"]["VersionSource"] | null;
+            /**
+             * Company Roadmap
+             * @default false
+             */
+            company_roadmap: boolean;
             /**
              * Created At
              * Format: date-time
@@ -23386,6 +23679,16 @@ export interface components {
             /** Message */
             message: string;
         };
+        /** FeatureSnap */
+        FeatureSnap: {
+            /**
+             * Feature Id
+             * Format: uuid
+             */
+            feature_id: string;
+            /** Links */
+            links: components["schemas"]["GoalLinkSnap"][];
+        };
         /**
          * FeatureTrace
          * @description A feature the intake touches: from the baseline (``key``) or the brief.
@@ -24221,6 +24524,71 @@ export interface components {
             /** Sso Hint */
             sso_hint?: string | null;
         };
+        /** GoalBucketFeature */
+        GoalBucketFeature: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Goal Ids */
+            goal_ids?: string[];
+        };
+        /** GoalBucketGoal */
+        GoalBucketGoal: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Order */
+            order: number;
+            /** Measure */
+            measure?: string | null;
+            /** Target */
+            target?: string | null;
+            /** Due */
+            due?: string | null;
+            /**
+             * Can Edit
+             * @default false
+             */
+            can_edit: boolean;
+        };
+        /** GoalBucketWrite */
+        GoalBucketWrite: {
+            goal?: components["schemas"]["GoalBucketGoal"] | null;
+            undo: components["schemas"]["GoalBucketsUndo"];
+        };
+        /** GoalBucketsOut */
+        GoalBucketsOut: {
+            /** Can Edit */
+            can_edit: boolean;
+            /** Goals */
+            goals: components["schemas"]["GoalBucketGoal"][];
+            /** Features */
+            features: components["schemas"]["GoalBucketFeature"][];
+        };
+        /**
+         * GoalBucketsUndo
+         * @description What a write changed, as it was before: Undo puts exactly this back.
+         */
+        GoalBucketsUndo: {
+            /** Goals */
+            goals?: components["schemas"]["GoalSnap"][];
+            /** Features */
+            features?: components["schemas"]["FeatureSnap"][];
+            /** Added Goal Id */
+            added_goal_id?: string | null;
+            /** Sig */
+            sig?: string | null;
+        };
         /** GoalCalibration */
         GoalCalibration: {
             /** N */
@@ -24262,6 +24630,20 @@ export interface components {
                 [key: string]: number;
             } | null;
         };
+        /** GoalIn */
+        GoalIn: {
+            /** Title */
+            title: string;
+            /** Measure */
+            measure: string;
+            /** Target */
+            target: string;
+            /**
+             * Due
+             * Format: date
+             */
+            due: string;
+        };
         /** GoalInterviewOut */
         GoalInterviewOut: {
             /**
@@ -24295,6 +24677,28 @@ export interface components {
              * @enum {string}
              */
             matched_on: "brief" | "feature";
+        };
+        /** GoalLinkSnap */
+        GoalLinkSnap: {
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+            /** Contribution */
+            contribution?: number | null;
+            /** Id */
+            id?: string | null;
+            /** Attrs */
+            attrs?: {
+                [key: string]: unknown;
+            } | null;
+            /** Status */
+            status?: string | null;
+            /** Origin */
+            origin?: string | null;
+            /** Created At */
+            created_at?: string | null;
         };
         /** GoalMeasurePushback */
         GoalMeasurePushback: {
@@ -24331,6 +24735,22 @@ export interface components {
              * @default 0
              */
             subgoals: number;
+        };
+        /** GoalSnap */
+        GoalSnap: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /** Attrs */
+            attrs: {
+                [key: string]: unknown;
+            };
         };
         /** GoalTerm */
         GoalTerm: {
@@ -25986,7 +26406,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone";
             /**
              * Status
              * @enum {string}
@@ -29405,6 +29825,16 @@ export interface components {
              */
             horizon: "now" | "next" | "later";
         };
+        /** MoveIn */
+        MoveIn: {
+            /** From Goal Id */
+            from_goal_id?: string | null;
+            /**
+             * To Goal Id
+             * Format: uuid
+             */
+            to_goal_id: string;
+        };
         /**
          * MyAccountOut
          * @description The signed-in member: who they are, their role and how they sign in.
@@ -31513,6 +31943,18 @@ export interface components {
              */
             unresolved: string[];
         };
+        /** PrdRef */
+        PrdRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+        };
         /**
          * PrdScopeOut
          * @description A PRD scope (C6): the features and requirements a feature-set stop approves for one
@@ -32922,6 +33364,41 @@ export interface components {
             /** Question Ids */
             question_ids: string[];
         };
+        /** QueueItem */
+        QueueItem: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            prd?: components["schemas"]["PrdRef"] | null;
+            /** Milestone */
+            milestone?: string | null;
+            /** Effort Weeks */
+            effort_weeks: number;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+        };
+        /** QueueOut */
+        QueueOut: {
+            roadmap?: components["schemas"]["CompanyRoadmapOut"] | null;
+            /** Team Size */
+            team_size: number;
+            /** Focus */
+            focus: number;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["QueueItem"][];
+        };
         /**
          * QueueWait
          * @description Why SwarmCloud holds the run's current step (oracle.runs.waits), as Oracle last
@@ -33531,6 +34008,11 @@ export interface components {
             key: string;
             /** Position */
             position: number;
+        };
+        /** ReplacedByIn */
+        ReplacedByIn: {
+            /** Prds */
+            prds: string[];
         };
         /** ReplyCounts */
         ReplyCounts: {
@@ -38102,7 +38584,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -38151,7 +38633,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -38877,6 +39359,97 @@ export interface components {
             /** Position */
             position?: number | null;
         };
+        /**
+         * SimpleGoalMilestone
+         * @description build-milestones-on-roadmap: a milestone on the Simple roadmap, per goal. ``prd``
+         *     set: read from that PRD's own milestones (read-only except through ``pending``);
+         *     ``prd_owner``: its display name. ``date`` null: no date yet.
+         */
+        SimpleGoalMilestone: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Roadmap Id
+             * Format: uuid
+             */
+            roadmap_id: string;
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Date */
+            date?: string | null;
+            /** Goal Id */
+            goal_id?: string | null;
+            /**
+             * Item Ids
+             * @default []
+             */
+            item_ids: string[];
+            /**
+             * Counts When
+             * @default
+             */
+            counts_when: string;
+            /**
+             * Progress
+             * @default not_started
+             * @enum {string}
+             */
+            progress: "on_track" | "at_risk" | "not_started" | "met";
+            prd?: components["schemas"]["SimpleDocRef"] | null;
+            /** Prd Owner */
+            prd_owner?: string | null;
+            pending?: components["schemas"]["SimpleMilestonePending"] | null;
+            /**
+             * Can Change
+             * @default false
+             */
+            can_change: boolean;
+        };
+        /** SimpleGoalMilestoneIn */
+        SimpleGoalMilestoneIn: {
+            /**
+             * Roadmap Id
+             * Format: uuid
+             */
+            roadmap_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Goal Id */
+            goal_id?: string | null;
+            /**
+             * Item Ids
+             * @default []
+             */
+            item_ids: string[];
+            /**
+             * Counts When
+             * @default
+             */
+            counts_when: string;
+        };
+        /** SimpleGoalMilestonePatch */
+        SimpleGoalMilestonePatch: {
+            /** Name */
+            name?: string | null;
+            /** Date */
+            date?: string | null;
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Item Ids */
+            item_ids?: string[] | null;
+            /** Counts When */
+            counts_when?: string | null;
+        };
         /** SimpleGoalRef */
         SimpleGoalRef: {
             /**
@@ -39542,6 +40115,22 @@ export interface components {
              * @default []
              */
             targets: components["schemas"]["SimpleMilestoneTarget"][];
+        };
+        /**
+         * SimpleMilestonePending
+         * @description build-milestones-on-roadmap: an edit to a PRD's milestone, waiting on its owner's
+         *     decision through the change engine (the milestone's date and ``counts_when`` stay as
+         *     the PRD has them until it is accepted).
+         */
+        SimpleMilestonePending: {
+            /** Date */
+            date?: string | null;
+            /** Counts When */
+            counts_when?: string | null;
+            /** Asked Of */
+            asked_of?: string | null;
+            /** Change Id */
+            change_id?: string | null;
         };
         /**
          * SimpleMilestoneTarget
@@ -40445,6 +41034,11 @@ export interface components {
             items: components["schemas"]["SimpleRoadmapItem"][];
             /** Milestones */
             milestones: components["schemas"]["SimpleMilestone"][];
+            /**
+             * Goal Milestones
+             * @default []
+             */
+            goal_milestones: components["schemas"]["SimpleGoalMilestone"][];
             /**
              * Changes In Review
              * @default 0
@@ -64845,6 +65439,128 @@ export interface operations {
             };
         };
     };
+    get_company_roadmap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyRoadmapOut"];
+                };
+            };
+            /** @description The company has no company roadmap yet */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_company_roadmap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description It already exists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyRoadmapOut"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyRoadmapOut"];
+                };
+            };
+        };
+    };
+    get_company_queue: {
+        parameters: {
+            query?: {
+                prd?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_replaced_by: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplacedByIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_roadmap_items: {
         parameters: {
             query?: {
@@ -70178,6 +70894,134 @@ export interface operations {
             };
         };
     };
+    create_goal_milestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleGoalMilestoneIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleGoalMilestone"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_goal_milestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                milestone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_goal_milestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                milestone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleGoalMilestonePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleGoalMilestone"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_goal_milestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                milestone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleGoalMilestone"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_simple_prd_plan: {
         parameters: {
             query?: never;
@@ -70227,6 +71071,197 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimplePlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_goal_buckets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalBucketsOut"];
+                };
+            };
+        };
+    };
+    create_bucket_goal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalBucketWrite"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_bucket_goal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalBucketWrite"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_bucket_goal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalBucketWrite"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_bucket_feature: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feature_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalBucketWrite"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_goal_buckets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalBucketsUndo"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalBucketsOut"];
                 };
             };
             /** @description Validation Error */

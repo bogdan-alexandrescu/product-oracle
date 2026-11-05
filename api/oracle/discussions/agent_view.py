@@ -61,8 +61,7 @@ def entry(
         status = d.summary_status
     else:
         withheld = True
-    # ask-page-context: the page's view is read in its starter's own chat only, never listed.
-    subject = {k: v for k, v in (d.subject or {}).items() if k not in (*_RUN_IDS, "view")}
+    subject = {k: v for k, v in (d.subject or {}).items() if k not in _RUN_IDS}
     return {
         "id": str(d.id),
         "visibility": d.visibility,

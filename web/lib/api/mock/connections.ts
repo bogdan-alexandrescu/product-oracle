@@ -97,6 +97,8 @@ const SETTING_DEFAULTS: Record<string, unknown> = {
   company_shared_drives: [],
   // A1, B2 Goals framework: Now = the current quarter, Next = the next 2, Later = 12-24 months.
   planning_horizons: { short_quarters: 1, medium_quarters: 2, long_from_months: 12, long_to_months: 24 },
+  // one-roadmap-many-prds: one team plans every PRD's items (team size x focus).
+  team_capacity: { team_size: 1, focus: 1.0 },
   // F6: the weekly alignment report, Monday 08:00 in the Company time zone; the channel once Slack is connected.
   alignment_report: { enabled: true, weekday: "mon", time: "08:00", slack_channel: null },
   // The Company time zone: goals' today, the weekly report and rituals (Los Angeles until an
@@ -515,6 +517,14 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string, email
       }
       if (key === "code_map_refresh" && value !== null && value !== undefined && !["hourly", "every_6_hours", "daily", "weekly", "on_demand"].includes(String(value))) {
         return json(422, { detail: "code_map_refresh must be one of hourly, every_6_hours, daily, weekly, on_demand" });
+      }
+      if (key === "team_capacity" && value !== null && value !== undefined) {
+        // As oracle.tenant_settings_api.validate_team_capacity.
+        const v = value as Record<string, unknown>;
+        if (typeof v !== "object" || Array.isArray(v) || Object.keys(v).sort().join() !== "focus,team_size") return json(422, { detail: "team_capacity needs team_size and focus" });
+        if (typeof v.team_size !== "number" || !Number.isInteger(v.team_size) || v.team_size < 1 || v.team_size > 1000) return json(422, { detail: "team_size must be a whole number from 1 to 1000" });
+        if (typeof v.focus !== "number" || !(v.focus > 0 && v.focus <= 1)) return json(422, { detail: "focus must be more than 0 and at most 1" });
+        value = { team_size: v.team_size, focus: v.focus };
       }
       if (key === "planning_horizons" && value !== null && value !== undefined) {
         const error = horizonsError(value);

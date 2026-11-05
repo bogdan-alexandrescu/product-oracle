@@ -152,9 +152,14 @@ async def _roadmap(client, auth, runtime) -> None:  # noqa: F811
     assert (await get(client, auth, run["id"]))["status"] == "succeeded"
 
 
+async def _all_marks(client, auth) -> list[dict]:
+    return (await client.get(VERSION_URL, headers=auth)).json()["date_marks"]
+
+
 async def _marks(client, auth) -> dict[str, str]:
-    version = (await client.get(VERSION_URL, headers=auth)).json()
-    return {m["text"]: m["status"] for m in version["date_marks"]}
+    """The body's date marks (the plan tables repeat the Beta date: roadmap-plan-tables)."""
+    marks = await _all_marks(client, auth)
+    return {m["text"]: m["status"] for m in marks if not m["section_key"].startswith("plan")}
 
 
 async def _payment(client, auth) -> dict:
@@ -357,7 +362,8 @@ async def test_impact_matches_what_withdraw_changes(client, owner, runtime):  # 
     assert [(i["roadmap"], i["version"], i["item_key"]) for i in impact["items"]] == [
         (ROADMAP, 1, "payment-step")
     ]
-    assert impact["documents"] == [{"slug": ROADMAP, "version": 1, "marks": 1}]
+    # The body's Beta date and the plan tables' two.
+    assert impact["documents"] == [{"slug": ROADMAP, "version": 1, "marks": 3}]
     # Nothing written.
     assert (await _eng_412(client, auth))["status"] == "verified"
     assert await _marks(client, auth) == {"2026-11-30": "verified", "2026-12-15": "unverified"}
@@ -369,8 +375,9 @@ async def test_impact_matches_what_withdraw_changes(client, owner, runtime):  # 
         m["id"] for m in impact["milestones"] if not m["keeps_date"]
     ]
     assert out["stale_items"] == [i["id"] for i in impact["items"]]
-    marks = await _marks(client, auth)
-    assert sum(1 for s in marks.values() if s == "withdrawn") == impact["documents"][0]["marks"]
+    marks = await _all_marks(client, auth)
+    withdrawn = sum(1 for m in marks if m["status"] == "withdrawn")
+    assert withdrawn == impact["documents"][0]["marks"]
 
 
 # --- AC8: the Inbox ----------------------------------------------------------------------------

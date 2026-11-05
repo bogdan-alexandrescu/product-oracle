@@ -11,7 +11,8 @@ approved version says, not the estimates its items were carried forward with.
   "founder commitment", "set by Pat Example"); ``Status`` ``shipped`` (or ``done``) and
   ``next PRD`` take the item off the plan;
 - milestones: a table whose header names ``Milestone`` and ``Date`` (optionally ``Gates``:
-  item keys or titles, comma separated, and ``Counts when``).
+  item keys or titles, comma separated, and ``Counts when``); one with ``Gates`` wins over
+  a template's own milestones table before it.
 
 A version with neither table changes nothing but an earlier version's mark carried on its
 items (so Simple never says it matches that one).
@@ -47,6 +48,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.authz import has_role
+from oracle.company_time import calendar_day
 from oracle.docs.models import Document, DocumentVersion
 from oracle.roadmap.models import ProductTrack, RoadmapItem, ScheduleBasis, TrackMilestone
 from oracle.simple.schemas import SimpleAppliedVersion, SimpleDocRef
@@ -83,6 +85,9 @@ class PlanMilestone:
 class Plan:
     items: list[PlanItem] = field(default_factory=list)
     milestones: list[PlanMilestone] = field(default_factory=list)
+    # Whether the text has each table, rows or not (oracle.runs.plan_tables checks a draft).
+    has_items_table: bool = False
+    has_milestones_table: bool = False
 
     @property
     def empty(self) -> bool:
@@ -145,11 +150,12 @@ def _col(header: list[str], *names: str) -> int | None:
 
 
 def parse(markdown: str, today: date) -> Plan:
-    """The version's items and milestones tables (the first of each)."""
+    """The version's items and milestones tables (the first of each; for milestones, the
+    first with a Gates column if any)."""
     plan = Plan()
     lines = markdown.splitlines()
     i = 0
-    seen_items = seen_milestones = False
+    seen_items = seen_milestones = gated = False
     while i < len(lines):
         line = lines[i]
         if not line.lstrip().startswith("|") or i + 1 >= len(lines):
@@ -166,7 +172,7 @@ def parse(markdown: str, today: date) -> Plan:
             rows.append(_cells(lines[j]) + [""] * len(header))
             j += 1
         if not seen_items and "item" in low and "start" in low and "end" in low:
-            seen_items = True
+            seen_items = plan.has_items_table = True
             key, item = _col(header, "key", "id"), _col(header, "item")
             start, end = _col(header, "start"), _col(header, "end")
             basis, state = _col(header, "dates from", "source"), _col(header, "status")
@@ -182,8 +188,15 @@ def parse(markdown: str, today: date) -> Plan:
                     basis=(r[basis] or None) if basis is not None else None,
                     state=_state(r[state]) if state is not None else None,
                 ))  # fmt: skip
-        elif not seen_milestones and "milestone" in low and "date" in low:
-            seen_milestones = True
+        elif (
+            "milestone" in low
+            and "date" in low
+            and (not seen_milestones or ("gates" in low and not gated))
+        ):
+            # A template's own milestones table (no Gates) gives way to the plan's.
+            seen_milestones = plan.has_milestones_table = True
+            gated = "gates" in low
+            plan.milestones = []
             name, day = _col(header, "milestone"), _col(header, "date")
             gates, counts = _col(header, "gates"), _col(header, "counts when", "counts")
             for r in rows:
@@ -375,7 +388,7 @@ async def _milestones(
 
 
 def _day(d: date) -> str:
-    return f"{d:%b} {d.day}"
+    return calendar_day(d)
 
 
 def _difference(title: str, now: tuple[date | None, date | None], was: tuple, n: int) -> str:

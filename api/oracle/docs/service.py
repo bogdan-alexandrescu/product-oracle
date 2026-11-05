@@ -74,6 +74,10 @@ class SlugTakenError(ImportConflictError):
     a document none of the run's versions is in, which the run's draft is not added to."""
 
 
+class ReplacedError(ImportConflictError):
+    """A replaced PRD takes no new version (409)."""
+
+
 class BaseVersionConflictError(ImportConflictError):
     """The draft was written on an older version than the latest, and saving it would
     overwrite sections changed since (409, never a silent last write).
@@ -421,6 +425,7 @@ async def imported_again(
 
 
 async def read_document(db: AsyncSession, doc: str) -> DocumentOut:
+    from oracle.roadmap import company
     from oracle.simple import drafts as simple_drafts
 
     document = await get_document_or_404(db, doc)
@@ -437,6 +442,7 @@ async def read_document(db: AsyncSession, doc: str) -> DocumentOut:
         ),
         versions=versions,
         changes_in_review=await simple_drafts.changes_in_review(db, document.id),
+        replaced_by=await company.refs(db, list(document.replaced_by or [])),
     )
 
 
@@ -1205,6 +1211,9 @@ async def import_draft(
     held: dict[str, HeldSection] = {}
 
     document = await find_document(db, doc, for_update=True)
+    if document is not None and document.replaced_by:
+        # one-roadmap-many-prds: a replaced PRD is read-only; its history stays.
+        raise ReplacedError(f"{document.title} is replaced and read-only")
     if (
         run_creates
         and document is not None

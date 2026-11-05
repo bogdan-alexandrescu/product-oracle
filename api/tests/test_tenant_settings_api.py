@@ -62,6 +62,8 @@ async def test_defaults_and_unknown_keys(client, owner):
             "long_from_months": 12,
             "long_to_months": 24,
         },
+        # one-roadmap-many-prds: one team plans every PRD's items.
+        "team_capacity": {"team_size": 1, "focus": 1.0},
         # F6: the weekly alignment report, Monday 08:00, no Slack channel yet; its time zone
         # is the Company time zone.
         "alignment_report": {

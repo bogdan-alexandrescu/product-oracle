@@ -15,7 +15,7 @@ import { leave } from "@/lib/leave-guard";
 import { useMe } from "@/lib/me";
 import { useSettingsTabs } from "@/lib/settings-tabs";
 import { loadInbox, loadMyQuestions, onWaitingChanged, waitingCount } from "@/lib/waiting";
-import { ScreenSubjectProvider, useShownPageName } from "@/lib/screen-subject";
+import { ScreenSubjectProvider } from "@/lib/screen-subject";
 import { useTheme, type ThemeChoice } from "@/lib/theme";
 
 import { Mark } from "./Brand";
@@ -736,8 +736,6 @@ function DocumentTitle() {
   const pathname = usePathname();
   const { plain } = usePageTitle(pathname);
   const text = !plain || plain === "Product Oracle" ? "Product Oracle" : `${plain} · Product Oracle`;
-  // ask-page-context: "This page" is titled as the page is.
-  useShownPageName(plain === "Product Oracle" ? null : plain);
   useEffect(() => {
     if (ownTitle(pathname) || !plain) return;
     document.title = text;

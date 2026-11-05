@@ -16,7 +16,7 @@ import { errorMessage } from "@/lib/use-query";
 import { versionHref } from "@/lib/version-href";
 
 /** What the menu needs of a document (a DocumentOut or a list row). */
-export type ArtifactDoc = { slug: string; title: string; kind?: string | null; latest_version?: number | null };
+export type ArtifactDoc = { slug: string; title: string; kind?: string | null; latest_version?: number | null; replaced_by?: unknown[] | null };
 
 type TrashItem = Schemas["TrashItem"];
 type Estimate = Schemas["RegenerateEstimateOut"];
@@ -73,7 +73,8 @@ export function ArtifactMenu({ doc, onDeleted, openItem = true }: { doc: Artifac
   // already opens the latest version its own way (qa-docs-27, qa-docs-32), so no second Open.
   const edit =
     openItem && can("edit_document_section") && doc.latest_version != null ? versionHref(doc.slug, doc.kind, doc.latest_version) : null;
-  const regenerate = can("start_regeneration") && !!doc.kind && REGENERATES.has(doc.kind);
+  // one-roadmap-many-prds: a replaced PRD is read-only, so it is not regenerated.
+  const regenerate = can("start_regeneration") && !!doc.kind && REGENERATES.has(doc.kind) && !doc.replaced_by?.length;
   const del = can("delete_document");
   if (!edit && !regenerate && !del) return null;
   const label = `Actions for ${doc.title}`;
