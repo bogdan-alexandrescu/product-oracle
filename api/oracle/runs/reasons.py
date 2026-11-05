@@ -178,6 +178,12 @@ def _day(value: Any) -> str:
 def _day_in_words(value: Any) -> str:
     """A milestone's day as a person reads it, month first ("Nov 30, 2026"); a value that is
     not a day stays as written."""
+    if isinstance(value, str):
+        # A quoted ISO day or moment ("2026-11-30") is still a day.
+        try:
+            value = datetime.fromisoformat(value.strip())
+        except ValueError:
+            return value
     if isinstance(value, datetime):
         value = value.date()
     if isinstance(value, date):
