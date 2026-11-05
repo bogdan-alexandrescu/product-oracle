@@ -28,6 +28,9 @@ Test cards (protects / fails_when / no_claim):
   entry and an ``undo`` for the links it moved; Restore and that Undo put the goal and
   every link back; fails_when=the delete's note has nothing to undo the links with;
   no_claim=Settings > Trash's own Restore of links.
+- test_delete_goal_undo_gives_items_their_goal_back: protects=the same Undo gives each
+  roadmap item that named the goal as its own goal that goal back, so the buckets with no
+  dated plan show it again; fails_when=an item keeps the goal it was moved to.
 """
 
 import uuid
@@ -238,3 +241,25 @@ async def test_delete_goal_undo_brings_links_back(client):
     assert r.status_code == 200, r.text
     assert _goal(r.json(), grow) is not None
     assert await w.links(client) == before
+
+
+@pytest.mark.asyncio
+async def test_delete_goal_undo_gives_items_their_goal_back(client):
+    from oracle.roadmap.models import RoadmapItem
+    from tests.test_trash_features_goals import _world
+
+    w = await _world()
+    goal = w.goal_id  # type: ignore[attr-defined]
+    item = uuid.UUID(w.ids["cut-a"])
+    r = await client.delete(f"{URL}/goals/{goal}", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    out = r.json()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        assert (await s.get(RoadmapItem, item)).goal_ids == []
+
+    r = await client.post(f"/v1/trash/{out['entry']['id']}/restore", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    r = await client.post(f"{URL}/undo", headers=w.ctx.as_("owner"), json=out["undo"])
+    assert r.status_code == 200, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        assert (await s.get(RoadmapItem, item)).goal_ids == [uuid.UUID(goal)]
