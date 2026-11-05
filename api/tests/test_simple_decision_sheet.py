@@ -49,6 +49,10 @@ Test cards (protects / fails_when / no_claim):
 - test_a_question_of_a_deleted_or_replaced_prd_is_404: protects=``GET
   /v1/simple/decisions/{id}`` drops an open question whose PRD is replaced or deleted, as
   the Decisions page does; fails_when=it still reads as a row.
+- test_a_waiting_suggestion_names_its_decision_as_it_is_now: protects=a proposed sheet
+  change lists (``GET /v1/simple/changes``, Home and Waiting for you) its decision by its
+  current code and name, in its target and words, after the decision is renamed;
+  fails_when=it names the decision as it was when the suggestion was sent.
 """
 
 import uuid
@@ -465,3 +469,28 @@ async def test_a_question_of_a_deleted_or_replaced_prd_is_404(client):
         await s.commit()
     r = await client.get(url, headers=ctx.as_("owner"))
     assert r.status_code == 404, r.text
+
+
+async def test_a_waiting_suggestion_names_its_decision_as_it_is_now(client):
+    ctx = await make_ctx()
+    d = await _decision(client, ctx, approver="owner")
+    target = {"decision_id": d["id"]}
+    r = await _change(
+        client, ctx, "approver", "edit_decision", target, {"context": "Asked by sales."}
+    )
+    assert r.status_code == 201, r.text
+    cid = r.json()["change"]["id"]
+    r = await _change(
+        client,
+        ctx,
+        "owner",
+        "edit_decision",
+        target,
+        {"title": "Keep the free plan's seven-seat limit"},
+    )
+    assert r.status_code == 201, r.text
+    r = await client.get(CHANGES, headers=ctx.as_("owner"), params={"status": "proposed"})
+    assert r.status_code == 200, r.text
+    c = next(x for x in r.json() if x["id"] == cid)
+    assert c["target"]["name"] == f"{d['ref']} Keep the free plan's seven-seat limit"
+    assert "seven-seat" in c["words"] and "five-seat" not in c["words"]
