@@ -8,11 +8,12 @@ import { Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { useQuery } from "@/lib/use-query";
 
-import { setRoadmapToday, type Item, type Roadmap } from "../simple/roadmap/_lib";
+import { setRoadmapToday, type Item, type Milestone, type Roadmap } from "../simple/roadmap/_lib";
 import { Chart } from "../simple/roadmap/_timeline";
 import type { GoalView } from "../home/_goals";
 import type { PlanItem } from "./_lib";
 import { grouped, type GroupBy } from "./_table";
+import { sortedMilestones, type Track } from "./_tracks";
 
 const none = () => {};
 
@@ -29,13 +30,45 @@ export function timelineMatch(rows: PlanItem[], items: Item[]): Map<string, Item
 }
 
 /**
+ * A draft's row drawn by the roadmap item it shares a key with: at the draft's own delivery date
+ * when it has one, else at the item's (approved) dates, marked so (`approved`).
+ */
+function draftDates(r: PlanItem, it: Item): { item: Item; approved: boolean } {
+  if (r.origin !== "draft" || r.id === it.id) return { item: it, approved: false };
+  const end = r.engineering.date;
+  if (!end) return { item: it, approved: true };
+  const start = it.start.date > end ? end : it.start.date;
+  return { item: { ...it, start: { ...it.start, date: start }, end: { ...it.end, date: end, estimated: false } }, approved: false };
+}
+
+/**
+ * The Plan's track milestones as the chart's milestone marks ("M1 First release" on its date), for
+ * the tracks of the rows drawn; one the roadmap already marks (the same id) is not drawn twice.
+ */
+function trackMarks(tracks: Track[] | undefined, trackIds: Set<string>, have: Milestone[]): Milestone[] {
+  const seen = new Set(have.map((m) => m.id));
+  const out: Milestone[] = [];
+  for (const t of tracks ?? []) {
+    if (!trackIds.has(t.id)) continue;
+    sortedMilestones(t).forEach((m, n) => {
+      if (!m.target_date || m.status === "dropped" || seen.has(m.id)) return;
+      out.push({ id: m.id, track_id: t.id, name: `M${n + 1} ${m.name}`, date: m.target_date, horizon: m.horizon, status: m.status, item_ids: [], done_when: [], targets: [] });
+    });
+  }
+  return out;
+}
+
+/**
  * B-26: the Plan's rows against their dates, drawn by Simple's roadmap chart as its Timeline
  * (read only): the same items the table lists (the Show bar's scope), in the same groups, with their
- * dates, milestones, dependencies and Today's line from GET /v1/simple/roadmap. A bar opens
- * the item in the Plan's inspector; a row the roadmap holds no dates for is listed below.
+ * dates, milestones, dependencies and Today's line from GET /v1/simple/roadmap, read again when a
+ * live roadmap version moves (`live`: an approved plan change), and the Plan's track milestones.
+ * A bar opens the item in the Plan's inspector; a row the roadmap holds no dates for is listed below.
  */
 export function PlanTimeline({
   items,
+  live,
+  tracks,
   by,
   tags,
   prdOrder,
@@ -43,6 +76,9 @@ export function PlanTimeline({
   onSelect,
 }: {
   items: PlanItem[] | undefined;
+  /** The live roadmap versions ("slug@version,…"). */
+  live: string;
+  tracks: Track[] | undefined;
   by: GroupBy;
   tags: Map<string, GoalView>;
   prdOrder: string[];
@@ -50,30 +86,40 @@ export function PlanTimeline({
   onSelect: (id: string) => void;
 }) {
   const phone = usePhone();
-  const q = useQuery("plan|timeline|simple-roadmap", () =>
-    unwrap(api.GET("/v1/simple/roadmap", {})).then((d) => {
-      setRoadmapToday(d.today);
-      return d;
-    }),
+  const q = useQuery(
+    `plan|timeline|simple-roadmap|${live}`,
+    () =>
+      unwrap(api.GET("/v1/simple/roadmap", {})).then((d) => {
+        setRoadmapToday(d.today);
+        return d;
+      }),
+    { keepPrevious: true },
   );
   const drawn = useMemo(() => {
     if (!q.data || !items) return null;
     const { rows, group } = grouped(items, by, tags, prdOrder);
     const match = timelineMatch(rows, q.data.items);
     const plan = new Map([...match].map(([planId, it]) => [it.id, planId]));
-    const groups: Roadmap["groups"] = [];
-    const used = new Set<string>();
+    const groups = new Map<string, Roadmap["groups"][number]>();
+    const drawnItems: Item[] = [];
+    const approved = new Set<string>();
+    const trackIds = new Set<string>();
     for (const r of rows) {
       const it = match.get(r.id);
-      if (!it || used.has(it.id)) continue;
-      used.add(it.id);
+      if (!it || plan.get(it.id) !== r.id) continue;
+      const d = draftDates(r, it);
+      drawnItems.push(d.item);
+      if (d.approved) approved.add(it.id);
+      if (r.track_id) trackIds.add(r.track_id);
       const title = group(r);
-      const g = groups.find((x) => x.title === title) ?? (groups.push({ key: `plan-group:${title}`, title, item_ids: [] }), groups.at(-1)!);
+      let g = groups.get(title);
+      if (!g) groups.set(title, (g = { key: `plan-group:${title}`, title, item_ids: [] }));
       g.item_ids.push(it.id);
     }
-    const data: Roadmap = { ...q.data, items: q.data.items.filter((i) => used.has(i.id)), groups };
-    return { data, plan, match, undated: rows.filter((r) => !match.has(r.id)) };
-  }, [q.data, items, by, tags, prdOrder]);
+    const milestones = [...q.data.milestones, ...trackMarks(tracks, trackIds, q.data.milestones)];
+    const data: Roadmap = { ...q.data, items: drawnItems, groups: [...groups.values()], milestones };
+    return { data, plan, match, approved, undated: rows.filter((r) => !match.has(r.id)) };
+  }, [q.data, items, tracks, by, tags, prdOrder]);
 
   if (q.error) return <Notice tone="error">{q.error}</Notice>;
   if (!drawn) return <Loading />;
@@ -100,6 +146,23 @@ export function PlanTimeline({
           onKeyEnd={none}
           onKeyCancel={none}
           onSuggestion={pick}
+          overlay={(l, sc) =>
+            drawn.data.items
+              .filter((it) => drawn.approved.has(it.id) && l.y.has(it.id))
+              .map((it) => (
+                <span
+                  key={it.id}
+                  data-testid="plan-timeline-approved-dates"
+                  data-item={it.key}
+                  className="absolute z-[6] flex items-center"
+                  style={{ left: sc.x(it.end.date) + sc.px + 4, top: l.y.get(it.id)!, height: l.rowH }}
+                >
+                  <InfoTip label={`the dates of ${it.title}`}>
+                    The draft has no dates for this item yet, so its bar shows the approved dates.
+                  </InfoTip>
+                </span>
+              ))
+          }
         />
       ) : (
         <p data-testid="plan-timeline-empty" className="px-1 text-[15px] text-text2">

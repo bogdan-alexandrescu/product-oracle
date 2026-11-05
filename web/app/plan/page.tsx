@@ -154,8 +154,10 @@ export default function PlanPage() {
   const roadmaps = approvedRoadmaps(data?.items);
   // qa4-plan-3: a roadmap with no approved version on the Plan (only a draft's rows) says so.
   const unapproved = draftOnlyRoadmaps(data?.items);
-  // qa-plan-21: each roadmap by its title, never its slug (read again when the live version moves).
-  const roadmapDocs = useRoadmapDocs(roadmaps.map((r) => `${r.slug}@${r.version}`).join(","));
+  // The live roadmap versions: each roadmap's title (qa-plan-21) and the Timeline's dates are read
+  // again when one moves (an approved plan change).
+  const live = roadmaps.map((r) => `${r.slug}@${r.version}`).join(",");
+  const roadmapDocs = useRoadmapDocs(live);
   const reload = q.reload;
   const onLink = useCallback(
     (i: PlanItem, term?: string) => {
@@ -322,6 +324,8 @@ export default function PlanPage() {
               {view === "timeline" && data && data.items.length > 0 ? (
                 <PlanTimeline
                   items={data.items}
+                  live={live}
+                  tracks={tracks.data}
                   by={by}
                   tags={tags}
                   prdOrder={prdOrder}
