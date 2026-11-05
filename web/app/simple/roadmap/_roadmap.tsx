@@ -1544,6 +1544,7 @@ export function SimpleRoadmap() {
                 onDecide={(c, how) => void onDecide(c, how)}
                 onClose={onClose}
                 near={nearWords(it, data.key_dates ?? [])}
+                onOpen={(id) => setCard({ id, left: 0, top: 0 })}
               />
             )}
           />
@@ -1633,6 +1634,7 @@ export function SimpleRoadmap() {
             onDecide={(c, how) => void onDecide(c, how)}
             onClose={() => setCard(null)}
             near={nearWords(cardItem, data.key_dates ?? [])}
+            onOpen={(id) => setCard({ id, ...anchorOf(id) })}
             onHorizon={format === "board" && canChange && !closedItem(cardItem) ? (h) => onHorizon(cardItem, h) : undefined}
           />
         )}
