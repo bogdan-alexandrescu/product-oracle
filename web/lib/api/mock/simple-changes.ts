@@ -37,6 +37,7 @@ import {
   companyToday,
   deciderIds,
   draftChanges,
+  openDraft,
   GOALS,
   goalId,
   goalIdsOf,
@@ -431,18 +432,7 @@ function intoDrafts(db: SimpleDb, c: Change, session: Session, undo = false): st
     } else if (!d) {
       const waiting = drafts.find((x) => x.roadmap === rm && x.out.status === "submitted");
       if (waiting) return json(409, { detail: `This roadmap's draft is in review as version ${waiting.out.version}: changes wait until it is approved` });
-      const items = db.items.filter((x) => x.roadmap === rm);
-      const keys = new Set(items.map((x) => x.key));
-      d = {
-        roadmap: rm,
-        published: structuredClone({ items, own: Object.fromEntries(Object.entries(db.own).filter(([k]) => keys.has(k))), key_dates: db.key_dates?.[rm] ?? [] }),
-        out: {
-          id: crypto.randomUUID(), document: { id: stableUuid(`simple-doc/${rm}`), slug: rm, title: rm.replace(/-/g, " ").replace(/^./, (x) => x.toUpperCase()) },
-          status: "working", base_version: 1, version: null, created_by: session.started_by, created_at: iso(mockNowMs()), participant_ids: [session.started_by],
-          submitted_at: null, submitted_by: null, decider_approved: false, waiting_on: [], approved_at: null, blocked_by: [], decision_notes: [],
-        },
-      };
-      drafts.push(d);
+      d = openDraft(db, rm, session.started_by);
     }
     if (!d.out.participant_ids.includes(session.started_by)) d.out.participant_ids.push(session.started_by);
     out.push(d.out.id);

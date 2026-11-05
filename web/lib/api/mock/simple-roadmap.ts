@@ -1026,6 +1026,42 @@ function regenerate(db: SimpleDb, today: string): number {
 
 const OPEN_DRAFT = ["working", "submitted"];
 
+/** drafts.ensure: the roadmap's new working draft, opened on its published items (`except`:
+ * keys left out of them, read by no one outside the draft). */
+export function openDraft(db: SimpleDb, rm: string, by: string, except: string[] = []): MockDraft {
+  const items = db.items.filter((x) => x.roadmap === rm && !except.includes(x.key));
+  const keys = new Set(items.map((x) => x.key));
+  const d: MockDraft = {
+    roadmap: rm,
+    published: structuredClone({ items, own: Object.fromEntries(Object.entries(db.own).filter(([k]) => keys.has(k))), key_dates: db.key_dates?.[rm] ?? [] }),
+    out: {
+      id: crypto.randomUUID(), document: { id: stableUuid(`simple-doc/${rm}`), slug: rm, title: rm.replace(/-/g, " ").replace(/^./, (x) => x.toUpperCase()) },
+      status: "working", base_version: 1, version: null, created_by: by, created_at: new Date(mockNowMs()).toISOString(), participant_ids: [by],
+      submitted_at: null, submitted_by: null, decider_approved: false, waiting_on: [], approved_at: null, blocked_by: [], decision_notes: [],
+    },
+  };
+  (db.drafts ??= []).push(d);
+  return d;
+}
+
+/**
+ * trash_items._reopened: a feature only ever in a Simple draft whose draft was approved while it
+ * was in Trash (its version made without it) goes to the roadmap's open draft, the working one
+ * (opened, without it, when there is none) or the one in review; the change that added it counts
+ * there, so the draft is sent with it. Never onto the published roadmap.
+ */
+export function reopenDraftOnly(db: SimpleDb, key: string, roadmap: string, by: string): void {
+  const id = db.ids[key];
+  const added = (db.changes ?? []).find((c) => c.op === "add_item" && c.target.item_id === id && ["applied", "accepted"].includes(c.status));
+  const own = (db.drafts ?? []).filter((d) => (added?.draft_ids ?? []).includes(d.out.id));
+  if (!added || !own.length || own.some((d) => OPEN_DRAFT.includes(d.out.status))) return;
+  const made = own.map((d) => (db.versions ?? []).find((v) => v.roadmap === roadmap && v.number === d.out.version));
+  if (made.some((v) => !v?.without.includes(key))) return;
+  const open = (db.drafts ?? []).filter((d) => d.roadmap === roadmap && OPEN_DRAFT.includes(d.out.status));
+  const d = open.find((x) => x.out.status === "working") ?? open[0] ?? openDraft(db, roadmap, by, [key]);
+  added.draft_ids = [...(added.draft_ids ?? []), d.out.id];
+}
+
 /** A draft's applied changes, not undone. */
 export function draftChanges(db: SimpleDb, id: string): number {
   const cs = db.changes ?? [];

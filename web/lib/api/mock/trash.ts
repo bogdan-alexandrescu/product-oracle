@@ -10,6 +10,7 @@
  * and Home leave it out without knowing about Trash.
  */
 import type { Schemas } from "@/lib/api/client";
+import { reopenDraftOnly, type SimpleDb } from "./simple-roadmap";
 
 type Role = Schemas["Me"]["role"];
 type TrashItem = Schemas["TrashItem"];
@@ -191,6 +192,11 @@ export type TrashedSimple = {
 export function restoreFromTrash(db: TrashDb, entry: TrashEntryRow, now: string, simple?: TrashedSimple): Schemas["TrashEntryOut"] {
   const root = entry.out.root;
   // Only that roadmap's rows of the key (another roadmap may use the same key).
+  // trash_items._reopened: its draft approved while it was in Trash, it goes to an open one.
+  if (root.type === "feature" && simple && "ids" in simple) {
+    const rm = entry.roadmap ?? simple.items.find((s) => s.key === root.slug)?.roadmap;
+    if (root.slug && rm) reopenDraftOnly(simple as SimpleDb, root.slug, rm, entry.out.deleted_by ?? "");
+  }
   if (root.type === "feature") simple?.items.filter((s) => s.key === root.slug && (!entry.roadmap || s.roadmap === entry.roadmap)).forEach((s) => (s.trashed = false));
   if (root.type === "goal") simple?.goal_buckets?.goals.filter((g) => g.id === root.id).forEach((g) => (g.trashed = false));
   // trash_items._onto_current: back on every version published while it was in Trash.

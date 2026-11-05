@@ -8,6 +8,7 @@ import { expect, test, type Page } from "./test";
  * the days left), and Restore puts each back where it was. The screens that delete them are still
  * being drawn, so the delete is made through the mock API's own routes (as the API would get it);
  * Settings › Trash, and every other step a screen offers, is driven as a person would.
+ * No Delete (Move to Trash) control exists yet: the queued feature-panel lane (feature panel Delete) adds it.
  *
  * Card tfg-list-restore: protects = Settings › Trash lists "Feature <name>" and "Goal <name>"
  * with "Deleted by" and "30 days left"; Restore on each takes it out of Trash and the roadmap and
@@ -186,7 +187,7 @@ test("a feature deleted before the roadmap's next version is published comes bac
   const feature = mine.find((i) => i.can_decide && i.code)!;
   const other = mine.find((i) => i.can_decide && i.id !== feature?.id)!;
   expect(feature && other).toBeTruthy();
-  // No screen deletes a feature yet: the delete goes through the mock API's route.
+  // No screen deletes a feature yet (the queued feature-panel lane adds Delete): the mock API's route.
   expect((await call(page, "DELETE", `/v1/simple/roadmap/items/${feature.id}`)).status).toBe(200);
 
   // Another feature's dates moved on the Timeline and the draft sent for review.
@@ -240,6 +241,7 @@ test("a feature added in the draft and restored while the draft is in review sta
   await expect(page.getByRole("status").filter({ hasText: `Added ${title} as a draft` })).toBeVisible();
   const added = (await alerts(page)).find((i) => i.title === title)!;
   expect(added).toBeTruthy();
+  // No screen deletes a feature yet (the queued feature-panel lane adds Delete): the mock API's route.
   expect((await call(page, "DELETE", `/v1/simple/roadmap/items/${added.id}`)).status).toBe(200);
 
   await moveBar(page, other.key);
@@ -266,6 +268,82 @@ test("a feature added in the draft and restored while the draft is in review sta
 
   // Approved on Home, it is on the roadmap.
   await approveOnHome(page);
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await expect(roadmap).toContainText(title);
+});
+
+/*
+ * Card tfg-draft-approved (review round 6): protects = a feature added in the open draft and
+ * deleted, its draft then sent and approved while it is in Trash, is still in Settings › Trash;
+ * Restore puts it in the roadmap's working draft (a new one), not on the published roadmap: a
+ * viewer does not see it, its owner does; once that draft is sent and approved on Home it is on
+ * the roadmap; fails_when = the approval loses it (no Trash row, or Restore refused), Restore puts
+ * it on the published roadmap, or the new draft cannot be sent with it; no_claim = the API's rows
+ * (pytest test_a_feature_only_in_the_draft_is_restored_to_the_draft_only[draft_approved]).
+ */
+test("a feature added in the draft and restored after the draft was approved without it comes back in a new draft", async ({ page }) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "trash-reviewer"), MOCK_SCENARIO_KEY);
+  await login(page);
+  const other = (await alerts(page)).find((i) => i.can_decide)!;
+  const title = "Quiet hours digest";
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await page.getByLabel("Add an item").fill(title);
+  await page.getByTestId("quick-add-roadmap").selectOption({ label: "Alerts roadmap" });
+  const chip = page.getByTestId("quick-add-chip");
+  await expect(chip).toHaveAttribute("aria-disabled", "false");
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const target = page.locator('[data-testid="quarter-drop"][data-add-where="quarter:2027-Q1"]');
+  const from = (await chip.boundingBox())!;
+  const to = (await target.boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, Math.min(to.y + 20, (page.viewportSize()?.height ?? 800) - 12), { steps: 12 });
+  await page.mouse.up();
+  await expect(page.getByRole("status").filter({ hasText: `Added ${title} as a draft` })).toBeVisible();
+  const added = (await alerts(page)).find((i) => i.title === title)!;
+  expect(added).toBeTruthy();
+  // No screen deletes a feature yet (the queued feature-panel lane adds Delete): the mock API's route.
+  expect((await call(page, "DELETE", `/v1/simple/roadmap/items/${added.id}`)).status).toBe(200);
+
+  // The draft sent and approved on Home while the feature is in Trash.
+  await moveBar(page, other.key);
+  const roadmap = page.getByTestId("simple-roadmap");
+  await expect(roadmap).not.toContainText(title);
+  await sendForReview(page);
+  await approveOnHome(page);
+  await signOut(page);
+  await login(page);
+
+  // Still in Trash, and Restore brings it back.
+  await page.goto("/settings/trash");
+  const row = page.getByTestId("trash-entry").filter({ hasText: title });
+  await expect(row).toHaveCount(1);
+  await row.getByRole("button", { name: `Restore ${title}` }).click();
+  await expect(row).toHaveCount(0);
+  // In the roadmap's new working draft, which its owner reads.
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await expect(roadmap).toContainText(title);
+
+  // A viewer reads the published roadmap: it is not there.
+  await signOut(page);
+  await login(page, "vic.moss@example.com");
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await expect(roadmap).toContainText(other.title);
+  await expect(roadmap).not.toContainText(title);
+
+  // The new draft is sent with it and, approved on Home, it is on the roadmap.
+  await signOut(page);
+  await login(page);
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await sendForReview(page);
+  await approveOnHome(page);
+  await signOut(page);
+  await login(page, "vic.moss@example.com");
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-chart")).toBeVisible();
   await expect(roadmap).toContainText(title);
