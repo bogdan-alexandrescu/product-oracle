@@ -15,7 +15,8 @@ Test cards (protects / fails_when / no_claim):
 - test_a_proposed_one_pager_wording_waits_named_by_its_line: protects=an approver's new
   wording for a one-pager line is in the PRD decider's ``simple_proposals`` with the
   one-pager's ``document_id``, the line's id and the line as it reads as ``subject``;
-  Decline removes it; fails_when=no row, no subject or line id, or it stays once declined.
+  ``asked`` reads as proposed; Decline removes it; fails_when=no row, no subject or line
+  id, ``asked`` reads as done, or it stays once declined.
 - test_deciding_the_question_on_decisions_removes_its_proposal: protects=the decider
   deciding Q3 on Decisions while a proposal on it waits removes that proposal from their
   Inbox; fails_when=it still waits (Accept would only say it is outdated).
@@ -99,6 +100,8 @@ async def test_a_proposed_one_pager_wording_waits_named_by_its_line(client):
     assert row["document_id"] == view["document"]["id"]
     assert row["line_id"] == "bets-1"
     assert row["subject"] == old
+    # Still to decide: it reads as proposed, never as done ("Edited a one-pager line ...").
+    assert row["asked"] == "proposed new wording for a one-pager line: “A checklist for admins”"
     assert row["item_id"] is None
     assert inbox["total"] == before + 1
     r = await client.post(f"{CHANGES}/{change['id']}/decline", json={},

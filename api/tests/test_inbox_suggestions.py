@@ -18,6 +18,10 @@ Test cards (protects / fails_when / no_claim):
 - test_draft_approval_names_who_submitted_it: protects=a submitted draft waiting on the
   required reviewer is a ``simple_approvals`` row naming the roadmap and who submitted it
   (``submitted_by_name``); fails_when=no name.
+- test_draft_waiting_on_the_decider_is_in_their_inbox: protects=a submitted draft with no
+  decider approval is a ``simple_approvals`` row for its decider (who is never in
+  ``waiting_on``), counted in ``total``, gone once they approve; fails_when=no row, not
+  counted, or it stays once approved.
 """
 
 import uuid
@@ -111,3 +115,25 @@ async def test_draft_approval_names_who_submitted_it(client):
     assert row["draft_id"] == d["id"]
     assert row["document"]["id"] == w.roadmap_id
     assert row["submitted_by_name"] == _name(w, "decider")
+
+
+async def test_draft_waiting_on_the_decider_is_in_their_inbox(client):
+    w = await World().build()
+    await w.add(client, "decider", "Guided setup")
+    ds = (await client.get("/v1/simple/drafts", headers=w.as_("decider"))).json()
+    d = next(x for x in ds if x["document"]["id"] == w.roadmap_id)
+    before = (await _inbox(client, w, "decider"))["total"]
+    r = await client.post(f"/v1/simple/drafts/{d['id']}/submit", headers=w.as_("decider"))
+    assert r.status_code == 200, r.text
+    inbox = await _inbox(client, w, "decider")
+    rows = [x for x in inbox["simple_approvals"] if x["draft_id"] == d["id"]]
+    assert len(rows) == 1, inbox["simple_approvals"]
+    assert rows[0]["decider_approved"] is False
+    assert inbox["total"] == before + 1
+    # The commenter, neither reviewer nor decider, gets none.
+    assert (await _inbox(client, w, "commenter"))["simple_approvals"] == []
+    r = await client.post(f"/v1/simple/drafts/{d['id']}/approve", headers=w.as_("decider"))
+    assert r.status_code == 200, r.text
+    inbox = await _inbox(client, w, "decider")
+    assert [x for x in inbox["simple_approvals"] if x["draft_id"] == d["id"]] == []
+    assert inbox["total"] == before

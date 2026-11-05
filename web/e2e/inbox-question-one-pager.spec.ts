@@ -14,9 +14,9 @@ import { expect, test, type Locator, type Page } from "./test";
  * a roadmap, the question is not shown with Decide, or the row stays.
  *
  * Card inbox-one-pager-proposal: protects = a commenter's proposed wording for a one-pager line
- * is an Inbox row quoting the line; Open lands on that line of the one-pager with its proposal's
- * Accept; accepting removes the row and the count drops by one; fails_when = no row, Open goes
- * to a roadmap, or the row stays.
+ * is an Inbox row quoting the line and reading as proposed; Open lands on that line of the
+ * one-pager with its proposal's Accept; accepting removes the row and the count drops by one;
+ * fails_when = no row, it reads as done, Open goes to a roadmap, or the row stays.
  *
  * Card more-counts-the-inbox (and fix 4): protects = on a phone, More's badge counts what waits in the Inbox
  * beyond the tabs' own counts (here the one-pager proposal), and Accept on the one-pager drops the
@@ -149,6 +149,8 @@ for (const phone of [false, true]) {
       const row = page.getByRole("row").filter({ hasText: LINE }).first();
       await expect(row).toBeVisible();
       await expect(row).not.toContainText("An item");
+      // Still to decide: it reads as proposed, never as done ("Edited a one-pager line ...").
+      await expect(row.getByTestId("meeting-proposal-context")).toContainText("Proposed new wording for a one-pager line: “Invite suggestions from shared contacts” · asked for by");
       await tap(row.getByRole("link", { name: new RegExp(`^Open “${LINE}.*” on its one-pager$`) }));
       await expect(page).toHaveURL(/\/simple\/one-pagers\/[^?]+\?line=bets-2/);
       const line = page.locator('[data-line="bets-2"]');

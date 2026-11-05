@@ -1,5 +1,5 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login, signOut } from "./helpers";
+import { ADMIN, login, signOut } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /**
@@ -22,8 +22,10 @@ import { expect, test, type Locator, type Page } from "./test";
  * Card inbox-simple-approval: protects = a roadmap version sent for review waits in its required
  * reviewer's Inbox, reached from Simple's rail whose count equals "N waiting": the roadmap by
  * name, the version, who sent it and when (month first); Open goes to the roadmap, where Approve
- * publishes it and the row leaves; fails_when = no row, the counts differ, or Approve is not
- * there. Desktop and phone.
+ * takes the row away and the counts drop at once, without publishing it; the decider (the owner)
+ * has it in their Inbox until they approve it too, which publishes it; fails_when = no row for
+ * either, the counts differ or wait for a reload, the reviewer's approval publishes it, or
+ * Approve is not there. Desktop and phone.
  */
 
 async function tap(l: Locator) {
@@ -66,6 +68,13 @@ async function openInboxFromRail(page: Page, phone: boolean): Promise<number> {
   await tap(link);
   await expect(page).toHaveURL(/\/inbox$/);
   return n;
+}
+
+/** The count Simple's rail shows for the Inbox (on a phone, the Roadmap tab's, where an approval counts); 0 when none shows. */
+async function shownCount(page: Page, phone: boolean): Promise<number> {
+  const count = page.getByTestId(phone ? "simple-tab-roadmap-count" : "simple-nav-inbox-count");
+  if (!(await count.isVisible())) return 0;
+  return Number((await count.textContent())!.trim());
 }
 
 /** The owner reads the roadmap (Oracle's dates and goal suggestions are made as it is first read). */
@@ -166,13 +175,39 @@ for (const phone of [false, true]) {
       await expect(page).toHaveURL(/\/simple\/roadmap\?roadmap=/);
       const approval = page.getByTestId("draft-approval");
       await expect(approval).toContainText(/Alerts roadmap version \d+ is waiting for your approval/);
+      await expect.poll(() => shownCount(page, phone)).toBeGreaterThan(0);
+      const shown = await shownCount(page, phone);
+      // The reviewer's approval alone does not publish it: the decider's is still to come.
       await tap(approval.getByRole("button", { name: "Approve" }));
-      await expect(page.getByText("Approved: Alerts roadmap is published")).toBeVisible();
+      await expect(page.getByText("Approved: it waits for the other approvals")).toBeVisible();
+      // The counts drop at once, on the page where it was approved.
+      await expect.poll(() => shownCount(page, phone)).toBe(shown - 1);
 
       await page.goto("/inbox");
       await expect(page.getByTestId("inbox-needs")).toBeVisible();
       await expect(page.getByRole("row").filter({ has: page.getByTestId("simple-approval-context") })).toHaveCount(0);
-      await expect.poll(() => waiting(page).catch(() => 0)).toBe(railCount - 1);
+
+      // The decider (the owner, who sent it) has it waiting in their Inbox too.
+      await switchTo(page, ADMIN.email);
+      const ownerCount = await openInboxFromRail(page, phone);
+      const mine = page.getByRole("row").filter({ has: page.getByTestId("simple-approval-context") });
+      await expect(mine).toHaveCount(1);
+      await expect(mine).toContainText(/Alerts roadmap version \d+/);
+      expect(await waiting(page)).toBe(ownerCount);
+      await tap(mine.getByRole("link", { name: /^Open Alerts roadmap version \d+ to approve it$/ }));
+      await expect(page).toHaveURL(/\/simple\/roadmap\?roadmap=.*approve=/);
+      const decide = page.getByTestId("draft-approval");
+      await expect(decide).toContainText(/Alerts roadmap version \d+ is waiting for your approval/);
+      await expect.poll(() => shownCount(page, phone)).toBeGreaterThan(0);
+      const ownerShown = await shownCount(page, phone);
+      await tap(decide.getByRole("button", { name: "Approve" }));
+      await expect(page.getByText("Approved: Alerts roadmap is published")).toBeVisible();
+      await expect.poll(() => shownCount(page, phone)).toBe(ownerShown - 1);
+
+      await page.goto("/inbox");
+      await expect(page.getByTestId("inbox-needs")).toBeVisible();
+      await expect(page.getByRole("row").filter({ has: page.getByTestId("simple-approval-context") })).toHaveCount(0);
+      await expect.poll(() => waiting(page).catch(() => 0)).toBe(ownerCount - 1);
     });
   });
 }
