@@ -1,14 +1,14 @@
 import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { PRIORITY_NO_GOAL_RUN, PRIORITY_STALE_GOAL_RUN } from "../lib/api/mock/runs";
+import { BASELINE_REVIEW_RUN, PRIORITY_NO_GOAL_RUN, PRIORITY_STALE_GOAL_RUN } from "../lib/api/mock/runs";
 import { login } from "./helpers";
 
 /**
  * Follow-ups to PR 1244 (review minors), on the mock layer, driven as a person would. Test cards:
  * - "a stale goal problem clears once the goal is back": protects=a goal the order's new feature
  *   serves, rejected after the check, blocks Approve order; once a person brings the goal back
- *   (Undo in the run's From this run review, or Confirm after it), the band and the run page's
+ *   (Undo in the review of the run that proposed it, or Confirm after it), the band and the run page's
  *   gate no longer list it and Approve order saves the order; fails_when=the problem stays on the
  *   band or the gate list after the goal is back, or Approve order stays refused;
  *   no_claim=other order problems.
@@ -21,7 +21,8 @@ import { login } from "./helpers";
 const STALE_GOAL = "Gift box sizes serves the goal Cut early churn, which was rejected after the order was checked: the run must name a goal of the Ground Truth";
 const DELETED_GOAL = "Gift wrap choice names a goal that was deleted: the run must name a goal of the Ground Truth";
 
-const withScenario = (page: Page) => page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "priority-order"]);
+// The Gift boxes order and a Build the baseline run, still at its review, that proposed Cut early churn.
+const withScenario = (page: Page, scenario = "priority-order-goal-review") => page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, scenario]);
 
 async function openOrder(page: Page, run: string) {
   await page.goto(`/runs/${run}`);
@@ -29,9 +30,9 @@ async function openOrder(page: Page, run: string) {
   await expect(page.getByTestId("snapshot-band")).toBeVisible();
 }
 
-/** The run's own review of what it wrote to the baseline: Cut early churn's row. */
+/** The baseline run's review of what it wrote to the baseline: Cut early churn's row. */
 async function churnRow(page: Page) {
-  await page.goto(`/baseline?tab=from-run&run=${PRIORITY_STALE_GOAL_RUN}`);
+  await page.goto(`/baseline?tab=from-run&run=${BASELINE_REVIEW_RUN}`);
   const row = page.getByTestId("from-run-row").filter({ hasText: "Cut early churn" });
   await expect(row).toBeVisible();
   return row;
@@ -99,7 +100,7 @@ test.describe("Follow-ups to PR 1244: order problems about goals", () => {
   });
 
   test("a goal with no name is said as a deleted goal, never by its key", async ({ page }) => {
-    await withScenario(page);
+    await withScenario(page, "priority-order");
     await login(page, "approver@example.com");
     // The band.
     await openNoGoalOrder(page);

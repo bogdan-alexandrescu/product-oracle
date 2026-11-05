@@ -82,7 +82,6 @@ import {
   seedEngReviewRun,
   seedFeatureSetRun,
   seedPriorityRuns,
-  PRIORITY_STALE_GOAL_RUN,
   seedRunReviewRun,
   seedNoDocumentRuns,
   proposalRun,
@@ -1999,9 +1998,19 @@ function seedPriorityOrder(): Db {
     template: null, template_version: null, theme: null, created_at: at, updated_at: at,
   });
   seeded("priority-order", () => seedPriorityRuns(db.runs!, runsContext(db)));
-  // The Gift boxes run proposed Cut early churn: its review (Baseline › From this run) decides it, and Undo brings it back.
+  return db;
+}
+
+/**
+ * Follow-up to PR 1244 "priority-order-goal-review" scenario: "priority-order" plus a Build the
+ * baseline run waiting at Confirm the baseline that proposed Cut early churn (the goal the Gift
+ * boxes order's new feature serves), so a person rejects it in that review, and Undo brings it back.
+ */
+function seedPriorityOrderGoalReview(): Db {
+  const db = seedPriorityOrder();
+  const run = seeded("priority-order-goal-review", () => seedBaselineReviewRun(db.runs!, runsContext(db)));
   const churn = db.baseline.entities.find((e) => e.type === "goal" && e.key === "g.early-churn");
-  if (churn) churn.run_id = PRIORITY_STALE_GOAL_RUN;
+  if (churn) churn.run_id = run.id;
   return db;
 }
 
@@ -3368,6 +3377,8 @@ function load(): Db {
             ? seedRunReviewDecider
           : scenario === "priority-order"
             ? seedPriorityOrder
+          : scenario === "priority-order-goal-review"
+            ? seedPriorityOrderGoalReview
           : scenario === "meeting-draft-dates"
             ? seedMeetingDraftDatesScenario
           : scenario === "next-draft" || scenario === "next-draft-costly"
