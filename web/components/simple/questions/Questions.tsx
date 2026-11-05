@@ -1,5 +1,6 @@
 "use client";
 
+import { QuestionForm, QuestionSheet, RowMenu, WithdrawnQuestion, useMkEditAll, useMkQuestion } from "@/components/simple/mock-edit/MockEdit"; // MOCK-HOOK
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Icon } from "@/components/ds/Icon";
@@ -319,6 +320,7 @@ export function QuestionRow({
   testId = "question-row",
   plain = false,
   forOthers = false,
+  mkTarget = false, // MOCK-HOOK
 }: {
   q: Question;
   mode: Mode;
@@ -329,7 +331,10 @@ export function QuestionRow({
   testId?: string;
   /** Listed under "Waiting for others": an owner's Decide is an override for the decider. */
   forOthers?: boolean;
+  mkTarget?: boolean; // MOCK-HOOK
 }) {
+  const m = useMkQuestion(q, mkTarget); // MOCK-HOOK
+  const editAll = useMkEditAll(); // MOCK-HOOK
   const zone = useCompanyZone();
   const { me } = useMe();
   const [open, setOpen] = useState<"answers" | "people" | "answerer" | null>(null);
@@ -426,10 +431,19 @@ export function QuestionRow({
           </button>
         )}
         {writes && !proposed && !primary && (nameIt || askSomeone) && another("Another answer")}
-        <AskButton q={q} />
+        {m.mk.eq2 === "a" ? <span className="flex items-center justify-end gap-1"> {/* MOCK-HOOK */}<AskButton q={q} /><RowMenu label={q.title} open={m.mode === "menu"} onOpen={(o) => m.setMode(o ? "menu" : null)} items={m.power === "read" ? [] : m.power === "change" ? [{ label: "Edit", onClick: () => { m.setDraft(m.s); m.setMode("edit"); } }, { label: "Withdraw", onClick: () => m.setMode("withdraw"), danger: true }] : [{ label: "Suggest a change", onClick: () => { m.setDraft(m.s); m.setMode("edit"); } }]} /></span> /* MOCK-HOOK */ : <AskButton q={q} />}
       </>
     );
   }
+  if (m.mk.eq2 && m.s.withdrawn) return <WithdrawnQuestion code={q.code} title={m.s.title} onUndo={() => m.setS({ ...m.s, withdrawn: false })} />; // MOCK-HOOK
+  if (m.mk.eq2 === "c" && editAll.on && !done) /* MOCK-HOOK */
+    return ( // MOCK-HOOK
+      <Tag data-testid={testId} className="simple-row"> {/* MOCK-HOOK */}
+        <span aria-hidden className="simple-ico"><Icon name="flag" size={20} stroke={1.7} /></span> {/* MOCK-HOOK */}
+        <div className="simple-rb min-w-0"><span className="simple-meta"><span className="simple-code">{q.code}</span> · {q.prd.title}</span>{m.power === "read" ? <b className="font-[650]">{m.s.title}</b> : <QuestionForm d={m.draft} onChange={m.setDraft} />}</div> {/* MOCK-HOOK */}
+        <div className="simple-actions min-[601px]:w-[232px]">{m.power === "change" && <button type="button" className="simple-button" onClick={() => m.setS({ ...m.s, withdrawn: true })}>Withdraw</button>}</div> {/* MOCK-HOOK */}
+      </Tag> // MOCK-HOOK
+    ); // MOCK-HOOK
   return (
     <Tag data-testid={testId} data-code={q.code} aria-label={`${q.code} ${q.title}`} className="simple-row">
       <span aria-hidden className={`simple-ico ${done ? "simple-ico-done" : ""}`}>
@@ -443,7 +457,7 @@ export function QuestionRow({
             </b>
           ) : (
             <>
-              <span className="simple-code">{q.code}</span> <b className="font-[650]">{q.title}</b>
+              <span className="simple-code">{q.code}</span> {m.mk.eq2 === "b" ? <button type="button" className="text-left font-[650] hover:underline" onClick={() => m.setMode("sheet")}>{m.s.title}</button> /* MOCK-HOOK */ : <b className="font-[650]">{m.mk.eq2 ? m.s.title /* MOCK-HOOK */ : q.title}</b>}
             </>
           )}
         </span>
@@ -470,15 +484,23 @@ export function QuestionRow({
               {q.chosen}
             </span>
           )
-        ) : q.recommendation ? (
+        ) : m.mk.eq2 === "a" && m.mode === "edit" ? ( /* MOCK-HOOK */
+          <div className="mt-2 flex flex-col gap-3 rounded-xl border border-line p-4"> {/* MOCK-HOOK */}
+            <QuestionForm d={m.draft} onChange={m.setDraft} prd={q.prd.title} /> {/* MOCK-HOOK */}
+            <span className="flex gap-2"><button type="button" className="simple-button simple-button-primary" onClick={() => m.save(m.draft)}>{m.power === "change" ? "Save" : `Suggest to ${q.decider?.name ?? "the PRD's owner"}`}</button><button type="button" className="simple-button" onClick={() => m.setMode(null)}>Cancel</button></span> {/* MOCK-HOOK */}
+          </div> // MOCK-HOOK
+        ) : (m.mk.eq2 ? m.s.recommendation : q.recommendation) /* MOCK-HOOK */ ? (
           <span className="simple-rec">
             <span className="simple-rec-label">{recommendsLabel(q)}:</span>{" "}
-            {q.recommendation}
+            {m.mk.eq2 ? m.s.recommendation /* MOCK-HOOK */ : q.recommendation}
           </span>
         ) : (
           <span className="simple-meta">No recommendation in the PRD yet.</span>
         )}
         {!done && !q.waiting_for_me && <span className="simple-meta">{q.decider ? `${q.decider.name} decides` : "No decider yet"}</span>}
+        {m.mk.eq2 && (m.s.edited || m.s.suggested) && <span className="simple-meta">{m.s.edited ? "Edited by you just now" : `Your change waits for ${q.decider?.name ?? "the PRD's owner"}`}</span> /* MOCK-HOOK */}
+        {m.mk.eq2 === "a" && m.mode === "withdraw" && <span className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-line p-3"><span className="flex-1">Withdraw this question? It stays in the PRD&apos;s history.</span><button type="button" className="simple-button simple-button-primary" onClick={() => m.setS({ ...m.s, withdrawn: true })}>Withdraw</button><button type="button" className="simple-button" onClick={() => m.setMode(null)}>Cancel</button></span> /* MOCK-HOOK */}
+        {m.mk.eq2 === "b" && <QuestionSheet open={m.mode !== null && m.mode !== "menu"} q={q} m={m} onClose={() => m.setMode(null)} /> /* MOCK-HOOK */}
         {q.pending && (
           <span className="simple-meta" data-testid="question-pending">
             {q.pending.by.name} proposed: {q.pending.answer}

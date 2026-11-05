@@ -655,7 +655,8 @@ const ROLES: readonly Schemas["Me"]["role"][] = ["viewer", "commenter", "approve
 
 /** The signed-in member, with the role overridden when a test set MOCK_ROLE_KEY. */
 function withMockRole<T extends { role: Schemas["Me"]["role"] }>(member: T): T {
-  const role = localStorage.getItem(MOCK_ROLE_KEY) as Schemas["Me"]["role"] | null;
+  const asParam = typeof location !== "undefined" ? new URLSearchParams(location.search).get("as") : null; // MOCK-HOOK: mk-edit-decisions' ?as=viewer|commenter
+  const role = (asParam ?? localStorage.getItem(MOCK_ROLE_KEY)) as Schemas["Me"]["role"] | null; // MOCK-HOOK
   return role && ROLES.includes(role) ? { ...member, role } : member;
 }
 const LATENCY_MS = 60;
