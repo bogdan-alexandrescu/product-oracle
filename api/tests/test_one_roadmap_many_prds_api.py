@@ -8,6 +8,7 @@ that replace it and its items no longer feed the roadmap. Against Postgres. Inve
 """
 
 import hashlib
+import uuid
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
@@ -455,3 +456,376 @@ async def test_a_runs_queue_is_the_roadmap_as_it_was_when_the_run_started(client
         then_rows = await company.run_queue(s, ids["safety"], as_of=started)
     assert "sharding" in {r["key"] for r in now_rows}
     assert {r["key"] for r in then_rows} == {"report-button", "read-replicas"}
+
+
+MILESTONE_ITEMS = """\
+version: 1
+prd: {document: user-safety, version: 1}
+items:
+  - id: report-button
+    title: Report button for every post
+    outcome: People report harm in one tap
+    horizon: now
+  - id: block-list
+    title: Block list
+    outcome: People block whoever they choose
+    horizon: later
+    milestone: {name: Beta}
+"""
+
+
+async def test_a_run_item_that_names_a_milestone_takes_that_milestones_place(client):
+    from oracle.roadmap import company
+
+    ctx, ids = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        replicas = await s.scalar(select(RoadmapItem).where(
+            RoadmapItem.item_key == "read-replicas"))  # fmt: skip
+        replicas.milestone = {"name": "Beta"}
+        rm = await s.get(Document, ids["company"])
+        v1 = await s.get(DocumentVersion, ids["v1"])
+        scale, cv = await s.get(Document, ids["scale"]), await s.get(DocumentVersion, ids["cv"])
+        s.add(_item(rm, v1, scale, cv, "sharding", "Sharding", 2, horizon="later"))
+        await s.commit()
+        rows = await company.run_queue(s, ids["safety"])
+    queued = company.with_run_items(rows, MILESTONE_ITEMS)
+    # Block list is in Later, but it names Beta: it goes where Beta is in the queue (before
+    # every item without a milestone), not after Later's items. Landing puts the run's items
+    # first (block list at 1, read replicas after it at 2), so Beta's place is block list's.
+    assert [r["key"] for r in queued] == ["block-list", "read-replicas", "report-button",
+                                          "sharding"]  # fmt: skip
+    by = {r["key"]: r for r in queued}
+    week = timedelta(days=7)
+    assert by["block-list"]["start"] == TODAY.isoformat()
+    assert by["block-list"]["end"] == (TODAY + week).isoformat()
+    assert by["sharding"]["end"] == (TODAY + 4 * week).isoformat()
+    # The plan tables a person approves are the queue once the file lands.
+    assert await _landed(ctx, ids, MILESTONE_ITEMS) == _planned(queued)
+
+
+async def _landed(ctx: Ctx, ids: dict, text: str) -> list[tuple[str, str, str]]:
+    """The company queue once the run's items file lands as the roadmap's next version."""
+    from oracle.roadmap import company
+
+    async with tenant_session(ctx.tenant_id) as s:
+        v2 = await _version(s, ids, 2, ids["sv"])
+        await roadmap_items.import_items(s, v2, text)
+        await s.commit()
+        _, rows = await company.queue(s)
+    return [(q.item.item_key, q.start.isoformat(), q.end.isoformat()) for q in rows]
+
+
+def _planned(queued: list[dict]) -> list[tuple[str, str, str]]:
+    return [(r["key"], r["start"], r["end"]) for r in queued]
+
+
+FIRST_ITEMS = """\
+version: 1
+prd: {document: user-safety, version: 1}
+items:
+  - id: block-list
+    title: Block list
+    outcome: People block whoever they choose
+    horizon: now
+  - id: no-title
+    outcome: Left out when the file lands
+    horizon: now
+  - id: report-button
+    title: Report button for every post
+    outcome: People report harm in one tap
+    horizon: now
+"""
+
+
+async def test_a_run_items_place_in_its_horizon_is_the_one_landing_gives_it(client):
+    from oracle.roadmap import company
+
+    ctx, ids = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        rows = await company.run_queue(s, ids["safety"])
+    queued = company.with_run_items(rows, FIRST_ITEMS)
+    # The run's file lands first, in file order (the item without a title left out), then
+    # the other PRDs' items: the new block list comes before read replicas in Now.
+    assert [r["key"] for r in queued] == ["block-list", "report-button", "read-replicas"]
+    assert await _landed(ctx, ids, FIRST_ITEMS) == _planned(queued)
+
+
+REPORT_ITEMS = """\
+version: 1
+prd: {document: user-safety, version: 1}
+items:
+  - id: report-button
+    title: Report button
+    outcome: People report harm in one tap
+    horizon: now
+"""
+
+
+QUICK_REPORT_ITEMS = REPORT_ITEMS + "    economics: {effort_weeks: 0.01}\n"
+
+
+async def test_a_runs_prompt_and_check_date_the_queue_from_the_runs_own_day(client, monkeypatch):
+    from oracle.roadmap import company
+    from oracle.runs import plan_tables, service
+    from oracle.runs.models import Run, RunSegment
+
+    ctx, ids = await world(client)
+    # The run's file makes the report button a few hours' work: it ends on the run's own day.
+    started = datetime.now(UTC)
+    run_day = company_time.day(started, company_time.DEFAULT_ZONE)
+    monkeypatch.setattr(company_time, "now", lambda: started)
+    async with tenant_session(ctx.tenant_id) as s:
+        run = await _add(s, Run(flow="prd_to_roadmap", status="running", created_at=started))
+        s.add(RunSegment(run_id=run.id, seq=1, name="roadmap_items", status="succeeded",
+                         artifacts={"files": {
+                             plan_tables.ITEMS_FILE: QUICK_REPORT_ITEMS}}))  # fmt: skip
+        await s.commit()
+        prompt_rows = await company.run_queue(s, ids["safety"], as_of=started)
+    assert prompt_rows[0]["start"] == run_day.isoformat()
+    queued = company.with_run_items(prompt_rows, QUICK_REPORT_ITEMS)
+    plan = plan_tables.engineering_plan(QUICK_REPORT_ITEMS, [], others=queued)
+    written = plan_tables.markdown(plan)
+    # The writer words the run's day without its year, as people do.
+    day = company_time.calendar_day(run_day)
+    assert f"| {plan_tables.day(run_day)} | team queue |" in written
+    written = written.replace(f"| {plan_tables.day(run_day)} |", f"| {day} |")
+    assert f"| report-button | Report button |  | {day} | team queue |" in written
+    # The check runs after the company's midnight: it still dates the queue from the run's day.
+    monkeypatch.setattr(company_time, "now", lambda: started + timedelta(days=1))
+    async with tenant_session(ctx.tenant_id) as s:
+        check_rows = await company.run_queue(s, ids["safety"], as_of=started)
+        problems = await service._plan_table_problems(s, run, written, ids["sv"])
+    assert [(r["start"], r["end"]) for r in check_rows] == [
+        (r["start"], r["end"]) for r in prompt_rows
+    ]
+    assert not problems, [p.message for p in problems]
+
+
+GAMMA_ITEMS = """\
+version: 1
+prd: {document: user-safety, version: 1}
+items:
+  - id: report-button
+    title: Report button
+    outcome: People report harm in one tap
+    horizon: later
+    milestone: {name: Gamma}
+"""
+
+
+async def test_an_item_moved_to_a_new_milestone_takes_the_place_it_will_have(client):
+    from oracle.roadmap import company
+
+    ctx, ids = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        report = await s.scalar(select(RoadmapItem).where(
+            RoadmapItem.roadmap_version_id == ids["v1"],
+            RoadmapItem.item_key == "report-button"))  # fmt: skip
+        report.milestone = {"name": "Alpha"}
+        rm = await s.get(Document, ids["company"])
+        v1 = await s.get(DocumentVersion, ids["v1"])
+        scale, cv = await s.get(Document, ids["scale"]), await s.get(DocumentVersion, ids["cv"])
+        s.add(_item(rm, v1, scale, cv, "sharding", "Sharding", 2, horizon="next",
+                    milestone={"name": "Beta"}))  # fmt: skip
+        await s.commit()
+        rows = await company.run_queue(s, ids["safety"])
+    queued = company.with_run_items(rows, GAMMA_ITEMS)
+    # The report button leaves Alpha (Now) for Gamma, which only it names, in Later: Gamma's
+    # place is the report button's own in Later, after Beta (Next), not Alpha's.
+    assert [r["key"] for r in queued] == ["sharding", "report-button", "read-replicas"]
+
+
+DROP_ITEMS = """\
+version: 1
+prd: {document: user-safety, version: 1}
+items:
+  - id: block-list
+    title: Block list
+    outcome: People block whoever they choose
+    horizon: later
+"""
+
+
+async def test_a_milestone_keeps_no_place_only_a_dropped_item_gave_it(client):
+    from oracle.roadmap import company
+
+    ctx, ids = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        report = await s.scalar(select(RoadmapItem).where(
+            RoadmapItem.roadmap_version_id == ids["v1"],
+            RoadmapItem.item_key == "report-button"))  # fmt: skip
+        report.milestone = {"name": "Beta"}
+        replicas = await s.scalar(select(RoadmapItem).where(
+            RoadmapItem.roadmap_version_id == ids["v1"],
+            RoadmapItem.item_key == "read-replicas"))  # fmt: skip
+        replicas.horizon, replicas.milestone = "next", {"name": "Alpha"}
+        rm = await s.get(Document, ids["company"])
+        v1 = await s.get(DocumentVersion, ids["v1"])
+        scale, cv = await s.get(Document, ids["scale"]), await s.get(DocumentVersion, ids["cv"])
+        s.add(_item(rm, v1, scale, cv, "sharding", "Sharding", 2, horizon="later",
+                    milestone={"name": "Beta"}))  # fmt: skip
+        await s.commit()
+        rows = await company.run_queue(s, ids["safety"])
+    assert [r["key"] for r in rows] == ["report-button", "sharding", "read-replicas"]
+    queued = company.with_run_items(rows, DROP_ITEMS)
+    # The run drops the report button, which put Beta in Now: Beta is where sharding puts it
+    # (Later), after Alpha (Next).
+    assert [r["key"] for r in queued] == ["read-replicas", "sharding", "block-list"]
+
+
+async def test_a_runs_queue_is_frozen_when_its_prompt_is_first_built(client):
+    """Runs onto the one roadmap go in parallel: another PRD's items land and the team's
+    capacity changes before a run's check; the prompt, every rewrite and the check read the
+    queue the run froze when its prompt was first built."""
+    from oracle.roadmap import company
+    from oracle.runs import plan_tables, service
+    from oracle.runs.models import Run, RunSegment
+
+    ctx = await make_ctx()
+    rm = await _company(client, ctx)
+    ids = {"company": uuid.UUID(rm["id"])}
+    started = datetime.now(UTC)
+    day = company_time.day(started, company_time.DEFAULT_ZONE)
+    async with tenant_session(ctx.tenant_id) as s:
+        _, sv = await _prd(s, "user-safety", "User Safety")
+        _, cv = await _prd(s, "scale", "Scale")
+        run = await _add(s, Run(flow="prd_to_roadmap", status="running", created_at=started,
+                                knobs={"source_version_id": str(sv.id)}))  # fmt: skip
+        s.add(RunSegment(run_id=run.id, seq=1, name="roadmap_items", status="succeeded",
+                         artifacts={"files": {plan_tables.ITEMS_FILE: REPORT_ITEMS}}))  # fmt: skip
+        await s.commit()
+        run_id, sv_id = run.id, sv.id
+        source = await service._source_context(s, run)
+        await s.commit()
+    # The roadmap is still empty: the run's own item is dated from the team's capacity.
+    queued = company.with_run_items(source.company_queue, REPORT_ITEMS, **source.company_plan)
+    plan = plan_tables.engineering_plan(REPORT_ITEMS, [], others=queued)
+    assert [(r.key, r.end, r.basis) for r in plan.items] == [
+        ("report-button", day + timedelta(days=7), "team queue")
+    ]
+    written = plan_tables.markdown(plan)
+    # Another PRD's run lands first and the team's capacity changes.
+    async with tenant_session(ctx.tenant_id) as s:
+        await roadmap_items.import_items(s, await _version(s, ids, 1, cv.id), SCALE_ITEMS)
+        await s.commit()
+    r = await client.put("/v1/settings/team_capacity", headers=ctx.as_("owner"),
+                         json={"value": {"team_size": 2, "focus": 1.0}})  # fmt: skip
+    assert r.status_code == 200, r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        run = await s.get(Run, run_id)
+        # A rewrite after a refusal reads the same queue.
+        again = await service._source_context(s, run)
+        assert (again.company_queue, again.company_plan) == (
+            source.company_queue, source.company_plan)  # fmt: skip
+        problems = await service._plan_table_problems(s, run, written, sv_id)
+    assert not problems, [p.message for p in problems]
+
+
+REESTIMATE_ITEMS = """\
+version: 1
+prd: {document: user-safety, version: 1}
+items:
+  - id: report-button
+    title: Report button
+    outcome: People report harm in one tap
+    horizon: now
+    milestone: {name: Beta}
+    economics: {effort_weeks: 3}
+  - id: mute-words
+    title: Mute words
+    outcome: People hide the words they choose
+    horizon: now
+    milestone: {name: Beta}
+    priority: {score: 5}
+  - id: block-list
+    title: Block list
+    outcome: People block whoever they choose
+    horizon: now
+    milestone: {name: Beta}
+    feature: blocking
+"""
+
+
+async def test_a_run_items_effort_priority_and_goal_are_the_ones_landing_stores(client):
+    """The file re-estimates the report button (3 weeks), drops the mute words' effort and
+    the report button's priority, and names a feature that serves a company goal for the
+    new block list: the plan tables use what landing stores, not the old item's values."""
+    from oracle.roadmap import company
+
+    ctx, ids = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        await _goal(s, "fewer-harmful-posts", "Fewer harmful posts", 1, "blocking")
+        report = await s.scalar(select(RoadmapItem).where(
+            RoadmapItem.roadmap_version_id == ids["v1"],
+            RoadmapItem.item_key == "report-button"))  # fmt: skip
+        report.milestone = {"name": "Beta"}
+        report.priority = {"score": 9}
+        report.economics = {"declared": {"effort_weeks": 1}, "priority_score": 9}
+        replicas = await s.scalar(select(RoadmapItem).where(
+            RoadmapItem.roadmap_version_id == ids["v1"],
+            RoadmapItem.item_key == "read-replicas"))  # fmt: skip
+        replicas.milestone, replicas.position = {"name": "Beta"}, 3
+        rm = await s.get(Document, ids["company"])
+        v1 = await s.get(DocumentVersion, ids["v1"])
+        safety, sv = await s.get(Document, ids["safety"]), await s.get(DocumentVersion, ids["sv"])
+        s.add(_item(rm, v1, safety, sv, "mute-words", "Mute words", 2,
+                    milestone={"name": "Beta"},
+                    economics={"declared": {"effort_weeks": 2}}))  # fmt: skip
+        await s.commit()
+        frozen = await company.frozen_queue(s, ids["safety"])
+    plan = {k: v for k, v in frozen.items() if k != "rows"}
+    queued = company.with_run_items(frozen["rows"], REESTIMATE_ITEMS, **plan)
+    # In Beta: the block list serves a goal, so it goes first; then priority (the mute words'
+    # 5, the report button has none now), then the report button's 3 weeks.
+    assert [r["key"] for r in queued] == ["block-list", "mute-words", "report-button",
+                                          "read-replicas"]  # fmt: skip
+    by = {r["key"]: r for r in queued}
+    week = timedelta(days=7)
+    assert (by["report-button"]["start"], by["report-button"]["end"]) == (
+        (TODAY + 2 * week).isoformat(), (TODAY + 5 * week).isoformat())  # fmt: skip
+    assert await _landed(ctx, ids, REESTIMATE_ITEMS) == _planned(queued)
+
+
+SECTION_ITEMS = """\
+version: 1
+prd: {document: user-safety, version: 1}
+items:
+  - id: report-button
+    title: Report button
+    outcome: People report harm in one tap
+    horizon: now
+    milestone: {name: Beta}
+  - id: safety-reports
+    title: Safety reports
+    outcome: People see what happened to their report
+    horizon: now
+    milestone: {name: Beta}
+    prd_section: reporting
+"""
+
+
+async def test_a_run_items_goal_comes_from_the_feature_its_prd_section_links(client):
+    from oracle.docs.models import Section
+    from oracle.roadmap import company
+    from oracle.v2.models import DocumentSectionLink
+
+    ctx, ids = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        feature = await _goal(s, "fewer-harmful-posts", "Fewer harmful posts", 1, "reporting")
+        s.add(Section(version_id=ids["sv"], section_key="reporting", ordinal=1, level=2,
+                      heading="Reporting", content_hash=_hash("Reporting")))  # fmt: skip
+        s.add(DocumentSectionLink(document_id=ids["safety"], version_id=ids["sv"],
+                                  section_key="reporting", kind="implements",
+                                  entity_id=feature.id))  # fmt: skip
+        replicas = await s.scalar(select(RoadmapItem).where(
+            RoadmapItem.roadmap_version_id == ids["v1"],
+            RoadmapItem.item_key == "read-replicas"))  # fmt: skip
+        replicas.milestone = {"name": "Beta"}
+        await s.commit()
+        frozen = await company.frozen_queue(s, ids["safety"], prd_version=await s.get(
+            DocumentVersion, ids["sv"]))  # fmt: skip
+    plan = {k: v for k, v in frozen.items() if k != "rows"}
+    queued = company.with_run_items(frozen["rows"], SECTION_ITEMS, **plan)
+    # Its section links a feature that serves a company goal: it goes first in Beta.
+    assert [r["key"] for r in queued] == ["safety-reports", "report-button", "read-replicas"]
+    assert await _landed(ctx, ids, SECTION_ITEMS) == _planned(queued)

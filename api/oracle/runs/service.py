@@ -125,7 +125,7 @@ import uuid
 import weakref
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
@@ -422,6 +422,8 @@ def _set_art(segment: RunSegment, data: dict[str, Any]) -> None:
 # #541 part 5: whether a ``company_draft`` run reads as a member (its target was
 # company-wide when it started). Set by start, never by a caller (not an ORACLE_KNOB).
 MEMBER_VIEW = "member_view"
+# one-roadmap-many-prds: the shared queue a prd_to_roadmap run froze (_frozen_queue).
+COMPANY_QUEUE = "company_queue"
 
 
 async def target_visibility(db: AsyncSession, run: Run) -> str:
@@ -3149,15 +3151,19 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
         known_from, known = await draft_items.known_items(db, version)
     else:
         known_from, known = await _known_roadmap_items(db, run)
+    frozen = (
+        await _frozen_queue(db, run, version)
+        if run.flow == "prd_to_roadmap"
+        else {"rows": [], "per_week": None, "today": None}
+    )
     return flows.SourceContext(
         approved=version.approved_at is not None or not _flow(run).stores_draft_items,
         known_items=known,
         known_from=known_from,
         horizons=await _run_horizons(db, run),
         schedule_bases=[b.as_json() for b in bases],
-        company_queue=await roadmap_company.run_queue(db, version.document_id, run.created_at)
-        if run.flow == "prd_to_roadmap"
-        else [],
+        company_queue=frozen["rows"],
+        company_plan={k: v for k, v in frozen.items() if k != "rows"},
         slug=document.slug if document else str(version.document_id),
         title=document.title if document else "",
         version=version.number,
@@ -3168,6 +3174,25 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
         edges=edges,
         goals=goals,
     )
+
+
+async def _frozen_queue(
+    db: AsyncSession, run: Run, source: DocumentVersion | None
+) -> dict[str, Any]:
+    """one-roadmap-many-prds: the shared queue this run reads (oracle.roadmap.company
+    .frozen_queue), stored on the run when its first prompt (the roadmap_items segment's)
+    is built, before the run writes its items file; that prompt, the roadmap draft's, every
+    rewrite after a refusal and the check read that copy, though other PRDs' runs land or
+    the team's capacity changes meanwhile. ``source``: the run's PRD version."""
+    frozen = (run.knobs or {}).get(COMPANY_QUEUE)
+    if isinstance(frozen, dict) and isinstance(frozen.get("rows"), list):
+        return frozen
+    frozen = await roadmap_company.frozen_queue(
+        db, source.document_id if source else None, run.created_at, source
+    )
+    _set_knob(run, COMPANY_QUEUE, frozen)
+    await db.flush()
+    return frozen
 
 
 async def _known_roadmap_items(db: AsyncSession, run: Run) -> tuple[str, list[dict[str, str]]]:
@@ -4774,10 +4799,10 @@ async def _plan_table_problems(
     any other run's roadmap draft (the feedback loop): the roadmap's own items."""
     from oracle.runs import plan_tables
 
-    today = await company_time.company_today(db)
     if run.flow != "prd_to_roadmap":
         items_text, loop_bases, queued, kept = await _loop_plan_inputs(db, run)
         loop_plan = plan_tables.engineering_plan(items_text, loop_bases, others=queued, kept=kept)
+        today = await company_time.company_today(db)
         return plan_tables.check(markdown, loop_plan, today, loop=True)
     items = None
     for seg in await db.scalars(
@@ -4787,14 +4812,20 @@ async def _plan_table_problems(
         items = files.get(plan_tables.ITEMS_FILE, items)
     source = await db.get(DocumentVersion, source_id) if source_id else None
     bases = await schedule.verified_bases(db, source.document_id if source else None)
-    # one-roadmap-many-prds: the other PRDs' items on the company roadmap are in the tables too.
-    others = await roadmap_company.run_queue(
-        db, source.document_id if source else None, run.created_at
+    # one-roadmap-many-prds: the other PRDs' items on the company roadmap are in the tables
+    # too, from the queue the run froze when its first prompt (roadmap_items) was built.
+    frozen = await _frozen_queue(db, run, source)
+    others = roadmap_company.with_run_items(
+        frozen["rows"], items, **{k: v for k, v in frozen.items() if k != "rows"}
     )
-    plan = plan_tables.engineering_plan(
-        items, [b.as_json() for b in bases], others=roadmap_company.with_run_items(others, items)
+    plan = plan_tables.engineering_plan(items, [b.as_json() for b in bases], others=others)
+    frozen_day = frozen["today"]
+    day = (
+        date.fromisoformat(frozen_day)
+        if frozen_day
+        else await roadmap_company.run_day(db, run.created_at)
     )
-    return plan_tables.check(markdown, plan, today)
+    return plan_tables.check(markdown, plan, day)
 
 
 async def _draft_source(db: AsyncSession, run: Run) -> uuid.UUID | None:

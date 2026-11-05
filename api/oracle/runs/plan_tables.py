@@ -42,7 +42,7 @@ from typing import Any
 from oracle import company_time
 from oracle.docs.schemas import ImportProblem
 from oracle.roadmap.schedule import _names, as_date
-from oracle.runs.roadmap import ItemsYamlError, load_items_yaml
+from oracle.runs.roadmap import ItemsYamlError, parsed_items
 from oracle.simple import approved_roadmap
 
 ITEMS_FILE = "roadmap_items.yaml"
@@ -160,7 +160,7 @@ def engineering_plan(
 def _engineering_plan(items_text: str, bases: Iterable[dict[str, Any]]) -> EngineeringPlan:
     plan = EngineeringPlan()
     try:
-        data = load_items_yaml(items_text)
+        data = parsed_items(items_text)
     except ItemsYamlError:
         return plan
     entries = data.get("items") if isinstance(data, dict) else None
