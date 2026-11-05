@@ -157,6 +157,9 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             if "milestone" in before and after.get("milestone") is None:
                 return f"removed the milestone {name}" if name else "removed a milestone"
             return f"changed the milestone {name}" if name else "changed a milestone"
+        # trash-features-goals: a feature deleted to Trash (oracle.simple.trash_items).
+        case "delete_item":
+            return f"moved {x} to Trash"
     return f"changed {x}"
 
 
@@ -177,11 +180,14 @@ def sentence(
     if status == "undone":
         # The undo row swaps before and after: its words name the change it undid.
         return f"{who} undid: {phrase(op, target, after, before, item)}"
-    words = f"{who} {phrase(op, target, before, after, item)}"
+    what = phrase(op, target, before, after, item)
+    words = f"{who} {what}"
+    # What was asked, not done: "proposed: move F-26 Alert rules engine to Trash".
+    asked = "move" + what[len("moved") :] if op == "delete_item" else what
     if status == "proposed":
-        words = f"{who} proposed: {phrase(op, target, before, after, item)}"
+        words = f"{who} proposed: {asked}"
     elif status == "declined":
-        words = f"{who} proposed: {phrase(op, target, before, after, item)} · declined"
+        words = f"{who} proposed: {asked} · declined"
     if undone:
         words += " · undone"
     return words

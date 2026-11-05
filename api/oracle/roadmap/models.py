@@ -42,6 +42,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
+from oracle.trash.models import Trashable, trashed_index
 from oracle.v2.models import FRESHNESS, _fk, _json, _lock_version, _texts, _updated_at, _uuids
 
 HORIZONS = ("now", "next", "later")
@@ -308,7 +309,7 @@ class DraftRoadmap(TenantScoped, Base):
     updated_at: Mapped[datetime] = _updated_at()
 
 
-class RoadmapItem(TenantScoped, Base):
+class RoadmapItem(Trashable, TenantScoped, Base):
     """One item of a roadmap version, traced to the PRD version it came from (§11.4).
     Or (E1) one item of a PRD draft's items-only roadmap (``draft_roadmap_id``): exactly
     one owner each.
@@ -335,6 +336,8 @@ class RoadmapItem(TenantScoped, Base):
             f"date_source IS NULL OR {_in('date_source', DATE_SOURCES)}", name="date_source"
         ),
         Index("ix_roadmap_items_prd_section", "prd_version_id", "prd_section_key"),
+        # trash-features-goals: a feature deleted to Trash (oracle.simple.trash_items).
+        trashed_index("roadmap_items"),
         Index(
             "uq_roadmap_items_draft_key",
             "draft_roadmap_id",

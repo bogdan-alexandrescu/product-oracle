@@ -679,6 +679,9 @@ ChangeOp = Literal[
     "edit_goal_milestone",
     # ask-oracle-actions: an item's own depends_on (into the working draft).
     "set_depends_on",
+    # trash-features-goals: a feature moved to Trash, proposed to its decider by who may
+    # not decide on it (oracle.simple.trash_items).
+    "delete_item",
 ]
 # chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
 # the change engine (oracle.simple.chat_actions).

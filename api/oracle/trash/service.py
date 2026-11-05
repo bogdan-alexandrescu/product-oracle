@@ -83,6 +83,13 @@ class Resolved:
 
 
 def describe(row: Any) -> dict[str, Any]:
+    from oracle.baseline.models import Entity
+    from oracle.roadmap.models import RoadmapItem
+
+    if isinstance(row, (RoadmapItem, Entity)):
+        from oracle.simple import trash_items
+
+        return trash_items.describe(row)
     if isinstance(row, Document):
         return {
             "type": "document",
@@ -183,6 +190,12 @@ async def find_root(db: AsyncSession, root_type: str, ref: str, *, trashed: bool
         stmt: Any = select(Document).where(column == (uuid.UUID(ref) if is_uuid(ref) else ref))
     elif not is_uuid(ref):
         raise NotFound(f"{root_type} '{ref}' not found")
+    elif root_type in ("feature", "goal"):
+        # trash-features-goals (oracle.simple.trash_items): a roadmap feature or a goal.
+        kind = _feature_goal_models()[root_type]
+        stmt = select(kind).where(kind.id == uuid.UUID(ref))  # type: ignore[attr-defined]
+        if root_type == "goal":
+            stmt = stmt.where(kind.type == "goal")  # type: ignore[attr-defined]
     elif root_type == "intake":
         stmt = select(ProductIntake).where(ProductIntake.id == uuid.UUID(ref))
     else:
@@ -348,8 +361,15 @@ async def trashed_documents(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.
     return {d.id: d for d in rows}
 
 
+def _feature_goal_models() -> dict[str, type]:
+    from oracle.baseline.models import Entity
+    from oracle.roadmap.models import RoadmapItem
+
+    return {"feature": RoadmapItem, "goal": Entity}
+
+
 def _models() -> tuple[type, ...]:
-    return (Document, ProductIntake, Run)
+    return (Document, ProductIntake, Run, *_feature_goal_models().values())
 
 
 async def get_entry(db: AsyncSession, entry_id: uuid.UUID) -> TrashEntry:
@@ -474,7 +494,7 @@ async def purge_entry(
     db: AsyncSession, principal: Principal | str | None, entry: TrashEntry
 ) -> None:
     """Delete the entry's rows for good (what hangs off them goes by cascade)."""
-    for model in (Run, Document, ProductIntake):
+    for model in (Run, Document, ProductIntake, *_feature_goal_models().values()):
         await db.execute(
             delete(model)
             .where(model.trash_entry_id == entry.id, model.deleted_at.is_not(None))
