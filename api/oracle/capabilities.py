@@ -66,6 +66,7 @@ EVERY_MEMBER = frozenset(
         "list_priority_overrides",
         "list_priority_snapshots",
         "list_providers",
+        "list_rebuilds",
         "list_run_decisions",
         "list_runs",
         "list_slack_channels",
