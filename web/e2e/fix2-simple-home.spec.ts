@@ -192,9 +192,19 @@ test("qa-simple-home-25 and -36: a viewer with no name is greeted plainly, with 
   await expect(lead).toHaveText(/^Good (morning|afternoon|evening)\. Here is where the plan stands\.$/);
   await expect(page.getByTestId("home-walk-slot")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Walk me through it" })).toHaveCount(0);
+  await expect(page.getByTestId("home-goal").first()).toBeVisible();
   const leadBox = (await lead.boundingBox())!;
   const goals = (await page.getByTestId("home-goals").boundingBox())!;
-  expect(goals.y - (leadBox.y + leadBox.height)).toBeLessThan(40);
+  // Rebuild-sign pick A: the rebuild card, when runs are being rebuilt, sits right under the
+  // greeting and the goal band right under it; with none, the band sits right under the greeting.
+  const rebuild = page.getByTestId("rb-home");
+  let above = leadBox.y + leadBox.height;
+  if (await rebuild.count()) {
+    const card = (await rebuild.boundingBox())!;
+    expect(card.y - above).toBeLessThan(40);
+    above = card.y + card.height;
+  }
+  expect(goals.y - above).toBeLessThan(40);
 });
 
 test("qa-simple-home-26: Decided lately is newest first and each row opens its decision; milestone rows open their item", async ({ page }) => {

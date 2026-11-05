@@ -5,6 +5,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 
 import { copyOf, setupOpen } from "@/app/home/_setup";
 import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRows, Top } from "@/app/simple/_home/cards";
+import { HomeSkeleton } from "@/app/simple/_home/skeleton";
 import { Walk } from "@/app/simple/_home/walk";
 import { runStopsOf, StopCard } from "@/app/simple/_home/run-stops";
 import { SimpleWelcome } from "@/app/simple/_home/welcome";
@@ -42,7 +43,7 @@ import {
 } from "@/lib/simple-home";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, loadWaiting, onWaitingChanged, waitingChanged } from "@/lib/waiting";
-import { RebuildHome } from "@/components/RebuildSign";
+import { RebuildHome, useRebuildsAnswered } from "@/components/RebuildSign";
 import { WaitingRow } from "@/components/simple/WaitingItems";
 
 type Change = Schemas["SimpleChangeOut"];
@@ -176,6 +177,7 @@ type Dates = { start_date?: string | null; end_date?: string | null };
 
 export default function SimpleHome() {
   const { me, can, capsReady } = useMe();
+  const rebuildsAnswered = useRebuildsAnswered();
   const zone = useCompanyZone();
   const [stamp, setStamp] = useState(0);
   // S9: "Walk me through it" turns Home into a guided pass; Done returns here.
@@ -613,6 +615,10 @@ export default function SimpleHome() {
     );
   }
 
+  // The rebuild card sits under the greeting (rebuild-sign pick A): until the runs being rebuilt
+  // are read, Home keeps its skeleton, so the card lands with the goal band and nothing moves.
+  if (!rebuildsAnswered) return <HomeSkeleton />;
+
   return (
     <SimplePage title="Home">
       {newPrd && <NewPrdSheet onClose={closeNewPrd} onStarted={() => void started.reload()} />}
@@ -687,6 +693,8 @@ export default function SimpleHome() {
           </div>
         )}
       </header>
+      {/* The rebuild sign: what shared with me is being rebuilt. */}
+      <RebuildHome />
 
       {walking && (
         <Walk
@@ -1316,10 +1324,6 @@ export default function SimpleHome() {
       )}
       </>
       )}
-      {/* The rebuild sign: what shared with me is being rebuilt. Under the cards, never between
-          the greeting and the goal band (the picked frame), and it shows once read, so nothing
-          the frame drew moves when it lands (walk-prio-home-first-paint, qa-simple-home-36). */}
-      <RebuildHome />
     </SimplePage>
   );
 }

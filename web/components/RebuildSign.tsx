@@ -35,6 +35,8 @@ let timer: ReturnType<typeof setTimeout> | null = null;
 let reading = false;
 let again = false;
 let opened: string[] | null = null;
+/** The first read has answered (or failed): Home draws what sits under its greeting only then. */
+let answered = false;
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 /** How soon to read again: soon while a run runs, slowly while one waits, else never. */
@@ -59,6 +61,10 @@ async function read() {
     // A failed read keeps what the sign said; the next read tries again.
   } finally {
     reading = false;
+    if (!answered) {
+      answered = true;
+      emit();
+    }
   }
   if (again) {
     again = false;
@@ -137,6 +143,7 @@ export function markVersionOpened(slug: string, n: number) {
 }
 
 const getData = () => data;
+const getAnswered = () => answered;
 const getOpened = () => (typeof window === "undefined" ? null : openedIds());
 const noop = () => () => {};
 
@@ -160,6 +167,14 @@ export function useRebuilds(own?: string) {
   }, [path]);
   if (!d) return null;
   return { ...d, rebuilds: d.rebuilds.filter((r) => r.state !== "done" || r.document_slug === own || !seen?.includes(versionKey(r.document_slug, r.to_version))) };
+}
+
+/**
+ * Whether the first read of the runs being rebuilt has answered; it starts that read. Home waits
+ * on it so its rebuild card lands with the goal band and cards, never pushing them down after.
+ */
+export function useRebuildsAnswered() {
+  return useSyncExternalStore(subscribe, getAnswered, () => false);
 }
 
 /** The version page (and a page showing a version): it marks that version opened. */
