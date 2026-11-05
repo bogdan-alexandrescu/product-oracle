@@ -1,6 +1,6 @@
 "use client";
 
-import { OnePagerArchivedBanner, OnePagerMk, PrdNote } from "@/components/simple/MkEditGoalsPrds"; // MOCK-HOOK
+import { OnePagerArchivedBanner, OnePagerMk, PrdNote, useMk } from "@/components/simple/MkEditGoalsPrds"; // MOCK-HOOK
 
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -927,8 +927,9 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeet
 }
 
 function BackLink() {
+  const mkEp = useMk("ep"); // MOCK-HOOK
   return (
-    <Link href="/simple/one-pagers" className="inline-flex items-center gap-1 text-[15px] font-semibold text-accent">
+    <Link href={`/simple/one-pagers${mkEp ? `?ep=${mkEp}` : ""}`} /* MOCK-HOOK */ className="inline-flex items-center gap-1 text-[15px] font-semibold text-accent">
       <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
         <path d="M15 6l-6 6 6 6" />
       </svg>
