@@ -227,7 +227,7 @@ test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
   await page.getByTestId("meetings-past").getByRole("link", { name: "Review: Usage alerts" }).click();
   await expect(page).toHaveURL(/\/simple\/meetings\/[^/?]+$/);
   await page.getByRole("list", { name: "Decisions taken" }).getByRole("link", { name: "D-9 Moved Weekly alert digest" }).click();
-  await expect(page).toHaveURL(/\/simple\/decisions#d-4$/);
+  await expect(page).toHaveURL(/\/simple\/decisions#d-9$/);
   await expect(page.getByTestId("decision-row").filter({ hasText: "D-9 Moved Weekly alert digest" }).filter({ visible: true }).first()).toBeVisible();
   await page.goBack();
   await page.getByRole("status", { name: "Sent" }).getByRole("link", { name: "Open the Decisions page" }).click();

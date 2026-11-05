@@ -351,8 +351,10 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
     }],
     inbox_seen: {},
   };
-  if (checklist) (ctx.roadmap.decided_in ??= {})[checklist.id] = [decidedRef(ctx, db, db.decisions[0])];
-  if (digest) (ctx.roadmap.decided_in ??= {})[digest.id] = [decidedRef(ctx, db, db.decisions[3])];
+  // The seeded decisions by their seed's id, never by their place in the list.
+  const seededDecision = (n: number) => db.decisions.find((x) => x.id === stableUuid(`simple-meeting-decision/${n}`))!;
+  if (checklist) (ctx.roadmap.decided_in ??= {})[checklist.id] = [decidedRef(ctx, db, seededDecision(1))];
+  if (digest) (ctx.roadmap.decided_in ??= {})[digest.id] = [decidedRef(ctx, db, seededDecision(4))];
   // The demo proposal a meeting decides is seeded when a meeting starts (seedMeetingProposal), not here: Home and the
   // rail read meetings on every page, and a proposal made by that read changed what the roadmap and Home showed.
   holder.simple_meetings = db;
