@@ -79,11 +79,6 @@ _WHY: dict[str, tuple[str, ...]] = {
         "update_my_account",
         "update_preferences",
     ),
-    "pings the person asked by Slack, whom the card would not name": (
-        "create_decision",
-        "create_question",
-        "update_question",
-    ),
     "an invitation reaches someone outside Oracle": (
         "create_invite",
         "list_invites",

@@ -680,9 +680,7 @@ async def test_a_card_whose_commit_failed_cannot_apply_twice(client, monkeypatch
 # --------------------------------------------------------------------------- fix round 3
 
 
-async def test_a_decision_request_names_the_approver_and_apply_pings_exactly_them(
-    client, slack
-):
+async def test_a_decision_request_names_the_approver_and_apply_pings_exactly_them(client, slack):  # noqa: F811
     from tests.test_slack_bridge import install
     from tests.test_slack_pings import pings_of
 
@@ -691,7 +689,8 @@ async def test_a_decision_request_names_the_approver_and_apply_pings_exactly_the
     await install(client, ctx)
     name = await _person_name(client, ctx, "decider")
     ask = {"action": "create_decision", "args": {"body": {
-        "title": "Ship the weekly digest", "approver_id": str(ctx.users["decider"].id)}}}  # fmt: skip
+        "title": "Ship the weekly digest",
+        "approver_id": str(ctx.users["decider"].id)}}}  # fmt: skip
     m = await _called(client, ctx, "owner", ask)
     [card] = m["cards"]
     assert card["summary"] == (
@@ -711,9 +710,7 @@ async def test_a_decision_request_names_the_approver_and_apply_pings_exactly_the
     assert m["cards"] == [] and ask_actions.NO_NAME in m["body"], m
 
 
-async def test_a_question_names_whom_it_asks_and_a_reassigned_one_the_new_person(
-    client, slack
-):
+async def test_a_question_names_whom_it_asks_and_a_reassigned_one_the_new_person(client, slack):  # noqa: F811
     from tests.test_slack_bridge import install
     from tests.test_slack_pings import pings_of
 
@@ -726,17 +723,18 @@ async def test_a_question_names_whom_it_asks_and_a_reassigned_one_the_new_person
     ask = {"action": "create_question",
            "args": _pinging(ctx.users["decider"].id, entity)["create_question"]}  # fmt: skip
     [card] = (await _called(client, ctx, "owner", ask))["cards"]
-    assert "subject “Night shift nurse”" in card["summary"], card["summary"]
+    assert "entity “Night shift nurse”" in card["summary"], card["summary"]
     assert f"Sends a Slack message to {decider} with the question." in card["summary"]
     await _apply(client, ctx, "owner", card)
     assert [p.recipient_id for p in await pings_of(ctx)] == [ctx.users["decider"].id]
     async with tenant_session(ctx.tenant_id) as s:
-        from oracle.intake.models import StakeholderQuestion
+        from oracle.v2.models import StakeholderQuestion
 
         q = await s.scalar(select(StakeholderQuestion).where(
             StakeholderQuestion.prompt == "Who reads the digest?"))  # fmt: skip
     move = {"action": "update_question",
-            "args": {"question_id": str(q.id), "body": {"asked_to": str(ctx.users["approver"].id)}}}  # fmt: skip
+            "args": {"question_id": str(q.id),
+                     "body": {"asked_to": str(ctx.users["approver"].id)}}}  # fmt: skip
     [card] = (await _called(client, ctx, "owner", move))["cards"]
     assert f"Sends a Slack message to {approver} with the question." in card["summary"]
     assert card["summary"].endswith(ask_actions.CANNOT_UNDO)
@@ -758,16 +756,17 @@ async def test_a_card_names_an_intake_a_prd_version_and_a_document(client):
     await World(ctx).build()
     intake = await create_intake(client, ctx, "approver", title="Saved addresses")
     gap = {"action": "create_knowledge_gap", "args": {"body": {
-        "intake_id": intake["id"], "category": "customer_user", "statement": "Who saves addresses?",
+        "intake_id": intake["intake"]["id"], "category": "customer_user",
+        "statement": "Who saves addresses?",
         "importance": "high"}}}  # fmt: skip
     [card] = (await _called(client, ctx, "approver", gap))["cards"]
     assert "intake “Saved addresses”" in card["summary"], card["summary"]
-    await _apply(client, ctx, "owner", card)
+    await _apply(client, ctx, "approver", card)
 
-    r = await import_draft(client, ctx.as_("approver"), draft("prd_v1.md"), "saved-addresses")
+    r = await import_draft(client, ctx.as_("approver"), draft("prd_v1.md"))
     assert r.status_code in (200, 201), r.text
     async with tenant_session(ctx.tenant_id) as s:
-        doc = await s.scalar(select(Document).where(Document.slug == "saved-addresses"))
+        doc = await s.scalar(select(Document).where(Document.slug == "checkout-redesign"))
         version = await s.scalar(select(DocumentVersion).where(
             DocumentVersion.document_id == doc.id))  # fmt: skip
     blocker = {"action": "create_blocker", "args": {"body": {
@@ -777,6 +776,4 @@ async def test_a_card_names_an_intake_a_prd_version_and_a_document(client):
     outcome = {"action": "create_outcome", "args": {"body": {
         "title": "More saved addresses", "prd_version_id": str(version.id)}}}  # fmt: skip
     [card] = (await _called(client, ctx, "approver", outcome))["cards"]
-    assert f"prd version “{doc.title} version {version.number}”" in card["summary"], card[
-        "summary"
-    ]
+    assert f"PRD version “{doc.title} version {version.number}”" in card["summary"], card["summary"]
