@@ -43449,6 +43449,59 @@
         "x-min-role": "approver"
       }
     },
+    "/v1/simple/goal-buckets/goals/{goal_id}/unarchive": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Unarchive Bucket Goal",
+        "description": "Restore an archived goal to the buckets (its features stay where Archive moved them).",
+        "operationId": "unarchive_bucket_goal",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalBucketWrite"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/simple/goal-buckets/features/{feature_id}/move": {
       "post": {
         "tags": [
@@ -53955,6 +54008,48 @@
         "type": "object",
         "title": "ArchiveIn"
       },
+      "ArchivedGoal": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "owner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name"
+          },
+          "archived_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ArchivedGoal"
+      },
       "ArtifactDependencyOut": {
         "properties": {
           "id": {
@@ -60887,7 +60982,9 @@
                   "restore_goal",
                   "edit_goal_milestone",
                   "set_depends_on",
-                  "delete_item"
+                  "delete_item",
+                  "archive_goal",
+                  "delete_goal"
                 ]
               },
               {
@@ -61290,7 +61387,9 @@
               "restore_goal",
               "edit_goal_milestone",
               "set_depends_on",
-              "delete_item"
+              "delete_item",
+              "archive_goal",
+              "delete_goal"
             ],
             "title": "Op"
           },
@@ -78236,6 +78335,29 @@
             "type": "boolean",
             "title": "Can Edit",
             "default": false
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "owner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name"
           }
         },
         "type": "object",
@@ -78287,6 +78409,20 @@
             },
             "type": "array",
             "title": "Features"
+          },
+          "archived": {
+            "items": {
+              "$ref": "#/components/schemas/ArchivedGoal"
+            },
+            "type": "array",
+            "title": "Archived"
+          },
+          "asks_to": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Asks To"
           }
         },
         "type": "object",
@@ -78466,6 +78602,18 @@
             "type": "string",
             "format": "date",
             "title": "Due"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
           }
         },
         "type": "object",
@@ -82786,7 +82934,9 @@
               "restore_goal",
               "edit_goal_milestone",
               "set_depends_on",
-              "delete_item"
+              "delete_item",
+              "archive_goal",
+              "delete_goal"
             ],
             "title": "Op"
           },
@@ -116865,7 +117015,9 @@
               "restore_goal",
               "edit_goal_milestone",
               "set_depends_on",
-              "delete_item"
+              "delete_item",
+              "archive_goal",
+              "delete_goal"
             ],
             "title": "Op"
           },
@@ -117014,7 +117166,9 @@
               "restore_goal",
               "edit_goal_milestone",
               "set_depends_on",
-              "delete_item"
+              "delete_item",
+              "archive_goal",
+              "delete_goal"
             ],
             "title": "Op"
           },

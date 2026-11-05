@@ -25,7 +25,7 @@ import uuid
 import pytest
 from sqlalchemy import select
 
-from oracle.models import User
+from oracle.auth.models import User
 from oracle.tenancy import tenant_session
 from tests.test_simple_goal_buckets_api import GOAL, URL, World
 
@@ -94,7 +94,11 @@ async def test_archived_goals_listed_and_restored(client):
     out = await w.read(client, "viewer")
     assert _goal(out, grow) is None
     (archived,) = out["archived"]
-    assert (archived["id"], archived["title"], archived["owner_name"]) == (grow, "Grow", "Hana Sato")
+    assert (archived["id"], archived["title"], archived["owner_name"]) == (
+        grow,
+        "Grow",
+        "Hana Sato",
+    )
     assert archived["archived_at"]
 
     r = await client.post(f"{URL}/goals/{grow}/unarchive", headers=w.as_("commenter"))
@@ -126,7 +130,7 @@ async def test_ask_to_archive_and_delete_goes_to_the_decider(client):
     assert r.status_code == 201, r.text
     change = r.json()["change"]
     assert change["status"] == "proposed" and change["routed_to"] == [owner]
-    assert "proposed: archive the goal Grow" in change["words"]
+    assert "proposed: archive the goal “Grow”" in change["words"]
     assert _goal(await w.read(client), grow) is not None
     r = await client.post(CHANGES, headers=w.as_("commenter"), json=ask)
     assert r.status_code == 409
@@ -145,7 +149,7 @@ async def test_ask_to_archive_and_delete_goes_to_the_decider(client):
     r = await client.post(CHANGES, headers=w.as_("commenter"), json=dele)
     assert r.status_code == 201, r.text
     cid = r.json()["change"]["id"]
-    assert "proposed: move the goal Quiet to Trash" in r.json()["change"]["words"]
+    assert "proposed: move the goal “Quiet” to Trash" in r.json()["change"]["words"]
     r = await client.post(f"{CHANGES}/{cid}/decline", headers=w.as_("owner"), json={"reason": "No"})
     assert r.status_code == 200, r.text
     assert _goal(await w.read(client), quiet) is not None
