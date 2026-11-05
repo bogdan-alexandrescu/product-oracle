@@ -447,7 +447,8 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
   }
   if (p[4] === "approve") {
     if (d.out.status !== "submitted") return json(409, { detail: `This draft is ${d.out.status}: only a submitted draft is approved` });
-    const reviewer = d.out.waiting_on.includes(ctx.id);
+    // As drafts._approve: a required reviewer who approved already may approve again (nothing changes).
+    const reviewer = d.out.waiting_on.includes(ctx.id) || (db.reviewers?.[d.roadmap] ?? []).includes(ctx.id);
     if (!reviewer && !approverOf(db, d.roadmap, ctx)) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
     // A required reviewer's approval takes them off waiting_on; the decider's (or an owner's) is
     // the decider's. As drafts._settle: published once the decider approved and no one is left.

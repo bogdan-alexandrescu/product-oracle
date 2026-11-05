@@ -73,8 +73,9 @@ async function openInboxFromRail(page: Page, phone: boolean): Promise<number> {
 /** The count Simple's rail shows for the Inbox (on a phone, the Roadmap tab's, where an approval counts); 0 when none shows. */
 async function shownCount(page: Page, phone: boolean): Promise<number> {
   const count = page.getByTestId(phone ? "simple-tab-roadmap-count" : "simple-nav-inbox-count");
-  if (!(await count.isVisible())) return 0;
-  return Number((await count.textContent())!.trim());
+  // Read without waiting: the badge goes away as the count drops to 0.
+  const t = await count.allTextContents();
+  return t.length ? Number(t[0].trim()) : 0;
 }
 
 /** The owner reads the roadmap (Oracle's dates and goal suggestions are made as it is first read). */

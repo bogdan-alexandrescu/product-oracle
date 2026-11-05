@@ -158,7 +158,8 @@ for (const phone of [false, true]) {
       const note = page.getByRole("note").filter({ hasText: "proposed new wording for “Invite suggestions" }).filter({ visible: true });
       // Before Accept, on the one-pager: the rail's Inbox count, or on a phone More's badge and its Inbox count.
       const moreBadge = page.getByTestId("simple-tab-more-count");
-      const more = phone ? Number((await moreBadge.textContent())!.trim()) : 0;
+      const moreText = phone ? await moreBadge.allTextContents() : [];
+      const more = moreText.length ? Number(moreText[0].trim()) : 0;
       await tap(note.getByRole("button", { name: "Accept" }));
       await expect(line).toContainText("Invite suggestions from shared contacts");
       // Accepted, the counts drop at once, on this page, before going anywhere.
