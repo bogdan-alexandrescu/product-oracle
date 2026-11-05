@@ -86,7 +86,7 @@ for (const size of SIZES) {
       await expect(panel(page).getByTestId("card-name")).toContainText("Weekly alert summary");
     });
 
-    test("the panel changes how the feature's goal is measured, with Undo", async ({ page }) => {
+    test("the panel changes how the feature's goal is measured, its target and date, with Undo", async ({ page }) => {
       await login(page);
       await page.goto("/simple/roadmap");
       await expect(page.getByTestId("simple-roadmap")).toBeVisible();
@@ -99,6 +99,74 @@ for (const size of SIZES) {
       await expect(measure).toHaveText("Teams active after 60 days");
       await tap(page.getByRole("button", { name: "Undo" }).last());
       await expect(measure).toHaveText("Teams active after 90 days");
+
+      // Its target and its date, each changed in place (the date month first).
+      const target = panel(page).getByTestId("card-goal-target");
+      await expect(target).toHaveText("70% of teams");
+      await tap(panel(page).getByRole("button", { name: "Change the target", exact: true }));
+      await panel(page).getByTestId("card-goal-target-edit").getByLabel("Target").fill("75% of teams");
+      await tap(panel(page).getByTestId("card-goal-target-edit").getByRole("button", { name: "Save" }));
+      await expect(target).toHaveText("75% of teams");
+      const date = panel(page).getByTestId("card-goal-date");
+      await expect(date).toHaveText("Mar 31, 2027");
+      await tap(panel(page).getByRole("button", { name: "Change the date", exact: true }));
+      await panel(page).getByTestId("card-goal-date-edit").getByLabel("Date").fill("2027-06-30");
+      await tap(panel(page).getByTestId("card-goal-date-edit").getByRole("button", { name: "Save" }));
+      await expect(date).toHaveText("Jun 30, 2027");
+      await expect(target).toHaveText("75% of teams");
+      await expect(measure).toHaveText("Teams active after 90 days");
+    });
+
+    test("a commenter's change to the goal's measure is a suggestion; nothing changes yet", async ({ page }) => {
+      await login(page, "commenter@example.com");
+      await page.goto("/simple/roadmap");
+      await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+      await openRoadmapItem(page, "alert-digest");
+      const measure = panel(page).getByTestId("card-goal-measure");
+      await expect(measure).toHaveText("Teams active after 90 days");
+      await tap(panel(page).getByRole("button", { name: "Change the measure" }));
+      await panel(page).getByTestId("card-goal-measure-edit").getByLabel("Measure").fill("Teams active after 60 days");
+      await tap(panel(page).getByTestId("card-goal-measure-edit").getByRole("button", { name: "Save" }));
+      await expect(page.getByText(/Measure changed proposed/).first()).toBeVisible();
+      await expect(measure).toHaveText("Teams active after 90 days");
+    });
+
+    test("the owner picked in the panel is the name the Owner field shows", async ({ page }) => {
+      await login(page);
+      await page.goto("/simple/roadmap");
+      await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+      await openRoadmapItem(page, "alert-digest");
+      await tap(panel(page).getByRole("button", { name: "Change the owner" }));
+      const pick = panel(page).getByTestId("card-owner-edit").getByLabel("Owner");
+      await expect(pick.locator("option").nth(1)).toBeAttached();
+      const names = (await pick.locator("option").allTextContents()).slice(1);
+      const name = names[names.length - 1];
+      await pick.selectOption({ label: name });
+      await tap(panel(page).getByTestId("card-owner-edit").getByRole("button", { name: "Save" }));
+      await expect(panel(page).getByTestId("card-owner")).toHaveText(name);
+    });
+
+    test("another PRD's feature added as a dependency reads code and name and opens its panel; an unknown key is refused", async ({ page }) => {
+      await login(page);
+      await page.goto("/simple/roadmap");
+      await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+      await openRoadmapItem(page, "setup-checklist");
+      await expect(panel(page).getByTestId("card-name")).toContainText("Setup checklist");
+      await tap(panel(page).getByRole("button", { name: "Add a dependency" }));
+      await panel(page).getByLabel("Feature it depends on").selectOption({ label: "F-06 Weekly alert digest" });
+      await tap(panel(page).getByRole("button", { name: "Save" }));
+      const dep = panel(page).getByTestId("card-depends-row").getByRole("button", { name: "F-06 Weekly alert digest" });
+      await expect(dep).toBeVisible();
+      await expect(panel(page).getByTestId("card-depends")).not.toContainText("Feature F-06");
+
+      await tap(panel(page).getByRole("button", { name: "Add a dependency" }));
+      await panel(page).getByLabel("Or another PRD's feature key").fill("F-404");
+      await tap(panel(page).getByRole("button", { name: "Save" }));
+      await expect(page.getByText(/no item or feature has the key F-404/).first()).toBeVisible();
+      await expect(panel(page).getByTestId("card-depends")).not.toContainText("F-404");
+
+      await tap(dep);
+      await expect(panel(page).getByTestId("card-name")).toHaveText(/^F-06\s*Weekly alert digest/);
     });
 
     test("a Priorities row opens the same panel, and its name changes there", async ({ page }) => {
@@ -143,11 +211,44 @@ for (const size of SIZES) {
   });
 }
 
-test("a feature a decision blocks opens its panel from Decisions, its code first", async ({ page }) => {
-  await login(page);
-  await page.goto("/simple/decisions");
-  const feature = page.getByTestId("question-blocks-feature").filter({ hasText: "Health log" }).first();
-  await expect(feature).toHaveText("F-03 Health log");
-  await tap(feature);
-  await expect(page.getByTestId("item-panel")).toBeVisible();
+for (const size of SIZES) {
+  test.describe(`${size.name} Decisions`, () => {
+    test.use(size.use);
+
+    test("a feature a decision blocks opens its own panel from Decisions, its code first, editable", async ({ page }) => {
+      await login(page);
+      await page.goto("/simple/decisions");
+      const feature = page.getByRole("button", { name: "F-03 Health log" }).first();
+      await expect(feature).toBeVisible();
+      await tap(feature);
+      await expect(panel(page).getByTestId("card-name")).toHaveText(/^F-03\s*Health log/);
+      await expect(panel(page).getByRole("button", { name: "Change the outcome" })).toBeVisible();
+      await expect(page.getByText("This feature is not on a roadmap you can see yet")).toHaveCount(0);
+    });
+  });
+}
+
+test.describe("Goal map", () => {
+  test.use(SIZES[0].use);
+
+  test("every Goal map feature opens its own panel, its code before its name", async ({ page }) => {
+    await login(page);
+    await page.goto("/simple/goals");
+    await expect(page.getByTestId("gm-page")).toBeVisible();
+    const cards = page.getByTestId("gm-ladder").getByTestId("gm-feature");
+    await expect(cards.first()).toBeVisible();
+    const n = await cards.count();
+    expect(n).toBeGreaterThan(5);
+    for (let i = 0; i < n; i++) {
+      const card = cards.nth(i);
+      const words = (await card.locator("span.font-semibold").first().innerText()).trim();
+      const code = words.match(/^F-\d+/)?.[0];
+      expect(code, words).toBeTruthy();
+      const name = words.replace(/^F-\d+\s*/, "");
+      await tap(card);
+      await expect(panel(page).getByTestId("card-name")).toHaveText(new RegExp(`^${code}\\s*${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+      await page.getByRole("button", { name: "Close the feature" }).click({ position: { x: 5, y: 5 } });
+      await expect(panel(page)).toHaveCount(0);
+    }
+  });
 });
