@@ -512,6 +512,9 @@ function Rows({ rows }: { rows: Row[] }) {
         // its code, its title, then the answer, as the API sends them (never read out of the title).
         const code = r.code ?? `D-${r.number}`;
         const { title, chosen } = r;
+        // build-feature-panel review 7: a decision about one roadmap item ("Moved Weekly alert digest
+        // to Next") opens that item's one feature panel.
+        const item = r.subjects.find((x) => x.kind === "roadmap_item" && typeof x.id === "string");
         return (
           <DecidedItem
             key={r.id}
@@ -525,7 +528,14 @@ function Rows({ rows }: { rows: Row[] }) {
             </span>
             <span className="simple-rb flex-1">
               <span className="break-words">
-                <span className="simple-code">{code}</span> <b className="font-[650]">{title}</b>
+                <span className="simple-code">{code}</span>{" "}
+                {item ? (
+                  <button type="button" data-feature={String(item.id)} className="text-left font-[650] hover:underline">
+                    {title}
+                  </button>
+                ) : (
+                  <b className="font-[650]">{title}</b>
+                )}
               </span>
               <span className="simple-meta">
                 {[chosen, r.approver?.name ?? "No approver", momentWords(r.decided_at ?? r.created_at, zone), done ? null : STATUS_WORDS[r.status] ?? "open"]

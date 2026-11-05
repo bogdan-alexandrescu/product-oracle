@@ -289,6 +289,28 @@ export function plainBlocks(blocks: Schemas["SimpleQuestion"]["blocks"] & object
   return what ? `Blocks ${what}` : "Blocks a milestone";
 }
 
+/** plainBlocks with each feature's name a button that opens its feature panel (build-feature-panel
+ * review 2: FeaturePanelHost opens it by the feature's code, else its title). */
+function BlocksWords({ blocks }: { blocks: Schemas["SimpleQuestion"]["blocks"] & object }) {
+  const features = blocks.features ?? [];
+  if (!features.length) return <>{plainBlocks(blocks)}</>;
+  const rest = plainBlocks({ ...blocks, features: [] }).replace(/^Blocks (a milestone)?/, "");
+  return (
+    <>
+      Blocks{" "}
+      {features.map((f, i) => (
+        <span key={`${f.code}-${i}`}>
+          {i > 0 && ", "}
+          <button type="button" data-feature={f.code || f.title} className="underline decoration-dotted underline-offset-2 hover:text-accent-ink">
+            {f.title}
+          </button>
+        </span>
+      ))}
+      {rest && `, ${rest}`}
+    </>
+  );
+}
+
 export function QuestionRow({
   q,
   mode,
@@ -435,7 +457,7 @@ export function QuestionRow({
               <DueLabel q={q} />
               {q.due_label && q.blocks ? " · " : ""}
               {/* qa4-simple-decide-10: plain words on every row (Home, Decisions, a meeting's agenda), never "M1: F-03". */}
-              {q.blocks ? plainBlocks(q.blocks) : null}
+              {q.blocks ? <BlocksWords blocks={q.blocks} /> : null}
             </span>
           )
         )}

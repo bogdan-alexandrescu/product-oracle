@@ -143,7 +143,7 @@ test.describe("QA pass 3: simple-plan, the Ranked list", () => {
   test("the move dialog closes on Escape, keeps focus, and a move can go back to Oracle's rank", async ({ page }) => {
     await setUp(page);
     await open(page);
-    const handle = page.getByRole("button", { name: "Drag Setup checklist (SC) to reorder" });
+    const handle = page.getByRole("button", { name: "Drag Setup checklist to reorder" });
     await handle.focus();
     await page.keyboard.press("ArrowDown");
     const dialog = page.getByRole("dialog", { name: /Why move Setup checklist/ });
@@ -169,7 +169,7 @@ test.describe("QA pass 3: simple-plan, the Ranked list", () => {
     );
     expect(new Set(xs).size).toBe(1);
     await moved.getByRole("button", { name: "Back to Oracle's rank" }).click();
-    await expect(toast(page, "Moved Setup checklist (SC) back to Oracle's rank")).toBeVisible();
+    await expect(toast(page, "Moved Setup checklist back to Oracle's rank")).toBeVisible();
     await expect(moved.getByTestId("prio-override")).toHaveCount(0);
     await expect(moved.getByTestId("prio-ghost")).toHaveCount(0);
   });
@@ -188,7 +188,7 @@ test.describe("QA pass 3: simple-plan, the Ranked list", () => {
       const b = (await r.getByTestId("prio-goal").boundingBox())!;
       expect(Math.abs(a.y - b.y)).toBeLessThan(6);
     }
-    await dragRow(page, "Setup checklist (SC)", 3);
+    await dragRow(page, "Setup checklist", 3);
     const dialog = page.getByRole("dialog", { name: /Why move Setup checklist/ });
     await dialog.getByLabel(/Reason/).fill("Setup first");
     await dialog.getByRole("button", { name: "Move" }).click();
@@ -223,7 +223,7 @@ test.describe("QA pass 3: simple-plan, the Ranked list", () => {
       const rankX = await page.getByTestId("prio-rank").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().x)));
       expect(new Set(rankX).size).toBe(1);
     }
-    const handle = page.getByRole("button", { name: "Drag Setup checklist (SC) to reorder" });
+    const handle = page.getByRole("button", { name: "Drag Setup checklist to reorder" });
     await handle.focus();
     await page.keyboard.press("ArrowDown");
     const dialog = page.getByRole("dialog", { name: /Why move Setup checklist/ });
@@ -251,14 +251,16 @@ test.describe("QA pass 3: simple-plan, a dated plan", () => {
   test("each feature reads one code, goal and effort on every tab", async ({ page }) => {
     await setUp(page, { scenario: "simple-plan" });
     await open(page);
-    const codes = await page.getByTestId("prio-row").getByTestId("prio-code").allTextContents();
+    // prio-company (the owner, Nov 4): a row shows its own key beside its name, never a made-up code.
+    await expect(page.getByTestId("prio-row").getByTestId("prio-code")).toHaveCount(0);
+    const codes = await page.getByTestId("prio-row").getByTestId("prio-own-key").allTextContents();
     expect(codes.some((c) => /^PF\d*$/.test(c))).toBe(false);
     expect(new Set(codes).size).toBe(codes.length);
     const setupError = rowByTitle(page, "Setup error report");
-    await expect(setupError.getByTestId("prio-code")).toHaveText("F-06");
+    await expect(setupError.getByTestId("prio-own-key")).toHaveText("F-06");
     await expect(setupError.getByTestId("prio-goal")).toHaveText("Reliability");
     const referral = rowByTitle(page, "Referral link");
-    await expect(referral.getByTestId("prio-code")).toHaveText("F-12");
+    await expect(referral.getByTestId("prio-own-key")).toHaveText("F-12");
     await expect(referral.getByTestId("prio-goal")).toHaveText("Growth");
     await expect(rowByTitle(page, "Setup checklist").getByTestId("prio-numbers")).toContainText("3 wk");
     // PM-owned work: no engineer-weeks, no score.
@@ -309,6 +311,10 @@ test.describe("QA pass 3: simple-plan, Value / effort", () => {
     await expect(legend).toContainText("Each mark shows the feature's code");
     await expect(legend).not.toContainText("Codes stay with the item");
     await page.locator('[data-testid="vxe-point"][data-code="setup-checklist"]').click();
+    // build-feature-panel review 5: a mark clicked opens the one feature panel; Escape closes it.
+    await expect(page.getByRole("dialog", { name: "Setup checklist" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.locator('[data-testid="side-row"][data-code="setup-checklist"]').getByTestId("side-numbers")).toHaveText(/^goal value [\d.]+ · confidence [\d.]+ · [\d.]+ wk · score [\d.]+$/);
     // A goal value of 0 (No goal): ArrowDown and ArrowUp change nothing.
     const noGoal = page.locator('[data-testid="vxe-point"][aria-label*="no goal"]').first();
@@ -354,7 +360,7 @@ test.describe("QA pass 3: simple-plan, Value / effort", () => {
       const more = page.getByTestId("line-caption-more");
       if ((await more.count()) > 0) {
         await more.click();
-        await expect(more).toHaveCount(0);
+        await expect(more).toHaveText("Hide them");
       }
     });
   }

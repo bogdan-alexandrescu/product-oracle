@@ -42671,7 +42671,7 @@
           "simple"
         ],
         "summary": "Create Goal Milestone",
-        "description": "Add a milestone to a goal on a roadmap: coded the next \"M<n>\" in that goal on that\nroadmap. Who may change the roadmap directly (an owner, its decider, with none its\nowner while an approver, same as a key date); a commenter is refused (403: milestones\nare not proposed here, unlike key dates).",
+        "description": "Add a milestone to a goal on a roadmap: coded the next \"M<n>\" in that goal on that\nroadmap. Who may change the roadmap directly (an owner, its decider, with none its\nowner while an approver, same as a key date); a commenter is refused (403: milestones\nare not proposed here, unlike key dates). A roadmap that is history (the company\nroadmap exists) is 409.",
         "operationId": "create_goal_milestone",
         "requestBody": {
           "content": {
@@ -42723,7 +42723,7 @@
           "simple"
         ],
         "summary": "Patch Goal Milestone",
-        "description": "Edit a milestone's name, date, goal, items it waits on or counts-when rule. A PRD's\nown milestone is read-only here: a date or counts-when edit instead proposes a change\nto the PRD's owner (``pending`` filled, the milestone unchanged) through the change\nengine (``POST /v1/simple/changes/{id}/accept|decline``); its name, goal and items are\nthe PRD's own and are 422 here.",
+        "description": "Edit a milestone's name, date, goal, items it waits on or counts-when rule. A PRD's\nown milestone is read-only here: a date or counts-when edit instead proposes a change\nto the PRD's owner (``pending`` filled, the milestone unchanged) through the change\nengine (``POST /v1/simple/changes/{id}/accept|decline``); its name, goal and items are\nthe PRD's own and are 422 here, even beside a date. A milestone of a roadmap that is\nhistory (the company roadmap exists) is 409.",
         "operationId": "patch_goal_milestone",
         "security": [
           {
@@ -60378,6 +60378,7 @@
                   "restore",
                   "edit_title",
                   "edit_outcome",
+                  "edit_note",
                   "accept_date_suggestion",
                   "accept_risk",
                   "shift_dependents",
@@ -60402,11 +60403,18 @@
                   "keep_both",
                   "set_milestone",
                   "add_feature_ask",
+                  "set_goals",
                   "set_owner",
                   "set_decider",
                   "decide_question",
                   "name_decider",
                   "cut_with_dependents",
+                  "add_link",
+                  "remove_link",
+                  "restore_link",
+                  "restore_dates",
+                  "set_goal",
+                  "restore_goal",
                   "edit_goal_milestone",
                   "set_depends_on"
                 ]
@@ -60772,6 +60780,7 @@
               "restore",
               "edit_title",
               "edit_outcome",
+              "edit_note",
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
@@ -60796,11 +60805,18 @@
               "keep_both",
               "set_milestone",
               "add_feature_ask",
+              "set_goals",
               "set_owner",
               "set_decider",
               "decide_question",
               "name_decider",
               "cut_with_dependents",
+              "add_link",
+              "remove_link",
+              "restore_link",
+              "restore_dates",
+              "set_goal",
+              "restore_goal",
               "edit_goal_milestone",
               "set_depends_on"
             ],
@@ -75300,6 +75316,14 @@
             "type": "object",
             "title": "Flags",
             "default": {}
+          },
+          "titles": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Titles",
+            "default": {}
           }
         },
         "type": "object",
@@ -77425,6 +77449,11 @@
           "code": {
             "type": "string",
             "title": "Code"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref",
+            "default": ""
           },
           "label": {
             "type": "string",
@@ -82222,6 +82251,7 @@
               "restore",
               "edit_title",
               "edit_outcome",
+              "edit_note",
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
@@ -82246,11 +82276,18 @@
               "keep_both",
               "set_milestone",
               "add_feature_ask",
+              "set_goals",
               "set_owner",
               "set_decider",
               "decide_question",
               "name_decider",
               "cut_with_dependents",
+              "add_link",
+              "remove_link",
+              "restore_link",
+              "restore_dates",
+              "set_goal",
+              "restore_goal",
               "edit_goal_milestone",
               "set_depends_on"
             ],
@@ -93868,6 +93905,18 @@
                 "type": "null"
               }
             ]
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
           },
           "decisions": {
             "items": {
@@ -111636,6 +111685,11 @@
             "type": "string",
             "title": "Code"
           },
+          "ref": {
+            "type": "string",
+            "title": "Ref",
+            "default": ""
+          },
           "severity": {
             "type": "string",
             "enum": [
@@ -115917,6 +115971,7 @@
               "restore",
               "edit_title",
               "edit_outcome",
+              "edit_note",
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
@@ -115941,11 +115996,18 @@
               "keep_both",
               "set_milestone",
               "add_feature_ask",
+              "set_goals",
               "set_owner",
               "set_decider",
               "decide_question",
               "name_decider",
               "cut_with_dependents",
+              "add_link",
+              "remove_link",
+              "restore_link",
+              "restore_dates",
+              "set_goal",
+              "restore_goal",
               "edit_goal_milestone",
               "set_depends_on"
             ],
@@ -116057,6 +116119,7 @@
               "restore",
               "edit_title",
               "edit_outcome",
+              "edit_note",
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
@@ -116081,11 +116144,18 @@
               "keep_both",
               "set_milestone",
               "add_feature_ask",
+              "set_goals",
               "set_owner",
               "set_decider",
               "decide_question",
               "name_decider",
               "cut_with_dependents",
+              "add_link",
+              "remove_link",
+              "restore_link",
+              "restore_dates",
+              "set_goal",
+              "restore_goal",
               "edit_goal_milestone",
               "set_depends_on"
             ],
@@ -118035,6 +118105,25 @@
         "type": "object",
         "title": "SimpleGoalMilestonePatch"
       },
+      "SimpleGoalPick": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SimpleGoalPick"
+      },
       "SimpleGoalRef": {
         "properties": {
           "id": {
@@ -118071,6 +118160,51 @@
               }
             ],
             "title": "Position"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
           }
         },
         "type": "object",
@@ -118080,6 +118214,57 @@
           "title"
         ],
         "title": "SimpleGoalRef"
+      },
+      "SimpleGoalSet": {
+        "properties": {
+          "oracle": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleGoalPick"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "measure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure"
+          }
+        },
+        "type": "object",
+        "title": "SimpleGoalSet",
+        "description": "build-feature-panel review 2: the goal (and measure) a person set on the item over\nOracle's: Oracle's goal as the item showed it (null: none), who set it and when."
       },
       "SimpleGoalSuggestion": {
         "properties": {
@@ -118732,6 +118917,48 @@
         ],
         "title": "SimpleLine",
         "description": "Roadmap-plus: where the line on priorities is drawn. ``now``: this quarter's plan\n(the Now horizon); ``key_date:<id>``, ``milestone:<id>``, ``date:<YYYY-MM-DD>``: planned\nto finish by that day."
+      },
+      "SimpleLink": {
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Item Id"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "removed": {
+            "type": "boolean",
+            "title": "Removed",
+            "default": false
+          },
+          "removed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Removed By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_id"
+        ],
+        "title": "SimpleLink",
+        "description": "build-feature-panel: one item the item depends on; ``by`` null: Oracle found it.\n``removed``: Oracle's link a person removed (``removed_by``), shown with Restore."
       },
       "SimpleMatch": {
         "properties": {
@@ -119954,6 +120181,82 @@
         "title": "SimpleOpenDecision",
         "description": "S4: a proposed decision naming the item as a subject (the floating card's)."
       },
+      "SimpleOverride": {
+        "properties": {
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "start_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Source"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          }
+        },
+        "type": "object",
+        "title": "SimpleOverride",
+        "description": "build-feature-panel: Oracle's dates a person's replaced, and who set the new ones."
+      },
       "SimpleOwnerRef": {
         "properties": {
           "id": {
@@ -119964,6 +120267,21 @@
           "name": {
             "type": "string",
             "title": "Name"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "item",
+                  "track"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
           }
         },
         "type": "object",
@@ -120658,6 +120976,16 @@
             "title": "Lines",
             "default": []
           },
+          "company_roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "plan": {
             "anyOf": [
               {
@@ -120989,6 +121317,17 @@
             "title": "Short Code",
             "default": ""
           },
+          "own_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Own Key"
+          },
           "title": {
             "type": "string",
             "title": "Title"
@@ -121142,6 +121481,11 @@
           "can_reorder": {
             "type": "boolean",
             "title": "Can Reorder",
+            "default": false
+          },
+          "on_roadmap": {
+            "type": "boolean",
+            "title": "On Roadmap",
             "default": false
           },
           "applies": {
@@ -121743,6 +122087,17 @@
             ],
             "title": "Date Basis"
           },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
           "suggestion": {
             "anyOf": [
               {
@@ -121875,6 +122230,34 @@
             "title": "Goal Ids",
             "description": "S7: the goals the item is linked to directly.",
             "default": []
+          },
+          "override": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleOverride"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleLink"
+            },
+            "type": "array",
+            "title": "Links",
+            "default": []
+          },
+          "goal_set": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleGoalSet"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "decided_in": {
             "items": {
@@ -122883,6 +123266,18 @@
               }
             ],
             "title": "Reviews Deleted"
+          },
+          "reviews_deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviews Deleted At"
           }
         },
         "type": "object",

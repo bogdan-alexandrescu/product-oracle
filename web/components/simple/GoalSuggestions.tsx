@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { Button, Sheet, toast } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { askWith } from "@/components/hop/open-state";
+import { openFeaturePanel } from "@/components/simple/FeaturePanelHost";
 import { useCompanyZone, zoneDateTime } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -300,8 +300,8 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
 }
 
 /**
- * qa-simple-plan-34: a look-alike feature, linked to its own row in the Ranked list (marked
- * there), and for whoever decides "Same as this: decline the suggestion" (it is declined as the
+ * qa-simple-plan-34: a look-alike feature, which opens the one feature panel (build-feature-panel
+ * review 6), and for whoever decides "Same as this: decline the suggestion" (it is declined as the
  * same as that feature; nothing is merged).
  */
 /** A look-alike line: its name, and "Duplicate", which asks in place before it declines the suggestion. */
@@ -311,9 +311,10 @@ function LooksLike({ s, m, merges, busy, onDecline }: { s: GoalSuggestion; m: Go
     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-warn" data-testid="suggestion-looks-like">
       <span>
         Looks like{" "}
-        <Link href={`/simple/priorities?tab=ranked&show=${encodeURIComponent(m.id)}`} className="font-semibold underline" data-testid="looks-like-link">
+        {/* build-feature-panel review 6: the look-alike opens the one feature panel, over this one (a feature's own id is not a roadmap item's, so its name). */}
+        <button type="button" onClick={() => openFeaturePanel(m.kind === "item" ? m.id : m.title)} className="text-left font-semibold underline" data-testid="looks-like-link">
           {lookName(m)}
-        </Link>
+        </button>
       </span>
       {merges && !asking && (
         <Button disabled={busy} onClick={() => setAsking(true)} data-testid="looks-like-duplicate">

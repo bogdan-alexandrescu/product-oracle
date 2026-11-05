@@ -868,6 +868,7 @@ OP_WORDS = {
     "restore": "Restored",
     "edit_title": "Renamed",
     "edit_outcome": "New outcome for",
+    "edit_note": "New notes for",
     "accept_risk": "Accepted a risk on",
     "shift_dependents": "Moved the dependents of",
     "move_dependency": "Moved the dependency of",
@@ -880,6 +881,7 @@ OP_WORDS = {
     "merge_item": "Merged",
     "keep_both": "Kept beside its look-alikes:",
     "cut_with_dependents": "Cut with its dependents:",
+    "set_goals": "Moved to another goal:",
 }
 
 

@@ -1558,8 +1558,12 @@ class SourceContext:
     # a milestone date may name.
     schedule_bases: list[dict[str, Any]] = field(default_factory=list)
     # one-roadmap-many-prds: every item on the company roadmap in one team's queue
-    # (oracle.roadmap.company.run_queue); empty: no company roadmap.
+    # (oracle.roadmap.company.run_queue); empty: no company roadmap. Frozen on the run when
+    # its first prompt (the roadmap_items segment's) is built, with company_plan: the rest
+    # of oracle.roadmap.company.frozen_queue (per_week, today: the team's capacity and the
+    # run's day its own items are dated from; features, sections: the goal each serves).
     company_queue: list[dict[str, Any]] = field(default_factory=list)
+    company_plan: dict[str, Any] = field(default_factory=dict)
     # The run's planning horizons (A1, the planning_horizons setting as the run started,
     # run.knobs["planning_horizons"]); empty: B2's defaults (HORIZONS).
     horizons: dict[str, int] = field(default_factory=dict)
@@ -1627,6 +1631,9 @@ class PromptContext:
     depth: str = "standard"
     # Earlier segments' outputs, re-sent because a workflow cannot wait for a person.
     prior_outputs: dict[str, str] = field(default_factory=dict)
+    # roadmap-plan-tables: the items of the earlier roadmap_items.yaml as its check read
+    # them (oracle.runs.roadmap.check_items_async, kept per text): the prompt never parses it.
+    run_items: list[dict[str, Any]] | None = None
     # Notes from checkpoint approvals and requested changes.
     reviewer_notes: list[str] = field(default_factory=list)
     # Feedback for the feedback loop: id, section, summary (and, for a staged text
@@ -1657,6 +1664,16 @@ class PromptContext:
     kind: str = "prd"
     # prd_to_roadmap: the approved PRD version the roadmap is built from.
     source: SourceContext | None = None
+    # roadmap-plan-tables for any other roadmap draft (the feedback loop): what its plan
+    # tables are built from, (the items file's items, verified bases, the company queue, the items
+    # an approved version took off the plan)
+    # (oracle.runs.service._loop_plan_inputs).
+    loop_plan: (
+        tuple[
+            list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]
+        ]
+        | None
+    ) = None
     # The target document's template, theme and starting skeleton (prd_to_roadmap's
     # roadmap; baseline_to_prd's PRD when the run has a template, C4).
     draft: DraftContext | None = None
@@ -1768,8 +1785,12 @@ def step_prompt(
 ) -> str:
     """The prompt of one agent step (``first``: the step that starts the attempt)."""
     r = ROLES[role]
+    does = r.description.lower()
+    if role == "writer" and ctx.kind != "prd" and ctx.kind in KIND_NAMES:
+        # The feedback loop's writer of a roadmap (or another kind) writes that draft.
+        does = f"writes the {KIND_NAMES[ctx.kind]} draft"
     lines = [
-        f"You are the {r.title.lower()} ({r.description.lower()}) in Product Oracle's "
+        f"You are the {r.title.lower()} ({does}) in Product Oracle's "
         f"{flow.title} flow, segment '{segment.title}'.",
         f"Run {ctx.run_id}"
         + (f", {KIND_NAMES[ctx.kind]} document '{ctx.document}'" if ctx.document else "")
@@ -1893,15 +1914,24 @@ def step_prompt(
         from oracle.roadmap import company
         from oracle.runs import plan_tables
 
-        items = ctx.prior_outputs.get(plan_tables.ITEMS_FILE)
-        queued = company.with_run_items(ctx.source.company_queue, items)
+        queued = company.with_run_items(ctx.source.company_queue, ctx.run_items,
+                                         **ctx.source.company_plan)  # fmt: skip
         plan = plan_tables.engineering_plan(
-            items,
+            ctx.run_items,
             ctx.source.schedule_bases,
             others=queued,
         )
         lines += company.queue_lines(queued)
         lines += plan_tables.prompt_lines(plan, critic=role == "critic")
+    elif segment.imports_draft and ctx.kind == "roadmap" and ctx.loop_plan is not None:
+        # The owner (Nov 4): every roadmap draft, the feedback loop's next draft too.
+        from oracle.roadmap import company
+        from oracle.runs import plan_tables
+
+        items, bases, queued, kept = ctx.loop_plan
+        plan = plan_tables.engineering_plan(items, bases, others=queued, kept=kept)
+        lines += company.queue_lines(queued)
+        lines += plan_tables.prompt_lines(plan, critic=role == "critic", loop=True)
     if ctx.extra_lines:
         lines += ["", *ctx.extra_lines]
     if flow.key == "update_draft" and ctx.document:

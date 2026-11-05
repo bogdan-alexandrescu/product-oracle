@@ -78,16 +78,16 @@ async function check(page: Page, view: View, phone: boolean) {
   await expect(card).toBeVisible();
   const parts: [string, Locator][] = [
     ["title", card.getByRole("heading", { level: 2 })],
-    ["Dates row", card.getByTestId("card-dates")],
-    ["warnings", card.getByTestId("card-flags")],
+    // build-feature-panel review 7: the one feature panel's Dates row and its clash box (the date warnings).
+    ["Dates row", card.locator('[data-fp-section="dates"]').getByTestId("fp-start")],
+    ["warnings", card.getByTestId("fp-clash")],
   ];
   for (const [name, part] of parts) {
     await expect(part, `${view}: the panel shows its ${name}`).toBeVisible();
     expect(await onTop(part), `${view}: the panel's ${name} is on top of the chart`).toBe(true);
   }
+  // The panel's talk sits beside the details on a desktop; a phone opens its tab.
   if (phone) await card.getByRole("tab", { name: "Talk to Oracle" }).click();
-  else await card.getByRole("button", { name: "Talk to Oracle" }).click();
-  await expect(card).toHaveAttribute("data-talk", "true");
   const box = card.getByTestId("item-talk").getByRole("textbox", { name: "Message Oracle" });
   await expect(box).toBeVisible();
   if (!phone) {

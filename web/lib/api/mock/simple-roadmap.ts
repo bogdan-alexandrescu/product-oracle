@@ -19,6 +19,7 @@ import { milestoneOut, routeMilestones, type MockMilestone } from "./simple-mile
 import { betSubject, flowFor, type VisualsDb } from "./simple-visuals";
 import type { OnePagerDb } from "./simple-one-pager";
 import { appliedMilestones, type AppliedRecord } from "./approved-roadmap";
+import { withPanel } from "./feature-panel";
 import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
 
 type Item = Schemas["SimpleRoadmapItem"];
@@ -29,6 +30,13 @@ type Horizon = Item["horizon"];
 type Role = Schemas["Me"]["role"];
 
 interface SeedItem {
+  /** build-feature-panel: Oracle's links a person removed before the mock's story (the panel shows them struck, with Restore). */
+  unlinked?: { key: string; by: string }[];
+  /** build-feature-panel review 3: links a person added before the mock's story (the panel names who). */
+  linked?: { key: string; by: string }[];
+  /** build-feature-panel review 2: the goal a person set in the panel (set_goal; "" for no
+   * goal), over `goal`; unset: Oracle's. */
+  own_goal?: string;
   key: string;
   title: string;
   horizon: Horizon;
@@ -45,7 +53,10 @@ interface SeedItem {
   /** item-chat-understands (RoadmapItem.shipped): its own "already shipped" mark, apart from a status its tracker gives it. */
   shipped?: { note: string; on: string } | null;
   draft?: boolean;
-  milestone?: { name: string; day: number };
+  /** Its own milestone (RoadmapItem.milestone): its day from the horizon's start, null when it has no date.
+   * build-feature-panel review 2: `engine` is what the date engine stored besides the name and
+   * day (its date_source, basis_ids...), never shown; a null name reads "Milestone". */
+  milestone?: { name: string | null; day: number | null; engine?: Record<string, unknown> };
   /** The track milestone record naming the item (its name), whatever its own text says. */
   record?: string;
   /** The roadmap item's validation gates (days from the window's start); one naming a
@@ -54,6 +65,10 @@ interface SeedItem {
   risks?: { flag: Flag["kind"]; note: string; subject?: string | null }[];
   /** Simple S3a's change engine (./simple-changes.ts) edits these. */
   outcome?: string | null;
+  /** build-feature-panel review 3: the item's notes (RoadmapItem.note; edit_note). */
+  note?: string | null;
+  /** build-feature-panel review 3: the start's own source when it is not the end's (`source`). */
+  start_source?: Exclude<Dated["source"], "estimated">;
   position?: number;
   /** S4 (the floating card): the priority's rationale and the PRD section it came from. */
   why?: string;
@@ -67,6 +82,9 @@ interface SeedItem {
   kept_both?: boolean;
   /** S7: the key of the item this draft was merged into (the draft is closed). */
   merged_into?: string;
+  /** prio-company: the key of the item whose feature this one is (an item a move on Priorities
+   * added to the company roadmap for a feature it did not hold); else its own feature. */
+  feature?: string;
   /** S7: the baseline feature (with no item) this draft was linked to by a merge. */
   // A draft merged with a baseline feature that has no item: linked to it (still a draft).
   linked_feature?: string;
@@ -140,6 +158,8 @@ interface SimpleDb {
   decided_in?: Record<string, Schemas["SimpleDecidedRef"][]>;
   /** The plan-model lane (./simple-plan.ts): Guided setup's plan, in the "simple-plan" scenario. */
   plan?: PlanDb;
+  /** "goal-buckets-undated": the plan's roadmap has no approved version yet, so Priorities reads no dated plan. */
+  plan_undated?: boolean;
   /** roadmap-keydates: each PRD's dated milestones as its latest approved version has them
    * (PRD slug -> milestones), read by the server before every request (prdMilestonesOf). */
   prd_milestones?: Record<string, PrdMilestone[]>;
@@ -307,9 +327,21 @@ function sectionLabel(section: string, heading: string | undefined, name: string
 
 /** S4: each goal's metric (the goal counters' line). */
 const METRICS: Record<string, string> = { "grow-retention": "Teams active after 90 days", "faster-activation": "Days to the first alert", "quiet-alerts": "Teams muting alerts" };
+/** build-feature-panel review 3: each goal's reading (its attrs current, target, unit, due; the panel's Reading row). */
+const READINGS: Record<string, { current: number; target: number; unit: string; due: string }> = {
+  "grow-retention": { current: 61, target: 70, unit: "%", due: "2027-06-30" },
+  "faster-activation": { current: 4, target: 2, unit: "days", due: "2027-03-31" },
+};
 /** roadmap-gantt ("simple-plan-two"): a goal named like a plan goal ("Growth"), for the plan's items only. */
 const PLAN_GOALS: Record<string, string> = { growth: "Growth" };
 export const goalId = (key: string): string => stableUuid(`simple-goal/${key}`);
+/** build-feature-panel review 2: the item's goal (key): the one set in its panel, else Oracle's. */
+export const goalOfSeed = (s: { goal?: string; own_goal?: string }): string | undefined => (s.own_goal !== undefined ? s.own_goal || undefined : s.goal);
+/** The item's goal_ids as the API stores them (its own goal's, once set in the panel). */
+export function goalIdsOf(s: { goal?: string; goals?: string[]; own_goal?: string }): string[] {
+  if (s.own_goal !== undefined) return s.own_goal ? [goalId(s.own_goal)] : [];
+  return [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])].map(goalId);
+}
 export const roadmapId = (slug: string): string => stableUuid(`simple-doc/${slug}`);
 // A new company has no roadmap yet (qa-shell-8: oracle.simple.service reads none).
 export const ROADMAP_SLUGS = (): string[] => (newCompany() ? [] : Object.keys(ROADMAPS));
@@ -347,16 +379,36 @@ const TRACKS: Record<string, string> = { alerts: "Usage alerts track", onboardin
 const SEED: SeedItem[] = [
   { key: "alert-rules", title: "Alert rules engine", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 40, source: "typed", status: "in_progress", gates: [{ phase: "discover", day: 6 }, { phase: "build", day: 28 }], why: "Admins asked for it most this quarter.", section: "bets" },
   { key: "alert-digest", title: "Weekly alert digest", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 30, end: 70, source: "accepted", depends: ["alert-rules"], milestone: { name: "Beta", day: 60 }, section: "f-06", heading: "F-06 Weekly digest of fired alerts" },
-  { key: "alert-mobile", title: "Mobile alert push", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", end: 80, source: "engineering", depends: ["alert-rules"], status: "in_progress" },
-  { key: "alert-export", title: "Alert history export", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", end: 50, source: "tracker" },
+  { key: "alert-mobile", title: "Mobile alert push", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", end: 80, source: "engineering", depends: ["alert-rules"], status: "in_progress", milestone: { name: null, day: 85, engine: { date_source: "estimate:eng-push", basis_ids: ["3f0c9a52-7d1e-4b8a-9c61-2e5d8f4a7b10"], refused_date: null, refused: false } } },
+  { key: "alert-export", title: "Alert history export", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", end: 50, source: "tracker", unlinked: [{ key: "alert-digest", by: "Leo Brandt" }] },
   { key: "alert-sso", title: "Alert routing by team", horizon: "next", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "low", depends: ["alert-export"] },
-  { key: "setup-checklist", title: "Setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "high", start: 10, end: 45, source: "typed", status: "in_progress", gates: [{ phase: "Beta", day: 40 }] },
+  { key: "setup-checklist", title: "Setup checklist", section: "build", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "high", start: 10, end: 45, source: "typed", status: "in_progress", gates: [{ phase: "Beta", day: 40 }] },
   { key: "setup-import", title: "Sample data import", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium", start: 20, end: 60, source: "typed", status: "in_progress", depends: ["setup-checklist"], gates: [{ phase: "beta", day: 75 }], risks: [{ flag: "dependency_order", note: "The checklist's last step is not needed" }] },
   { key: "setup-tour", title: "In-app tour", horizon: "later", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", status: "cut", start: 30, end: 75, source: "typed" },
   { key: "setup-video", title: "Welcome video", horizon: "later", roadmap: "onboarding-roadmap", track: "onboarding", depends: ["setup-tour"] },
   { key: "setup-ideas", title: "Team invite nudges", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", draft: true },
   { key: "price-tiers", title: "New plan tiers", horizon: "next", roadmap: "pricing-roadmap", confidence: "medium" },
 ];
+
+/**
+ * walkb-roadmap review, build-feature-panel: an item's own bet on its PRD's one-pager
+ * (service._bet_flows, shared by betFlow and the one-pager's item_id): the one bet naming the
+ * item's code, else the one bet whose source keys include its section, else the one bet its
+ * title names ("the one" meaning exactly one match, else none at that step). Null with no
+ * section (not built from a PRD section) or no match.
+ */
+export function ownBetLineId(op: Pick<OnePagerDb, "blocks">, s: { section?: string; title: string }): string | null {
+  if (!s.section) return null;
+  const bets = op.blocks.find((b) => b.key === "bets")?.lines ?? [];
+  const words = (t: string) => ` ${t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
+  const code = prdCode(s.section);
+  const one = <T,>(xs: T[]): T | undefined => (xs.length === 1 ? xs[0] : undefined);
+  const line =
+    one(bets.filter((l) => !!code && words(l.text).includes(words(code)))) ??
+    one(bets.filter((l) => l.keys.includes(s.section!))) ??
+    one(bets.filter((l) => !!s.title.trim() && words(l.text).includes(words(s.title))));
+  return line?.id ?? null;
+}
 
 /**
  * walkb-roadmap review: the flow drawn on the PRD's one-pager for the bet an item was built
@@ -366,17 +418,26 @@ const SEED: SeedItem[] = [
 function betFlow(db: SimpleDb, s: SeedItem): Schemas["SimpleFlow"] | null {
   const op = db.onePager;
   if (!op || !s.section || ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-") !== op.doc.slug) return null;
-  const bets = op.blocks.find((b) => b.key === "bets")?.lines ?? [];
-  const words = (t: string) => ` ${t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
-  const code = prdCode(s.section);
-  // roadmap-keydates: its own bet: the one naming its code, else the one bet from its section
-  // alone, else the one bet its title names (a short title two bets mention names neither).
-  const one = <T,>(xs: T[]): T | undefined => (xs.length === 1 ? xs[0] : undefined);
-  const line =
-    one(bets.filter((l) => !!code && words(l.text).includes(words(code)))) ??
-    one(bets.filter((l) => l.keys.includes(s.section!))) ??
-    one(bets.filter((l) => !!s.title.trim() && words(l.text).includes(words(s.title))));
-  return line ? flowFor(db.visuals, "one_pager_line", betSubject(op.flowKey ? `${op.flowKey}/${line.id}` : line.id)) : null;
+  const lineId = ownBetLineId(op, s);
+  return lineId ? flowFor(db.visuals, "one_pager_line", betSubject(op.flowKey ? `${op.flowKey}/${lineId}` : lineId)) : null;
+}
+
+/**
+ * build-feature-panel: api/oracle/simple/schemas.OnePagerLine.item_id (service._bet_flows): each
+ * bet on the PRD's one-pager, keyed to the roadmap item whose own bet it is (ownBetLineId). An
+ * item not cut, not a draft and built from a PRD section claims its own bet; the first item in
+ * roadmap order to claim a given bet keeps it. Bet line id -> item id.
+ */
+export function betLineItemIds(db: SimpleDb, op: OnePagerDb): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const s of db.items) {
+    if (s.status === "cut" || s.draft || !s.section) continue;
+    if (ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-") !== op.doc.slug) continue;
+    const id = db.ids[s.key];
+    const lineId = id ? ownBetLineId(op, s) : null;
+    if (lineId && !(lineId in out)) out[lineId] = id;
+  }
+  return out;
 }
 
 const DAY = 86_400_000;
@@ -450,9 +511,13 @@ export function storedDates(db: SimpleDb, key: string): { start: string | null; 
   const own = db.own[key];
   if (own) return { start: own.start, end: own.end };
   const s = db.items.find((x) => x.key === key)!;
-  if (s.source !== "typed" && s.source !== "accepted") return { start: null, end: null };
+  const stored = (src: SeedItem["source"]) => src === "typed" || src === "accepted";
   const w = simpleWindows(companyToday())[s.horizon];
-  return { start: s.start !== undefined ? addDays(w[0], s.start) : null, end: s.end !== undefined ? addDays(w[0], s.end) : null };
+  // build-feature-panel review 3: a start of its own source (an accepted start before an engineering delivery) is stored alone.
+  return {
+    start: s.start !== undefined && stored(s.start_source ?? s.source) ? addDays(w[0], s.start) : null,
+    end: s.end !== undefined && stored(s.source) ? addDays(w[0], s.end) : null,
+  };
 }
 
 /**
@@ -556,7 +621,7 @@ function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated
   }
   const end: Dated = s.end !== undefined && s.source ? { date: addDays(w[0], s.end), source: s.source, estimated: false } : { date: w[1], source: "estimated", estimated: true };
   let start: Dated = { date: w[0], source: "estimated", estimated: true };
-  if (s.start !== undefined && s.source) start = { date: addDays(w[0], s.start), source: s.source, estimated: false };
+  if (s.start !== undefined && s.source) start = { date: addDays(w[0], s.start), source: s.start_source ?? s.source, estimated: false };
   else if (end.date < w[0]) start = { date: addDays(end.date, -41), source: "estimated", estimated: true };
   return { start, end };
 }
@@ -638,8 +703,8 @@ function recordOf(s: { record?: string; track?: string }): { record_id?: string;
  * every other phase keeps the 15/55/20/10 split of the bar, estimated. */
 function phases(start: string, end: string, s: SeedItem, w: [string, string]): Schemas["SimplePhase"][] {
   const named = new Map<string, string>();
-  for (const e of [...(s.milestone ? [{ phase: s.milestone.name, day: s.milestone.day }] : []), ...(s.gates ?? [])]) {
-    const word = e.phase.trim().toLowerCase();
+  for (const e of [...(s.milestone?.day != null ? [{ phase: s.milestone.name, day: s.milestone.day }] : []), ...(s.gates ?? [])]) {
+    const word = (e.phase ?? "").trim().toLowerCase();
     if (PHASES.some(([k]) => k === word)) named.set(word, addDays(w[0], e.day));
   }
   const total = span(start, end);
@@ -688,7 +753,7 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
     if (dep.r.end.date >= r.start.date)
       flag("dependency_order", dependencyLine(s.title, r.start.date, dep.s.title, dep.r.end.date), ["shift_dependents", "move_dependency", "accept_risk"], stableUuid(`simple-item/${key}`));
   }
-  if (s.milestone) {
+  if (s.milestone?.day != null) {
     const day = addDays(w[0], s.milestone.day);
     if (r.end.date > day) flag("outside_milestone", `‘${short(s.title)}’ ends ${word(r.end.date)}, after its milestone ‘${s.milestone.name}’ (${word(day)})`, ["accept_risk"], s.milestone.name);
   }
@@ -744,7 +809,8 @@ export function shiftPlan(items: Map<string, Item>, itemId: string, depId: strin
 /** S4: the item's track owner, by name (service: an enabled track owner). */
 function ownerOf(db: SimpleDb, s: SeedItem): Item["owner"] {
   const id = itemOwnerId(db, s.key);
-  return id ? { id, name: db.people?.[id] ?? "Track owner" } : null;
+  const own = namedOn(db, s.key, "owner_id");
+  return id ? { id, name: db.people?.[id] ?? "Track owner", source: own ? "item" : "track" } : null;
 }
 
 /** A chat card's set_owner / set_decider (the targets kept by item id), if any: the item's own owner or decider. */
@@ -980,7 +1046,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       code: prdCode(s.section),
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
       prd: ownPrd(s),
-      goal: s.goal ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, title: GOALS[s.goal] ?? PLAN_GOALS[s.goal], metric: METRICS[s.goal] ?? null, position: goalPositionOf(s.goal) } : null,
+      goal: goalOfSeed(s) ? { id: stableUuid(`simple-goal/${goalOfSeed(s)}`), key: goalOfSeed(s)!, title: GOALS[goalOfSeed(s)!] ?? PLAN_GOALS[goalOfSeed(s)!], metric: METRICS[goalOfSeed(s)!] ?? null, position: goalPositionOf(goalOfSeed(s)!), ...READINGS[goalOfSeed(s)!] } : null,
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,
       status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),
@@ -988,12 +1054,17 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       start: r.start, end: r.end,
       // approved-roadmap-to-simple: the applied version's words, until a person changes the dates.
       date_basis: s.basis && s.dates && !db.own[s.key] ? s.basis : null,
+      note: s.note ?? null,
       source: r.end.estimated ? r.start.source : r.end.source,
       estimated: r.start.estimated && r.end.estimated,
       suggestion: suggestion ? { ...suggestion, can_decide: decides(s) } : null,
-      milestone: s.milestone
+      // service._milestone: its own dated milestone (set_milestone writes it, as typed in its
+      // panel; null: cleared), else the track's record, else its own undated one.
+      milestone: s.milestone?.day != null
         ? { name: s.milestone.name, date: addDays(w[s.horizon][0], s.milestone.day), source: "item", ...recordOf(s) }
-        : s.record ? { name: s.record, date: null, source: "track", ...recordOf(s) } : null,
+        : s.milestone && !s.record
+          ? { name: s.milestone.name, date: null, source: "item" }
+          : s.record ? { name: s.record, date: null, source: "track", ...recordOf(s) } : null,
       phases: phases(r.start.date, r.end.date, s, w[s.horizon]),
       slices: sliced,
       milestones: [...new Set(sliced.map((x) => x.milestone))],
@@ -1014,13 +1085,19 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       merged_into: s.merged_into ? { id: db.ids[s.merged_into], code: s.merged_into, title: db.items.find((x) => x.key === s.merged_into)?.title ?? s.merged_into } : null,
       drafting: !!s.drafting_until,
       flow: s.draft ? (s.flow ?? null) : (flowFor(db.visuals, "feature", db.ids[s.key]) ?? betFlow(db, s)),
-      goal_ids: [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])].map(goalId),
+      goal_ids: goalIdsOf(s),
       // S8: the decided decisions that changed the item (./simple-meetings.ts records them).
       decided_in: [...(db.decided_in?.[db.ids[s.key]] ?? [])],
       // walkc-roadmap-tasks: the work under the item (service._tasks).
       tasks: itemTasks(db, db.ids[s.key]),
+      // build-feature-panel: filled below (withPanel).
+      override: null,
+      links: [],
     };
   });
+  // build-feature-panel: each item's override and links (api: panel.item_panel).
+  const keyOfId = new Map(Object.entries(db.ids).map(([k, id]) => [id, k]));
+  withPanel(items, db.changes ?? [], (id) => keyOfId.get(id), (k) => db.ids[k], (k) => db.items.find((x) => x.key === k)?.unlinked ?? [], (k) => db.items.find((x) => x.key === k)?.linked ?? []);
   // qa-simple-home-1: what "Move the dependents" moves, as the change engine moves it (service.read).
   const byItem = new Map(items.map((i) => [i.id, i]));
   for (const i of items)
@@ -1085,7 +1162,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       ),
     ],
     // build-milestones-on-roadmap: the shown roadmaps' milestones per goal (a PRD's among them).
-    goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)))),
+    goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, x.prd ? role !== "viewer" : role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)))),
     span: db.plan ? planSpan() : null,
     // A working draft belongs to one roadmap: a chosen roadmap's read carries its own only.
     changes_in_review: chosen ? (reader.hiddenBy[roadmapId(chosen)] ?? 0) : reader.hidden,
@@ -1284,7 +1361,7 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
     return out ? json(200, out) : json(422, { detail: "group: goal, track or prd" });
   }
   const slugOf = (id: string) => Object.keys(ROADMAPS).find((r) => roadmapId(r) === id) ?? null;
-  const ms = await routeMilestones(db, me, req, p, slugOf, (r) => canEditRoadmap(db, r, me));
+  const ms = await routeMilestones(db, me, req, p, slugOf, (r) => canEditRoadmap(db, r, me), (r) => !!db.company_roadmap && r !== db.company_roadmap);
   if (ms) return ms;
   if (p[3] !== "date-suggestions") return null;
   if (!p[4] && m === "GET") {

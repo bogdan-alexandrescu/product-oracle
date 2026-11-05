@@ -679,6 +679,7 @@ PROPOSAL_WORDS = {
     "restore": "restore",
     "edit_title": "rename",
     "edit_outcome": "new outcome for",
+    "edit_note": "new notes for",
     "accept_risk": "accept a risk on",
     "shift_dependents": "move the dependents of",
     "move_dependency": "move the dependency of",
@@ -691,6 +692,7 @@ PROPOSAL_WORDS = {
     "merge_item": "merge",
     "keep_both": "keep beside its look-alikes:",
     "cut_with_dependents": "cut with its dependents:",
+    "set_goals": "move to another goal:",
 }
 
 
@@ -1458,7 +1460,7 @@ async def _upcoming(
     for kind in {REVIEWS[r.kind] for _, r in rows if r.kind in REVIEWS}:
         trashed[kind] = await trash_service.only_in_trash(db, kind)
     # home-deleted-roadmap: and one whose documents were all deleted for good says that.
-    deleted: dict[str, bool] = {}
+    deleted: dict[str, datetime | None] = {}
     for kind in {REVIEWS[r.kind] for _, r in rows if r.kind in REVIEWS}:
         deleted[kind] = await trash_service.deleted_for_good(db, kind)
     out = []
@@ -1480,6 +1482,7 @@ async def _upcoming(
             can_start=may_start_ritual(principal, r),
             reviews_in_trash=REVIEWS[r.kind] if trashed.get(REVIEWS.get(r.kind, "")) else None,
             reviews_deleted=REVIEWS[r.kind] if deleted.get(REVIEWS.get(r.kind, "")) else None,
+            reviews_deleted_at=deleted.get(REVIEWS.get(r.kind, "")),
         ))  # fmt: skip
     return out
 
