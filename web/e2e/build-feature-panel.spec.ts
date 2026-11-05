@@ -546,7 +546,9 @@ test.describe("one feature panel, every name that can be picked (review 6)", () 
 
   test("Ranked: a name that misses the line opens the panel", async ({ page }) => {
     await go(page, "/simple/priorities?tab=value-effort", { scenario: "simple-plan" });
-    await opens(page, page.getByTestId("line-caption").locator("button[data-feature]").first());
+    // prio-company: the caption lists the names under Show them.
+    await page.getByTestId("line-caption").getByRole("button", { name: "Show them" }).click();
+    await opens(page, page.getByTestId("line-caption").locator('[data-testid="line-miss"][data-feature]').first());
   });
 
   test("Value / effort: Enter on a side row opens the panel and keeps it selected", async ({ page }) => {
