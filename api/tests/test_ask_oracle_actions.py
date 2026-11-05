@@ -306,15 +306,18 @@ async def test_a_card_names_each_record_and_undo_is_promised_only_when_sure(clie
     assert (await _apply(client, ctx, "approver", card))["can_undo"] is False
 
     # A create with no DELETE of what it makes: cannot be undone, said before Apply.
-    decision = {"title": "Pick a launch city", "approver_id": str(ctx.users["decider"].id)}
+    blocker = {"key": "night-staffing", "statement": "Night staffing is thin", "type": "soft"}
     m = await _called(client, ctx, "approver",
-                      {"action": "create_decision", "args": {"body": decision}})  # fmt: skip
+                      {"action": "create_blocker", "args": {"body": blocker}})  # fmt: skip
     [card] = m["cards"]
-    assert card["summary"] == "Add a decision: title “Pick a launch city”. This cannot be undone."
+    assert card["summary"] == (
+        "Add a blocker: key “night-staffing”, statement “Night staffing is thin”, type “soft”. "
+        "This cannot be undone."
+    )
     assert (await _apply(client, ctx, "approver", card))["can_undo"] is False
     # The route's own audit rows say it came via Ask Oracle (written with the change).
     async with tenant_session(ctx.tenant_id) as s:
-        rows = list(await s.scalars(select(AuditEvent).where(AuditEvent.action.like("decision%"))))
+        rows = list(await s.scalars(select(AuditEvent).where(AuditEvent.action.like("blocker%"))))
     assert rows and all(r.data.get("via") == "Ask Oracle" for r in rows), rows
 
 
@@ -326,7 +329,7 @@ def test_undo_needs_one_id_matching_the_delete():
     assert ask_actions._result_id({"items": [{"id": str(uuid.uuid4())}]}, back) is None
     rid = str(uuid.uuid4())
     assert ask_actions._result_id({"id": rid}, back) == rid
-    assert ask_actions.inverse(cat["create_decision"]) is None
+    assert ask_actions.inverse(cat["create_blocker"]) is None
     assert (
         ask_actions.inverse(cat["update_entity"], {"body": {"reason": "x"}}, {"title": "a"}) is None
     )
@@ -399,3 +402,220 @@ async def test_undo_of_a_dependency_card_turns_back_only_its_dependency(client):
     r = await client.post(f"{CARDS}/{removed['id']}/undo", headers=ctx.as_("owner"))
     assert r.status_code == 200, r.text
     assert sorted((await w.item("Bulk import")).depends_on) == ["alert-digest", "ledger-v2"]
+
+
+# --------------------------------------------------------------------------- fix round 2
+
+# Each sends to a person or a system outside Oracle (Slack DMs and posts, email).
+SENDS = (
+    "oracle.slack.pings.queue", "oracle.slack.pings.draft_ready", "oracle.slack.pings.notification",
+    "oracle.slack.bridge.queue", "oracle.slack.bridge.queue_new", "oracle.slack.models.SlackOutbox",
+    "oracle.members.mailer.get_mailer",
+)  # fmt: skip
+
+
+def _reaches(fn, seen: set, path: tuple = ()) -> tuple | None:
+    """The call path from ``fn`` to one of ``SENDS`` (None: none): each name the function
+    uses, resolved in its module or its own imports, followed into Oracle's functions."""
+    import ast
+    import importlib
+    import inspect
+    import textwrap
+
+    fn = inspect.unwrap(fn)
+    where = f"{getattr(fn, '__module__', '')}.{getattr(fn, '__qualname__', '')}"
+    if where in SENDS:
+        return (*path, where)
+    if where in seen or not where.startswith("oracle.") or not inspect.isfunction(fn):
+        return None
+    seen.add(where)
+    try:
+        tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
+    except (OSError, TypeError, SyntaxError):
+        return None
+    scope = dict(vars(inspect.getmodule(fn)))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            for a in node.names:
+                try:
+                    mod = importlib.import_module(node.module)
+                    scope[a.asname or a.name] = getattr(
+                        mod, a.name, None
+                    ) or importlib.import_module(f"{node.module}.{a.name}")
+                except ImportError:
+                    continue
+    for node in ast.walk(tree):
+        chain: list[str] = []
+        n = node
+        while isinstance(n, ast.Attribute):
+            chain.insert(0, n.attr)
+            n = n.value
+        if not isinstance(n, ast.Name) or not isinstance(node, ast.Name | ast.Attribute):
+            continue
+        obj = scope.get(n.id)
+        for attr in chain:
+            obj = getattr(obj, attr, None) if obj is not None else None
+        if obj is None:
+            continue
+        name = f"{getattr(obj, '__module__', '')}.{getattr(obj, '__qualname__', '')}"
+        if name in SENDS:
+            return (*path, where, name)
+        if inspect.isfunction(obj):
+            found = _reaches(obj, seen, (*path, where))
+            if found:
+                return found
+    return None
+
+
+def test_no_allowed_operation_pings_a_person_or_reaches_an_outbox():
+    """No ALLOWED route reaches a Slack ping, the Slack outbox or the mailer: a card never
+    notifies someone it does not name. (Company webhooks are Oracle's own events: allowed.)"""
+    from fastapi.routing import iter_route_contexts
+
+    by_route = {(m, r.path_format): r.endpoint for r in iter_route_contexts(app.router.routes)
+                if hasattr(r, "endpoint") for m in getattr(r, "methods", None) or ()}  # fmt: skip
+    reached = {}
+    for a in ask_actions.catalogue(app).actions.values():
+        if a.reads:
+            continue
+        found = _reaches(by_route[(a.method, a.path)], set())
+        if found:
+            reached[a.name] = found
+    assert reached == {}, reached
+    for op in ("create_question", "update_question", "create_decision"):
+        assert "Slack" in OUTWARD_OR_SECRET.get(op, ""), op
+
+
+def test_the_walk_sees_a_ping():
+    from oracle.decisions import service as decisions
+    from oracle.intake import questions
+
+    assert _reaches(questions.ping_asked, set())
+    assert _reaches(decisions._ping_approver, set())
+
+
+async def _new_entity(client, ctx, key: str, title: str) -> str:
+    r = await client.post("/v1/baseline/entities", headers=ctx.as_("approver"),
+                          json={"type": "assumption", "key": key, "title": title})  # fmt: skip
+    assert r.status_code == 201, r.text
+    return r.json()["entity"]["id"]
+
+
+async def test_a_card_names_every_record_its_body_points_to(client):
+    ctx = await make_people()
+    await World(ctx).build()
+    a = await _new_entity(client, ctx, "night-nurse", "Night shift nurse")
+    b = await _new_entity(client, ctx, "day-nurse", "Day shift nurse")
+    link = {"action": "create_edge",
+            "args": {"body": {"src_id": a, "dst_id": b, "type": "depends_on"}}}  # fmt: skip
+    m = await _called(client, ctx, "approver", link)
+    [card] = m["cards"]
+    assert "“Night shift nurse”" in card["summary"] and "“Day shift nurse”" in card["summary"]
+    assert card["summary"].startswith("Link two records: from “Night shift nurse”, to “Day shift")
+    # A body id no one can name: no card.
+    link["args"]["body"]["dst_id"] = str(uuid.uuid4())
+    m = await _called(client, ctx, "approver", link)
+    assert m["cards"] == [] and ask_actions.NO_NAME in m["body"], m
+    # A move to another parent says where to.
+    move = {"action": "update_entity", "args": {"entity_id": a, "body": {"parent_id": b}}}
+    m = await _called(client, ctx, "approver", move)
+    [card] = m["cards"]
+    assert "parent “Day shift nurse”" in card["summary"], card["summary"]
+
+
+async def test_undo_is_not_promised_for_a_merged_value(client):
+    ctx = await make_people()
+    await World(ctx).build()
+    a = await _new_entity(client, ctx, "night-nurse", "Night shift nurse")
+    edit = {"action": "update_entity",
+            "args": {"entity_id": a, "body": {"attrs": {"shift": "night"}}}}  # fmt: skip
+    m = await _called(client, ctx, "approver", edit)
+    [card] = m["cards"]
+    assert card["summary"].endswith(ask_actions.CANNOT_UNDO), card["summary"]
+    assert (await _apply(client, ctx, "approver", card))["can_undo"] is False
+    cat = ask_actions.catalogue(app).actions
+    assert ask_actions.inverse(cat["update_entity"], {"body": {"attrs": {"x": 1}}},
+                               {"attrs": {}}) is None  # fmt: skip
+
+
+async def test_a_meeting_never_reads_one_person_own_records(client, meetings):  # noqa: F811
+    from tests.test_simple_chat_api import MeetingRules
+
+    ctx = await make_people()
+    await World(ctx).build()
+    # Two members of the same role: each reads only their own sources.
+    mid = uuid.uuid4()
+    u = ctx.users
+    assert u["approver"].role == u["decider"].role
+    meetings.rules[mid] = MeetingRules(
+        meeting_id=mid, session_id=None, presenter_id=u["approver"].id,
+        attendee_ids=[u["approver"].id, u["decider"].id], change_mode="everyone",
+    )  # fmt: skip
+    seen: list = []
+    m = await _called(client, ctx, "approver", {"action": "list_sources", "args": {}},
+                      meeting=mid, seen=seen)  # fmt: skip
+    offered = {a["action"] for a in seen[0]["api"]}
+    assert "list_sources" not in offered and "get_source" not in offered
+    assert len(seen) == 1 and m["kind"] == "note", m  # never run, never worded
+    seen = []
+    await _called(client, ctx, "approver", {"action": "list_sources", "args": {}}, seen=seen)
+    assert "list_sources" in {a["action"] for a in seen[0]["api"]}
+
+
+async def test_a_secret_value_is_never_kept_in_a_card(client):
+    ctx = await make_people()
+    await World(ctx).build()
+    pasted = "ghp_" + "Example0Token1Not2Real3Value4Abc5"
+    body = {"type": "assumption", "key": "k2", "title": f"Use {pasted}"}
+    m = await _called(client, ctx, "approver", {"action": "create_entity", "args": {"body": body}})
+    assert m["cards"] == [] and "secret" in m["body"], m
+    assert pasted not in m["body"]
+    assert ask_actions._secret({"title": "Night shift nurse, 2026 plan"}) is False
+
+
+async def test_a_proposal_answer_promises_no_undo(monkeypatch):
+    from types import SimpleNamespace
+
+    cat = ask_actions.catalogue(app).actions
+    pid = str(uuid.uuid4())
+
+    async def proposed(db, principal, action, args):
+        return 202, {"applied": False, "entity": None, "proposal": {"id": pid}}
+
+    async def nothing(*a, **k):
+        return None
+
+    class Db:
+        async def commit(self):
+            return None
+
+    monkeypatch.setattr(ask_actions, "call", proposed)
+    monkeypatch.setattr(ask_actions.audit, "record", nothing)
+    c = SimpleNamespace(id=uuid.uuid4(), summary="Add a product record", before={},
+                        target={"action": "create_entity", "args": {"body": {"key": "k"}}},
+                        after={"undo": "delete"})  # fmt: skip
+    await ask_actions.apply(Db(), SimpleNamespace(role="approver"), c)
+    assert c.after["undo"] is None, c.after
+    assert cat["create_entity"].creates
+
+
+async def test_a_card_whose_commit_failed_cannot_apply_twice(client, monkeypatch):
+    ctx = await make_people()
+    await World(ctx).build()
+    m = await _called(client, ctx, "approver", _entity_call("once-only")["calls"][0])
+    [card] = m["cards"]
+
+    async def broken(*a, **k):
+        raise RuntimeError("the card's write failed")
+
+    monkeypatch.setattr(ask_actions.audit, "record", broken)
+    try:
+        r = await client.post(f"{CARDS}/{card['id']}/apply", headers=ctx.as_("approver"))
+        assert r.status_code >= 500
+    except RuntimeError:
+        pass
+    monkeypatch.undo()
+    assert await _entity(ctx, "once-only") is not None
+    r = await client.post(f"{CARDS}/{card['id']}/apply", headers=ctx.as_("approver"))
+    # Refused as a card applied once, not by the route (its record exists already).
+    assert r.status_code == 409 and "Oracle could not" not in r.text, r.text
