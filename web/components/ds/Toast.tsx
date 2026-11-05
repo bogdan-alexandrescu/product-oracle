@@ -13,7 +13,8 @@ export type ToastAsk = {
    * its Ask Oracle and account), clear of the main column's buttons on the right
    * (qa-simple-home-30); "top": top-right on a desktop, beside a page's title, for a message
    * about a banner near the page's top (Simple's Roadmap's working draft: never over a bar of the
-   * chart below it); a phone keeps the centred strip. Every other toast stays centred. */
+   * chart below it), left of Simple's Ask panel while it is open (400 px wide, docked or over the
+   * page: SIMPLE_ASK_PANEL_ID); a phone keeps the centred strip. Every other toast stays centred. */
   place?: "corner" | "rail" | "top";
   /** What the message must not cover (a CSS selector: the row its action came from, roadmap-decide
    * review): where it would at the bottom, it sits at the top of the screen instead. */
@@ -119,7 +120,7 @@ export function ToastHost() {
       ref={host}
       data-testid="toasts"
       data-up={up ? "" : undefined}
-      className={`pointer-events-none fixed left-0 right-[var(--backdrop-room,0px)] bottom-4 z-[60] flex justify-center px-3 max-[600px]:bottom-20 [body:has([aria-modal=true])_&]:bottom-auto [body:has([aria-modal=true])_&]:top-4 [body:has([data-sheet=bottom])_&]:bottom-auto [body:has([data-sheet=bottom])_&]:top-4${shown?.place === "corner" ? " min-[601px]:inset-x-auto min-[601px]:right-4 min-[601px]:justify-end min-[601px]:px-0" : ""}${shown?.place === "rail" ? " min-[601px]:inset-x-auto min-[601px]:left-[calc(var(--simple-rail-width,232px)+16px)] min-[601px]:justify-start min-[601px]:px-0" : ""}${shown?.place === "top" ? " min-[601px]:inset-x-auto min-[601px]:right-4 min-[601px]:bottom-auto min-[601px]:top-4 min-[601px]:justify-end min-[601px]:px-0" : ""}${up ? " bottom-auto! top-4" : ""}`}
+      className={`pointer-events-none fixed left-0 right-[var(--backdrop-room,0px)] bottom-4 z-[60] flex justify-center px-3 max-[600px]:bottom-20 [body:has([aria-modal=true])_&]:bottom-auto [body:has([aria-modal=true])_&]:top-4 [body:has([data-sheet=bottom])_&]:bottom-auto [body:has([data-sheet=bottom])_&]:top-4${shown?.place === "corner" ? " min-[601px]:inset-x-auto min-[601px]:right-4 min-[601px]:justify-end min-[601px]:px-0" : ""}${shown?.place === "rail" ? " min-[601px]:inset-x-auto min-[601px]:left-[calc(var(--simple-rail-width,232px)+16px)] min-[601px]:justify-start min-[601px]:px-0" : ""}${shown?.place === "top" ? " min-[601px]:inset-x-auto min-[601px]:right-4 min-[601px]:bottom-auto min-[601px]:top-4 min-[601px]:justify-end min-[601px]:px-0 min-[601px]:[body:has(#simple-ask-panel)_&]:right-[416px]" : ""}${up ? " bottom-auto! top-4" : ""}`}
     >
       {shown && (
         <div
