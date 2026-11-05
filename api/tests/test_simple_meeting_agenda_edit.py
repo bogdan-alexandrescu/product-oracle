@@ -16,8 +16,8 @@ proposer withdraws it); a viewer reads.
   alongside the sheet's edits; fails_when=either stops working after an edit.
 """
 
-from tests.test_simple_chat_actions import apply, one_card
 from tests.test_simple_changes_api import clock as clock  # noqa: F401
+from tests.test_simple_chat_actions import apply, one_card
 from tests.test_simple_meetings_api import MEETINGS, get, start, uid, world
 
 

@@ -2014,6 +2014,10 @@ class SimpleMeetingCan(BaseModel):
     redraft: bool = False
     # Whoever ended the meeting or an owner retries a failed email or Slack post.
     retry_delivery: bool = False
+    # agenda-sheet: an owner or the PRD's decider changes the agenda; an approver who is
+    # not the decider proposes; others read.
+    edit_agenda: bool = False
+    propose_agenda: bool = False
 
 
 class SimpleMeetingNote(BaseModel):
@@ -2034,11 +2038,51 @@ class SimpleAgendaItem(BaseModel):
     title: str
 
 
+class SimpleAgendaRow(BaseModel):
+    """agenda-sheet: one row of the meeting's agenda: a feature of its PRD or a topic a
+    person typed, with its minutes; ``state`` reads the chat's next and skip."""
+
+    id: str
+    kind: Literal["feature", "topic"]
+    feature_id: uuid.UUID | None = None
+    title: str
+    mins: int
+    by_name: str | None = None
+    state: Literal["done", "now", "next", "skipped"]
+
+
+class SimpleAgendaProposal(BaseModel):
+    """agenda-sheet: an approver's agenda changes waiting for the meeting's decider."""
+
+    by: SimplePersonRef
+    decider: SimplePersonRef | None = None
+    words: list[str] = []
+
+
 class SimpleAgenda(BaseModel):
-    """chat-actions: the item the meeting takes next and the items it skips."""
+    """chat-actions: the item the meeting takes next and the items it skips.
+    agenda-sheet: the rows in order, the PRD's features not on it yet, what the last batch
+    of the sheet did (for its Undo line) and an approver's waiting proposal."""
 
     next: SimpleAgendaItem | None = None
     skipped: list[SimpleAgendaItem] = []
+    items: list[SimpleAgendaRow] = []
+    addable: list[SimpleAgendaItem] = []
+    batch: str | None = None
+    words: list[str] = []
+    proposal: SimpleAgendaProposal | None = None
+
+
+class SimpleAgendaEditIn(BaseModel):
+    """agenda-sheet: one op of the Agenda sheet. ``batch`` names the sheet's opening, so
+    Undo puts back the agenda as it was when that batch began."""
+
+    op: Literal["add", "rename", "move", "remove", "undo", "accept", "withdraw"]
+    item_id: str | None = Field(default=None, max_length=64)
+    feature_id: uuid.UUID | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    to: int | None = Field(default=None, ge=0, le=200)
+    batch: str | None = Field(default=None, max_length=64)
 
 
 class SimpleDraftRoadmapItem(BaseModel):

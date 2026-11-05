@@ -13589,6 +13589,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/meetings/{meeting_id}/agenda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Edit Simple Meeting Agenda
+         * @description agenda-sheet: one op of the Agenda sheet (oracle.simple.meetings.edit_agenda).
+         */
+        post: operations["edit_simple_meeting_agenda"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/meetings/{meeting_id}/approve": {
         parameters: {
             query?: never;
@@ -38608,6 +38628,8 @@ export interface components {
         /**
          * SimpleAgenda
          * @description chat-actions: the item the meeting takes next and the items it skips.
+         *     agenda-sheet: the rows in order, the PRD's features not on it yet, what the last batch
+         *     of the sheet did (for its Undo line) and an approver's waiting proposal.
          */
         SimpleAgenda: {
             next?: components["schemas"]["SimpleAgendaItem"] | null;
@@ -38616,6 +38638,46 @@ export interface components {
              * @default []
              */
             skipped: components["schemas"]["SimpleAgendaItem"][];
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["SimpleAgendaRow"][];
+            /**
+             * Addable
+             * @default []
+             */
+            addable: components["schemas"]["SimpleAgendaItem"][];
+            /** Batch */
+            batch?: string | null;
+            /**
+             * Words
+             * @default []
+             */
+            words: string[];
+            proposal?: components["schemas"]["SimpleAgendaProposal"] | null;
+        };
+        /**
+         * SimpleAgendaEditIn
+         * @description agenda-sheet: one op of the Agenda sheet. ``batch`` names the sheet's opening, so
+         *     Undo puts back the agenda as it was when that batch began.
+         */
+        SimpleAgendaEditIn: {
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "add" | "rename" | "move" | "remove" | "undo" | "accept" | "withdraw";
+            /** Item Id */
+            item_id?: string | null;
+            /** Feature Id */
+            feature_id?: string | null;
+            /** Title */
+            title?: string | null;
+            /** To */
+            to?: number | null;
+            /** Batch */
+            batch?: string | null;
         };
         /** SimpleAgendaItem */
         SimpleAgendaItem: {
@@ -38626,6 +38688,46 @@ export interface components {
             id: string;
             /** Title */
             title: string;
+        };
+        /**
+         * SimpleAgendaProposal
+         * @description agenda-sheet: an approver's agenda changes waiting for the meeting's decider.
+         */
+        SimpleAgendaProposal: {
+            by: components["schemas"]["SimplePersonRef"];
+            decider?: components["schemas"]["SimplePersonRef"] | null;
+            /**
+             * Words
+             * @default []
+             */
+            words: string[];
+        };
+        /**
+         * SimpleAgendaRow
+         * @description agenda-sheet: one row of the meeting's agenda: a feature of its PRD or a topic a
+         *     person typed, with its minutes; ``state`` reads the chat's next and skip.
+         */
+        SimpleAgendaRow: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "feature" | "topic";
+            /** Feature Id */
+            feature_id?: string | null;
+            /** Title */
+            title: string;
+            /** Mins */
+            mins: number;
+            /** By Name */
+            by_name?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "done" | "now" | "next" | "skipped";
         };
         /**
          * SimpleAppliedVersion
@@ -39994,6 +40096,16 @@ export interface components {
              * @default false
              */
             retry_delivery: boolean;
+            /**
+             * Edit Agenda
+             * @default false
+             */
+            edit_agenda: boolean;
+            /**
+             * Propose Agenda
+             * @default false
+             */
+            propose_agenda: boolean;
         };
         /** SimpleMeetingCommentIn */
         SimpleMeetingCommentIn: {
@@ -40225,7 +40337,10 @@ export interface components {
             notes: components["schemas"]["SimpleMeetingNote"][];
             /**
              * @default {
-             *       "skipped": []
+             *       "skipped": [],
+             *       "items": [],
+             *       "addable": [],
+             *       "words": []
              *     }
              */
             agenda: components["schemas"]["SimpleAgenda"];
@@ -73199,6 +73314,41 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_simple_meeting_agenda: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleAgendaEditIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

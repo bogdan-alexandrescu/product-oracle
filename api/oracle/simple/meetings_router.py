@@ -8,6 +8,8 @@ people: a run's token is refused (the ``simple`` area is in no run-token scope).
 - ``POST .../join``: commenter and up joins a live meeting.
 - ``PATCH .../rules``: the presenter's change mode and who is absent.
 - ``POST .../comments``: a comment, recorded as a meeting decision.
+- ``POST .../agenda`` (agenda-sheet): add, rename, move, remove an agenda item and Undo;
+  an owner or the PRD's decider saves, an approver proposes (accept, withdraw), 403 else.
 - ``POST .../approve``: the PRD's decider (or an owner) approves the meeting's drafts.
 - ``POST .../end``: the presenter, the decider or an owner; Oracle drafts the minutes.
 - ``PUT .../minutes``: edit them before sending; ``POST .../send``: Decisions and Inbox
@@ -31,6 +33,7 @@ from oracle.auth.deps import Principal, TenantDB
 from oracle.simple import meeting_draft, meetings
 from oracle.simple.router import _people
 from oracle.simple.schemas import (
+    SimpleAgendaEditIn,
     SimpleDecisionsOut,
     SimpleDecisionsWaitingOut,
     SimpleDraftDatesIn,
@@ -132,6 +135,17 @@ async def comment_in_simple_meeting(
     meeting_id: uuid.UUID, body: SimpleMeetingCommentIn, principal: Commenter, db: TenantDB
 ) -> SimpleMeetingOut:
     await _run(db, meetings.comment(db, principal, meeting_id, body.text, body.subjects))
+    await db.commit()
+    return await _out(db, principal, meeting_id)
+
+
+@router.post("/meetings/{meeting_id}/agenda", response_model=SimpleMeetingOut,
+             name="edit_simple_meeting_agenda")  # fmt: skip
+async def edit_simple_meeting_agenda(
+    meeting_id: uuid.UUID, body: SimpleAgendaEditIn, principal: Commenter, db: TenantDB
+) -> SimpleMeetingOut:
+    """agenda-sheet: one op of the Agenda sheet (oracle.simple.meetings.edit_agenda)."""
+    await _run(db, meetings.edit_agenda(db, principal, meeting_id, body.model_dump()))
     await db.commit()
     return await _out(db, principal, meeting_id)
 
