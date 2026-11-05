@@ -1165,6 +1165,9 @@ export function SimpleRoadmap() {
       // fix4 qa-simple-roadmap-21: who decides, and where the proposal shows.
       else toast({ message: `Proposed ${title} (${w.label}): it waits for ${deciderWords(undefined)} in Needs a decision` });
       await reload();
+      // one-feature-panel: the added item opens its panel, to fill in the rest.
+      const added = c.status === "applied" ? c.target.item_id : null;
+      if (typeof added === "string") setCard({ id: added, ...anchorOf(added) });
       return true;
     } catch (e) {
       toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not add it" });
