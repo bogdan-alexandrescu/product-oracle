@@ -88,6 +88,23 @@ def calendar_day(d: date | str) -> str:
     return f"{d:%b} {d.day}"
 
 
+def calendar_day_with_year(d: date | str) -> str:
+    """A calendar day (no zone) with its year as "Nov 30, 2026"."""
+    if isinstance(d, str):
+        d = date.fromisoformat(d[:10])
+    return f"{calendar_day(d)}, {d.year}"
+
+
+def calendar_month(d: date) -> str:
+    """A calendar day's month (no zone: a metric week's Monday, a milestone's) as "Nov"."""
+    return f"{d:%b}"
+
+
+def month_in_words(moment: datetime | str, zone: str = DEFAULT_ZONE) -> str:
+    """The company's month at ``moment`` as "Oct"."""
+    return calendar_month(day(moment, zone))
+
+
 def day_first_in_words(moment: datetime | str, zone: str = DEFAULT_ZONE) -> str:
     """The company's day at ``moment`` as "25 Oct"."""
     local = _local(moment, zone)
