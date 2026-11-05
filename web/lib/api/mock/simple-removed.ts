@@ -99,7 +99,13 @@ function change(ctx: RemovedCtx, body: Schemas["SimpleChangeIn"], applied: boole
 const OPS = new Set(["unarchive_goal", "restore_goal_milestone", "add_track", "edit_track", "delete_track"]);
 
 /** GET /v1/simple/removed, GET /v1/simple/tracks and the plan ops; null when not one of them. */
-export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: string[], trash: () => TrashEntryRow[]): Promise<Response | null> {
+/**
+ * routeRemoved's reach past Simple's own db: whether anything else references a track (a track
+ * milestone, tracker record or alert, a launch or an outcome), as the API's _holds_anything.
+ */
+export type HeldElsewhere = (trackId: string) => boolean;
+
+export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: string[], trash: () => TrashEntryRow[], heldElsewhere: HeldElsewhere = () => false): Promise<Response | null> {
   if (p[1] !== "simple") return null;
   syncTracks(db);
   const m = req.method;
@@ -131,7 +137,7 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
       const own = db.track_owners?.[k];
       const decides = owner || (own === ctx.id && RANK[ctx.role] >= RANK.approver);
       const st = states[k];
-      return { id: trackId(k), title, status: st.status, owner_id: own ?? null, owner_name: name(own), prd_id: prdId(st.prd), prd_title: st.prd || null, can_decide: decides, decider_name: decides ? null : (name(own) ?? deciderName), feature_count: db.items.filter((s) => s.track === k && !closed(s)).length };
+      return { id: trackId(k), title, status: st.status, owner_id: own ?? null, owner_name: name(own), prd_id: prdId(st.prd), prd_title: st.prd || null, can_decide: decides, decider_name: decides ? null : (name(own) ?? deciderName), feature_count: db.items.filter((s) => s.track === k && !closed(s)).length, moves_count: db.items.filter((s) => s.track === k).length };
     });
     // As free_prds: only PRDs with no track (one in Trash takes its PRD too).
     const taken = new Set([...Object.keys(TRACKS).map((k) => states[k].prd), ...Object.values(db.trashed_tracks ?? {}).map((x) => x.state.prd)]);
@@ -201,10 +207,10 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
       states[k] = { status: "active", prd };
       if (a.owner_id) (db.track_owners ??= {})[k] = a.owner_id;
     }
-    // Undo removes the track while it holds nothing; one that holds features since goes to Trash.
+    // Undo removes the track while it holds nothing; one that anything references since goes to Trash.
     return done(change(ctx, body, owner, ctx.owners, `added the track ${title}`), () => {
       if (!(added in TRACKS)) return;
-      if (db.items.some((s) => s.track === added)) return (trashTrack(added), { in_trash: true });
+      if (db.items.some((s) => s.track === added) || heldElsewhere(trackId(added))) return (trashTrack(added), { in_trash: true });
       delete TRACKS[added];
       delete db.track_titles?.[added];
       delete states[added];

@@ -6605,7 +6605,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       return out ? json(200, out) : json(404, { detail: "No such roadmap" });
     }
     // removed-tracks: Simple's removed list, its tracks and their change ops (./simple-removed.ts).
-    const removedRes = await routeRemoved(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames }, r, p, () => (db.trash ??= emptyTrash()).entries);
+    const removedRes = await routeRemoved(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames }, r, p, () => (db.trash ??= emptyTrash()).entries, (id) =>
+      !!db.roadmap?.milestones.some((m) => m.track_id === id) || !!db.roadmap?.records.some((x) => x.track_id === id) || !!db.roadmap?.alerts?.some((x) => x.track_id === id) || !!db.launches?.launches.some((l) => l.track_id === id) || !!db.quality?.outcomes.some((o) => o.track_id === id),
+    );
     if (removedRes) return removedRes;
     const bucketsRes = await routeGoalBuckets(db.simple_roadmap!, me.role, r, p);
     if (bucketsRes) return bucketsRes;

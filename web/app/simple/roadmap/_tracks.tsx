@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button, Sheet, toast } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -47,7 +47,8 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
   const [open, setOpen] = useState(false);
   const [n, setN] = useState(0);
   // A track's count is the API's, over the whole roadmap: never the filtered items on screen.
-  const q = useQuery(`simple-tracks:${n}:${stampOf(items)}`, () => unwrap(api.GET("/v1/simple/tracks")), { keepPrevious: true });
+  const stamp = useMemo(() => stampOf(items), [items]);
+  const q = useQuery(`simple-tracks:${n}:${stamp}`, () => unwrap(api.GET("/v1/simple/tracks")), { keepPrevious: true });
   const [opened, setOpened] = useState<string | null>(null);
   const [trashing, setTrashing] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -73,7 +74,7 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
       else
         toast({
           message: `${asked} proposed · waits for ${decider ?? "an owner"}`,
-          action: { label: "Withdraw", onClick: () => void withdraw(res.change.id).then(() => toast({ message: "Withdrawn" }), failed("Oracle could not withdraw it")) },
+          action: { label: "Withdraw", onClick: () => void withdraw(res.change.id).then(() => (toast({ message: "Withdrawn" }), refresh()), failed("Oracle could not withdraw it")) },
         });
       return true;
     } catch (e) {
@@ -84,7 +85,8 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
   const edit = (t: Track, after: Record<string, string | null>, done: string) =>
     send({ op: "edit_track", target: { track_id: t.id }, before: {}, after } as Schemas["SimpleChangeIn"], done, t.decider_name ?? null, asking(after), t.title);
   const toTrash = (t: Track) => {
-    const n = t.feature_count ?? 0;
+    // Every feature on it moves, cut ones too: the API's count of what moves.
+    const n = t.moves_count ?? 0;
     const done = n ? `Moved ${t.title} to Trash · ${features(n)} now ${n === 1 ? "has" : "have"} no track` : `Moved ${t.title} to Trash`;
     void send({ op: "delete_track", target: { track_id: t.id }, before: {}, after: {} } as Schemas["SimpleChangeIn"], done, t.decider_name ?? null, "Move to Trash", t.title).then((ok) => ok && (setOpened(null), setTrashing(null)));
   };
@@ -107,6 +109,7 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
             {tracks.map((t) => {
               const expanded = opened === t.id;
               const count = t.feature_count ?? 0;
+              const moves = t.moves_count ?? 0;
               return (
                 <li key={t.id} data-testid="track-row" className={`border-b border-line py-2 ${expanded ? "-mx-2 rounded-lg bg-surface2 px-2" : ""}`}>
                   <div className="flex items-start gap-2">
@@ -129,14 +132,17 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
                           type="button"
                           className="mt-1 text-sm font-medium text-crit hover:underline"
                           // A track with features asks once, saying where they go; an empty one moves at once.
-                          onClick={() => (count ? setTrashing(t.id) : toTrash(t))}
+                          onClick={() => (moves ? setTrashing(t.id) : toTrash(t))}
                         >
                           Move to Trash
                         </button>
                       )}
                       {canChange && t.can_decide && trashing === t.id && (
                         <div className="mt-1 grid gap-1.5" data-testid="track-trash-confirm">
-                          <p className="text-sm">Its {features(count)} move to No track.</p>
+                          <p className="text-sm">
+                            Its {features(moves)}
+                            {moves > count ? ", cut ones too," : ""} move to No track.
+                          </p>
                           <div className="flex gap-1.5">
                             <Button variant="danger" onClick={() => toTrash(t)}>
                               Move to Trash
