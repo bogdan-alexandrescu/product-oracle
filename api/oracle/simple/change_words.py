@@ -40,6 +40,14 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             return f"moved the dates of {x}"
         case "accept_date_suggestion":
             return f"accepted Oracle's dates for {x}"
+        case "restore_dates":
+            return f"put Oracle's dates back on {x}"
+        case "add_link" | "restore_link":
+            other = _quoted(target.get("subject_title")) or "another item"
+            return f"made {x} depend on {other}"
+        case "remove_link":
+            other = _quoted(target.get("subject_title")) or "another item"
+            return f"took out the link from {x} to {other}"
         case "change_horizon":
             h = HORIZON_WORDS.get(str(after.get("horizon")))
             return f"moved {x} to {h}" if h else f"moved {x} to another horizon"
@@ -59,6 +67,8 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             return f"renamed {x} to {title}" if title else f"renamed {x}"
         case "edit_outcome":
             return f"changed the outcome of {x}"
+        case "edit_note":
+            return f"changed the notes of {x}"
         case "accept_risk":
             return f"accepted a risk on {x}"
         case "shift_dependents":
@@ -117,12 +127,25 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             if m is None and "milestone" in after:
                 return f"cleared the milestone of {x}"
             return f"set the milestone of {x} to {name}" if name else f"set the milestone of {x}"
+        case "set_goals":
+            return f"moved {x} to another goal"
         case "add_feature_ask":
             return f"filed the feature ask {title}" if title else "filed a feature ask"
         case "set_owner":
             return f"changed the owner of {x}"
+        case "set_goal":
+            return f"changed the goal of {x}"
+        case "restore_goal":
+            return f"put Oracle's goal back on {x}"
         case "set_decider":
             return f"changed the decider of {x}"
+        # ask-oracle-actions: a dependency added or removed in the feature talk.
+        case "set_depends_on":
+            dep = target.get("dependency")
+            gone = len(after.get("depends_on") or []) < len(before.get("depends_on") or [])
+            if not dep:
+                return f"changed what {x} depends on"
+            return f"{x} no longer depends on {dep}" if gone else f"{x} now depends on {dep}"
         # prd-questions: a PRD question (a decision) answered, or its decider named.
         case "decide_question":
             return f"decided {x}"
@@ -131,6 +154,8 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
         # Goal milestones: a PRD's own milestone's date or counts-when rule, asked of its owner.
         case "edit_goal_milestone":
             name = _quoted(target.get("name")) or item
+            if "milestone" in before and after.get("milestone") is None:
+                return f"removed the milestone {name}" if name else "removed a milestone"
             return f"changed the milestone {name}" if name else "changed a milestone"
     return f"changed {x}"
 

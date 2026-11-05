@@ -18,9 +18,12 @@ export const LINK = "font-semibold text-accent-ink hover:underline";
  * "Thu Oct 29, 7:01 PM" in the company zone (each page names the zone once); `day` alone
  * gives "Thu Oct 29", as the API's decided label words it.
  */
-export function momentWords(at: string, zone: string, day = false): string {
+export function momentWords(at: string, zone: string, day = false, zoned = false): string {
   const d = formatInZone(at, zone, { weekday: "short", month: "short", day: "numeric" }).replace(",", "");
-  return day ? d : `${d}, ${formatInZone(at, zone, { hour: "numeric", minute: "2-digit" }).replace(/ (?:[A-Z]{2,5}|GMT[+-][\d:]+)$/, "")}`;
+  if (day) return d;
+  // A stamp that stands alone keeps its zone ("Wed Nov 4, 4:41 PM PST"); in a list under a zoned heading it is dropped.
+  const time = formatInZone(at, zone, { hour: "numeric", minute: "2-digit" });
+  return `${d}, ${zoned ? time : time.replace(/ (?:[A-Z]{2,5}|GMT[+-][\d:]+)$/, "")}`;
 }
 
 /**

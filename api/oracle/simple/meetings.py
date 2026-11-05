@@ -341,9 +341,11 @@ async def _prd(db: AsyncSession, principal: Any, ref: str) -> Document:
     from oracle.simple.changes import ChangeError
 
     try:
-        document = await one_pager._document(db, principal, ref)
+        # simple-replaced-prds: a replaced PRD is not reviewed in Simple (404 naming its
+        # replacements); its past meetings stay as history.
+        document = await one_pager._document(db, principal, ref, current=True)
     except ChangeError as e:
-        raise MeetingError(e.status, str(e)) from e
+        raise MeetingError(e.status, e.detail) from e
     if document.kind != "prd":
         raise MeetingError(422, "A review meeting reviews a PRD")
     return document
@@ -365,6 +367,12 @@ def _defaults(w: PrdWho, me: uuid.UUID | None) -> list[uuid.UUID]:
 # --------------------------------------------------------------------------- start
 
 
+def _current() -> Any:
+    """Not a PRD marked replaced (simple-replaced-prds): Simple offers only the PRDs that
+    replaced it; the replaced one is history, read in Detailed."""
+    return Document.replaced_by == []
+
+
 async def options(
     db: AsyncSession, principal: Any, prd: str | None, occurrence: uuid.UUID | None
 ) -> SimpleStartOptions:
@@ -378,7 +386,7 @@ async def options(
             d
             for d in await db.scalars(
                 select(Document)
-                .where(Document.kind == "prd", Document.deleted_at.is_(None))
+                .where(Document.kind == "prd", Document.deleted_at.is_(None), _current())
                 .order_by(Document.title)
             )
             if await _readable(db, principal, d)
@@ -679,6 +687,7 @@ PROPOSAL_WORDS = {
     "restore": "restore",
     "edit_title": "rename",
     "edit_outcome": "new outcome for",
+    "edit_note": "new notes for",
     "accept_risk": "accept a risk on",
     "shift_dependents": "move the dependents of",
     "move_dependency": "move the dependency of",
@@ -691,6 +700,7 @@ PROPOSAL_WORDS = {
     "merge_item": "merge",
     "keep_both": "keep beside its look-alikes:",
     "cut_with_dependents": "cut with its dependents:",
+    "set_goals": "move to another goal:",
 }
 
 
@@ -965,7 +975,7 @@ async def approve(db: AsyncSession, principal: Any, meeting_id: uuid.UUID):
     try:
         result = await drafts.approve_in_meeting(db, session, me, present)
     except drafts.DraftError as e:
-        raise MeetingError(e.status, str(e)) from e
+        raise MeetingError(e.status, e.detail) from e
     except ImportRejected as e:
         # walkc-meeting: never the raw "draft rejected: 38 problem(s)": each problem in
         # plain words, with what to do about it and where; its section by the headings of
@@ -1458,7 +1468,7 @@ async def _upcoming(
     for kind in {REVIEWS[r.kind] for _, r in rows if r.kind in REVIEWS}:
         trashed[kind] = await trash_service.only_in_trash(db, kind)
     # home-deleted-roadmap: and one whose documents were all deleted for good says that.
-    deleted: dict[str, bool] = {}
+    deleted: dict[str, datetime | None] = {}
     for kind in {REVIEWS[r.kind] for _, r in rows if r.kind in REVIEWS}:
         deleted[kind] = await trash_service.deleted_for_good(db, kind)
     out = []
@@ -1480,6 +1490,7 @@ async def _upcoming(
             can_start=may_start_ritual(principal, r),
             reviews_in_trash=REVIEWS[r.kind] if trashed.get(REVIEWS.get(r.kind, "")) else None,
             reviews_deleted=REVIEWS[r.kind] if deleted.get(REVIEWS.get(r.kind, "")) else None,
+            reviews_deleted_at=deleted.get(REVIEWS.get(r.kind, "")),
         ))  # fmt: skip
     return out
 
@@ -2361,6 +2372,9 @@ async def decisions_page(
     docs = {d.id: d for d in await db.scalars(
         select(Document).where(Document.kind == "prd", Document.deleted_at.is_(None)))}  # fmt: skip
     readable = {i for i, d in docs.items() if await _readable(db, principal, d)}
+    # simple-replaced-prds: a replaced PRD leaves the PRD filter and its open questions; its
+    # past meetings, their decisions and its decided questions stay as history.
+    replaced = {i for i in readable if docs[i].replaced_by}
     ms = [m for m in ms if m.prd_document_id in readable]
     await _settle(db, ms)
     from oracle.simple import questions as prd_questions
@@ -2373,7 +2387,7 @@ async def decisions_page(
     prd_doc = None
     if prd:
         prd_doc = next((d for d in docs.values() if prd in (str(d.id), d.slug)), None)
-        if prd_doc is None or prd_doc.id not in readable:
+        if prd_doc is None or prd_doc.id not in readable or prd_doc.id in replaced:
             raise MeetingError(404, "No such PRD")
     goal_ent = None
     if goal:
@@ -2460,11 +2474,12 @@ async def decisions_page(
         else await _run_groups(db, principal, {i: docs[i] for i in qdocs})
     )
     return SimpleDecisionsOut(
-        **await questions.page_fields(db, principal, qdocs, only),
+        **await questions.page_fields(db, principal, qdocs, only, replaced),
         meetings=groups,
         other=[_row(d, names) for d in others],
         prds=[SimpleFilterOption(id=d.slug, title=d.title)
-              for d in sorted(docs.values(), key=lambda d: d.title) if d.id in readable],
+              for d in sorted(docs.values(), key=lambda d: d.title)
+              if d.id in readable and d.id not in replaced],
         # goal-order: the Goal filter lists the goals in the one goal order.
         goals=[SimpleFilterOption(id=g.key, title=g.title)
                for g in sort_goals(goals.values())],

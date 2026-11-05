@@ -227,7 +227,7 @@ export function EngReview({
           ref={listRef}
           aria-label="Features"
           data-testid="brief-list"
-          className={`sticky top-4 h-[calc(100dvh_-_var(--bar-h,72px)_-_var(--list-top,16px))] min-w-0 overflow-y-auto overscroll-contain rounded-panel border border-line bg-surface max-[900px]:static max-[900px]:h-auto ${
+          className={`sticky top-4 max-h-[calc(100dvh_-_var(--bar-h,72px)_-_var(--list-top,16px))] min-w-0 overflow-y-auto overscroll-contain rounded-panel border border-line bg-surface max-[900px]:static max-[900px]:max-h-none ${
             reading ? "max-[900px]:hidden" : ""
           }`}
         >
@@ -325,8 +325,9 @@ export function EngReview({
           <span className="flex-1" />
           {decides && (
             <>
+              {/* EC1/EC2 b: a quiet text button beside the dashed Approve, as drawn. */}
               <Button
-                variant="secondary"
+                variant="ghost"
                 disabled={busy || (sending && !note.trim())}
                 onClick={() => (sending ? void decide("changes_requested") : setSending(true))}
               >
@@ -442,6 +443,13 @@ function BriefPane({
   onAsk: (text: string) => void;
 }) {
   const writes = stages || suggests;
+  // EC1/EC2 b: the frames end the questions with the last card, so asking the architect is one
+  // quiet link on that card's line (or after "None for this feature."), not a button below.
+  const ask = stages ? (
+    <button type="button" data-testid="ask-architect" className="text-sm font-semibold whitespace-nowrap text-accent" onClick={() => onAsk(`${f.title}: `)}>
+      Ask the architect
+    </button>
+  ) : null;
   const verdict = edit(acts, "verdict");
   const current = verdict?.value as { verdict: Verdict; note?: string | null } | undefined;
   const [picking, setPicking] = useState<Verdict | null>(null);
@@ -589,10 +597,15 @@ function BriefPane({
       </section>
 
       <PaneSection label={f.questions.length ? `Architect's questions · ${answered} of ${f.questions.length} answered` : "Architect's questions"}>
-        {f.questions.length === 0 && <p className="text-text2">None for this feature.</p>}
+        {f.questions.length === 0 && (
+          <p className="flex flex-wrap items-baseline gap-x-3">
+            <span className="text-text2">None for this feature.</span>
+            {ask}
+          </p>
+        )}
         {f.questions.length > 0 && (
           <ul className="max-w-[760px] space-y-2">
-            {f.questions.map((q) => {
+            {f.questions.map((q, qi) => {
               const answer = edit(acts, `answer:${q.id}`);
               const open = writes && (!answer || editing[q.id]);
               const done = !!answer && !open;
@@ -609,6 +622,7 @@ function BriefPane({
                       <Chip kind="na">Question</Chip>
                     )}
                     <span className={done ? "text-text2" : "font-semibold"}>{q.question}</span>
+                    {qi === f.questions.length - 1 && ask && <span className="ml-auto flex-none pl-3">{ask}</span>}
                   </p>
                   {done && (
                     <p className="mt-1 ml-5 text-[15px]" data-testid="answer">
@@ -664,11 +678,6 @@ function BriefPane({
               );
             })}
           </ul>
-        )}
-        {stages && (
-          <Button className="mt-2" onClick={() => onAsk(`${f.title}: `)}>
-            Ask the architect
-          </Button>
         )}
       </PaneSection>
 

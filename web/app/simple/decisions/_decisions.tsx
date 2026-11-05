@@ -13,6 +13,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay, useCompanyZone } from "@/lib/dates";
 import { zoneName } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
+import { useWaitingList, WaitingRow } from "@/components/simple/WaitingItems";
 
 import { DeliveryLine, emailWords, slackWords } from "../meetings/_delivery";
 import { DecidedItem, LINK, momentWords } from "../meetings/_flow";
@@ -241,16 +242,29 @@ function QuestionList({ d, actions, filtered, onClear, linked }: { d: Schemas["S
   const [all, setAll] = useState(() => mine.findIndex((x) => x.id === linked) >= FIRST);
   const others = open.filter((x) => !mine.includes(x));
   const shown = all ? mine : mine.slice(0, FIRST);
+  // home-waiting-one-list: and everything else that waits on me, from the one list Home reads
+  // (run stops, broken links, dates, drafts, proposals, goal suggestions), each with its action;
+  // the filters narrow the PRDs' questions only, so these show unfiltered.
+  const waiting = useWaitingList();
+  const extra = filtered ? [] : (waiting.data?.items ?? []).filter((i) => i.kind !== "question");
+  const count = Math.min(d.waiting_count, mine.length) + extra.length;
   return (
     <>
-      <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={Math.min(d.waiting_count, mine.length)} source>
-        {mine.length === 0 ? (
-          <p className="simple-meta">
-            Nothing waits on you. {filtered && <ClearFilters onClear={onClear} />}
-          </p>
+      <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={count} source>
+        {mine.length === 0 && extra.length === 0 ? (
+          !filtered && !waiting.data && !waiting.error ? (
+            <p className="simple-meta" role="status">
+              Loading what waits on you…
+            </p>
+          ) : (
+            <p className="simple-meta">
+              Nothing waits on you. {filtered && <ClearFilters onClear={onClear} />}
+            </p>
+          )
         ) : (
           <ul>
             {shown.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} linked={x.id === linked} />)}
+            {extra.map((i) => <WaitingRow key={i.key} item={i} />)}
           </ul>
         )}
         {mine.length > FIRST && (
@@ -528,6 +542,9 @@ function Rows({ rows }: { rows: Row[] }) {
         // its code, its title, then the answer, as the API sends them (never read out of the title).
         const code = r.code ?? `D-${r.number}`;
         const { title, chosen } = r;
+        // build-feature-panel review 7: a decision about one roadmap item ("Moved Weekly alert digest
+        // to Next") opens that item's one feature panel.
+        const item = r.subjects.find((x) => x.kind === "roadmap_item" && typeof x.id === "string");
         return (
           <DecidedItem
             key={r.id}
@@ -541,7 +558,14 @@ function Rows({ rows }: { rows: Row[] }) {
             </span>
             <span className="simple-rb flex-1">
               <span className="break-words">
-                <span className="simple-code">{code}</span> <b className="font-[650]">{title}</b>
+                <span className="simple-code">{code}</span>{" "}
+                {item ? (
+                  <button type="button" data-feature={String(item.id)} className="text-left font-[650] hover:underline">
+                    {title}
+                  </button>
+                ) : (
+                  <b className="font-[650]">{title}</b>
+                )}
               </span>
               <span className="simple-meta">
                 {[chosen, r.approver?.name ?? "No approver", momentWords(r.decided_at ?? r.created_at, zone), done ? null : STATUS_WORDS[r.status] ?? "open"]

@@ -102,7 +102,8 @@ for (const [where, use] of [
         await card(page, "alert-rules").click();
         const sheet = page.getByTestId("floating-card");
         await expect(sheet.getByRole("heading", { name: "Alert rules engine" })).toBeVisible();
-        await expect(sheet).toHaveAttribute("data-sheet", where === "phone" ? "bottom" : "float");
+        // build-feature-panel: a board card opens the one feature panel (a phone: full screen).
+        await expect(sheet).toHaveAttribute("data-sheet", where === "phone" ? "full" : "panel");
       });
 
       /**

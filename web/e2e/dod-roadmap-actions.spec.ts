@@ -84,9 +84,11 @@ async function openCard(page: Page, key: string): Promise<Locator> {
 /** Talk to Oracle in an item's card (a phone's sheet has it as a tab). */
 async function talk(page: Page, key: string): Promise<Locator> {
   const card = await openCard(page, key);
+  // The feature panel: a desktop's talk is always beside the details.
   if (isPhone(page)) await card.getByRole("tab", { name: "Talk to Oracle" }).click();
-  else await card.getByRole("button", { name: "Talk to Oracle" }).click();
-  return card.getByTestId("item-talk");
+  const box = card.getByTestId("item-talk");
+  await expect(box).toBeVisible();
+  return box;
 }
 
 /** Whether an item reads as cut: its bar on a desktop, its lane row struck through on a phone. */

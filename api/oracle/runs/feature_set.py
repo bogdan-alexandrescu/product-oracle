@@ -180,6 +180,9 @@ class FeatureSetCheck:
     excluded: list[dict[str, Any]] = field(default_factory=list)
     problems: list[dict[str, Any]] = field(default_factory=list)
     flags: dict[str, list[str]] = field(default_factory=dict)
+    # Each feature's title by its key (included and left out): the gate names a problem's
+    # feature by it, never by its key.
+    titles: dict[str, str] = field(default_factory=dict)
 
     def add(
         self,
@@ -211,6 +214,7 @@ class FeatureSetCheck:
             "excluded": len(self.excluded),
             "problems": self.problems,
             "flags": self.flags,
+            "titles": self.titles,
         }
 
 
@@ -433,12 +437,16 @@ def _check_sets(
         parsed = _parse_feature(out, n, raw)
         if parsed is not None:
             out.features.append(parsed)
+            if parsed["key"] and parsed["title"]:
+                out.titles[parsed["key"]] = parsed["title"]
     for n, raw in enumerate(excluded, start=1):
         key = _text(raw.get("key")) if isinstance(raw, dict) else None
         if key is None:
             out.add("missing_field", f"excluded entry {n} lacks key")
             continue
         entry = {"key": key, "reason": _text(raw.get("reason"))}
+        if _text(raw.get("title")):
+            out.titles[key] = _text(raw.get("title"))
         if raw.get("decision") == "defer":
             entry["decision"] = "defer"
         out.excluded.append(entry)
@@ -651,7 +659,7 @@ def check_rows(rows: list[dict[str, Any]], *, known: Known) -> FeatureSetCheck:
     included, left_out = [], []
     for f in features:
         if f["decision"] in LEFT_OUT:
-            entry = {"key": f["key"], "reason": f.get("decision_reason")}
+            entry = {"key": f["key"], "reason": f.get("decision_reason"), "title": f.get("title")}
             if f["decision"] == "defer":
                 entry["decision"] = "defer"
             left_out.append(entry)
@@ -1150,6 +1158,7 @@ def scope_out(scope: PrdScope, items: list[PrdScopeItem]) -> PrdScopeOut:
             excluded=check.get("excluded", 0),
             problems=check.get("problems") or [],
             flags=check.get("flags") or {},
+            titles=check.get("titles") or {},
         ),
         features=features,
         approved_by=scope.approved_by,
