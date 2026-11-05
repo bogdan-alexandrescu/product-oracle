@@ -1,0 +1,447 @@
+{
+ "title": "Feature panel menu: Cut, Restore and Delete to Trash",
+ "subtitle": "Three picks: where the panel's menu sits and how a cut feature reads, the Delete confirm for a feature and a goal, and features and goals in Settings › Trash. Owner, approver and viewer shown in each.",
+ "decisions": [
+  {
+   "code": "pm1",
+   "name": "The panel's menu and a cut feature",
+   "question": "Where does the feature panel's Cut, Restore and Delete live, and how does a cut feature's panel read?",
+   "common": "Every Simple page opens the same panel, so this shows on all of them. The menu holds Cut (or Restore for a cut feature) and Move to Trash. Cut asks first and names what depends on it. An approver who is not the decider sees the same words as Propose, and who decides; a viewer sees no menu. Cut and Restore have Undo.",
+   "proposals": [
+    {
+     "letter": "A",
+     "name": "⋯ menu by the close",
+     "recommended": true,
+     "what": "A ⋯ button sits left of the × on the panel's header. It opens a short menu: Cut from the roadmap (or Restore to the roadmap for a cut feature) and Move to Trash…. A cut feature's panel keeps its normal look, its status chip reads Cut, and a grey strip under the title says 'Cut Nov 2 by Liam Brooks' with a Restore button, so Restore is one click and never hidden.",
+     "plus": "Small and familiar (Priorities' rows already use ⋯); Restore is visible without opening anything; the strip says who cut it and when.",
+     "cost": "The ⋯ hides what it holds until clicked; the cut strip takes one more row of the header on a cut feature.",
+     "frames": [
+      {
+       "file": "frames/pm1-a-rest.html",
+       "caption": "Alert history export's panel at rest, signed in as the owner"
+      },
+      {
+       "file": "frames/pm1-a-open.html",
+       "caption": "The menu opened: Cut from the roadmap and Move to Trash"
+      },
+      {
+       "file": "frames/pm1-a-mid.html",
+       "caption": "Cut asks first and names what depends on it"
+      },
+      {
+       "file": "frames/pm1-a-result.html",
+       "caption": "After Cut: the panel reads Cut with who cut it and when; the toast offers Undo"
+      },
+      {
+       "file": "frames/pm1-a-cut-1512.html",
+       "caption": "A feature cut earlier (In-app tour) at 1512, its menu open with Restore"
+      },
+      {
+       "file": "frames/pm1-a-propose.html",
+       "caption": "An approver who is not the decider: the same place reads Propose, and names who decides"
+      },
+      {
+       "file": "frames/pm1-a-viewer.html",
+       "caption": "A viewer on the cut feature: no menu, only the words saying it is cut"
+      },
+      {
+       "file": "frames/pm1-a-cut-390.html",
+       "caption": "Phone 390: the cut feature's panel"
+      },
+      {
+       "file": "frames/pm1-a-open-390.html",
+       "caption": "Phone 390: the menu opened on the cut feature"
+      }
+     ],
+     "why": "It is where the owner asked for it (the header), it costs one small icon, and the one action people need on a cut feature, Restore, sits in plain sight on the strip. It reads the same on every page that opens the panel and on a phone."
+    },
+    {
+     "letter": "B",
+     "name": "Status chip is the menu",
+     "recommended": false,
+     "what": "The status chip under the title becomes a button ('Planned ▾'). Clicking it opens Cut from the roadmap and Move to Trash…; on a cut feature it reads 'Cut ▾' with Restore inside, and 'Cut Nov 2 by Liam Brooks' follows it on the same line.",
+     "plus": "No new control on the header; the menu sits on the very thing it changes (the status).",
+     "cost": "A status chip that is also a menu is easy to miss, and its ▾ shows only to who may change it; Restore is two clicks.",
+     "frames": [
+      {
+       "file": "frames/pm1-b-rest.html",
+       "caption": "Alert history export's panel at rest, signed in as the owner"
+      },
+      {
+       "file": "frames/pm1-b-open.html",
+       "caption": "The menu opened: Cut from the roadmap and Move to Trash"
+      },
+      {
+       "file": "frames/pm1-b-mid.html",
+       "caption": "Cut asks first and names what depends on it"
+      },
+      {
+       "file": "frames/pm1-b-result.html",
+       "caption": "After Cut: the panel reads Cut with who cut it and when; the toast offers Undo"
+      },
+      {
+       "file": "frames/pm1-b-cut-1512.html",
+       "caption": "A feature cut earlier (In-app tour) at 1512, its menu open with Restore"
+      },
+      {
+       "file": "frames/pm1-b-propose.html",
+       "caption": "An approver who is not the decider: the same place reads Propose, and names who decides"
+      },
+      {
+       "file": "frames/pm1-b-viewer.html",
+       "caption": "A viewer on the cut feature: no menu, only the words saying it is cut"
+      },
+      {
+       "file": "frames/pm1-b-cut-390.html",
+       "caption": "Phone 390: the cut feature's panel"
+      },
+      {
+       "file": "frames/pm1-b-open-390.html",
+       "caption": "Phone 390: the menu opened on the cut feature"
+      }
+     ]
+    },
+    {
+     "letter": "C",
+     "name": "Named Actions button",
+     "recommended": false,
+     "what": "A labelled 'Actions ▾' button left of the ×. A cut feature's whole header turns grey with the title muted and 'Cut Nov 2 by Liam Brooks' in the header line; Restore lives only in the Actions menu.",
+     "plus": "The word says what is behind it; the grey header tells at a glance that the feature is cut.",
+     "cost": "A wider button on every panel header for actions used rarely; Restore takes two clicks; the grey header can read as 'disabled'.",
+     "frames": [
+      {
+       "file": "frames/pm1-c-rest.html",
+       "caption": "Alert history export's panel at rest, signed in as the owner"
+      },
+      {
+       "file": "frames/pm1-c-open.html",
+       "caption": "The menu opened: Cut from the roadmap and Move to Trash"
+      },
+      {
+       "file": "frames/pm1-c-mid.html",
+       "caption": "Cut asks first and names what depends on it"
+      },
+      {
+       "file": "frames/pm1-c-result.html",
+       "caption": "After Cut: the panel reads Cut with who cut it and when; the toast offers Undo"
+      },
+      {
+       "file": "frames/pm1-c-cut-1512.html",
+       "caption": "A feature cut earlier (In-app tour) at 1512, its menu open with Restore"
+      },
+      {
+       "file": "frames/pm1-c-propose.html",
+       "caption": "An approver who is not the decider: the same place reads Propose, and names who decides"
+      },
+      {
+       "file": "frames/pm1-c-viewer.html",
+       "caption": "A viewer on the cut feature: no menu, only the words saying it is cut"
+      },
+      {
+       "file": "frames/pm1-c-cut-390.html",
+       "caption": "Phone 390: the cut feature's panel"
+      },
+      {
+       "file": "frames/pm1-c-open-390.html",
+       "caption": "Phone 390: the menu opened on the cut feature"
+      }
+     ]
+    },
+    {
+     "letter": "D",
+     "name": "Links in the Status row",
+     "recommended": false,
+     "what": "No new header control: the Details section's Status row (read-only today) gets Cut and Move to Trash as links beside the status; for a cut feature it reads 'Cut Nov 2 by Liam Brooks · Restore · Move to Trash'.",
+     "plus": "Nothing added to the header; the actions sit beside the status they change, in words.",
+     "cost": "It is not on the header the owner picked: the row is at the bottom of a long panel, below Dates, Goal, Links and Milestone, so it is found only by scrolling.",
+     "frames": [
+      {
+       "file": "frames/pm1-d-rest.html",
+       "caption": "Alert history export's panel at rest, signed in as the owner (scrolled to its Status row)"
+      },
+      {
+       "file": "frames/pm1-d-mid.html",
+       "caption": "Cut asks first and names what depends on it"
+      },
+      {
+       "file": "frames/pm1-d-result.html",
+       "caption": "After Cut: the panel reads Cut with who cut it and when; the toast offers Undo"
+      },
+      {
+       "file": "frames/pm1-d-cut-1512.html",
+       "caption": "A feature cut earlier (In-app tour) at 1512"
+      },
+      {
+       "file": "frames/pm1-d-propose.html",
+       "caption": "An approver who is not the decider: the row's links read Propose"
+      },
+      {
+       "file": "frames/pm1-d-viewer.html",
+       "caption": "A viewer on the cut feature: no menu, only the words saying it is cut"
+      },
+      {
+       "file": "frames/pm1-d-cut-390.html",
+       "caption": "Phone 390: the cut feature's panel"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "pm2",
+   "name": "The Delete confirm",
+   "question": "What does the Delete confirm say for a feature and for a goal, and how hard is it to press?",
+   "common": "Delete always sends to Trash for 30 days; nothing is deleted for good. After it the feature leaves the roadmap and a toast offers Undo. Features that depended on it lose that link; decisions that name it stay. A goal's features stay on the roadmap under No goal. An approver who is not the decider proposes it.",
+   "proposals": [
+    {
+     "letter": "A",
+     "name": "One line, counts behind (i)",
+     "recommended": false,
+     "what": "The confirm asks 'Move Alert rules engine to Trash?' with one short line of counts ('2 links, 3 decisions and a goal go with it.'); the (i) beside it lists them by name. One more line says where Restore lives.",
+     "plus": "Shortest confirm; nothing to read for a feature with no links.",
+     "cost": "Who loses a link is hidden behind the (i), so the owner may trash a feature others depend on without seeing their names.",
+     "frames": [
+      {
+       "file": "frames/pm2-a-confirm.html",
+       "caption": "The confirm for Alert rules engine, which two features depend on"
+      },
+      {
+       "file": "frames/pm2-a-mid.html",
+       "caption": "The (i) opened: what goes with it, by name"
+      },
+      {
+       "file": "frames/pm2-a-result.html",
+       "caption": "After Move to Trash: the roadmap without it and the Undo toast"
+      },
+      {
+       "file": "frames/pm2-a-goal-1512.html",
+       "caption": "A goal that holds 15 features, at 1512: the goal's confirm"
+      },
+      {
+       "file": "frames/pm2-a-propose.html",
+       "caption": "An approver who is not the decider: the same confirm proposes it"
+      },
+      {
+       "file": "frames/pm2-a-confirm-390.html",
+       "caption": "Phone 390: the confirm"
+      }
+     ]
+    },
+    {
+     "letter": "B",
+     "name": "List what points at it",
+     "recommended": true,
+     "what": "The confirm lists, one row each: Needed by (the features that lose the link, by name), Depends on, Decisions that name it (they stay), Milestone and Goal. Under it one line: 'Restore it from Settings › Trash for 30 days.' A quiet hint at the foot says 'Not now? Cut keeps it on the roadmap.' A goal's confirm lists the features that stay under No goal and its measure.",
+     "plus": "Everything at stake in one look; the Cut hint steers 'not now' away from Delete.",
+     "cost": "A taller dialog (five rows) even for a feature with nothing linked; a goal with many features shortens its list to four names and a count.",
+     "frames": [
+      {
+       "file": "frames/pm2-b-confirm.html",
+       "caption": "The confirm for Alert rules engine, which two features depend on"
+      },
+      {
+       "file": "frames/pm2-b-result.html",
+       "caption": "After Move to Trash: the roadmap without it and the Undo toast"
+      },
+      {
+       "file": "frames/pm2-b-goal-1512.html",
+       "caption": "A goal that holds 15 features, at 1512: the goal's confirm"
+      },
+      {
+       "file": "frames/pm2-b-propose.html",
+       "caption": "An approver who is not the decider: the same confirm proposes it"
+      },
+      {
+       "file": "frames/pm2-b-confirm-390.html",
+       "caption": "Phone 390: the confirm"
+      }
+     ],
+     "why": "The owner sees by name what the delete touches before pressing it, with no extra step; the same five rows read alike for every feature, and the one line about Trash says it can come back."
+    },
+    {
+     "letter": "C",
+     "name": "Type the name if needed",
+     "recommended": false,
+     "what": "Like B, but when other features depend on it (or a goal still holds features) the Move to Trash button stays off until the name is typed.",
+     "plus": "A hard stop exactly when a delete breaks others' links.",
+     "cost": "An extra step for an action Restore can undo anyway; typing long names is slow, worst on a phone.",
+     "frames": [
+      {
+       "file": "frames/pm2-c-confirm.html",
+       "caption": "The confirm for Alert rules engine, which two features depend on"
+      },
+      {
+       "file": "frames/pm2-c-mid.html",
+       "caption": "Halfway through typing the name: Move to Trash is still off"
+      },
+      {
+       "file": "frames/pm2-c-result.html",
+       "caption": "After Move to Trash: the roadmap without it and the Undo toast"
+      },
+      {
+       "file": "frames/pm2-c-goal-1512.html",
+       "caption": "A goal that holds 15 features, at 1512: the goal's confirm"
+      },
+      {
+       "file": "frames/pm2-c-propose.html",
+       "caption": "An approver who is not the decider: the same confirm proposes it"
+      },
+      {
+       "file": "frames/pm2-c-confirm-390.html",
+       "caption": "Phone 390: the confirm"
+      }
+     ]
+    },
+    {
+     "letter": "D",
+     "name": "No confirm, Undo",
+     "recommended": false,
+     "what": "Move to Trash acts at once: the panel closes, the feature leaves the roadmap and a toast says 'Moved Alert rules engine to Trash' with Undo.",
+     "plus": "Fastest; nothing to dismiss; Restore and Undo make it safe.",
+     "cost": "One slip removes a feature others depend on; after the toast is gone it is back only from Settings › Trash, which approvers and viewers cannot open.",
+     "frames": [
+      {
+       "file": "frames/pm2-d-result.html",
+       "caption": "Move to Trash from the menu acts at once: the roadmap without Alert rules engine and the Undo toast"
+      },
+      {
+       "file": "frames/pm2-d-propose.html",
+       "caption": "An approver who is not the decider: the proposal goes at once, the toast names who decides"
+      },
+      {
+       "file": "frames/pm2-d-result-390.html",
+       "caption": "Phone 390: the roadmap right after, with the toast"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "pm3",
+   "name": "Settings › Trash",
+   "question": "How does Settings › Trash list features and goals beside documents?",
+   "common": "Each row says who deleted it and when, days left, and Restore; an (i) says what Restore puts back: a feature's dates, links, milestone and goal, a goal's measure and its features' links. Owners restore; approvers propose a restore of a feature or goal; viewers read; documents stay owners only.",
+   "proposals": [
+    {
+     "letter": "A",
+     "name": "One list, kind chip",
+     "recommended": true,
+     "what": "One Deleted list, newest first, each row led by a kind chip (Feature, Goal, PRD, Update…), its roadmap in grey, who deleted it and when, days left, an (i) with what Restore puts back, and Restore.",
+     "plus": "Today's page, with one chip added; the thing just deleted is always on top.",
+     "cost": "With many deletes of one kind the others are pushed down; no way to see only goals.",
+     "frames": [
+      {
+       "file": "frames/pm3-a-rest.html",
+       "caption": "Settings › Trash for the owner, with the feature just deleted beside goals and documents"
+      },
+      {
+       "file": "frames/pm3-a-open.html",
+       "caption": "The (i) opened: what Restore puts back (dates, links, milestone, goal)"
+      },
+      {
+       "file": "frames/pm3-a-result.html",
+       "caption": "After Restore: the toast says what came back, and the row is gone"
+      },
+      {
+       "file": "frames/pm3-a-back.html",
+       "caption": "The restored feature's panel on the roadmap, its dates, links and goal back"
+      },
+      {
+       "file": "frames/pm3-a-hard-1512.html",
+       "caption": "The full list at 1512"
+      },
+      {
+       "file": "frames/pm3-a-propose.html",
+       "caption": "An approver: features and goals only, each with Propose a restore"
+      },
+      {
+       "file": "frames/pm3-a-viewer.html",
+       "caption": "A viewer: the same list, read only"
+      },
+      {
+       "file": "frames/pm3-a-rest-390.html",
+       "caption": "Phone 390"
+      }
+     ],
+     "why": "Trash is a short list people visit to find one thing they just deleted; newest first with a chip finds it fastest, and it keeps today's page as it is."
+    },
+    {
+     "letter": "B",
+     "name": "Grouped by kind",
+     "recommended": false,
+     "what": "Three panels: Features, Goals, Documents, each with its count and its own rows newest first.",
+     "plus": "Each kind in its own place; counts at a glance.",
+     "cost": "Long Features panel pushes Goals and Documents below the fold; a goal deleted today sits under weeks-old features.",
+     "frames": [
+      {
+       "file": "frames/pm3-b-rest.html",
+       "caption": "Settings › Trash for the owner, with the feature just deleted beside goals and documents"
+      },
+      {
+       "file": "frames/pm3-b-open.html",
+       "caption": "The (i) opened: what Restore puts back (dates, links, milestone, goal)"
+      },
+      {
+       "file": "frames/pm3-b-result.html",
+       "caption": "After Restore: the toast says what came back, and the row is gone"
+      },
+      {
+       "file": "frames/pm3-b-hard-1512.html",
+       "caption": "The full list at 1512"
+      },
+      {
+       "file": "frames/pm3-b-propose.html",
+       "caption": "An approver: features and goals only, each with Propose a restore"
+      },
+      {
+       "file": "frames/pm3-b-viewer.html",
+       "caption": "A viewer: the same list, read only"
+      },
+      {
+       "file": "frames/pm3-b-rest-390.html",
+       "caption": "Phone 390"
+      }
+     ]
+    },
+    {
+     "letter": "C",
+     "name": "Filtered tabs",
+     "recommended": false,
+     "what": "Tabs above the list: All, Features, Goals, Documents with counts; All is one list with kind chips like A.",
+     "plus": "One list by default, and one click narrows it.",
+     "cost": "One more control on a page with little in it; a tab left on Goals hides the feature someone is looking for.",
+     "frames": [
+      {
+       "file": "frames/pm3-c-rest.html",
+       "caption": "Settings › Trash for the owner, with the feature just deleted beside goals and documents"
+      },
+      {
+       "file": "frames/pm3-c-open.html",
+       "caption": "The (i) opened: what Restore puts back (dates, links, milestone, goal)"
+      },
+      {
+       "file": "frames/pm3-c-result.html",
+       "caption": "After Restore: the toast says what came back, and the row is gone"
+      },
+      {
+       "file": "frames/pm3-c-hard-1512.html",
+       "caption": "The full list at 1512 with the Features tab picked"
+      },
+      {
+       "file": "frames/pm3-c-propose.html",
+       "caption": "An approver: features and goals only, each with Propose a restore"
+      },
+      {
+       "file": "frames/pm3-c-viewer.html",
+       "caption": "A viewer: the same list, read only"
+      },
+      {
+       "file": "frames/pm3-c-rest-390.html",
+       "caption": "Phone 390"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
