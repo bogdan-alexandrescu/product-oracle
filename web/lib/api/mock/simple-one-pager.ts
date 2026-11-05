@@ -50,6 +50,8 @@ export interface OnePagerCtx {
   planPages?: string[];
   /** e2e-pdf-export ("one-pager-overflow"): the pages the one-pager runs to past its one (the API lays it out). */
   overflowPages?: number;
+  /** build-feature-panel: each "bets" line's own roadmap item (./simple-roadmap.ts betLineItemIds), by line id. */
+  betItemIds?: Record<string, string>;
 }
 
 const REMIND_EVERY_MS = 24 * 60 * 60 * 1000;
@@ -565,6 +567,8 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
           // S10: each bet carries its visual, keyed by its line: an edit keeps the flow. Its
           // brief is the published words (the API's bet_line): never a draft's.
           ...(b.key === "bets" ? { flow_subject: betSubject(db.flowKey ? `${db.flowKey}/${l.id}` : l.id, uncomment(l.text).split(/\s+/).filter(Boolean).join(" ")), flow } : {}),
+          // build-feature-panel: the roadmap item whose own bet this line is (./simple-roadmap.ts betLineItemIds); null for other lines and for bets no item claims.
+          item_id: b.key === "bets" ? (ctx.betItemIds?.[l.id] ?? null) : null,
           decisions: [...(db.decisions?.[l.id] ?? [])],
           measure: null, measure_source: null, footnotes: [],
           // 2026-10-30: a bet with no flow offers "Draw the flow" to those who change the PRD (visuals.may_revise).

@@ -167,7 +167,7 @@ for (const scheme of ["light", "dark"] as const) {
       await open(page, scheme);
       await row(page, "plan-f-05").getByTestId("timeline-bar").click();
       const panel = page.getByTestId("item-panel");
-      await expect(panel.getByRole("heading", { name: "Team invites" })).toBeVisible();
+      await expect(panel.getByRole("heading", { name: "Team invites", exact: true })).toBeVisible();
       await expect(panel.getByTestId("card-slice")).toHaveCount(2);
       await expect(row(page, "plan-f-05")).toHaveAttribute("data-open", "true");
       await panel.getByRole("button", { name: "Close" }).click();
@@ -176,7 +176,7 @@ for (const scheme of ["light", "dark"] as const) {
       await format(page, "gantt");
       await slice(page, "F-05b").locator("rect[data-slice-body]").click();
       const card = page.getByTestId("floating-card");
-      await expect(card.getByRole("heading", { name: "Team invites" })).toBeVisible();
+      await expect(card.getByRole("heading", { name: "Team invites", exact: true })).toBeVisible();
       await expect(card.getByTestId("card-slice")).toHaveCount(2);
       await expect(bar(page, "plan-f-05")).toHaveAttribute("data-open", "true");
     });
@@ -255,8 +255,8 @@ for (const scheme of ["light", "dark"] as const) {
 
       await row(page, "plan-f-05").getByTestId("timeline-bar").click();
       const card = page.getByTestId("floating-card");
-      await expect(card).toHaveAttribute("data-sheet", "bottom");
-      await expect(card.getByRole("heading", { name: "Team invites" })).toBeVisible();
+      await expect(card).toHaveAttribute("data-sheet", "full");
+      await expect(card.getByRole("heading", { name: "Team invites", exact: true })).toBeVisible();
       await expect(card.getByTestId("card-slice")).toHaveCount(2);
       await expect(row(page, "plan-f-05")).toHaveAttribute("data-open", "true");
       await card.getByRole("button", { name: "Close" }).click();

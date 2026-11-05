@@ -309,6 +309,10 @@ test.describe("QA pass 3: simple-plan, Value / effort", () => {
     await expect(legend).toContainText("Each mark shows the feature's code");
     await expect(legend).not.toContainText("Codes stay with the item");
     await page.locator('[data-testid="vxe-point"][data-code="setup-checklist"]').click();
+    // build-feature-panel review 5: a mark clicked opens the one feature panel; Escape closes it.
+    await expect(page.getByRole("dialog", { name: "Setup checklist" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.locator('[data-testid="side-row"][data-code="setup-checklist"]').getByTestId("side-numbers")).toHaveText(/^goal value [\d.]+ · confidence [\d.]+ · [\d.]+ wk · score [\d.]+$/);
     // A goal value of 0 (No goal): ArrowDown and ArrowUp change nothing.
     const noGoal = page.locator('[data-testid="vxe-point"][aria-label*="no goal"]').first();

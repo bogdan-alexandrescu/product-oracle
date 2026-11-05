@@ -732,7 +732,7 @@ function record(db: MeetingsDb, ctx: MeetingsCtx, m: Meeting, title: string, sub
 
 const OP_WORDS: Record<string, string> = {
   move_dates: "New dates for", accept_date_suggestion: "Accepted Oracle's dates for", change_horizon: "Moved", reorder: "Reordered", cut: "Cut",
-  restore: "Restored", edit_title: "Renamed", edit_outcome: "New outcome for", accept_risk: "Accepted a risk on", confirm_item: "Confirmed", edit_line: "New wording for",
+  restore: "Restored", edit_title: "Renamed", edit_outcome: "New outcome for", edit_note: "New notes for", accept_risk: "Accepted a risk on", confirm_item: "Confirmed", edit_line: "New wording for",
   cut_with_dependents: "Cut with its dependents:",
 };
 
@@ -742,7 +742,7 @@ const HORIZON_TO: Record<string, string> = { now: "Now", next: "Next", later: "L
 /** walkc-meeting r2 (meetings.PROPOSAL_WORDS): what a proposal asked for. */
 const PROPOSAL_WORDS: Record<string, string> = {
   move_dates: "new dates for", accept_date_suggestion: "accept Oracle's dates for", change_horizon: "move", reorder: "reorder", cut: "cut",
-  restore: "restore", edit_title: "rename", edit_outcome: "new outcome for", accept_risk: "accept a risk on", shift_dependents: "move the dependents of",
+  restore: "restore", edit_title: "rename", edit_outcome: "new outcome for", edit_note: "new notes for", accept_risk: "accept a risk on", shift_dependents: "move the dependents of",
   move_dependency: "move the dependency of", confirm_item: "confirm", edit_line: "new wording for", add_key_date: "add the key date",
   edit_key_date: "change the key date", remove_key_date: "remove the key date", add_item: "add", merge_item: "merge",
   keep_both: "keep beside its look-alikes:", cut_with_dependents: "cut with its dependents:",

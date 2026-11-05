@@ -342,6 +342,37 @@ def clip(text: str, words: int, chars: int = LINE_MAX) -> tuple[str, str | None]
     return shown, (text[:FULL_MAX] if shown != text else None)
 
 
+async def _bet_items(
+    db: AsyncSession, bets: list[OnePagerLine], page: list[dict], items: list[Any]
+) -> None:
+    """build-feature-panel review 7: each bet names the roadmap item built from it (its own
+    bet, service.own_bet, the rule the roadmap's bet flows read): the first item, in roadmap
+    order, that claims it. Only items the caller sees, not cut and not drafts."""
+    from oracle.roadmap.models import RoadmapItem
+    from oracle.simple import service
+
+    shown = [i for i in items if i.status != "cut" and not i.draft]
+    if not bets or not shown:
+        return
+    sections = dict(
+        (
+            await db.execute(
+                select(RoadmapItem.id, RoadmapItem.prd_section_key).where(
+                    RoadmapItem.id.in_([i.id for i in shown])
+                )
+            )
+        ).all()
+    )
+    keys = {x["id"]: list(x.get("source_keys") or []) for blk in page for x in blk["lines"]}
+    words = [(x.text, keys.get(x.id, x.source_keys)) for x in bets]
+    for i in shown:
+        if not sections.get(i.id):
+            continue
+        at = service.own_bet(i.code, sections[i.id], i.title, words)
+        if at is not None and bets[at].item_id is None:
+            bets[at].item_id = i.id
+
+
 def _tidy(
     text: str, words: int, full: str | None, sources: list[Section]
 ) -> tuple[str, str | None]:
@@ -1425,6 +1456,7 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
         for i in slice_.items
         if i.status != "cut"
     ]
+    await _bet_items(db, bets, page, slice_.items)
     plan = plan_strip.strip(plan_items(slice_.items), slice_.today)
     # A dated plan's span is the one its timeline draws (its milestones, or the dates the
     # lead accepted); else the items' dated milestones.

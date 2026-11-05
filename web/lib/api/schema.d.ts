@@ -18296,7 +18296,7 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             /** Op */
-            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped");
+            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal" | "edit_goal_milestone") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped");
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -18412,7 +18412,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal" | "edit_goal_milestone";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -26408,7 +26408,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal" | "edit_goal_milestone";
             /**
              * Status
              * @enum {string}
@@ -30727,6 +30727,8 @@ export interface components {
             /** Flow Subject */
             flow_subject?: string | null;
             flow?: components["schemas"]["OnePagerFlow"] | null;
+            /** Item Id */
+            item_id?: string | null;
             /**
              * Decisions
              * @default []
@@ -38493,7 +38495,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal" | "edit_goal_milestone";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -38542,7 +38544,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal" | "edit_goal_milestone";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -39359,6 +39361,16 @@ export interface components {
             /** Counts When */
             counts_when?: string | null;
         };
+        /** SimpleGoalPick */
+        SimpleGoalPick: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
         /** SimpleGoalRef */
         SimpleGoalRef: {
             /**
@@ -39374,6 +39386,28 @@ export interface components {
             metric?: string | null;
             /** Position */
             position?: number | null;
+            /** Current */
+            current?: number | null;
+            /** Target */
+            target?: number | null;
+            /** Unit */
+            unit?: string | null;
+            /** Due */
+            due?: string | null;
+        };
+        /**
+         * SimpleGoalSet
+         * @description build-feature-panel review 2: the goal (and measure) a person set on the item over
+         *     Oracle's: Oracle's goal as the item showed it (null: none), who set it and when.
+         */
+        SimpleGoalSet: {
+            oracle?: components["schemas"]["SimpleGoalPick"] | null;
+            /** By */
+            by?: string | null;
+            /** At */
+            at?: string | null;
+            /** Measure */
+            measure?: string | null;
         };
         /** SimpleGoalSuggestion */
         SimpleGoalSuggestion: {
@@ -39632,6 +39666,27 @@ export interface components {
             /** Date */
             date?: string | null;
             prd?: components["schemas"]["SimpleDocRef"] | null;
+        };
+        /**
+         * SimpleLink
+         * @description build-feature-panel: one item the item depends on; ``by`` null: Oracle found it.
+         *     ``removed``: Oracle's link a person removed (``removed_by``), shown with Restore.
+         */
+        SimpleLink: {
+            /**
+             * Item Id
+             * Format: uuid
+             */
+            item_id: string;
+            /** By */
+            by?: string | null;
+            /**
+             * Removed
+             * @default false
+             */
+            removed: boolean;
+            /** Removed By */
+            removed_by?: string | null;
         };
         /** SimpleMatch */
         SimpleMatch: {
@@ -40121,6 +40176,24 @@ export interface components {
             /** Title */
             title: string;
         };
+        /**
+         * SimpleOverride
+         * @description build-feature-panel: Oracle's dates a person's replaced, and who set the new ones.
+         */
+        SimpleOverride: {
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Source */
+            source?: string | null;
+            /** Start Source */
+            start_source?: string | null;
+            /** By */
+            by?: string | null;
+            /** At */
+            at?: string | null;
+        };
         /** SimpleOwnerRef */
         SimpleOwnerRef: {
             /**
@@ -40130,6 +40203,8 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /** Source */
+            source?: ("item" | "track") | null;
         };
         /** SimplePersonRef */
         SimplePersonRef: {
@@ -40852,6 +40927,8 @@ export interface components {
             estimated: boolean;
             /** Date Basis */
             date_basis?: string | null;
+            /** Note */
+            note?: string | null;
             suggestion?: components["schemas"]["DateSuggestionOut"] | null;
             milestone?: components["schemas"]["SimpleItemMilestone"] | null;
             /** Phases */
@@ -40903,6 +40980,13 @@ export interface components {
              * @default []
              */
             goal_ids: string[];
+            override?: components["schemas"]["SimpleOverride"] | null;
+            /**
+             * Links
+             * @default []
+             */
+            links: components["schemas"]["SimpleLink"][];
+            goal_set?: components["schemas"]["SimpleGoalSet"] | null;
             /**
              * Decided In
              * @default []
