@@ -24832,6 +24832,8 @@ export interface components {
             goals?: components["schemas"]["GoalSnap"][];
             /** Features */
             features?: components["schemas"]["FeatureSnap"][];
+            /** Items */
+            items?: components["schemas"]["ItemGoalsSnap"][];
             /** Added Goal Id */
             added_goal_id?: string | null;
             /** Sig */
@@ -27860,6 +27862,19 @@ export interface components {
             id: string;
             /** Changes */
             changes: components["schemas"]["FieldDiff"][];
+        };
+        /**
+         * ItemGoalsSnap
+         * @description A roadmap item's own goals (``goal_ids``) before a goal's delete took one off.
+         */
+        ItemGoalsSnap: {
+            /**
+             * Item Id
+             * Format: uuid
+             */
+            item_id: string;
+            /** Goal Ids */
+            goal_ids: string[];
         };
         /** ItemHistoryOut */
         ItemHistoryOut: {

@@ -115,11 +115,20 @@ class GoalSnap(BaseModel):
     attrs: dict[str, Any]
 
 
+class ItemGoalsSnap(BaseModel):
+    """A roadmap item's own goals (``goal_ids``) before a goal's delete took one off."""
+
+    item_id: uuid.UUID
+    goal_ids: list[uuid.UUID]
+
+
 class GoalBucketsUndo(BaseModel):
     """What a write changed, as it was before: Undo puts exactly this back."""
 
     goals: list[GoalSnap] = Field(default_factory=list)
     features: list[FeatureSnap] = Field(default_factory=list)
+    # edit-goals-prds: the items a goal's delete moved off it (trash_items.trash_goal).
+    items: list[ItemGoalsSnap] = Field(default_factory=list)
     # A goal the write added: Undo archives it again.
     added_goal_id: uuid.UUID | None = None
     # The API's signature over the rest: Undo takes only an undo a write gave.
@@ -528,6 +537,13 @@ async def undo_goal_buckets(
     for f in body.features:
         await _entity(db, f.feature_id, "feature")
         await _restore_links(db, f)
+    if body.items:
+        from oracle.roadmap.models import RoadmapItem
+
+        for it in body.items:
+            row = await db.get(RoadmapItem, it.item_id, with_for_update=True)
+            if row is not None:
+                row.goal_ids = list(it.goal_ids)
     if body.added_goal_id is not None:
         (await _entity(db, body.added_goal_id, "goal")).status = "rejected"
     await db.commit()

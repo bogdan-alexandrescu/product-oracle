@@ -35,7 +35,7 @@ from oracle.authz import has_role
 from oracle.baseline.models import Entity
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import drafts, service
-from oracle.simple.goal_buckets import GoalBucketsUndo
+from oracle.simple.goal_buckets import GoalBucketsUndo, ItemGoalsSnap
 from oracle.simple.models import SimpleChange
 from oracle.simple.router import Approver, Commenter
 from oracle.simple.schemas import SimpleChangeOut
@@ -262,10 +262,11 @@ async def trash_goal(
     from oracle.simple import goal_buckets
 
     links = await goal_buckets.move_off(db, goal, to_goal_id)
-    moved = []
+    moved, items = [], []
     for row in await db.scalars(
         select(RoadmapItem).where(RoadmapItem.goal_ids.contains([goal.id])).with_for_update()
     ):
+        items.append(ItemGoalsSnap(item_id=row.id, goal_ids=list(row.goal_ids)))
         ids = [i for i in row.goal_ids if i != goal.id]
         if to_goal_id is not None and to_goal_id not in ids:
             ids = [to_goal_id, *ids]
@@ -274,7 +275,7 @@ async def trash_goal(
     to = str(to_goal_id) if to_goal_id else None
     entry = await _new_entry(db, principal, goal, [goal],
                              {"to_goal_id": to, "moved_items": moved}, reason)  # fmt: skip
-    return entry, GoalBucketsUndo(features=links)
+    return entry, GoalBucketsUndo(features=links, items=items)
 
 
 def _restores(principal: Any, entry: TrashEntry | None) -> bool:

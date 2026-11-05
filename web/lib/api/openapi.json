@@ -78451,6 +78451,13 @@
             "type": "array",
             "title": "Features"
           },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ItemGoalsSnap"
+            },
+            "type": "array",
+            "title": "Items"
+          },
           "added_goal_id": {
             "anyOf": [
               {
@@ -86276,6 +86283,30 @@
           "changes"
         ],
         "title": "ItemFieldsDiff"
+      },
+      "ItemGoalsSnap": {
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Item Id"
+          },
+          "goal_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Goal Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_id",
+          "goal_ids"
+        ],
+        "title": "ItemGoalsSnap",
+        "description": "A roadmap item's own goals (``goal_ids``) before a goal's delete took one off."
       },
       "ItemHistoryOut": {
         "properties": {
