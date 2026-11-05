@@ -76,6 +76,7 @@ import {
   seedEngCheckRun,
   seedEngCheckUnmappedRun,
   shopBriefsCheck,
+  briefsCheckOf,
   seedRunDecisions,
   seedEngDatesRuns,
   seedBaselineReviewRun,
@@ -1786,6 +1787,18 @@ const seedEngCheckUnreadable = () =>
     check.problems = [{ code: "missing_file", message: "the segment left no tech_briefs.yaml" }];
   });
 
+/**
+ * "eng-check-cross-prd" scenario: the "eng-check" run whose first brief also depends on the
+ * account health ledger, a feature of the Safety PRD on the company roadmap (the owner, Nov 4):
+ * the check reads it and names it with its PRD, as oracle.engineering.check does.
+ */
+const seedEngCheckCrossPrd = () =>
+  seedEngCheckWith("eng-check-cross-prd", (check) => {
+    const briefs = (check as unknown as { features: Parameters<typeof briefsCheckOf>[0] }).features;
+    const linked = briefs.map((b, i) => (i === 0 ? { ...b, depends_on: [...b.depends_on, "account-health-ledger"] } : b));
+    Object.assign(check, briefsCheckOf(linked, undefined, undefined, { "account-health-ledger": "Account health ledger (Safety PRD)" }));
+  });
+
 /** "eng-check-long-key" scenario: the "eng-check" run whose first brief has a long key with no break in it. */
 const seedEngCheckLongKey = () =>
   seedEngCheckWith("eng-check-long-key", (check) => {
@@ -3276,6 +3289,8 @@ function load(): Db {
             ? seedEngCheckUnnamed
           : scenario === "eng-check-unreadable"
             ? seedEngCheckUnreadable
+          : scenario === "eng-check-cross-prd"
+            ? seedEngCheckCrossPrd
           : scenario === "eng-check-long-key"
             ? seedEngCheckLongKey
           : scenario === "eng-check-shop"
