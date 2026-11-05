@@ -65,7 +65,7 @@
       },
       {
        "file": "frames/ea-b-open.html",
-       "caption": "Edit agenda opens the Agenda sheet: every item numbered, with its minutes and 'topic' on its second line, arrows, Rename and ×; done and current items are fixed, and the item after Now has no up arrow."
+       "caption": "Edit agenda opens the Agenda sheet: every item numbered, with its minutes and 'topic' on its second line, arrows, Rename and ×; done and current items are fixed, the item after Now has no up arrow and the last no down arrow."
       },
       {
        "file": "frames/ea-b-mid.html",
@@ -212,7 +212,7 @@
       },
       {
        "file": "frames/et-b-hard-1512.html",
-       "caption": "At 1512 with 11 tracks: the sheet lists all of them, closed and empty ones too, and scrolls."
+       "caption": "At 1512 with 10 tracks: the sheet lists all of them, closed and empty ones too, and scrolls."
       },
       {
        "file": "frames/et-b-viewer.html",

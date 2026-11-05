@@ -2,6 +2,7 @@
 
 // MOCK-HOOK: mk-edit-meetings-tracks, decision 3 (?em=a|b|c): how a person moves a feature to another PRD or track of the one roadmap.
 import { InfoTip } from "@/components/ds"; // MOCK-HOOK
+import { usePhone } from "@/components/simple/FlowViews"; // MOCK-HOOK
 import { MK_DECIDERS, MK_PRDS, MK_PRDS_MANY } from "@/lib/api/mock/mk-edit-meetings-tracks"; // MOCK-HOOK
 
 import { MK_BTN, MK_CHIP, MK_FIELD, MK_PRIMARY, mk, useMkMode } from "./mk"; // MOCK-HOOK
@@ -105,7 +106,8 @@ export function TrackLine({ item }: { item: Moveable }) { // MOCK-HOOK
 export function TrackDropHook() { // MOCK-HOOK
   const mode = useMkMode(); // MOCK-HOOK
   const s = st(); // MOCK-HOOK
-  if (mk("em") !== "c" || mode === "read" || (s !== "open" && s !== "mid")) return null; // MOCK-HOOK
+  const phone = usePhone(); // MOCK-HOOK: no dragging on a phone
+  if (mk("em") !== "c" || mode === "read" || phone || (s !== "open" && s !== "mid")) return null; // MOCK-HOOK
   return ( // MOCK-HOOK
     <div className="relative px-2 py-1.5" data-mk-focus=""> {/* MOCK-HOOK */}
       <div className={`flex h-[44px] items-center rounded-lg border-2 border-dashed px-2 text-[15px] font-semibold ${s === "mid" ? "border-accent bg-accent-soft text-accent-ink" : "border-line text-text2"}`}>{TO}<span className="ml-1 text-xs font-normal">· empty</span></div> {/* MOCK-HOOK */}

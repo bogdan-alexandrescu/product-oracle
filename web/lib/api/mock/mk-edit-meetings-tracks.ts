@@ -61,7 +61,7 @@ export const MK_PEOPLE = ["Dana Whitfield", "Marco Ilves", "Priya Raman", "Leo B
 export const MK_PRDS_MANY: { title: string; tracks: string[] }[] = [ // MOCK-HOOK
   ...MK_PRDS, // MOCK-HOOK
   { title: "Team billing and invoices for large accounts", tracks: ["Invoices", "Tax rules", "Payment retries"] }, // MOCK-HOOK
-  { title: "Search everywhere", tracks: ["Search"] }, // MOCK-HOOK
+  { title: "Workspace search", tracks: ["Search index"] }, // MOCK-HOOK
 ]; // MOCK-HOOK
 
 /** MOCK-HOOK: who decides what an approver proposes: the meeting's decider, and the Guided setup track's owner for the track and its features. */
