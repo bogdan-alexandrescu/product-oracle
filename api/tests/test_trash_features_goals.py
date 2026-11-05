@@ -47,8 +47,9 @@ Test cards (protects / fails_when / no_claim):
   delete a feature that its decider then deletes is closed "Already in Trash";
   fails_when=it stays proposed; no_claim=goals (the same close).
 - test_a_purged_feature_leaves_no_milestone_or_dependency_on_it: protects=a purge takes
-  the feature's id out of milestones and its key out of other items' depends_on;
-  fails_when=either still names it; no_claim=decisions (they name it "(deleted)").
+  the feature's id out of milestones and its key out of other items' depends_on, and a
+  purged goal's id out of the items' goal_ids; fails_when=any still names it;
+  no_claim=decisions (they name it "(deleted)").
 """
 
 import uuid
@@ -433,6 +434,12 @@ async def test_a_commenters_goal_delete_is_a_proposal_to_its_decider(client):
     assert change["status"] == "proposed" and change["op"] == "delete_goal"
     assert "proposed: move the goal Grow to Trash" in change["words"]
     assert grow in [g["id"] for g in (await w.read(client))["goals"]]
+    # The owners read it among the changes, theirs to decide.
+    r = await client.get("/v1/simple/changes", headers=w.as_("owner"))
+    assert r.status_code == 200, r.text
+    mine = next(c for c in r.json() if c["id"] == change["id"])
+    assert mine["can_decide"] is True and str(w.ctx.users["owner"].id) in mine["routed_to"]
+    assert (await client.get("/v1/inbox", headers=w.as_("owner"))).status_code == 200
     r = await client.post(f"/v1/simple/changes/{change['id']}/accept",
                           headers=w.as_("commenter"))  # fmt: skip
     assert r.status_code == 403
@@ -471,3 +478,14 @@ async def test_a_purged_feature_leaves_no_milestone_or_dependency_on_it(client):
         m = await s.scalar(select(TrackMilestone).where(TrackMilestone.name == "Beta"))
         assert m.item_ids == []
         assert (await s.get(RoadmapItem, uuid.UUID(b))).depends_on == []
+
+    # A purged goal leaves the items' goal_ids.
+    r = await client.delete(f"{BUCKETS}/goals/{w.goal_id}", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        for entry in await trash_service.list_entries(s):
+            await trash_service.purge_entry(s, None, entry)
+        await s.commit()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        rows = await s.scalars(select(RoadmapItem).execution_options(**ALL))
+        assert all(uuid.UUID(w.goal_id) not in (r.goal_ids or []) for r in rows)

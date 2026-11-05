@@ -392,9 +392,18 @@ async def after_restore(db: AsyncSession, entry: TrashEntry) -> None:
 
 async def before_purge(db: AsyncSession, entry: TrashEntry) -> None:
     """A purged feature leaves nothing pointing at it: its id out of the milestones, its key
-    out of the depends_on of the roadmap's other items (every version and draft)."""
+    out of the depends_on of the roadmap's other items (every version and draft); a purged
+    goal's id leaves the items' goal_ids."""
     from oracle.roadmap.models import TrackMilestone
 
+    if entry.root_type == "goal":
+        # Its links go by cascade; the items that name it as their goal drop it.
+        for row in await db.scalars(
+            select(RoadmapItem).where(RoadmapItem.goal_ids.contains([entry.root_id]))
+            .execution_options(**ALL)
+        ):  # fmt: skip
+            row.goal_ids = [i for i in row.goal_ids if i != entry.root_id]
+        await db.flush()
     if entry.root_type != "feature":
         return
     rows = (
