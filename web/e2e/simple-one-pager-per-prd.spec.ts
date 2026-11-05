@@ -25,9 +25,10 @@ const LINE_2 = "A setup checklist that shows the next step";
 const OTHER_BET = "In scope: the cart summary, the shipping step and the order review page on web.";
 
 async function editLine2(page: Page, text: string, from = LINE_2) {
-  await page.getByRole("button", { name: `Edit “${from.slice(0, 30)}` }).click();
+  // The button names the line, cut to fit: its first words.
+  await page.getByRole("button", { name: `Edit “${from.slice(0, 20)}` }).click();
   await page.getByLabel("New wording for").fill(text);
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.locator('[data-line="bets-1"]')).toHaveAttribute("data-state", "edited");
 }
 
