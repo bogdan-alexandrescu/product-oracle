@@ -118,7 +118,7 @@ test("impact: the table view lists outputs by category with the inspector's depe
 test("impact: a what-if from a baseline item's drawer", async ({ page }) => {
   await scenario(page, "impact");
   await login(page);
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
   await page.getByRole("dialog", { name: "Guided setup" }).getByRole("link", { name: "What if it changed?" }).click();
   await expect(page).toHaveURL(/\/impact\/entities\/[^/]+$/);

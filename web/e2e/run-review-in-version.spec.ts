@@ -40,7 +40,7 @@ test("Decide in the Inbox and the runs list opens the version with the run revie
   const row = page.getByTestId("inbox-checkpoints").locator("tr[data-row]").filter({ hasText: "Usage alerts" });
   await row.getByRole("link", { name: "Decide" }).click();
   await expect(page).toHaveURL(new RegExp(`${VERSION}\\?run_review=`));
-  await expect(barText(page)).toHaveText("Run review · Baseline to PRD · draft v2 · 0 of 3 sections reviewed");
+  await expect(barText(page)).toHaveText("Run review · Ground Truth to PRD · draft v2 · 0 of 3 sections reviewed");
 
   await page.goto("/runs");
   const listed = page.getByTestId("run-row").filter({ hasText: "Usage alerts" }).filter({ has: page.getByRole("button", { name: "Decide" }) });
@@ -159,7 +159,7 @@ test("a commenter reads the run review without deciding it", async ({ page }) =>
   // no_claim=the API's 403 on decide.
   await start(page, "commenter@example.com");
   await page.goto(VERSION);
-  await expect(barText(page)).toHaveText("Run review · Baseline to PRD · draft v2 · 0 of 3 sections reviewed");
+  await expect(barText(page)).toHaveText("Run review · Ground Truth to PRD · draft v2 · 0 of 3 sections reviewed");
   await expect(bar(page)).toContainText("An approver decides");
   await expect(bar(page).getByRole("button")).toHaveCount(0);
 });
@@ -171,7 +171,7 @@ test("only the designated decider approves or sends back the run review; others 
   await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "run-review-decider"]);
   await login(page);
   await page.goto(VERSION);
-  await expect(barText(page)).toHaveText("Run review · Baseline to PRD · draft v2 · 0 of 3 sections reviewed");
+  await expect(barText(page)).toHaveText("Run review · Ground Truth to PRD · draft v2 · 0 of 3 sections reviewed");
   await expect(bar(page)).toContainText("Priya Raman decides (designated decider)");
   await expect(bar(page).getByRole("button")).toHaveCount(0);
 
@@ -193,14 +193,14 @@ test("with a designated decider, someone else's last section approval leaves the
   await login(page);
   await page.goto(VERSION);
   for (const key of KEYS) await approveSection(page, key);
-  await expect(barText(page)).toHaveText("Run review · Baseline to PRD · draft v2 · 3 of 3 sections reviewed");
+  await expect(barText(page)).toHaveText("Run review · Ground Truth to PRD · draft v2 · 3 of 3 sections reviewed");
   await expect(bar(page)).toContainText("Every section is approved · waits for Priya Raman, the designated decider");
   await expect(bar(page).getByRole("button")).toHaveCount(0);
 
   await signOut(page);
   await login(page, "approver@example.com");
   await page.goto(VERSION);
-  await expect(barText(page)).toHaveText("Run review · Baseline to PRD · draft v2 · 3 of 3 sections reviewed");
+  await expect(barText(page)).toHaveText("Run review · Ground Truth to PRD · draft v2 · 3 of 3 sections reviewed");
   await bar(page).getByRole("button", { name: "Approve draft" }).click();
   await expect(barText(page)).toContainText("3 of 3 sections reviewed · Approved");
 });

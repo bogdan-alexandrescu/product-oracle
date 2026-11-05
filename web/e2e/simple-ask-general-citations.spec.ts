@@ -17,7 +17,7 @@ import { ADMIN } from "./helpers";
  * touches the word or the footnote before it; no_claim=the real model's wording.
  */
 
-const QUESTION = "What are our focus areas, with their baseline features?";
+const QUESTION = "What are our focus areas, with their Ground Truth features?";
 
 async function tap(l: Locator) {
   await l.evaluate((el) => el.scrollIntoView({ block: "center" }));
@@ -79,7 +79,7 @@ for (const phone of [false, true]) {
       // Context citations are raised links to the baseline; the read is a raised number after them.
       const links = body.locator('sup a[data-testid="answer-cite"]');
       expect(await links.count()).toBeGreaterThan(2);
-      await expect(links.first()).toHaveAttribute("href", /^\/baseline#/);
+      await expect(links.first()).toHaveAttribute("href", /^\/ground-truth#/);
       const read = body.locator('sup span[data-testid="answer-cite"]');
       await expect(read).toHaveCount(1);
       await expect(read).toHaveAttribute("aria-label", /^Source \d+: Meeting notes · read /);

@@ -85,7 +85,7 @@ test("an approver opens a milestone and edits it", async ({ page }) => {
 test("the goal drawer shows a person's name and labelled attributes and history", async ({ page }) => {
   await withScenario(page, "goal-words");
   await login(page, "commenter@example.com");
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await page.getByTestId("goal-g.activation").getByRole("button", { name: "Raise activation" }).click();
   const d = page.getByRole("dialog", { name: "Raise activation" });
 
@@ -112,8 +112,8 @@ test("Why it needs you names one count", async ({ page }) => {
   await openPlan(page, "approver@example.com");
   await page.getByTestId("plan-row").filter({ visible: true }).filter({ hasText: "Daily alert digest email" }).first().click();
   const why = page.getByTestId("plan-inspector").filter({ visible: true }).getByTestId("plan-why");
-  await expect(why).toContainText("11 baseline items changed");
-  await expect(why).not.toContainText("42 baseline items");
+  await expect(why).toContainText("11 Ground Truth items changed");
+  await expect(why).not.toContainText("42 Ground Truth items");
   // Said once: the other reasons (its feature, goals and product, in words) are not counts.
-  expect((await why.innerText()).match(/baseline items changed/g)).toHaveLength(1);
+  expect((await why.innerText()).match(/Ground Truth items changed/g)).toHaveLength(1);
 });

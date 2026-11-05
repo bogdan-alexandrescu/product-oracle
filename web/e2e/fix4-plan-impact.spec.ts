@@ -16,7 +16,7 @@ const scenario = (page: Page, name: string) =>
 /** Baseline > a feature > "What if it changed?". */
 async function openWhatIf(page: Page, key: string, title: string) {
   await login(page);
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await page.getByTestId(`feature-${key}`).getByRole("button", { name: title }).click();
   await page.getByRole("dialog", { name: title }).getByRole("link", { name: "What if it changed?" }).click();
   await expect(page).toHaveURL(/\/impact\/entities\/[^/?]+$/);

@@ -119,7 +119,7 @@ test("qa-work-22: the actions stay on the title's line on every run, the cost ap
 test("qa-work-27: a viewer at a checkpoint is told who decides and that they can only read it", async ({ page }) => {
   await openRun(page, "team-onboarding", "viewer@example.com");
   const shared = page.getByTestId("shared-draft");
-  await expect(shared).toContainText("Confirm the baseline: waiting for a decision");
+  await expect(shared).toContainText("Confirm the Ground Truth: waiting for a decision");
   await expect(shared.getByTestId("checkpoint-who")).toHaveText("Approvers and owners can decide");
   await expect(shared).toContainText("You can read it; you can't decide it.");
   await expect(shared).not.toContainText("shared decision");

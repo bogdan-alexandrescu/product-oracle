@@ -6,8 +6,8 @@ import { login } from "./helpers";
 
 async function openItem(page: Page, key: string, title: string, email?: string) {
   await login(page, email);
-  await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await page.goto("/ground-truth");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   await page.getByTestId(`feature-${key}`).getByRole("button", { name: title }).click();
   return page.getByRole("dialog", { name: title });
 }

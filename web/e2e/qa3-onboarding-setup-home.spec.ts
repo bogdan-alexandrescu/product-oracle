@@ -36,7 +36,7 @@ test("Set up's buttons are named for their step", async ({ page }) => {
     ["eng_lead", "Open Engineering lead"],
     ["horizons", "Open Horizons"],
     ["timezone", "Open Time zone"],
-    ["build_baseline", "Open Build baseline"],
+    ["build_baseline", "Open Build the Ground Truth"],
   ] as const) {
     await expect(row(page, key).getByRole("link", { name, exact: true })).toBeVisible();
   }
@@ -51,16 +51,16 @@ test("the Goals card says Build the baseline from Set up, and starts it itself o
   // hidden checklist leaves the card with no way to build; no_claim=the build sheet.
   await newCompanyOwner(page);
   const hint = goals(page).getByTestId("goals-build-in-setup");
-  await expect(hint).toHaveText("Build the baseline from Set up, above");
-  await expect(goals(page).getByRole("link", { name: "Build the baseline" })).toHaveCount(0);
+  await expect(hint).toHaveText("Build the Ground Truth from Set up, above");
+  await expect(goals(page).getByRole("link", { name: "Build the Ground Truth" })).toHaveCount(0);
   await panel(page).getByRole("button", { name: "Hide" }).click();
   await expect(panel(page)).toHaveCount(0);
   await expect(hint).toHaveCount(0);
-  const build = goals(page).getByRole("link", { name: "Build the baseline" });
-  await expect(build).toHaveAttribute("href", "/baseline?build=1");
+  const build = goals(page).getByRole("link", { name: "Build the Ground Truth" });
+  await expect(build).toHaveAttribute("href", "/ground-truth?build=1");
   // Shown again, one baseline action again.
   await page.getByRole("button", { name: "Set up 2 of 8" }).click();
-  await expect(hint).toHaveText("Build the baseline from Set up, above");
+  await expect(hint).toHaveText("Build the Ground Truth from Set up, above");
   await expect(build).toHaveCount(0);
 });
 
@@ -85,10 +85,10 @@ test("while the first build runs: one Open the build, and its segment under way 
   await page.getByRole("navigation", { name: "Settings" }).getByRole("link", { name: "Back to Home" }).click();
   await expect(page).toHaveURL(/\/home$/);
   await expect(row(page, "sources")).toHaveAttribute("data-done", "true");
-  await row(page, "build_baseline").getByRole("link", { name: "Open Build baseline" }).click();
+  await row(page, "build_baseline").getByRole("link", { name: "Open Build the Ground Truth" }).click();
   // From Set up the sheet keeps the way back to Home (fix4-plan, qa-onboarding-17).
-  await expect(page).toHaveURL(/\/baseline\?build=1&from=setup$/);
-  const sheet = page.getByRole("dialog", { name: "Build the baseline" });
+  await expect(page).toHaveURL(/\/ground-truth\?build=1&from=setup$/);
+  const sheet = page.getByRole("dialog", { name: "Build the Ground Truth" });
   await sheet.getByRole("button", { name: "Start" }).click();
   await expect(sheet).toHaveCount(0);
   await page.getByTestId("nav-home").filter({ visible: true }).first().click();
@@ -98,7 +98,7 @@ test("while the first build runs: one Open the build, and its segment under way 
   await expect(row(page, "build_baseline").getByTestId("setup-status")).toHaveText("Building…");
   await expect(page.getByRole("link", { name: "Open the build" })).toHaveCount(1);
   await expect(row(page, "build_baseline").getByRole("link", { name: "Open the build" })).toHaveAttribute("href", /^\/runs\//);
-  await expect(goals(page).getByTestId("goals-build-in-setup")).toHaveText("The baseline is building: open it from Set up, above");
+  await expect(goals(page).getByTestId("goals-build-in-setup")).toHaveText("The Ground Truth is building: open it from Set up, above");
 
   // The run's details: its segments, the one under way marked Running, no "Next" repeating it.
   const flight = page.getByTestId("home-in-flight-table").getByTestId("flight-row");

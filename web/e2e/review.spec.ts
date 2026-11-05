@@ -106,7 +106,7 @@ test("a citation of Oracle's baseline reads 'Oracle baseline', its ref as text, 
       id: crypto.randomUUID(),
       cite_key: "o-g1",
       source: "oracle",
-      ref: "baseline goal g1 (activation), locked",
+      ref: "Ground Truth goal g1 (activation), locked",
       title: "Goal G1: raise first-order completion",
       excerpt: "Raise first-order completion from 61% to 70% by the end of Q4.",
       retrieved_at: "2026-10-20T17:02:00Z",
@@ -119,15 +119,15 @@ test("a citation of Oracle's baseline reads 'Oracle baseline', its ref as text, 
   await page.goto("/documents/checkout-redesign/v/2");
 
   const chip = (await openSection(page, "problem")).getByTestId("cite-o-g1");
-  await expect(chip).toHaveText(/Oracle baseline/);
+  await expect(chip).toHaveText(/Oracle Ground Truth/);
   await chip.hover();
   const card = page.getByRole("tooltip");
   await expect(card).toContainText("Goal G1: raise first-order completion");
-  await expect(card.getByTestId("cite-ref")).toHaveText("baseline goal g1 (activation), locked");
+  await expect(card.getByTestId("cite-ref")).toHaveText("Ground Truth goal g1 (activation), locked");
   await expect(card.getByRole("link")).toHaveCount(0);
 
   await openTab(page, "Sources");
-  const row = page.getByTestId("sources-list").filter({ visible: true }).getByRole("listitem").filter({ hasText: "Oracle baseline" });
+  const row = page.getByTestId("sources-list").filter({ visible: true }).getByRole("listitem").filter({ hasText: "Oracle Ground Truth" });
   await expect(row).toContainText("Goal G1: raise first-order completion");
   await expect(row.getByRole("link")).toHaveCount(0);
 });
@@ -206,7 +206,7 @@ test("open the diff: section badges and word-level changes", async ({ page }) =>
   await expect(byKey("metrics").locator("ins").first()).toContainText("Refund rate");
   // A markdown table is drawn as a table, as in the version view, not as pipe text.
   const table = byKey("metrics").getByTestId("diff-table");
-  await expect(table.getByRole("columnheader")).toHaveText(["Metric", "Baseline", "Target"]);
+  await expect(table.getByRole("columnheader")).toHaveText(["Metric", "Ground Truth", "Target"]);
   await expect(table.getByRole("row").filter({ hasText: "Refund rate" }).locator("ins").first()).toBeVisible();
   await expect(byKey("metrics")).not.toContainText("Metric | Baseline");
 

@@ -209,7 +209,7 @@ async def test_bulk_changes_name_the_count_that_applies_to_the_item_once(
                 "entity",
                 cause="entity_updated",
                 actor=None,
-                subject_ref=f"{n} baseline items",
+                subject_ref=f"{n} Ground Truth items",
                 data={"roots": roots, "entity_ids": [r["id"] for r in roots]},
             )
             await s.commit()
@@ -318,7 +318,7 @@ def _hiding(title: str) -> Hidden:
         # A half that reads as a ref-named reason ("plan:x renamed") is put into words.
         ("plan:enterprise renamed; tier two", "tier two"),
         # A half that reads as a counted reason is absorbed by a later count.
-        ("2 baseline items changed; tier two", "tier two"),
+        ("2 Ground Truth items changed; tier two", "tier two"),
     ],
 )
 def test_an_old_alert_line_cut_on_a_hidden_title_is_hidden_before_it_is_reworded(title, shown):
@@ -329,10 +329,12 @@ def test_an_old_alert_line_cut_on_a_hidden_title_is_hidden_before_it_is_reworded
     shown; no_claim=a title named in other words (Hidden.names)."""
     hidden = _hiding(title)
     detail = staleness.detail_for_reader(
-        f"{title} changed; 5 baseline items changed; requirement:x changed", hidden
+        f"{title} changed; 5 Ground Truth items changed; requirement:x changed", hidden
     )
     assert shown not in detail, detail
-    assert detail == f"{staleness.HIDDEN_REASON}; 5 baseline items changed; a requirement changed"
+    assert detail == (
+        f"{staleness.HIDDEN_REASON}; 5 Ground Truth items changed; a requirement changed"
+    )
 
 
 def test_an_old_alert_line_cut_on_a_hidden_title_keeps_its_other_reasons():

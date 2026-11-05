@@ -11,8 +11,8 @@ import { login, signOut } from "./helpers";
 
 async function openBaseline(page: Page, email?: string) {
   await login(page, email);
-  await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await page.goto("/ground-truth");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   await expect(page.getByTestId("goal-g.activation")).toBeVisible();
 }
 
@@ -151,7 +151,7 @@ test("measurements: Home shows 7 pts to go; Record value 40 today moves the char
   await expect(page.getByTestId("home-goal-G3").getByTestId("goal-to-go")).toHaveText("7 pts to go");
   await expect(page.getByTestId("home-goal-G1").getByTestId("goal-to-go")).toHaveText("No current value yet");
 
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await page.getByTestId("goal-g.activation").getByRole("button", { name: "Raise activation" }).click();
   const d = drawer(page, "Raise activation");
   const section = d.getByTestId("goal-measurements");
@@ -174,7 +174,7 @@ test("measurements: Home shows 7 pts to go; Record value 40 today moves the char
   await expect(page.getByTestId("home-goal-G3").getByTestId("goal-to-go")).toHaveText("5 pts to go");
 
   // Deleting it, with the in-page confirmation, rolls back to 38%.
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await page.getByTestId("goal-g.activation").getByRole("button", { name: "Raise activation" }).click();
   const row = d.getByTestId("goal-measurements").getByTestId("measurement-row").first();
   await row.getByRole("button", { name: /^Delete/ }).click();

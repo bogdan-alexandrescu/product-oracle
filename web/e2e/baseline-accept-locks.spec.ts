@@ -10,7 +10,7 @@ const LOCKED = "locked against Oracle's changes until a person unlocks it";
 
 test("the Proposals tab says Accept locks the item against Oracle's changes until a person unlocks it", async ({ page }) => {
   await login(page);
-  await page.goto("/baseline?tab=proposals");
+  await page.goto("/ground-truth?tab=proposals");
   const proposals = page.getByTestId("proposal");
   await expect(proposals.first()).toBeVisible();
   await expect(page.getByTestId("proposals-accept-help")).toContainText(LOCKED);

@@ -17,8 +17,8 @@ async function openLookup(page: Page, role?: "approver") {
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, BLOCKER_NARROWED_SCENARIO] as const);
   if (role) await page.addInitScript((r) => localStorage.setItem("po-mock-role", r), role);
   await login(page);
-  await page.goto("/baseline?tab=blockers");
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await page.goto("/ground-truth?tab=blockers");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   await page.getByTestId("blocker-row").filter({ hasText: LOOKUP }).click();
   const insp = page.getByTestId("blocker-inspector");
   await expect(insp.getByRole("heading", { name: LOOKUP })).toBeVisible();

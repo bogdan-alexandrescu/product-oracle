@@ -43,10 +43,10 @@ test.describe("at 1440", () => {
 
   test("qa4-company-45: a checkpoint line reads 'Baseline proposal · Team onboarding'", async ({ page }) => {
     await openHome(page);
-    const row = lines(page).filter({ hasText: "Baseline proposal" }).first();
+    const row = lines(page).filter({ hasText: "Ground Truth proposal" }).first();
     await expect(row).toBeVisible();
-    await expect(row).toContainText("Baseline proposal · Team onboarding");
-    await expect(row).not.toContainText(/Baseline proposal\s*Team onboarding/);
+    await expect(row).toContainText("Ground Truth proposal · Team onboarding");
+    await expect(row).not.toContainText(/Ground Truth proposal\s*Team onboarding/);
   });
 
   test("qa4-company-46: a section question names the section without its outline number", async ({ page }) => {

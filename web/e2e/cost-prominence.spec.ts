@@ -55,7 +55,7 @@ for (const size of SIZES) {
     });
 
     test("run page of a waiting run: one small Cost line in Details, no Cost section, no bar", async ({ page }) => {
-      const inspector = await openRun(page, "team-onboarding", "Baseline to PRD");
+      const inspector = await openRun(page, "team-onboarding", "Ground Truth to PRD");
       await expect(inspector.getByTestId("run-cost-section")).toHaveCount(0);
       await expect(inspector.getByTestId("spend-bar")).toHaveCount(0);
       const details = inspector.getByTestId("run-details");
@@ -75,7 +75,7 @@ for (const size of SIZES) {
     });
 
     test("run page awaiting cost approval: the Cost approval section, prominent, no per-segment cost", async ({ page }) => {
-      const inspector = await openRun(page, "usage-alerts-v2", "Baseline to PRD");
+      const inspector = await openRun(page, "usage-alerts-v2", "Ground Truth to PRD");
       const section = inspector.getByTestId("run-cost-section");
       await expect(section).toContainText("Cost approval");
       await expect(section.locator('[data-cost="prominent"]')).toHaveText(/^\$[\d,.]+ estimated$/);

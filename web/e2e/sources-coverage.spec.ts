@@ -89,7 +89,7 @@ test("coverage: Used in leads to the baseline item and to the document version",
   const used = inspector(page).getByRole("list", { name: "Used in" });
   await expect(used.getByRole("listitem")).toHaveCount(3);
   await used.getByRole("link", { name: /Dark mode/ }).click();
-  await expect(page).toHaveURL(/\/baseline\?entity=[0-9a-f-]+$/);
+  await expect(page).toHaveURL(/\/ground-truth\?entity=[0-9a-f-]+$/);
   await expect(page.getByRole("dialog", { name: "Dark mode" })).toBeVisible();
 
   await page.goBack();

@@ -18,8 +18,8 @@ async function setZone(page: Page, zone: string) {
 }
 
 async function openProposals(page: Page) {
-  await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await page.goto("/ground-truth");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   await page.getByRole("tab", { name: /Proposals/ }).click();
   await expect(page.getByTestId("proposal")).toHaveCount(3);
 }
@@ -31,16 +31,16 @@ async function openProposals(page: Page) {
 test("proposals: the run that made them is named with the Company day", async ({ page }) => {
   await login(page);
   await openProposals(page);
-  await expect(page.getByLabel("From").locator("option")).toContainText(["Baseline to PRD · Oct 16"]);
+  await expect(page.getByLabel("From").locator("option")).toContainText(["Ground Truth to PRD · Oct 16"]);
 
   await setZone(page, "Pacific/Honolulu");
   await openProposals(page);
-  const label = "Baseline to PRD · Oct 15";
+  const label = "Ground Truth to PRD · Oct 15";
   await expect(page.getByLabel("From").locator("option")).toContainText([label]);
   const rows = page.getByTestId("proposal");
   const link = rows.filter({ hasText: "Guided setup" }).getByRole("link", { name: `From run · ${label}` });
   await expect(link).toHaveAttribute("href", `/runs/${AGENT_RUN}`);
-  await expect(page.getByText("Baseline to PRD · Oct 16")).toHaveCount(0);
+  await expect(page.getByText("Ground Truth to PRD · Oct 16")).toHaveCount(0);
 });
 
 const PROBLEM = "Returning buyers retype their address at every checkout. Saved addresses would make repeat checkout faster.";
@@ -72,7 +72,7 @@ test("reuse: the baseline's approval day is the Company day in the sheet and on 
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
 
   const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });
-  await expect(sheet.getByRole("radio", { name: `Use the current baseline (approved ${day})` })).toBeChecked();
+  await expect(sheet.getByRole("radio", { name: `Use the current Ground Truth (approved ${day})` })).toBeChecked();
   await sheet.getByRole("button", { name: "Estimate" }).click();
   // F4 (#181): the Engineering check and the Engineering dates are on by default, $5.00 each in the estimate (eng-review.spec.ts, eng-dates.spec.ts).
   await expect(sheet.getByTestId("draft-estimate")).toContainText("$29.50 estimated");

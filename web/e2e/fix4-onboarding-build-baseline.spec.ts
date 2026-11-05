@@ -12,7 +12,7 @@ import { login } from "./helpers";
 const DESKTOP = { width: 1440, height: 900 };
 
 const row = (page: Page, key: string) => page.getByTestId(`setup-row-${key}`);
-const sheet = (page: Page) => page.getByRole("dialog", { name: "Build the baseline" });
+const sheet = (page: Page) => page.getByRole("dialog", { name: "Build the Ground Truth" });
 const settingsNav = (page: Page) => page.getByRole("navigation", { name: "Settings" });
 
 async function newCompany(page: Page) {
@@ -26,7 +26,7 @@ async function openBuildFromSetup(page: Page) {
   const build = row(page, "build_baseline");
   await expect(build.getByTestId("setup-status")).toHaveText("Not built");
   await build.getByTestId("setup-action").click();
-  await expect(page).toHaveURL(/\/baseline\?build=1&from=setup$/);
+  await expect(page).toHaveURL(/\/ground-truth\?build=1&from=setup$/);
   await expect(sheet(page)).toBeVisible();
   await expect(sheet(page).getByTestId("build-estimate")).toContainText("estimated");
 }
@@ -85,7 +85,7 @@ test("qa-onboarding-2: Start waits for a source with items, then the first build
   await expect(sheet(page).getByRole("button", { name: "Start" })).toBeEnabled();
   await sheet(page).getByRole("button", { name: "Start" }).click();
   await expect(sheet(page)).toHaveCount(0);
-  await expect(page.getByTestId("baseline-build-banner")).toContainText("Baseline being built");
+  await expect(page.getByTestId("baseline-build-banner")).toContainText("Ground Truth being built");
 
   // 4. Home: the row follows the build.
   await page.getByTestId("nav-home").filter({ visible: true }).first().click();
@@ -107,8 +107,8 @@ test("qa-onboarding-17: the no-sources link keeps the way back to Home when open
   await expect(page).toHaveURL(/\/home$/);
 
   // From the Baseline page's own Build baseline, the link is plain Sources.
-  await page.goto("/baseline");
-  await page.getByRole("button", { name: "Build baseline" }).click();
+  await page.goto("/ground-truth");
+  await page.getByRole("button", { name: "Build the Ground Truth" }).click();
   await expect(sheet(page).getByRole("link", { name: "Add files or sync a source" })).toHaveAttribute("href", "/settings/sources");
 });
 

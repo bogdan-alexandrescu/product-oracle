@@ -10,8 +10,8 @@ const SECOND = "Moved below the line after sizing.";
 async function openProposals(page: Page) {
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "proposal-overlap"));
   await login(page);
-  await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await page.goto("/ground-truth");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   await page.getByRole("tab", { name: /Proposals/ }).click();
   await expect(page.getByTestId("proposal").filter({ hasText: SECOND })).toBeVisible();
 }

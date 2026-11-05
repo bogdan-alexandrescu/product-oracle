@@ -92,7 +92,7 @@ test("qa-onboarding-48: a new company's owner switches to Simple, sees the setup
 
   // The welcome and its steps, first on a new company's Home (above the empty goal band).
   await expect(setupCard(page).getByRole("heading", { name: "Welcome: set up Oracle" })).toBeVisible();
-  await expect(setupCard(page)).toContainText("connect your tools, pick the sources it reads, then build the baseline");
+  await expect(setupCard(page)).toContainText("connect your tools, pick the sources it reads, then build the Ground Truth");
   await expect(progress(page)).toHaveText("2 of 8 done");
   await expect(setupCard(page).getByTestId("home-setup-step")).toHaveText([
     // fix4 (qa-onboarding-19): Detailed's words and figures.
@@ -103,7 +103,7 @@ test("qa-onboarding-48: a new company's owner switches to Simple, sees the setup
     /^Engineering lead\s*None$/,
     /^Horizons\s*Not checked$/,
     /^Time zone\s*Not set · Pacific is used$/,
-    /^Build baseline\s*Not built$/,
+    /^Build the Ground Truth\s*Not built$/,
   ]);
   const card = (await setupCard(page).boundingBox())!;
   const goals = (await page.getByTestId("simple-page").getByTestId("home-goals").boundingBox())!;
@@ -132,8 +132,8 @@ test("qa-onboarding-48: a new company's owner switches to Simple, sees the setup
   await expect(progress(page)).toHaveText("6 of 8 done");
   // Sources and the baseline are still to do: the card stays, each still one click away.
   await expect(setupCard(page).getByRole("link", { name: "Pick sources", exact: true })).toHaveAttribute("href", "/settings/sources?from=simple-setup");
-  await expect(setupCard(page).getByRole("link", { name: "Build baseline", exact: true })).toHaveAttribute("href", "/baseline?build=1");
-  await openStep(page, "Build baseline", /\/baseline\?build=1$/);
+  await expect(setupCard(page).getByRole("link", { name: "Build the Ground Truth", exact: true })).toHaveAttribute("href", "/ground-truth?build=1");
+  await openStep(page, "Build the Ground Truth", /\/ground-truth\?build=1$/);
 });
 
 test("qa-onboarding-4: an established company's Simple Home has no setup card", async ({ page }) => {

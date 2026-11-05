@@ -72,10 +72,10 @@ for (const phone of [false, true]) {
       // The default company: one run waits on the owner to confirm its baseline.
       await signIn(page, ADMIN.email);
       await expect(stops(page)).toHaveCount(1);
-      await expect(page.getByRole("region", { name: "Confirm the baseline: Team onboarding PRD" }).getByRole("link")).toHaveText("Confirm the baseline");
+      await expect(page.getByRole("region", { name: "Confirm the Ground Truth: Team onboarding PRD" }).getByRole("link")).toHaveText("Confirm the Ground Truth");
       await expect(page.getByTestId("home-sentence")).toContainText("a run wait on you.");
       // Its button opens the run at that stop; once confirmed there, Home has no card and no run in the greeting.
-      await stops(page).getByRole("link", { name: "Confirm the baseline" }).click();
+      await stops(page).getByRole("link", { name: "Confirm the Ground Truth" }).click();
       await expect(page).toHaveURL(/\/runs\/[^/?]+/);
       await page.getByRole("button", { name: "Approve and continue" }).first().click();
       await expect(page.getByRole("button", { name: "Approve and continue" })).toHaveCount(0);
@@ -109,7 +109,7 @@ for (const phone of [false, true]) {
     test(`back to Home after confirming: the confirmed stop's card is not drawn from before (${where})`, async ({ page }) => {
       await signIn(page, ADMIN.email);
       await expect(stops(page)).toHaveCount(1);
-      await stops(page).getByRole("link", { name: "Confirm the baseline" }).click();
+      await stops(page).getByRole("link", { name: "Confirm the Ground Truth" }).click();
       await expect(page).toHaveURL(/\/runs\/[^/?]+/);
       await page.getByRole("button", { name: "Approve and continue" }).first().click();
       await expect(page.getByRole("button", { name: "Approve and continue" })).toHaveCount(0);

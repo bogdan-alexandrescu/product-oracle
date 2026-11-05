@@ -201,7 +201,7 @@ test.describe("desktop", () => {
     await expect(goes.getByTestId("delete-run").first()).toHaveText(
       /^The run of [A-Z][a-z]{2} \d{1,2} that wrote /,
     );
-    await expect(goes).not.toContainText("Baseline to PRD");
+    await expect(goes).not.toContainText("Ground Truth to PRD");
     await expect(goes).not.toContainText(/Run\s{2}/);
   });
 

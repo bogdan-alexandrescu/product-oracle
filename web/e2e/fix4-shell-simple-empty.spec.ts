@@ -25,7 +25,7 @@ async function newCompany(page: Page) {
   );
 }
 
-const NO_GOALS = /^No features yet: confirm your company’s goals in Detailed › Baseline and /;
+const NO_GOALS = /^No features yet: confirm your company’s goals in Detailed › Ground Truth and /;
 
 for (const [where, use] of [
   ["desktop", { viewport: { width: 1440, height: 900 } }],
@@ -73,9 +73,9 @@ for (const [where, use] of [
       await expect(roadmap.getByTestId("quick-add")).toHaveCount(0);
 
       // The link works: it opens Detailed's Baseline.
-      await empty.getByRole("link", { name: "Detailed › Baseline" }).click();
-      await expect(page).toHaveURL(/\/baseline$/);
-      await expect(page.getByRole("heading", { name: "Baseline" }).first()).toBeVisible();
+      await empty.getByRole("link", { name: "Detailed › Ground Truth" }).click();
+      await expect(page).toHaveURL(/\/ground-truth$/);
+      await expect(page.getByRole("heading", { name: "Ground Truth" }).first()).toBeVisible();
     });
   });
 }

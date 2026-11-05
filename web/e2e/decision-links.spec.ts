@@ -44,7 +44,7 @@ test("a proposal names the baseline items, evidence and document it is about; th
   await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: `Priya Raman · ${APPROVER}` });
 
   const evidence = dialog.getByRole("group", { name: "Evidence" });
-  await expect(evidence).toContainText("Link a baseline item to pick from its evidence");
+  await expect(evidence).toContainText("Link a Ground Truth item to pick from its evidence");
   const linked = dialog.getByRole("group", { name: "Linked items" });
   await linked.getByLabel("Find an item to link").fill("guided");
   await linked.getByRole("button", { name: /^Guided setup · Feature/ }).click();
@@ -69,7 +69,7 @@ test("a proposal names the baseline items, evidence and document it is about; th
     const ins = inspector(page);
     await expect(ins).toContainText("Point new accounts to payment setup first");
     const restsOn = ins.getByTestId("decision-rests-on");
-    await expect(restsOn.getByRole("link", { name: "Guided setup" })).toHaveAttribute("href", /\/baseline\?entity=/);
+    await expect(restsOn.getByRole("link", { name: "Guided setup" })).toHaveAttribute("href", /\/ground-truth\?entity=/);
     await expect(restsOn).not.toContainText("Cut early churn");
     await expect(restsOn.getByTestId("decision-evidence")).toHaveCount(1);
     await expect(restsOn.getByTestId("decision-evidence")).toContainText(STALL);
@@ -90,26 +90,26 @@ test("editing a proposal changes its linked items, evidence and subjects", async
   await linked.getByRole("button", { name: /^Guided setup · Feature/ }).click();
   await form.getByRole("group", { name: "Evidence" }).getByRole("checkbox", { name: new RegExp(STALL) }).check();
   const about = form.getByRole("group", { name: "About" });
-  await about.getByLabel("Kind", { exact: true }).selectOption({ label: "Baseline item" });
+  await about.getByLabel("Kind", { exact: true }).selectOption({ label: "Ground Truth item" });
   await about.getByLabel("Item", { exact: true }).selectOption({ label: "Guided setup" });
   await about.getByRole("button", { name: "Add", exact: true }).click();
   await form.getByRole("button", { name: "Save changes" }).click();
   await expect(form).toHaveCount(0);
   await expect(inspector(page).getByTestId("decision-evidence")).toContainText(STALL);
-  await expect(inspector(page).getByRole("link", { name: "Baseline item Guided setup" })).toBeVisible();
+  await expect(inspector(page).getByRole("link", { name: "Ground Truth item Guided setup" })).toBeVisible();
 
   // Edit again: the form holds what was saved; unticking and removing clears them.
   await inspector(page).getByRole("button", { name: "Edit", exact: true }).click();
   const again = inspector(page).getByRole("form", { name: "Edit decision" });
   await expect(again.getByRole("group", { name: "Linked items" }).getByRole("button", { name: "Remove Guided setup" })).toBeVisible();
   await again.getByRole("group", { name: "Evidence" }).getByRole("checkbox", { name: new RegExp(STALL) }).uncheck();
-  await again.getByRole("group", { name: "About" }).getByRole("button", { name: "Remove Baseline item Guided setup" }).click();
+  await again.getByRole("group", { name: "About" }).getByRole("button", { name: "Remove Ground Truth item Guided setup" }).click();
   await again.getByRole("button", { name: "Save changes" }).click();
   await expect(again).toHaveCount(0);
   await page.reload();
   await expect(inspector(page).getByRole("link", { name: "Guided setup" })).toBeVisible();
   await expect(inspector(page).getByTestId("decision-evidence")).toHaveCount(0);
-  await expect(inspector(page).getByRole("link", { name: "Baseline item Guided setup" })).toHaveCount(0);
+  await expect(inspector(page).getByRole("link", { name: "Ground Truth item Guided setup" })).toHaveCount(0);
 });
 
 test("a decision with a prediction shows its outcome's status under Expected and opens it in Outcomes", async ({ page }) => {
@@ -177,7 +177,7 @@ test("a title-only edit saves after evidence the decision rests on is removed fr
   await expect(form).toHaveCount(0);
   await expect(inspector(page).getByTestId("decision-evidence")).toContainText(STALL);
 
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
   const drawer = page.getByRole("dialog", { name: "Guided setup" });
   await drawer.getByRole("list", { name: "Evidence" }).getByRole("button", { name: "Remove example-org/storefront#128" }).click();
@@ -222,10 +222,10 @@ test("a commenter's edit keeps a linked item only approvers may see, and never s
   await expect(inspector(page)).not.toContainText(PRICING);
   await inspector(page).getByRole("button", { name: "Edit", exact: true }).click();
   const mine = inspector(page).getByRole("form", { name: "Edit decision" });
-  await expect(mine.getByRole("group", { name: "Linked items" })).not.toContainText("A baseline item");
+  await expect(mine.getByRole("group", { name: "Linked items" })).not.toContainText("A Ground Truth item");
   await expect(mine).not.toContainText(PRICING);
   await mine.getByRole("group", { name: "Linked items" }).getByLabel("Find an item to link").fill("starter plan");
-  await expect(mine.getByRole("group", { name: "Linked items" })).toContainText("No baseline item matches");
+  await expect(mine.getByRole("group", { name: "Linked items" })).toContainText("No Ground Truth item matches");
   await mine.getByRole("button", { name: "Cancel" }).click();
   await editTitle(page, `${CAPS}, revised`);
   await expect(inspector(page)).not.toContainText(UUID);

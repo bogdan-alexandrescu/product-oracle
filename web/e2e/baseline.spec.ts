@@ -6,8 +6,8 @@ import { login } from "./helpers";
 
 async function openBaseline(page: Page) {
   await login(page);
-  await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await page.goto("/ground-truth");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   await expect(page.getByTestId("goal-g.activation")).toBeVisible();
 }
 
@@ -275,7 +275,7 @@ test("baseline: an approver accepts and rejects proposals", async ({ page }) => 
   await expect(onLocked.getByTestId("proposal-op")).toHaveText("Change:");
   await expect(onLocked.getByLabel("Proposed fields")).toHaveText("effort → L");
   await expect(onLocked).toContainText("The setup review estimated more work than planned.");
-  await expect(onLocked).toContainText("From run · Baseline to PRD · Oct 16");
+  await expect(onLocked).toContainText("From run · Ground Truth to PRD · Oct 16");
 
   await onLocked.getByRole("button", { name: "Accept" }).click();
   await expect(page.getByRole("status")).toContainText("Proposal accepted");
@@ -328,7 +328,7 @@ test("baseline: a viewer reads everything but sees no write buttons", async ({ p
 // B3 Proposals by run. The mock seeds two proposals from one Baseline to PRD run (started
 // Oct 16) and one from a commenter, with no run.
 const AGENT_RUN = "0b7e5d4c-3a29-4118-9f07-e6d5c4b3a291";
-const RUN_LABEL = "Baseline to PRD · Oct 16";
+const RUN_LABEL = "Ground Truth to PRD · Oct 16";
 
 async function openProposals(page: Page) {
   await openBaseline(page);
@@ -377,7 +377,7 @@ test("baseline: proposals filtered by the run that made them", async ({ page }) 
  */
 test("baseline: reloading a run's proposals link restores the filter", async ({ page }) => {
   await openBaseline(page);
-  await page.goto(`/baseline?tab=proposals&run=${AGENT_RUN}`);
+  await page.goto(`/ground-truth?tab=proposals&run=${AGENT_RUN}`);
   await expect(page.getByRole("tab", { name: /Proposals/ })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByLabel("From")).toHaveValue(AGENT_RUN);
   await expect(page.getByTestId("proposal")).toHaveCount(2);
@@ -404,7 +404,7 @@ test("baseline: each run's proposal links to its run", async ({ page }) => {
 
   await rows.filter({ hasText: "Guided setup" }).getByRole("link", { name: /From run/ }).click();
   await expect(page).toHaveURL(new RegExp(`/runs/${AGENT_RUN}$`));
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
 });
 
 /**
@@ -416,13 +416,13 @@ test("baseline: each run's proposal links to its run", async ({ page }) => {
 test("baseline: the run page counts its open proposals and Review opens them", async ({ page }) => {
   await login(page);
   await page.goto(`/runs/${AGENT_RUN}`);
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
   const count = page.getByTestId("run-proposals");
   await expect(count).toHaveText("2 to review · Review");
   await expect(page.getByTestId("run-proposals-row")).toContainText("Changes it proposed");
 
   await count.getByRole("link", { name: "Review" }).click();
-  await expect(page).toHaveURL(new RegExp(`/baseline\\?tab=proposals&run=${AGENT_RUN}$`));
+  await expect(page).toHaveURL(new RegExp(`/ground-truth\\?tab=proposals&run=${AGENT_RUN}$`));
   const rows = page.getByTestId("proposal");
   await expect(rows).toHaveCount(2);
   await rows.filter({ hasText: "Guided setup" }).getByRole("button", { name: "Accept" }).click();
@@ -506,7 +506,7 @@ test("baseline: each proposal says who made it", async ({ page, browser }) => {
   const context = await browser.newContext();
   const theirs = await context.newPage();
   await login(theirs, "commenter@example.com");
-  await theirs.goto("/baseline?tab=proposals");
+  await theirs.goto("/ground-truth?tab=proposals");
   const own = theirs.getByTestId("proposal").filter({ hasText: "Team invites" });
   await expect(own.getByTestId("proposal-summary")).toHaveText(SENTENCES["Team invites"]);
   await expect(own.getByTestId("proposal-by")).toHaveText(/^You · Oct \d+/);

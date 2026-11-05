@@ -62,10 +62,10 @@ test("qa-onboarding-5: a new company with no approved baseline is offered only B
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
   const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });
   const none = sheet.getByTestId("draft-baseline-none");
-  await expect(none).toContainText("Build the baseline ($7.00)");
-  await expect(none).toContainText("No baseline exists yet");
+  await expect(none).toContainText("Build the Ground Truth ($7.00)");
+  await expect(none).toContainText("No Ground Truth exists yet");
   await expect(sheet.getByRole("radio")).toHaveCount(0);
-  await expect(sheet).not.toContainText("Use the current baseline");
+  await expect(sheet).not.toContainText("Use the current Ground Truth");
 });
 
 test("qa-onboarding-28: the day's read cap shows before the first read", async ({ page }) => {

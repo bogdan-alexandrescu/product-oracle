@@ -318,7 +318,7 @@ async def test_one_workflow_credential_map_and_step_inputs(client, owner):
     # Prompts name the tools; nothing earlier is pasted.
     second = next(s for s in agents if s["step_id"].startswith("feature_set-1"))
     assert "get_run_output(seq, name)" in second["input"]["prompt"]
-    assert "seq 1 (Baseline proposal): baseline.yaml, summary.md" in second["input"]["prompt"]
+    assert "seq 1 (Ground Truth proposal): baseline.yaml, summary.md" in second["input"]["prompt"]
     assert "Outputs of earlier segments:" not in second["input"]["prompt"]
     assert second["depends_on"] == ["baseline-review1"]
     body = (await client.get("/v1/runtime/status", headers=auth)).json()

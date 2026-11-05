@@ -42,8 +42,8 @@ async function inOrder(list: Locator, want: string[]) {
 }
 
 async function setPositions(page: Page) {
-  await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await page.goto("/ground-truth");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   for (const [key, name, position] of POSITIONS) {
     const row = page.getByTestId(`goal-${key}`);
     await row.getByRole("button", { name, exact: true }).click();
@@ -104,7 +104,7 @@ for (const [label, viewport] of [
       await inOrder(byGoal, expected("Grow paid conversion", "Raise activation"));
 
       // Detailed > Baseline > Flagged: the Goal coverage grid.
-      await page.goto("/baseline");
+      await page.goto("/ground-truth");
       await page.getByRole("tab", { name: /Flagged/ }).click();
       await inOrder(page.getByRole("grid", { name: "Goal coverage" }).getByRole("row"), NAMES);
     });
@@ -112,7 +112,7 @@ for (const [label, viewport] of [
     test("the Position field refuses a number below 1", async ({ page }) => {
       await page.context().addInitScript(([key]) => localStorage.setItem(key, "simple-home"), [MOCK_SCENARIO_KEY]);
       await login(page);
-      await page.goto("/baseline");
+      await page.goto("/ground-truth");
       await page.getByTestId("goal-grow-retention").getByRole("button", { name: "Grow retention", exact: true }).click();
       const drawer = page.getByRole("dialog").last();
       await drawer.getByRole("button", { name: "Edit" }).click();

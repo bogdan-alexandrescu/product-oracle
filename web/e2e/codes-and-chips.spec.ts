@@ -13,8 +13,8 @@ import { login } from "./helpers";
 
 async function openBaseline(page: Page) {
   await login(page);
-  await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await page.goto("/ground-truth");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
 }
 
 for (const [size, viewport] of [

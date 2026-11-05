@@ -31,7 +31,7 @@ test("impact: the lineage names a baseline item's kind, not its raw key", async 
   await login(page);
   // A version's preview reaches only that document's sections (as the API's): a baseline
   // item is an upstream on its own what-if, opened from its drawer as a person would.
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
   await page.getByRole("dialog", { name: "Guided setup" }).getByRole("link", { name: "What if it changed?" }).click();
   await expect(page).toHaveURL(/\/impact\/entities\/[^/]+$/);

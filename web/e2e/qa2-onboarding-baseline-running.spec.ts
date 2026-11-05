@@ -22,8 +22,8 @@ async function startFromSetup(page: Page) {
   const row = setupRow(page);
   await expect(row.getByTestId("setup-status")).toHaveText("Not built");
   // One baseline action before the build: the row's Open; the Goals card points at it.
-  await expect(goals(page).getByTestId("goals-build-in-setup")).toHaveText("Build the baseline from Set up, above");
-  await expect(goals(page).getByRole("link", { name: "Build the baseline" })).toHaveCount(0);
+  await expect(goals(page).getByTestId("goals-build-in-setup")).toHaveText("Build the Ground Truth from Set up, above");
+  await expect(goals(page).getByRole("link", { name: "Build the Ground Truth" })).toHaveCount(0);
   // Start waits for a source with items (qa-onboarding-2): Pick sources first, a file in an upload source.
   await page.getByTestId("setup-row-sources").getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/settings\/sources\?from=setup$/);
@@ -39,8 +39,8 @@ async function startFromSetup(page: Page) {
   await page.getByRole("navigation", { name: "Settings" }).getByRole("link", { name: "Back to Home" }).click();
   await expect(page).toHaveURL(/\/home$/);
   await row.getByRole("link", { name: "Open" }).click();
-  await expect(page).toHaveURL(/\/baseline\?build=1&from=setup$/);
-  const sheet = page.getByRole("dialog", { name: "Build the baseline" });
+  await expect(page).toHaveURL(/\/ground-truth\?build=1&from=setup$/);
+  const sheet = page.getByRole("dialog", { name: "Build the Ground Truth" });
   await sheet.getByRole("button", { name: "Start" }).click();
   await expect(sheet).toHaveCount(0);
   // The build banner says it, with the Inbox item to come (qa-onboarding-25: one line, not a toast too).
@@ -59,9 +59,9 @@ async function seeBuilding(page: Page): Promise<string> {
   const href = (await link.getAttribute("href"))!;
   // No "Not built" and no second start anywhere on Home.
   await expect(row).not.toContainText("Not built");
-  await expect(page.getByRole("link", { name: "Build the baseline" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Build the Ground Truth" })).toHaveCount(0);
   await expect(goals(page).getByRole("link", { name: "Open the build" })).toHaveCount(0);
-  await expect(goals(page).getByTestId("goals-build-in-setup")).toHaveText("The baseline is building: open it from Set up, above");
+  await expect(goals(page).getByTestId("goals-build-in-setup")).toHaveText("The Ground Truth is building: open it from Set up, above");
   await expect(page.getByRole("link", { name: "Open the build" })).toHaveCount(1);
   return href;
 }
@@ -76,8 +76,8 @@ test("while the first build runs, Set up says Building… and opens the build; t
   await expect(page.getByTestId("home-in-flight-table").getByTestId("flight-row")).toHaveCount(1);
   await setupRow(page).getByRole("link", { name: "Open the build" }).click();
   await expect(page).toHaveURL(new RegExp(`${href}$`));
-  await expect(page.getByRole("heading", { name: "Build the baseline" }).first()).toBeVisible();
-  await expect(page.getByRole("dialog", { name: "Build the baseline" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Build the Ground Truth" }).first()).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Build the Ground Truth" })).toHaveCount(0);
 });
 
 test.describe("on a phone", () => {

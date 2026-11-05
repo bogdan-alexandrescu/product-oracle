@@ -24,9 +24,9 @@ test("a run that does not exist says so, with a way back to Runs", async ({ page
 test("a role refusal says who can act, not a status", async ({ page, context }) => {
   // The approver opens the build sheet; an owner, in another tab, makes them a commenter.
   await login(page, "approver@example.com");
-  await page.goto("/baseline");
-  await page.getByRole("button", { name: "Build baseline" }).click();
-  const sheet = page.getByRole("dialog", { name: "Build the baseline" });
+  await page.goto("/ground-truth");
+  await page.getByRole("button", { name: "Build the Ground Truth" }).click();
+  const sheet = page.getByRole("dialog", { name: "Build the Ground Truth" });
   await expect(sheet.getByTestId("build-estimate")).toHaveText("$7.00 estimated · below the $50 approval line · starts at once");
 
   const owner = await context.newPage();

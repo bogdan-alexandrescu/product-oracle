@@ -235,7 +235,7 @@ test.describe("phone", () => {
 
 test("fix-work review: New request does not offer a rejected goal", async ({ page }) => {
   await login(page);
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await page.getByTestId("goal-g.early-churn").getByRole("button", { name: "Cut early churn" }).click();
   const d = page.getByRole("dialog", { name: "Cut early churn" });
   await d.getByRole("button", { name: "Reject" }).click();

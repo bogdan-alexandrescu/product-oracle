@@ -54,8 +54,8 @@ test("qa-onboarding-47, qa-onboarding-12: a new company goes from its first requ
   await expect(panel).not.toContainText("Link a confirmed goal first");
 
   // The way to a goal: Build the baseline.
-  await needs.getByRole("link", { name: "Build the baseline" }).click();
-  await expect(page).toHaveURL(/\/baseline\?build=1$/);
+  await needs.getByRole("link", { name: "Build the Ground Truth" }).click();
+  await expect(page).toHaveURL(/\/ground-truth\?build=1$/);
 
   // On to a first PRD, as a new owner would: PRDs > New PRD, a title and the problem, Continue to the brief.
   await page.keyboard.press("Escape");
@@ -72,10 +72,10 @@ test("qa-onboarding-47, qa-onboarding-12: a new company goes from its first requ
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
   const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });
   const none = sheet.getByTestId("draft-baseline-none");
-  await expect(none).toContainText("Build the baseline ($7.00)");
-  await expect(none).toContainText("No baseline exists yet");
+  await expect(none).toContainText("Build the Ground Truth ($7.00)");
+  await expect(none).toContainText("No Ground Truth exists yet");
   await expect(sheet.getByRole("radio")).toHaveCount(0);
-  await expect(sheet).not.toContainText("Use the current baseline");
+  await expect(sheet).not.toContainText("Use the current Ground Truth");
 
   await sheet.getByRole("button", { name: "Estimate" }).click();
   await expect(sheet.getByTestId("draft-estimate")).toHaveText(/^\$[\d,]+\.\d{2} estimated/);

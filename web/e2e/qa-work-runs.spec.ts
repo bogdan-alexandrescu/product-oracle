@@ -80,7 +80,7 @@ test("qa-work-9, 10, 23, 25: names not slugs or ids, one waiting count, flows in
   }
   await expect(rows(page).locator(".font-mono")).toHaveCount(0);
   // The flow's name shows in full on hover.
-  await expect(row(page, "team onboarding").locator('[title="Baseline to PRD"]')).toHaveCount(1);
+  await expect(row(page, "team onboarding").locator('[title="Ground Truth to PRD"]')).toHaveCount(1);
   // One cost format, in the normal font.
   const overrun = row(page, "Paused").locator("[data-cost]");
   await expect(overrun).toHaveText("$14.20 of $9.00 estimated");

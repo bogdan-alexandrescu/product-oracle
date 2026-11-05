@@ -225,7 +225,7 @@ async def test_an_intake_run_reuses_a_reusable_baseline(client, runtime):
     rows = {r["name"]: r for r in est["segments"]}
     assert rows["baseline"]["estimate_usd"] == 0.0
     assert rows["baseline"]["reused"] is True
-    assert rows["baseline"]["note"] == f"Current baseline, approved {oct_date(at)}"
+    assert rows["baseline"]["note"] == f"Current Ground Truth, approved {oct_date(at)}"
     assert rows["feature_set"]["reused"] is False and rows["feature_set"]["note"] is None
     rebuilt = await estimate(
         client, ctx, (await plain_run(client, ctx, reuse_baseline=False))["id"]
@@ -238,7 +238,7 @@ async def test_an_intake_run_reuses_a_reusable_baseline(client, runtime):
     seg = started["segments"]
     assert seg[0]["name"] == "baseline" and seg[0]["status"] == "skipped"
     assert seg[0]["cost_usd"] == 0 and seg[0]["estimate_usd"] == 0
-    assert seg[0]["note"] == f"Reused the baseline approved {oct_date(at)}"
+    assert seg[0]["note"] == f"Reused the Ground Truth approved {oct_date(at)}"
     assert seg[0]["reused"]["checkpoint_id"] == str(cp_id)
     assert seg[1]["name"] == "feature_set" and seg[1]["status"] == "running"
     [cp] = started["checkpoints"]

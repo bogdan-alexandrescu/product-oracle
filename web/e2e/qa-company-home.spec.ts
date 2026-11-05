@@ -23,7 +23,7 @@ const flight = (page: Page, slug: string, kind: "prd" | "run" = "run") =>
 test("goal names: one Tab stop each, Enter opens the goal, no card covers the figure", async ({ page }) => {
   await openHome(page);
   const link = page.getByTestId("home-goal-G1").getByTestId("goal-open");
-  await expect(link).toHaveAttribute("href", /^\/baseline\?entity=/);
+  await expect(link).toHaveAttribute("href", /^\/ground-truth\?entity=/);
   await expect(page.getByTestId("home-goal-G1").getByTestId("code-chip")).toHaveCount(0);
   await link.focus();
   await expect(link).toBeFocused();
@@ -50,7 +50,7 @@ test("goal names: one Tab stop each, Enter opens the goal, no card covers the fi
   await expect(page.getByTestId("code-card")).toHaveCount(0);
   await link.focus();
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/baseline\?entity=/);
+  await expect(page).toHaveURL(/\/ground-truth\?entity=/);
 });
 
 // prod-2, qa-company-44: the ring says it is confidence, and shows only once there is a value.
@@ -122,14 +122,14 @@ test("in flight: a run paused over budget says Paused; runs are named by title, 
 
   const table = page.getByTestId("home-in-flight-table");
   // #979: a run is named by its document's own title and its flow, no kind word added.
-  await expect(flight(page, "usage-alerts-v2")).toContainText("Usage alerts v2 · Baseline to PRD");
+  await expect(flight(page, "usage-alerts-v2")).toContainText("Usage alerts v2 · Ground Truth to PRD");
   await expect(table).not.toContainText("usage-alerts-v2");
   await expect(table).not.toContainText("team-onboarding");
   await flight(page, "team-onboarding").click();
   const inspector = page.getByTestId("home-inspector");
   await expect(inspector).toContainText("Run · selected");
   await expect(inspector).not.toContainText(/Run [0-9a-f]{4}\b/);
-  await expect(inspector.getByRole("heading", { name: /^Team onboarding · Baseline to PRD/ })).toBeVisible();
+  await expect(inspector.getByRole("heading", { name: /^Team onboarding · Ground Truth to PRD/ })).toBeVisible();
 });
 
 // qa-company-24: Set up says the default zone is used until one is set, then the zone in words.

@@ -12,8 +12,8 @@ const PHONE = { width: 390, height: 844 };
 
 async function openBaseline(page: Page, email?: string) {
   await login(page, email);
-  await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await page.goto("/ground-truth");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   await expect(page.getByTestId("goal-g.activation")).toBeVisible();
 }
 
@@ -215,7 +215,7 @@ test("items: the empty state names the kinds, and one Add control", async ({ pag
 test("phone: tabs all show; features keep delivery and confidence", async ({ page }) => {
   await page.setViewportSize(PHONE);
   await openBaseline(page);
-  const strip = page.getByRole("tablist", { name: "Baseline views" });
+  const strip = page.getByRole("tablist", { name: "Ground Truth views" });
   expect(await strip.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
   await expect(page.getByRole("button", { name: /^Scroll/ })).toHaveCount(0);
   await expect(page.getByTestId("confirmed-chip")).toBeHidden();

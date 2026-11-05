@@ -39,7 +39,7 @@ test("Plan, Baseline and Priorities draw names, never a place code or a slug", a
   await expect(page.getByTestId("plan-group").first()).toContainText("G-A Activation");
   expect(await mainText(page)).not.toMatch(BARE);
 
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await expect(page.getByTestId("feature-f.guided-setup")).toBeVisible();
   await expect(page.locator("main").getByTestId("code-tag").filter({ hasText: "G-B" }).first()).toBeVisible();
   expect(await mainText(page)).not.toMatch(BARE);
@@ -67,7 +67,7 @@ test("a goal chip's card opens on hover and Enter, shows name, target and Open, 
   await expect(card).toContainText("Goal · confirmed");
   await expect(card.getByTestId("card-name")).toHaveText("Growth");
   await expect(card.getByTestId("card-line")).toHaveText("Target 12%");
-  await expect(card.getByRole("link", { name: "Open" })).toHaveAttribute("href", /^\/baseline\?entity=/);
+  await expect(card.getByRole("link", { name: "Open" })).toHaveAttribute("href", /^\/ground-truth\?entity=/);
   await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);
 
@@ -87,7 +87,7 @@ test("a goal chip's card opens on hover and Enter, shows name, target and Open, 
   // Open goes to the goal on the Baseline.
   await chip.click();
   await card.getByRole("link", { name: "Open" }).click();
-  await expect(page).toHaveURL(/\/baseline\?entity=/);
+  await expect(page).toHaveURL(/\/ground-truth\?entity=/);
 });
 
 test.describe("on a phone", () => {
@@ -248,7 +248,7 @@ test("keyboard: Tab passes the chip; Enter opens the card, Tab leaves it; Escape
   await expect(chip).toBeFocused();
   await page.keyboard.press("Enter");
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/baseline\?entity=/);
+  await expect(page).toHaveURL(/\/ground-truth\?entity=/);
 });
 
 test("keyboard: a citation chip's card takes focus on open, Tab leaves it, and Escape gives focus back", async ({ page }) => {
