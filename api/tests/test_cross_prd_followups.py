@@ -6,6 +6,9 @@
   not found, never ``features[0] (key)``.
 - A cancelled or failed run's scope is not on the company roadmap; an earlier scope of a
   live or finished run of that PRD still is.
+- A stopped update run of a published PRD keeps the PRD's earlier approved scope on the
+  company roadmap: approving the run's scope superseded it, and the run then stopped.
+- A Ground Truth feature with no title is named with a readable name and its key.
 - A waiting Engineering check whose dependency stays unknown is not parsed again on every
   read while its briefs and what Oracle knows stay the same.
 
@@ -14,8 +17,10 @@ Against Postgres. Invented data only.
 
 from datetime import UTC, datetime
 
+from oracle.baseline.models import Entity
 from oracle.engineering import check
 from oracle.roadmap import company
+from oracle.runs import feature_set
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.scope_models import PrdScope, PrdScopeItem
 from oracle.tenancy import tenant_session
@@ -92,6 +97,75 @@ async def test_a_cancelled_or_failed_run_s_scope_is_not_on_the_company_roadmap()
     assert "abandoned-idea" not in on
     assert on["audit-trail"].label == "Audit trail (Audit trail PRD)"
     assert on["account-health-ledger"].label == "Account health ledger (Safety PRD)"
+
+
+async def _stopped_update(w: dict, status: str) -> None:
+    """An update run of the Safety PRD whose scope is approved at its feature set stop (the
+    PRD's earlier approved scope is then superseded), and the run then ``status``."""
+    async with tenant_session(w["tenant"]) as s:
+        run = await _add(s, Run(flow="baseline_to_prd", status="running",
+                                document_id=w["safety"]))  # fmt: skip
+        scope = await _add(s, PrdScope(run_id=run.id, segment_seq=2, attempt=1,
+                                       status="proposed", document_id=w["safety"],
+                                       check_result={}))  # fmt: skip
+        s.add(PrdScopeItem(scope_id=scope.id, kind="feature", key="session-guard",
+                           title="Session guard", decision="include", position=0))  # fmt: skip
+        await s.flush()
+        await feature_set.approve(s, scope, None)
+        run.status = status
+        await s.commit()
+
+
+async def _safety_kept(w: dict) -> None:
+    async with tenant_session(w["tenant"]) as s:
+        on = await company.features_on_roadmap(s)
+    assert on["account-health-ledger"].label == "Account health ledger (Safety PRD)"
+    assert "session-guard" not in on
+    # Another PRD's brief depending on it is not told it is in no PRD yet.
+    summary = await _summary(w)
+    assert summary["problems"] == []
+    assert summary["elsewhere"] == {"account-health-ledger": "Account health ledger (Safety PRD)"}
+
+
+async def test_a_cancelled_update_run_keeps_the_prd_s_earlier_scope_on_the_roadmap():
+    # protects=a cancelled update of a published PRD falls back to the scope it superseded;
+    # fails_when=none of the PRD's features are on the company roadmap any more.
+    w = await world(roadmap=False)
+    await _stopped_update(w, "cancelled")
+    await _safety_kept(w)
+
+
+async def test_a_failed_update_run_keeps_the_prd_s_earlier_scope_on_the_roadmap():
+    # protects=a failed update of a published PRD falls back to the scope it superseded;
+    # fails_when=the PRD's features read as in no PRD yet.
+    w = await world(roadmap=False)
+    await _stopped_update(w, "failed")
+    await _safety_kept(w)
+
+
+async def test_a_live_update_run_s_scope_replaces_the_one_it_superseded():
+    # protects=the fallback is only for a stopped run; fails_when=a superseded scope still
+    # shows beside the live run's newer one.
+    w = await world(roadmap=False)
+    await _stopped_update(w, "running")
+    async with tenant_session(w["tenant"]) as s:
+        on = await company.features_on_roadmap(s)
+    assert on["session-guard"].label == "Session guard (Safety PRD)"
+    assert "account-health-ledger" not in on
+
+
+async def test_a_feature_with_no_title_in_no_prd_is_named_in_words_with_its_key():
+    # protects=a nameless Ground Truth feature reads as a name and its key; fails_when=the
+    # message names it by its bare key ("usage-meter is in no PRD yet").
+    w = await world(roadmap=False)
+    async with tenant_session(w["tenant"]) as s:
+        s.add(Entity(type="feature", key="usage-meter", title=" ", status="confirmed",
+                     origin="user"))  # fmt: skip
+        await s.commit()
+    (problem,) = (await _summary(w, "usage-meter"))["problems"]
+    assert problem["message"] == (
+        "Usage meter (usage-meter) is in no PRD yet: Observability depends on it"
+    )
 
 
 async def test_a_waiting_check_with_a_key_still_unknown_is_not_parsed_again(monkeypatch):
