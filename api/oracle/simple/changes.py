@@ -1546,21 +1546,33 @@ class _View:
         )
 
 
+def _target(c: SimpleChange, v: _View) -> dict:
+    """edit-decisions: a sheet suggestion still waiting names its decision as it is now (its
+    code and title), not as it was when it was sent (Home's and Waiting for you's rows)."""
+    d = v.questions.get(str((c.target or {}).get("decision_id")))
+    if c.status != "proposed" or c.op not in SHEET_OPS or c.op == "add_question" or d is None:
+        return c.target
+    from oracle.simple.decision_sheet import name_of
+
+    return {**c.target, "name": name_of(d)}
+
+
 def _out(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> SimpleChangeOut:
     asked = v.meeting(c)
+    target = _target(c, v)
     return SimpleChangeOut(
         id=c.id, session_id=c.session_id, document_id=c.document_id, op=c.op,  # type: ignore[arg-type]
         draft_ids=list(c.draft_ids or []),
-        target=c.target, before=c.before, after=c.after, status=c.status,  # type: ignore[arg-type]
+        target=target, before=c.before, after=c.after, status=c.status,  # type: ignore[arg-type]
         by=c.by, by_name=names.get(c.by, "someone"), at=c.at, decided_by=c.decided_by,
         decided_at=c.decided_at, reason=c.reason, decision_reason=c.decision_reason,
         routed_to=v.route(c), undoes_id=c.undoes_id, undone=c.id in v.undone,
         can_decide=c.status == "proposed" and v.may_decide(c), can_undo=v.can_undo(c),
-        words=_words(c, v, names), from_meeting=asked[0], off_agenda=asked[1],
+        words=_words(c, v, names, target), from_meeting=asked[0], off_agenda=asked[1],
     )  # fmt: skip
 
 
-def _words(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> str:
+def _words(c: SimpleChange, v: _View, names: dict[uuid.UUID, str], target: dict) -> str:
     """The change in plain words (oracle.simple.change_words): who, what, the item's code
     and name as this reader reads it, "· undone" once undone."""
     from oracle.simple import change_words
@@ -1569,7 +1581,7 @@ def _words(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> str:
     item = f"{e.code or ''} {e.row.title}".strip() if e is not None else None
     if item is None and c.target.get("item_id"):
         item = v.deleted.get(str(c.target["item_id"]))
-    return change_words.sentence(c.op, c.target, c.before, c.after,
+    return change_words.sentence(c.op, target, c.before, c.after,
                                  who=names.get(c.by, "someone"), item=item,
                                  status=c.status, undone=c.id in v.undone)  # fmt: skip
 
