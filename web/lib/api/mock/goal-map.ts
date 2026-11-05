@@ -5,7 +5,8 @@
  * (api/oracle/simple/goal_map.py). Invented data: three goals, a guardrail, four areas,
  * seven gated milestones and twelve features. The "goal-map-hard" scenario
  * (MOCK_SCENARIO_KEY) gives the hard case: 5 areas, 12 milestones, 40 features, one
- * milestone missed, revenue not measured yet. Under "fit-date-company-roadmap" the company roadmap
+ * milestone missed, revenue not measured yet. "goal-map-guardrail-goal" gives the goals with
+ * their priorities and a goal marked as a guardrail (guardrailGoal). Under "fit-date-company-roadmap" the company roadmap
  * exists next to an older roadmap that still holds goal milestones of its own: only the company
  * roadmap's show (goal_map._on_map). Invented people, products and numbers only.
  */
@@ -277,6 +278,26 @@ function noGate(): GoalMap {
   return map;
 }
 
+/** The "goal-map-guardrail-goal" scenario's guardrail: a goal marked as a guardrail, no constraint. */
+export const GUARDRAIL_GOAL = "Account restrictions";
+
+/**
+ * The company's goals with their priorities (attrs.position) and a goal marked as a guardrail,
+ * read as the API does (goal_map._goals and build): the cards in the one goal order, the
+ * guardrail goal never a card but the strip's guardrail while no guardrail constraint is set.
+ */
+function guardrailGoal(): GoalMap {
+  const map = plain();
+  const place: Record<string, number> = { revenue: 1, signups: 3, conversions: 4 };
+  const every = [
+    ...map.goals.map((g) => ({ g, position: place[g.id], guardrail: false })),
+    { g: { ...map.goals[0], id: "restrictions", name: GUARDRAIL_GOAL, measure: "account restrictions", target: 0, current: 0, math: "", history: [] }, position: 2, guardrail: true },
+  ].sort((a, b) => a.position - b.position);
+  map.goals = every.filter((x) => !x.guardrail).map((x) => x.g);
+  map.guardrail = { name: GUARDRAIL_GOAL, rule: "= 0 every day", current: 0, days: [0, 0, 0, 0, 0, 0, 0], held: true };
+  return map;
+}
+
 /** Goal milestones only an older roadmap holds: history once the company roadmap exists. */
 export const OLDER_MILESTONES = ["15 sign-ups per rep", "$8k revenue per day"];
 
@@ -297,7 +318,7 @@ function companyRoadmap(): GoalMap {
 
 export function seedGoalMap(scenario: string | null): GoalMap {
   return withIds(
-    scenario === "goal-map-hard" ? hard() : scenario === "goal-map-no-gate" ? noGate() : scenario === FIT_COMPANY_SCENARIO ? companyRoadmap() : plain(),
+    scenario === "goal-map-hard" ? hard() : scenario === "goal-map-no-gate" ? noGate() : scenario === "goal-map-guardrail-goal" ? guardrailGoal() : scenario === FIT_COMPANY_SCENARIO ? companyRoadmap() : plain(),
   );
 }
 

@@ -161,13 +161,16 @@ async def _goal(db: AsyncSession, goal_id: Any) -> Entity:
     return g
 
 
-async def _shown_version(db: AsyncSession, doc: uuid.UUID) -> uuid.UUID | None:
+async def _shown_version(
+    db: AsyncSession, doc: uuid.UUID, *, draft: bool = True
+) -> uuid.UUID | None:
     """The version a new draft of the roadmap is opened on: its working draft's base, else
-    the latest approved version with items, else its latest approved, else its latest."""
+    the latest approved version with items, else its latest approved, else its latest.
+    ``draft=False``: the published one, whatever draft is open."""
     d = await db.scalar(
         select(SimpleDraft).where(SimpleDraft.document_id == doc, SimpleDraft.status == "working")
     )
-    if d is not None:
+    if d is not None and draft:
         return d.base_version_id
     hidden = await drafts.submitted_versions(db)
     vs = [
@@ -348,6 +351,9 @@ async def _place(
             )
         )
     )
+    from oracle.simple import trash_items
+
+    taken |= await trash_items.trashed_keys(db, doc)
     key, n = _slug(c.after["title"]), 2
     while key in taken:
         key, n = f"{_slug(c.after['title'])[:21]}-{n}", n + 1

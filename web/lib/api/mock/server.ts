@@ -163,10 +163,10 @@ import {
   type PricingContext,
   type PricingDb,
 } from "./pricing";
-import { routeGoalBuckets, seedGoalBucketsHard } from "./goal-buckets";
-import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
+import { bucketGoalsInOrder, placeBucketGoal, placeBucketGoals, routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith } from "./goal-buckets";
+import { proposeGoalDelete, routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./currentstate";
-import { prioritiesOut } from "./simple-priorities";
+import { featureKeyOf, prioritiesOut } from "./simple-priorities";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
@@ -179,9 +179,9 @@ import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStray
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
-import { appliedVersionOf, approvedPrdToDraft, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, seedFitDateRoadmap } from "./simple-roadmap";
-import { shownDates, storedDates } from "./simple-roadmap";
+import { closed, GOALS, shownDates, storedDates } from "./simple-roadmap";
 import { routeGoalMap, type GoalMap } from "./goal-map";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -588,6 +588,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * approver owning the alerts track) deciding Grow retention's suggestions (suggest review);
  * "simple-home-deciders" as "simple-deciders" plus a commenter's proposal waiting on the
  * pricing roadmap's decider (#723 S1 Home review).
+ * "trash-reviewer" as "simple-deciders" with Avery Lane the alerts roadmap's required reviewer
+ * (trash-features-goals review 4).
  * "simple-home-move" as "simple-home" plus a "Move the dependents" proposal Home's Accept confirms.
  * "simple-home-same-name" as "simple-home" plus a second goal named Grow retention and a proposal to change an owner.
  * "goal-order" as "simple-home" with five goals in a set order, each with work; "goal-order-hard" adds three more and an archived one.
@@ -952,6 +954,18 @@ function seedSimpleDecidersScenario(): Db {
 }
 
 /**
+ * trash-features-goals review 4 "trash-reviewer" scenario: "simple-deciders" with Avery Lane (the
+ * alerts track's owner, an approver, so the alerts roadmap's approver) its required reviewer: a
+ * draft sent for review waits on them on Home until they approve it.
+ */
+function seedTrashReviewerScenario(): Db {
+  const db = seedSimpleDecidersScenario();
+  const avery = db.members.find((m) => m.email === "avery.lane@example.com")!;
+  db.simple_roadmap!.reviewers = { "alerts-roadmap": [avery.id] };
+  return db;
+}
+
+/**
  * meeting-changes-only-its-agenda "meeting-agenda" scenario: the default company, with the
  * Welcome video (on the onboarding roadmap) built from Usage alerts, so a review of Usage
  * alerts (pinned to the alerts roadmap) sees an item it does not review.
@@ -971,6 +985,13 @@ function seedMeetingAgendaScenario(): Db {
 function seedSimpleCrossPrdDates(): Db {
   const db = seedSimpleHomeScenario();
   dependOnOtherPrd(db.simple_roadmap!, "setup-checklist", "alert-rules");
+  return db;
+}
+
+/** hotfix-2 "simple-dated-move": "simple-home" with Alert replay engine, dated only by engineering's end. */
+function seedSimpleDatedMove(): Db {
+  const db = seedSimpleHomeScenario();
+  dateSourceItem(db.simple_roadmap!);
   return db;
 }
 
@@ -1248,6 +1269,39 @@ function seedGoalBucketsHardScenario(): Db {
   const rm = db.simple_roadmap!;
   rm.plan = { ...rm.plan!, big_goal: true };
   rm.goal_buckets = seedGoalBucketsHard();
+  return db;
+}
+
+/**
+ * Goal buckets you can fully edit (the owner, Nov 4), "goal-buckets-undated": "simple-plan" whose
+ * roadmap has no approved version yet, so Priorities reads no dated plan and falls back to the
+ * goal cards; each plan item names its plan goal on the roadmap, and the goal buckets hold the
+ * roadmap's own goals and features too (Grow retention, Faster activation), as the API's do.
+ * Invented data.
+ */
+export const GOAL_BUCKETS_UNDATED_SCENARIO = "goal-buckets-undated";
+
+function seedGoalBucketsUndatedScenario(): Db {
+  const db = seedSimplePlanScenario(true);
+  const rm = db.simple_roadmap!;
+  rm.plan_undated = true;
+  const goalOf = new Map(planSlices().map((x) => [x.feature_code.toLowerCase(), x.goal]));
+  for (const s of rm.items) {
+    const goal = s.section ? goalOf.get(s.section) : undefined;
+    if (goal && !s.goal) s.goal = goal.toLowerCase();
+  }
+  // As the API's goal buckets: every live goal (here, each goal an item serves) and every feature an
+  // item has, so each Priorities bucket is a goal you add tasks to and move them between.
+  const name = (k: string) => GOALS[k] ?? k;
+  const items = rm.items.filter((s) => !s.draft && !closed(s));
+  rm.goal_buckets = seedGoalBucketsWith(
+    seedGoalBuckets(),
+    [...new Set(items.flatMap((s) => [...(s.goal ? [s.goal] : []), ...(s.goals ?? [])]).map(name))],
+    items.map((s) => ({ key: featureKeyOf(rm, s.key), title: s.title, goals: [...(s.goal ? [s.goal] : []), ...(s.goals ?? [])].map(name) })),
+  );
+  // goal-order: the company's goal order is the buckets' (each goal's place stored), so Move up and
+  // Move down on Priorities read the same order as its buckets and the Roadmap's goal rows.
+  placeBucketGoals(rm.goal_buckets, db.baseline.entities);
   return db;
 }
 
@@ -3396,10 +3450,14 @@ function load(): Db {
                 ? seedManyPeople
               : scenario === "simple-deciders"
                 ? seedSimpleDecidersScenario
+              : scenario === "trash-reviewer"
+                ? seedTrashReviewerScenario
               : scenario === "meeting-agenda"
                 ? seedMeetingAgendaScenario
               : scenario === "simple-cross-prd-dates"
                 ? seedSimpleCrossPrdDates
+              : scenario === "simple-dated-move"
+                ? seedSimpleDatedMove
               : scenario === "simple-home"
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-move"
@@ -3449,6 +3507,8 @@ function load(): Db {
                 ? seedRoadmapMilestonesHardScenario
               : scenario === GOAL_BUCKETS_HARD_SCENARIO
                 ? seedGoalBucketsHardScenario
+              : scenario === GOAL_BUCKETS_UNDATED_SCENARIO
+                ? seedGoalBucketsUndatedScenario
               : scenario === "simple-plan"
                 ? () => seedSimplePlanScenario()
               : scenario === "roadmap-keydates"
@@ -5785,6 +5845,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       // New PRD (4): a PRD moved to Trash releases its requests; Restore links back the free ones.
       // TRASH_KEPT_LINKS_SCENARIO: a PRD trashed before this release kept its request links.
       onTrash: (ids) => (localStorage.getItem(MOCK_SCENARIO_KEY) === TRASH_KEPT_LINKS_SCENARIO ? undefined : releaseDocuments(ensureRequests(db), ids)),
+      simple: () => db.simple_roadmap,
       onRestore: (released) => relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
       uuid,
       now,
@@ -6087,6 +6148,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       if (accepted.ok) afterAccept(goalCtx, p[3]);
       return accepted;
     }
+  }
+  // goal-order: a goal bucket's Move up or Move down stores its place as the baseline's goals do.
+  if (p[1] === "baseline" && db.simple_roadmap) {
+    const placed = await placeBucketGoal(db.simple_roadmap, me.role, req, p, db.baseline.entities);
+    if (placed) return placed;
   }
   // The baseline mock checks roles itself (commenters propose, approvers decide).
   if (p[1] === "baseline") return routeBaselineFor(db, me, req, p, q);
@@ -6581,8 +6647,10 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
   const simpleRoute = async (r: Request): Promise<Response | null> => {
-    // goal-order: Simple's goals follow the baseline's one goal order.
-    knowCompanyGoals(db.baseline.entities.filter((e) => e.type === "goal"));
+    // goal-order: Simple's goals follow the baseline's one goal order (and the place Move up or Move
+    // down stored on a bucket goal the baseline does not hold).
+    const baselineGoals = db.baseline.entities.filter((e) => e.type === "goal");
+    knowCompanyGoals([...baselineGoals, ...(db.simple_roadmap ? bucketGoalsInOrder(db.simple_roadmap, new Set(baselineGoals.map((e) => e.key))) : [])]);
     // build-goal-order-control: the "goal-order" scenarios' added goals name their roadmap work on every load.
     knowGoalOrderGoals(db.baseline.entities);
     // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
@@ -6646,7 +6714,15 @@ async function route(db: Db, req: Request): Promise<Response> {
       const out = appliedVersionOf(db.simple_roadmap!, doc.slug, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames });
       return out ? json(200, out) : json(404, { detail: "No such roadmap" });
     }
-    const bucketsRes = await routeGoalBuckets(db.simple_roadmap!, me.role, r, p);
+    // trash-features-goals: a goal deleted to Settings › Trash (./trash.ts).
+    // edit-goals-prds EG1: a goal's owner is one of the members; an ask goes to the company's owners.
+    const people = db.members.map((x) => ({ id: x.id, name: displayName(x.email, x.name), email: x.email, role: x.role, disabled: x.status === "disabled" }));
+    const bin = {
+      trash: (db.trash ??= emptyTrash()), id: me.id, name: simpleNames[me.id] ?? me.email, now: () => new Date(mockNowMs()).toISOString(), people,
+      propose: (g: { id: string; title: string }, to: string | null, reason: string | null) =>
+        proposeGoalDelete(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames, trash: db.trash }, g, to, reason),
+    };
+    const bucketsRes = await routeGoalBuckets(db.simple_roadmap!, me.role, r, p, bin);
     if (bucketsRes) return bucketsRes;
     const goalMapRes = await routeGoalMap(db, localStorage.getItem(MOCK_SCENARIO_KEY), { role: me.role, name: simpleNames[me.id] ?? "You" }, r, p, (itemId) => {
       const key = db.simple_roadmap && Object.keys(db.simple_roadmap.ids).find((k) => db.simple_roadmap!.ids[k] === itemId);
@@ -6656,7 +6732,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const simpleRes = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, r, p, q);
     if (simpleRes) return simpleRes;
     const companyGoals = db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title }));
-    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals }, r, p, q);
+    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin }, r, p, q);
   };
   // Simple S8: review meetings, the Decisions page, and changes made through a meeting.
   // Seeded on the first meetings or Decisions read, so the other Simple screens keep their data.

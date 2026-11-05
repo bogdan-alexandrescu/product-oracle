@@ -174,6 +174,11 @@ export function storedDates(i: Item): { start_date: string | null; end_date: str
   return { start_date: own(i.start), end_date: own(i.end) };
 }
 
+/** hotfix-2: the dates the roadmap shows (a date source's, an estimated start's too): a move's `before`. */
+export function shownDates(i: Item): { start_date: string | null; end_date: string | null } {
+  return { start_date: i.start.date, end_date: i.end.date };
+}
+
 /** The flags drawn red (not accepted as a risk). */
 export const broken = (i: Item): Flag[] => i.flags.filter((f) => f.state === "red");
 
@@ -553,6 +558,14 @@ export function lanes(data: Roadmap, by: Lane): Roadmap {
       if (at !== bt) return Number(at) - Number(bt);
       return ac.localeCompare(bc, undefined, { numeric: true }) || ap.localeCompare(bp);
     });
-  else groups.sort((a, b) => Number(a.key === "none") - Number(b.key === "none"));
+  else {
+    // goal-order: the goals in the API's order (the one goal order), whichever item came first;
+    // a plan goal the API does not group by comes after them, No goal last.
+    const rank = (key: string) => {
+      const n = data.groups.findIndex((x) => x.key === key && x.key !== "none");
+      return key === "none" ? Infinity : n < 0 ? data.groups.length : n;
+    };
+    groups.sort((a, b) => rank(a.key) - rank(b.key));
+  }
   return { ...data, groups };
 }

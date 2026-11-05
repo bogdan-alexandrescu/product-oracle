@@ -32,6 +32,9 @@ type Horizon = Item["horizon"];
 type Role = Schemas["Me"]["role"];
 
 interface SeedItem {
+  /** trash-features-goals: moved to Trash (oracle.trash.filter.INCLUDE_TRASHED): left out of
+   * every read (visibleItems) but kept here, as they were, for Restore. */
+  trashed?: boolean;
   key: string;
   title: string;
   horizon: Horizon;
@@ -98,6 +101,14 @@ interface SeedItem {
   basis?: string;
 }
 
+export type MockVersion = { roadmap: string; number: number; without: string[] };
+
+/** trash-features-goals review 4: off its roadmap's latest version (published while it was in Trash). */
+function offLatest(db: SimpleDb, s: SeedItem): boolean {
+  const latest = (db.versions ?? []).filter((v) => v.roadmap === s.roadmap).at(-1);
+  return !!latest?.without.includes(s.key);
+}
+
 interface SimpleDb {
   items: SeedItem[];
   ids: Record<string, string>;
@@ -112,12 +123,19 @@ interface SimpleDb {
   meeting_proposals?: string[];
   /** Simple S3b (./simple-changes.ts): working drafts, each with its roadmap's published items. */
   drafts?: MockDraft[];
+  /** trash-features-goals review 4: each roadmap's versions published in the mock, each with the
+   * keys of the features that were in Trash when it was published (made without them). The
+   * roadmap reads its latest; Restore puts the feature back on every one (trash.restoreFromTrash). */
+  versions?: MockVersion[];
   /** walkb-roadmap review 5a: roadmaps built from a PRD with no approved version yet (their drafts' `published` is false). */
   unapproved?: string[];
   /** S3b: non-versioned targets (item tasks, action items, overrides, launch tasks) by id. */
   targets?: Record<string, Record<string, unknown>>;
   /** D-a (#730 review): each roadmap's designated decider (roadmap slug -> person id). */
   deciders?: Record<string, string>;
+  /** Each roadmap's required reviewers (roadmap slug -> person ids; drafts.Who.reviewers): a
+   * draft sent for review waits on them (the "trash-reviewer" scenario names one). */
+  reviewers?: Record<string, string[]>;
   /** D-a: each track's owner (track key -> person id); their role (Who.roles) says whether they decide. */
   track_owners?: Record<string, string>;
   /** S4: people's display names (person id -> name), for the items' owners. */
@@ -135,6 +153,8 @@ interface SimpleDb {
   goal_suggestions?: GoalSuggestionRow[];
   /** Goal buckets (./goal-buckets.ts): the goals and each feature's goal links. */
   goal_buckets?: import("./goal-buckets").GoalBucketsDb;
+  /** one-feature-panel: a roadmap goal edited through the goal edit (goal key -> its fields). */
+  goal_edits?: Record<string, RoadmapGoalFields>;
   goal_jobs?: Record<string, { until: number; job_id: string; origin: "auto" | "on_demand" }>;
   auto_done?: string[];
   /** S7: the seeds a merge changed, as they were (change id -> seeds), for its undo. */
@@ -147,6 +167,8 @@ interface SimpleDb {
   decided_in?: Record<string, Schemas["SimpleDecidedRef"][]>;
   /** The plan-model lane (./simple-plan.ts): Guided setup's plan, in the "simple-plan" scenario. */
   plan?: PlanDb;
+  /** "goal-buckets-undated": the plan's roadmap has no approved version yet, so Priorities reads no dated plan. */
+  plan_undated?: boolean;
   /** roadmap-keydates: each PRD's dated milestones as its latest approved version has them
    * (PRD slug -> milestones), read by the server before every request (prdMilestonesOf). */
   prd_milestones?: Record<string, PrdMilestone[]>;
@@ -316,6 +338,14 @@ function sectionLabel(section: string, heading: string | undefined, name: string
 const METRICS: Record<string, string> = { "grow-retention": "Teams active after 90 days", "faster-activation": "Days to the first alert", "quiet-alerts": "Teams muting alerts" };
 /** roadmap-gantt ("simple-plan-two"): a goal named like a plan goal ("Growth"), for the plan's items only. */
 const PLAN_GOALS: Record<string, string> = { growth: "Growth" };
+/** one-feature-panel: each goal's target and date (invented), as the goal edit reads them. */
+const TARGETS: Record<string, [string, string]> = { "grow-retention": ["70% of teams", "2027-03-31"], "faster-activation": ["2 days", "2027-02-26"], "quiet-alerts": ["Under 10% of teams", "2027-03-31"] };
+export type RoadmapGoalFields = { title: string; metric: string | null; target: string | null; due: string | null };
+/** A roadmap goal's key from its id (the goal edit takes either kind of goal, as the API's one goal entity). */
+export const roadmapGoalKey = (id: string): string | null => [...Object.keys(GOALS), ...Object.keys(PLAN_GOALS)].find((k) => stableUuid(`simple-goal/${k}`) === id) ?? null;
+/** The roadmap goal's fields as read: an edit, else its seed. */
+export const roadmapGoal = (db: Pick<SimpleDb, "goal_edits">, key: string): RoadmapGoalFields =>
+  db.goal_edits?.[key] ?? { title: GOALS[key] ?? PLAN_GOALS[key], metric: METRICS[key] ?? null, target: TARGETS[key]?.[0] ?? null, due: TARGETS[key]?.[1] ?? null };
 export const goalId = (key: string): string => stableUuid(`simple-goal/${key}`);
 export const roadmapId = (slug: string): string => stableUuid(`simple-doc/${slug}`);
 // A new company has no roadmap yet (qa-shell-8: oracle.simple.service reads none).
@@ -457,6 +487,8 @@ export function storedDates(db: SimpleDb, key: string): { start: string | null; 
   const own = db.own[key];
   if (own) return { start: own.start, end: own.end };
   const s = db.items.find((x) => x.key === key)!;
+  // hotfix-2: a PRD's item stores the dates the PRD gave it (an engineering end-only one too).
+  if (s.dates) return { start: s.dates.start, end: s.dates.end };
   if (s.source !== "typed" && s.source !== "accepted") return { start: null, end: null };
   const w = simpleWindows(companyToday())[s.horizon];
   return { start: s.start !== undefined ? addDays(w[0], s.start) : null, end: s.end !== undefined ? addDays(w[0], s.end) : null };
@@ -684,6 +716,15 @@ export function shownDates(db: SimpleDb, key: string): { start: string; end: str
   return { start: r.start.date, end: r.end.date };
 }
 
+/** hotfix-2: the dates the roadmap shows for an item (after what it depends on), a move's `before`. */
+export function readDates(db: SimpleDb, key: string): { start: string; end: string } {
+  const w = simpleWindows(companyToday());
+  const all = new Map(db.items.map((s) => [s.key, { s, r: resolve(db, s, w[s.horizon]) }]));
+  afterDependencies(all);
+  const r = all.get(key)!.r;
+  return { start: r.start.date, end: r.end.date };
+}
+
 /**
  * oracle.simple.dates.after_dependencies (walkb-roadmap): an item dated only by its end starts
  * the day after what it depends on ends (the end itself when that is later); a fully estimated
@@ -723,6 +764,14 @@ export function itemOfOtherPrd(db: SimpleDb, key: string, roadmap: string): void
   if (s) s.prd_doc = itemPrd({ ...s, roadmap });
 }
 
+/** hotfix-2 ("simple-dated-move"): an Alerts PRD item dated only by its date source (engineering's
+ * end, no start), as approving the PRD stores it on the draft; its start is estimated. */
+export function dateSourceItem(db: SimpleDb): void {
+  const end = "2027-04-02";
+  db.items.push({ key: "alert-replay", title: "Alert replay engine", horizon: horizonOf(end), roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", from_prd: { slug: "usage-alerts", title: "Usage alerts" }, dates: { start: null, end, source: "engineering" } });
+  db.ids["alert-replay"] = stableUuid("simple-item/alert-replay");
+}
+
 /** cross-prd-deps ("simple-cross-prd-dates"): ``key`` also depends on ``dep``, an item of another PRD. */
 export function dependOnOtherPrd(db: SimpleDb, key: string, dep: string): void {
   const s = db.items.find((x) => x.key === key);
@@ -736,7 +785,7 @@ function itemPrd(s: SeedItem): Schemas["SimpleDocRef"] {
 }
 
 /** The PRD an item reads as its own: the one it was added from, else its roadmap's (the API's item.prd). */
-function ownPrd(s: SeedItem): Schemas["SimpleDocRef"] {
+export function ownPrd(s: SeedItem): Schemas["SimpleDocRef"] {
   if (s.prd_doc) return s.prd_doc;
   if (s.from_prd) return { id: stableUuid(`simple-prd/${s.from_prd.slug}`), slug: s.from_prd.slug, title: s.from_prd.title };
   return itemPrd(s);
@@ -872,7 +921,7 @@ function ownerOf(db: SimpleDb, s: SeedItem): Item["owner"] {
 }
 
 /** A chat card's set_owner / set_decider (the targets kept by item id), if any: the item's own owner or decider. */
-const namedOn = (db: SimpleDb, key: string, field: "owner_id" | "decider_id"): string | null | undefined => {
+export const namedOn = (db: SimpleDb, key: string, field: "owner_id" | "decider_id"): string | null | undefined => {
   const t = db.targets?.[db.ids[key]];
   return t && field in t ? ((t[field] as string | null) ?? null) : undefined;
 };
@@ -928,7 +977,7 @@ export function canEditRoadmap(db: SimpleDb, roadmap: string, me: { id: string; 
 
 function visibleItems(db: SimpleDb, role: Role): SeedItem[] {
   const restricted = role === "commenter" || role === "viewer";
-  return db.items.filter((s) => (!db.company_roadmap || s.roadmap === db.company_roadmap) && (!restricted || ROADMAPS[s.roadmap].visibility === "company"));
+  return db.items.filter((s) => !s.trashed && !offLatest(db, s) && (!db.company_roadmap || s.roadmap === db.company_roadmap) && (!restricted || ROADMAPS[s.roadmap].visibility === "company"));
 }
 
 /** plan-model (suggestions._planned): the item's dated slices in its PRD's plan; none when the plan does not place it. */
@@ -1027,6 +1076,42 @@ function regenerate(db: SimpleDb, today: string): number {
 
 const OPEN_DRAFT = ["working", "submitted"];
 
+/** drafts.ensure: the roadmap's new working draft, opened on its published items (`except`:
+ * keys left out of them, read by no one outside the draft). */
+export function openDraft(db: SimpleDb, rm: string, by: string, except: string[] = []): MockDraft {
+  const items = db.items.filter((x) => x.roadmap === rm && !except.includes(x.key));
+  const keys = new Set(items.map((x) => x.key));
+  const d: MockDraft = {
+    roadmap: rm,
+    published: structuredClone({ items, own: Object.fromEntries(Object.entries(db.own).filter(([k]) => keys.has(k))), key_dates: db.key_dates?.[rm] ?? [] }),
+    out: {
+      id: crypto.randomUUID(), document: { id: stableUuid(`simple-doc/${rm}`), slug: rm, title: rm.replace(/-/g, " ").replace(/^./, (x) => x.toUpperCase()) },
+      status: "working", base_version: 1, version: null, created_by: by, created_at: new Date(mockNowMs()).toISOString(), participant_ids: [by],
+      submitted_at: null, submitted_by: null, decider_approved: false, waiting_on: [], approved_at: null, blocked_by: [], decision_notes: [],
+    },
+  };
+  (db.drafts ??= []).push(d);
+  return d;
+}
+
+/**
+ * trash_items._reopened: a feature only ever in a Simple draft whose draft was approved while it
+ * was in Trash (its version made without it) goes to the roadmap's open draft, the working one
+ * (opened, without it, when there is none) or the one in review; the change that added it counts
+ * there, so the draft is sent with it. Never onto the published roadmap.
+ */
+export function reopenDraftOnly(db: SimpleDb, key: string, roadmap: string, by: string): void {
+  const id = db.ids[key];
+  const added = (db.changes ?? []).find((c) => c.op === "add_item" && c.target.item_id === id && ["applied", "accepted"].includes(c.status));
+  const own = (db.drafts ?? []).filter((d) => (added?.draft_ids ?? []).includes(d.out.id));
+  if (!added || !own.length || own.some((d) => OPEN_DRAFT.includes(d.out.status))) return;
+  const made = own.map((d) => (db.versions ?? []).find((v) => v.roadmap === roadmap && v.number === d.out.version));
+  if (made.some((v) => !v?.without.includes(key))) return;
+  const open = (db.drafts ?? []).filter((d) => d.roadmap === roadmap && OPEN_DRAFT.includes(d.out.status));
+  const d = open.find((x) => x.out.status === "working") ?? open[0] ?? openDraft(db, roadmap, by, [key]);
+  added.draft_ids = [...(added.draft_ids ?? []), d.out.id];
+}
+
 /** A draft's applied changes, not undone. */
 export function draftChanges(db: SimpleDb, id: string): number {
   const cs = db.changes ?? [];
@@ -1035,7 +1120,8 @@ export function draftChanges(db: SimpleDb, id: string): number {
 
 /** Who sees a draft in the mock (no required reviewers): owners, its people and the roadmap's decider. */
 export function seesDraft(d: MockDraft, me: { id: string; role: Role }, db?: SimpleDb): boolean {
-  return me.role === "owner" || d.out.created_by === me.id || d.out.participant_ids.includes(me.id) || db?.deciders?.[d.roadmap] === me.id;
+  // drafts.sees: whoever it waits on and its roadmap's required reviewers read it too.
+  return me.role === "owner" || d.out.created_by === me.id || d.out.participant_ids.includes(me.id) || db?.deciders?.[d.roadmap] === me.id || (d.out.waiting_on ?? []).includes(me.id) || (db?.reviewers?.[d.roadmap] ?? []).includes(me.id);
 }
 
 /** The roadmap as one reader reads it: hidden drafts' roadmaps at their published items. */
@@ -1095,6 +1181,9 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     const code = prdCode(s.section);
     return code && (prdSlug === PLAN_PRD_SLUG || db.plan?.prds?.includes(prdSlug)) ? slices.filter((x) => x.feature_code === code) : [];
   };
+  // trash-features-goals: a goal in Trash is left out of every item's goal (service.load's goal_ids).
+  const trashedGoals = (reader.full.goal_buckets?.goals ?? []).filter((g) => g.trashed);
+  const inTrash = (k: string) => trashedGoals.some((g) => g.key === k || g.title.toLowerCase() === (GOALS[k] ?? PLAN_GOALS[k] ?? "").toLowerCase());
   const items: Item[] = seeds.map((s) => {
     const r = all.get(s.key)!.r;
     const rm = ROADMAPS[s.roadmap];
@@ -1106,7 +1195,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       code: prdCode(s.section),
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
       prd: ownPrd(s),
-      goal: s.goal ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, title: GOALS[s.goal] ?? PLAN_GOALS[s.goal], metric: METRICS[s.goal] ?? null, position: goalPositionOf(s.goal) } : null,
+      goal: s.goal && !inTrash(s.goal) ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, ...roadmapGoal(db, s.goal), position: goalPositionOf(s.goal) } : null,
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,
       status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),
@@ -1127,6 +1216,9 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       needed_by: seeds.filter((x) => x.depends?.includes(s.key)).map((x) => db.ids[x.key]),
       flags: flagsOf(s, r, all, w[s.horizon]),
       owner: ownerOf(db, s),
+      // one-feature-panel: the item's own owner (set_owner's before) and its stored dependency keys.
+      own_owner_id: namedOn(db, s.key, "owner_id") ?? null,
+      depends_keys: s.depends ?? [],
       can_decide: decides(s),
       deciders: deciders(s),
       reasons: [

@@ -76,6 +76,10 @@ class SimpleGoalRef(BaseModel):
     metric: str | None = None
     # goal-order: the goal's place (its attrs.position, 1 = first); none when unset.
     position: int | None = None
+    # one-feature-panel: its target and date, as the goal bucket edit reads and writes them
+    # (the panel edits how it is measured through that edit, which takes the whole goal).
+    target: str | None = None
+    due: dt.date | None = None
 
 
 class SimpleTrackRef(BaseModel):
@@ -306,6 +310,10 @@ class SimpleRoadmapItem(BaseModel):
     # floating card: the item's track owner (enabled), up to 3 one-line reasons (the
     # priority's rationale, the goal it serves, its PRD section) and the open decisions naming it.
     owner: SimpleOwnerRef | None = None
+    # one-feature-panel: the item's own owner (set_owner's ``before``; null: its track's
+    # owner is shown) and the keys it depends on as stored (set_depends' ``before``).
+    own_owner_id: str | None = None
+    depends_keys: list[str] = []
     can_decide: bool = False
     deciders: list[str] = []
     reasons: list[str] = []
@@ -558,6 +566,13 @@ ChangeOp = Literal[
     # Oracle's Requests (non-versioned), both made by chat as well.
     "set_milestone",
     "add_feature_ask",
+    # one-feature-panel: every field of an item, edited in its panel.
+    "set_confidence",
+    "set_track",
+    "set_prd",
+    "set_goal",
+    "set_depends",
+    "set_status",
     # chat-actions: the item's own owner and decider (into the working draft).
     "set_owner",
     "set_decider",
@@ -571,6 +586,16 @@ ChangeOp = Literal[
     # build-milestones-on-roadmap: a proposed date/counts_when on a PRD's own goal
     # milestone, on the PRD document, routed to its owner (oracle.simple.goal_milestones).
     "edit_goal_milestone",
+    # trash-features-goals: a feature moved to Trash, proposed to its decider by who may
+    # not decide on it (oracle.simple.trash_items).
+    "delete_item",
+    # trash-features-goals: a goal moved to Trash, proposed by a commenter to the company's
+    # owners (oracle.simple.trash_items).
+    "delete_goal",
+    # edit-goals-prds: a goal archived or restored from the archive, asked of the company's
+    # owners by who may not (oracle.simple.goal_asks).
+    "archive_goal",
+    "unarchive_goal",
 ]
 # chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
 # the change engine (oracle.simple.chat_actions).

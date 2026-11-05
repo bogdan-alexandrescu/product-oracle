@@ -211,7 +211,10 @@ test("qa-simple-home-26: Decided lately is newest first and each row opens its d
   expect(stamps.every((t) => !Number.isNaN(t))).toBe(true);
   expect([...stamps].sort((a, b) => b - a)).toEqual(stamps);
   const milestone = page.getByTestId("home-next-milestone").getByTestId("home-milestone-row");
-  await expect(milestone.first().getByRole("link")).toHaveAttribute("href", /^\/simple\/roadmap\?(prd|roadmap)=/);
+  // one-feature-panel: a milestone row's item opens its feature panel, its code before its name.
+  await milestone.first().getByRole("button").first().click();
+  await expect(page.getByTestId("item-panel")).toBeVisible();
+  await page.keyboard.press("Escape");
   await links.first().click();
   await expect(page).toHaveURL(/\/simple\/decisions#d-\d+$/);
 });

@@ -774,6 +774,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
             <button
               type="button"
               data-testid="chart-label"
+              data-item-id={r.item.id}
               data-open={open === r.item.id ? "true" : undefined}
               style={{ height: l.nameH?.get(r.item.id) ?? l.rowH }}
               onClick={() => onOpen(r.item, { x: sc.x((moved[r.item.id] ?? barSpan(r.item))[0]), y: (l.y.get(r.item.id) ?? 0) + l.rowH })}

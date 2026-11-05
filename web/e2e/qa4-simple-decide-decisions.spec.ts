@@ -65,13 +65,14 @@ for (const phone of [false, true]) {
       await expect(row(page, "Q1")).toBeVisible();
     });
 
-    test("qa4-simple-decide-10: a question's Blocks line reads in plain words, no codes", async ({ page }) => {
+    test("qa4-simple-decide-10: a question's Blocks line reads in plain words, the feature's code before its name", async ({ page }) => {
+      // BGD (Nov 4): every feature shows its code before its name; a milestone stays in words.
       await decisions(page, "list");
-      await expect(row(page, "Q5")).toContainText("Blocks Health log, first milestone");
-      await expect(page.getByTestId("questions-mine")).not.toContainText(/Blocks M\d|F-\d+/);
+      await expect(row(page, "Q5")).toContainText("Blocks F-03 Health log, first milestone");
+      await expect(page.getByTestId("questions-mine")).not.toContainText(/Blocks M\d/);
       await page.getByTestId("decisions-view-board").click();
       if (phone) await page.getByTestId("board-tab-recommended").click();
-      await expect(row(page, "Q7")).toContainText("Blocks Health log, first milestone");
+      await expect(row(page, "Q7")).toContainText("Blocks F-03 Health log, first milestone");
       await expect(page.getByTestId("questions-board")).not.toContainText(/Blocks M\d/);
     });
 

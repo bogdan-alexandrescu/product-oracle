@@ -46,14 +46,14 @@ const put = (p: Placed) =>
   unwrap(api.PATCH("/v1/baseline/entities/{entity_id}", { params: { path: { entity_id: p.id } }, body: { origin: "user", attrs: { position: p.position } } }));
 
 /**
- * Stores each goal's place; only the goals whose place changed are written. When one write
- * fails, the places already written are put back, so the order is never left half-saved.
+ * Stores each goal's place; only the goals whose place changed are written (`every`: all of them).
+ * When one write fails, the places already written are put back, so the order is never left half-saved.
  */
-async function store(places: Placed[], before: Map<string, number | null>): Promise<void> {
+async function store(places: Placed[], before: Map<string, number | null>, every = false): Promise<void> {
   const written: Placed[] = [];
   try {
     for (const p of places)
-      if ((before.get(p.id) ?? null) !== p.position) {
+      if (every || (before.get(p.id) ?? null) !== p.position) {
         await put(p);
         written.push({ id: p.id, position: before.get(p.id) ?? null });
       }
@@ -61,6 +61,18 @@ async function store(places: Placed[], before: Map<string, number | null>): Prom
     for (const p of written.reverse()) await put(p).catch(() => undefined);
     throw e;
   }
+}
+
+/**
+ * Priorities' Move up and Move down: stores `order` (goal ids, first first) as every goal's place,
+ * 1 to n; `before` is each goal's place now, put back when a write fails.
+ */
+export function storeGoalOrder(order: string[], before: Map<string, number | null>): Promise<void> {
+  return store(
+    order.map((id, i) => ({ id, position: i + 1 })),
+    before,
+    true,
+  );
 }
 
 /** Home's goal row while ordering: the bar with Cancel and Save order over the numbered cards. */

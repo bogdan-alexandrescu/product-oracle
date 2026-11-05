@@ -271,17 +271,24 @@ async def apply(
     position = max((r.position for r in rows), default=-1)
     listed: set[uuid.UUID] = set()
     written: dict[str, Any] = {"items": [], "added": [], "shipped": [], "moved_out": []}
+    from oracle.simple import trash_items
+
+    # A feature in Trash keeps its key (and its row on this version): a new item never takes it.
+    taken = await trash_items.trashed_keys(db, document.id)
     for p in plan.items:
         row = by_key.get(p.key or "") or by_title.get(p.title.lower())
         if row is None:
             if p.state is not None:
                 continue
             position += 1
+            key, n = p.key or _slug(p.title), 2
+            while key in taken or key in by_key:
+                key, n = f"{(p.key or _slug(p.title))[:21]}-{n}", n + 1
             row = RoadmapItem(
                 roadmap_document_id=document.id,
                 roadmap_version_id=version.id,
                 track_id=track.id if track else None,
-                item_key=p.key or _slug(p.title),
+                item_key=key,
                 title=p.title,
                 horizon=template.horizon if template else "now",
                 position=position,

@@ -1,6 +1,8 @@
 """Delete, restore, Trash and Regenerate (#482).
 
 Roles: owners delete any document, intake or run, see Settings › Trash, restore and purge;
+whoever deleted a roadmap feature or a goal (oracle.simple.trash_items) sees it in Trash and
+restores it too (commenter and up; oracle.trash.service.may_restore);
 a document's decider (whatever their role) and approvers (approver role and above)
 regenerate it, checked per document. Commenters and viewers do
 none of these. A run's agents never do any of them (``not_for_runs``), and every
@@ -31,6 +33,8 @@ from oracle.trash.schemas import (
 router = APIRouter(prefix="/v1", tags=["trash"], dependencies=[Depends(not_for_runs)])
 
 OwnerNow = Annotated[Principal, Depends(require_role_now("owner"))]
+# Trash's list and Restore: whoever deleted a feature or a goal, too (checked per entry).
+CommenterNow = Annotated[Principal, Depends(require_role_now("commenter"))]
 # Regenerate is checked per document (its decider, or an approver): any member here.
 MemberNow = Annotated[Principal, Depends(require_role_now("viewer"))]
 SAME_ORIGIN = [Depends(same_origin)]
@@ -46,7 +50,9 @@ async def _call[T](op: Awaitable[T]) -> T:
         raise HTTPException(exc.status, getattr(exc, "detail", None) or str(exc)) from exc
 
 
-def _entry_out(entry: TrashEntry, not_restored: list[dict] | None = None) -> TrashEntryOut:
+def _entry_out(
+    entry: TrashEntry, not_restored: list[dict] | None = None, *, can_restore: bool = False
+) -> TrashEntryOut:
     return TrashEntryOut(
         id=entry.id,
         root=entry.root,  # type: ignore[arg-type]
@@ -59,6 +65,7 @@ def _entry_out(entry: TrashEntry, not_restored: list[dict] | None = None) -> Tra
         purge_after=entry.purge_after,
         days_left=service.days_left(entry),
         not_restored=not_restored or [],  # type: ignore[arg-type]
+        can_restore=can_restore,
     )
 
 
@@ -80,7 +87,7 @@ async def _delete(
             db, principal, root_type, ref, reason=reason, confirm_published=confirm_published
         )
     )
-    out = _entry_out(entry)
+    out = _entry_out(entry, can_restore=service.may_restore(principal, entry))
     await db.commit()
     return out
 
@@ -168,17 +175,22 @@ async def restore_run(run_id: uuid.UUID, db: TenantDB, principal: OwnerNow) -> T
 
 
 @router.get("/trash", response_model=list[TrashEntryOut])
-async def list_trash(db: TenantDB, principal: OwnerNow) -> list[TrashEntryOut]:
+async def list_trash(db: TenantDB, principal: CommenterNow) -> list[TrashEntryOut]:
     """What is in Trash, newest first: who deleted it, when, why, what went with it and
-    the days left before the ticker purges it."""
-    return [_entry_out(e) for e in await service.list_entries(db)]
+    the days left before the ticker purges it. Owners see everything; others the features
+    and goals they deleted, which they restore themselves (``can_restore``)."""
+    return [
+        _entry_out(e, can_restore=service.may_restore(principal, e))
+        for e in await service.list_entries(db, principal)
+    ]
 
 
 @router.post("/trash/{entry_id}/restore", response_model=TrashEntryOut, dependencies=SAME_ORIGIN)
 async def restore_trash_entry(
-    entry_id: uuid.UUID, db: TenantDB, principal: OwnerNow
+    entry_id: uuid.UUID, db: TenantDB, principal: CommenterNow
 ) -> TrashEntryOut:
-    """Restore everything the delete took, together; ``not_restored`` says what could not
+    """Restore everything the delete took, together (owners; whoever deleted a feature or
+    a goal, too); ``not_restored`` says what could not
     come back with it (what it was built from, purged or still in Trash, and what was
     trashed separately)."""
     entry, not_restored = await _call(service.restore_entry(db, principal, entry_id))
