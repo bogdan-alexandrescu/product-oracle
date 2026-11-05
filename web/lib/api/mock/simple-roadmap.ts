@@ -1034,7 +1034,8 @@ export function draftChanges(db: SimpleDb, id: string): number {
 
 /** Who sees a draft in the mock (no required reviewers): owners, its people and the roadmap's decider. */
 export function seesDraft(d: MockDraft, me: { id: string; role: Role }, db?: SimpleDb): boolean {
-  return me.role === "owner" || d.out.created_by === me.id || d.out.participant_ids.includes(me.id) || db?.deciders?.[d.roadmap] === me.id;
+  // drafts.sees: whoever it waits on and its roadmap's required reviewers read it too.
+  return me.role === "owner" || d.out.created_by === me.id || d.out.participant_ids.includes(me.id) || db?.deciders?.[d.roadmap] === me.id || (d.out.waiting_on ?? []).includes(me.id) || (db?.reviewers?.[d.roadmap] ?? []).includes(me.id);
 }
 
 /** The roadmap as one reader reads it: hidden drafts' roadmaps at their published items. */
