@@ -831,3 +831,67 @@ async def test_approving_the_order_adds_its_new_features_as_proposed(client, own
         proposal = await s.scalar(select(Proposal).where(Proposal.run_id == uuid.UUID(run["id"])))
     assert entity is not None and entity.status == "proposed" and entity.title == "Bulk edit"
     assert proposal.status == "accepted"
+
+
+async def new_feature_graph(tenant_id, key="bulk-edit"):
+    """The feature ``key`` and its outgoing links as (type, other key, status, attrs)."""
+    async with tenant_session(tenant_id) as s:
+        by_id = {e.id: e for e in await s.scalars(select(Entity))}
+        entity = next((e for e in by_id.values() if e.key == key), None)
+        edges = (
+            list(await s.scalars(select(Edge).where(Edge.src_id == entity.id)))
+            if entity is not None
+            else []
+        )
+    links = sorted((e.type, by_id[e.dst_id].key, e.status, e.attrs) for e in edges)
+    return entity, links
+
+
+async def test_approved_new_features_carry_their_goal_links_and_attrs(client, owner, runtime):  # noqa: F811
+    """Review of PR 1244: an approved order's new feature joins the Ground Truth with the
+    goal it serves and what it depends on, as proposed links a person confirms, and the
+    run's effort and confidence; live Priorities scores it under its goal."""
+    tenant_id, auth = owner
+    run = await at_priority(client, owner, runtime, ORDER_NEW, features=NEW_DEPENDS)
+    approver = await as_user(tenant_id, "approver")
+    run = await decide(client, approver, run, note="Good order")
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert snap.status == "saved"
+    entity, links = await new_feature_graph(tenant_id)
+    assert entity is not None and entity.status == "proposed"
+    assert entity.attrs["effort"] == 2 and entity.attrs["confidence"] == 0.6
+    assert links == [
+        ("depends_on", "address-lookup", "proposed", {}),
+        ("supports", "activation", "proposed", {"contribution": 2}),
+    ]
+    live = (await client.get("/v1/priorities", headers=auth)).json()
+    row = {f["key"]: f for f in live["features"]}["bulk-edit"]
+    assert row["serves_goal"] is True
+    assert [(g["goal"], g["link_status"]) for g in row["explanation"]["goals"]] == [
+        ("activation", "proposed")
+    ]
+    assert row["depends_on"] == ["address-lookup"]
+
+
+async def test_a_new_feature_with_no_open_create_is_added_from_the_feature_set(
+    client,
+    owner,
+    runtime,  # noqa: F811
+):
+    """Review of PR 1244: a new key the run left no open create proposal for is added from
+    the approved feature set's entry, never skipped."""
+    tenant_id, _ = owner
+    run = await at_priority(client, owner, runtime, ORDER_NEW, features=NEW_DEPENDS)
+    async with tenant_session(tenant_id) as s:
+        for p in await s.scalars(select(Proposal).where(Proposal.run_id == uuid.UUID(run["id"]))):
+            p.status = "withdrawn"
+        await s.commit()
+    approver = await as_user(tenant_id, "approver")
+    run = await decide(client, approver, run, note="Good order")
+    entity, links = await new_feature_graph(tenant_id)
+    assert entity is not None and entity.status == "proposed" and entity.title == "Bulk edit"
+    assert entity.attrs["effort"] == 2 and entity.attrs["confidence"] == 0.6
+    assert [(t, k, st) for t, k, st, _ in links] == [
+        ("depends_on", "address-lookup", "proposed"),
+        ("supports", "activation", "proposed"),
+    ]
