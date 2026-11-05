@@ -556,6 +556,8 @@ ChangeOp = Literal[
     # Oracle's Requests (non-versioned), both made by chat as well.
     "set_milestone",
     "add_feature_ask",
+    # goal-buckets-tasks: the goals an item serves (into the working draft).
+    "set_goals",
     # chat-actions: the item's own owner and decider (into the working draft).
     "set_owner",
     "set_decider",

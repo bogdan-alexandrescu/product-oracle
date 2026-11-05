@@ -16,9 +16,9 @@ import { useSetParams } from "@/lib/use-set-params";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { FeaturePanel } from "../roadmap/_panel";
-import { ArchiveDialog, BTN, count, dayOf, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type Note } from "./goal-buckets";
+import { ArchiveDialog, BTN, count, dayOf, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
-import { TaskRow, useBucketTasks } from "./task-edit";
+import { TaskRow, useBucketTasks, type Task } from "./task-edit";
 import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan } from "./plan-buckets";
 
 type Out = Schemas["SimplePrioritiesOut"];
@@ -1947,6 +1947,18 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
   const rights = useBucketRights(gb);
   const drag = useBucketDrag({ gb, writes });
   const tasks = useBucketTasks({ rows: data.rows, plan: null, may: rights.task, reload: reloadAll, setNote, setError });
+  // A goal's pencil and ⋯, as with a dated plan: its form in place, and Archive's question.
+  const [editingGoal, setEditingGoal] = useState<string | null>(null);
+  const [archiving, setArchiving] = useState<string | null>(null);
+  const archivedGoal = gb?.goals.find((g) => g.id === archiving);
+  const year = data.today.slice(0, 4);
+  // A task just added (a draft, which the goal buckets do not list yet) moves by the change engine.
+  const draftGrip = (t: Task, from: string | null) => {
+    if (!rights.task || !gb) return undefined;
+    const f = { code: t.code, name: t.name, slices: [], weeks: null };
+    const own = { from, move: (to: { id: string; title: string }) => tasks.move(t, to) };
+    return { onPointerDown: (e: React.PointerEvent) => drag.grip(f, e, own), onKeyDown: (e: React.KeyboardEvent) => drag.grip(f, e, own) };
+  };
   const phone = usePhone();
   const [opened, setOpened] = useState<{ code: string; name: string } | null>(null);
   // Each feature by its code and its name, as the Ranked list shows them.
@@ -1975,6 +1987,8 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
   // qa4-simple-plan-2: milestones or key dates on the roadmap (the Line's) are not a dated plan; never say there are no dates.
   const dated = (data.lines ?? []).some((l) => l.kind === "milestone" || l.kind === "key_date");
   const weeksOf = (r: Row) => (r.effort == null ? "" : `${fmt(r.effort)} wk`);
+  // A goal's features as Archive counts them: its bucket's.
+  const featuresOf: GoalFeatures = (title) => (buckets.find((b) => !b.no_goal && sameGoal(b.title, title))?.codes ?? []).map((c) => ({ code: c, name: rowOf.get(c)?.title ?? c, slices: [] }));
   return (
     <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
       <p className="mb-3 text-text2" data-testid="buckets-intro">
@@ -2019,7 +2033,7 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
           const rec = goalOf(b);
           const over = !!rec && drag.over === rec.id;
           const drafts = data.drafts.filter((d) => (b.no_goal ? !d.goal : !!d.goal && sameGoal(d.goal.title, b.title)));
-          const add = rec ? tasks.add({ id: rec.id, title: b.title }) : null;
+          const add = b.no_goal ? null : tasks.add(rec && { id: rec.id, title: b.title }, !gb);
           return (
             <li
               key={b.key}
@@ -2029,12 +2043,35 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
               data-drop={over ? "" : undefined}
               className={`relative rounded-[var(--simple-card-radius)] border bg-surface p-3 ${over ? "border-2 border-accent bg-accent-soft" : b.no_goal ? "border-warn" : "border-line"}`}
             >
-              <div className="flex items-baseline justify-between gap-2">
-                <h3 className="font-semibold">{b.title}</h3>
-                <span className="tabular-nums">
-                  {fmt(b.weeks)} wk · <span data-testid="bucket-share">{percent[k]}%</span>
-                </span>
-              </div>
+              {rec && editingGoal === rec.id ? (
+                <GoalForm
+                  start={{ title: rec.title, measure: rec.measure ?? "", target: rec.target ?? "", due: dayOf(rec.due, year) }}
+                  order={rec.order}
+                  title="Edit goal"
+                  year={year}
+                  onCancel={() => setEditingGoal(null)}
+                  onSave={async (f) => {
+                    if (await writes.edit(rec, f, year)) setEditingGoal(null);
+                  }}
+                />
+              ) : (
+                <div className="flex items-baseline gap-2">
+                  <h3 className="min-w-0 flex-1 font-semibold">{b.title}</h3>
+                  <span className="tabular-nums">
+                    {fmt(b.weeks)} wk · <span data-testid="bucket-share">{percent[k]}%</span>
+                  </span>
+                  {rights.edit(rec) && (
+                    <button type="button" aria-label={`Edit ${b.title}`} title="Edit goal" className={`${ICON_BTN} self-center`} onClick={() => setEditingGoal(rec!.id)} disabled={!!editingGoal}>
+                      ✎
+                    </button>
+                  )}
+                  {rights.edit(rec) && rights.archive && (
+                    <span className="self-center">
+                      <GoalMenu title={b.title} archive onEdit={() => setEditingGoal(rec!.id)} onArchive={() => setArchiving(rec!.id)} />
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="mt-2 h-3 overflow-hidden rounded-full bg-surface2">
                 <div className={`h-full ${b.no_goal ? "bg-warn" : "bg-accent"}`} style={{ width: `${b.share * 100}%` }} />
               </div>
@@ -2060,7 +2097,7 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
                         key={c}
                         code={r?.short_code || c}
                         name={name}
-                        milestone={r?.milestone ?? null}
+                        milestone={(t && tasks.milestoneName(t)) ?? r?.milestone ?? null}
                         weeks={r ? weeksOf(r) : ""}
                         grip={movable ? { onPointerDown: (e) => drag.grip(f, e), onKeyDown: (e) => drag.grip(f, e) } : undefined}
                         lifted={drag.lifted === c}
@@ -2077,7 +2114,18 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
                         {form}
                       </li>
                     ) : (
-                      <TaskRow key={d.item_id} code={d.code} name={d.title} milestone={tasks.milestoneName(t)} weeks="" draft onOpen={() => setOpened({ code: d.code, name: d.title })} actions={tasks.actions(t)} />
+                      <TaskRow
+                        key={d.item_id}
+                        code={d.code}
+                        name={d.title}
+                        milestone={tasks.milestoneName(t)}
+                        weeks=""
+                        draft
+                        grip={draftGrip(t, rec?.id ?? null)}
+                        lifted={drag.lifted === d.code}
+                        onOpen={() => setOpened({ code: d.code, name: d.title })}
+                        actions={tasks.actions(t)}
+                      />
                     );
                   })}
                   {add}
@@ -2103,6 +2151,18 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
       {drag.ghost}
       {tasks.dialog}
       {opened && <FeaturePanel key={opened.code} feature={opened} phone={phone} canChange={can("create_simple_change")} onClose={() => setOpened(null)} />}
+      {archivedGoal && gb && (
+        <ArchiveDialog
+          goal={archivedGoal}
+          plan={null}
+          featuresOf={featuresOf}
+          gb={gb}
+          onClose={() => setArchiving(null)}
+          onArchive={async (to) => {
+            if (await writes.archive(archivedGoal, to, archiveWords(featuresOf, gb, archivedGoal, to))) setArchiving(null);
+          }}
+        />
+      )}
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
     </section>
   );
@@ -2170,6 +2230,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
         const t = tasks.taskOf(f.code, f.name);
         return t ? tasks.form(t, goal ?? "No goal") : null;
       },
+      milestone: (f: { code: string; name: string }) => tasks.ownMilestone(tasks.taskOf(f.code, f.name)),
     },
     tail: (
       <>
@@ -2183,10 +2244,21 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
                 {form}
               </li>
             ) : (
-              <TaskRow key={d.item_id} code={d.code} name={d.title} milestone={tasks.milestoneName(t)} weeks="" draft onOpen={() => setOpened({ code: d.code, name: d.title })} actions={tasks.actions(t)} />
+              <TaskRow
+                key={d.item_id}
+                code={d.code}
+                name={d.title}
+                milestone={tasks.milestoneName(t)}
+                weeks=""
+                draft
+                grip={draftGrip(t, rec?.id ?? null)}
+                lifted={drag.lifted === d.code}
+                onOpen={() => setOpened({ code: d.code, name: d.title })}
+                actions={tasks.actions(t)}
+              />
             );
           })}
-        {rec && tasks.add({ id: rec.id, title: rec.title })}
+        {goal != null && tasks.add(rec && { id: rec.id, title: rec.title }, !gb)}
       </>
     ),
   });
@@ -2195,6 +2267,13 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
   const nextOrder = Math.max(0, ...(gb?.goals ?? []).map((g) => g.order)) + 1;
   // GB3 a: a feature carried by its grip, by pointer or by keyboard.
   const drag = useBucketDrag({ gb, writes });
+  // A task just added (a draft, which the goal buckets do not list yet) moves by the change engine.
+  const draftGrip = (t: Task, from: string | null) => {
+    if (!rights.task || !gb) return undefined;
+    const f = { code: t.code, name: t.name, slices: [], weeks: null };
+    const own = { from, move: (to: { id: string; title: string }) => tasks.move(t, to) };
+    return { onPointerDown: (e: React.PointerEvent) => drag.grip(f, e, own), onKeyDown: (e: React.KeyboardEvent) => drag.grip(f, e, own) };
+  };
   // Who may suggest (commenters and up) gets B's two buttons; anyone else, the suggestions to read.
   const suggests = can("create_goal_suggestion");
   // A goal's code: its own ("G-A1 Account Safety"), else the code of the goal it names.
@@ -2390,7 +2469,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
           gb={gb}
           onClose={() => setArchiving(null)}
           onArchive={async (to) => {
-            if (!(await writes.archive(archivedGoal, to, archiveWords(plan, gb, archivedGoal, to)))) return;
+            if (!(await writes.archive(archivedGoal, to, archiveWords((t) => planFeatures(plan, t), gb, archivedGoal, to)))) return;
             setArchiving(null);
             // gb2-a-result: the archived bucket is gone, so the page scrolls back to the note's own
             // place above the buckets, where it covers no goal's title.
@@ -2406,8 +2485,8 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
 const ICON_BTN = "inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-transparent text-[16px] text-text hover:border-line-strong hover:bg-surface2 disabled:opacity-40";
 
 /** GB2 a's note: "Archived Grow shop partners. 1 feature moved to Faster first ride, 1 to the other goal it serves." */
-function archiveWords(plan: Schemas["SimplePlanOut"], gb: Schemas["GoalBucketsOut"], goal: Schemas["GoalBucketGoal"], to: string | null): string {
-  const list = planFeatures(plan, goal.title);
+function archiveWords(listOf: GoalFeatures, gb: Schemas["GoalBucketsOut"], goal: Schemas["GoalBucketGoal"], to: string | null): string {
+  const list = listOf(goal.title);
   const own = list.filter((f) => (featureOf(gb, f.code, f.name)?.goal_ids ?? []).some((g) => g !== goal.id)).length;
   const rest = list.length - own;
   const toTitle = gb.goals.find((g) => g.id === to)?.title;

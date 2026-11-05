@@ -9,7 +9,9 @@ import { planFeatures, wk } from "./plan-buckets";
 
 type Buckets = Schemas["GoalBucketsOut"];
 type Feature = ReturnType<typeof planFeatures>[number];
-type Carried = { f: Feature; id: string; from: string | null; by: "pointer" | "keys"; x: number; y: number; moved: boolean };
+/** A task the goal buckets do not list yet (a draft): where it is, and its own write. */
+export type Own = { from: string | null; move: (to: { id: string; title: string }) => Promise<unknown> };
+type Carried = { f: Feature; id: string; from: string | null; by: "pointer" | "keys"; x: number; y: number; moved: boolean; own?: Own };
 
 const EDGE = 72; // px from the window's top or bottom where a drag scrolls the page
 const SPEED = 14; // px a frame
@@ -47,21 +49,22 @@ export function useBucketDrag({ gb, writes }: { gb: Buckets | undefined; writes:
         return;
       }
       setSaid(`Moved ${c.f.name} to ${titleOf(to)}.`);
-      await writes.move(c.id, c.from, to, <>Moved {c.f.name} to {titleOf(to)}.</>);
+      if (c.own) await c.own.move({ id: to, title: titleOf(to) });
+      else await writes.move(c.id, c.from, to, <>Moved {c.f.name} to {titleOf(to)}.</>);
     },
     [titleOf, writes],
   );
 
-  const grip = (f: Feature, e: React.PointerEvent | React.KeyboardEvent) => {
-    const rec = featureOf(gb, f.code, f.name);
+  const grip = (f: Feature, e: React.PointerEvent | React.KeyboardEvent, own?: Own) => {
+    const rec = own ? { id: `own:${f.code}`, goal_ids: own.from ? [own.from] : [] } : featureOf(gb, f.code, f.name);
     if (!rec || ref.current.carried) return;
     const from = rec.goal_ids[0] ?? null;
     if ("pointerId" in e) {
       if (e.button !== 0) return;
       e.preventDefault();
-      setCarried({ f, id: rec.id, from, by: "pointer", x: e.clientX, y: e.clientY, moved: false });
+      setCarried({ f, id: rec.id, from, by: "pointer", x: e.clientX, y: e.clientY, moved: false, own });
     } else {
-      setCarried({ f, id: rec.id, from, by: "keys", x: 0, y: 0, moved: false });
+      setCarried({ f, id: rec.id, from, by: "keys", x: 0, y: 0, moved: false, own });
       setSaid(`Picked up ${f.name}. Use the arrow keys to choose a goal, Enter to drop it there, Escape to cancel.`);
     }
   };

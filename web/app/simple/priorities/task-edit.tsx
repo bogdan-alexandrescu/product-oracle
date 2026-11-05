@@ -48,9 +48,10 @@ export function rowOf(rows: Row[], code: string, name: string): Row | undefined 
   return rows.find((r) => r.code.toLowerCase() === c || r.short_code.toLowerCase() === c) ?? rows.find((r) => r.title === name);
 }
 
-/** The milestones a task may be in: the plan's, then those the roadmap's items name. */
-export function milestoneOptions(plan: Schemas["SimplePlanOut"] | null | undefined, items: Item[]): MilestoneOption[] {
+/** The milestones a task may be in: the plan's, the roadmap's, then those the roadmap's items name. */
+export function milestoneOptions(plan: Schemas["SimplePlanOut"] | null | undefined, items: Item[], roadmap: Schemas["SimpleMilestone"][] = []): MilestoneOption[] {
   const out: MilestoneOption[] = (plan?.milestones ?? []).map((m) => ({ name: m.name, date: m.end_date ?? null }));
+  for (const m of roadmap) if (!out.some((o) => o.name === m.name)) out.push({ name: m.name, date: m.date ?? null });
   for (const i of items) {
     const name = i.milestone?.name;
     if (name && !out.some((m) => m.name === name)) out.push({ name, date: i.milestone?.date ?? null });
@@ -242,15 +243,23 @@ export function CutDialog({ task, dependents, onClose, onCut }: { task: Task; de
   );
 }
 
+/** The API's own words for a change it refused (never "Cannot reach the API"). */
+class Refused extends Error {}
+
+const said = (e: unknown) => (e instanceof Refused ? e.message : errorMessage(e));
+
 /** POST /v1/simple/changes; a refusal throws its words. */
 async function send(body: ChangeIn): Promise<Change> {
   const { data, error, response } = await api.POST("/v1/simple/changes", { body });
   if (response.ok && data) return data.change;
   const detail = (error as { detail?: unknown } | undefined)?.detail;
-  throw new Error(typeof detail === "string" ? detail : detail && typeof detail === "object" && "message" in detail ? String((detail as { message: unknown }).message) : response.statusText);
+  throw new Refused(typeof detail === "string" ? detail : detail && typeof detail === "object" && "message" in detail ? String((detail as { message: unknown }).message) : response.statusText);
 }
 
 const milestoneOf = (name: string, options: MilestoneOption[]) => (name ? { name, date: options.find((m) => m.name === name)?.date ?? null, date_source: "typed" } : null);
+
+/** What an edit's change is about, for the note naming those proposed. */
+const PART: Record<string, string> = { edit_title: "the name", edit_outcome: "the outcome", set_milestone: "the milestone" };
 
 /** The task writes: each applied one shows its note with Undo; a proposal says it waits for a decision. */
 export function useTaskWrites(reload: () => Promise<void>, setNote: (n: Note | null) => void, setError: (e: string | null) => void) {
@@ -259,12 +268,18 @@ export function useTaskWrites(reload: () => Promise<void>, setNote: (n: Note | n
       const made = await go();
       setError(null);
       const applied = made.filter((c) => c.status === "applied");
+      const waiting = made.filter((c) => c.status !== "applied");
+      const changes = applied.filter((c) => c.can_undo).map((c) => c.id);
       if (made.length && !applied.length) setNote({ text: <>{proposed}: it waits for a decision.</> });
-      else setNote({ text: <>{done}</>, changes: applied.filter((c) => c.can_undo).map((c) => c.id) });
+      else if (waiting.length) {
+        // Some applied, some proposed: the note names those proposed.
+        const parts = [...new Set(waiting.map((c) => PART[c.op] ?? "a change"))];
+        setNote({ text: <>{`${done} Proposed ${andList(parts)}: ${parts.length === 1 ? "it waits" : "they wait"} for a decision.`}</>, changes });
+      } else setNote({ text: <>{done}</>, changes });
       await reload();
       return true;
     } catch (e) {
-      setError(errorMessage(e));
+      setError(said(e));
       await reload();
       return false;
     }
@@ -300,6 +315,15 @@ export function useTaskWrites(reload: () => Promise<void>, setNote: (n: Note | n
         `Proposed the change to ${name}`,
       );
     },
+    /** A task carried to another goal's bucket: that goal becomes the first it serves. */
+    move: (task: Task, item: Item | undefined, to: { id: string; title: string }) => {
+      const was = item?.goal_ids ?? [];
+      return run(
+        async () => [await send({ op: "set_goals", target: { item_id: task.itemId }, before: { goal_ids: was }, after: { goal_ids: [to.id, ...was.slice(1).filter((g) => g !== to.id)] } })],
+        `Moved ${task.name} to ${to.title}.`,
+        `Proposed moving ${task.name} to ${to.title}`,
+      );
+    },
     cut: (task: Task, dependents: string[]) =>
       run(
         async () => [await send({ op: "cut", target: { item_id: task.itemId }, before: { cut: false }, after: { cut: true } })],
@@ -314,7 +338,7 @@ export function useTaskWrites(reload: () => Promise<void>, setNote: (n: Note | n
         }
         setNote({ text: <>Undone: the task is back as it was.</> });
       } catch (e) {
-        setError(errorMessage(e));
+        setError(said(e));
       }
       await reload();
     },
@@ -325,6 +349,9 @@ export function useTaskWrites(reload: () => Promise<void>, setNote: (n: Note | n
 export function dependentsOf(rows: Row[], code: string): string[] {
   return rows.filter((r) => r.depends_on.some((d) => d.toLowerCase() === code.toLowerCase())).map((r) => r.title);
 }
+
+/** A code people know ("F-27"), not an item's raw key ("saved-carts"): a draft shows no chip until it has one. */
+const knownCode = (code: string) => /^[a-z]+\d*-\d+[a-z]?$/i.test(code);
 
 /** A task's row where the plan does not place it (an added draft; every task with no dated plan), as FeatureRows draws a feature's. */
 export function TaskRow({
@@ -375,9 +402,11 @@ export function TaskRow({
           ⠿
         </button>
       )}
-      <span data-testid="prio-code" title={name} className="inline-block min-w-[3.25rem] flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1.5 text-center align-middle text-[13px] font-semibold leading-5 tabular-nums text-text">
-        {code}
-      </span>{" "}
+      {(!draft || knownCode(code)) && (
+        <span data-testid="prio-code" title={name} className="inline-block min-w-[3.25rem] flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1.5 text-center align-middle text-[13px] font-semibold leading-5 tabular-nums text-text">
+          {code}
+        </span>
+      )}{" "}
       <span data-testid="plan-feature-name" className="min-w-0 flex-1">
         {onOpen ? (
           <button type="button" data-testid="plan-feature-open" title={`Open ${name}`} className="text-left hover:underline" onClick={onOpen}>
@@ -433,7 +462,7 @@ export function useBucketTasks({
     setError,
   );
   const all = items.data?.items ?? [];
-  const options = milestoneOptions(plan, all);
+  const options = milestoneOptions(plan, all, items.data?.milestones);
   const itemOf = (t: Task) => all.find((i) => i.id === t.itemId);
   const live = (i: Item) => i.status !== "cut" && i.status !== "merged";
   /** The roadmap item a feature is: its ranked row's, else the live item of its key or name. */
@@ -463,9 +492,17 @@ export function useBucketTasks({
       />
     ) : null;
   const actions = (t: Task | undefined): ReactNode => (may && t ? <TaskActions name={t.name} disabled={!!editing} onEdit={() => setEditing(t.code)} onCut={() => setCutting(t)} /> : null);
-  /** "+ Add a task" at the foot of a goal's bucket, or its form in place. */
-  const add = (goal: { id: string; title: string } | undefined): ReactNode => {
-    if (!may || !goal) return null;
+  /** "+ Add a task" at the foot of a goal's bucket, or its form in place; off while the goal buckets load. */
+  const add = (goal: { id: string; title: string } | undefined, loading = false): ReactNode => {
+    if (!may || (!goal && !loading)) return null;
+    if (!goal)
+      return (
+        <li data-testid="add-task" className="pt-1">
+          <button type="button" className="mt-1 flex h-9 w-full items-center gap-1.5 rounded-lg border border-dashed border-line-strong px-3 text-left text-[15px] font-[650] text-text2 disabled:opacity-40" disabled>
+            + Add a task
+          </button>
+        </li>
+      );
     const key = `new:${goal.id}`;
     return (
       <li data-testid="add-task" className="pt-1">
@@ -499,5 +536,12 @@ export function useBucketTasks({
     />
   ) : null;
   const milestoneName = (t: Task | undefined) => (t ? (itemOf(t)?.milestone?.name ?? null) : null);
-  return { taskOf, isCut, form, actions, add, dialog, undo: writes.undo, milestoneName, editing };
+  /** The task's own milestone (set in its form), beside the plan's milestones on its row. */
+  const ownMilestone = (t: Task | undefined) => {
+    const m = t ? itemOf(t)?.milestone : undefined;
+    return m?.source === "item" ? (m.name ?? null) : null;
+  };
+  /** A task carried to another goal's bucket (a draft: the goal buckets do not list it yet). */
+  const move = (t: Task, to: { id: string; title: string }) => writes.move(t, itemOf(t), to);
+  return { taskOf, isCut, form, actions, add, dialog, undo: writes.undo, milestoneName, ownMilestone, move, editing };
 }
