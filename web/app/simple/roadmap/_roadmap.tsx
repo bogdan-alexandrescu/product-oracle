@@ -1270,9 +1270,9 @@ export function SimpleRoadmap() {
   // Review: under a filter, Needs a decision counts the whole roadmap's broken links and dates to
   // confirm, as the side menu does.
   const counted = decisionCounts(data.items, allProposals);
-  const narrowed = !!(f.prd || f.goal || f.track || f.from || f.to || f.roadmap);
-  const allLinks = narrowed ? wholeLinks.data?.broken_links : undefined;
-  const allDates = narrowed ? wholeLinks.data?.dates_to_confirm : undefined;
+  const anyFilter = !!(f.prd || f.goal || f.track || f.from || f.to || f.roadmap);
+  const allLinks = anyFilter ? wholeLinks.data?.broken_links : undefined;
+  const allDates = anyFilter ? wholeLinks.data?.dates_to_confirm : undefined;
   const waiting = counted.total - counted.links - counted.dates.length + (allLinks ?? counted.links) + (allDates ?? counted.dates.length);
   const qList = quarters(data.windows.now.start, data.windows.later.end);
   // qa-shell-8: a new company's roadmap has nothing on it (no item, milestone or key date, and

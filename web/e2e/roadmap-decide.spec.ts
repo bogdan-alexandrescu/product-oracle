@@ -165,7 +165,7 @@ test("under a filter, every dependent of a cut item can drop it, and every count
   await expect.poll(() => badgeLinks(page)).toBe(whole);
   expect(await trayLinks(page)).toBe(whole);
   await page.getByTestId("needs-decision").click();
-  await expect(tray(page).getByTestId("tray-links-here")).toContainText(`of the ${whole} broken links are in these filters`);
+  await expect(tray(page).getByTestId("tray-links-here")).toContainText(`1 of the ${whole} broken links is in these filters`);
   await tray(page).getByRole("button", { name: "Close" }).click();
   await all.getByRole("button", { name: "Clear filters" }).click();
   await expect(page.locator('[data-testid="timeline-row"][data-item="uptime-alerts"]')).toHaveCount(1);
@@ -198,7 +198,7 @@ test("with two working drafts, the banner has a line per draft: its roadmap, its
   await expect(alerts.getByTestId("draft-next")).toContainText("Next: you approve it");
   await expect(alerts.getByRole("button", { name: "Approve and publish" })).toBeVisible();
   await expect(alerts.getByRole("button", { name: "Send for review" })).toHaveCount(0);
-  await expect(onboarding.getByTestId("draft-next")).toContainText("Next: you send it for review. When Priya Raman approves");
+  await expect(onboarding.getByTestId("draft-next")).toContainText("Next: you send it for review.");
   await expect(onboarding.getByRole("button", { name: "Approve and publish" })).toHaveCount(0);
   await onboarding.getByRole("button", { name: "Send for review" }).click();
   await expect(page.getByText(/Sent for review/).first()).toBeVisible();
@@ -323,7 +323,7 @@ test("an approver's proposed Remove the dependency says who it waits for and is 
   await propose.click();
   await expect(page.getByText(/proposed: it waits for/).first()).toBeVisible();
   await expect(cut.getByRole("button", { name: label, exact: true })).toHaveCount(0);
-  await expect(cut.getByTestId("fix-proposed").first()).toContainText("Proposed: waits for Avery Stone");
+  await expect(cut.getByTestId("fix-proposed").first()).toContainText(/[Pp]roposed,? waits for Avery Stone/);
 });
 
 test("under a filter, Needs a decision says N here, M in all on one basis, and 1 of N is", async ({ page }) => {

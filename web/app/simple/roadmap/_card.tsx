@@ -178,7 +178,8 @@ export function FixButtons({
                 {live.length > 1 ? `Removing the dependency of ‘${n.title}’: proposed, waits for ${waits}` : `Proposed: waits for ${waits}`}
               </span>
             ) : (
-              <Button key={`${f}-${n.id}`} className={inline ? "!h-6 !px-2 !text-xs" : ""} onClick={() => unlink(n)}>
+              // A long name wraps inside its button rather than run past a phone's edge.
+              <Button key={`${f}-${n.id}`} className={inline ? "!h-6 !px-2 !text-xs" : "!h-auto min-h-8 max-w-full py-1 text-left !whitespace-normal"} onClick={() => unlink(n)}>
                 {live.length > 1 ? `${fixWords(f, n.can_decide)} of ‘${n.title}’` : fixWords(f, n.can_decide)}
               </Button>
             );
