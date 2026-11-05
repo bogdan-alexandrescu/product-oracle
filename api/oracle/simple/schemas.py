@@ -306,6 +306,10 @@ class SimpleRoadmapItem(BaseModel):
     # floating card: the item's track owner (enabled), up to 3 one-line reasons (the
     # priority's rationale, the goal it serves, its PRD section) and the open decisions naming it.
     owner: SimpleOwnerRef | None = None
+    # one-feature-panel: the item's own owner (set_owner's ``before``; null: its track's
+    # owner is shown) and the keys it depends on as stored (set_depends' ``before``).
+    own_owner_id: str | None = None
+    depends_keys: list[str] = []
     can_decide: bool = False
     deciders: list[str] = []
     reasons: list[str] = []
@@ -558,6 +562,13 @@ ChangeOp = Literal[
     # Oracle's Requests (non-versioned), both made by chat as well.
     "set_milestone",
     "add_feature_ask",
+    # one-feature-panel: every field of an item, edited in its panel.
+    "set_confidence",
+    "set_track",
+    "set_prd",
+    "set_goal",
+    "set_depends",
+    "set_status",
     # chat-actions: the item's own owner and decider (into the working draft).
     "set_owner",
     "set_decider",

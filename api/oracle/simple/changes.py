@@ -40,6 +40,15 @@ Ops and the fields they write (``before`` must name the key fields):
   date_source: "typed"}}`` (date optional), or null to clear it.
 - ``set_owner`` / ``set_decider`` (chat-actions): the item's own owner_id / decider_id, a
   member of the company (null: back to its track's owner / its roadmap's decider).
+- ``set_confidence`` / ``set_track`` / ``set_prd`` (one-feature-panel): the item's
+  confidence (low, medium, high or null), its track (a product track) and the PRD it
+  belongs to (a PRD document), each null to clear.
+- ``set_goal``: the goal the item serves, ``{"goal_id"}`` (a goal; null: its feature's
+  goal again), stored as goal_ids, which win over the feature's goal.
+- ``set_depends``: the keys the item depends on (``depends_on``: item keys of its roadmap,
+  or feature keys, as the dependency checks read them).
+- ``set_status``: planned, done or cut; ``before`` ``{"status"}`` as the read showed it;
+  writes cut and shipped (done: marked shipped; planned: neither, the tracker's again).
 - ``accept_risk``: the risk accepted on one flag (``target.flag``, ``target.subject``),
   ``{"risk": {"note"}}``; ``before`` ``{"risk": null}`` when none is.
 - ``shift_dependents``: the flagged item (``target.item_id``) starts the day after its
@@ -117,7 +126,28 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "set_milestone": ("milestone",),
     "set_owner": ("owner_id",),
     "set_decider": ("decider_id",),
+    # one-feature-panel: every field of an item, edited in its panel.
+    "set_confidence": ("confidence",),
+    "set_track": ("track_id",),
+    "set_prd": ("prd_document_id",),
+    "set_goal": ("goal_id",),
+    "set_depends": ("depends_on",),
+    "set_status": ("status",),
 }
+CONFIDENCES = ("low", "medium", "high")
+# set_status: the statuses a person sets (the others come from the tracker or a merge).
+STATUSES = ("planned", "done", "cut")
+DEPENDS_MAX = 50
+# The ops whose ``before`` is what the read shows, and the row fields each writes.
+SHOWN = {
+    "set_confidence": lambda e: {"confidence": e.row.confidence},
+    "set_track": lambda e: {"track_id": str(e.track.id) if e.track else None},
+    "set_prd": lambda e: {"prd_document_id": str(e.prd.id) if e.prd else None},
+    "set_goal": lambda e: {"goal_id": str(e.goal.id) if e.goal else None},
+    "set_depends": lambda e: {"depends_on": list(e.row.depends_on or [])},
+    "set_status": lambda e: {"status": e.status},
+}
+STORED = {"set_track": ("track_id",), "set_prd": ("prd_document_id",), "set_goal": ("goal_ids",)}
 FIXES = ("shift_dependents", "move_dependency")
 # fix5-cut-dependents: the item and every item that waits on it, cut as one change.
 CUT_ALL = "cut_with_dependents"
@@ -631,10 +661,33 @@ async def _plan(
         raise ChangeError(422, f"before: {', '.join(missing)} as you saw them")
     if op in ("confirm_item", "keep_both") and (not row.draft or row.merged_into):
         raise ChangeError(422, "Only a draft item is confirmed or kept")
-    current = read(row, fields, target)
+    if op in SHOWN:
+        # one-feature-panel: ``before`` is what the read shows (a track or goal may come
+        # from the item's PRD or feature, not its own row).
+        shown = SHOWN[op](entry)
+        if {f: body.before[f] for f in fields} != shown:
+            raise await _conflict(db, shown, {str(row.id)}, "Changed since you saw it")
+    if op == "set_status":
+        status = body.after.get("status")
+        if status not in STATUSES:
+            raise ChangeError(422, "after.status: planned, done or cut")
+        shipped = None
+        if status == "done":
+            shipped = row.shipped or {
+                "note": "Marked done in its panel",
+                "by": str(_me(principal)),
+                "on": company_time.today().isoformat(),
+            }
+        after = {"cut": status == "cut", "shipped": shipped}
+        return entry, target, read(row, ("cut", "shipped"), target), after
+    if op in SHOWN:
+        current = seen_ = {}
+    else:
+        current = read(row, fields, target)
     # A suggestion accepted after the item got dates is "outdated" (S2-minor).
     lead = "outdated" if op == "accept_date_suggestion" else "Changed since you saw it"
-    seen_ = _normal(fields, body.before)
+    if op not in SHOWN:
+        seen_ = _normal(fields, body.before)
     if op == "move_dates" and seen_ != current:
         # hotfix-2: a move's ``before`` is the dates the read shows (a date source's, an
         # estimated start, a folded PRD copy's); the stored ones still pass (older pages).
@@ -744,6 +797,39 @@ async def _plan(
         if outcome is not None and len(outcome) > OUTCOME_MAX:
             raise ChangeError(422, f"after.outcome: at most {OUTCOME_MAX} characters")
         after = {"outcome": outcome or None}
+    elif op == "set_confidence":
+        c = a.get("confidence")
+        if c is not None and c not in CONFIDENCES:
+            raise ChangeError(422, "after.confidence: low, medium, high or null")
+        after = {"confidence": c}
+    elif op in ("set_track", "set_prd"):
+        field = STORED[op][0]
+        ref = _uuid(a[field], f"after.{field}") if a.get(field) is not None else None
+        if ref is not None and not await _exists(db, op, ref):
+            what = "a product track" if op == "set_track" else "a PRD"
+            raise ChangeError(422, f"after.{field}: {what}")
+        after = {field: str(ref) if ref else None}
+        stored = STORED[op]
+    elif op == "set_goal":
+        from oracle.baseline.models import Entity
+
+        goal = _uuid(a["goal_id"], "after.goal_id") if a.get("goal_id") is not None else None
+        if (
+            goal is not None
+            and await db.scalar(select(Entity.id).where(Entity.id == goal, Entity.type == "goal"))
+            is None
+        ):
+            raise ChangeError(422, "after.goal_id: a goal")
+        after = {"goal_ids": [str(goal)] if goal else []}
+        stored = STORED[op]
+    elif op == "set_depends":
+        keys = a.get("depends_on")
+        if not isinstance(keys, list) or len(keys) > DEPENDS_MAX:
+            raise ChangeError(422, f"after.depends_on: a list of at most {DEPENDS_MAX} keys")
+        clean = list(dict.fromkeys(" ".join(str(k or "").split()) for k in keys))
+        if any(not k or len(k) > TITLE_MAX for k in clean) or row.item_key in clean:
+            raise ChangeError(422, "after.depends_on: item or feature keys, never the item's own")
+        after = {"depends_on": clean}
     else:  # accept_risk
         if target.get("flag") not in FLAG_KINDS:
             raise ChangeError(422, "target.flag: a constraint flag's kind")
@@ -761,6 +847,17 @@ async def _plan(
             }
         }
     return entry, target, read(row, stored, target), after
+
+
+async def _exists(db: AsyncSession, op: str, ref: uuid.UUID) -> bool:
+    """set_track: a product track; set_prd: a PRD document."""
+    from oracle.docs.models import Document
+    from oracle.roadmap.models import ProductTrack
+
+    if op == "set_track":
+        return await db.scalar(select(ProductTrack.id).where(ProductTrack.id == ref)) is not None
+    q = select(Document.id).where(Document.id == ref, Document.kind == "prd")
+    return await db.scalar(q) is not None
 
 
 async def _merge_plan(

@@ -123,6 +123,19 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             return f"changed the owner of {x}"
         case "set_decider":
             return f"changed the decider of {x}"
+        case "set_confidence":
+            return f"changed the confidence of {x}"
+        case "set_track":
+            return f"changed the track of {x}"
+        case "set_prd":
+            return f"changed the PRD of {x}"
+        case "set_goal":
+            return f"changed the goal of {x}"
+        case "set_depends":
+            return f"changed what {x} depends on"
+        case "set_status":
+            word = "cut" if after.get("cut") else "done" if after.get("shipped") else "planned"
+            return f"marked {x} {word}"
         # prd-questions: a PRD question (a decision) answered, or its decider named.
         case "decide_question":
             return f"decided {x}"

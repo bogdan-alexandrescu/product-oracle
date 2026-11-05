@@ -21,9 +21,10 @@ Test cards (protects / fails_when / no_claim):
 from datetime import date
 
 import pytest
+
 from oracle import company_time
 from oracle.tenancy import tenant_session
-from tests.test_simple_changes_api import CHANGES, World, make_people
+from tests.test_simple_changes_api import CHANGES, make_people
 from tests.test_simple_roadmap_api import NOW, Seed, by_key, get
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")

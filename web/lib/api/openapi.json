@@ -61650,6 +61650,12 @@
                   "keep_both",
                   "set_milestone",
                   "add_feature_ask",
+                  "set_confidence",
+                  "set_track",
+                  "set_prd",
+                  "set_goal",
+                  "set_depends",
+                  "set_status",
                   "set_owner",
                   "set_decider",
                   "decide_question",
@@ -62042,6 +62048,12 @@
               "keep_both",
               "set_milestone",
               "add_feature_ask",
+              "set_confidence",
+              "set_track",
+              "set_prd",
+              "set_goal",
+              "set_depends",
+              "set_status",
               "set_owner",
               "set_decider",
               "decide_question",
@@ -85552,6 +85564,12 @@
               "keep_both",
               "set_milestone",
               "add_feature_ask",
+              "set_confidence",
+              "set_track",
+              "set_prd",
+              "set_goal",
+              "set_depends",
+              "set_status",
               "set_owner",
               "set_decider",
               "decide_question",
@@ -119392,6 +119410,12 @@
               "keep_both",
               "set_milestone",
               "add_feature_ask",
+              "set_confidence",
+              "set_track",
+              "set_prd",
+              "set_goal",
+              "set_depends",
+              "set_status",
               "set_owner",
               "set_decider",
               "decide_question",
@@ -119531,6 +119555,12 @@
               "keep_both",
               "set_milestone",
               "add_feature_ask",
+              "set_confidence",
+              "set_track",
+              "set_prd",
+              "set_goal",
+              "set_depends",
+              "set_status",
               "set_owner",
               "set_decider",
               "decide_question",
@@ -125270,6 +125300,25 @@
                 "type": "null"
               }
             ]
+          },
+          "own_owner_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Own Owner Id"
+          },
+          "depends_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Depends Keys",
+            "default": []
           },
           "can_decide": {
             "type": "boolean",
