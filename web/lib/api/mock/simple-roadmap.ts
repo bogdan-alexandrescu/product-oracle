@@ -1167,8 +1167,9 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
         })),
       ),
     ],
-    // build-milestones-on-roadmap: the shown roadmaps' milestones per goal (a PRD's among them).
-    goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, x.prd ? role !== "viewer" : role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)), (slug) => roadmapTitle(db, slug))),
+    // build-milestones-on-roadmap: the shown roadmaps' milestones per goal (a PRD's among them);
+    // while the company roadmap exists, its own alone (older roadmaps are history, company.feeding_ids).
+    goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (!db.company_roadmap || m.roadmap === db.company_roadmap) && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, x.prd ? role !== "viewer" : role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)), (slug) => roadmapTitle(db, slug))),
     old_milestones: oldMilestonesOut(db.goal_milestones ?? [], role, oldCtx(db)),
     span: db.plan ? planSpan() : null,
     // A working draft belongs to one roadmap: a chosen roadmap's read carries its own only.
