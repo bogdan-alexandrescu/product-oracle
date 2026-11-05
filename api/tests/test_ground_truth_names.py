@@ -10,7 +10,7 @@ from oracle.decisions.capture import STOP_LABELS
 from oracle.discussions.context import PAGES
 from oracle.rituals.kinds import KINDS
 from oracle.rituals.rebuild import TITLES
-from oracle.runs import flows
+from oracle.runs import flows, reasons
 from oracle.runs.service import CHECKPOINT_TITLES, decision_summary
 from oracle.simple.meetings import _STOP_WORDS
 
@@ -63,3 +63,12 @@ def test_ritual_and_autonomy_names_say_ground_truth():
 def test_page_names_say_ground_truth():
     assert PAGES["ground-truth"] == "Ground Truth"
     assert PAGES["baseline"] == "Ground Truth"  # an old /baseline link's screen
+
+
+def test_a_serves_no_goal_reason_names_a_ground_truth_feature():
+    """A roadmap item Oracle could not trace reads "a Ground Truth feature", in the review
+    catalogue and in the reason a run's review shows; fails_when=either says "baseline"."""
+    text = reasons.CATALOGUE["serves_no_goal"].sentence
+    assert "a Ground Truth feature" in text and not BASELINE.search(text), text
+    said = reasons.SERVES_NO_GOAL_UNTRACED
+    assert said == "Oracle could not trace it to a Ground Truth feature, so no goal is known."
