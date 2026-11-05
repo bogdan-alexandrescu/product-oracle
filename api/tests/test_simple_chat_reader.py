@@ -328,7 +328,13 @@ async def test_reader_roles_in_a_meeting(client, meetings):  # noqa: F811
         "messages"] for c in x["cards"]]  # fmt: skip
     r = await client.post(f"{CARDS}/{cards[3]['id']}/apply", headers=ctx.as_("commenter"))
     assert r.json()["result"]["change"]["status"] == "proposed"
+    # chat-latest-card: the commenter's newer card replaced the decider's; asked again, it applies.
     r = await client.post(f"{CARDS}/{cards[1]['id']}/apply", headers=ctx.as_("decider"))
+    assert r.status_code == 409
+    await post(client, ctx, "decider", "let's bring partner api forward", mid)
+    await read(ctx, answer)
+    card = (await last(client, ctx, "decider", mid))["cards"][0]
+    r = await client.post(f"{CARDS}/{card['id']}/apply", headers=ctx.as_("decider"))
     assert r.json()["result"]["change"]["status"] == "applied"
     assert (await w.item("Partner API")).horizon == "next"
 

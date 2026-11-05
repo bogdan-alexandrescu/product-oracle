@@ -73,9 +73,7 @@ def replaced(cards: list[SimpleChatCard]) -> dict[uuid.UUID, uuid.UUID]:
     return out
 
 
-async def replaced_in(
-    db: AsyncSession, cards: list[SimpleChatCard]
-) -> dict[uuid.UUID, uuid.UUID]:
+async def replaced_in(db: AsyncSession, cards: list[SimpleChatCard]) -> dict[uuid.UUID, uuid.UUID]:
     """``replaced`` for every chat these cards are in (a card off any chat: never)."""
     chats = {c.discussion_id for c in cards if c.discussion_id is not None}
     out: dict[uuid.UUID, uuid.UUID] = {}
