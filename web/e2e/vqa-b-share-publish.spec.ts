@@ -50,12 +50,14 @@ test("B-10: the Audience view preview has a caption and a frame that shows on th
       width: parseFloat(s.borderTopWidth),
       color: s.borderTopColor,
       background: s.backgroundColor,
+      filter: s.filter,
       strong: getComputedStyle(document.documentElement).getPropertyValue("--line-strong"),
       faint: getComputedStyle(document.documentElement).getPropertyValue("--line"),
     };
   });
   // The export stays a white page.
   expect(rgb(look.background)).toEqual([255, 255, 255]);
+  expect(look.filter).toBe("none");
   expect(look.width).toBeGreaterThanOrEqual(1);
   expect(look.color).not.toMatch(/rgba\(.*,\s*0\)$|transparent/);
   // The frame is the strong line, not the faint one that disappears on the dark page.

@@ -1370,16 +1370,8 @@ code .date-mark {
   --simple-m4-tag-ink: #4cd9a0;
 }
 
-/* qa4-docs-share-58: in dark mode the audience preview (a white page as the audience sees it)
-   is dimmed, so it does not glare inside the dark console; its own colours stay as shared. */
-:root[data-theme="dark"] [data-testid="audience-view"] iframe {
-  filter: brightness(0.8);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) [data-testid="audience-view"] iframe {
-    filter: brightness(0.8);
-  }
-}
+/* B-10 (replaces qa4-docs-share-58's dimming): the audience preview stays the white page it
+   exports as, in dark mode too; RoadmapSharing frames it with a strong line and a caption. */
 
 /*
  * qa4-settings-20: in dark, the browser's own checkbox draws an unchecked box as a filled grey
