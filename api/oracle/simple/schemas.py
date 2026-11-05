@@ -2057,6 +2057,8 @@ class SimpleAgendaProposal(BaseModel):
     by: SimplePersonRef
     decider: SimplePersonRef | None = None
     words: list[str] = []
+    # The proposer's earlier ops whose item is gone since, as words: dropped, not proposed.
+    dropped: list[str] = []
 
 
 class SimpleAgenda(BaseModel):

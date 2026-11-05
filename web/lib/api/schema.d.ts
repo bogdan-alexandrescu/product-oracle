@@ -38702,6 +38702,11 @@ export interface components {
              * @default []
              */
             words: string[];
+            /**
+             * Dropped
+             * @default []
+             */
+            dropped: string[];
         };
         /**
          * SimpleAgendaRow

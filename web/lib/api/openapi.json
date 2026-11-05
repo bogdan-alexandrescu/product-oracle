@@ -116618,6 +116618,14 @@
             "type": "array",
             "title": "Words",
             "default": []
+          },
+          "dropped": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dropped",
+            "default": []
           }
         },
         "type": "object",

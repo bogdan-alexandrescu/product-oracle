@@ -572,7 +572,9 @@ async def _occurrence_now(
 
 
 async def _get(db: AsyncSession, principal: Any, meeting_id: uuid.UUID, lock: bool = False):
-    m = await db.get(SimpleMeeting, meeting_id, with_for_update=lock)
+    # A locked read refreshes a row the session holds already, so what the caller changes
+    # starts from the row as committed (agenda-sheet: two people's ops at once).
+    m = await db.get(SimpleMeeting, meeting_id, with_for_update=lock, populate_existing=lock)
     if m is None:
         raise MeetingError(404, "No such meeting")
     document = await db.get(Document, m.prd_document_id)
@@ -1310,8 +1312,9 @@ def _agenda_right(principal: Any, w: PrdWho) -> str:
 
 
 def _agenda_apply(a: dict, rows: list[dict], titles: dict[str, str], me: uuid.UUID,
-                  body: dict) -> str:  # fmt: skip
-    """Apply one sheet op to ``rows`` (in place); returns its words for the Undo line."""
+                  body: dict) -> dict:  # fmt: skip
+    """Apply one sheet op to ``rows`` (in place); returns its clause for the Undo line
+    (:func:`_agenda_words`)."""
     states = dict(zip([x["id"] for x in rows], _states(a, rows), strict=True))
 
     def find(i: str | None) -> dict:
@@ -1319,9 +1322,6 @@ def _agenda_apply(a: dict, rows: list[dict], titles: dict[str, str], me: uuid.UU
         if x is None:
             raise MeetingError(404, "That item is not on the agenda")
         return x
-
-    def name(x: dict) -> str:
-        return x.get("title") or titles.get(x.get("feature_id") or "", "the item")
 
     op = body["op"]
     if op == "add":
@@ -1331,28 +1331,29 @@ def _agenda_apply(a: dict, rows: list[dict], titles: dict[str, str], me: uuid.UU
                 raise MeetingError(404, "That feature is not in the meeting's PRD")
             if any(x.get("feature_id") == f for x in rows):
                 raise MeetingError(409, "That feature is on the agenda already")
-            rows.append({"id": f, "feature_id": f, "title": None, "mins": FEATURE_MINS,
-                         "by": str(me)})  # fmt: skip
-            return f"added {titles[f]}"
+            rows.append({"id": f, "feature_id": f, "title": None, "was": titles[f],
+                         "mins": FEATURE_MINS, "by": str(me)})  # fmt: skip
+            return {"op": "add", "id": f, "name": titles[f]}
         title = (body.get("title") or "").strip()
         if not title:
             raise MeetingError(422, "Give the topic a name")
-        rows.append({"id": str(uuid.uuid4()), "feature_id": None, "title": title,
-                     "mins": TOPIC_MINS, "by": str(me)})  # fmt: skip
-        return f"added {title}"
+        i = str(uuid.uuid4())
+        rows.append({"id": i, "feature_id": None, "title": title, "mins": TOPIC_MINS,
+                     "by": str(me)})  # fmt: skip
+        return {"op": "add", "id": i, "name": title}
     x = find(body.get("item_id"))
     if states[x["id"]] in ("done", "now"):
         raise MeetingError(409, "The current item and done ones stay where they are")
+    was = _row_name(x, titles, "the item")
     if op == "rename":
         title = (body.get("title") or "").strip()
         if not title:
             raise MeetingError(422, "Give the item a name")
-        was = name(x)
         x["title"] = title
-        return f"renamed {was} to {title}"
+        return {"op": "rename", "id": x["id"], "name": was, "to": title}
     if op == "remove":
         rows.remove(x)
-        return f"removed {name(x)}"
+        return {"op": "remove", "id": x["id"], "name": was}
     # move: never before the current item or a done one.
     first = max(
         (k + 1 for k, y in enumerate(rows) if states[y["id"]] in ("done", "now")), default=0
@@ -1361,17 +1362,47 @@ def _agenda_apply(a: dict, rows: list[dict], titles: dict[str, str], me: uuid.UU
     to = max(first, min(int(body.get("to") or 0), len(rows) - 1))
     rows.remove(x)
     rows.insert(to, x)
-    return f"moved {name(x)} {'up' if to < at else 'down'}"
+    return {"op": "move", "id": x["id"], "name": was, "dir": "up" if to < at else "down"}
+
+
+def _row_name(x: dict, titles: dict[str, str], none: str) -> str:
+    """A row's name: its own, its feature's, else the name its feature last had here."""
+    return x.get("title") or titles.get(x.get("feature_id") or "") or x.get("was") or none
+
+
+def _agenda_words(clauses: list[dict]) -> list[str]:
+    """The batch's clauses as words; a move and a rename of one item read as one clause
+    ("moved Quiet hours up and renamed it"), named as the item was when first touched."""
+    out: list[dict] = []
+    for c in clauses:
+        same = next(
+            (o for o in out if o["id"] == c["id"] and o["op"] in ("move", "rename", "both")),
+            None,
+        ) if c["op"] in ("move", "rename") else None  # fmt: skip
+        if same is None:
+            out.append(dict(c))
+        elif c["op"] == "move":
+            same.update(op="both" if same["op"] != "move" else "move", dir=c["dir"])
+        else:
+            same.update(op="both" if same["op"] != "rename" else "rename", to=c["to"])
+    words = {
+        "add": "added {name}",
+        "remove": "removed {name}",
+        "move": "moved {name} {dir}",
+        "rename": "renamed {name} to {to}",
+        "both": "moved {name} {dir} and renamed it",
+    }
+    return [words[c["op"]].format(**c) for c in out]
 
 
 async def edit_agenda(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
                       body: dict) -> None:  # fmt: skip
     """agenda-sheet: one op of the Agenda sheet (add, rename, move, remove, undo; accept
-    or withdraw an approver's proposal). The caller commits."""
-    m, document = await _get(db, principal, meeting_id)
+    or withdraw an approver's proposal). The meeting row is locked before it is read, so
+    two people's ops at once both land. The caller commits."""
+    m, document = await _get(db, principal, meeting_id, lock=True)
     if m.status == "ended":
         raise MeetingError(409, "This meeting has ended")
-    m = await _live(db, meeting_id)
     w = await prd_who(db, document)
     right = _agenda_right(principal, w)
     if right == "read" or not has_role(principal.role, "commenter"):
@@ -1390,34 +1421,46 @@ async def edit_agenda(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
     elif op == "accept":
         if right != "save" or not prop:
             raise MeetingError(403 if prop else 404, "Only the decider accepts the proposal")
-        a.update(before=[dict(x) for x in rows], batch=f"accept-{uuid.uuid4()}", words=[])
-        words = []
+        # The accept is the decider's batch: their sheet named it, so their Undo line shows.
+        batch = body.get("batch") or f"accept-{uuid.uuid4()}"
+        a.update(before=[dict(x) for x in rows], batch=batch)
+        clauses = []
         for o in prop.get("ops") or []:
             try:
-                words.append(_agenda_apply(a, rows, titles, uuid.UUID(prop["by"]), o))
+                clauses.append(_agenda_apply(a, rows, titles, uuid.UUID(prop["by"]), o))
             except MeetingError:
                 continue  # an item the proposal named is gone since
-        a.update(items=rows, words=words, proposal=None)
+        a.update(items=rows, clauses=clauses, words=_agenda_words(clauses), proposal=None)
     elif op == "undo":
         if right != "save" or "before" not in a:
             raise MeetingError(404, "Nothing to undo")
-        a.update(items=a.pop("before"), words=[], batch=None)
+        if body.get("batch") != a.get("batch"):
+            raise MeetingError(409, "Someone changed the agenda since")
+        a.update(items=a.pop("before"), clauses=[], words=[], batch=None)
     elif right == "propose":
-        # The agenda stays as it is; the ops wait for the decider.
-        ops = list(prop.get("ops") or []) if prop and prop.get("by") == str(me) else []
+        # The agenda stays as it is; the ops wait for the decider. An op of the earlier
+        # proposal whose item is gone since is dropped, and the proposal says so.
+        mine = prop if prop and prop.get("by") == str(me) else None
+        ops, said = list((mine or {}).get("ops") or []), list((mine or {}).get("said") or [])
         trial = [dict(x) for x in _rows(m, features)]
-        for o in ops:
-            _agenda_apply(a, trial, titles, me, o)  # type: ignore[arg-type]
-        words = [*(prop.get("words") or [])] if ops else []
-        words.append(_agenda_apply(a, trial, titles, me, body))  # type: ignore[arg-type]
+        kept, clauses, dropped = [], [], list((mine or {}).get("dropped") or [])
+        for k, o in enumerate(ops):
+            try:
+                clauses.append(_agenda_apply(a, trial, titles, me, o))  # type: ignore[arg-type]
+                kept.append(o)
+            except MeetingError:
+                if k < len(said):
+                    dropped.extend(_agenda_words([said[k]]))
+        clauses.append(_agenda_apply(a, trial, titles, me, body))  # type: ignore[arg-type]
         a["proposal"] = {"by": str(me), "decider": str(w.decider) if w.decider else None,
-                         "ops": [*ops, {k: v for k, v in body.items() if v is not None}],
-                         "words": words}  # fmt: skip
+                         "ops": [*kept, {k: v for k, v in body.items() if v is not None}],
+                         "said": clauses, "words": _agenda_words(clauses),
+                         "dropped": dropped}  # fmt: skip
     else:
         if a.get("batch") != body.get("batch") or "before" not in a:
-            a.update(before=[dict(x) for x in rows], batch=body.get("batch"), words=[])
-        word = _agenda_apply(a, rows, titles, me, body)  # type: ignore[arg-type]
-        a.update(items=rows, words=[*(a.get("words") or []), word])
+            a.update(before=[dict(x) for x in rows], batch=body.get("batch"), clauses=[])
+        clauses = [*(a.get("clauses") or []), _agenda_apply(a, rows, titles, me, body)]  # type: ignore[arg-type]
+        a.update(items=rows, clauses=clauses, words=_agenda_words(clauses))
     m.agenda = json.loads(json.dumps(a, default=str))
     await db.flush()
 
@@ -1471,8 +1514,8 @@ def _rows(m: SimpleMeeting, features: list[RoadmapItem]) -> list[dict]:
     a = m.agenda or {}
     if "items" in a:
         return [dict(x) for x in a["items"]]
-    return [{"id": str(r.id), "feature_id": str(r.id), "title": None, "mins": FEATURE_MINS}
-            for r in features]  # fmt: skip
+    return [{"id": str(r.id), "feature_id": str(r.id), "title": None, "was": r.title,
+             "mins": FEATURE_MINS} for r in features]  # fmt: skip
 
 
 def _states(a: dict, rows: list[dict]) -> list[str]:
@@ -1532,7 +1575,7 @@ async def _agenda_out(
                 id=x["id"],
                 kind="feature" if x.get("feature_id") else "topic",
                 feature_id=x.get("feature_id"),
-                title=x.get("title") or titles.get(x.get("feature_id") or "", "Untitled"),
+                title=_row_name(x, titles, "Untitled"),
                 mins=x.get("mins") or FEATURE_MINS,
                 by_name=names.get(uuid.UUID(x["by"])) if x.get("by") else None,
                 state=st,  # type: ignore[arg-type]
@@ -1546,9 +1589,11 @@ async def _agenda_out(
             by=_ref(uuid.UUID(prop["by"]), names),
             decider=_ref(uuid.UUID(prop["decider"]), names) if prop.get("decider") else None,
             words=list(prop.get("words") or []),
+            dropped=list(prop.get("dropped") or []),
         )
         if prop
         else None,  # fmt: skip
+        decider=_ref(decider, names) if decider else None,
     )
 
 
