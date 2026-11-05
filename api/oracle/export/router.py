@@ -95,7 +95,11 @@ async def with_audience(db, ev: ExportVersion, audience: str | None) -> ExportVe
     return apply_audience(ev, audience)
 
 
-async def _load(db, doc: str, n: int, layer: str, audience: str | None = None):
+async def _load(
+    db, doc: str, n: int, layer: str, audience: str | None = None, full_without_brief=False
+):
+    """The version restricted to ``layer``; 422 when it has no brief, unless
+    ``full_without_brief`` (Present mode, B-04): then the full document's sections."""
     try:
         ev = await load_export_version(db, doc, n)
     except NotFound as e:
@@ -103,7 +107,11 @@ async def _load(db, doc: str, n: int, layer: str, audience: str | None = None):
     try:
         ev = apply_layer(ev, layer)
     except NoBrief as e:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from None
+        if not full_without_brief:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from None
+        ev = apply_layer(ev, "full")
+        # The title slide already names the document: its empty title section is no slide.
+        ev.sections = [s for s in ev.sections if s.level > 1 or (s.body_md or "").strip()]
     return await with_audience(db, ev, audience)
 
 
@@ -213,12 +221,12 @@ async def get_deck(
     audience: Audience | None = Query(None),
 ) -> Any:
     """The brief layer as slides in the document's theme (its slide variant), with
-    presenter notes and the detail each slide can expand. 422 when the version has no
-    brief sections."""
+    presenter notes and the detail each slide can expand. A version with no brief
+    sections shows its full document's sections, one per slide (B-04)."""
     # Present mode: kept, else built on the export pool in a Present place (owner decision
     # 2026-10-20).
     check_audience_role(principal, audience)
-    ev = detached(await _load(db, doc, n, "deck", audience))
+    ev = detached(await _load(db, doc, n, "deck", audience, full_without_brief=True))
     await db.commit()  # no connection held while it waits for the pool
     try:
         deck = await present.deck_for(principal, ev, build_deck)

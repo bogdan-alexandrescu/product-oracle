@@ -18,9 +18,11 @@ and roadmaps alike.
 
 import re
 from dataclasses import dataclass, field
+from datetime import date
 from decimal import Decimal
 from typing import Any
 
+from oracle import company_time
 from oracle.docs.schemas import CITATION_CONTRACT_MARK, with_citation_contract
 from oracle.engineering import briefs, codemap
 from oracle.priorities.run_order import FORMAT as PRIORITY_FORMAT
@@ -2150,6 +2152,10 @@ def draft_lines(kind: str, rm: DraftContext, src: SourceContext | None) -> list[
             "Link each item to its PRD section as a markdown link to "
             f"{prd_link(src.slug, src.version, '<section id>')}, e.g. [PRD]({example})."
         )
+    if src is not None and src.company_plan.get("today"):
+        # B-05: the as-of line reads month first, as people read dates, never ISO.
+        day = company_time.calendar_day_with_year(date.fromisoformat(src.company_plan["today"]))
+        lines.append(f'The line under the title starts "As of {day}" (month first, never ISO).')
     lines += ["", "--- template skeleton ---", rm.skeleton]
     return lines
 
