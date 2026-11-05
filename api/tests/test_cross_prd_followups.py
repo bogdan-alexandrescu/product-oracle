@@ -140,3 +140,25 @@ async def _safety_scope(s, w):
     from sqlalchemy import select
 
     return await s.scalar(select(PrdScope.id).where(PrdScope.document_id == w["safety"]))
+
+
+async def test_the_trash_filter_builds_its_criteria_once(monkeypatch):
+    # protects=each read (the Inbox makes about 75) reuses the trash filter's criteria;
+    # fails_when=every SELECT builds one loader criteria per trashable class again.
+    from oracle.trash import filter as trash_filter
+
+    built: list[object] = []
+    real = trash_filter.with_loader_criteria
+
+    def counted(*args, **kwargs):
+        built.append(args[0])
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(trash_filter, "with_loader_criteria", counted)
+    monkeypatch.setattr(trash_filter, "_OPTIONS", (), raising=False)
+    w = await world(roadmap=False)
+    async with tenant_session(w["tenant"]) as s:
+        for _ in range(3):
+            assert await s.get(Run, w["run"]) is not None
+            s.expunge_all()
+    assert len(built) == len(trash_filter.criteria())
