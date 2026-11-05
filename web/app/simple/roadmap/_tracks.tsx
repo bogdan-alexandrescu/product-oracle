@@ -85,7 +85,7 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
                         {t.status !== "active" ? ` · ${STATE[t.status]}` : ""}
                       </p>
                     </div>
-                    <button type="button" aria-expanded={expanded} aria-label={`${expanded ? "Hide" : "Change"} ${t.title}`} onClick={() => setOpened(expanded ? null : t.id)} className="h-8 rounded px-2 text-sm text-accent-ink hover:bg-surface">
+                    <button type="button" aria-expanded={expanded} aria-label={`${expanded ? "Hide" : canChange ? "Change" : "Open"} ${t.title}`} onClick={() => setOpened(expanded ? null : t.id)} className="h-8 rounded px-2 text-sm text-accent-ink hover:bg-surface">
                       {expanded ? "Hide" : canChange ? "Change" : "Open"}
                     </button>
                   </div>

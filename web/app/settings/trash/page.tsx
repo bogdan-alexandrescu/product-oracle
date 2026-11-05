@@ -87,7 +87,7 @@ export default function TrashPage() {
           {q.error && <Notice tone="error">{q.error}</Notice>}
           {q.data && q.data.length === 0 && (
             <Empty testId="trash-empty">
-              Trash is empty. Deleted documents, requests and runs wait here for 30 days, with everything that went with
+              Trash is empty. Deleted documents, requests, runs and tracks wait here for 30 days, with everything that went with
               them. Until then an owner can restore them; after that they are gone for good.
             </Empty>
           )}
