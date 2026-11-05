@@ -174,7 +174,8 @@ function milestonesApart(scheme: "light" | "dark") {
       await page.getByTestId(`zoom-${z}`).click();
       await expect(page.getByTestId(`zoom-${z}`)).toHaveAttribute("aria-pressed", "true");
       await check(`${z}, unscrolled`);
-      for (let n = 0; n < (steps[z] ?? 0); n++) {
+      const atEnd = () => page.getByTestId("timeline-scroll").evaluate((el) => el.scrollLeft + el.clientWidth >= el.scrollWidth - 1);
+      for (let n = 0; n < (steps[z] ?? 0) && !(await atEnd()); n++) {
         await slide(page, 120);
         await check(`${z}, slid ${n + 1}`);
       }

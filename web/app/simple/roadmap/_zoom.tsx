@@ -454,7 +454,8 @@ function DayChart(props: TimelineProps) {
   }
   // A milestone whose line has slid under the names column keeps its label whole at the view's
   // left edge, till all of it would be gone; then the label goes too. A label gives way to the
-  // next one's where they would touch (as a week mark gives way), scrolled or not.
+  // next one, scrolled or not: it ends short of it (its words cut with "…", whole in its hover)
+  // and goes once too little of it is left to read.
   const milestones = (data.milestones ?? [])
     .filter((m) => m.date && m.status !== "dropped" && m.date >= t0 && m.date <= t1)
     .sort((a, b) => (a.date as string).localeCompare(b.date as string))
@@ -462,12 +463,13 @@ function DayChart(props: TimelineProps) {
       const at = x(m.date as string);
       const words = `◆ ${m.name} · ${shortDay(m.date as string)}`;
       const left = fit ? at : Math.max(at, sl);
-      return { m, at, words, left, gone: !fit && at + 26 + words.length * 7 < sl };
+      return { m, at, words, left, room: Infinity, gone: !fit && at + 26 + words.length * 7 < sl };
     });
   let nextStart = Infinity;
   for (const m of [...milestones].reverse()) {
     if (m.gone) continue;
-    if (m.left + 22 + m.words.length * 7 > nextStart - 6) m.gone = true;
+    m.room = nextStart - 6 - (m.left + 4);
+    if (m.room < 56) m.gone = true;
     else nextStart = m.left + 4;
   }
   // roadmap-r2: the Gantt's moves. A drag past DRAG_PX moves the bar by whole days (an end
@@ -745,7 +747,7 @@ function DayChart(props: TimelineProps) {
           </span>
           {/* approved-roadmap-to-simple: the roadmap's milestones (an approved version's too),
            * each a dashed line on its day with its name, as the Gantt marks them. */}
-          {milestones.map(({ m, at, words, left, gone }) => (
+          {milestones.map(({ m, at, words, left, room, gone }) => (
             <div key={m.id}>
               {/* A line under the names column would show through a goal's header row. */}
               {(fit || at >= sl) && (
@@ -759,8 +761,8 @@ function DayChart(props: TimelineProps) {
                 <span
                   data-testid="timeline-milestone"
                   title={`${m.name}, ${shortDay(m.date as string)}${m.done_when.length ? `: counts when ${m.done_when.join("; ")}` : ""}`}
-                  className="absolute top-[21px] z-20 rounded-full border border-line bg-surface px-2 text-xs leading-4 whitespace-nowrap text-text"
-                  style={{ left: labelW + left + 4 }}
+                  className="absolute top-[21px] z-20 overflow-hidden rounded-full border border-line bg-surface px-2 text-xs leading-4 text-ellipsis whitespace-nowrap text-text"
+                  style={{ left: labelW + left + 4, maxWidth: room < Infinity ? room : undefined }}
                 >
                   {words}
                 </span>
@@ -858,7 +860,7 @@ function DayChart(props: TimelineProps) {
             span={[labelW + sl, sl + w]}
             keepOff={milestones
               .filter((m) => !m.gone)
-              .map((m): [number, number] => [labelW + m.left + 4, labelW + m.left + 20 + m.words.length * 7])}
+              .map((m): [number, number] => [labelW + m.left + 4, labelW + m.left + 4 + Math.min(m.room, 16 + m.words.length * 7)])}
           />
         </div>
       </div>
