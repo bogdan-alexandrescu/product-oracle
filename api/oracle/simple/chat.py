@@ -51,6 +51,7 @@ from oracle.members.names import display_name
 from oracle.roadmap.models import DraftRoadmap, ProductTrack, RoadmapItem
 from oracle.simple import (
     agenda,
+    card_order,
     change_words,
     changes,
     constraints,
@@ -1348,9 +1349,17 @@ async def post(
         page = page_of_thread(await own_chat(db, principal, chat_id))
     ctx = Ctx(db, principal, rules)
     ctx.page = page
-    ctx.wants_decider = _decision_line(text)
+    # chat-latest-card: a line answering the previous card to change it ("no, note: ...")
+    # is that change, made a redo of the previous card's draft (card_order.redo_of).
+    rest = card_order.redo_line(text)
+    ctx.wants_decider = _decision_line(rest or text)
     await ctx.load()
-    reply = _talk().restate(ctx, parse(ctx, text))
+    reply = parse(ctx, rest) if rest is not None else None
+    redo = reply is not None and reply.kind == "cards"
+    if not redo:
+        ctx.wants_decider = _decision_line(text)
+        reply = parse(ctx, text)
+    reply = _talk().restate(ctx, reply)
     if ctx.item is not None and reply.kind == "answer":
         reply.citations = _talk().source_of(ctx, "roadmap")
     if only_understood and not reply.understood and not reply.reader:
@@ -1369,7 +1378,8 @@ async def post(
     if reply.reader:
         reply = Reply("pending", READING)
     asked, answer = await _write(db, principal, meeting_id, text.strip(), reply, page=page,
-                                 chat_id=chat_id, new_chat=new_chat, general=general)  # fmt: skip
+                                 chat_id=chat_id, new_chat=new_chat, general=general,
+                                 redo=redo)  # fmt: skip
     if reply.kind == "pending":
         read = SimpleChatRead(discussion_id=answer.discussion_id, message_id=answer.id,
                               ask_id=asked.id, meeting_id=meeting_id, by=_me(principal),
@@ -1405,9 +1415,10 @@ async def _write(
     chat_id: uuid.UUID | None = None,
     new_chat: bool = False,
     general: bool = False,
+    redo: bool = False,
 ) -> tuple[DiscussionMessage, DiscussionMessage]:
     """The person's line and Oracle's reply with its cards (and choices); the caller
-    commits."""
+    commits. ``redo``: the line asks to change the previous card's draft."""
     me = _me(principal)
     d = await _thread(db, principal, meeting_id, create=True, page=page, chat_id=chat_id,
                       new_chat=new_chat, general=general)  # fmt: skip
@@ -1425,7 +1436,7 @@ async def _write(
     d.last_message_at = at
     await db.flush()
     answer.reply_to = asked.id
-    await _attach(db, principal, answer, meeting_id, reply)
+    await _attach(db, principal, answer, meeting_id, reply, redo)
     if reply.choices:
         db.add(SimpleChatRead(discussion_id=d.id, message_id=answer.id, ask_id=asked.id,
                               meeting_id=meeting_id, by=me, line=line,
@@ -1445,14 +1456,21 @@ async def _attach(
     answer: DiscussionMessage,
     meeting_id: uuid.UUID | None,
     reply: Reply,
+    redo: bool = False,
 ) -> None:
-    """Oracle's cards on its line, in the order asked (real time orders them)."""
+    """Oracle's cards on its line, in the order asked (real time orders them). A new
+    record's card redoes an earlier draft only on an explicit signal: the reader named it
+    (``redo_of``) or the line asks to change the previous card (``redo``)."""
     at = datetime.now(UTC)
     for i, c in enumerate(reply.cards):
+        c = dict(c)
+        named = c.pop("redo_of", None)
+        again = await card_order.redo_of(db, answer, c, named, redo)
         card = SimpleChatCard(discussion_id=answer.discussion_id, message_id=answer.id,
                               meeting_id=meeting_id,
                               owner_id=None if meeting_id else _me(principal), status="open",
-                              created_at=at + timedelta(microseconds=i), **c)  # fmt: skip
+                              created_at=at + timedelta(microseconds=i), redo_of=again,
+                              **c)  # fmt: skip
         db.add(card)
         await db.flush()
         if card.op in FLOW_OPS:
@@ -1579,9 +1597,27 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
         "milestones": [n for n, _ in _talk().milestones(c).values()],
         "today": c.today.isoformat(),
         "ops": [{"op": o.op, "describe": o.describe, "args": o.args} for o in OPS.values()],
+        # chat-latest-card: the chat's open drafts of new records, a line may ask to change
+        # one ("make it April instead"): the reader names it (``redo_of``).
+        "cards": await _open_drafts(db, read),
         # ask-oracle-actions: every action of the API the person's role reaches (``calls``).
         "api": _api().offer(c.principal.role, c.api_role, c.meeting is not None),
     }
+
+
+async def _open_drafts(db: AsyncSession, read: SimpleChatRead) -> list[dict[str, str]]:
+    rows = list(
+        await db.scalars(
+            select(SimpleChatCard)
+            .where(SimpleChatCard.discussion_id == read.discussion_id,
+                   SimpleChatCard.message_id != read.message_id,
+                   SimpleChatCard.status == "open", SimpleChatCard.item_id.is_(None),
+                   SimpleChatCard.op.in_(card_order.NEW_OPS))
+            .order_by(SimpleChatCard.created_at.desc(), SimpleChatCard.id.desc())
+            .limit(10)
+        )
+    )  # fmt: skip
+    return [{"id": str(c.id), "op": c.op, "restated": c.summary} for c in reversed(rows)]
 
 
 _TOKEN = re.compile(r"\s*\[(?:c|l):\d+\]")
@@ -1731,6 +1767,10 @@ def interpret(c: Ctx, answer: Any, ask_box: bool = False, line: str | None = Non
                     return Reply("question", r.body)
                 refused.append(r.body if r.kind == "note" else f"I can't do that: {r.body}")
                 continue
+            if a.get("redo_of"):
+                # chat-latest-card: the reader read the line as changing that open draft
+                # (checked when the card is stored: card_order.redo_of).
+                r.cards = [{**x, "redo_of": str(a["redo_of"])} for x in r.cards]
             cards += r.cards
         # qa-simple-decide-24: nothing is dropped without a word: every refusal, the parts the
         # reader could not read, the changes past the fifth.
@@ -2357,6 +2397,11 @@ async def apply(
     body.session_id = getattr(rules, "session_id", None) if rules is not None else None
 
     async def make() -> SimpleChangeResult:
+        # The chat is locked and the card checked again in the change's own transaction (a
+        # retry's rollback let the first lock go): a newer card acted on meanwhile refuses it.
+        fresh = await db.get(SimpleChatCard, card_id, populate_existing=True)
+        if fresh is not None:
+            await refuse_replaced(db, fresh)
         # The card is taken in the change's own transaction (the engine commits both): two
         # Apply clicks at once make one change.
         if fix is None:

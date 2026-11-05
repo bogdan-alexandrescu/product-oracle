@@ -5,12 +5,15 @@ card in that chat is replaced; among the open cards, only the newest card per to
 actionable. A topic is the record the card changes: its item, else the record its target
 names (a question, a line, an API action's record). A card that makes a new record (a note, an
 open question, a decision, a suggestion, a feature ask, a new item) is its own topic: the
-meeting, page or goal it is made in is where, not what. Only a draft offered again in other
-words (same op and place, an open earlier card, most of its words the same) replaces it.
+meeting, page or goal it is made in is where, not what, and two drafts sharing most words
+("we launch billing in March" / "... in April") are two records. Only a card its builder
+marks a redo of an earlier open draft (``redo_of``: the person asked to change that draft,
+"make it April instead", "no, ...") takes that draft's topic and so replaces it.
 Cards on one reply are offered together (Apply all), so they never replace one another;
 "earlier" is an earlier reply.
 
-Read, never stored: the chat's cards in order say it, so it holds after a reload.
+Read, never stored (but ``redo_of``): the chat's cards in order say it, so it holds after a
+reload.
 """
 
 from __future__ import annotations
@@ -32,12 +35,9 @@ _NOT_TOPIC = ("note_id", "suggestion_id", "meeting_id", "dependency_id", "decide
 # Cards that make a new record when applied (with no item yet): each its own topic.
 NEW_OPS = ("minutes_note", "open_question", "record_decision", "suggest_feature",
            "add_feature_ask", "add_item")  # fmt: skip
-# Words a reworded draft may drop or add without saying something else.
-_SMALL = frozenset(
-    "a an the and or of to for in on at by with is are was be we it this that our".split()
-)
-# A reworded draft: at least half of the two drafts' words (the small ones aside) shared.
-REWORDED = 0.5
+# The person's line answering the previous card to change it: "no, ...", "instead, ...",
+# "... instead". What follows (or comes before "instead") is the change itself.
+_REDO = re.compile(r"^(?:no|nope|rather|instead)\b[,:;.!]?\s+(.+)$|^(.+?),?\s+instead[.!]?$", re.I)
 
 
 def _api_topic(target: dict[str, Any]) -> str:
@@ -69,39 +69,56 @@ def topic(card: SimpleChatCard) -> str:
     return f"{card.op}:{json.dumps(rest, sort_keys=True, default=str)}"
 
 
-def _draft(card: SimpleChatCard) -> tuple[str, str, frozenset[str]] | None:
-    """A new record's draft: its op, where it is made, and its words; else None."""
-    if card.item_id is not None or card.op not in NEW_OPS:
+def redo_line(line: str) -> str | None:
+    """The change a line asks for when it answers the previous card to change it ("no,
+    note: ..."), else None."""
+    m = _REDO.match(" ".join(line.split()))
+    return (m[1] or m[2]) if m else None
+
+
+async def redo_of(
+    db: AsyncSession, answer: DiscussionMessage, card: dict[str, Any], named: Any,
+    explicit: bool,
+) -> uuid.UUID | None:  # fmt: skip
+    """The earlier open draft a new record's card (the dict built for ``answer``) redoes:
+    the one the reader named (``named``, an open draft of the same op in this chat), else,
+    when the person's line asks to change the previous card (``explicit``), that reply's
+    open draft of the same op. Else None: the card is its own topic."""
+    if card.get("item_id") is not None or card.get("op") not in NEW_OPS:
         return None
-    target, after = card.target or {}, card.after or {}
-    where = {k: v for k, v in target.items()
-             if k.endswith("_id") and k not in ("note_id", "suggestion_id", "item_id")}  # fmt: skip
-    text = next((str(v) for v in (after.get("text"), after.get("outcome"), after.get("title"),
-                                  target.get("title")) if v), "")  # fmt: skip
-    words = frozenset(w for w in re.findall(r"[a-z0-9]+", text.casefold()) if w not in _SMALL)
-    return card.op, json.dumps(where, sort_keys=True, default=str), words
+    if named is None and not explicit:
+        return None
+    rows = list(
+        await db.scalars(
+            select(SimpleChatCard)
+            .join(DiscussionMessage, DiscussionMessage.id == SimpleChatCard.message_id)
+            .where(SimpleChatCard.discussion_id == answer.discussion_id,
+                   SimpleChatCard.message_id != answer.id,
+                   DiscussionMessage.created_at < answer.created_at)
+            .order_by(DiscussionMessage.created_at, SimpleChatCard.created_at, SimpleChatCard.id)
+        )
+    )  # fmt: skip
 
+    def draft(r: SimpleChatCard) -> bool:
+        return r.status == "open" and r.op == card["op"] and r.item_id is None
 
-def _reworded(a: frozenset[str], b: frozenset[str]) -> bool:
-    if not a or not b:
-        return a == b
-    return len(a & b) / len(a | b) >= REWORDED
+    if named is not None:
+        return next((r.id for r in rows if draft(r) and str(r.id) == str(named)), None)
+    previous = [r for r in rows if rows and r.message_id == rows[-1].message_id]
+    same = [r for r in previous if draft(r)]
+    return same[-1].id if same else None
 
 
 def topics(cards: list[SimpleChatCard]) -> list[str]:
-    """Each card's topic, the chat's cards oldest first: a new record's draft offered again
-    in other words takes the topic of the newest earlier open draft it rewords."""
+    """Each card's topic, the chat's cards oldest first: a redo of an earlier draft
+    (``redo_of``) takes that draft's topic."""
     keys: list[str] = []
-    drafts = [_draft(c) for c in cards]
-    for i, c in enumerate(cards):
-        key, mine = topic(c), drafts[i]
-        if mine is not None:
-            for j in range(i - 1, -1, -1):
-                d = drafts[j]
-                if (d is not None and cards[j].status == "open" and d[:2] == mine[:2]
-                        and _reworded(d[2], mine[2])):  # fmt: skip
-                    key = keys[j]
-                    break
+    at: dict[uuid.UUID, int] = {}
+    for c in cards:
+        key = topic(c)
+        if c.redo_of is not None and c.redo_of in at:
+            key = keys[at[c.redo_of]]
+        at[c.id] = len(keys)
         keys.append(key)
     return keys
 
