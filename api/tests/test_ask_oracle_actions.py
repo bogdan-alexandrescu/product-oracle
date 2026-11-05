@@ -42,6 +42,19 @@ Test cards (protects / fails_when / no_claim):
 - test_apply_all_leaves_api_action_cards_for_their_own_apply.
 - test_undo_of_a_dependency_card_turns_back_only_its_dependency: protects=Undo puts back the
   one dependency it removed and keeps one added since; fails_when=the whole list is restored.
+- test_no_allowed_operation_pings_a_person_or_reaches_an_outbox: protects=no allowed route's
+  calls reach a Slack ping, the Slack outbox or the mailer (a question asked of someone, a
+  decision requested of its approver are denied with why); fails_when=one does.
+- test_a_card_names_every_record_its_body_points_to: protects=create_edge's card names both
+  records, a reparent names the new parent, an id no one can name gets no card.
+- test_undo_is_not_promised_for_a_merged_value: protects=an edit sending a dict (attrs, which
+  the route merges) says before Apply it cannot be undone.
+- test_a_meeting_never_reads_one_person_own_records: protects=two members of one role in a
+  meeting: the asker's own sources are neither offered nor read there.
+- test_a_secret_value_is_never_kept_in_a_card: protects=a token pasted into a title: no card.
+- test_a_proposal_answer_promises_no_undo: protects=a 202 (a proposal) keeps no Undo.
+- test_a_card_whose_commit_failed_cannot_apply_twice: protects=the route ran, the card's own
+  write failed: a second Apply is refused, the route is not called again.
 """
 
 import uuid
