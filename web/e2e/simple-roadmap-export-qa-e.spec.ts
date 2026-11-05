@@ -155,16 +155,19 @@ test.describe("A phone's Timeline export names every quarter and every goal", ()
 test.describe("A phone's Gantt export names each goal lane whole", () => {
   test.use({ viewport: { width: 320, height: 844 }, hasTouch: true });
 
-  test("each lane's goal reads whole in the PNG and the PDF", async ({ page }) => {
+  test("each lane's goal and metric read whole in the PNG and the PDF", async ({ page }) => {
     await open(page, { format: "gantt" });
     const groups = page.locator('[data-testid="chart-labels"] > [data-testid="chart-group"]');
     await expect(groups.first()).toBeVisible();
-    const names = await groups.evaluateAll((els) => els.map((el) => (el.querySelector("span[title]")?.getAttribute("title") ?? "").trim()).filter(Boolean));
+    // Each lane's goal and, after it, its metric ("Grow retention · Teams active after 90 days").
+    const names = await groups.evaluateAll((els) =>
+      els.map((el) => [...el.querySelectorAll("span[title]")].map((t) => (t.getAttribute("title") ?? "").trim()).filter(Boolean).join(" · ")).filter(Boolean),
+    );
     expect(names.length).toBeGreaterThan(1);
     for (const kind of ["PNG", "PDF"] as const) {
       const { svg } = await exported(page, kind);
       const lanes = (await textsIn(page, svg, '[data-testid="export-lane"]')).map((l) => l.replace(/^\d+\s*/, ""));
-      for (const n of names) expect(lanes.some((l) => l === n || l.startsWith(`${n} · `)), `${kind}: ${n} whole`).toBe(true);
+      for (const n of names) expect(lanes, `${kind}: ${n} whole`).toContain(n);
     }
   });
 });
