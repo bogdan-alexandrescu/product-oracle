@@ -81,11 +81,16 @@ test.describe("EC1 b and EC2 b: the Engineering check", () => {
   });
 
   test("the list card hugs its rows, no empty band down to the decision bar", async ({ page }) => {
+    // Tall enough that all 9 rows fit with room to spare, whatever the font's width.
+    await page.setViewportSize({ width: 1440, height: 1400 });
     await openCheck(page, "eng-check-shop", 9);
     const list = page.getByRole("region", { name: "Features" });
     const lastRow = await box(page.getByTestId("brief-row").last());
     const card = await box(list);
-    expect(card.y + card.height - (lastRow.y + lastRow.height), "the card ends at its last row").toBeLessThan(4);
+    const gap = card.y + card.height - (lastRow.y + lastRow.height);
+    expect(gap, "the card ends at its last row").toBeGreaterThanOrEqual(-1);
+    expect(gap, "the card ends at its last row").toBeLessThan(4);
+    expect((await box(bar(page))).y - (card.y + card.height), "room under the card, as drawn").toBeGreaterThan(40);
   });
 
   test("a longer list still scrolls on its own and stops above the decision bar", async ({ page }) => {
