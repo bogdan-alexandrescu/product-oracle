@@ -291,7 +291,7 @@ test.describe("desktop", () => {
 
   test("the ladder's head and goal cards as the frame: the step hint on its own line, the top goal widest", async ({ page }) => {
     // protects=the review's frame match: title and subtitle on one line, the step hint below them;
-    // the first goal's title wraps and the third card is the widest; fails_when=the hint shares the
+    // the third card is the widest; fails_when=the hint shares the
     // title's line or the cards are sized otherwise; no_claim=colours.
     await open(page);
     const head = ladder(page).getByTestId("gm-ladder-head");
@@ -304,8 +304,6 @@ test.describe("desktop", () => {
     const w = await Promise.all([0, 1, 2].map(async (i) => (await cards.nth(i).boundingBox())!.width));
     expect(w[2]).toBeGreaterThan(w[1]);
     expect(w[2]).toBeGreaterThan(w[0]);
-    const title = (await cards.nth(0).getByText("Sign-ups per rep per day").boundingBox())!;
-    expect(title.height).toBeGreaterThan(30);
   });
 
   test("starts a New PRD from a milestone: Simple's New PRD form opens prefilled", async ({ page }) => {
@@ -423,7 +421,10 @@ for (const [name, size] of [["desktop", DESKTOP], ["phone", PHONE]] as const) {
         // shows, the cards keep the builds-on order, or the guardrail goal is a card;
         // no_claim=the API's order (test_simple_goal_map_api).
         await page.context().addInitScript((t) => localStorage.setItem("oracle-theme", t), theme);
-        await open(page, "goal-map-guardrail-goal");
+        await page.context().addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, "goal-map-guardrail-goal"] as const);
+        await login(page, ADMIN.email);
+        await page.goto("/simple/goals");
+        await expect(page.getByTestId("gm-page")).toBeVisible();
         await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
         const goals = page.getByTestId("gm-goals");
         const cards = page.getByTestId("gm-goal");

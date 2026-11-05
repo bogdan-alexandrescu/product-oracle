@@ -54,7 +54,7 @@ for (const [name, size] of SIZES) {
 
     test("Home shows no fit-a-date card", async ({ page }) => {
       await open(page);
-      await page.goto("/simple/home");
+      await page.goto("/simple");
       await expect(page.getByTestId("home-goals")).toBeVisible();
       await noFit(page);
     });
