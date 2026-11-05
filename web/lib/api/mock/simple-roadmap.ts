@@ -20,6 +20,8 @@ import { betSubject, flowFor, type VisualsDb } from "./simple-visuals";
 import type { OnePagerDb } from "./simple-one-pager";
 import { appliedMilestones, type AppliedRecord } from "./approved-roadmap";
 import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
+import { COMPANY_SLUG, COMPANY_TITLE } from "./one-roadmap";
+import { basePlan as fitBasePlan, PLAN_TARGET as FIT_PLAN_TARGET, schedule as fitSchedule } from "./fit-date-engine";
 
 type Item = Schemas["SimpleRoadmapItem"];
 type Suggestion = Schemas["DateSuggestionOut"];
@@ -86,6 +88,8 @@ interface SeedItem {
   dates?: { start: string | null; end: string; source: "engineering" | "accepted" };
   /** build-runplan RP2: the PRD it belongs to when not its roadmap's own (./meeting-draft.ts). */
   prd_doc?: { id: string; slug: string; title: string };
+  /** Bring a date in: the re-plan sliced or split it, so its date waits for a new estimate. */
+  estimate_pending?: boolean;
   /** approved-roadmap-to-simple: the source words of the dates an applied roadmap version gave it
    * ("founder commitment"); its `dates` are that version's. */
   basis?: string;
@@ -476,6 +480,7 @@ const manySlug = (n: number): string => `${MANY_PRDS[n].toLowerCase().replace(/ 
  */
 let manyAdded: { roadmaps: string[]; goals: string[]; tracks: string[] } | null = null;
 export function knowManyPlans(db: { items: { key: string; roadmap: string }[] } | undefined): void {
+  knowFitRoadmap(db);
   const many = !!db?.items.some((x) => x.roadmap === manySlug(0));
   if (many && !manyAdded) {
     manyAdded = {
@@ -532,6 +537,101 @@ export function seedSimpleMany(n = 500): SimpleDb {
   const db: SimpleDb = { items, ids: Object.fromEntries(items.map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])), own: {}, suggestions: [] };
   knowManyPlans(db);
   return db;
+}
+
+/**
+ * Bring a date in (./fit-date.ts): its invented PRD's items on the Help desk roadmap, under the
+ * fit-date scenarios, ending where its plan has them. An approved re-plan moves them
+ * (fitDateApproved), as the API's fit_date_router._roadmap_follows does in the roadmap's next version.
+ */
+const FIT_ROADMAP = "help-desk-roadmap";
+const FIT_PRD = { id: stableUuid("fit-date/prd"), slug: "reply-faster", title: "Reply faster in the shared inbox" };
+// Each item ends where the fit-date plan's capacity queue has it (./fit-date-engine, the API's
+// fit_date.schedule), so the roadmap and the panel read the same dates.
+const FIT_PLAN = fitBasePlan(1, FIT_PLAN_TARGET);
+const FIT_SCHEDULE = fitSchedule(FIT_PLAN);
+const FIT_M1_END = FIT_SCHEDULE.milestones.M1;
+const FIT_ITEMS: [key: string, title: string, end: string][] = FIT_PLAN.items.map((i) => [`fit-${i.id}`, i.title, FIT_SCHEDULE.items[i.id]]);
+const horizonOf = (end: string): Horizon => {
+  const w = simpleWindows(companyToday());
+  return end <= w.now[1] ? "now" : end <= w.next[1] ? "next" : "later";
+};
+
+/** The Help desk roadmap, its goal and track, known while the roadmap holds its items (as knowManyPlans). */
+function knowFitRoadmap(db: { items: { roadmap: string }[] } | undefined): void {
+  if (db?.items.some((x) => x.roadmap === FIT_ROADMAP)) {
+    ROADMAPS[FIT_ROADMAP] ??= { title: "Help desk roadmap", visibility: "company", prd: FIT_PRD.title, draft: 3 };
+    GOALS["reply-faster"] ??= "Reply faster";
+    TRACKS["help-desk"] ??= "Help desk track";
+  } else if (ROADMAPS[FIT_ROADMAP]) {
+    delete ROADMAPS[FIT_ROADMAP];
+    delete GOALS["reply-faster"];
+    delete TRACKS["help-desk"];
+  }
+}
+
+/** An item only the Help desk roadmap holds once the company roadmap exists: history, never on Simple. */
+export const FIT_OLD_ITEM = "Saved reply folders";
+
+/**
+ * The fit-date scenarios: the Help desk roadmap's items, added to the company's roadmap. With
+ * `company` (one-roadmap-many-prds), they sit on the company roadmap (Product roadmap), which alone
+ * feeds Simple, and the PRD's older Help desk roadmap keeps one item of its own as history.
+ */
+export function seedFitDateRoadmap(db: SimpleDb, company = false): void {
+  const roadmap = company ? COMPANY_SLUG : FIT_ROADMAP;
+  for (const [key, title, end] of FIT_ITEMS) {
+    db.items.push({
+      key, title, horizon: horizonOf(end), roadmap, goal: "reply-faster", track: "help-desk", confidence: "medium",
+      status: end <= FIT_M1_END ? "in_progress" : "planned", prd_doc: FIT_PRD,
+      dates: { start: addDays(end, -20), end, source: "engineering" },
+    });
+    db.ids[key] = stableUuid(`simple-item/${key}`);
+  }
+  if (company) {
+    const end = "2027-01-15";
+    db.items.push({
+      key: "fit-old-folders", title: FIT_OLD_ITEM, horizon: horizonOf(end), roadmap: FIT_ROADMAP, goal: "reply-faster", track: "help-desk",
+      confidence: "medium", status: "planned", prd_doc: FIT_PRD, dates: { start: addDays(end, -20), end, source: "engineering" },
+    });
+    db.ids["fit-old-folders"] = stableUuid("simple-item/fit-old-folders");
+    db.extra_roadmaps = { ...db.extra_roadmaps, [COMPANY_SLUG]: { title: COMPANY_TITLE, prd: FIT_PRD.title, track: "help-desk", track_title: "Help desk track" } };
+    // The company roadmap alone feeds Simple (api/oracle/roadmap/company.feeding_ids).
+    db.company_roadmap = COMPANY_SLUG;
+  }
+  knowFitRoadmap(db);
+}
+
+/** Moves an approve sent, until the request's roadmap takes them (applyFitDate). */
+let fitMoves: { moves: { item: string; end?: string | null }[]; pending: string[] } | null = null;
+
+/**
+ * Bring a date in's approval (./fit-date.ts): each item (by key or title) moves to its new end
+ * date (null: it leaves the plan's dates as they were), and the sliced or split ones wait on a
+ * new estimate. Applied to the roadmap by applyFitDate in the same request.
+ */
+export function fitDateApproved(moves: { item: string; end?: string | null }[], pending: string[]): void {
+  fitMoves = { moves, pending };
+}
+
+/** The approval's moves (fitDateApproved), made on the mock's roadmap; nothing when none waits. */
+export function applyFitDate(db: SimpleDb | undefined): void {
+  const was = fitMoves;
+  fitMoves = null;
+  if (!was || !db) return;
+  // The re-plan lands on the company roadmap while there is one (fit_date_router._roadmap_id).
+  const on = db.company_roadmap ?? FIT_ROADMAP;
+  const named = (s: SeedItem, names: string[]) => s.roadmap === on && (names.includes(s.key) || names.includes(s.title));
+  for (const s of db.items) {
+    const to = was.moves.find((m) => named(s, [m.item]));
+    if (to?.end && s.dates) {
+      const start = s.dates.start && s.dates.start < addDays(to.end, -7) ? s.dates.start : addDays(to.end, -14);
+      s.dates = { ...s.dates, start, end: to.end };
+      s.horizon = horizonOf(to.end);
+      delete db.own[s.key];
+    }
+    if (named(s, was.pending)) s.estimate_pending = true;
+  }
 }
 
 /** The item's stored dates (the API's start_date, end_date, date_source columns): moved or
@@ -611,6 +711,12 @@ export function itemOfOtherPrd(db: SimpleDb, key: string, roadmap: string): void
   if (s) s.prd_doc = itemPrd({ ...s, roadmap });
 }
 
+/** cross-prd-deps ("simple-cross-prd-dates"): ``key`` also depends on ``dep``, an item of another PRD. */
+export function dependOnOtherPrd(db: SimpleDb, key: string, dep: string): void {
+  const s = db.items.find((x) => x.key === key);
+  if (s) s.depends = [...(s.depends ?? []), dep];
+}
+
 /** The PRD a seeded item was built from (its roadmap's). */
 function itemPrd(s: SeedItem): Schemas["SimpleDocRef"] {
   const prd = ROADMAPS[s.roadmap].prd;
@@ -663,11 +769,15 @@ function phases(start: string, end: string, s: SeedItem, w: [string, string]): S
 
 const short = (t: string): string => (t.length <= 40 ? t : `${t.slice(0, 39)}…`);
 
-/** A dependency_order line, naming the item and its dependency (constraints.check), with the years when they differ. */
-function dependencyLine(title: string, start: string, depTitle: string, end: string, verb: "starts" | "ends" = "starts"): string {
+/** "Usage alerts PRD": a PRD's title with PRD after it when it does not say so (company.OnRoadmap.prd_name). */
+const prdName = (title: string): string => (title.toLowerCase().endsWith("prd") ? title : `${title} PRD`);
+
+/** A dependency_order line, naming the item and its dependency (constraints.check), with the years when they differ;
+ * a dependency of another PRD is named with its PRD (the owner, Nov 4). */
+function dependencyLine(title: string, start: string, depTitle: string, end: string, verb: "starts" | "ends" = "starts", depPrd: string | null = null): string {
   const years = start.slice(0, 4) !== end.slice(0, 4);
   const day = (d: string) => `${word(d)}${years ? ` ${d.slice(0, 4)}` : ""}`;
-  return `‘${short(title)}’ ${verb} ${day(start)}, but ‘${short(depTitle)}’, which it depends on, ends ${day(end)}`;
+  return `‘${short(title)}’ ${verb} ${day(start)}, but ‘${short(depTitle)}’${depPrd ? ` (${depPrd})` : ""}, which it depends on, ends ${day(end)}`;
 }
 
 function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>, w: [string, string]): Flag[] {
@@ -679,14 +789,16 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
   for (const key of s.depends ?? []) {
     const dep = all.get(key);
     if (!dep || closed(dep.s) || (dep.r.end.estimated && r.start.estimated)) continue;
+    const theirs = ownPrd(dep.s).title;
+    const depPrd = theirs !== ownPrd(s).title ? prdName(theirs) : null;
     if (r.start.estimated) {
       // walkb-roadmap, as constraints.check: an invented start breaks no link; a real end before the dependency's end does.
       if (!r.end.estimated && dep.r.end.date >= r.end.date)
-        flag("dependency_order", dependencyLine(s.title, r.end.date, dep.s.title, dep.r.end.date, "ends"), ["shift_dependents", "move_dependency", "accept_risk"], stableUuid(`simple-item/${key}`));
+        flag("dependency_order", dependencyLine(s.title, r.end.date, dep.s.title, dep.r.end.date, "ends", depPrd), ["shift_dependents", "move_dependency", "accept_risk"], stableUuid(`simple-item/${key}`));
       continue;
     }
     if (dep.r.end.date >= r.start.date)
-      flag("dependency_order", dependencyLine(s.title, r.start.date, dep.s.title, dep.r.end.date), ["shift_dependents", "move_dependency", "accept_risk"], stableUuid(`simple-item/${key}`));
+      flag("dependency_order", dependencyLine(s.title, r.start.date, dep.s.title, dep.r.end.date, "starts", depPrd), ["shift_dependents", "move_dependency", "accept_risk"], stableUuid(`simple-item/${key}`));
   }
   if (s.milestone) {
     const day = addDays(w[0], s.milestone.day);
@@ -977,6 +1089,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     const suggestion = itemSuggestion(db, db.ids[s.key]);
     return {
       id: db.ids[s.key], key: s.key, title: s.title, outcome: s.outcome ?? null, horizon: s.horizon,
+      estimate_pending: !!s.estimate_pending,
       code: prdCode(s.section),
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
       prd: ownPrd(s),

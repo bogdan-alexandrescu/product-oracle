@@ -181,6 +181,9 @@ def code_name_trouble(warnings: list[str]) -> str:
                      "the team's queue")  # fmt: skip
     if "unverified_written" in warnings:
         parts.append("calls a date unverified itself")
+    # Walk 2, problem 17 (oracle.intake.draft_check).
+    if "described_called_missing" in warnings:
+        parts.append("calls something missing that a source or a feature describes")
     return " and ".join(parts) or "uses codes without their names"
 
 

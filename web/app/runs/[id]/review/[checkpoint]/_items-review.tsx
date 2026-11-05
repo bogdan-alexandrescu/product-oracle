@@ -16,6 +16,7 @@ import { datesInWords } from "@/lib/dates";
 import { formatCount } from "@/lib/format";
 import { docLabel } from "@/lib/labels";
 import { useMe } from "@/lib/me";
+import { usePageView } from "@/lib/screen-subject";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
@@ -29,6 +30,7 @@ import {
   fieldWords,
   horizonLabel,
   HORIZONS,
+  itemsPageLines,
   itemsText,
   openReasons,
   openText,
@@ -49,6 +51,7 @@ import { draftKey, loadDraft } from "./_draft";
 import type { ReviewViewProps } from "./_shell";
 
 type Filter = "needs" | "all" | "changed";
+const FILTER_WORDS: Record<Filter, string> = { needs: "Needs you", all: "All", changed: "Changed" };
 type Group = "horizon" | "reason";
 type ActionBody = Schemas["ActionIn"];
 /** What a row or the inspector does to the shared draft (D8). */
@@ -237,6 +240,8 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
     return [...list].sort((a, b) => (a.position ?? 1e9) - (b.position ?? 1e9));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, filter]);
+  // ask-page-context: "This page" reads the items listed and the filters in use.
+  usePageView(review ? { filters: [`Show: ${FILTER_WORDS[filter]}`, `Group: ${group === "horizon" ? "Horizon" : "Reason"}`], lines: itemsPageLines(rows, counts) } : null);
 
   if (reviewQ.error) return <Page className="py-6"><ErrorNote>{reviewQ.error}</ErrorNote></Page>;
   // The rows wait for what the role may do too: drawn before it they are a viewer's, and Enter
@@ -335,7 +340,7 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
             <span className={`grid min-w-0 items-center gap-1 ${mode !== "viewer" ? "grid-cols-[minmax(0,1fr)_2rem] max-[600px]:grid-cols-[minmax(0,1fr)_2.5rem]" : "grid-cols-1"}`} data-testid="your-call">
               <span className="flex min-w-0 flex-wrap items-center justify-end gap-1" data-testid="your-call-buttons">
                 {confirm === it.key && rowFixes(openReasons(it))[0] ? (
-                  <ConfirmFix {...rowFixes(openReasons(it))[0]} ops={ops} onDone={() => leaveConfirm(it.key)} />
+                  <ConfirmFix {...rowFixes(openReasons(it))[0]} it={it} ops={ops} onDone={() => leaveConfirm(it.key)} />
                 ) : (
                   <YourCall it={it} open={openReasons(it)} staged={it.actions.filter((a) => a.state === "staged" && a.kind !== "question")} mode={mode} ops={ops} titleOf={titleOf} meId={me?.user_id ?? null} />
                 )}
@@ -514,8 +519,8 @@ function ReasonsCell({ it, showDiff }: { it: Item; showDiff: boolean }) {
   return (
     <span className="flex min-w-0 flex-col gap-1">
       <span className="flex min-w-0 flex-wrap gap-1" data-testid="row-reasons">
-        {shown.slice(0, 2).map((r) => (
-          <span key={r.code} data-testid="reason-chip" className="max-w-full">
+        {shown.slice(0, 2).map((r, n) => (
+          <span key={`${r.code}:${n}`} data-testid="reason-chip" className="max-w-full">
             <Chip kind={!open.includes(r) ? "na" : r.severity === "blocking" ? "crit" : "warn"} title={datesInWords(r.text)} wrap>
               {r.label}
             </Chip>
@@ -582,23 +587,38 @@ function YourCall({ it, open, staged, mode, ops, titleOf, meId }: { it: Item; op
     <>
       {askedChip}
       {rowFixes(open).map(({ reason, fix }, i) => (
-        <FixButton key={fix.label} fix={fix} reason={reason} mode={mode} ops={ops} primary={i === 0} />
+        <FixButton key={fix.label} fix={fix} reason={reason} it={it} mode={mode} ops={ops} primary={i === 0} />
       ))}
     </>
   );
 }
 
-/** Stages a fix (or suggests it, for a commenter), answering its reason when it is the row's. */
-const applyFix = (fix: Fix, reason: Reason, ops: Ops) =>
-  ops.act({ item_key: fix.action.item, kind: fix.action.kind, field: fix.action.field ?? null, value: fix.action.value ?? null, answers: fix.action.item === reason.item ? [reason.code] : [] });
+/**
+ * Stages a fix (or suggests it, for a commenter), answering its reason when it is the row's. An
+ * item keeps one dependency edit, so Remove dependency joins the removal already staged (as the
+ * panel's × does): both dependencies stay removed and both reasons answered.
+ */
+function applyFix(fix: Fix, reason: Reason, ops: Ops, it: Item) {
+  let value = fix.action.value ?? null;
+  let answers = fix.action.item === reason.item ? [reason.code] : [];
+  const removing = (value as { remove?: string[] } | null)?.remove;
+  const before = it.actions.find((a) => a.kind === "edit" && a.field === "depends_on" && a.state === "staged");
+  if (fix.action.kind === "edit" && fix.action.field === "depends_on" && fix.action.item === it.key && removing && before) {
+    const was = (before.value ?? {}) as { add?: string[]; remove?: string[] };
+    value = { add: was.add ?? [], remove: [...new Set([...(was.remove ?? []), ...removing])] };
+    // An edit naming no reason answers every reason of its item: it stays so.
+    answers = before.answers.length ? [...new Set([...before.answers, ...answers])] : [];
+  }
+  return ops.act({ item_key: fix.action.item, kind: fix.action.kind, field: fix.action.field ?? null, value, answers });
+}
 
-export function FixButton({ fix, reason, mode, ops, primary }: { fix: Fix; reason: Reason; mode: Mode; ops: Ops; primary?: boolean }) {
+export function FixButton({ fix, reason, it, mode, ops, primary }: { fix: Fix; reason: Reason; it: Item; mode: Mode; ops: Ops; primary?: boolean }) {
   return (
     <Button
       variant={primary ? "primary" : "secondary"}
       className="h-8 px-2.5 text-sm max-[600px]:h-10"
       title={mode === "commenter" ? "Suggest: an approver stages it" : undefined}
-      onClick={() => void applyFix(fix, reason, ops)}
+      onClick={() => void applyFix(fix, reason, ops, it)}
     >
       {fix.label}
     </Button>
@@ -609,7 +629,7 @@ export function FixButton({ fix, reason, mode, ops, primary }: { fix: Fix; reaso
  * Enter on a row (criterion 16): the row's first fix as "Confirm: {fix}", focused, so Enter
  * again applies it; Cancel or Escape goes back to the row with nothing staged.
  */
-function ConfirmFix({ fix, reason, ops, onDone }: { fix: Fix; reason: Reason; ops: Ops; onDone: () => void }) {
+function ConfirmFix({ fix, reason, it, ops, onDone }: { fix: Fix; reason: Reason; it: Item; ops: Ops; onDone: () => void }) {
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => ref.current?.querySelector("button")?.focus(), []);
   return (
@@ -622,7 +642,7 @@ function ConfirmFix({ fix, reason, ops, onDone }: { fix: Fix; reason: Reason; op
         onDone();
       }}
     >
-      <Button variant="primary" className="h-8 px-2.5 text-sm max-[600px]:h-10" onClick={() => void applyFix(fix, reason, ops).then(onDone)}>
+      <Button variant="primary" className="h-8 px-2.5 text-sm max-[600px]:h-10" onClick={() => void applyFix(fix, reason, ops, it).then(onDone)}>
         Confirm: {fix.label}
       </Button>
       <Button variant="ghost" className="h-8 px-2.5 text-sm max-[600px]:h-10" onClick={onDone}>
@@ -830,7 +850,13 @@ function ReviewInspector({
 }) {
   const [editing, setEditing] = useState(false);
   const { can } = useMe();
-  const titleOf = (key: string) => items.find((x) => x.key === key)?.title ?? key;
+  // Another PRD's feature is not a row: its reasons name it ("Account health ledger (Safety PRD)").
+  const otherTitles: Record<string, string> = {};
+  for (const r of item.reasons) {
+    const d = r.data as { dependency?: unknown; dependency_title?: unknown };
+    if (typeof d.dependency === "string" && typeof d.dependency_title === "string") otherTitles[d.dependency] = d.dependency_title;
+  }
+  const titleOf = (key: string) => items.find((x) => x.key === key)?.title ?? otherTitles[key] ?? key;
   const open = openReasons(item);
   const edit = mode !== "viewer" && item.position != null;
   const staged = (field: string) => item.actions.find((a) => a.kind === "edit" && a.field === field && (a.state === "staged" || a.created_by?.id === meId));
@@ -845,11 +871,11 @@ function ReviewInspector({
       {item.reasons.length > 0 && (
         <InspectorSection label="Needs you because" testId="item-reasons-cards">
           <ul className="flex flex-col gap-2">
-            {item.reasons.map((r) => {
+            {item.reasons.map((r, n) => {
               const isOpen = open.includes(r);
               const by = item.actions.find((a) => answersReason(a, r));
               return (
-                <li key={r.code} className="rounded-button border border-line p-2.5" data-testid="reason-card">
+                <li key={`${r.code}:${n}`} className="rounded-button border border-line p-2.5" data-testid="reason-card">
                   <Chip kind={!isOpen ? "na" : r.severity === "blocking" ? "crit" : "warn"} wrap>
                     {r.severity === "blocking" ? "Blocking" : "To confirm"} · {r.label}
                   </Chip>
@@ -869,7 +895,7 @@ function ReviewInspector({
                         {r.fixes
                           .filter((f) => f.action.kind !== "waive")
                           .map((f, i) => (
-                            <FixButton key={f.label} fix={f} reason={r} mode={mode} ops={ops} primary={i === 0} />
+                            <FixButton key={f.label} fix={f} reason={r} it={item} mode={mode} ops={ops} primary={i === 0} />
                           ))}
                         {mode === "approver" && mayWaive(r, can("waive_strategy_finding")) && (
                           <Button className="h-8 px-2.5 text-sm" onClick={() => setForm({ key: item.key, kind: "waive", code: r.code, where: "inspector" })}>
@@ -942,6 +968,7 @@ function ReviewInspector({
         ) : null
       }
       removedDependencies={removedDeps}
+      dependencyTitles={otherTitles}
       dependencyAction={
         edit
           ? (d) => (

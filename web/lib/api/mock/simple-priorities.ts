@@ -340,6 +340,7 @@ export function prioritiesOut(
       above_line: mine && (line.date ? readItems.get(i.id)!.end.date <= line.date : i.horizon === "now"),
       end_date: mine ? readItems.get(i.id)!.end.date : null,
       end_estimated: mine && readItems.get(i.id)!.end.estimated,
+      estimate_pending: mine && !!readItems.get(i.id)!.estimate_pending,
       no_goal: !i.goal,
       in_plan: false,
       can_reorder: can && mine,

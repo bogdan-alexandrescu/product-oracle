@@ -560,15 +560,20 @@ async def import_analysis(
             await _fallback(s, intake, "invalid_output", error or "empty")
             await s.commit()
             return {"error": error}
-        _body, known, chosen = await intake_job.payload(s, intake)
+        body, known, chosen = await intake_job.payload(s, intake)
         marker = {"run_id": str(run.id), "llm_job_id": None}
-        out = await intake_job.apply_answer(s, intake, answer, known, chosen, marker)
+        out = await intake_job.apply_answer(s, intake, answer, known, chosen, marker, body)
         cost = float(run.spent_usd) if run.spent_usd is not None else None
         _done(intake, read, out, run_id=str(run.id), cost_usd=cost)
         await s.commit()
     notes = []
     if out.get("dropped_refs"):
         notes.append(f"{out['dropped_refs']} evidence refs outside the input dropped")
+    if out.get("dropped_described"):
+        notes.append(
+            f"{out['dropped_described']} gaps dropped: they called missing what a source or "
+            "a baseline feature describes"
+        )
     return {"imported": out, "notes": notes}
 
 

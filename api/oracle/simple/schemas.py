@@ -288,6 +288,8 @@ class SimpleRoadmapItem(BaseModel):
     # The bar's source (its end's, else its start's) and whether it is an estimate.
     source: DateSource
     estimated: bool
+    # A re-plan resized it: its date waits on a new estimate from its owner.
+    estimate_pending: bool = False
     # approved-roadmap-to-simple: the applied roadmap version's words for the dates
     # ("engineering estimate", "founder commitment", "set by <person>"); null when the
     # dates are not the version's (none applied, or a person changed them since).
@@ -945,6 +947,8 @@ class SimplePriorityRow(BaseModel):
     # Roadmap-plus: the item's end as the roadmap resolves it (stored or estimated).
     end_date: dt.date | None = None
     end_estimated: bool = False
+    # A re-plan resized it: its date waits on a new estimate from its owner.
+    estimate_pending: bool = False
     # Serves no confirmed goal.
     no_goal: bool = False
     # plan-charts: the item is the PRD's whose plan "this quarter" is (Goal buckets lists the
@@ -1343,6 +1347,8 @@ class SimplePlanRow(BaseModel):
     milestone: bool
     # Its date falls after the strip's last month.
     past_edge: bool = False
+    # The one-pager: its roadmap items' ids (OnePagerOut.timeline), each once, in plan order.
+    item_ids: list[uuid.UUID] = []
 
 
 class SimplePlanStrip(BaseModel):

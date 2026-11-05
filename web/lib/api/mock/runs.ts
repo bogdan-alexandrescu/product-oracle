@@ -709,9 +709,34 @@ function blockingOf(cp: CheckpointOut, live?: GateReason[]): { reasons: GateReas
  */
 const OWNER_WAIVES = ["stopped_but_planned"];
 
+type Answering = { item_key?: string; kind: string; field?: string | null; value?: unknown; answers?: string[] | null };
+
+type Answered = { item?: string; code?: string; data?: unknown; fixes?: ReasonFix[] };
+const HORIZON_ORDER = ["now", "next", "later"];
+
+/**
+ * As oracle.runs.reasons.is_its_fix: an edit naming a reason's code answers it only when it is
+ * one of its edits of that item and field, if it has any (of an item's two dependency reasons,
+ * Remove dependency on one answers that one); any other action always. A dependency reason is
+ * also answered by an edit removing its dependency among others, and a later horizon reason by a
+ * move to the dependency's horizon or after it.
+ */
+const isItsFix = (a: Answering, x?: Answered) => {
+  if (a.kind !== "edit" || !x) return true;
+  const data = (x.data ?? {}) as { dependency?: unknown; dependency_horizon?: unknown };
+  if (a.item_key === x.item && typeof data.dependency === "string") {
+    const removed = (a.value as { remove?: unknown } | null | undefined)?.remove;
+    if (a.field === "depends_on" && Array.isArray(removed) && removed.includes(data.dependency)) return true;
+    const at = (h: unknown) => HORIZON_ORDER.indexOf(String(h));
+    if (x.code === "horizon_breaks_dependency" && a.field === "horizon" && at(a.value) >= 0 && at(data.dependency_horizon) >= 0) return at(a.value) >= at(data.dependency_horizon);
+  }
+  const mine = (x.fixes ?? []).filter((f) => f.action.item === a.item_key && f.action.kind === a.kind && (f.action.field ?? null) === (a.field ?? null));
+  return !mine.length || mine.some((f) => JSON.stringify(f.action.value ?? null) === JSON.stringify(a.value ?? null));
+};
+
 /** As the API: an action answers a reason it names, every reason of its item when it names none, but a waiver naming none never an owner's. */
-const answersCode = (a: { kind: string; answers?: string[] | null }, code: string) =>
-  a.kind !== "question" && (a.answers?.length ? a.answers.includes(code) : a.kind !== "waive" || !OWNER_WAIVES.includes(code));
+const answersCode = (a: Answering, code: string, x?: Answered) =>
+  a.kind !== "question" && (a.answers?.length ? a.answers.includes(code) && isItsFix(a, x) : a.kind !== "waive" || !OWNER_WAIVES.includes(code));
 
 /** As the API: waiving another reason of the item adds it to the staged waiver before (naming none covers them all). */
 function mergedAnswers(a: { kind: string; answers?: string[] | null }, existing?: { state: string; answers?: string[] | null }): string[] {
@@ -3635,6 +3660,53 @@ export const ROADMAP_DRIFT_RUN: { run: RunOut; artifacts: Record<string, string>
   artifacts: { [`${ROADMAP_DRIFT_RUN_ID}|1|roadmap_items.yaml`]: REVIEW_ITEMS },
 };
 
+/** The roadmap review run whose Budget caps also waits on another PRD's feature (seedRoadmapCrossPrd in e2e/helpers.ts). */
+export const ROADMAP_CROSS_PRD_RUN_ID = "7a11c0de-0000-4000-8000-0000000000db";
+
+/**
+ * The owner, Nov 4: an item may depend on another PRD's feature on the company roadmap. Budget
+ * caps (Now) depends on Account health ledger, the Safety PRD's item in Next, and on its own
+ * Anomaly detection (Later): two reasons of one code, each in its own words with its own fixes,
+ * as oracle.runs.reasons words them.
+ */
+function roadmapCrossPrdRun(): RunOut {
+  const run = JSON.parse(JSON.stringify(roadmapReviewRun()).replaceAll("0000000d2", "0000000db")) as RunOut;
+  run.id = ROADMAP_CROSS_PRD_RUN_ID;
+  run.document_slug = "usage-alerts-roadmap-6";
+  const [items] = run.segments;
+  const reasons = [...(items.items_check?.reasons ?? [])];
+  const at = reasons.findIndex((x) => x.item === "budget-caps" && x.code === "horizon_breaks_dependency");
+  reasons.splice(at, 0, {
+    item: "budget-caps",
+    item_title: "Budget caps",
+    code: "horizon_breaks_dependency",
+    severity: "blocking",
+    label: "Depends on a later item",
+    text: "Needs Account health ledger (Safety PRD), which is in Next. An item cannot ship before what it depends on.",
+    data: { dependency: "account-health-ledger", dependency_horizon: "next", dependency_title: "Account health ledger (Safety PRD)" },
+    fixes: [moveTo("budget-caps", "next"), fix("Remove dependency", "edit", "budget-caps", "depends_on", { remove: ["account-health-ledger"] })],
+  });
+  const problems = [...(items.items_check?.problems ?? [])];
+  problems.splice(
+    problems.findIndex((p) => p.code === "horizon_breaks_dependency"),
+    0,
+    { code: "horizon_breaks_dependency", message: "Budget caps is in Now but waits on Account health ledger (Safety PRD) in Next", item: "budget-caps" },
+  );
+  items.items_check = withReasons({ items: items.items_check!.items, by_horizon: items.items_check!.by_horizon, problems }, reasons, items.items_check!.base);
+  const [cp] = run.checkpoints;
+  cp.run_id = run.id;
+  cp.payload = { ...cp.payload, items_check: items.items_check };
+  refresh(run);
+  return run;
+}
+
+export const ROADMAP_CROSS_PRD_RUN: { run: RunOut; artifacts: Record<string, string> } = {
+  run: roadmapCrossPrdRun(),
+  artifacts: {
+    [`${ROADMAP_CROSS_PRD_RUN_ID}|1|roadmap_items.yaml`]: REVIEW_ITEMS.replace("depends_on: [anomaly-detection]", "depends_on: [account-health-ledger, anomaly-detection]"),
+  },
+};
+
 /** The roadmap review run whose file cannot be read as items (seedRoadmapFileProblem in e2e/helpers.ts, D1). */
 export const ROADMAP_FILE_PROBLEM_RUN_ID = "7a11c0de-0000-4000-8000-0000000000d7";
 
@@ -3664,7 +3736,7 @@ export const ROADMAP_FILE_PROBLEM_RUN: { run: RunOut; artifacts: Record<string, 
 // ---------------------------------------------------------------- F4 Engineering check
 
 type Brief = { key: string; title: string; approach: string; size: string; depends_on: string[]; questions: { id: string; question: string; blocking: boolean }[] };
-type BriefsCheck = { features: Brief[]; problems: { code: string; message: string; feature?: string | null; features?: string[] }[]; code_map_used: boolean; unmapped_repos: string[]; unnamed_repo: boolean };
+type BriefsCheck = { features: Brief[]; problems: { code: string; message: string; feature?: string | null; features?: string[] }[]; code_map_used: boolean; unmapped_repos: string[]; unnamed_repo: boolean; elsewhere?: Record<string, string> };
 const SIZES = ["xs", "s", "m", "l", "xl"];
 const VERDICTS = ["feasible", "feasible_with_changes", "not_feasible"];
 const VERDICT_WORDS: Record<string, string> = { feasible: "Feasible", feasible_with_changes: "Feasible with changes", not_feasible: "Not feasible as scoped" };
@@ -3698,7 +3770,12 @@ type RunMaps = { ids: string[]; repos: string[] };
  * features citing it and where; the repositories the file names that none of the run's maps
  * covers (compared as owner/name); unnamed_repo when ids are unknown but none is named.
  */
-function briefsCheckOf(briefs: Brief[], file?: BriefsMaps, maps?: RunMaps): BriefsCheck {
+/**
+ * As oracle.engineering.check._summarize. `elsewhere`: the keys outside the feature set a brief may
+ * depend on, named with their PRD (features of other PRDs on the company roadmap, or waived at the
+ * feature set stop); any other dependency outside the set is unknown_dependency.
+ */
+export function briefsCheckOf(briefs: Brief[], file?: BriefsMaps, maps?: RunMaps, elsewhere: Record<string, string> = {}): BriefsCheck {
   const cited: Record<string, Record<string, string[]>> = {};
   for (const b of briefs) {
     for (const [ref, at] of file?.cites[b.key] ?? []) {
@@ -3715,7 +3792,24 @@ function briefsCheckOf(briefs: Brief[], file?: BriefsMaps, maps?: RunMaps): Brie
     });
   const mapped = new Set((maps?.repos ?? []).map(repoKey));
   const unmapped_repos = [...new Set([...(file?.repos ?? []), ...(file?.unmapped ?? [])])].filter((r) => r.trim() && !mapped.has(repoKey(r)));
-  return { features: briefs, problems, code_map_used: !!file?.repos.length, unmapped_repos, unnamed_repo: !unmapped_repos.length && problems.length > 0 };
+  const keys = new Set(briefs.map((b) => b.key));
+  const named: Record<string, string> = {};
+  const unknown: BriefsCheck["problems"] = [];
+  briefs.forEach((b, i) => {
+    for (const d of b.depends_on) {
+      if (keys.has(d)) continue;
+      if (d in elsewhere) named[d] = elsewhere[d];
+      else unknown.push({ code: "unknown_dependency", feature: b.key, message: `features[${i}] (${b.key}): depends on '${d}', not a feature of the feature set or the company roadmap` });
+    }
+  });
+  return {
+    features: briefs,
+    problems: [...unknown, ...problems],
+    code_map_used: !!file?.repos.length,
+    unmapped_repos,
+    unnamed_repo: !unmapped_repos.length && problems.length > 0,
+    elsewhere: named,
+  };
 }
 
 /** As oracle.engineering.check._repo_key: a repository name as owner/name (URL, ssh address and .git dropped). */
@@ -4241,7 +4335,7 @@ function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftR
     const mine = draft.actions.filter((a) => a.item_key === key);
     const theirs = reasons.filter((x) => x.item === key);
     const answered = (x: (typeof reasons)[number]) =>
-      mine.some((a) => a.state === "staged" && answersCode(a, x.code));
+      mine.some((a) => a.state === "staged" && answersCode(a, x.code, x));
     const open = theirs.filter((x) => !answered(x));
     const asked = mine.map(questionOf).filter((q): q is Schemas["ReviewQuestion"] => q?.status === "open");
     for (const q of asked) {
@@ -4365,7 +4459,7 @@ function buildReview(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged: Dra
       }
     }
   }
-  const open = reasons.filter((x) => !staged.some((a) => a.item_key === x.item && answersCode(a, x.code)));
+  const open = reasons.filter((x) => !staged.some((a) => a.item_key === x.item && answersCode(a, x.code, x)));
   // qa-work-1: a feature set sends the rows a person changed (as the API's sent_review).
   const scoped = cp.kind === "feature_set" ? scopeSendBack(ctx.db, r.id, staged) : null;
   if (scoped) {
@@ -4475,7 +4569,7 @@ function inboxSummary(ctx: RunsContext, r: RunOut, cp: CheckpointOut): Schemas["
     return { ...t, ...none, wait: review.wait, console_held: cp.console?.needs === "confirm" && t.blocking > 0 };
   }
   const answers = (a: Schemas["ReviewAction"], x: ItemReason) =>
-    a.state === "staged" && answersCode(a, x.code);
+    a.state === "staged" && answersCode(a, x.code, x);
   const first = (xs: ItemReason[]) => [...xs].sort((a, b) => SEVERITY[a.severity] - SEVERITY[b.severity])[0];
   const rows: { order: [number, number]; child: Schemas["InboxChild"] }[] = [];
   for (const it of review.items) {
@@ -4782,9 +4876,15 @@ function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug
  * blocking row is open, so the approval is held). With `kept`, that row is also new and a likely
  * duplicate, both kept by one call staged before each reason had its own.
  */
-export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">, kept = false, manyQuestions = false) {
+export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">, kept = false, manyQuestions = false, otherPrd = false) {
   // Pick address in one step is new as well as low in confidence: one feature, two calls.
   const first = seedScopeRun(db, ctx, SCOPE_REVIEW_RUN, "saved-addresses", "2026-10-17T09:00:00Z", SCOPE_REVIEW_SET, 1, { "pick-address": ["new_feature"] });
+  if (otherPrd) {
+    // The owner, Nov 4: Address lookup needs Address verification, the Trust PRD's feature on the company roadmap.
+    first.scope.elsewhere = { "address-verification": { title: "Address verification", prd: "Trust PRD" } };
+    first.scope.features.find((f) => f.key === "address-lookup")!.depends_on = ["address-verification"];
+    recheckScope(db, first.scope);
+  }
   // AQ1: the analyst's and architect's questions at this stop; the hard case asks eleven.
   (db.agent_questions ??= {})[first.cp.id] = seedAgentQuestions(manyQuestions);
   const commenter = (ctx.members ?? []).find((x) => x.email === "commenter@example.com");

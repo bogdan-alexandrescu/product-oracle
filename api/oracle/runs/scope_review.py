@@ -47,6 +47,7 @@ from oracle.runs.schemas import (
     ScopeHistory,
     ScopeItemOut,
     ScopeItemPatch,
+    ScopeOtherDependency,
     ScopeReason,
     ScopeRequirementIn,
     ScopeReviewFeature,
@@ -110,6 +111,15 @@ def _answers(action: Any, code: str, kind: str) -> bool:
     )
 
 
+def _label(problem: dict[str, Any], key: str, code: str) -> str:
+    """A problem's words on its feature's row: ``needs_other_prd`` reads "Needs Account
+    health ledger from Safety PRD" (the row names the feature already)."""
+    message = problem.get("message") or code
+    if code == "needs_other_prd" and message.startswith(f"{key} needs "):
+        return "Needs " + message.removeprefix(f"{key} needs ")
+    return message
+
+
 def reasons_of(
     scope: PrdScope, items: list[PrdScopeItem], actions: list[Any]
 ) -> dict[str, list[ScopeReason]]:
@@ -139,7 +149,7 @@ def reasons_of(
             ScopeReason(
                 code=code,
                 severity=severity,  # type: ignore[arg-type]
-                label=p.get("message") or code,
+                label=_label(p, key, code),
                 requirement=p.get("requirement"),
                 waivable=can_waive,
                 answered=bool(answered and (can_waive or not blocking)),
@@ -320,6 +330,26 @@ async def _baseline_goals(
     return out
 
 
+async def _other_prd(
+    db: AsyncSession, run: Run | None, items: list[PrdScopeItem]
+) -> dict[str, ScopeOtherDependency]:
+    """The dependencies another PRD on the company roadmap holds, by key, named with their
+    PRD: those of the scope's features this scope does not include (as the check reads them,
+    feature_set.check_scope's ``needs_other_prd``)."""
+    mine = {i.key for i in items if i.kind == "feature" and i.decision == "include"}
+    wanted = {d for i in items if i.kind == "feature" for d in i.depends_on or [] if d not in mine}
+    if not wanted:
+        return {}
+    from oracle.roadmap import company
+
+    own = run.document_id if run is not None else None
+    return {
+        k: ScopeOtherDependency(key=k, title=f.title, prd=f.prd_name)
+        for k, f in (await company.features_on_roadmap(db)).items()
+        if k in wanted and f.other_than(own, run.id if run is not None else None)
+    }
+
+
 async def read(db: AsyncSession, principal: Principal, scope_id: uuid.UUID) -> PrdScopeReview:
     scope = await _scope(db, scope_id)
     items = await feature_set.scope_items(db, scope.id)
@@ -331,6 +361,8 @@ async def read(db: AsyncSession, principal: Principal, scope_id: uuid.UUID) -> P
     by_id = {i.id: i for i in items}
     named = await _evidence(db, [e for i in items for e in i.evidence_ids or []])
     served = await _baseline_goals(db, [i.entity_id for i in items if i.entity_id and not i.goals])
+    run = await db.get(Run, scope.run_id)
+    elsewhere = await _other_prd(db, run, items)
     features = []
     for f in base.features:
         row = by_id[f.id]
@@ -348,6 +380,7 @@ async def read(db: AsyncSession, principal: Principal, scope_id: uuid.UUID) -> P
                 reasons=mine,
                 needs_you=any(not r.answered for r in mine),
                 history=_history(row, names),
+                other_prd_dependencies=[elsewhere[d] for d in f.depends_on if d in elsewhere],
                 requirements=[
                     ScopeReviewRequirement(
                         **r.model_dump(),
@@ -363,7 +396,6 @@ async def read(db: AsyncSession, principal: Principal, scope_id: uuid.UUID) -> P
             )
         )
     previous, previous_reqs = await _previous(db, scope)
-    run = await db.get(Run, scope.run_id)
     goals = await db.scalars(
         select(Entity)
         .where(Entity.type == "goal", Entity.status == "confirmed")

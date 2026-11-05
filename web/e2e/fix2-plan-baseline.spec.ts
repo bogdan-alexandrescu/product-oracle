@@ -18,7 +18,7 @@ const scenario = (page: Page, name: string) =>
 async function openBaseline(page: Page, email?: string) {
   await login(page, email);
   await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
   await expect(page.getByTestId("goal-g.activation")).toBeVisible();
 }
 

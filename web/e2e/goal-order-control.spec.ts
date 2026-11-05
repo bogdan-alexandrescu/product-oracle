@@ -66,7 +66,7 @@ async function everyPageShows(page: Page, want: string[], phone: boolean) {
   await expect(group.getByTestId("order-num")).toHaveText("1");
 
   await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
   for (const [i, name] of want.entries()) {
     const row = page.locator('[data-testid^="goal-"]').filter({ has: page.getByRole("button", { name, exact: true }) }).first();
     await expect(row.getByTestId("order-num")).toHaveText(String(i + 1));

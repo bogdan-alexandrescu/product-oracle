@@ -1,0 +1,106 @@
+"""Simple Goal map (build-goal-map), for people (a run's token is refused):
+
+- ``GET /v1/simple/goal-map``: viewer and up; ``can_edit`` says whether they may edit.
+- ``POST /areas``, ``PUT /areas/order``, ``PATCH /goals/{id}``, ``POST /milestones``
+  (propose one), ``PATCH /milestones/{id}`` (set its threshold, confirm it), ``POST /links``
+  (attach a feature to a cell): approver and up; each answers the map as it now reads.
+"""
+
+import uuid
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, status
+
+from oracle.auth.deps import Principal, TenantDB
+from oracle.auth.models import User
+from oracle.authz import has_role, require_role
+from oracle.simple import goal_map
+from oracle.simple.goal_map import (
+    AreaIn,
+    AreaOrderIn,
+    AttachIn,
+    GateIn,
+    GoalMapOut,
+    GoalTargetIn,
+    ProposeIn,
+)
+
+router = APIRouter(prefix="/v1/simple/goal-map", tags=["simple"])
+
+
+def _people(role: str):
+    async def check(principal: Annotated[Principal, Depends(require_role(role))]) -> Principal:
+        if principal.run_id is not None or principal.run_token_id is not None:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Simple is not available to runs")
+        return principal
+
+    return check
+
+
+Reader = Annotated[Principal, Depends(_people("viewer"))]
+Approver = Annotated[Principal, Depends(_people("approver"))]
+
+
+def _can_edit(principal: Principal) -> bool:
+    return has_role(principal.role, "approver") and not principal.read_only
+
+
+async def _done(db: TenantDB, principal: Principal) -> GoalMapOut:
+    await db.commit()
+    return await goal_map.build(db, _can_edit(principal))
+
+
+async def _run(db: TenantDB, principal: Principal, step) -> GoalMapOut:
+    try:
+        await step
+    except goal_map.GoalMapError as e:
+        await db.rollback()
+        raise HTTPException(e.status, e.detail) from e
+    return await _done(db, principal)
+
+
+async def _who(db: TenantDB, principal: Principal) -> str:
+    user = await db.get(User, principal.user_id) if principal.user_id else None
+    return (user.name or user.email) if user else "An API token"
+
+
+@router.get("", response_model=GoalMapOut)
+async def get_goal_map(principal: Reader, db: TenantDB) -> GoalMapOut:
+    return await goal_map.build(db, _can_edit(principal))
+
+
+@router.post("/areas", response_model=GoalMapOut)
+async def add_area(body: AreaIn, principal: Approver, db: TenantDB) -> GoalMapOut:
+    return await _run(db, principal, goal_map.add_area(db, body))
+
+
+@router.put("/areas/order", response_model=GoalMapOut)
+async def order_areas(body: AreaOrderIn, principal: Approver, db: TenantDB) -> GoalMapOut:
+    return await _run(db, principal, goal_map.order_areas(db, body.ids))
+
+
+@router.patch("/goals/{goal_id}", response_model=GoalMapOut)
+async def edit_goal(
+    goal_id: uuid.UUID, body: GoalTargetIn, principal: Approver, db: TenantDB
+) -> GoalMapOut:
+    who = await _who(db, principal)
+    return await _run(db, principal, goal_map.edit_goal(db, goal_id, body.target, who))
+
+
+@router.post("/milestones", response_model=GoalMapOut)
+async def propose_milestone(body: ProposeIn, principal: Approver, db: TenantDB) -> GoalMapOut:
+    return await _run(db, principal, goal_map.propose(db, body, principal.user_id))
+
+
+@router.patch("/milestones/{milestone_id}", response_model=GoalMapOut)
+async def set_gate(
+    milestone_id: uuid.UUID, body: GateIn, principal: Approver, db: TenantDB
+) -> GoalMapOut:
+    return await _run(
+        db, principal, goal_map.set_gate(db, milestone_id, body, await _who(db, principal))
+    )
+
+
+@router.post("/links", response_model=GoalMapOut)
+async def attach_feature(body: AttachIn, principal: Approver, db: TenantDB) -> GoalMapOut:
+    return await _run(db, principal, goal_map.attach(db, body))

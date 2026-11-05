@@ -117,7 +117,27 @@ export function describe(a: Action, item: Item | undefined, title: (key: string)
  * names none, but a waiver naming none never one only an owner waives (H4 §5). Questions answer nothing.
  */
 export const answersReason = (a: Action, r: Reason) =>
-  a.state === "staged" && a.kind !== "question" && (a.answers.length ? a.answers.includes(r.code) : a.kind !== "waive" || r.code !== "stopped_but_planned");
+  a.state === "staged" && a.kind !== "question" && (a.answers.length ? a.answers.includes(r.code) && isItsFix(a, r) : a.kind !== "waive" || r.code !== "stopped_but_planned");
+
+/**
+ * As the API (reasons.is_its_fix): an edit naming a reason's code answers it only when it is one
+ * of its edits of that item and field, if it has any, so of an item's two dependency reasons
+ * Remove dependency on one clears that one; any other action always. A dependency reason is also
+ * answered by an edit removing its dependency among others, and a later horizon reason by a move
+ * to the dependency's horizon or after it.
+ */
+export function isItsFix(a: Pick<Action, "item_key" | "kind" | "field" | "value">, r: Pick<Reason, "item" | "code" | "data" | "fixes">): boolean {
+  if (a.kind !== "edit") return true;
+  const data = (r.data ?? {}) as { dependency?: unknown; dependency_horizon?: unknown };
+  if (a.item_key === r.item && typeof data.dependency === "string") {
+    const removed = (a.value as { remove?: unknown } | null)?.remove;
+    if (a.field === "depends_on" && Array.isArray(removed) && removed.includes(data.dependency)) return true;
+    const at = (h: unknown) => HORIZONS.indexOf(h as (typeof HORIZONS)[number]);
+    if (r.code === "horizon_breaks_dependency" && a.field === "horizon" && at(a.value) >= 0 && at(data.dependency_horizon) >= 0) return at(a.value) >= at(data.dependency_horizon);
+  }
+  const mine = r.fixes.filter((f) => f.action.item === a.item_key && f.action.kind === a.kind && (f.action.field ?? null) === (a.field ?? null));
+  return !mine.length || mine.some((f) => isFix(a, f));
+}
 
 export const openReasons = (it: Item, actions: Action[] = it.actions): Reason[] => it.reasons.filter((r) => !actions.some((a) => answersReason(a, r)));
 
@@ -177,4 +197,27 @@ export function showValue(field: string, v: unknown): string {
   const text = show(v);
   if (ONLY_DAY.test(text)) return formatDate(text);
   return KEY_FIELDS.includes(field) ? text : datesInWords(text);
+}
+
+/**
+ * ask-page-context: what a Roadmap items review shows, for Ask Oracle's "This page": the count
+ * line, then each listed item with its horizon, milestone and date, confidence, outcome and why
+ * it needs the owner (dates month first).
+ */
+export function itemsPageLines(rows: Item[], counts: ReviewCounts): string[] {
+  const line = (it: Item) => {
+    const m = it.milestone;
+    const milestone = m?.name || m?.date ? [m.name, m.date ? day(m.date) : null].filter(Boolean).join(", ") : "none";
+    const why = it.reasons.map((r) => `${r.label}: ${datesInWords(r.text)}`).join("; ");
+    return [
+      it.title ?? it.key,
+      `horizon ${horizonLabel(it.horizon)}`,
+      `milestone ${milestone}`,
+      `confidence ${it.confidence ?? "not given"}`,
+      ...(it.outcome ? [`outcome ${datesInWords(it.outcome)}`] : []),
+      ...(it.position == null ? ["dropped from the file"] : []),
+      why ? `needs you because ${why}` : "nothing needs you",
+    ].join(" · ");
+  };
+  return [`${itemsText(counts)} · ${openText(counts)}; listed: ${plural(rows.length, "item")}`, ...rows.map(line)];
 }

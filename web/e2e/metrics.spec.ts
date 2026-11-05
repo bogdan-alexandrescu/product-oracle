@@ -60,7 +60,7 @@ async function openCompanyOnPhone(page: Page) {
 /** Opens a goal's drawer in the Baseline (the rail's Baseline). */
 async function openGoal(page: Page, key: string, title: string) {
   await page.getByTestId("app-nav").getByTestId("nav-baseline").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
   await page.getByTestId(`goal-${key}`).getByRole("button", { name: title }).click();
   return page.getByRole("dialog", { name: title });
 }

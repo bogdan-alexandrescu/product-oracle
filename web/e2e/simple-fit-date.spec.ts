@@ -1,0 +1,211 @@
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { THEME_KEY } from "../lib/theme";
+import { login } from "./helpers";
+import { expect, test, type Page } from "./test";
+
+/*
+ * Bring a date in, in Simple (the owner's picks FD1 a "On the roadmap date", FD2 a "Ranked list,
+ * live date", FD3 a "Draft, check, approve"). Simple Roadmap shows the goal's target and its date
+ * on today's plan; "Bring this date in" opens Oracle's ranked changes in a side panel (a sheet on a
+ * phone) with a live date meter; "Draft N changes" shows what changes in the PRD and every date
+ * that moves; "Approve both" makes them live, and Roadmap and Home show the new date. Driven
+ * through the UI against the mock's "fit-date" and "fit-date-hard" scenarios (invented data:
+ * Larkspur Help Desk's M2 Agent reply flow, target Jan 29, on today's plan Mar 12).
+ */
+
+const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
+
+async function open(page: Page, scenario = "fit-date", scheme: "light" | "dark" = "light", email?: string) {
+  await page.context().addInitScript(
+    ([key, value, themeKey, theme]) => {
+      localStorage.setItem(key, value);
+      localStorage.setItem(themeKey, theme);
+    },
+    [MOCK_SCENARIO_KEY, scenario, THEME_KEY, scheme] as const,
+  );
+  await page.emulateMedia({ colorScheme: scheme });
+  await login(page, email);
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("fit-goal")).toBeVisible();
+}
+
+const tick = (page: Page, id: string) => page.getByTestId(`fit-change-${id}`).getByRole("checkbox");
+
+test.describe("desktop", () => {
+  test("the late goal opens Oracle's ranked changes, the live date follows the ticks, the draft is approved", async ({ page }) => {
+    await open(page);
+    const goal = page.getByTestId("fit-goal");
+    await expect(goal).toContainText("Goal: 40 replied threads per agent per day");
+    await expect(goal).toContainText("Target Jan 29");
+    await expect(page.getByTestId("fit-on-plan")).toHaveText("Mar 12");
+    await expect(goal).toContainText("6 weeks late");
+    await expect(page.getByTestId("fit-lane-M2")).toContainText("Send check before a draft goes out");
+    // The chip beside Roadmap names the PRD whose goal leads the page (fd1-a-rest), not "All roadmaps".
+    await expect(page.getByTestId("roadmap-scope")).toHaveText("Reply faster in the shared inbox");
+
+    await page.getByRole("button", { name: "Bring this date in" }).click();
+    const panel = page.getByTestId("fit-panel");
+    await expect(panel).toContainText("Bring M2 Agent reply flow in");
+    await expect(panel).toContainText("Target Jan 29; on today’s plan Mar 12. 4 engineers at 70% focus.");
+    // The roadmap stays in view beside the side panel.
+    await expect(page.getByTestId("fit-lane-M2")).toBeInViewport();
+
+    // Oracle's own pick is ticked; the meter reaches the target in green.
+    const meter = page.getByTestId("fit-meter-date");
+    await expect(meter).toHaveText("Jan 24");
+    await expect(meter).toHaveAttribute("data-state", "reach");
+    await expect(page.getByTestId("fit-meter")).toContainText("Reaches Jan 29, 5 days to spare.");
+    await expect(tick(page, "bulk")).toBeChecked();
+    await expect(tick(page, "focus")).toBeChecked();
+    await expect(tick(page, "wait:M2")).not.toBeChecked();
+    // Ranked strictly by days saved: the must-include change saves the most, so it is first, with
+    // its lock and no tick; the first change Oracle may tick is second.
+    const rows = page.getByTestId("fit-ranked").locator("ol > li");
+    await expect(rows.first()).toContainText("1. Reply drafts in the inbox");
+    await expect(rows.first()).toContainText("15 days sooner");
+    await expect(rows.first()).toContainText("Must-include");
+    await expect(rows.first().getByTestId("fit-change-lock")).toBeVisible();
+    await expect(tick(page, "drafts")).toBeDisabled();
+    await expect(tick(page, "drafts")).not.toBeChecked();
+    await expect(rows.nth(1)).toContainText("2. Reply to similar threads at once");
+    await expect(rows.last()).not.toContainText("Reply drafts in the inbox");
+    await expect(page.getByTestId("fit-change-bulk").getByTestId("fit-change-lock")).toHaveCount(0);
+    await expect(page.getByTestId("fit-change-bulk")).toContainText("13 days sooner");
+    await expect(page.getByTestId("fit-change-bulk")).toContainText("Goal at risk");
+
+    // Unticking the biggest change misses the target: amber, with how late.
+    await tick(page, "bulk").click();
+    await expect(meter).toHaveText("Feb 4");
+    await expect(meter).toHaveAttribute("data-state", "miss");
+    await expect(page.getByTestId("fit-meter")).toContainText("6 days after Jan 29.");
+    await expect(page.getByRole("button", { name: "Draft 4 changes" })).toBeVisible();
+    await tick(page, "bulk").click();
+    await expect(meter).toHaveText("Jan 24");
+
+    // A must-include item shows but cannot be ticked; the locked box says what Oracle will not cut.
+    await expect(tick(page, "drafts")).toBeDisabled();
+    const locked = page.getByTestId("fit-locked");
+    await expect(locked).toContainText("Oracle will not cut these");
+    await expect(locked).toContainText("Send check before a draft goes out (3 person-weeks). Guardrail");
+    await expect(locked).toContainText("Hide card numbers in drafts (2 person-weeks). Safety");
+    // Drafting is the capacity queue, not a run: no made-up time or cost.
+    await expect(panel).toContainText("Oracle drafts the next PRD and roadmap versions for you to check.");
+    await expect(panel).not.toContainText("seconds");
+    await expect(panel).not.toContainText("$0.");
+
+    // The draft: what changes in the PRD and every date that moves, old struck through.
+    await page.getByRole("button", { name: "Draft 5 changes" }).click();
+    const diff = page.getByTestId("fit-diff");
+    await expect(panel).toContainText("Check the new drafts");
+    await expect(diff).toContainText("Reply faster in the shared inbox: version 3 → 4");
+    await expect(diff).toContainText("Roadmap dates: version 6 → 7");
+    const m2 = page.getByTestId("fit-diff-dates").locator("li").filter({ hasText: "M2 Agent reply flow" });
+    await expect(m2.locator("del")).toHaveText("Mar 12");
+    await expect(m2.locator("ins")).toHaveText("Jan 24");
+    // Nothing asks the owner yet, so the panel does not say they are asked.
+    await expect(page.getByTestId("fit-needs-estimate")).toContainText("Thread summary card needs a new estimate from Tomas Brook");
+    await expect(page.getByTestId("fit-needs-estimate")).not.toContainText("is asked");
+    // The target is reached, so Approve both and Back to the picks sit side by side (fd3-a-result).
+    const approveBox = (await page.getByRole("button", { name: "Approve both", exact: true }).boundingBox())!;
+    const backBox = (await page.getByRole("button", { name: "Back to the picks" }).boundingBox())!;
+    expect(Math.abs(backBox.y - approveBox.y)).toBeLessThanOrEqual(1);
+    expect(backBox.x).toBeGreaterThan(approveBox.x + approveBox.width);
+
+    // Back to the picks keeps them; drafting again returns to the check.
+    await page.getByRole("button", { name: "Back to the picks" }).click();
+    await expect(tick(page, "bulk")).toBeChecked();
+    await page.getByRole("button", { name: "Draft 5 changes" }).click();
+    await page.getByRole("button", { name: "Approve both", exact: true }).click();
+
+    // Live: the roadmap reads the new date, the sliced item's date waits for its new estimate.
+    await expect(panel).toBeHidden();
+    await expect(page.getByTestId("fit-approved")).toContainText("PRD version 4 and roadmap version 7 are live: M2 lands Jan 24.");
+    await expect(page.getByTestId("fit-on-plan")).toHaveText("Jan 24");
+    await expect(page.getByRole("button", { name: "Bring this date in" })).toHaveCount(0);
+    const lane = page.getByTestId("fit-lane-M2");
+    await expect(lane.locator("del").first()).toHaveText("Mar 12");
+    await expect(lane.locator("li").filter({ hasText: "Thread summary card" })).toContainText("Jan 15");
+
+    // Home shows the milestone on its date and what moved.
+    await page.getByRole("navigation").getByRole("link", { name: "Home" }).click();
+    const home = page.getByTestId("fit-home");
+    await expect(home).toContainText("M2 Agent reply flow is on its date");
+    await expect(home).toContainText("It now lands Jan 24 (was Mar 12), 5 days before Jan 29.");
+    await expect(home).toContainText("Tone presets: not dated");
+  });
+
+  test("an approver who does not decide the roadmap leaves its version in review with its decider", async ({ page }) => {
+    await open(page, "fit-date", "light", "approver@example.com");
+    await page.getByRole("button", { name: "Bring this date in" }).click();
+    await page.getByRole("button", { name: "Draft 5 changes" }).click();
+    await page.getByRole("button", { name: "Approve both", exact: true }).click();
+    const done = page.getByTestId("fit-approved");
+    await expect(done).toContainText("PRD version 4 is live: M2 lands Jan 24. Roadmap version 7 is in review with Noor Hale.");
+    await expect(done).not.toContainText("are live");
+    // Home says the roadmap's version is in review, never that it was approved.
+    await page.getByRole("navigation").getByRole("link", { name: "Home" }).click();
+    const home = page.getByTestId("fit-home");
+    await expect(home).toContainText("You approved PRD version 4 on");
+    await expect(home).toContainText("Roadmap version 7 is in review with Noor Hale.");
+    await expect(home).not.toContainText("and roadmap version 7");
+  });
+
+  test("approving is refused while the roadmap's draft holds someone else's edits", async ({ page }) => {
+    await open(page, "fit-date-foreign-draft");
+    await page.getByRole("button", { name: "Bring this date in" }).click();
+    await page.getByRole("button", { name: "Draft 5 changes" }).click();
+    await page.getByRole("button", { name: "Approve both", exact: true }).click();
+    const panel = page.getByTestId("fit-panel");
+    await expect(panel).toContainText("Ines Moreau has unsaved changes in this roadmap's draft; ask them to submit or discard first.");
+    // Nothing was written: the panel stays on the draft and the roadmap keeps today's date.
+    await expect(panel).toContainText("Check the new drafts");
+    await expect(page.getByRole("button", { name: "Approve both", exact: true })).toBeEnabled();
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+    await expect(page.getByTestId("fit-approved")).toHaveCount(0);
+    await expect(page.getByTestId("fit-on-plan")).toHaveText("Mar 12");
+  });
+
+  test("hard case: no set reaches the target, so it says so with the best date", async ({ page }) => {
+    await open(page, "fit-date-hard");
+    await expect(page.getByTestId("fit-goal")).toContainText("Target Jan 8");
+    await expect(page.getByTestId("fit-goal")).toContainText("9 weeks late");
+    await page.getByRole("button", { name: "Bring this date in" }).click();
+    const hard = page.getByTestId("fit-hard");
+    await expect(hard).toContainText("No set of cuts reaches Jan 8. The earliest is Jan 15, 7 days after.");
+    await expect(hard).toContainText("Cutting it would reach Jan 8; Oracle will not offer it.");
+    await expect(hard).toContainText("Every change is picked. Another engineer counts only after a 3-week start, so lands too late to help. Two items stay whatever the date:");
+    await expect(page.getByTestId("fit-meter-date")).toHaveAttribute("data-state", "miss");
+    await expect(page.getByRole("button", { name: "Draft 7 changes and the Jan 15 target" })).toBeVisible();
+    await page.getByRole("button", { name: "Draft 7 changes and the Jan 15 target" }).click();
+    await expect(page.getByTestId("fit-diff")).toContainText("No set of changes reaches Jan 8, so you approve the new target too.");
+    const approve = page.getByRole("button", { name: "Approve both and the Jan 15 target" });
+    await expect(approve).toBeVisible();
+    // No set reaches the target: Back to the picks sits under the Approve button, both at the
+    // footer's left (fd3-a-hard-1512).
+    const back = page.getByTestId("fit-check-actions").getByRole("button", { name: "Back to the picks" });
+    const a = (await approve.boundingBox())!;
+    const b = (await back.boundingBox())!;
+    expect(b.y).toBeGreaterThanOrEqual(a.y + a.height);
+    expect(Math.abs(b.x - a.x)).toBeLessThanOrEqual(1);
+  });
+});
+
+test.describe("phone", () => {
+  test.use(PHONE);
+
+  test("the answer opens as a sheet and the live date follows a tick", async ({ page }) => {
+    await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "fit-date"] as const);
+    await login(page);
+    await page.goto("/simple/roadmap");
+    await page.getByRole("button", { name: "Bring this date in" }).click();
+    const panel = page.getByTestId("fit-panel");
+    await expect(panel).toBeVisible();
+    const box = await panel.boundingBox();
+    expect(box!.width).toBeLessThanOrEqual(390);
+    await expect(page.getByTestId("fit-meter-date")).toHaveText("Jan 24");
+    await tick(page, "wait:M2").click();
+    await expect(page.getByTestId("fit-meter-date")).toHaveText("Jan 17");
+    await expect(page.getByRole("button", { name: "Draft 6 changes" })).toBeVisible();
+  });
+});

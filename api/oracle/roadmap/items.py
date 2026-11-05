@@ -475,6 +475,8 @@ async def import_items(
                 select(Section.section_key).where(Section.version_id == prd_version.id)
             )
         )
+    from oracle.roadmap import company
+
     bases = await schedule.verified_bases(db, prd_doc.id if prd_doc else None)
     # Kept by oracle.runs.roadmap: a run's file checked at its checkpoint is not parsed again.
     check = await items_file.check_items_async(
@@ -483,6 +485,9 @@ async def import_items(
         prd_version=prd_version.number if prd_version else None,
         prd_sections=keys,
         date_bases=bases,
+        # The owner, Nov 4: an item may depend on another PRD's feature on the company roadmap.
+        elsewhere=await company.other_prds(db, prd_doc.id if prd_doc else None),
+        prd_name=company.OnRoadmap("", prd_doc.title).prd_name if prd_doc else None,
     )
     result.problems = check.problems
     if strict and check.problems:
@@ -498,6 +503,7 @@ async def import_items(
                 )
             ).all()
         )
+    continues = await _continues(db, prd_doc, prd_version)
     track = None if draft is not None else await tracks.track_for_roadmap(db, version, prd_version)
     owner = (
         RoadmapItem.draft_roadmap_id == draft.id
@@ -520,6 +526,8 @@ async def import_items(
         if keys is not None and section not in keys:
             section = None
         confidence = raw.get("confidence")
+        if continues is not None:
+            derived["trace"] = [*derived["trace"], *_continue_links(continues, raw, section)]
         item = RoadmapItem(
             roadmap_document_id=None if draft is not None else version.document_id,
             roadmap_version_id=None if draft is not None else version.id,
@@ -558,6 +566,48 @@ async def import_items(
             await company.carry_for_version(db, version)
     await db.flush()
     return result
+
+
+# new-prd-from-replaced-prd: an item of a PRD that replaces another keeps a link to the old
+# PRD's items it continues (``continues`` declared, or its section's 'Continues:' lines), so
+# the old items' verified estimates can be carried to it.
+
+
+@dataclass
+class Continues:
+    old_document_id: str
+    by_section: dict[str, list[str]]
+
+
+async def _continues(
+    db: AsyncSession, prd_doc: Document | None, prd_version: DocumentVersion | None
+) -> Continues | None:
+    if prd_doc is None or prd_version is None:
+        return None
+    from oracle.intake import carried
+
+    old = await carried.replaced_document(db, prd_doc.id)
+    if old is None:
+        return None
+    rows = await db.execute(
+        select(Section.section_key, Section.body_md).where(Section.version_id == prd_version.id)
+    )
+    return Continues(str(old), {k: carried.continues_in(body or "") for k, body in rows.all()})
+
+
+def _continue_links(c: Continues, raw: dict[str, Any], section: str | None) -> list[dict[str, Any]]:
+    declared = raw.get("continues")
+    keys = (
+        [declared] if isinstance(declared, str) else declared if isinstance(declared, list) else []
+    )
+    links: list[dict[str, Any]] = []
+    for key, via in [
+        *((str(k), "declared") for k in keys if not isinstance(k, dict | list)),
+        *((k, "section") for k in c.by_section.get(section or "", [])),
+    ]:
+        if all(x["key"] != key for x in links):
+            links.append({"target": "continues", "id": c.old_document_id, "key": key, "via": via})
+    return links
 
 
 COPIED = (

@@ -267,7 +267,11 @@ async def test_composition_lifecycle_records_who_why_changes_and_publish(client)
         assert [e.subject_kind for e in events][-2:] == ["composition_revision", "document_section"]
         assert events[-1].data["change"] == "module_removed"
         audits = (
-            await s.scalars(select(AuditEvent).where(AuditEvent.action == "composition.revision"))
+            await s.scalars(
+                select(AuditEvent)
+                .where(AuditEvent.action == "composition.revision")
+                .order_by(AuditEvent.created_at)
+            )
         ).all()
         assert len(audits) == 2 and audits[-1].data["reason"] == "Memory is a later PRD"
 

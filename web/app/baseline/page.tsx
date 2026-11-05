@@ -4,13 +4,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { setupReturn } from "@/app/settings/_nav";
-import { Button, Chip, InfoTip, KpiStrip, LinkButton, Notice, Page, PageHeader, Split, ViewOnly, type Kpi } from "@/components/ds";
+import { Button, InfoTip, KpiStrip, LinkButton, Notice, Page, PageHeader, Split, ViewOnly, type Kpi } from "@/components/ds";
 import { VagueGoalsLine } from "@/components/discuss/VagueGoalsLine";
 import { Loading } from "@/components/ui";
 import { startInterview, startInterviews, vagueGoals } from "@/lib/api/goal-interview";
 import { GOALS_OBSERVE, useGoalsLevel } from "@/lib/goals-autonomy";
 import { api, unwrap, type ConflictOut, type EntityOut, type ProposalOut } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
+import { CurrentStateView, DesiredList, ReadyBand, StateTabs, useFeatureStates } from "@/components/current-state/CurrentState";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { AddItemSheet, type AddKind } from "./_components/AddItem";
@@ -124,8 +125,18 @@ function InterviewFromUrl({ onGoal, onVague }: { onGoal: (id: string) => void; o
   return null;
 }
 
+/** ?view=current: Detailed's Current state tab, on Desired state's own URL. */
+function StateViewFromUrl({ onView }: { onView: (v: "desired" | "current") => void }) {
+  const v = useSearchParams().get("view") === "current" ? "current" : "desired";
+  useEffect(() => onView(v), [v, onView]);
+  return null;
+}
+
 export default function BaselinePage() {
   const { me, can, capsReady, capsError } = useMe();
+  const [stateView, setStateView] = useState<"desired" | "current">("desired");
+  const states = useFeatureStates();
+  const stateChanged = () => void states.reload();
   // #370: approvers change the baseline, commenters propose; a viewer only reads it.
   const canWrite = can("confirm_entity");
   const canComment = can("create_proposal");
@@ -461,14 +472,25 @@ export default function BaselinePage() {
   if (!capsReady && !capsError)
     return (
       <Page>
-        <PageHeader title="Baseline" />
+        <PageHeader title="Desired state" />
         <Loading />
+      </Page>
+    );
+
+  if (stateView === "current")
+    return (
+      <Page>
+        <Suspense fallback={null}>
+          <StateViewFromUrl onView={setStateView} />
+        </Suspense>
+        <CurrentStateView q={states} onChanged={stateChanged} />
       </Page>
     );
 
   return (
     <Page>
       <Suspense fallback={null}>
+        <StateViewFromUrl onView={setStateView} />
         <OpenFromUrl onOpen={openItem} onBlocker={openBlocker} />
         <TabFromUrl onTab={setTab} onFrom={setFrom} onRun={setRunId} />
         {canInterview && <InterviewFromUrl onGoal={makeMeasurable} onVague={() => void interviewVague()} />}
@@ -478,51 +500,23 @@ export default function BaselinePage() {
       {adding && canWrite && (
         <AddItemSheet kind={adding} graph={graph.data} tags={tags} onClose={() => setAdding(null)} onAdded={added} />
       )}
+      {/* The owner's pick (cs3-b): the header is the title alone; the goals, areas and milestones
+          and their tools (Add item, Build baseline) sit with their views under the features list. */}
       <PageHeader
-        title="Baseline"
-        info={
-          <InfoTip label="Baseline" align="start" side="bottom">
-            Goals, products and features the product is built on, each linked to its evidence.
-          </InfoTip>
-        }
+        title="Desired state"
         action={
-          <span className="flex flex-wrap items-center gap-2">
-            <Suspense fallback={null}>
-              <BackHomeFromUrl />
-            </Suspense>
-            {/* The Items tab has its own Add, on the kind it shows: one Add control there (qa-plan-49). */}
-            {canWrite && tab !== "items" && (
-              <Button icon="plus" className="h-10" onClick={() => setAdding("goal")}>
-                Add item
-              </Button>
-            )}
-            {canWrite &&
-              runs.data &&
-              (build && build.status !== "failed" ? (
-                <BuildChip build={build} />
-              ) : (
-                <Button variant="primary" icon="baseline" onClick={() => openBuild(false)}>
-                  Build baseline
-                </Button>
-              ))}
-          </span>
+          <Suspense fallback={null}>
+            <BackHomeFromUrl />
+          </Suspense>
         }
-        status={
-          <>
-            {/* On a phone the Counts strip right below says it ("Goals confirmed"): the chip
-                would stand on a line by itself above the actions (qa-plan-50). */}
-            {s && s.goals > 0 && (
-              <span className="inline-flex max-[600px]:hidden">
-                <Chip kind="pass" data-testid="confirmed-chip">
-                  {s.confirmed_goals} confirmed
-                </Chip>
-              </span>
-            )}
-            {capsReady && !canComment && <ViewOnly />}
-          </>
-        }
+        status={capsReady && !canComment ? <ViewOnly /> : undefined}
       />
 
+      <p className="-mt-2 mb-3 max-w-[760px] text-[14px] text-text2">What the product should become: goals, areas of focus, milestones and the planned features.</p>
+      <StateTabs view="desired" desired={states.data?.desired ?? null} running={states.data?.running ?? null} />
+      {states.data && <ReadyBand data={states.data} onChanged={stateChanged} />}
+      {states.data && <DesiredList data={states.data} />}
+      <div className="mt-6" />
       <Split
         inspector={
           blockerId ? (
@@ -578,7 +572,26 @@ export default function BaselinePage() {
         {view && <FromRunBand view={view} />}
         {runId && fromRun.error && <Notice tone="error">{fromRun.error}</Notice>}
 
-        <Tabs label="Baseline views" items={tabs} value={tab} onChange={setTab} />
+        <div className="flex flex-wrap items-center justify-between gap-2 max-[600px]:flex-col max-[600px]:items-stretch">
+          <Tabs label="Baseline views" items={tabs} value={tab} onChange={setTab} />
+          <span className="flex flex-wrap items-center gap-2">
+            {/* The Items tab has its own Add, on the kind it shows: one Add control there (qa-plan-49). */}
+            {canWrite && tab !== "items" && (
+              <Button icon="plus" className="h-10" onClick={() => setAdding("goal")}>
+                Add item
+              </Button>
+            )}
+            {canWrite &&
+              runs.data &&
+              (build && build.status !== "failed" ? (
+                <BuildChip build={build} />
+              ) : (
+                <Button variant="primary" icon="baseline" onClick={() => openBuild(false)}>
+                  Build baseline
+                </Button>
+              ))}
+          </span>
+        </div>
 
         {error && <Notice tone="error">{error}</Notice>}
         {notice && <Notice>{notice}</Notice>}

@@ -42,6 +42,8 @@ class PlanItem:
     record_name: str | None = None
     # plan-model: the milestone's start when the PRD's plan dates it.
     milestone_start: date | None = None
+    # The roadmap item it reads (the one-pager lists a row's items by it).
+    id: str | None = None
 
 
 # M1..M99: "M1.5 · X" and "M2026 roadmap" are texts, not codes.
@@ -130,6 +132,7 @@ def strip(items: list[PlanItem], today: date) -> SimplePlanStrip | None:
             estimated=False if planned else all(i.estimated for i in of),
             milestone=milestone,
             past_edge=when is not None and when > end,
+            item_ids=list(dict.fromkeys(i.id for i in of if i.id)),
         )
 
     ordered = sorted(

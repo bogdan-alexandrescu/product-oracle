@@ -11,7 +11,10 @@ from oracle.docs.parser import ParsedSection
 from oracle.docs.schemas import VersionWarning
 from oracle.roadmap import draft_words
 
-SENT_BACK = (*named_codes.CODES, *draft_words.CODES)
+# oracle.intake.draft_check.CODE: a PRD drafted from an intake calls missing what its
+# sources or features describe (walk 2, problem 17).
+DESCRIBED_CALLED_MISSING = "described_called_missing"
+SENT_BACK = (*named_codes.CODES, *draft_words.CODES, DESCRIBED_CALLED_MISSING)
 
 
 def run_warnings(kind: str, sections: Sequence[ParsedSection]) -> list[VersionWarning]:

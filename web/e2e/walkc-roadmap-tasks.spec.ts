@@ -147,7 +147,9 @@ for (const where of ["desktop", "phone"] as const) {
     await page.goto("/simple");
     const mine = page.getByTestId("home-tasks");
     await expect(mine).toBeVisible();
-    await expect(mine.getByTestId("home-task")).toHaveText(/^Draft the digest email · Weekly alert digest · due Nov 20/);
+    // build-current-state: the item's feature carries its word pill after its name (it runs today: Exists).
+    await expect(mine.getByTestId("home-task")).toHaveText(/^Draft the digest email · Weekly alert digest Exists · due Nov 20/);
+    await expect(mine.getByTestId("cs-mark")).toHaveText("Exists");
     await expect(page.getByTestId("home-nothing-waits")).toHaveCount(0);
   });
 }

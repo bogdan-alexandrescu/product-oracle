@@ -8,10 +8,12 @@ import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRo
 import { Walk } from "@/app/simple/_home/walk";
 import { runStopsOf, StopCard } from "@/app/simple/_home/run-stops";
 import { SimpleWelcome } from "@/app/simple/_home/welcome";
+import { MarkForItem, WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { Icon } from "@/components/ds/Icon";
 import { Button } from "@/components/ds/Button";
 import { Dialog } from "@/components/ds/Dialog";
 import { setToastPlace, toast } from "@/components/ds/Toast";
+import { FitHomeCard } from "@/components/simple/FitDate";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { usePhone } from "@/components/simple/FlowViews";
 import { GoalNum, GoalOrderEdit } from "@/components/simple/GoalOrder";
@@ -614,6 +616,8 @@ export default function SimpleHome() {
 
       {!walking && (
       <>
+      {/* Bring a date in (FD3 a): an approved re-plan's milestone on its date, and what moved. */}
+      <FitHomeCard />
       <StartedCard started={started.data ?? []} />
       {/* qa-onboarding-6: an invited member's role welcome, in Simple too (dismissed in one mode, gone in both). */}
       <SimpleWelcome show={setupQ.data?.welcome === true} onDismissed={() => void setupQ.reload()} />
@@ -830,18 +834,20 @@ export default function SimpleHome() {
 
       {!reads && myTasks.length > 0 && (
         <HomeCard id="tasks" icon="check" title="Tasks waiting for you" count={myTasks.length} all="/simple/roadmap" allLabel="Open the roadmap">
+          <WithFeatureMarks>
           <ul className="space-y-2" data-testid="home-task-list">
             {myTasks.map((t) => (
               <li key={t.id} data-testid="home-task" className="simple-small [overflow-wrap:anywhere]">
                 <Link href={`/simple/roadmap?roadmap=${t.roadmap_id}`} className="simple-link">
                   {t.title}
                 </Link>{" "}
-                · {t.item_title}
+                · {t.item_title} <MarkForItem itemId={t.item_id} />
                 {t.due_date ? ` · due ${calendarDay(t.due_date)}` : ""}
                 {t.late ? " · late" : ""}
               </li>
             ))}
           </ul>
+          </WithFeatureMarks>
         </HomeCard>
       )}
 

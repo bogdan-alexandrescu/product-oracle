@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
+import { MarkFor, WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { FlowDiagram } from "@/components/simple/FlowViews";
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay, todayIn, useCompanyZone } from "@/lib/dates";
-import { errorMessage } from "@/lib/use-query";
+import { errorMessage, useQuery } from "@/lib/use-query";
 
 type Plan = Schemas["SimplePlanOut"];
 type Milestone = Schemas["SimplePlanMilestone"];
@@ -322,12 +323,52 @@ const FLAG = (
 
 // ---------------------------------------------------------------- the plan
 
+/** Each slice's roadmap item (by the slice's code, else its feature's code), for its Current-state pill. */
+const SliceItems = createContext<Map<string, string> | null>(null);
+
+/**
+ * The PRD's roadmap items (GET /v1/simple/roadmap?prd=: each with its PRD code and its slices),
+ * so each "What we build" line finds the item its feature stands for, and the features' marks.
+ */
+function PlanMarks({ prd, children }: { prd?: string; children: ReactNode }) {
+  const q = useQuery(`simple-prd-items|${prd ?? ""}`, () => (prd ? unwrap(api.GET("/v1/simple/roadmap", { params: { query: { prd } } })).catch(() => null) : Promise.resolve(null)));
+  const items = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const i of q.data?.items ?? []) {
+      if (i.code && !m.has(`feature:${i.code}`)) m.set(`feature:${i.code}`, i.id);
+      for (const sl of i.slices) if (!m.has(sl.code)) m.set(sl.code, i.id);
+    }
+    return m;
+  }, [q.data]);
+  if (!prd) return <>{children}</>;
+  return (
+    <WithFeatureMarks>
+      <SliceItems.Provider value={items}>{children}</SliceItems.Provider>
+    </WithFeatureMarks>
+  );
+}
+
+/** A "What we build" line's pill: its feature's mark, through the roadmap item it stands for. */
+function SliceMark({ s }: { s: Slice }) {
+  const items = useContext(SliceItems);
+  const id = items?.get(s.code) ?? items?.get(`feature:${s.feature_code}`);
+  return id ? <MarkFor itemId={id} /> : null;
+}
+
 /**
  * The PRD's plan under its header: the timeline card and the picked milestone's card on a
  * desktop (D1 with B1's When strip), the vertical timeline and the milestone's card on a phone
  * (D2). Picking a milestone in the timeline switches the card.
  */
-export function PrdPlan({ plan, title, onPlan }: { plan: Plan; title: string; onPlan: (p: Plan) => void }) {
+export function PrdPlan({ plan, title, onPlan, prd }: { plan: Plan; title: string; onPlan: (p: Plan) => void; prd?: string }) {
+  return (
+    <PlanMarks prd={prd}>
+      <PrdPlanBody plan={plan} title={title} onPlan={onPlan} />
+    </PlanMarks>
+  );
+}
+
+function PrdPlanBody({ plan, title, onPlan }: { plan: Plan; title: string; onPlan: (p: Plan) => void }) {
   const phone = usePhone();
   const zone = useCompanyZone();
   // Today in the company's time zone.
@@ -1027,7 +1068,11 @@ export function MilestoneCard({ plan, m, today, phone, marked = [] }: { plan: Pl
                       className={`grid list-none gap-x-2.5 border-t ${marked.includes(s.code) ? "bg-accent-soft" : ""} border-[var(--simple-rule)] py-1.5 text-[15px] leading-[21px] ${phone ? "grid-cols-[62px_minmax(0,1fr)] gap-y-0.5" : "grid-cols-[62px_250px_minmax(0,1fr)] gap-y-2.5"}`}>
                       <span className={`${CODE} border border-line bg-surface2 text-text`}>{s.code}</span>
                       <b className="font-[650]">
-                        {keep(s.name)}
+                        <span data-testid="part-build-name">{keep(s.name)}</span>
+                        {/* Its feature's Current-state pill, right after the name (cs2-b, the owner's later pick). */}
+                        <span className="ml-2 inline-flex align-middle empty:hidden" data-testid="part-build-mark">
+                          <SliceMark s={s} />
+                        </span>
                         {s.flow_steps.length > 0 && (
                           <span className="text-[13px] font-[650] whitespace-nowrap">
                             {" · "}

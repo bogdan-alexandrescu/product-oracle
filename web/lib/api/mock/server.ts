@@ -23,8 +23,10 @@ import { brandHeaderHtml, brandStyleHtml, emptyBranding, routeBranding, type Bra
 import { capabilitiesOut } from "./capabilities";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
+import { carriedFor, REPLACED_PRD_SCENARIO, seedReplacedBases } from "./replaced-prd";
 import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
+import { FIT_COMPANY_SCENARIO, FIT_SCENARIOS, fitDateGoal, routeFitDate } from "./fit-date";
 import { generalReply } from "./general-chat";
 import { afterAccept, goalInterviewReply, proposeVersion, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
 import { goalCheck } from "./goals";
@@ -76,6 +78,7 @@ import {
   seedEngCheckRun,
   seedEngCheckUnmappedRun,
   shopBriefsCheck,
+  briefsCheckOf,
   seedRunDecisions,
   seedEngDatesRuns,
   seedBaselineReviewRun,
@@ -98,7 +101,7 @@ import { routeFirefliesBrowse } from "./fireflies";
 import { liveReply, routeLive } from "./live";
 import { sourceBrowseRoute } from "./source-browse";
 import { DRAFT_NEW_ITEMS_SCENARIO, itemsChangedSince, routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
-import { BEFORE_DRAFTING, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
+import { BEFORE_DRAFTING, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type IntakeContext, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, REPORT_PRD_MOVED_SCENARIO, reportsRoute, type LiveTracks, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
@@ -142,7 +145,7 @@ import {
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
-import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, NOT_CLAIMS_LINE, NOT_CLAIMS_SCENARIO, SHARED_DATE_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, dateWarnings, versionWarnings, inboxTracks, planEntityTitle, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, NOT_CLAIMS_LINE, NOT_CLAIMS_SCENARIO, SHARED_DATE_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, dateWarnings, versionWarnings, inboxTracks, planEntityTitle, planFeatureRows, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecPerson, type SpecsDb } from "./specs";
 import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { seedImpact } from "./impact";
@@ -162,6 +165,8 @@ import {
 } from "./pricing";
 import { routeGoalBuckets, seedGoalBucketsHard } from "./goal-buckets";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
+import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./currentstate";
+import { prioritiesOut } from "./simple-priorities";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
@@ -174,8 +179,10 @@ import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStray
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
-import { appliedVersionOf, approvedPrdToDraft, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { appliedVersionOf, approvedPrdToDraft, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { applyFitDate, seedFitDateRoadmap } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
+import { routeGoalMap, type GoalMap } from "./goal-map";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -287,6 +294,9 @@ export interface Db {
   roadmap?: RoadmapDb;
   /** Simple S2 (#723): the company-wide roadmap's items and date suggestions (./simple-roadmap.ts). */
   simple_roadmap?: SimpleDb;
+  current_state?: CurrentStateDb;
+  /** Simple Goal map (build-goal-map): goals, guardrail, areas, gated milestones, features (./goal-map.ts). */
+  goal_map?: GoalMap;
   /** Simple S5 (#723): one PRD's one-pager, its working draft and line changes (./simple-one-pager.ts). */
   simple_one_pager?: OnePagerDb;
   /** Every other mock PRD's own one-pager (the same invented page), by document id. */
@@ -542,8 +552,12 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * duplicate, both kept by one older call that answers the two;
  * "scope-review-questions" as "scope-review" with the agents asking eleven questions at the
  * first run's feature set (AQ1's hard case, ./agent-questions.ts);
+ * "scope-review-other-prd" as "scope-review" with the first run's Address lookup needing
+ * another PRD's feature on the company roadmap (needs_other_prd, to confirm);
  * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
  * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting);
+ * "unknown-work" as "before-drafting" with its critical Blockers question still asked of the
+ * approver, holding the draft (walk 2 problem 19);
  * "draft-gate" as the default company where Oracle reads a critical blocker in every new
  * brief, so drafting waits until it is answered or an owner accepts its risk (C5);
  * "late-answers" as "before-drafting" with that brief drafting into Checkout redesign: an answer
@@ -821,6 +835,22 @@ function seedBeforeDraftingScenario(): Db {
   return db;
 }
 
+/**
+ * Walk 2 problem 19: the "before-drafting" brief with its critical Blockers question still
+ * asked of the approver (no answer yet), so it holds the draft: see MOCK_SCENARIO_KEY.
+ */
+function seedUnknownWorkScenario(): Db {
+  const db = seedBeforeDraftingScenario();
+  const v2 = ensureV2(db);
+  const approver = db.members.find((m) => m.email === "approver@example.com")!;
+  const q = v2.questions.find((x) => x.intake_id === BEFORE_DRAFTING.intakeId && x.category === "blockers")!;
+  v2.answers = v2.answers.filter((a) => a.question_id !== q.id);
+  v2.intake_proposals = (v2.intake_proposals ?? []).filter((p) => p.question_id !== q.id);
+  Object.assign(q, { status: "asked", asked_to: approver.id });
+  Object.assign(v2.gaps.find((g) => g.id === q.gap_id)!, { status: "asked", knowledge_state: "unknown" });
+  return db;
+}
+
 /** The default company where every new brief has a critical blocker (C5): see MOCK_SCENARIO_KEY. */
 function seedDraftGateScenario(): Db {
   const db = seed();
@@ -930,6 +960,17 @@ function seedMeetingAgendaScenario(): Db {
   const db = seed();
   db.simple_roadmap = seedSimpleRoadmap();
   itemOfOtherPrd(db.simple_roadmap, "setup-video", "alerts-roadmap");
+  return db;
+}
+
+/**
+ * cross-prd-deps "simple-cross-prd-dates" scenario: "simple-home", with the Setup
+ * checklist (Guided setup, typed to start before) waiting on the Alert rules engine of the
+ * Usage alerts PRD: its warning names that PRD.
+ */
+function seedSimpleCrossPrdDates(): Db {
+  const db = seedSimpleHomeScenario();
+  dependOnOtherPrd(db.simple_roadmap!, "setup-checklist", "alert-rules");
   return db;
 }
 
@@ -1786,6 +1827,18 @@ const seedEngCheckUnreadable = () =>
     check.problems = [{ code: "missing_file", message: "the segment left no tech_briefs.yaml" }];
   });
 
+/**
+ * "eng-check-cross-prd" scenario: the "eng-check" run whose first brief also depends on the
+ * account health ledger, a feature of the Safety PRD on the company roadmap (the owner, Nov 4):
+ * the check reads it and names it with its PRD, as oracle.engineering.check does.
+ */
+const seedEngCheckCrossPrd = () =>
+  seedEngCheckWith("eng-check-cross-prd", (check) => {
+    const briefs = (check as unknown as { features: Parameters<typeof briefsCheckOf>[0] }).features;
+    const linked = briefs.map((b, i) => (i === 0 ? { ...b, depends_on: [...b.depends_on, "account-health-ledger"] } : b));
+    Object.assign(check, briefsCheckOf(linked, undefined, undefined, { "account-health-ledger": "Account health ledger (Safety PRD)" }));
+  });
+
 /** "eng-check-long-key" scenario: the "eng-check" run whose first brief has a long key with no break in it. */
 const seedEngCheckLongKey = () =>
   seedEngCheckWith("eng-check-long-key", (check) => {
@@ -1880,9 +1933,9 @@ function seedSimpleWaits(): Db {
 }
 
 /** C7 "scope-review": the default seed plus three runs at their feature set (./runs.ts seedScopeReviewRuns). */
-function seedScopeReview(kept = false, manyQuestions = false): Db {
+function seedScopeReview(kept = false, manyQuestions = false, otherPrd = false): Db {
   const db = seed();
-  seeded("scope-review", () => seedScopeReviewRuns(db.runs!, runsContext(db), kept, manyQuestions));
+  seeded("scope-review", () => seedScopeReviewRuns(db.runs!, runsContext(db), kept, manyQuestions, otherPrd));
   return db;
 }
 
@@ -3260,8 +3313,8 @@ function load(): Db {
             ? () => seedBaselineReview(scenario === "baseline-review-console")
           : scenario === "simple-waits"
             ? seedSimpleWaits
-          : scenario === "scope-review" || scenario === "scope-review-kept" || scenario === "scope-review-questions"
-            ? () => seedScopeReview(scenario === "scope-review-kept", scenario === "scope-review-questions")
+          : scenario === "scope-review" || scenario === "scope-review-kept" || scenario === "scope-review-questions" || scenario === "scope-review-other-prd"
+            ? () => seedScopeReview(scenario === "scope-review-kept", scenario === "scope-review-questions", scenario === "scope-review-other-prd")
           : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO || scenario === SHARED_DATE_SCENARIO || scenario === NOT_CLAIMS_SCENARIO || scenario === TWO_WAY_DATES_SCENARIO
             ? seedEngReview
           : scenario === "eng-check"
@@ -3276,6 +3329,8 @@ function load(): Db {
             ? seedEngCheckUnnamed
           : scenario === "eng-check-unreadable"
             ? seedEngCheckUnreadable
+          : scenario === "eng-check-cross-prd"
+            ? seedEngCheckCrossPrd
           : scenario === "eng-check-long-key"
             ? seedEngCheckLongKey
           : scenario === "eng-check-shop"
@@ -3300,6 +3355,8 @@ function load(): Db {
             ? () => seedNextDraft(scenario === "next-draft-costly")
           : scenario === "before-drafting"
             ? seedBeforeDraftingScenario
+          : scenario === "unknown-work"
+            ? seedUnknownWorkScenario
           : scenario === "draft-gate"
             ? seedDraftGateScenario
           : scenario === "late-answers"
@@ -3316,6 +3373,8 @@ function load(): Db {
                 ? seedSimpleDecidersScenario
               : scenario === "meeting-agenda"
                 ? seedMeetingAgendaScenario
+              : scenario === "simple-cross-prd-dates"
+                ? seedSimpleCrossPrdDates
               : scenario === "simple-home"
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-move"
@@ -3451,6 +3510,22 @@ function load(): Db {
                       const r = db.simple_roadmap;
                       r.targets = { ...r.targets, [r.ids["alert-rules"]]: { ...r.targets?.[r.ids["alert-rules"]], decider_id: approver.id } };
                     }
+                    return db;
+                  }
+              : (FIT_SCENARIOS as readonly string[]).includes(scenario ?? "")
+                ? () => {
+                    // Bring a date in (./fit-date.ts): its PRD's items on the Help desk roadmap and
+                    // the Baseline goal its M2 gate counts toward.
+                    const db = seed();
+                    // "fit-date-company-roadmap": the company roadmap next to the PRD's older Help desk roadmap.
+                    const company = scenario === FIT_COMPANY_SCENARIO;
+                    if (company) {
+                      const at = "2026-10-01T09:00:00Z";
+                      db.documents.push({ id: uuid(), slug: COMPANY_SLUG, title: COMPANY_TITLE, status: "approved", kind: "roadmap", template: null, template_version: null, theme: null, created_at: at, updated_at: at, company_roadmap: true });
+                    }
+                    seedFitDateRoadmap((db.simple_roadmap ??= seedSimpleRoadmap()), company);
+                    const goal = fitDateGoal(scenario, db.baseline.entities.find((e) => e.type === "goal")!);
+                    if (goal) db.baseline.entities.push(goal);
                     return db;
                   }
               : scenario === APPROVED_ROADMAP_SCENARIO
@@ -3833,7 +3908,8 @@ function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): Su
     return { key: `run_item:${run.id}:${cp.kind}:${s.item_key}`, label: `${label} · ${s.item_key}`, url: `/runs/${run.id}`, run_id: run.id };
   }
   if (kind === "priorities") return { key: "priorities", label: "Priority order", url: "/priorities" };
-  if (kind === "screen") return { key: `screen:${s.path}`, label: screenPageName(String(s.path)), url: String(s.path) };
+  // ask-page-context: the page's own name, as the API (Labels.of).
+  if (kind === "screen") return { key: `screen:${s.path}`, label: (s.view as { name?: string } | undefined)?.name || screenPageName(String(s.path)), url: String(s.path) };
   const id = Object.values(s)[0];
   return { key: `${kind}:${id}`, label: kind.replace("_", " "), url: "/" };
 }
@@ -4014,6 +4090,51 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
     return json(200, documentOut(db, doc));
   }
   return null;
+}
+
+/** new-prd-from-replaced-prd: what a new PRD replacing an approved PRD carries, read off the
+ * mock's documents, roadmap items, decisions and schedule bases (./replaced-prd.ts). */
+function replacedPrd(db: Db, me: MemberRow): IntakeContext["carried"] {
+  return (documentId, itemKeys, area) => {
+    const dctx = decisionsContext(db, me);
+    const decisions = ensureDecisions(db, dctx);
+    const roadmap = (db.roadmap = ensureRoadmap(db, roadmapContext(db, me)));
+    const doc = findDocument(db, documentId);
+    const vs = doc ? docVersions(db, doc) : [];
+    const items = Object.values(roadmap.items)
+      .flat()
+      .filter((i) => doc && i.prd?.document?.id === doc.id);
+    if (doc && localStorage.getItem(MOCK_SCENARIO_KEY) === REPLACED_PRD_SCENARIO && !roadmap.bases.some((b) => b.prd_document_id === doc.id && b.reference === "EX-101")) {
+      const keys = [...new Set(items.map((i) => i.item_key))].sort();
+      roadmap.bases.push(...seedReplacedBases(doc.id, keys, uuid));
+      const owner = db.members.find((m) => m.role === "owner");
+      const about = [{ kind: "document", id: doc.id, ref: doc.slug }];
+      const first = items.find((i) => i.item_key === keys[0]);
+      const seeds = [
+        { title: "Cut voice notes from the first release", subjects: about, chosen: "cut" },
+        { title: "Cap alerts at 30 a minute", subjects: first ? [{ kind: "roadmap_item", id: first.id, ref: first.item_key }] : about, chosen: "cap" },
+        { title: "Drop email alerts", subjects: about, chosen: "drop" },
+      ];
+      for (const [n, d] of seeds.entries()) {
+        const id = uuid();
+        logMeetingDecision(dctx, decisions, { id, at: `2026-10-2${n}T17:00:00Z`, approver_id: owner?.id ?? me.id, meeting_title: `Review: ${doc.title}`, ...d });
+        if (n === 2) decisions.decisions.find((x) => x.id === id)!.status = "reversed";
+      }
+    }
+    return carriedFor(
+      {
+        doc: doc && { id: doc.id, slug: doc.slug, title: doc.title, kind: doc.kind },
+        approvedVersion: vs.filter((v) => v.approved_at).pop()?.number ?? null,
+        versionIds: vs.map((v) => v.id),
+        items,
+        decisions: decisions.decisions,
+        trashedAbout: (d) => dctx.trashedAbout?.(d.subjects) ?? null,
+        bases: roadmap.bases,
+      },
+      itemKeys,
+      area,
+    );
+  };
 }
 
 function findDocument(db: Db, ref: string) {
@@ -6267,7 +6388,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     };
     const intake = await routeIntake(
       v2db,
-      { userId: me.id, role: me.role, createRun, updateRun, runStatus, startRun, people: db.members, subjects, confirmedGoals, goalKeys, lockedSections, requests, questionsLevel: () => levelFor((db.autonomy ??= emptyAutonomy()), "questions"), learned: () => nudges(db.quality?.learnings, "question_category"), raiseFeedback, withdrawFeedback },
+      { userId: me.id, role: me.role, carried: replacedPrd(db, me), createRun, updateRun, runStatus, startRun, people: db.members, subjects, confirmedGoals, goalKeys, lockedSections, requests, questionsLevel: () => levelFor((db.autonomy ??= emptyAutonomy()), "questions"), learned: () => nudges(db.quality?.learnings, "question_category"), raiseFeedback, withdrawFeedback },
       req,
       p,
       q,
@@ -6421,6 +6542,16 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.simple_roadmap.prd_milestones = prdMilestonesOf(db);
   const simpleRoles = Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role]));
   const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
+  // Current state: every Simple feature's mark and proof; the approver role (confirm_entity) moves and answers.
+  if (p[1] === "feature-states") {
+    const rows = prioritiesOut(db.simple_roadmap, { id: me.id, role: me.role, owners: simpleOwners, names: {} }, () => [], () => false).rows;
+    db.current_state ??= seedCurrentState(rows, Date.now());
+    const mayMove = me.role === "approver" || me.role === "owner";
+    // Every confirmed feature, as the API lists them: the Detailed Plan's traced features too
+    // (after the Simple ones, so the seed's marks by rank stay as they are: new, nothing built).
+    const res = await routeCurrentState(db.current_state, [...rows, ...planFeatureRows()], mayMove, req, p, Date.now());
+    if (res) return res;
+  }
   const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
   const simpleRoute = async (r: Request): Promise<Response | null> => {
     // goal-order: Simple's goals follow the baseline's one goal order.
@@ -6457,6 +6588,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       p,
     );
     if (onePagerRes) return onePagerRes;
+    // Bring a date in (oracle.simple.fit_date_router), under the fit-date scenarios.
+    const fitRes = await routeFitDate(localStorage.getItem(MOCK_SCENARIO_KEY), me.role, r, p, db.baseline.entities);
+    // An approved re-plan moves the PRD's items on the Help desk roadmap (fitDateApproved).
+    applyFitDate(db.simple_roadmap);
+    if (fitRes) return fitRes;
     // The plan-model lane: a PRD's plan (GET .../plan, owners' POST .../plan/read-again).
     const planRes = routeSimplePlan(
       db.simple_roadmap!.plan,
@@ -6485,6 +6621,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     }
     const bucketsRes = await routeGoalBuckets(db.simple_roadmap!, me.role, r, p);
     if (bucketsRes) return bucketsRes;
+    const goalMapRes = await routeGoalMap(db, localStorage.getItem(MOCK_SCENARIO_KEY), { role: me.role, name: simpleNames[me.id] ?? "You" }, r, p, (itemId) => {
+      const key = db.simple_roadmap && Object.keys(db.simple_roadmap.ids).find((k) => db.simple_roadmap!.ids[k] === itemId);
+      return db.simple_roadmap?.items.find((i) => i.key === key) ?? null;
+    });
+    if (goalMapRes) return goalMapRes;
     const simpleRes = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, r, p, q);
     if (simpleRes) return simpleRes;
     const companyGoals = db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title }));

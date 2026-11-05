@@ -1352,7 +1352,7 @@ export function planAnswer(db: SimpleDb, ctx: ChatCtx, question: string): { text
   const [i] = itemsFor(db, ctx)
     .filter((x) => q.includes(x.title.toLowerCase()))
     .sort((a, b) => b.title.length - a.title.length);
-  if (!i) return null;
+  if (!i) return leftOn(db, ctx, q);
   // The shape the API's prompt asks for (oracle.discussions.plan.PLAN_FIRST): the name in bold,
   // when it runs, then short labelled lists; the plan cited.
   // "Nov 16 – Dec 11", as the pick's answer reads.
@@ -1372,6 +1372,26 @@ export function planAnswer(db: SimpleDb, ctx: ChatCtx, question: string): { text
   const citations: Record<string, unknown>[] = [{ n: 1, kind: "roadmap_item", ref: i.id, title: `Roadmap item: ${i.title}`, url: "/simple/roadmap" }];
   if (i.prd) citations.unshift({ n: 2, kind: "section", ref: i.prd.id, title: `${i.prd.title}: Roadmap`, url: `/documents/${i.prd.slug}` });
   return { text: i.prd ? text.replace("[c:1]", "[c:1] [c:2]") : text, citations };
+}
+
+/**
+ * "What is left on the Alerts roadmap?": the roadmap's items not done yet, named in one line as
+ * a model writes them from the plan (by name, the plan cited once); null when no roadmap is named.
+ */
+function leftOn(db: SimpleDb, ctx: ChatCtx, q: string): { text: string; citations: Record<string, unknown>[] } | null {
+  if (!/\bleft\b/.test(q)) return null;
+  const items = itemsFor(db, ctx);
+  const roadmap = items.map((x) => x.roadmap).find((r) => q.includes(r.title.toLowerCase()) || q.includes(r.title.toLowerCase().replace(/ roadmap$/, "")));
+  if (!roadmap) return null;
+  const left = items.filter((x) => x.roadmap.id === roadmap.id && !x.draft && x.status !== "done" && x.status !== "cut" && x.status !== "merged");
+  if (!left.length) return { text: `**What is left on the ${roadmap.title}**\n\nNothing: every item is done.`, citations: [] };
+  const names = left.map((x) => x.title);
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+  const text = [
+    `**What is left on the ${roadmap.title}**`,
+    `${left.length} ${left.length === 1 ? "item is" : "items are"} not done yet: ${list}. [c:1]`,
+  ].join("\n\n");
+  return { text, citations: [{ n: 1, kind: "roadmap_item", ref: left[0].id, title: `Roadmap item: ${left[0].title}`, url: "/simple/roadmap" }] };
 }
 
 /**

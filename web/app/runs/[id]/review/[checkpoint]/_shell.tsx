@@ -8,6 +8,8 @@ import Link from "next/link";
 import { Icon, LinkButton, NotFoundPanel, Page } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
+import { CHECKPOINT_LABEL } from "@/app/runs/_lib";
+import { useScreenSubject } from "@/lib/screen-subject";
 import { useQuery } from "@/lib/use-query";
 
 import { beginDraft } from "./_draft";
@@ -45,6 +47,11 @@ export function ReviewShell({ runId, checkpointId, item }: { runId: string; chec
   );
   const cp = q.data?.checkpoints.find((c) => c.id === checkpointId) ?? null;
   const View = cp ? VIEWS[cp.kind] : undefined;
+  // ask-page-context: "This page" is about this stop ("Roadmap from a PRD · Roadmap items"), never "Runs".
+  useScreenSubject(
+    q.data && cp ? { kind: "checkpoint", subject: { run_id: q.data.id, checkpoint_id: cp.id } } : null,
+    q.data && cp ? `${q.data.flow_title} · ${CHECKPOINT_LABEL[cp.kind] ?? cp.kind}` : null,
+  );
   const elsewhere = !!q.data && !View;
   // The view's draft, asked for with the run rather than once the run has answered.
   useEffect(() => beginDraft(runId, checkpointId), [runId, checkpointId]);

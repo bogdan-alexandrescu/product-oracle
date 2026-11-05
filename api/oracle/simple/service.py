@@ -431,16 +431,23 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
             )
         )
     await _prd_headings(db, entries)
-    # Dependencies within each roadmap version, by item key.
-    by_version: dict[tuple[Any, str], Entry] = {
-        (e.row.roadmap_version_id, e.row.item_key): e for e in entries
-    }
+    # Dependencies within each roadmap version, by item key, or by the key of the feature
+    # an item delivers (the checks accept another PRD's feature key).
+    entry_of = {e.row.id: e for e in entries}
+    versions: dict[Any, list[RoadmapItem]] = defaultdict(list)
     for e in entries:
-        for k in e.row.depends_on or []:
-            dep = by_version.get((e.row.roadmap_version_id, k))
-            if dep is not None and dep is not e:
-                e.depends_on.append(dep.row.id)
-                dep.needed_by.append(e.row.id)
+        versions[e.row.roadmap_version_id].append(e.row)
+    feature_keys = await company.feature_keys_of(db, [e.row for e in entries])
+    for version_rows in versions.values():
+        at = company.resolve_dependencies(version_rows, feature_keys)
+        for row in version_rows:
+            e = entry_of[row.id]
+            for k in row.depends_on or []:
+                for d in at.get(k, ()):
+                    dep = entry_of[d.id]
+                    if dep is not e and d.id not in e.depends_on:
+                        e.depends_on.append(d.id)
+                        dep.needed_by.append(e.row.id)
     # walkb-roadmap: an estimated start never comes before what the item depends on.
     moved = dates.after_dependencies(
         {e.row.id: e.resolved for e in entries}, {e.row.id: e.depends_on for e in entries}
@@ -462,6 +469,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
             if e.milestone is not None and e.milestone.date is not None
             else None,
             accepted_risks=list(e.row.accepted_risks or []),
+            prd=company.OnRoadmap("", e.prd.title).prd_name if e.prd is not None else None,
         )
         for e in entries
     ]
@@ -882,6 +890,7 @@ def item_out(
         end=_date(r.end),
         source=r.source,
         estimated=r.estimated,
+        estimate_pending=row.estimate_pending,
         date_basis=approved_roadmap.date_basis(row),
         suggestion=suggestion_out(e.suggestion, row, may, e.suggestion_span)
         if e.suggestion is not None

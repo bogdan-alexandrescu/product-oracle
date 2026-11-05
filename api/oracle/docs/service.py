@@ -208,18 +208,20 @@ async def version_sources(
         .join(Document, Document.id == DocumentVersion.document_id)
         .where(DocumentVersion.id.in_(ids))
     )
-    return {
-        v.id: VersionSource(
-            document_id=d.id,
-            slug=d.slug,
-            title=d.title,
-            kind=d.kind,  # type: ignore[arg-type]
-            version=v.number,
-            version_id=v.id,
-            approved_at=v.approved_at,
-        )
-        for v, d in rows.all()
-    }
+    return {v.id: version_source(v, d) for v, d in rows.all()}
+
+
+def version_source(v: DocumentVersion, d: Document) -> VersionSource:
+    """The provenance of version ``v`` of document ``d``."""
+    return VersionSource(
+        document_id=d.id,
+        slug=d.slug,
+        title=d.title,
+        kind=d.kind,  # type: ignore[arg-type]
+        version=v.number,
+        version_id=v.id,
+        approved_at=v.approved_at,
+    )
 
 
 def _summary(
@@ -1208,6 +1210,11 @@ async def import_draft(
         draft.template, draft.template_version = template
     if run_id is not None:
         await check_member_draft(db, run_id, markdown)
+        # new-prd-from-replaced-prd: the critic's check against what the draft carries.
+        from oracle.intake.carried import run_draft_problems
+
+        if carried_problems := await run_draft_problems(db, run_id, markdown):
+            raise DraftError(carried_problems)
     held: dict[str, HeldSection] = {}
 
     document = await find_document(db, doc, for_update=True)
@@ -1437,6 +1444,12 @@ async def import_draft(
         # #306: an agent names the codes it writes; a draft that does not is flagged. A
         # roadmap's date words too (roadmap-draft-wording).
         warnings += draft_checks.run_warnings(document.kind, draft.sections)
+        if document.kind == "prd" and run_id is not None:
+            # Walk 2, problem 17: a PRD drafted from an intake never calls missing what a
+            # pinned source or a baseline feature the brief names describes.
+            from oracle.intake import draft_check
+
+            warnings += await draft_check.check(db, run_id, draft.sections)
     if previous is not None:
         locked = await review_service.locked_section_keys(db, previous.id)
         if locked:
