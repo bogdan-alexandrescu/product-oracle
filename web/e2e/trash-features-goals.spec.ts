@@ -1,4 +1,5 @@
-import { login } from "./helpers";
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { login, signOut } from "./helpers";
 import { expect, test, type Page } from "./test";
 
 /*
@@ -15,7 +16,7 @@ import { expect, test, type Page } from "./test";
  * screens (not drawn yet).
  *
  * Card tfg-deleter-restores (owner's answer, Nov 5: "Whoever deleted it, too"): protects = an
- * approver who deleted a feature and a goal finds Settings › Trash, sees both there with Restore
+ * approver (the pricing roadmap's decider) who deleted a feature and a goal finds Settings › Trash, sees both there with Restore
  * (and not what an owner deleted) and restores each without an owner; fails_when = the approver
  * has no Trash tab, no Restore, sees the owner's delete, or Restore is refused; no_claim = other
  * approvers (the API's tests).
@@ -77,12 +78,15 @@ test("a deleted feature and goal are listed in Settings › Trash and restored f
 });
 
 test("whoever deleted a feature or a goal sees it in Trash and restores it, with no owner", async ({ page }) => {
+  // Dana Decider, an approver, decides the pricing roadmap's features ("simple-deciders").
+  await page.addInitScript((key) => localStorage.setItem(key, "simple-deciders"), MOCK_SCENARIO_KEY);
   // An owner deletes a feature: it is the owners' to restore, so the approver never sees it.
   await login(page);
   const theirs = (await items(page)).find((i) => i.can_decide)!;
   expect((await call(page, "DELETE", `/v1/simple/roadmap/items/${theirs.id}`)).status).toBe(200);
 
-  await login(page, "approver@example.com");
+  await signOut(page);
+  await login(page, "dana.decider@example.com");
   const feature = (await items(page)).find((i) => i.can_decide && i.id !== theirs.id)!;
   const [goal, other] = await goals(page);
   expect(feature && goal && other).toBeTruthy();
