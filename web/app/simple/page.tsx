@@ -27,6 +27,7 @@ import {
   beforeAfter,
   brokenLinks,
   changeWords,
+  fixChange,
   goalTiles,
   greeting,
   NEW_FLOW_OPS,
@@ -36,6 +37,7 @@ import {
   planInput,
   waitSentence,
   type BrokenLink,
+  type FixOp,
   type GoalTile,
 } from "@/lib/simple-home";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -49,7 +51,6 @@ type Decision = Schemas["DecisionOut"];
 const REVIEW = "/simple/roadmap?review=proposals";
 
 /** A broken link's one-click fixes, and what each did, in a toast ("Risk accepted in your working draft"). */
-type FixOp = "shift_dependents" | "move_dependency" | "accept_risk";
 const FIX_OPS = new Set<string>(["shift_dependents", "move_dependency", "accept_risk"]);
 const FIX_DONE: Record<FixOp, string> = {
   shift_dependents: "Dependents moved",
@@ -179,6 +180,18 @@ export default function SimpleHome() {
     if (revisit && !inbox.loading) setRevisit(false);
   }, [revisit, inbox.loading]);
   const roadmap = useQuery(k("roadmap"), () => unwrap(api.GET("/v1/simple/roadmap")), { keepPrevious: true });
+  // home-waiting-one-list: a goal suggestion confirmed here (or anywhere) adds an item Oracle
+  // drafts; its dates to confirm wait on me once that is done, so while one drafts Home, its
+  // cards and the rail read again (until it is done).
+  const drafting = !!roadmap.data?.items.some((i) => i.drafting);
+  useEffect(() => {
+    if (!drafting) return;
+    const t = window.setTimeout(() => {
+      invalidateWaiting();
+      waitingChanged();
+    }, 900);
+    return () => window.clearTimeout(t);
+  }, [drafting, roadmap.data]);
   const goals = useQuery(k("goals"), () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })), { keepPrevious: true });
   const changes = useQuery(k("changes"), () => unwrap(api.GET("/v1/simple/changes")), { keepPrevious: true });
   const drafts = useQuery(k("drafts"), () => unwrap(api.GET("/v1/simple/drafts")), { keepPrevious: true });
@@ -469,15 +482,7 @@ export default function SimpleHome() {
   }
 
   async function fix(b: BrokenLink, op: FixOp, note = "") {
-    const dep = b.dependency;
-    const body: Schemas["SimpleChangeIn"] =
-      op === "accept_risk"
-        ? { op, target: { item_id: b.item.id, flag: b.flag.kind, subject: b.flag.subject }, before: { risk: null }, after: { risk: { note: note.trim() } } }
-        : {
-            op,
-            target: { item_id: b.item.id, subject: b.flag.subject },
-            before: { [b.item.id]: stored(b.item), ...(dep ? { [dep.id]: stored(dep) } : {}) },
-          };
+    const body = fixChange(b, op, note);
     try {
       const r = await unwrap(api.POST("/v1/simple/changes", { body }));
       const message = await changeResult(r, `${FIX_DONE[op]} in your working draft${op === "accept_risk" ? "" : await movedWords(r.change)}`);
@@ -765,6 +770,17 @@ export default function SimpleHome() {
             ))}
           </ul>
           )}
+          {/* home-waiting-one-list: the decisions tile counts the questions and calls I decide; the
+           * rail's Decisions count is everything in the one list. Said plainly when they differ. */}
+          {waiting.data && waiting.data.items.length !== decisionCount && (
+            <p data-testid="home-summary-all" className="simple-small mt-2">
+              In all, {waiting.data.items.length} {waiting.data.items.length === 1 ? "thing waits" : "things wait"} on you: the{" "}
+              <Link href="/simple/decisions" className="simple-link">
+                Decisions
+              </Link>{" "}
+              count also counts run stops, broken links, dates, drafts and goal suggestions.
+            </p>
+          )}
           {myDrafts.map((draft) => (
             <p key={draft.id} data-testid="home-draft" className="flex flex-wrap items-center justify-between gap-3">
               <span>
@@ -875,7 +891,7 @@ export default function SimpleHome() {
 
       {!reads && alsoWaiting.length > 0 && (
         <HomeCard id="also-waiting" icon="flag" title="Also waiting for you" count={alsoWaiting.length} all="/simple/decisions" allLabel="All that waits on you">
-          <ul data-testid="home-also-waiting">
+          <ul data-testid="home-also-waiting-list">
             {alsoWaiting.map((i) => (
               <WaitingRow key={i.key} item={i} />
             ))}
@@ -1288,12 +1304,6 @@ function SetupCard({ setup, owner, onHide }: { setup: Schemas["SetupOut"]; owner
       </ul>
     </HomeCard>
   );
-}
-
-/** The dates an item stores (typed or accepted), as the change engine compares them; null for the others. */
-function stored(i: Schemas["SimpleRoadmapItem"]) {
-  const own = (d: Schemas["SimpleDate"]) => (d.source === "typed" || d.source === "accepted" ? d.date : null);
-  return { start_date: own(i.start), end_date: own(i.end) };
 }
 
 /** build-rundecide RD3 a: the questions I own, one group per PRD, the PRD with the soonest due first; each soonest first. */
