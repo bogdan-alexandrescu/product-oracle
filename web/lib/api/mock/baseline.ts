@@ -877,7 +877,7 @@ export type NewOrderRow = {
   depends_on: string[];
   explanation: {
     inputs: Record<string, unknown>;
-    confidence: { value: number };
+    confidence: { value: number; source?: string };
     goals: { goal: string; weight: number; contribution: number }[];
   };
 };
@@ -890,91 +890,100 @@ export const SAME_FEATURE_NOTE = "The same feature as one the approved order add
 /** The accepted note an approved order's own create proposal gets (api run_order.accept_new). */
 export const ADDED_BY_ORDER_NOTE = "Added by the approved order";
 
+/** A supports link's contribution as the API takes it (run_order._contribution): an integer 0-3, else none. */
+const contributionOf = (c: unknown): number | null => (typeof c === "number" && Number.isInteger(c) && c >= 0 && c <= 3 ? c : null);
+
 /**
  * C8 RP1 (api run_order.accept_new): an approved order adds the features new in its PRD
  * (`new: true` ranking rows) to the baseline as proposed. The run's open create proposals
- * for the same keys are accepted, one per key; a second open create of a key already added
- * is rejected (SAME_FEATURE_NOTE). A key with no open create gets its proposed entity built
- * straight from the ranking row (key, title, depends_on, effort, confidence, goals).
- * Idempotent: a key that is already a feature entity is left alone. Returns how many
- * features were added.
+ * for the same keys are accepted, one per key; another open create of a key already added,
+ * or of a key that is already a feature, is rejected (SAME_FEATURE_NOTE). A key with no
+ * open create is made from its ranking row, never skipped. Each carries the row's effort
+ * and confidence (attrs), and, as proposed links Oracle made for a person to confirm, the
+ * goals it serves (supports, the row's contribution) and what it depends on. Returns how
+ * many features were added.
  */
 export function acceptNewFeatures(s: BaselineState, runId: string | null | undefined, rows: NewOrderRow[], by: string | null): number {
   const keys = new Set(rows.filter((r) => r.new).map((r) => r.key));
-  if (!keys.size) return 0;
+  if (!keys.size || !runId) return 0;
   const at = now();
-  const open = runId ? s.proposals.filter((p) => p.run_id === runId && p.status === "open").sort((a, b) => a.created_at.localeCompare(b.created_at)) : [];
-  const first = new Map<string, ProposalRow>();
+  const open = s.proposals.filter((p) => p.run_id === runId && p.status === "open").sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const creates = new Map<string, ProposalRow[]>();
   for (const p of open) {
-    const payload = p.payload as { op?: string; fields?: { key?: string } };
+    const payload = p.payload as { op?: string; fields?: { key?: string; type?: string } };
     const key = payload.fields?.key;
-    if (payload.op !== "create" || !key || !keys.has(key)) continue;
-    if (first.has(key)) {
-      // Rejected before the first is accepted (as the API: it would otherwise close it as already done).
-      Object.assign(p, { status: "rejected", decided_by: by, decided_at: at, payload: { ...p.payload, note: SAME_FEATURE_NOTE } });
-      continue;
-    }
-    first.set(key, p);
+    if (payload.op !== "create" || (payload.fields?.type ?? "feature") !== "feature" || !key || !keys.has(key)) continue;
+    creates.set(key, [...(creates.get(key) ?? []), p]);
   }
-  let added = 0;
+  const reject = (p: ProposalRow) => Object.assign(p, { status: "rejected", decided_by: by, decided_at: at, payload: { ...p.payload, note: SAME_FEATURE_NOTE } });
+  const added: EntityRow[] = [];
   for (const key of keys) {
-    if (s.entities.some((e) => e.type === "feature" && e.key === key)) continue;
+    const mine = creates.get(key) ?? [];
+    const exists = s.entities.some((e) => e.type === "feature" && e.key === key);
+    // Rejected before the first is accepted (as the API: it would otherwise close it as already done).
+    for (const p of mine.slice(exists ? 0 : 1)) reject(p);
+    if (exists) continue;
     const row = rows.find((r) => r.key === key)!;
-    const proposal = first.get(key);
-    const fields = proposal?.payload.fields as { title?: string; attrs?: Attrs } | undefined;
-    const fieldAttrs = fields?.attrs ?? {};
+    const proposal = mine[0];
+    const fields = proposal?.payload.fields as { title?: string; body?: string | null; attrs?: Attrs } | undefined;
+    const effort = effortOf(row);
+    const confidence = row.explanation.confidence.source === "attrs" ? row.explanation.confidence.value : null;
     const entity: EntityRow = {
       id: newId(),
       type: "feature",
       key,
       title: fields?.title ?? row.title,
-      body: null,
-      attrs: {
-        ...fieldAttrs,
-        effort: fieldAttrs.effort ?? effortOf(row),
-        confidence: fieldAttrs.confidence ?? row.explanation.confidence.value ?? null,
-        goals: row.explanation.goals.map((g) => g.goal),
-      },
+      body: fields?.body ?? null,
+      attrs: { ...(fields?.attrs ?? {}), ...(effort != null ? { effort } : {}), ...(confidence != null ? { confidence } : {}) },
       status: "proposed",
-      origin: "agent",
-      locked: false,
-      locked_by: null,
-      locked_at: null,
-      confidence: row.explanation.confidence.value ?? null,
-      run_id: runId ?? null,
+      // Accepted for the person who approved the order, as a person's write: theirs, locked.
+      origin: "user",
+      locked: true,
+      locked_by: by,
+      locked_at: at,
+      confidence: null,
+      run_id: runId,
       created_at: at,
       updated_at: at,
     };
     s.entities.push(entity);
-    // What it depends on, and the goals it serves (proposed links, as the order's row has them).
-    const links = [
-      ...row.depends_on.map((dep) => ({ target: s.entities.find((e) => e.type === "feature" && e.key === dep), type: "depends_on" as const, attrs: {}, status: "confirmed" as const })),
-      ...row.explanation.goals.map((g) => ({ target: s.entities.find((e) => e.type === "goal" && e.key === g.goal), type: "supports" as const, attrs: { contribution: g.contribution }, status: "proposed" as const })),
-    ];
-    for (const { target, type, attrs, status } of links) {
-      if (target) {
-        s.edges.push({
-          id: newId(),
-          src_id: entity.id,
-          dst_id: target.id,
-          type,
-          attrs,
-          status,
-          origin: "agent",
-          locked: false,
-          locked_by: null,
-          locked_at: null,
-          confidence: null,
-          run_id: runId ?? null,
-          created_at: at,
-          updated_at: at,
-        });
-      }
-    }
     if (proposal) Object.assign(proposal, { status: "accepted", decided_by: by, decided_at: at, payload: { ...proposal.payload, note: ADDED_BY_ORDER_NOTE } });
-    added++;
+    added.push(entity);
   }
-  return added;
+  for (const entity of added) {
+    const row = rows.find((r) => r.key === entity.key)!;
+    const goals = new Map<string, number>();
+    for (const g of row.explanation.goals) {
+      const c = contributionOf(g.contribution);
+      if (g.goal && c != null && !goals.has(g.goal)) goals.set(g.goal, c);
+    }
+    const links = [
+      ...[...goals].map(([goal, contribution]) => ({ target: s.entities.find((e) => e.type === "goal" && e.key === goal), type: "supports" as const, attrs: { contribution } })),
+      ...[...new Set(row.depends_on)].filter((d) => d !== entity.key).sort().map((dep) => ({ target: s.entities.find((e) => e.type === "feature" && e.key === dep), type: "depends_on" as const, attrs: {} })),
+    ];
+    for (const { target, type, attrs } of links) {
+      if (!target || target.status === "rejected") continue;
+      if (s.edges.some((e) => e.src_id === entity.id && e.dst_id === target.id && e.type === type)) continue;
+      // Proposed by the run (Oracle), unlocked: a person confirms or declines it on the Ground Truth.
+      s.edges.push({
+        id: newId(),
+        src_id: entity.id,
+        dst_id: target.id,
+        type,
+        attrs,
+        status: "proposed",
+        origin: "agent",
+        locked: false,
+        locked_by: null,
+        locked_at: null,
+        confidence: null,
+        run_id: runId,
+        created_at: at,
+        updated_at: at,
+      });
+    }
+  }
+  return added.length;
 }
 
 /** A person's new link, as service.create_edge: both ends exist, a supports link carries its contribution 0-3. */

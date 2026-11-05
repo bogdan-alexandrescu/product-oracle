@@ -137,6 +137,10 @@ test.describe("RP1 a: the run's priority order", () => {
 
   test("Approve order puts the new features on the Ground Truth as proposed and on live Priorities", async ({ page }) => {
     await openOrder(page);
+    // Only a real move among the live features differs from live: the new features ranked
+    // above Saved addresses at checkout do not move it (as the frame draws it).
+    await expect(page.getByTestId("priority-row-F-4").getByTestId("problem-differs_from_live")).toBeVisible();
+    await expect(page.getByTestId("priority-row-F-1").getByTestId("problem-differs_from_live")).toHaveCount(0);
     const band = page.getByTestId("snapshot-band");
     await band.getByRole("button", { name: "Approve order" }).click();
     await expect(band).toContainText("Saved for Saved addresses");
@@ -151,6 +155,18 @@ test.describe("RP1 a: the run's priority order", () => {
     await expect(added).toHaveCount(1);
     await expect(added).not.toContainText("Serves no goal");
     await expect(page.locator("main").getByRole("row", { name: /^Address labels and notes Proposed/ }).filter({ visible: true })).toHaveCount(1);
+
+    // The goal it serves and what it needs come as Oracle's proposed links, for a person to confirm.
+    const delivery = page.locator("main").getByRole("row", { name: /^Default delivery address Proposed/ }).filter({ visible: true });
+    await delivery.getByRole("button", { name: "Default delivery address" }).first().click();
+    const supports = page.getByRole("list", { name: "Supports" });
+    await expect(supports.getByRole("listitem")).toHaveCount(1);
+    await expect(supports.getByRole("listitem")).toContainText("Raise activation");
+    await expect(supports.getByRole("listitem")).toContainText("Proposed");
+    const needs = page.getByRole("list", { name: "Depends on" });
+    await expect(needs.getByRole("listitem")).toHaveCount(1);
+    await expect(needs.getByRole("listitem")).toContainText("Address book per account");
+    await expect(needs.getByRole("listitem")).toContainText("Proposed");
   });
 });
 

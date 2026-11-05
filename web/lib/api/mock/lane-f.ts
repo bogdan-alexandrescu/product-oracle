@@ -80,7 +80,8 @@ export const FORMULAS: Record<Method, string> = {
 const METHODS = Object.keys(FORMULAS) as Method[];
 const MOSCOW: Record<string, number> = { must: 4, should: 3, could: 2, wont: 1, "won't": 1 };
 
-export type GoalLink = { goal: string; title: string; weight: number | null; contribution: number | null };
+/** `link_status` "proposed": a link Oracle proposed and no one has confirmed yet (an approved order's new feature, addLiveFeature). */
+export type GoalLink = { goal: string; title: string; weight: number | null; contribution: number | null; link_status?: "confirmed" | "proposed" };
 export type FeatureSeed = {
   key: string;
   title: string;
@@ -270,7 +271,7 @@ function scoreFeature(f: FeatureSeed, method: Method, cal: TrackRecord = null): 
       weight_assumed: g.weight == null,
       contribution,
       contribution_assumed: g.contribution == null,
-      link_status: "confirmed",
+      link_status: g.link_status ?? "confirmed",
       term: round(weight * contribution),
     };
   });
@@ -2017,24 +2018,42 @@ function state(db: Db, scenario?: string | null): LaneFState {
 
 /**
  * C8 RP1: an approved order's new feature (accepted into the baseline by acceptNewFeatures,
- * ./baseline.ts) joins this db's live ranking too, scored from the same row (effort,
- * confidence, goal links). Idempotent: a key already in the fixed set or added before is
- * left alone.
+ * ./baseline.ts) joins this db's live ranking too, read from the baseline as the API reads
+ * it: the effort and confidence it carries, its proposed supports links to confirmed goals
+ * (titled as goalTitles titles them) and its depends_on links. Idempotent: a key already in
+ * the fixed set or added before is left alone.
  */
 export function addLiveFeature(db: Db, rows: NewOrderRow[]): void {
   const st = state(db);
   const extra = (st.extraFeatures ??= []);
+  const entities = db.baseline.entities;
   for (const row of rows) {
     if (!row.new) continue;
     if (featureSeeds().some((f) => f.key === row.key) || extra.some((f) => f.key === row.key)) continue;
+    const entity = entities.find((e) => e.type === "feature" && e.key === row.key);
+    if (!entity || entity.status === "rejected") continue;
+    const links = db.baseline.edges.filter((e) => e.src_id === entity.id && e.status !== "rejected");
+    const target = (id: string) => entities.find((e) => e.id === id);
+    const goals: GoalLink[] = links.flatMap((l) => {
+      const goal = target(l.dst_id);
+      if (l.type !== "supports" || goal?.type !== "goal" || goal.status !== "confirmed") return [];
+      // The weight the order scored it on, as the fixed set carries its own (the live ranking's scale).
+      const weight = Number(row.explanation.goals.find((g) => g.goal === goal.key)?.weight ?? goal.attrs.weight);
+      return [{ goal: goal.key, title: goal.title, weight: Number.isFinite(weight) ? weight : null, contribution: Number(l.attrs.contribution ?? 1), link_status: l.status === "confirmed" ? "confirmed" : "proposed" }];
+    });
+    const attrs: Record<string, number | string> = {};
+    for (const k of ["effort", "confidence"] as const) {
+      const v = entity.attrs[k];
+      if (typeof v === "number" || typeof v === "string") attrs[k] = v;
+    }
     extra.push({
       key: row.key,
-      title: row.title,
-      status: "proposed",
-      goals: row.explanation.goals.map((g) => ({ goal: g.goal, title: g.goal, weight: g.weight, contribution: g.contribution })),
-      attrs: { effort: effortOf(row) ?? 1, confidence: row.explanation.confidence.value },
+      title: entity.title,
+      status: entity.status,
+      goals,
+      attrs,
       evidence: [],
-      depends_on: row.depends_on,
+      depends_on: links.filter((l) => l.type === "depends_on").flatMap((l) => target(l.dst_id)?.key ?? []).sort(),
     });
   }
 }

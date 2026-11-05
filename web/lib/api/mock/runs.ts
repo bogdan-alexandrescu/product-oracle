@@ -1281,8 +1281,10 @@ function checkOrder(spec: OrderSpec, scope: PrdScopeOut["features"] | null): Pri
     const inputs = Object.fromEntries(NEW_INPUTS.filter((n) => o[n] != null).map((n) => [n, o[n]]));
     return { key: o.key, rank: i + 1, score: o.score, explanation: o.explanation, live_rank: at < 0 ? null : at + 1, ...inputs };
   });
+  // Where each sits among the live features the order ranks (api run_order.check_order): new features ranked above it do not move it.
+  const position = new Map(order.filter((o) => o.live_rank != null).map((o, i) => [o.key, i + 1]));
   for (const o of order) {
-    if (o.live_rank != null && Math.abs(o.live_rank - o.rank) > 2) {
+    if (o.live_rank != null && Math.abs(o.live_rank - position.get(o.key)!) > 2) {
       add("differs_from_live", o.key, `${o.key} is ranked ${o.rank} here and ${o.live_rank} in the live ranking`, false);
     }
     if (live.find((f) => f.key === o.key)?.flags.includes("no_confirmed_goal")) {
