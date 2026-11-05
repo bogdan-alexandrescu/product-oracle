@@ -50,7 +50,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       await expect(line).toHaveText("Still open in Summary, Behaviour");
       expect((await line.boundingBox())!.height).toBeLessThan(viewport.width < 600 ? 60 : 32);
       await line.getByRole("link", { name: "Behaviour" }).click();
-      await expect(page).toHaveURL(/#behaviour|section=behaviour/);
+      await expect(page).toHaveURL(/#item-behaviour$/);
       await chip.click();
       await expect(page.getByRole("tooltip").filter({ visible: true })).toContainText("feedback items stay open");
     });
