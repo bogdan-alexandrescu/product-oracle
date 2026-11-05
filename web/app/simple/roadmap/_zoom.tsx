@@ -453,15 +453,23 @@ function DayChart(props: TimelineProps) {
     lastEnd = end;
   }
   // A milestone whose line has slid under the names column keeps its label whole at the view's
-  // left edge, till all of it would be gone; then the label goes too.
+  // left edge, till all of it would be gone; then the label goes too. A label gives way to the
+  // next one's where they would touch (as a week mark gives way), scrolled or not.
   const milestones = (data.milestones ?? [])
     .filter((m) => m.date && m.status !== "dropped" && m.date >= t0 && m.date <= t1)
+    .sort((a, b) => (a.date as string).localeCompare(b.date as string))
     .map((m) => {
       const at = x(m.date as string);
       const words = `◆ ${m.name} · ${shortDay(m.date as string)}`;
       const left = fit ? at : Math.max(at, sl);
       return { m, at, words, left, gone: !fit && at + 26 + words.length * 7 < sl };
     });
+  let nextStart = Infinity;
+  for (const m of [...milestones].reverse()) {
+    if (m.gone) continue;
+    if (m.left + 22 + m.words.length * 7 > nextStart - 6) m.gone = true;
+    else nextStart = m.left + 4;
+  }
   // roadmap-r2: the Gantt's moves. A drag past DRAG_PX moves the bar by whole days (an end
   // grabbed near the bar's edge, grabAt, moves only that end); a shorter one is a click. A
   // finger picks a bar up with the Gantt's long press first. The arrow keys move a focused
@@ -739,10 +747,14 @@ function DayChart(props: TimelineProps) {
            * each a dashed line on its day with its name, as the Gantt marks them. */}
           {milestones.map(({ m, at, words, left, gone }) => (
             <div key={m.id}>
-              <div
-                className="pointer-events-none absolute top-11 bottom-0 z-10 border-l-2 border-dashed border-text2"
-                style={{ left: labelW + at }}
-              />
+              {/* A line under the names column would show through a goal's header row. */}
+              {(fit || at >= sl) && (
+                <div
+                  data-testid="timeline-milestone-line"
+                  className="pointer-events-none absolute top-11 bottom-0 z-10 border-l-2 border-dashed border-text2"
+                  style={{ left: labelW + at }}
+                />
+              )}
               {!gone && (
                 <span
                   data-testid="timeline-milestone"
@@ -843,6 +855,7 @@ function DayChart(props: TimelineProps) {
             labelW={labelW}
             trackW={trackW}
             phone={phone}
+            span={[labelW + sl, sl + w]}
             keepOff={milestones
               .filter((m) => !m.gone)
               .map((m): [number, number] => [labelW + m.left + 4, labelW + m.left + 20 + m.words.length * 7])}
@@ -854,7 +867,7 @@ function DayChart(props: TimelineProps) {
 }
 
 /** build-milestones-on-roadmap: each row's place, for the milestone layer over the Timeline. */
-function TimelineMilestones({ rows, moved, x, labelW, trackW, phone, keepOff }: { rows: Row[]; moved: Record<string, [string, string]>; x: (d: string) => number; labelW: number; trackW: number; phone: boolean; keepOff: [number, number][] }) {
+function TimelineMilestones({ rows, moved, x, labelW, trackW, phone, span, keepOff }: { rows: Row[]; moved: Record<string, [string, string]>; x: (d: string) => number; labelW: number; trackW: number; phone: boolean; span: [number, number]; keepOff: [number, number][] }) {
   let y = 44;
   const out: MsRow[] = [];
   const lanes: MsLane[] = [];
@@ -869,7 +882,7 @@ function TimelineMilestones({ rows, moved, x, labelW, trackW, phone, keepOff }: 
     y += ROW_H;
     if (lanes.length) lanes[lanes.length - 1].y1 = y;
   }
-  return <MsLayer view="timeline" x={x} left={labelW} top={44} axisY={33} height={y} width={labelW + trackW} rows={out} lanes={lanes} phone={phone} keepOff={keepOff} />;
+  return <MsLayer view="timeline" x={x} left={labelW} top={44} axisY={33} height={y} width={labelW + trackW} rows={out} lanes={lanes} phone={phone} span={span} keepOff={keepOff} />;
 }
 
 const NO_WARN: string[] = [];
