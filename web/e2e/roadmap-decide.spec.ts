@@ -1,4 +1,4 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_SCENARIO_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
 import { login, openRoadmapItem, signOut } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
@@ -202,10 +202,11 @@ test("with two working drafts, the banner has a line per draft: its roadmap, its
   await expect(onboarding.getByRole("button", { name: "Approve and publish" })).toHaveCount(0);
   await onboarding.getByRole("button", { name: "Send for review" }).click();
   await expect(page.getByText(/Sent for review/).first()).toBeVisible();
-  // Sent, the line says so with its own step (an owner may approve it too): no Send for review is
-  // left, disabled or not.
-  await expect(onboarding.getByTestId("draft-next")).toContainText("Sent for review: it waits for your approval");
-  await expect(onboarding.getByRole("button", { name: "Approve", exact: true })).toBeVisible();
+  // Sent, the line says so with its own step: Priya Raman decides it, so it waits for her (as the
+  // API has it, the owner who sent it does not approve it); no Send for review is left, disabled or not.
+  await expect(onboarding.getByTestId("draft-next")).toContainText("Sent for review: it waits for Priya Raman to approve");
+  await expect(onboarding.getByTestId("draft-next")).not.toContainText("your approval");
+  await expect(onboarding.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
   await expect(banner.getByRole("button", { name: "Send for review" })).toHaveCount(0);
   await alerts.getByRole("button", { name: "Approve and publish" }).click();
   await expect(page.getByText(/Approved: Alerts roadmap is published/)).toBeVisible();
@@ -314,6 +315,11 @@ test("a cut flag with many fixes keeps its sentence to two lines, its fixes on t
 
 test("an approver's proposed Remove the dependency says who it waits for and is not offered again", async ({ page }) => {
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "roadmap-talk-own-decider"] as const);
+  // Names answer late: the line holds its "waits for" until it knows whom, never "its decider".
+  await page.addInitScript(([key, value, msKey]) => {
+    localStorage.setItem(key, value);
+    localStorage.setItem(msKey, "4000");
+  }, [MOCK_SLOW_KEY, "/v1/people", MOCK_SLOW_MS_KEY] as const);
   await login(page, "approver@example.com");
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
@@ -328,10 +334,22 @@ test("an approver's proposed Remove the dependency says who it waits for and is 
   await expect(page.getByText(/^Removed the dependency/)).toHaveCount(0);
   await expect(cut.getByRole("button", { name: label, exact: true })).toHaveCount(0);
   const line = cut.getByTestId("fix-proposed").first();
-  await expect(line).toContainText(/[Pp]roposed,? waits for Avery Stone/);
-  // The proposed line's item name opens that item's panel, as other item names do.
+  await expect(line).toBeVisible();
+  await expect(line).not.toContainText("its decider");
+  await expect(line).toContainText(/[Pp]roposed,? waits for Avery Stone/, { timeout: 15_000 });
+  // The proposed line's item name opens that item's panel, as other item names do, and looks it.
   const dependent = /of ‘(.+?)’/.exec(await line.innerText())![1];
-  await line.getByRole("button", { name: `‘${dependent}’` }).click();
+  const name = line.getByRole("button", { name: `‘${dependent}’` });
+  const accent = await page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--accent-ink)";
+    document.body.append(probe);
+    const c = getComputedStyle(probe).color;
+    probe.remove();
+    return c;
+  });
+  await expect(name).toHaveCSS("color", accent);
+  await name.click();
   await expect(page.getByTestId("floating-card")).toContainText(dependent);
   // The person it waits for reads "waits for you", on the strip and in Needs a decision.
   await signOut(page);
@@ -350,12 +368,19 @@ test("the decider of a draft sent for review sees Approve, not Send for review, 
   const banner = page.getByTestId("draft-banner");
   await banner.getByRole("button", { name: "Send for review" }).click();
   await expect(page.getByText(/Sent for review/).first()).toBeVisible();
-  // Priya Raman decides the Onboarding roadmap.
+  // Priya Raman decides the Onboarding roadmap; the people lookup answers late.
   await signOut(page);
+  await page.evaluate(([key, value, msKey]) => {
+    localStorage.setItem(key, value);
+    localStorage.setItem(msKey, "20000");
+  }, [MOCK_SLOW_KEY, "/v1/people", MOCK_SLOW_MS_KEY] as const);
   await login(page, "approver@example.com");
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await expect(banner).toBeVisible();
+  // Right after load, before the people lookup answers, the banner names whose draft it is.
+  await expect(banner.getByTestId("draft-words")).toContainText("Avery Stone's working draft of the Onboarding roadmap", { timeout: 3_000 });
+  await expect(banner.getByTestId("draft-words")).not.toContainText("Someone");
   await expect(banner.getByRole("button", { name: "Send for review" })).toHaveCount(0);
   await expect(banner.getByRole("button", { name: "Approve", exact: true })).toBeVisible();
   // Not hers: the banner names whose draft it is and its roadmap.
@@ -376,6 +401,9 @@ test("under a filter, Needs a decision says N here, M in all on one basis, and 1
   // The whole count is every roadmap the reader sees, and says so.
   const m = /^(\d+) here, (\d+) in all your roadmaps to decide/.exec(await scope.innerText());
   expect(m).not.toBeNull();
+  // No roadmap is chosen: the sentence counts every roadmap's draft, never "this roadmap's" too.
+  await expect(scope).toContainText("in your roadmaps' working drafts");
+  await expect(scope).not.toContainText("this roadmap's working draft");
   const tiles = await tray(page).getByTestId("tray-counter").locator("b").allInnerTexts();
   // The tiles count the whole roadmap, as the "in all" does and the button does.
   expect(tiles.reduce((n, t) => n + Number(t), 0)).toBe(Number(m![2]));
@@ -408,4 +436,42 @@ test("the strip's M in all shows only when a filter hides some broken links", as
   // The filter hides none of them: no "here", no "in all", no Clear filters.
   await expect(strip(page).getByTestId("conflicts-all")).toHaveCount(0);
   await expect(strip(page)).not.toContainText("here,");
+});
+
+test("Needs a decision names this roadmap's draft only when one roadmap is chosen", async ({ page }) => {
+  await open(page);
+  await page.getByTestId("needs-decision").click();
+  const scope = tray(page).getByTestId("tray-scope");
+  await expect(scope).toContainText("in your roadmaps' working drafts");
+  await expect(scope).not.toContainText("this roadmap's working draft");
+  await tray(page).getByRole("button", { name: "Close" }).click();
+  await page.getByRole("combobox", { name: "Roadmap", exact: true }).selectOption({ label: "Alerts roadmap" });
+  await page.getByTestId("needs-decision").click();
+  await expect(scope).toContainText("in this roadmap's working draft");
+  await expect(scope).not.toContainText("your roadmaps");
+});
+
+test("at 390 px the Propose toast covers neither the cut flag's buttons nor the proposed line", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "roadmap-talk-own-decider"] as const);
+  await login(page, "approver@example.com");
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await cutKeepingDependents(page, "alert-rules");
+  const cut = strip(page).locator('[data-testid="conflict"][data-item="alert-rules"]');
+  await cut.getByRole("button", { name: /^Propose: remove the dependency/ }).first().click();
+  const toast = page.getByRole("status").filter({ hasText: /^Proposed: remove the dependency/ });
+  await expect(toast).toBeVisible();
+  await expect(cut.getByTestId("fix-proposed").first()).toBeVisible();
+  const box = (await toast.boundingBox())!;
+  const covered = await cut.locator('[data-testid="fix-proposed"], button').evaluateAll(
+    (els, t) =>
+      els.flatMap((el) => {
+        const r = el.getBoundingClientRect();
+        const over = r.width > 0 && r.left < t.x + t.width && t.x < r.right && r.top < t.y + t.height && t.y < r.bottom;
+        return over ? [(el.textContent ?? "").trim()] : [];
+      }),
+    box,
+  );
+  expect(covered).toEqual([]);
 });

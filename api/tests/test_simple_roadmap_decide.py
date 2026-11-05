@@ -40,6 +40,11 @@ Test cards (protects / fails_when / no_claim):
   the change asked of the PRD, with can_decide, and the milestone's pending says the viewer
   may decide it; fails_when=it is missing for the owner or decidable by someone else;
   no_claim=the web.
+- test_sent_draft_waits_for_its_decider: protects=an owner who sends the draft of a roadmap
+  someone else decides cannot approve it (no can_approve, POST approve 403s), the draft
+  names its decider and its author (the banner names them from the draft, not a lookup),
+  and the decider's approval publishes it; fails_when=the owner may approve, or the names
+  are missing; no_claim=the web.
 """
 
 import uuid
@@ -301,3 +306,28 @@ async def test_prd_owner_sees_and_decides_the_ask(client):
     r = await client.get(CHANGES, params={"status": "proposed"}, headers=ctx.as_("commenter"))
     listed = {c["id"]: c for c in r.json()}
     assert change_id not in listed or listed[change_id]["can_decide"] is False
+
+
+async def test_sent_draft_waits_for_its_decider(client):
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, ops=["move_dates"])
+    r = await w.post(client, "owner", "move_dates")
+    assert r.status_code == 201, r.text
+    r = await client.get("/v1/simple/drafts", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    (d,) = [x for x in r.json() if x["status"] == "working"]
+    assert d["created_by_name"] == "owner@example.com"
+    assert d["decider"] == {"id": str(ctx.users["decider"].id), "name": "Dee Cider"}
+    r = await client.post(f"/v1/simple/drafts/{d['id']}/submit", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    sent = r.json()
+    assert sent["status"] == "submitted" and sent["can_approve"] is False, sent
+    assert sent["decider"]["name"] == "Dee Cider"
+    r = await client.post(f"/v1/simple/drafts/{d['id']}/approve", headers=ctx.as_("owner"))
+    assert r.status_code == 403, r.text
+    assert "Only the decider and the required reviewers approve this draft" in r.text
+    r = await client.get(f"/v1/simple/drafts/{d['id']}", headers=ctx.as_("decider"))
+    assert r.json()["can_approve"] is True, r.text
+    r = await client.post(f"/v1/simple/drafts/{d['id']}/approve", headers=ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "approved", r.text
