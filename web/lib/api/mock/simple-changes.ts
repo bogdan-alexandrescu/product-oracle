@@ -28,7 +28,7 @@ import { draftDecisionNotes } from "./decision-notes";
 import { stableUuid } from "./ids";
 import { changeSentence } from "./simple-change-words";
 import { milestoneValue, writeMilestone } from "./simple-milestones";
-import { archiveGoal, goalBucketsDb, seedGoalBuckets, trashGoal, type GoalBucketsTrash } from "./goal-buckets";
+import { archiveGoal, goalBucketsDb, seedGoalBuckets, trashGoal, unarchiveGoal, type GoalBucketsTrash } from "./goal-buckets";
 import { addToCompany, featureItem, featureKeyOf, priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
 import {
   canDecideItem,
@@ -92,11 +92,11 @@ export interface SimpleChangesCtx {
   goalBin?: GoalBucketsTrash;
 }
 
-/** edit-goals-prds (oracle.simple.goal_asks): a goal archived or moved to Trash, asked by who may not. */
-const GOAL_ASK_OPS = ["archive_goal", "delete_goal"];
+/** edit-goals-prds (oracle.simple.goal_asks): a goal archived, moved to Trash or restored, asked by who may not. */
+const GOAL_ASK_OPS = ["archive_goal", "delete_goal", "unarchive_goal"];
 const approves = (ctx: Pick<SimpleChangesCtx, "role">) => ctx.role === "owner" || ctx.role === "approver";
 
-/** Applies a goal ask: Archive (its features to `to_goal_id`), or the goal to Trash. */
+/** Applies a goal ask: Archive (its features to `to_goal_id`), the goal to Trash, or Restore. */
 function applyGoalAsk(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target" | "reason">): Response | null {
   const gb = goalBucketsDb(db, ctx.goalBin?.people);
   const id = String(c.target.goal_id ?? "");
@@ -104,6 +104,10 @@ function applyGoalAsk(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" 
   if (c.op === "archive_goal") {
     const undo = archiveGoal(gb, id, to, iso(mockNowMs()));
     return undo instanceof Response ? undo : null;
+  }
+  if (c.op === "unarchive_goal") {
+    const done = unarchiveGoal(gb, id);
+    return done instanceof Response ? done : null;
   }
   const bin = ctx.goalBin ?? { trash: (ctx.trash ??= { entries: [], estimates: {} }), id: ctx.id, name: ctx.names[ctx.id] ?? null, now: () => iso(mockNowMs()) };
   const row = trashGoal(gb, bin, id, to, c.reason ?? null);
@@ -116,6 +120,7 @@ function createGoalAsk(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simpl
   const g = gb.goals.find((x) => x.id === body.target.goal_id && !x.trashed);
   if (!g) return json(404, { detail: "No such goal" });
   if (body.op === "archive_goal" && g.archived) return json(409, { detail: `${g.title} is archived already` });
+  if (body.op === "unarchive_goal" && !g.archived) return json(409, { detail: `${g.title} is not archived` });
   const applies = approves(ctx);
   if (!applies && (db.changes ?? []).some((c) => c.op === body.op && c.status === "proposed" && c.target.goal_id === g.id)) return json(409, { detail: "This is asked already" });
   const target = { goal_id: g.id, title: g.title, to_goal_id: (body.target.to_goal_id as string | null | undefined) ?? null };
@@ -246,7 +251,8 @@ const slugOf = (id: unknown): string | undefined => ROADMAP_SLUGS().find((r) => 
 function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target"> & Partial<Pick<Change, "routed_to" | "after">>): boolean {
   // Review major (changes.decides_all): a cut with its dependents needs rights on every item it cuts.
   if (c.op === CUT_ALL && c.after) return Object.keys(c.after).every((id) => decides(db, ctx, id));
-  if (GOAL_ASK_OPS.includes(c.op)) return approves(ctx);
+  // A goal ask is decided by the owners it is sent to (goal_asks.may_decide).
+  if (GOAL_ASK_OPS.includes(c.op)) return ctx.role === "owner";
   if (KEY_DATE_OPS.includes(c.op) || c.op === MILESTONE_OP) {
     const rm = roadmapOfDoc(db, c.target.document_id);
     return ctx.role === "owner" || (c.routed_to ?? []).includes(ctx.id) || (!!rm && canEditRoadmap(db, rm, ctx));

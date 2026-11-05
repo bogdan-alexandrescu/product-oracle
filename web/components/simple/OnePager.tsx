@@ -459,7 +459,14 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
           onDeleted={(entry) => {
             dsToast({
               message: `Deleted ${v.document.title}. It is in Settings > Trash for 30 days.`,
-              action: { label: "Undo", onClick: () => void restorePrd(entry).then(() => router.push(`/simple/one-pagers/${v.document.slug}`)) },
+              action: {
+                label: "Undo",
+                onClick: () =>
+                  void restorePrd(entry)
+                    .then(() => router.push(`/simple/one-pagers/${v.document.slug}`))
+                    // A failed restore says why, in the API's words.
+                    .catch((e) => dsToast({ message: errorMessage(e) })),
+              },
             });
             router.push("/simple/one-pagers");
           }}

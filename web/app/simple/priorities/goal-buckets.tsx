@@ -513,9 +513,10 @@ type Archived = Schemas["ArchivedGoal"];
 
 /**
  * EG1 a (eg1-a-result, eg1-a-readonly): archived goals in an "Archived goals" fold at the end of
- * the buckets, newest first, each with its owner and the day it was archived, Restore and Delete.
+ * the buckets, newest first, each with its owner and the day it was archived, Restore and Delete;
+ * for who may not, Ask to restore alone (eg1-a-propose).
  */
-export function ArchivedGoals({ gb, year, open, onToggle, restore, del, onRestore, onDelete }: { gb: Buckets; year: string; open: boolean; onToggle: (open: boolean) => void; restore: boolean; del: Act; onRestore: (g: Archived) => void; onDelete: (g: Archived) => void }) {
+export function ArchivedGoals({ gb, year, open, onToggle, restore, del, onRestore, onDelete }: { gb: Buckets; year: string; open: boolean; onToggle: (open: boolean) => void; restore: Act; del: Act; onRestore: (g: Archived) => void; onDelete: (g: Archived) => void }) {
   const list = gb.archived ?? [];
   if (!list.length) return null;
   return (
@@ -532,12 +533,12 @@ export function ArchivedGoals({ gb, year, open, onToggle, restore, del, onRestor
               <span className="flex-1" />
               {restore && (
                 <button type="button" className={BTN} onClick={() => onRestore(g)}>
-                  Restore
+                  {restore === "do" ? "Restore" : "Ask to restore"}
                 </button>
               )}
-              {del && (
+              {del === "do" && (
                 <button type="button" className={`${BTN} text-warn`} onClick={() => onDelete(g)}>
-                  {del === "do" ? "Delete" : "Ask to delete"}
+                  Delete
                 </button>
               )}
             </li>
@@ -549,7 +550,7 @@ export function ArchivedGoals({ gb, year, open, onToggle, restore, del, onRestor
 }
 
 /** EG1 a (eg1-a-delete): Delete on an archived goal asks once more; it holds no features now. */
-export function DeleteArchivedDialog({ goal, ask, onClose, onDelete }: { goal: Archived; ask?: string[] | null; onClose: () => void; onDelete: () => Promise<void> }) {
+export function DeleteArchivedDialog({ goal, onClose, onDelete }: { goal: Archived; onClose: () => void; onDelete: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -558,18 +559,17 @@ export function DeleteArchivedDialog({ goal, ask, onClose, onDelete }: { goal: A
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
   }, [onClose]);
-  const heading = ask ? "Ask to delete" : "Delete";
   return (
     <div data-backdrop="" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-label={`${heading} ${goal.title}`} className="w-full max-w-lg rounded-t-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg sm:rounded-[var(--simple-card-radius)]" onClick={(e) => e.stopPropagation()}>
+      <div ref={ref} role="dialog" aria-modal="true" aria-label={`Delete ${goal.title}`} className="w-full max-w-lg rounded-t-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg sm:rounded-[var(--simple-card-radius)]" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">
-          {heading} {goal.title}?
+          Delete {goal.title}?
         </h2>
         <p className="mt-1 text-[15px] text-text">It goes to Settings &gt; Trash for 30 days.</p>
         <div className="mt-3 flex items-center gap-2">
           <button
             type="button"
-            className={ask ? PRIMARY : DANGER}
+            className={DANGER}
             disabled={busy}
             onClick={async () => {
               setBusy(true);
@@ -580,7 +580,7 @@ export function DeleteArchivedDialog({ goal, ask, onClose, onDelete }: { goal: A
               }
             }}
           >
-            {ask ? `Send to ${andList(ask) || "an owner"}` : "Delete goal"}
+            Delete goal
           </button>
           <button type="button" className={BTN} onClick={onClose}>
             Cancel
@@ -591,8 +591,12 @@ export function DeleteArchivedDialog({ goal, ask, onClose, onDelete }: { goal: A
   );
 }
 
-/** A task change (./task-edit) names the changes Undo takes back, in the order they were made. */
-export type Note = { text: ReactNode; undo?: Undo; changes?: string[] };
+/**
+ * A task change (./task-edit) names the changes Undo takes back, in the order they were made; a
+ * goal's delete, its Trash entry and the Undo for its links (`restore`).
+ */
+export type Note = { text: ReactNode; undo?: Undo; changes?: string[]; restore?: Restore };
+type Restore = { entry: string; title: string; undo?: Undo | null };
 
 /** The writes, each answering with the note to show and what Undo puts back. */
 export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note | null) => void, setError: (e: string | null) => void) {
@@ -621,11 +625,12 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
     archive: (g: Goal, to: string | null, text: ReactNode) => run(() => unwrap(api.POST("/v1/simple/goal-buckets/goals/{goal_id}/archive", { params: { path: { goal_id: g.id } }, body: { to_goal_id: to } })), text),
     // EG1 a: Restore an archived goal (with Undo), Delete a goal to Settings > Trash, and an ask for who may not.
     unarchive: (g: { id: string; title: string }) => run(() => unwrap(api.POST("/v1/simple/goal-buckets/goals/{goal_id}/unarchive", { params: { path: { goal_id: g.id } } })), <>Restored {g.title}.</>),
-    remove: async (g: { id: string }, to: string | null, text: ReactNode): Promise<boolean> => {
+    remove: async (g: { id: string; title: string }, to: string | null, text: ReactNode): Promise<boolean> => {
       try {
-        await unwrap(api.DELETE("/v1/simple/goal-buckets/goals/{goal_id}", { params: { path: { goal_id: g.id }, query: to ? { to_goal_id: to } : {} } }));
+        const out = await unwrap(api.DELETE("/v1/simple/goal-buckets/goals/{goal_id}", { params: { path: { goal_id: g.id }, query: to ? { to_goal_id: to } : {} } }));
         setError(null);
-        setNote({ text });
+        // Undo restores it from Trash, then puts back the links it moved.
+        setNote({ text, restore: out.entry && out.can_restore ? { entry: out.entry.id, title: g.title, undo: out.undo } : undefined });
         await reload();
         return true;
       } catch (e) {
@@ -633,11 +638,11 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
         return false;
       }
     },
-    ask: async (op: "archive_goal" | "delete_goal", g: { id: string; title: string }, to: string | null, askTo: string[]): Promise<boolean> => {
+    ask: async (op: "archive_goal" | "delete_goal" | "unarchive_goal", g: { id: string; title: string }, to: string | null, askTo: string[]): Promise<boolean> => {
       try {
         await unwrap(api.POST("/v1/simple/changes", { body: { op, target: { goal_id: g.id, to_goal_id: to }, before: {}, after: {} } }));
         setError(null);
-        setNote({ text: <>Sent to {andList(askTo) || "an owner"}: {op === "archive_goal" ? "archive" : "delete"} {g.title}.</> });
+        setNote({ text: <>Sent to {andList(askTo) || "an owner"}: {{ archive_goal: "archive", delete_goal: "delete", unarchive_goal: "restore" }[op]} {g.title}.</> });
         return true;
       } catch (e) {
         setError(errorMessage(e));
@@ -646,6 +651,17 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
     },
     move: (feature: string, from: string | null, to: string, text: ReactNode) =>
       run(() => unwrap(api.POST("/v1/simple/goal-buckets/features/{feature_id}/move", { params: { path: { feature_id: feature } }, body: { from_goal_id: from, to_goal_id: to } })), text),
+    restore: async (r: Restore) => {
+      try {
+        await unwrap(api.POST("/v1/trash/{entry_id}/restore", { params: { path: { entry_id: r.entry } } }));
+        if (r.undo) await unwrap(api.POST("/v1/simple/goal-buckets/undo", { body: r.undo }));
+        setError(null);
+        setNote({ text: <>Undone: {r.title} and its links are back.</> });
+      } catch (e) {
+        setError(errorMessage(e));
+      }
+      await reload();
+    },
     undo: async (u: Undo) => {
       try {
         await unwrap(api.POST("/v1/simple/goal-buckets/undo", { body: u }));
@@ -671,6 +687,8 @@ export function useBucketRights(gb: Buckets | undefined) {
     archiveAct: (!gb ? null : can("archive_bucket_goal") ? "do" : can("create_simple_change") ? "ask" : null) as Act,
     deleteAct: (!gb ? null : can("delete_bucket_goal") ? "do" : can("create_simple_change") ? "ask" : null) as Act,
     unarchive: !!gb && can("unarchive_bucket_goal"),
+    // eg1-a-propose: Restore for who may, Ask to restore for who may not.
+    unarchiveAct: (!gb ? null : can("unarchive_bucket_goal") ? "do" : can("create_simple_change") ? "ask" : null) as Act,
     move: !!gb && can("move_bucket_feature"),
     // Tasks: the change engine applies or proposes, by the roadmap's own rule.
     task: can("create_simple_change"),

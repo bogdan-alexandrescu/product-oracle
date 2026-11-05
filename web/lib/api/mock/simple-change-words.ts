@@ -100,6 +100,7 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
     // edit-goals-prds: a goal archived or moved to Trash (goal_asks).
     case "archive_goal": return `archived the goal ${quoted(target.title) ?? "a goal"}`;
     case "delete_goal": return `moved the goal ${quoted(target.title) ?? "a goal"} to Trash`;
+    case "unarchive_goal": return `restored the goal ${quoted(target.title) ?? "a goal"}`;
   }
   return `changed ${x}`;
 }
@@ -118,7 +119,7 @@ export function changeSentence(
   const what = changePhrase(c.op, target, before, after, item);
   let words = `${who} ${what}`;
   // What was asked, not done: "proposed: move F-26 Alert rules engine to Trash" (change_words.describe).
-  const asked = c.op === "delete_item" || c.op === "delete_goal" ? `move${what.slice("moved".length)}` : c.op === "archive_goal" ? `archive${what.slice("archived".length)}` : what;
+  const asked = c.op === "delete_item" || c.op === "delete_goal" ? `move${what.slice("moved".length)}` : c.op === "archive_goal" ? `archive${what.slice("archived".length)}` : c.op === "unarchive_goal" ? `restore${what.slice("restored".length)}` : what;
   if (c.status === "proposed") words = `${who} proposed: ${asked}`;
   else if (c.status === "declined") words = `${who} proposed: ${asked} · declined`;
   if (undone) words += " · undone";

@@ -182,12 +182,23 @@ export function archiveGoal(db: GoalBucketsDb, id: string, to: string | null, no
   return undo;
 }
 
-/** A goal to Trash (trash_items.trash_goal), also an accepted Ask to delete: the Trash row, or an error. */
-export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, id: string, to: string | null, reason: string | null): TrashEntryRow | Response {
+/** Restore an archived goal (goal_buckets.unarchive), also an accepted Ask to restore: the Undo, or an error. */
+export function unarchiveGoal(db: GoalBucketsDb, id: string): { g: Goal; undo: Undo } | Response {
+  const g = db.goals.find((x) => x.id === id && !x.trashed);
+  if (!g) return json(404, { detail: "No such goal" });
+  if (!g.archived) return json(409, { detail: `${g.title} is not archived` });
+  const undo = signed({ goals: [goalSnap(g)], features: [], added_goal_id: null });
+  g.archived = false;
+  g.archived_at = null;
+  return { g, undo };
+}
+
+/** A goal to Trash (trash_items.trash_goal), also an accepted Ask to delete: the Trash row and the Undo for its links, or an error. */
+export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, id: string, to: string | null, reason: string | null): { row: TrashEntryRow; undo: Undo } | Response {
   const g = db.goals.find((x) => x.id === id && !x.trashed);
   if (!g) return json(404, { detail: "No such goal" });
   if (to && !db.goals.some((x) => x.id === to && !x.archived && !x.trashed && x.id !== g.id)) return json(422, { detail: "Pick another goal" });
-  moveOff(db, g, to);
+  const undo = signed({ goals: [], features: moveOff(db, g, to).map(featureSnap), added_goal_id: null });
   g.trashed = true;
   const at = bin.now();
   const row: TrashEntryRow = {
@@ -200,7 +211,7 @@ export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, id: string, 
     documents: [], versions: [], runs: [], intakes: [],
   };
   bin.trash.entries.push(row);
-  return row;
+  return { row, undo };
 }
 
 /** The goal buckets' db, its seeded owners matched to the members by email. */
@@ -234,9 +245,9 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
   // trash-features-goals: DELETE .../goals/{id}?to_goal_id= (approvers and owners): whoever deletes it restores it.
   if (bin && p[3] === "goals" && p[4] && !p[5] && m === "DELETE") {
     const q = new URL(req.url).searchParams;
-    const row = trashGoal(db, bin, p[4], q.get("to_goal_id"), q.get("reason"));
-    if (row instanceof Response) return row;
-    return json(200, { entry: entryOut(row, row.out.deleted_at, true), change: null, can_restore: true });
+    const done = trashGoal(db, bin, p[4], q.get("to_goal_id"), q.get("reason"));
+    if (done instanceof Response) return done;
+    return json(200, { entry: entryOut(done.row, done.row.out.deleted_at, true), change: null, can_restore: true, undo: done.undo });
   }
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   if (p[3] === "goals" && !p[4] && m === "POST") {
@@ -268,13 +279,9 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
   }
   // edit-goals-prds EG1: Restore an archived goal to the buckets, with Undo.
   if (p[3] === "goals" && p[5] === "unarchive" && m === "POST") {
-    const g = db.goals.find((x) => x.id === p[4] && !x.trashed);
-    if (!g) return json(404, { detail: "No such goal" });
-    if (!g.archived) return json(409, { detail: `${g.title} is not archived` });
-    const undo = signed({ goals: [goalSnap(g)], features: [], added_goal_id: null });
-    g.archived = false;
-    g.archived_at = null;
-    return json(200, { goal: goalOut(g, people), undo });
+    const done = unarchiveGoal(db, p[4]);
+    if (done instanceof Response) return done;
+    return json(200, { goal: goalOut(done.g, people), undo: done.undo });
   }
   if (p[3] === "features" && p[5] === "move" && m === "POST") {
     const f = db.features.find((x) => x.id === p[4]);
