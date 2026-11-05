@@ -537,8 +537,9 @@ test("a reviewer's approval before the decider's says the draft waits for the de
   await login(page, "commenter@example.com");
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  const line = page.getByTestId("draft-banner").getByTestId("draft-line").filter({ hasText: "Onboarding roadmap" });
-  await line.getByRole("button", { name: "Approve", exact: true }).click();
+  const banner = page.getByTestId("draft-banner");
+  await expect(banner.getByTestId("draft-words")).toContainText("Avery Stone's working draft of the Onboarding roadmap");
+  await banner.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Approved: Onboarding roadmap waits for Priya Raman to decide" })).toBeVisible();
 });
 
