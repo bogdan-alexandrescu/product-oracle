@@ -89,7 +89,7 @@ def _grouped(problems: list[briefs.Problem]) -> list[dict[str, Any]]:
             if p.at and p.at not in places:
                 places.append(p.at)
         else:
-            out.append(p.model_dump())
+            out.append(p.model_dump() | ({"entity": p.entity} if p.entity else {}))
     for ref in sorted(cited):
         by = [
             f"{key} ({', '.join(places)})" if places else key
@@ -119,13 +119,14 @@ def _summarize(
     code_map: Collection[str] | None,
     mapped_repos: Collection[str] = (),
     elsewhere: Mapping[str, str] | None = None,
-    no_prd: Mapping[str, str] | None = None,
+    no_prd: Mapping[str, tuple[str, str]] | None = None,
 ) -> dict[str, Any]:
     elsewhere, no_prd = elsewhere or {}, no_prd or {}
     if text is None:
         return {"features": [], "problems": [MISSING], "code_map_used": False,
                 "unmapped_repos": [], "unnamed_repo": False, "elsewhere": {}}  # fmt: skip
-    problems = briefs.check(text, feature_keys, code_map, {**no_prd, **elsewhere})
+    known = {**{k: name for k, (name, _) in no_prd.items()}, **elsewhere}
+    problems = briefs.check(text, feature_keys, code_map, known)
     try:
         parsed = briefs.parse(text)
     except briefs.BriefsInvalid:
@@ -133,8 +134,8 @@ def _summarize(
     # A Ground Truth feature no PRD holds, named here rather than first refused at the
     # roadmap items stop (cross-PRD follow-ups).
     problems += [
-        briefs.Problem(code="dependency_in_no_prd", feature=b.feature,
-                       message=f"{no_prd[d]} is in no PRD yet: {b.title} depends on it")
+        briefs.Problem(code="dependency_in_no_prd", feature=b.feature, entity=no_prd[d][1],
+                       message=f"{no_prd[d][0]} is in no PRD yet: {b.title} depends on it")
         for b in (parsed.features if parsed else [])
         for d in b.depends_on
         if d not in feature_keys and d not in elsewhere and d in no_prd
@@ -185,12 +186,13 @@ async def summarize(
     code_map: Collection[str] | None,
     mapped_repos: Collection[str] = (),
     elsewhere: Mapping[str, str] | None = None,
-    no_prd: Mapping[str, str] | None = None,
+    no_prd: Mapping[str, tuple[str, str]] | None = None,
 ) -> dict[str, Any]:
     """What the stop reads, from the segment's file (None: it left none). Untrusted text:
     parsed on the parse pool. ``elsewhere``: the keys outside the feature set a brief may
     depend on, with their names (:func:`elsewhere`); ``no_prd``: the Ground Truth features
-    no PRD holds, with their names (:func:`in_no_prd`), each a problem a brief depends on."""
+    no PRD holds, with their names and ids (:func:`in_no_prd`), each a problem a brief
+    depends on."""
     return await safe_yaml.run_parse_within(
         _summarize, text, frozenset(feature_keys), code_map, frozenset(mapped_repos),
         dict(elsewhere or {}), dict(no_prd or {}), name=briefs.FILE,
@@ -258,14 +260,18 @@ async def elsewhere(db: AsyncSession, run: Run) -> dict[str, str]:
     return out
 
 
-async def in_no_prd(db: AsyncSession, known: Collection[str]) -> dict[str, str]:
+async def in_no_prd(db: AsyncSession, known: Collection[str]) -> dict[str, tuple[str, str]]:
     """The Ground Truth features (not rejected) outside ``known`` (the run's feature set and
-    :func:`elsewhere`), each with its name: a brief depending on one is told it is in no PRD
-    yet (the feature set stop lets it pass; the roadmap items stop would refuse it)."""
+    :func:`elsewhere`), each with its name and id: a brief depending on one is told it is in
+    no PRD yet (the feature set stop lets it pass; the roadmap items stop would refuse it),
+    with a link to it. A feature with no title reads "Usage meter (usage-meter)"."""
     return {
-        key: title.strip() or f"{key.replace('-', ' ').replace('_', ' ').capitalize()} ({key})"
-        for key, title in await db.execute(
-            select(Entity.key, Entity.title).where(
+        key: (
+            title.strip() or f"{key.replace('-', ' ').replace('_', ' ').capitalize()} ({key})",
+            str(id_),
+        )
+        for id_, key, title in await db.execute(
+            select(Entity.id, Entity.key, Entity.title).where(
                 Entity.type == "feature", Entity.status != "rejected"
             )
         )

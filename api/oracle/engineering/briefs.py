@@ -74,6 +74,8 @@ class Problem(BaseModel):
     ref: str | None = Field(default=None, exclude=True)
     # unknown_ref: where the feature cites it (touches[i].ref or reuse).
     at: str | None = Field(default=None, exclude=True)
+    # dependency_in_no_prd: the Ground Truth feature's id (the stop links to it).
+    entity: str | None = Field(default=None, exclude=True)
 
 
 class Touch(BaseModel):
