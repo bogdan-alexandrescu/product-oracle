@@ -77,9 +77,33 @@ test("the feature talk removes a dependency from the owner's sentence, with Undo
   await bar.click();
   const panel = page.getByTestId("floating-card");
   await expect(panel).toBeVisible();
-  await tap(panel.getByRole("button", { name: "Talk to Oracle" }));
   const talk = panel.getByTestId("item-talk");
   await removeAndUndo(talk, `it should not depend on the ${DEP.toLowerCase()}. remove that dependency relationship`);
+});
+
+/**
+ * Card ask-actions-panel-link: protects = a dependency the talk removes reads in the same
+ * feature panel as Oracle's link removed by the person, with Restore, which puts it back as
+ * Oracle's (api: panel._link_steps); fails_when = the panel still lists the link as Oracle's
+ * or forgets it once removed; no_claim = a dependency the talk adds.
+ */
+test("a dependency the feature talk removes reads in the feature panel, with Restore", async ({ page }) => {
+  await signIn(page, "/simple/roadmap");
+  await tap(page.getByTestId("format-gantt"));
+  await page.locator('[data-testid="bar"][data-item="alert-digest"]').click();
+  const panel = page.getByTestId("floating-card");
+  await expect(panel).toBeVisible();
+  const row = panel.getByTestId("fp-list-depends").getByTestId("fp-dep").filter({ hasText: DEP });
+  await expect(row).toContainText("Found by Oracle");
+  const talk = panel.getByTestId("item-talk");
+  await say(talk, `it should not depend on the ${DEP.toLowerCase()}. remove that dependency relationship`);
+  const card = last(talk).getByTestId("chat-card");
+  await expect(card.getByTestId("chat-card-summary")).toHaveText(SUMMARY);
+  await tap(card.getByRole("button", { name: "Apply", exact: true }));
+  await expect(card.getByTestId("chat-card-outcome")).toContainText("Applied by you");
+  await expect(row).toContainText("Oracle's link, removed by");
+  await tap(row.getByRole("button", { name: "Restore" }));
+  await expect(row).toContainText("Found by Oracle");
 });
 
 /**
@@ -145,7 +169,6 @@ test("the feature talk applies an action of the API, with Undo, and one that can
   await expect(bar).toBeVisible();
   await bar.click();
   const panel = page.getByTestId("floating-card");
-  await tap(panel.getByRole("button", { name: "Talk to Oracle" }));
   await apiActions(panel.getByTestId("item-talk"));
 });
 
@@ -187,7 +210,6 @@ test("a pasted token never lands in a card, in the three chats", async ({ contex
   await expect(bar).toBeVisible();
   await bar.click();
   const panel = page.getByTestId("floating-card");
-  await tap(panel.getByRole("button", { name: "Talk to Oracle" }));
   await refused(panel.getByTestId("item-talk"));
 
   await page.goto("/simple/roadmap");

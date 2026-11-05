@@ -83,6 +83,16 @@ export function goalSetOf(changes: Change[], item: string): Schemas["SimpleGoalS
   return kept;
 }
 
+/** (link op, item key) of a change: a link change's own, or each key Ask Oracle's
+ * `set_depends_on` added or removed (api: panel._link_steps). */
+function linkSteps(c: Change): [string, string][] {
+  if (LINK_OPS.includes(c.op)) return [[c.op, String(c.target.subject_key ?? "")]];
+  if ((c.op as string) !== "set_depends_on") return [];
+  const before = ((c.before?.depends_on as string[] | null) ?? []);
+  const after = ((c.after?.depends_on as string[] | null) ?? []);
+  return [...before.filter((k) => !after.includes(k)).map((k): [string, string] => ["remove_link", k]), ...after.filter((k) => !before.includes(k)).map((k): [string, string] => ["add_link", k])];
+}
+
 /** Each item's `override` and `links` (api: panel.item_panel). `unlinked` are Oracle's links
  * removed before the mock's story starts (a seed's own record of that change). */
 export function withPanel(items: Item[], changes: Change[], keyOf: (id: string) => string | undefined, idOf: (key: string) => string | undefined, unlinked: (key: string) => { key: string; by: string }[] = () => [], linked: (key: string) => { key: string; by: string }[] = () => []): void {
@@ -98,15 +108,16 @@ export function withPanel(items: Item[], changes: Change[], keyOf: (id: string) 
     // build-feature-panel review 3: a person's links made before the mock's story (the seed's record of that add_link).
     for (const l of key ? linked(key) : []) added.set(l.key, l.by);
     for (const c of rows) {
-      if (!LINK_OPS.includes(c.op) || c.target.item_id !== i.id) continue;
-      const k = String(c.target.subject_key ?? "");
-      if (c.op === "add_link") {
-        added.set(k, c.by_name);
-        removed.delete(k);
-      } else if (c.op === "remove_link") {
-        if (added.has(k)) added.delete(k);
-        else removed.set(k, c.by_name);
-      } else removed.delete(k);
+      if (c.target.item_id !== i.id) continue;
+      for (const [op, k] of linkSteps(c)) {
+        if (op === "add_link") {
+          added.set(k, c.by_name);
+          removed.delete(k);
+        } else if (op === "remove_link") {
+          if (added.has(k)) added.delete(k);
+          else removed.set(k, c.by_name);
+        } else removed.delete(k);
+      }
     }
     const links: Schemas["SimpleLink"][] = i.depends_on.map((d) => ({ item_id: d, by: added.get(keyOf(d) ?? "") ?? null, removed: false, removed_by: null }));
     for (const [k, by] of removed) {
