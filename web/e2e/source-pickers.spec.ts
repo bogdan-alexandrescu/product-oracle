@@ -159,7 +159,7 @@ test("slack picker: a date range, since and until", async ({ page }) => {
   await expect(picker.getByLabel("Until")).toHaveAttribute("min", "2026-03-01");
   await form.getByLabel("Name").fill("Q1 product chat");
   await form.getByRole("button", { name: "Add source" }).click();
-  await expect(form.getByText("the end date must be on or after the start date")).toBeVisible();
+  await expect(form.getByText("until must be on or after since")).toBeVisible();
 
   await picker.getByLabel("Until").fill("2026-03-31");
   await expect(picker.getByRole("alert")).toHaveCount(0);
