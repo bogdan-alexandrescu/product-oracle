@@ -543,5 +543,5 @@ def _needs_attention(connector: base.Connector, config: dict[str, Any]) -> str |
         check(config)
     except base.ConnectorConfigError as e:
         message = str(e)
-        return f"{message[:1].upper()}{message[1:]}: edit this source to sync it again"
+        return f"{message[:1].upper()}{message[1:]}, then it syncs again"
     return None

@@ -180,7 +180,7 @@ def _channels(config: dict[str, Any]) -> list[str]:
         raise ConnectorConfigError("channel ids must be strings")
     ids = list(dict.fromkeys(c.strip() for c in channels))
     if len(ids) > MAX_CHANNELS:
-        raise ConnectorConfigError(f"allowlist at most {MAX_CHANNELS} channels")
+        raise ConnectorConfigError(f"pick {MAX_CHANNELS} channels or fewer")
     for channel in ids:
         if is_dm(channel):
             raise ConnectorConfigError(f"{channel} is a direct message: DMs are never ingested")

@@ -195,7 +195,7 @@ function seed(): SourcesDb {
     connection_id: CONNECTIONS.slack[0].id,
     config: { channels: Array.from({ length: 120 }, (_, i) => `C9${String(i + 1).padStart(3, "0")}LEGACY`) },
     status: "needs_attention",
-    last_error: `Allowlist at most ${MAX_CHANNELS} channels: edit this source to sync it again`,
+    last_error: `Pick ${MAX_CHANNELS} channels or fewer, then it syncs again`,
     last_synced_at: "2026-10-01T08:00:00Z",
     created_at: "2026-03-02T09:00:00Z",
     updated_at: "2026-10-18T08:00:00Z",
@@ -608,7 +608,7 @@ function badConfig(kind: Source["kind"], config: Record<string, unknown>): strin
   const channels = config.channels;
   // As the Slack connector's _channels: a source reads at least one channel (qa-onboarding-4).
   if (!Array.isArray(channels) || channels.length === 0) return "allowlist at least one channel id";
-  if (channels.length > MAX_CHANNELS) return `allowlist at most ${MAX_CHANNELS} channels`;
+  if (channels.length > MAX_CHANNELS) return `pick ${MAX_CHANNELS} channels or fewer`;
   for (const key of ["since", "until"] as const) {
     const v = config[key];
     if (v == null) continue;
@@ -800,7 +800,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     const broken = badConfig(s.kind, s.config);
     if (broken) {
       s.status = "needs_attention";
-      s.last_error = `${broken[0].toUpperCase()}${broken.slice(1)}: edit this source to sync it again`;
+      s.last_error = `${broken[0].toUpperCase()}${broken.slice(1)}, then it syncs again`;
       return json(200, { source_id: s.id, outcome: "needs_attention", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: s.last_error, source: counted(db, s) });
     }
     // As the API's credential_for: a source a Disconnect left without a connection.
