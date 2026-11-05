@@ -102,3 +102,18 @@ test.describe("1440 wide", () => {
     await expect(chart.getByTestId("today-line")).toHaveAttribute("y1", "38");
   });
 });
+
+test("no quarter label is cut at any width from 320 to 1680", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  const chart = await open(page, "light");
+  const scroll = chart.getByTestId("chart-scroll");
+  for (const width of [320, 360, 390, 430, 520, 600, 641, 700, 800, 900, 1024, 1280, 1440, 1680]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const end of [false, true]) {
+      await scroll.evaluate((el, e) => (el.scrollLeft = e ? el.scrollWidth : 0), end);
+      await expect
+        .poll(async () => (await labels(page)).filter((l) => l.cut).map((l) => l.text), { message: `cut labels at ${width}${end ? ", scrolled to the end" : ""}` })
+        .toEqual([]);
+    }
+  }
+});
