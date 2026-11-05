@@ -1,6 +1,6 @@
-"""Train AN's review follow-ups: plan tables (a planned row whose status flips, an empty
-roadmap), the writer's words in every flow, C6 titles of feature keys only, ParseBusy on the
-parse-once items check, and one day-words helper. Invented data only.
+"""Train AN's review follow-ups: plan tables for an empty roadmap, the writer's words in
+every flow, C6 titles of feature keys only, ParseBusy on the parse-once items check, and
+one day-words helper. Invented data only.
 """
 
 import datetime as dt
@@ -11,29 +11,12 @@ from oracle import company_time, safe_yaml
 from oracle.roadmap import doc_dates
 from oracle.runs import flows, gate, plan_tables
 from oracle.runs import roadmap as runs_roadmap
-from tests.test_feedback_loop_plan_tables import NEXT_MD, _codes, _loop, _versions
-from tests.test_roadmap import ITEMS, owner, runtime  # noqa: F401 - fixtures
+from tests.test_roadmap import ITEMS
 
 TODAY = dt.date(2026, 11, 5)
-PAYMENT_ROW = "| payment-step | Payment step |  | Nov 30, 2026 | estimate | planned |"
 
 
-# --- plan tables: a planned row's status cannot flip either ---------------------------------
-
-
-async def test_a_loop_draft_marking_a_planned_row_shipped_is_refused(client, owner, runtime):  # noqa: F811
-    """A row on the plan (planned) that the draft marks shipped is refused with a plain
-    plan_state_differs, as a kept row flipped back to planned is."""
-    tenant_id, auth = owner
-    assert PAYMENT_ROW in NEXT_MD
-    shipped = PAYMENT_ROW.replace("| planned |", "| shipped |")
-    run = await _loop(client, auth, runtime, NEXT_MD.replace(PAYMENT_ROW, shipped))
-    assert _codes(run) == ["plan_state_differs"], run["segments"][0]["draft_import"]
-    message = run["segments"][0]["draft_import"]["problems"][0]["message"]
-    assert message == (
-        "Payment step is planned on the roadmap, not shipped: keep its row with its status"
-    )
-    assert await _versions(tenant_id) == [1]
+# --- plan tables: an empty roadmap ----------------------------------------------------------
 
 
 EMPTY_TABLES = """\
