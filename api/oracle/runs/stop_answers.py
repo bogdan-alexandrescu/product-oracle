@@ -594,9 +594,12 @@ _SYNONYMS = (
     frozenset({"ageing", "aging"}),
     frozenset({"jewellery", "jewelry"}),
     frozenset({"aluminium", "aluminum"}),
+    frozenset({"odour", "odor"}),
 )
 
-# Common abbreviations, each beside the word it stands for (plurals as for _SYNONYMS).
+# Common abbreviations, each beside the word it stands for (plurals as for _SYNONYMS). Only
+# these stand for a longer word: a real word is never read as one ("end" is not "extend",
+# "its" not "items"), so an abbreviation that is not listed is a new word.
 _ABBREVIATIONS = (
     frozenset({"yr", "year"}),
     frozenset({"hr", "hour"}),
@@ -606,41 +609,61 @@ _ABBREVIATIONS = (
     frozenset({"mth", "month"}),
     frozenset({"mgmt", "management"}),
     frozenset({"mgr", "manager"}),
+    frozenset({"mkt", "market"}),
+    frozenset({"mkt", "marketing"}),
+    frozenset({"std", "standard"}),
+    frozenset({"stg", "staging"}),
+    frozenset({"pmt", "payment"}),
+    frozenset({"rpt", "report"}),
     frozenset({"dept", "department"}),
     frozenset({"acct", "account"}),
     frozenset({"msg", "message"}),
+    frozenset({"req", "request"}),
+    frozenset({"req", "requirement"}),
+    frozenset({"txn", "transaction"}),
     frozenset({"pw", "pwd", "password"}),
     frozenset({"qty", "quantity"}),
     frozenset({"amt", "amount"}),
+    frozenset({"avg", "average"}),
     frozenset({"approx", "approximately"}),
+    frozenset({"eng", "engineering"}),
+    frozenset({"eng", "engineer"}),
+    frozenset({"ops", "operations"}),
+    frozenset({"admin", "administrator"}),
+    frozenset({"admin", "administration"}),
+    frozenset({"perf", "performance"}),
+    frozenset({"auth", "authentication"}),
+    frozenset({"auth", "authorization"}),
     frozenset({"govt", "government"}),
     frozenset({"intl", "international"}),
     frozenset({"ppl", "people"}),
 )
-
-# Acronyms that are words of their own, never a longer word by its consonants ("SMS" is not
-# "systems", "MRR" is not "mirror").
-_ACRONYMS = frozenset({"sms", "mms", "mrr", "arr", "css", "scss", "html", "http", "https", "xml",
-                       "sql", "ssl", "tls", "ssh", "dns", "cdn", "crm", "cms", "pdf", "png",
-                       "jpg", "svg", "csv", "tsv", "mvp", "ltv", "cpm", "cpc", "ctr", "nps",
-                       "sdk", "jwt", "ttl", "rpm", "rps", "tps", "qps", "ssd", "hdd", "gdpr",
-                       "pst", "pdt", "est", "edt", "cst", "cdt", "mst", "mdt", "gmt", "bst",
-                       "utc", "nyc", "ytd", "mtd", "qtd", "tbd", "lgtm"})  # fmt: skip
 
 # A word and the word with -s or -es that is a different word ("news" is not more "new").
 _NOT_PLURALS = frozenset({("new", "news"), ("good", "goods"), ("custom", "customs"),
                           ("us", "uses"), ("mean", "means"), ("manner", "manners"),
                           ("damage", "damages"), ("saving", "savings"), ("arm", "arms"),
                           ("her", "hers"), ("our", "ours"), ("his", "hiss")})  # fmt: skip
-_VOWELS = frozenset("aeiou")
+# Endings that take -es for a plural ("boxes"); after any other, -es is another word ("states").
+_TAKES_ES = ("s", "x", "z", "ch", "sh", "o")
 
 # British endings and their American spelling, from five letters ("four" is not "for").
 _SPELLINGS = (
     (re.compile(r"^([a-z]{2,}[aeiou])ll(ed|ing|ers?)$"), r"\1l\2"),  # cancelled, travelling
-    (re.compile(r"(?<=[^aeiou])re$"), "er"),  # centre
+    # centre, metre, theatre, fibre, litre, calibre (not timbre, acre or genre)
+    (
+        re.compile(r"(cent|met|theat|fib|lit|mit|nit|calib|sab|somb|spect|lust|meag|och)re(s?)$"),
+        r"\1er\2",
+    ),
     (re.compile(r"ogue$"), "og"),  # catalogue
     (re.compile(r"ence$"), "ense"),  # licence
-    (re.compile(r"our"), "or"),  # colour
+    # colour, honour, behaviour, labour and their endings (not fourth, mourning or pouring)
+    (
+        re.compile(
+            r"^([a-z]{3,})our(s|ed|ing|ite|ites|ful|able|ably|less|er|ers|ist|ists|hood|hoods)?$"
+        ),
+        r"\1or\2",
+    ),
     (re.compile(r"is(e|ed|es|ing|ation|ations)$"), r"iz\1"),  # organise, organisation
     (re.compile(r"ys(e|ed|es|ing)$"), r"yz\1"),  # analyse
 )
@@ -656,13 +679,14 @@ def _american(word: str) -> str:
 
 def _variants(x: str, y: str) -> bool:
     """``x`` and ``y`` are one word spelt two ways: a known synonym ("datastore",
-    "database"), a listed abbreviation ("yrs", "years"; "pw", "password"), a longer
-    abbreviation by its consonants ("mgmt", "management"), a plural ("export", "exports") or a
-    British or American spelling ("colour", "color"; "organise", "organize"; "licence",
-    "license"; "centre", "center"; "catalogue", "catalog"; "cancelled", "canceled"). Two
-    different words ("Safari", "Firefox"; "fast", "slow"; "export", "expert"; "new", "news"),
-    a two-letter word ("us", "users"; "ms", "months") or an acronym ("SMS", "systems") are
-    not."""
+    "database"), a listed abbreviation ("yrs", "years"; "pw", "password"; "mgmt",
+    "management"), a plural ("export", "exports"; "box", "boxes") or a British or American
+    spelling ("colour", "color"; "organise", "organize"; "licence", "license"; "centre",
+    "center"; "catalogue", "catalog"; "cancelled", "canceled"). Two different words
+    ("Safari", "Firefox"; "fast", "slow"; "export", "expert"; "new", "news"; "stat",
+    "states"; "fourth", "forth"; "timbre", "timber"), a word that is not a listed
+    abbreviation of the other ("end", "extend"; "its", "items"; "us", "users"; "ms",
+    "months") or an acronym ("SMS", "systems") are not."""
     if x == y:
         return True
     short, long = sorted((x, y), key=len)
@@ -677,22 +701,12 @@ def _variants(x: str, y: str) -> bool:
             return True
         if len(max(a, b, key=len)) >= 5 and _american(a) == _american(b):
             return True
-    if len(short) >= 3 and long in (short + "s", short + "es"):
+    # "boxes", "classes", "matches", "potatoes"; not "states" for "stat" or "planes" for "plan".
+    if len(short) >= 3 and (
+        long == short + "s" or (long == short + "es" and short.endswith(_TAKES_ES))
+    ):
         return (short, long) not in _NOT_PLURALS
-    return (
-        len(short) >= 3
-        and len(long) >= len(short) + 2
-        and short not in _ACRONYMS
-        and short[0] == long[0]
-        and short[-1] == long[-1]
-        and not _VOWELS & set(short[1:])
-        and _in_order(short, long)
-    )
-
-
-def _in_order(letters: str, word: str) -> bool:
-    rest = iter(word)
-    return all(c in rest for c in letters)
+    return False
 
 
 def same_question(asked: str, listed: str) -> bool:
