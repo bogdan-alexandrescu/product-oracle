@@ -85,11 +85,15 @@ class ConnectorConfigError(ConnectorError):
     """The config or credential is invalid (bad repo name, missing scope, ...).
 
     ``is_action``: the message already says what to do ("pick 100 channels or fewer"),
-    so a source it stops reads it as the fix, not as a cause to edit away."""
+    so a source it stops reads it as the fix, not as a cause to edit away. ``cause``: what
+    is wrong, for a role that cannot do the fix ("over 100 channels"); an action has one."""
 
-    def __init__(self, message: str = "", *, is_action: bool = False) -> None:
+    def __init__(
+        self, message: str = "", *, is_action: bool = False, cause: str | None = None
+    ) -> None:
         super().__init__(message)
         self.is_action = is_action
+        self.cause = cause
 
 
 class ConnectorBadInput(ConnectorConfigError):
@@ -192,6 +196,12 @@ LABEL_LENGTH = 200
 ZONE_KEY = "timezone"
 
 
+def _zone_refused() -> ConnectorConfigError:
+    return ConnectorConfigError(
+        "pick a time zone from the list", is_action=True, cause="an unknown time zone"
+    )
+
+
 def config_zone(config: dict[str, Any]) -> tzinfo:
     """The zone of a config's picker days: ``config["timezone"]`` (an IANA name), else
     UTC; raises :class:`ConnectorConfigError` when it names no zone."""
@@ -199,11 +209,11 @@ def config_zone(config: dict[str, Any]) -> tzinfo:
     if value is None or value == "":
         return UTC
     if not isinstance(value, str) or len(value) > 64:
-        raise ConnectorConfigError(f"{ZONE_KEY} must be an IANA time zone name")
+        raise _zone_refused()
     try:
         return ZoneInfo(value)
     except (ValueError, ZoneInfoNotFoundError):
-        raise ConnectorConfigError(f"{ZONE_KEY} must be an IANA time zone name") from None
+        raise _zone_refused() from None
 
 
 def zone_midnight(day: date, zone: tzinfo) -> datetime:

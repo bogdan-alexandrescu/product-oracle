@@ -43,6 +43,7 @@ from oracle.sources.schemas import (
     SearchResults,
     SnapshotCreate,
     SnapshotOut,
+    SourceAttention,
     SourceCoverageDetail,
     SourceCreate,
     SourceKindOut,
@@ -121,11 +122,13 @@ _ERRORS = (
 
 
 def _source_out(source: Source, count: int = 0, conn: Connection | None = None) -> SourceOut:
+    attention = sync_engine.attention_of(source)
     return SourceOut.model_validate(source).model_copy(
         update={
             "item_count": count,
             "connector_available": service.connector_available(source.kind),
             "reconnect_reason": service.source_reconnect_reason(source, conn),
+            "attention": SourceAttention(**attention) if attention else None,
         }
     )
 

@@ -180,7 +180,11 @@ def _channels(config: dict[str, Any]) -> list[str]:
         raise ConnectorConfigError("channel ids must be strings")
     ids = list(dict.fromkeys(c.strip() for c in channels))
     if len(ids) > MAX_CHANNELS:
-        raise ConnectorConfigError(f"pick {MAX_CHANNELS} channels or fewer", is_action=True)
+        raise ConnectorConfigError(
+            f"pick {MAX_CHANNELS} channels or fewer",
+            is_action=True,
+            cause=f"over {MAX_CHANNELS} channels",
+        )
     for channel in ids:
         if is_dm(channel):
             raise ConnectorConfigError(f"{channel} is a direct message: DMs are never ingested")
@@ -198,10 +202,18 @@ def _day(config: dict[str, Any], key: str) -> date | None:
     except ValueError:
         day = None
     if day is None or not FIRST_DAY <= day <= LAST_DAY:
+        label = "a start date" if key == "since" else "an end date"
         raise ConnectorConfigError(
-            f"{key} must be a date (YYYY-MM-DD) from {FIRST_DAY} to {LAST_DAY}"
+            f"pick {label} from {_shown(FIRST_DAY)} to {_shown(LAST_DAY)}",
+            is_action=True,
+            cause=f"the {label.split(' ', 1)[1]} is out of range",
         )
     return day
+
+
+def _shown(day: date) -> str:
+    """A day as people read it: "Jan 1, 2000"."""
+    return f"{day:%b} {day.day}, {day.year}"
 
 
 def _midnight(day: date, config: dict[str, Any]) -> float:
@@ -224,7 +236,7 @@ def _until(config: dict[str, Any]) -> float | None:
         return None
     since = _day(config, "since")
     if since is not None and day < since:
-        raise ConnectorConfigError("until must be on or after since")
+        raise ConnectorConfigError("the end date must be on or after the start date")
     return _midnight(day + timedelta(days=1), config)
 
 

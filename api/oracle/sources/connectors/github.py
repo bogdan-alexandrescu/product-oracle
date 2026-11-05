@@ -99,12 +99,18 @@ def _parse_config(config: dict[str, Any]) -> tuple[list[str], set[str]]:
             raise ConnectorConfigError(f"not a repo name (owner/name): {repo!r}")
         unique.setdefault(repo.strip().lower(), repo.strip())
     if len(unique) > MAX_REPOS:
-        raise ConnectorConfigError(f"allowlist at most {MAX_REPOS} repos")
+        raise ConnectorConfigError(
+            f"allowlist at most {MAX_REPOS} repos", is_action=True, cause=f"over {MAX_REPOS} repos"
+        )
     include = config.get("include")
     if include is None:
         include = list(INCLUDE)
     if not isinstance(include, list) or not include:
-        raise ConnectorConfigError(f"include at least one of {', '.join(INCLUDE)}")
+        raise ConnectorConfigError(
+            f"include at least one of {', '.join(INCLUDE)}",
+            is_action=True,
+            cause="nothing to include",
+        )
     unknown = [i for i in include if i not in INCLUDE]
     if unknown:
         raise ConnectorConfigError(f"unknown include {unknown[0]!r}; use {', '.join(INCLUDE)}")
