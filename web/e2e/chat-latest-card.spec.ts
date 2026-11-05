@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "./test";
 
 import { CHAT_MEETING_ID } from "../lib/api/mock/simple-chat";
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN } from "./helpers";
 
 /*
@@ -9,8 +9,10 @@ import { ADMIN } from "./helpers";
  * only the newest offers Apply; the older reads "Replaced by a newer card" with a link to it.
  * Cards on two items: one active card per item. Once a card is applied, every earlier card in
  * the chat is replaced too (an applied card keeps its Undo), and a reload reads the same.
- * In the feature talk, the Ask Oracle panel and a meeting's chat. Mock-backed (invented
- * items); desktop (1366x820).
+ * In the feature talk, the Ask Oracle panel and a meeting's chat. A card that makes a new
+ * record (a note, a decision, a suggestion) is its own topic: two different notes both stay
+ * active; a note offered again in other words replaces its earlier draft. Discard and Propose
+ * replace earlier cards as Apply does. Mock-backed (invented items); desktop (1366x820).
  */
 
 async function tap(l: Locator) {
@@ -160,4 +162,95 @@ test("a meeting's chat keeps only the newest card per item active", async ({ con
     await page.reload();
     await ready();
   });
+});
+
+async function openMeeting(page: Page, context: import("@playwright/test").BrowserContext) {
+  await context.addInitScript((key) => localStorage.setItem(key, "simple-chat"), MOCK_SCENARIO_KEY);
+  await signIn(page, `/simple/meetings/${CHAT_MEETING_ID}/chat`);
+  await expect(page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
+}
+
+async function openAsk(page: Page) {
+  await tap(page.getByTestId("simple-ask").filter({ visible: true }).first());
+  await expect(page.getByTestId("ask-chat").filter({ visible: true })).toBeVisible();
+}
+
+/**
+ * Card latest-card-new-records: protects = in a meeting's chat two different notes and two
+ * different decisions all stay active and both notes apply; a note said again in other words
+ * replaces the earlier draft, after a reload too; fails_when = the meeting makes every note
+ * (or every decision) one topic, so the older reads "Replaced by a newer card".
+ */
+test("a meeting's chat keeps different notes and decisions active", async ({ context, page }) => {
+  await openMeeting(page, context);
+  const box = () => page.getByTestId("meeting-chat");
+  await say(box(), "note: the budget is approved");
+  const n1 = await newest(box());
+  await say(box(), "note: we hire a designer next month");
+  const n2 = await newest(box());
+  await say(box(), "decision: the pilot starts in spring");
+  const d1 = await newest(box());
+  await say(box(), "decision: the tour stays optional");
+  const d2 = await newest(box());
+  for (const c of [n1, n2, d1, d2]) await active(c);
+  // The same note in other words replaces its earlier draft; the other note stays active.
+  await say(box(), "note: the budget is approved for the spring");
+  const n3 = await newest(box());
+  await active(n3);
+  await replaced(n1);
+  for (const c of [n2, d1, d2]) await active(c);
+  const n3Id = await n3.getAttribute("data-card-id");
+  await page.reload();
+  await expect(page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
+  await replaced(n1);
+  for (const c of [n2, d1, d2]) await active(c);
+  const again = box().locator(`[data-testid="chat-card"][data-card-id="${n3Id}"]`);
+  await active(again);
+  // Both different notes apply.
+  await tap(applyOf(again));
+  await expect(again).toHaveAttribute("data-status", "applied");
+  await replaced(n2);
+});
+
+/**
+ * Card latest-card-discard: protects = two features suggested for one goal both stay active, and
+ * Discard on the newest replaces every earlier card; fails_when = the goal makes them one topic,
+ * or an earlier card still applies after a Discard.
+ */
+test("Discard on the newest card replaces the earlier ones", async ({ page }) => {
+  await signIn(page, "/simple/roadmap");
+  await openAsk(page);
+  const box = () => page.getByTestId("ask-chat").filter({ visible: true });
+  await say(box(), "suggest a feature for Grow retention: Search across saved notes");
+  const a = await newest(box());
+  await say(box(), "suggest a feature for Grow retention: Export reports to a sheet");
+  const b = await newest(box());
+  await active(a);
+  await active(b);
+  await tap(b.getByRole("button", { name: "Discard", exact: true }));
+  await expect(b).toHaveAttribute("data-status", "discarded");
+  await replaced(a);
+});
+
+/**
+ * Card latest-card-propose: protects = a commenter's two decisions on the Ask panel both offer
+ * Propose, and Propose on the newest replaces the earlier one; fails_when = the page makes them
+ * one topic, or the earlier one still offers Propose after it.
+ */
+test("Propose on the newest card replaces the earlier ones", async ({ page }) => {
+  await page.addInitScript(([key, role]) => localStorage.setItem(key, role), [MOCK_ROLE_KEY, "commenter"] as const);
+  await signIn(page, "/simple/roadmap");
+  await openAsk(page);
+  const box = () => page.getByTestId("ask-chat").filter({ visible: true });
+  const propose = (c: Locator) => c.getByRole("button", { name: "Propose", exact: true });
+  await say(box(), "decision: the pilot starts in spring");
+  const a = await newest(box());
+  await say(box(), "decision: the tour stays optional");
+  const b = await newest(box());
+  await expect(propose(a)).toBeVisible();
+  await expect(propose(b)).toBeVisible();
+  await tap(propose(b));
+  await expect(b).toHaveAttribute("data-status", "proposed");
+  await expect(a.getByTestId("chat-card-replaced")).toContainText("Replaced by a newer card");
+  await expect(propose(a)).toHaveCount(0);
 });
