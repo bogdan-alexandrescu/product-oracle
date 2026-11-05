@@ -52,16 +52,17 @@ test.describe("desktop", () => {
 
     // Oracle's own pick is ticked; the meter reaches the target in green.
     const meter = page.getByTestId("fit-meter-date");
-    await expect(meter).toHaveText("Jan 25");
+    await expect(meter).toHaveText("Jan 24");
     await expect(meter).toHaveAttribute("data-state", "reach");
-    await expect(page.getByTestId("fit-meter")).toContainText("Reaches Jan 29, 4 days to spare.");
+    await expect(page.getByTestId("fit-meter")).toContainText("Reaches Jan 29, 5 days to spare.");
     await expect(tick(page, "bulk")).toBeChecked();
-    await expect(tick(page, "focus")).not.toBeChecked();
+    await expect(tick(page, "focus")).toBeChecked();
+    await expect(tick(page, "wait:M2")).not.toBeChecked();
     // Ranked strictly by days saved: the must-include change saves the most, so it is first, with
     // its lock and no tick; the first change Oracle may tick is second.
     const rows = page.getByTestId("fit-ranked").locator("ol > li");
     await expect(rows.first()).toContainText("1. Reply drafts in the inbox");
-    await expect(rows.first()).toContainText("18 days sooner");
+    await expect(rows.first()).toContainText("15 days sooner");
     await expect(rows.first()).toContainText("Must-include");
     await expect(rows.first().getByTestId("fit-change-lock")).toBeVisible();
     await expect(tick(page, "drafts")).toBeDisabled();
@@ -69,17 +70,17 @@ test.describe("desktop", () => {
     await expect(rows.nth(1)).toContainText("2. Reply to similar threads at once");
     await expect(rows.last()).not.toContainText("Reply drafts in the inbox");
     await expect(page.getByTestId("fit-change-bulk").getByTestId("fit-change-lock")).toHaveCount(0);
-    await expect(page.getByTestId("fit-change-bulk")).toContainText("16 days sooner");
+    await expect(page.getByTestId("fit-change-bulk")).toContainText("13 days sooner");
     await expect(page.getByTestId("fit-change-bulk")).toContainText("Goal at risk");
 
     // Unticking the biggest change misses the target: amber, with how late.
     await tick(page, "bulk").click();
-    await expect(meter).toHaveText("Feb 10");
+    await expect(meter).toHaveText("Feb 4");
     await expect(meter).toHaveAttribute("data-state", "miss");
-    await expect(page.getByTestId("fit-meter")).toContainText("12 days after Jan 29.");
+    await expect(page.getByTestId("fit-meter")).toContainText("6 days after Jan 29.");
     await expect(page.getByRole("button", { name: "Draft 4 changes" })).toBeVisible();
     await tick(page, "bulk").click();
-    await expect(meter).toHaveText("Jan 25");
+    await expect(meter).toHaveText("Jan 24");
 
     // A must-include item shows but cannot be ticked; the locked box says what Oracle will not cut.
     await expect(tick(page, "drafts")).toBeDisabled();
@@ -100,7 +101,7 @@ test.describe("desktop", () => {
     await expect(diff).toContainText("Roadmap dates: version 6 → 7");
     const m2 = page.getByTestId("fit-diff-dates").locator("li").filter({ hasText: "M2 Agent reply flow" });
     await expect(m2.locator("del")).toHaveText("Mar 12");
-    await expect(m2.locator("ins")).toHaveText("Jan 25");
+    await expect(m2.locator("ins")).toHaveText("Jan 24");
     // Nothing asks the owner yet, so the panel does not say they are asked.
     await expect(page.getByTestId("fit-needs-estimate")).toContainText("Thread summary card needs a new estimate from Tomas Brook");
     await expect(page.getByTestId("fit-needs-estimate")).not.toContainText("is asked");
@@ -118,19 +119,19 @@ test.describe("desktop", () => {
 
     // Live: the roadmap reads the new date, the sliced item's date waits for its new estimate.
     await expect(panel).toBeHidden();
-    await expect(page.getByTestId("fit-approved")).toContainText("PRD version 4 and roadmap version 7 are live: M2 lands Jan 25.");
-    await expect(page.getByTestId("fit-on-plan")).toHaveText("Jan 25");
+    await expect(page.getByTestId("fit-approved")).toContainText("PRD version 4 and roadmap version 7 are live: M2 lands Jan 24.");
+    await expect(page.getByTestId("fit-on-plan")).toHaveText("Jan 24");
     await expect(page.getByRole("button", { name: "Bring this date in" })).toHaveCount(0);
     const lane = page.getByTestId("fit-lane-M2");
     await expect(lane.locator("del").first()).toHaveText("Mar 12");
-    await expect(lane.locator("li").filter({ hasText: "Thread summary card (first slice)" })).toContainText("Estimate pending");
+    await expect(lane.locator("li").filter({ hasText: "Thread summary card" })).toContainText("Jan 15");
 
     // Home shows the milestone on its date and what moved.
     await page.getByRole("navigation").getByRole("link", { name: "Home" }).click();
     const home = page.getByTestId("fit-home");
     await expect(home).toContainText("M2 Agent reply flow is on its date");
-    await expect(home).toContainText("It now lands Jan 25 (was Mar 12), 4 days before Jan 29.");
-    await expect(home).toContainText("Tone presets left this PRD");
+    await expect(home).toContainText("It now lands Jan 24 (was Mar 12), 5 days before Jan 29.");
+    await expect(home).toContainText("Tone presets: not dated");
   });
 
   test("an approver who does not decide the roadmap leaves its version in review with its decider", async ({ page }) => {
@@ -139,7 +140,7 @@ test.describe("desktop", () => {
     await page.getByRole("button", { name: "Draft 5 changes" }).click();
     await page.getByRole("button", { name: "Approve both", exact: true }).click();
     const done = page.getByTestId("fit-approved");
-    await expect(done).toContainText("PRD version 4 is live: M2 lands Jan 25. Roadmap version 7 is in review with Noor Hale.");
+    await expect(done).toContainText("PRD version 4 is live: M2 lands Jan 24. Roadmap version 7 is in review with Noor Hale.");
     await expect(done).not.toContainText("are live");
     // Home says the roadmap's version is in review, never that it was approved.
     await page.getByRole("navigation").getByRole("link", { name: "Home" }).click();
@@ -171,14 +172,14 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("fit-goal")).toContainText("9 weeks late");
     await page.getByRole("button", { name: "Bring this date in" }).click();
     const hard = page.getByTestId("fit-hard");
-    await expect(hard).toContainText("No set of cuts reaches Jan 8. The earliest is Jan 16, 8 days after.");
+    await expect(hard).toContainText("No set of cuts reaches Jan 8. The earliest is Jan 15, 7 days after.");
     await expect(hard).toContainText("Cutting it would reach Jan 8; Oracle will not offer it.");
     await expect(hard).toContainText("Every change is picked. Another engineer counts only after a 3-week start, so lands too late to help. Two items stay whatever the date:");
     await expect(page.getByTestId("fit-meter-date")).toHaveAttribute("data-state", "miss");
-    await expect(page.getByRole("button", { name: "Draft 7 changes and the Jan 16 target" })).toBeVisible();
-    await page.getByRole("button", { name: "Draft 7 changes and the Jan 16 target" }).click();
-    await expect(page.getByTestId("fit-diff")).toContainText("No set of cuts reaches Jan 8, so you approve the new target too.");
-    const approve = page.getByRole("button", { name: "Approve both and the Jan 16 target" });
+    await expect(page.getByRole("button", { name: "Draft 7 changes and the Jan 15 target" })).toBeVisible();
+    await page.getByRole("button", { name: "Draft 7 changes and the Jan 15 target" }).click();
+    await expect(page.getByTestId("fit-diff")).toContainText("No set of changes reaches Jan 8, so you approve the new target too.");
+    const approve = page.getByRole("button", { name: "Approve both and the Jan 15 target" });
     await expect(approve).toBeVisible();
     // No set reaches the target: Back to the picks sits under the Approve button, both at the
     // footer's left (fd3-a-hard-1512).
@@ -202,9 +203,9 @@ test.describe("phone", () => {
     await expect(panel).toBeVisible();
     const box = await panel.boundingBox();
     expect(box!.width).toBeLessThanOrEqual(390);
-    await expect(page.getByTestId("fit-meter-date")).toHaveText("Jan 25");
-    await tick(page, "focus").click();
-    await expect(page.getByTestId("fit-meter-date")).toHaveText("Jan 19");
+    await expect(page.getByTestId("fit-meter-date")).toHaveText("Jan 24");
+    await tick(page, "wait:M2").click();
+    await expect(page.getByTestId("fit-meter-date")).toHaveText("Jan 17");
     await expect(page.getByRole("button", { name: "Draft 6 changes" })).toBeVisible();
   });
 });

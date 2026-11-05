@@ -57,22 +57,23 @@ async function lowerTheGoal(page: Page) {
   // Due opens on the goal's own due date, read month first.
   await expect(sheet.getByTestId("fit-goal-due")).toHaveText("Mar 31, 2027");
   await expect(sheet.getByLabel("Due")).toHaveValue("2027-03-31");
-  await value.fill("30");
+  await value.fill("25");
   await sheet.getByRole("button", { name: "Save" }).click();
   await expect(sheet).toBeHidden();
   const smaller = page.getByTestId("fit-smaller");
-  await expect(smaller).toContainText("Counted against the smaller goal: At least 30 threads (the PRD asks for at least 40 threads).");
+  await expect(smaller).toContainText("Counted against the smaller goal: At least 25 threads (the PRD asks for at least 40 threads).");
   await expect(smaller).toContainText("M2 Agent reply flow now reaches Jan 8.");
   await expect(page.getByTestId("fit-meter-date")).toHaveAttribute("data-state", "reach");
   await expect(page.getByTestId("fit-meter")).toContainText("Reaches Jan 8");
   await expect(page.getByTestId("fit-hard")).toBeHidden();
   await expect(page.getByRole("button", { name: "Keep Jan 8 with a smaller goal" })).toBeHidden();
-  // Only the goal's own unlocked work shrinks: moving the bulk reply saves half its days now, while the
-  // must-include Reply drafts in the inbox keeps its full size (and so its days) and stays locked.
-  await expect(page.getByTestId("fit-change-bulk")).toContainText("8 days sooner");
-  await expect(page.getByTestId("fit-change-drafts")).toContainText("18 days sooner");
+  // Only the goal's own unlocked work shrinks: moving the bulk reply (a quarter of its size now) saves
+  // 2 days, while the must-include Reply drafts in the inbox keeps its full size and stays locked; the
+  // days are the API engine's on the same plan (fit-date-plan.json).
+  await expect(page.getByTestId("fit-change-bulk")).toContainText("2 days sooner");
+  await expect(page.getByTestId("fit-change-drafts")).toContainText("14 days sooner");
   await expect(page.getByTestId("fit-change-drafts").getByRole("checkbox")).toBeDisabled();
-  await expect(page.getByTestId("fit-change-tone")).toContainText("8 days sooner");
+  await expect(page.getByTestId("fit-change-tone")).toContainText("7 days sooner");
 }
 
 test.describe("desktop", () => {
@@ -82,7 +83,7 @@ test.describe("desktop", () => {
     // of its own in the list.
     await expect(page.getByTestId("fit-keep-date")).toHaveCount(0);
     const actions = page.getByTestId("fit-pick-actions");
-    const draft = actions.getByRole("button", { name: "Draft 7 changes and the Jan 16 target" });
+    const draft = actions.getByRole("button", { name: "Draft 7 changes and the Jan 15 target" });
     const keep = actions.getByRole("button", { name: "Keep Jan 8 with a smaller goal" });
     await expect(keep).toBeInViewport();
     const d = (await draft.boundingBox())!;
