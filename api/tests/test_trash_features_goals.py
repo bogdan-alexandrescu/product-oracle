@@ -302,3 +302,151 @@ async def test_trashed_features_and_goals_expire_after_30_days(client, monkeypat
         )
         assert gone is None and goal is None
     assert (await client.get("/v1/trash", headers=w.ctx.as_("owner"))).json() == []
+
+
+# --- fix round 2 ------------------------------------------------------------------------
+
+
+async def _links_and_goals(w: World, feature_ids: list[uuid.UUID]) -> tuple:
+    """Every supports link of the features, whole, and every item's goal_ids, trashed or
+    not: what a goal delete and its Restore must leave exactly as they were."""
+    async with tenant_session(w.ctx.tenant_id) as s:
+        edges = await s.scalars(
+            select(Edge).where(Edge.src_id.in_(feature_ids), Edge.type == "supports")
+            .execution_options(**ALL)
+        )  # fmt: skip
+        links = sorted(
+            (str(e.id), str(e.src_id), str(e.dst_id), e.attrs, e.status, e.origin, e.created_at)
+            for e in edges
+        )
+        rows = await s.execute(
+            select(RoadmapItem.id, RoadmapItem.goal_ids).execution_options(**ALL)
+        )
+        goals = {str(i): list(g or []) for i, g in rows.all()}
+    return links, goals
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("move_to_other", [False, True])
+async def test_delete_a_goal_and_restore_keep_links_and_item_goals_exactly(client, move_to_other):
+    w = await _world()
+    goal = uuid.UUID(w.goal_id)
+    async with tenant_session(w.ctx.tenant_id) as s:
+        seed = Seed(s)
+        other = await seed.entity("goal", "fewer-tickets", position=2)
+        solo = await seed.entity("feature", "solo-pay")
+        both = await seed.entity("feature", "both-pay")
+        s.add(Edge(src_id=solo.id, dst_id=goal, type="supports", status="confirmed",
+                   origin="user", attrs={"contribution": 3}))  # fmt: skip
+        s.add(Edge(src_id=both.id, dst_id=goal, type="supports", status="proposed",
+                   origin="agent", attrs={"contribution": 2, "why": "rides"}))  # fmt: skip
+        s.add(Edge(src_id=both.id, dst_id=other.id, type="supports", status="confirmed",
+                   origin="user", attrs={"contribution": 3}))  # fmt: skip
+        b = await s.get(RoadmapItem, uuid.UUID(w.ids["cut-b"]))
+        b.goal_ids = [other.id, goal]
+        await s.commit()
+        features = [solo.id, both.id]
+        other_id = str(other.id)
+    before = await _links_and_goals(w, features)
+
+    params = {"to_goal_id": other_id} if move_to_other else {}
+    r = await client.delete(f"{BUCKETS}/goals/{w.goal_id}", params=params,
+                            headers=w.ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    items = await _items(client, w)
+    # While the goal is in Trash no read names it.
+    assert w.goal_id not in items["cut-a"]["goal_ids"]
+    assert items["cut-b"]["goal_ids"] == [other_id]
+    if not move_to_other:
+        assert items["cut-a"]["goal"] is None
+        # Nothing was rewritten: the trash filter hides the goal and its links.
+        assert await _links_and_goals(w, features) == before
+
+    r = await client.post(f"{BUCKETS}/goals/{w.goal_id}/restore", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert await _links_and_goals(w, features) == before
+    items = await _items(client, w)
+    assert items["cut-a"]["goal_ids"] == [w.goal_id]
+    assert items["cut-a"]["goal"]["id"] == w.goal_id
+
+
+@pytest.mark.asyncio
+async def test_a_new_feature_never_takes_a_trashed_key_and_restore_keeps_dependents(client):
+    from tests.test_simple_additions_api import World as Additions
+
+    w = await Additions().build()
+    a, b = w.ids["import-a"], w.ids["import-b"]
+    r = await client.delete(f"{ITEMS}/{a}", headers=w.as_("owner"))
+    assert r.status_code == 200, r.text
+    # A new feature named as the trashed one gets a key of its own.
+    added = (await w.add(client, "owner", "Import A"))["change"]["target"]["item_id"]
+    async with tenant_session(w.ctx.tenant_id) as s:
+        new = await s.get(RoadmapItem, uuid.UUID(added))
+        assert new.item_key != "import-a"
+        # A clash made some other way: Restore refuses rather than share the key.
+        kept, new.item_key = new.item_key, "import-a"
+        await s.commit()
+    r = await client.post(f"{ITEMS}/{a}/restore", headers=w.as_("owner"))
+    assert r.status_code == 409, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        (await s.get(RoadmapItem, uuid.UUID(added))).item_key = kept
+        await s.commit()
+
+    r = await client.post(f"{ITEMS}/{a}/restore", headers=w.as_("owner"))
+    assert r.status_code == 200, r.text
+    items = await w.items(client)
+    assert items[b]["depends_on"] == [a]
+    assert items[a]["key"] == "import-a"
+
+
+@pytest.mark.asyncio
+async def test_a_commenters_goal_delete_is_a_proposal_to_its_decider(client):
+    w = await Buckets().build()
+    grow = w.goals["grow"]
+    r = await client.delete(f"{BUCKETS}/goals/{grow}", headers=w.as_("viewer"))
+    assert r.status_code == 403
+    r = await client.delete(f"{BUCKETS}/goals/{grow}", headers=w.as_("commenter"))
+    assert r.status_code == 200, r.text
+    assert r.json()["entry"] is None
+    change = r.json()["change"]
+    assert change["status"] == "proposed" and change["op"] == "delete_goal"
+    assert "proposed: move the goal Grow to Trash" in change["words"]
+    assert grow in [g["id"] for g in (await w.read(client))["goals"]]
+    r = await client.post(f"/v1/simple/changes/{change['id']}/accept",
+                          headers=w.as_("commenter"))  # fmt: skip
+    assert r.status_code == 403
+    r = await client.post(f"/v1/simple/changes/{change['id']}/accept",
+                          headers=w.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert r.json()["change"]["status"] == "accepted"
+    assert grow not in [g["id"] for g in (await w.read(client))["goals"]]
+    listed = (await client.get("/v1/trash", headers=w.as_("owner"))).json()
+    assert [(e["root"]["kind"], e["root"]["title"]) for e in listed] == [("goal", "Grow")]
+
+
+@pytest.mark.asyncio
+async def test_a_proposed_delete_of_a_feature_already_in_trash_is_closed(client):
+    w = await _world()
+    a = w.ids["cut-a"]
+    r = await client.delete(f"{ITEMS}/{a}", headers=w.ctx.as_("approver"))
+    proposal = r.json()["change"]["id"]
+    r = await client.delete(f"{ITEMS}/{a}", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    r = await client.get("/v1/simple/changes", headers=w.ctx.as_("owner"))
+    c = next(c for c in r.json() if c["id"] == proposal)
+    assert c["status"] == "declined" and c["decision_reason"] == "Already in Trash"
+
+
+@pytest.mark.asyncio
+async def test_a_purged_feature_leaves_no_milestone_or_dependency_on_it(client):
+    w = await _world()
+    a, b = w.ids["cut-a"], w.ids["cut-b"]
+    assert (await client.delete(f"{ITEMS}/{a}", headers=w.ctx.as_("owner"))).status_code == 200
+    async with tenant_session(w.ctx.tenant_id) as s:
+        for entry in await trash_service.list_entries(s):
+            await trash_service.purge_entry(s, None, entry)
+        await s.commit()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        m = await s.scalar(select(TrackMilestone).where(TrackMilestone.name == "Beta"))
+        assert m.item_ids == []
+        assert (await s.get(RoadmapItem, uuid.UUID(b))).depends_on == []
