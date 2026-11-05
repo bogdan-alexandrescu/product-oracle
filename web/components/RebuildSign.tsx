@@ -8,7 +8,7 @@
 // moves, re-read only when the tab comes back, on a page change and after a change is saved.
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { api, type Schemas } from "@/lib/api/client";
@@ -159,6 +159,12 @@ export function RebuildSeen({ slug, version }: { slug: string; version: number }
     if (slug && Number.isFinite(version)) markVersionOpened(slug, version);
   }, [slug, version]);
   return null;
+}
+
+/** The version page's own: the version in its URL (/documents/<slug>/v/<n>). */
+export function RebuildSeenHere() {
+  const { doc, n } = useParams<{ doc: string; n: string }>();
+  return <RebuildSeen slug={decodeURIComponent(doc)} version={Number(n)} />;
 }
 
 type Rb = NonNullable<ReturnType<typeof useRebuilds>>;

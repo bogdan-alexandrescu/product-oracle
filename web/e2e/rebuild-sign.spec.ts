@@ -18,18 +18,19 @@ type Seed = { slug: string; state: State; step?: number; minutes?: number; start
  * `open`, it seeds on a blank page of the app's origin (no app running to write its own
  * store back over the seed), then opens `open`: the first load reads the seed.
  */
-async function seedRuns(page: Page, seeds: Seed[], { clear = [], open }: { clear?: string[]; open?: string } = {}): Promise<{ ids: string[]; latest: Record<string, number> }> {
+async function seedRuns(page: Page, seeds: Seed[], { clear = [], open, only = false }: { clear?: string[]; open?: string; only?: boolean } = {}): Promise<{ ids: string[]; latest: Record<string, number> }> {
   if (open) {
     await page.route("**/__rebuild-seed", (r) => r.fulfill({ contentType: "text/html", body: "<!doctype html><title>seed</title>" }));
     await page.goto("/__rebuild-seed");
   }
-  const out = await write(page, seeds, clear);
+  const out = await write(page, seeds, clear, only);
   if (open) await page.goto(open);
   return out;
 }
 
-async function write(page: Page, seeds: Seed[], clear: string[]): Promise<{ ids: string[]; latest: Record<string, number> }> {
-  return page.evaluate(([seeds, clear]) => {
+/** `only`: the seeded runs are the store's only ones (Home lists every document's). */
+async function write(page: Page, seeds: Seed[], clear: string[], only: boolean): Promise<{ ids: string[]; latest: Record<string, number> }> {
+  return page.evaluate(([seeds, clear, only]) => {
     const key = "po-mock-db-v2";
     const db = JSON.parse(localStorage.getItem(key)!);
     type Seg = Record<string, unknown> & { seq: number; status: string; checkpoint: string | null; checkpoint_on: boolean };
@@ -37,7 +38,7 @@ async function write(page: Page, seeds: Seed[], clear: string[]): Promise<{ ids:
     const at = "2026-10-22T18:20:00Z";
     // A clean scene: no other run on the documents seeded (the default seed has one on some).
     const slugs = new Set([...seeds.map((s) => s.slug), ...clear]);
-    db.runs.runs = db.runs.runs.filter((r: { document_slug: string | null }) => !slugs.has(r.document_slug ?? ""));
+    db.runs.runs = db.runs.runs.filter((r: { document_slug: string | null }) => !only && !slugs.has(r.document_slug ?? ""));
     const ids: string[] = [];
     const latest: Record<string, number> = {};
     for (const s of seeds) {
@@ -94,7 +95,7 @@ async function write(page: Page, seeds: Seed[], clear: string[]): Promise<{ ids:
     }
     localStorage.setItem(key, JSON.stringify(db));
     return { ids, latest };
-  }, [seeds, clear] as const);
+  }, [seeds, clear, only] as const);
 }
 
 /** Moves a seeded running run to its next step, as the run does between two reads. */
@@ -167,15 +168,28 @@ test("a rebuild that stopped says where", async ({ page }) => {
 
 test("the new version lands: 'ready: review it' until it is opened", async ({ page }) => {
   await start(page);
-  const { latest } = await seedRuns(page, [{ slug: "checkout-redesign", state: "done" }], { open: "/simple/one-pagers/checkout-redesign" });
+  const { latest } = await seedRuns(page, [{ slug: "checkout-redesign", state: "done" }], { open: "/simple/one-pagers" });
   const v = latest["checkout-redesign"] + 1;
-  await expect(chip(page)).toHaveText(`v${v} ready: review it`);
-  await chip(page).click();
+  const row = page.getByRole("listitem").filter({ hasText: "Checkout redesign PRD" });
+  await expect(row.getByTestId("rb-chip")).toHaveText(`v${v} ready: review it`);
+  await row.getByTestId("rb-chip").click();
   await page.getByTestId("rb-popover").getByRole("link", { name: `Review v${v}` }).click();
   await expect(page).toHaveURL(new RegExp(`/documents/checkout-redesign/v/${v}`));
-  await page.goto("/simple/one-pagers/checkout-redesign");
-  await expect(page.getByText(`Version`).first()).toBeVisible();
+  await page.goto("/simple/one-pagers");
+  await expect(row).toBeVisible();
+  await expect(row.getByTestId("rb-chip")).toHaveCount(0);
+});
+
+test("a page already showing the landed version says nothing of it, and viewing it ends 'ready'", async ({ page }) => {
+  await start(page);
+  const { latest } = await seedRuns(page, [{ slug: "checkout-redesign", state: "done" }], { open: "/simple/one-pagers/checkout-redesign" });
+  const v = latest["checkout-redesign"] + 1;
+  await expect(page.getByText(`Version ${v}`).first()).toBeVisible();
   await expect(page.getByTestId("rb-chip")).toHaveCount(0);
+  await page.goto("/simple/one-pagers");
+  const row = page.getByRole("listitem").filter({ hasText: "Checkout redesign PRD" });
+  await expect(row).toBeVisible();
+  await expect(row.getByTestId("rb-chip")).toHaveCount(0);
 });
 
 test("two runs on one PRD: the chip counts the other, the popover shows both", async ({ page }) => {
@@ -261,27 +275,26 @@ test("the company roadmap's chip says only its own run while one PRD rebuilds", 
   await expect(page.getByTestId("rb-popover").getByTestId("rb-run")).toHaveCount(1);
 });
 
-test("Approve ends 'ready: review it' for everyone, not only who opened it", async ({ page }) => {
+test("Approve ends 'ready: review it', though the version was never opened", async ({ page }) => {
   await start(page);
-  const { latest } = await seedRuns(page, [{ slug: "checkout-redesign", state: "done" }], { open: "/simple" });
-  const v = latest["checkout-redesign"] + 1;
+  // A PRD with no blocker holding its publish.
+  const slug = "saved-carts";
+  const { latest } = await seedRuns(page, [{ slug, state: "done" }], { open: "/simple", only: true });
+  const v = latest[slug] + 1;
   const home = page.getByTestId("rb-home");
   await expect(home.getByRole("heading", { name: "New versions ready" })).toBeVisible();
   await expect(home.getByTestId("rb-chip")).toHaveText(`v${v} ready: review it`);
-  // Another tab still shows the chip while the version is approved here.
-  const other = await page.context().newPage();
-  await other.goto("/simple/one-pagers");
-  const row = other.getByRole("listitem").filter({ hasText: "Checkout redesign PRD" });
-  await expect(row.getByTestId("rb-chip")).toHaveText(`v${v} ready: review it`);
-  await page.goto(`/documents/checkout-redesign/v/${v}`);
-  await page.getByRole("button", { name: "Approve version" }).click();
-  await page.getByRole("group", { name: "Confirm approval" }).getByRole("button", { name: "Confirm" }).click();
-  await expect(page.getByText(/Approved/).first()).toBeVisible();
-  // The other tab, never navigated: it re-reads when it is shown again, and the chip is gone.
-  await other.bringToFront();
-  await other.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(row.getByTestId("rb-chip")).toHaveCount(0, { timeout: 4000 });
-  await other.close();
+  // Publish approves the latest version (C5).
+  await page.goto(`/documents/${slug}/publish`);
+  await page.getByTestId("publish-button").click();
+  await page.getByRole("dialog").getByRole("button", { name: /^Publish/ }).click();
+  await expect(page.getByTestId("publish-inspector").getByText(`Version v${v} approved with its evidence`)).toBeVisible();
+  // Never opened, only approved: Home has nothing new to review.
+  await page.getByRole("link", { name: "Home" }).first().click();
+  await expect(page).toHaveURL(/\/(simple|home)$/);
+  // Give the sign its read (the mock answers in a few ms), then: nothing.
+  await page.waitForTimeout(1500);
+  await expect(page.getByTestId("rb-home")).toHaveCount(0);
 });
 
 test("a hidden tab stops reading; shown again, it reads at once", async ({ page }) => {
@@ -310,7 +323,7 @@ test("a commenter reads no sign for a document only approvers see", async ({ pag
   await seedRuns(page, [
     { slug: "checkout-redesign", state: "running", step: 2, minutes: 40 },
     { slug: "saved-carts", state: "running", step: 2, minutes: 20 },
-  ]);
+  ], { only: true });
   await page.evaluate(() => {
     const db = JSON.parse(localStorage.getItem("po-mock-db-v2")!);
     db.documents.find((d: { slug: string }) => d.slug === "saved-carts").visibility = "approvers";
