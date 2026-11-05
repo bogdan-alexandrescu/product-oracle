@@ -615,3 +615,76 @@ async def test_a_typed_start_before_another_prd_s_dependency_ends_is_warned_in_s
             "depends on, ends Dec 1",
         )
     ]
+
+
+# --------------------------------------------------------------------------- hotfix: one source
+
+
+async def _waiting_check(dep: str) -> tuple[dict, dict, str]:
+    """A run of a new company waiting at an Engineering check stored with the old rules'
+    problems (``dep`` refused as unknown), its one feature's verdict staged. The world, the
+    owner's headers and the review's URL."""
+    from oracle.runs.models import RunSegment
+    from tests.fixtures import seed_auth
+
+    tenant_id, auth = await seed_auth()
+    w = await world(tenant_id=tenant_id)
+    text = BRIEFS.replace("DEP", dep)
+    old = check._summarize(text, frozenset({"observability"}), None)
+    assert [p["code"] for p in old["problems"]] == ["unknown_dependency"]
+    async with tenant_session(w["tenant"]) as s:
+        (await s.get(Run, w["run"])).status = "awaiting_checkpoint"
+        s.add(RunSegment(run_id=w["run"], seq=3, name="eng_review", status="succeeded",
+                         artifacts={"files": {check.briefs.FILE: text}}))  # fmt: skip
+        payload = {"segment_seq": 3, check.PAYLOAD_KEY: old}
+        cp = await _add(s, Checkpoint(run_id=w["run"], kind=check.KIND, status="pending",
+                                      payload=payload))  # fmt: skip
+        s.add(CheckpointAction(checkpoint_id=cp.id, item_key="observability", kind="edit",
+                               field="verdict", state="staged",
+                               value={"verdict": "feasible"}))  # fmt: skip
+        await s.commit()
+        w["cp"] = cp.id
+    return w, auth, f"/v1/runs/{w['run']}/checkpoints/{w['cp']}"
+
+
+async def _shown(client, auth, w: dict) -> dict:
+    resp = await client.get(f"/v1/runs/{w['run']}", headers=auth)
+    assert resp.status_code == 200, resp.text
+    (cp,) = [c for c in resp.json()["checkpoints"] if c["id"] == str(w["cp"])]
+    return cp
+
+
+async def test_the_review_gate_reads_the_problems_the_page_shows(client):
+    # protects=a check stored with problems a later rule answers is approvable once every
+    # verdict is staged: the review's gate reads the briefs checked again, as the page's
+    # check does; fails_when=the gate counts the stored problems (file_problems 1, Approve
+    # disabled while the page shows no problem).
+    w, auth, url = await _waiting_check("account-health-ledger")
+    assert (await _shown(client, auth, w))["payload"][check.PAYLOAD_KEY]["problems"] == []
+    resp = await client.get(url + "/review", headers=auth)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["gate"] == {"open": True, "blocking_open": 0, "file_problems": 0, "left": []}
+    # Reading writes nothing: the stored check stays until the stop is decided.
+    async with tenant_session(w["tenant"]) as s:
+        cp = await s.get(Checkpoint, w["cp"])
+        assert [p["code"] for p in cp.payload[check.PAYLOAD_KEY]["problems"]] == [
+            "unknown_dependency"
+        ]
+
+
+async def test_a_check_with_real_problems_is_listed_on_the_page_and_never_approved(client):
+    # protects=a dependency no PRD or roadmap knows still blocks: the page's check lists it,
+    # the review's gate counts the same problem and Approve is refused; fails_when=the
+    # gate and the page disagree, or the approve route approves with a real problem.
+    w, auth, url = await _waiting_check("nowhere-ledger")
+    shown = (await _shown(client, auth, w))["payload"][check.PAYLOAD_KEY]["problems"]
+    assert [p["code"] for p in shown] == ["unknown_dependency"]
+    resp = await client.get(url + "/review", headers=auth)
+    assert resp.status_code == 200, resp.text
+    gate = resp.json()["gate"]
+    assert not gate["open"] and gate["file_problems"] == len(shown) == 1
+    resp = await client.post(url + "/decide", json={"decision": "approved"}, headers=auth)
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["detail"]["code"] == "blocking_open"
+    async with tenant_session(w["tenant"]) as s:
+        assert (await s.get(Checkpoint, w["cp"])).status == "pending"
