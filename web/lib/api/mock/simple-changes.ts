@@ -66,7 +66,7 @@ import {
 } from "./simple-roadmap";
 import { routeGoalSuggestions } from "./simple-suggestions";
 import { goalSetOf, linkPlan, overrideOf } from "./feature-panel";
-import { entryOut, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
+import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
 
 type Change = Schemas["SimpleChangeOut"];
 type Session = Schemas["SimpleSessionOut"];
@@ -813,17 +813,19 @@ function deleteItemRoute(db: SimpleDb, ctx: SimpleChangesCtx, itemId: string, re
   const res = doDeleteItem(db, ctx, itemId, reason);
   if (res instanceof Response) return res;
   return json(200, {
-    entry: res.row ? entryOut(res.row, iso(mockNowMs())) : null,
+    entry: res.row ? entryOut(res.row, iso(mockNowMs()), true) : null,
     change: res.row ? null : view(db, ctx, res.change),
-    can_restore: ctx.role === "owner",
+    // Whoever deleted it restores it too (mayRestore); a proposal waits, so only an owner.
+    can_restore: res.row ? true : ctx.role === "owner",
   });
 }
 
-/** POST /v1/simple/roadmap/items/{id}/restore (owners): puts the feature back from Trash. */
+/** POST /v1/simple/roadmap/items/{id}/restore (an owner, or whoever deleted it): puts the feature back from Trash. */
 function restoreItemRoute(db: SimpleDb, ctx: SimpleChangesCtx, itemId: string): Response {
-  if (ctx.role !== "owner") return json(403, { detail: "Requires the owner role" });
+  if (ctx.role === "viewer") return json(403, { detail: "Requires the commenter role" });
   const entry = ctx.trash?.entries.find((e) => e.out.root.type === "feature" && e.out.root.id === itemId);
   if (!entry) return json(404, { detail: "No such roadmap item" });
+  if (!mayRestore(entry, ctx)) return json(403, { detail: "Only an owner, or whoever deleted it, restores this" });
   return json(200, restoreFromTrash(ctx.trash!, entry, iso(mockNowMs()), db));
 }
 

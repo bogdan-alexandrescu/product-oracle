@@ -34,7 +34,7 @@ export interface TrashVersion {
 
 /** One delete and the rows it took (put back as they were on Restore). */
 export interface TrashEntryRow {
-  out: Omit<Schemas["TrashEntryOut"], "days_left" | "not_restored">;
+  out: Omit<Schemas["TrashEntryOut"], "days_left" | "not_restored" | "can_restore">;
   documents: unknown[];
   versions: unknown[];
   runs: RunOut[];
@@ -137,7 +137,19 @@ function daysLeft(entry: TrashEntryRow, now: string): number {
   return Math.max(0, Math.ceil(ms / DAY_MS));
 }
 
-export const entryOut = (e: TrashEntryRow, now: string): Schemas["TrashEntryOut"] => ({ ...e.out, days_left: daysLeft(e, now), not_restored: [] });
+export const entryOut = (e: TrashEntryRow, now: string, canRestore = false): Schemas["TrashEntryOut"] => ({
+  ...e.out,
+  days_left: daysLeft(e, now),
+  not_restored: [],
+  can_restore: canRestore,
+});
+
+/** As oracle.trash.service.may_restore (owner's answer, Nov 5): an owner restores anything;
+ * whoever deleted a feature or a goal restores it too. */
+export function mayRestore(entry: TrashEntryRow, me: { id: string; role: string }): boolean {
+  if (me.role === "owner") return true;
+  return entry.out.deleted_by === me.id && (entry.out.root.type === "feature" || entry.out.root.type === "goal");
+}
 
 /** trash-features-goals: the Simple rows a feature's or a goal's entry marks `trashed`; the mock
  * db is kept as JSON, so Restore finds them by the entry's root, never through a closure. */
@@ -178,11 +190,19 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
   for (const e of ctx.db.entries) if (daysLeft(e, now) <= 0) purge(ctx.db, e, now);
 
   if (p[1] === "trash") {
-    if (!owner) return ownerOnly;
-    if (m === "GET" && !p[2]) return json(200, ctx.db.entries.map((e) => entryOut(e, now)).reverse());
+    // Trash's list and Restore: commenters and up, each entry checked (mayRestore); purge: owners.
+    if (!atLeast(ctx.me.role, "commenter")) return json(403, { detail: "Requires the commenter role" });
+    if (m === "GET" && !p[2]) {
+      const mine = ctx.db.entries.filter((e) => owner || mayRestore(e, ctx.me));
+      return json(200, mine.map((e) => entryOut(e, now, mayRestore(e, ctx.me))).reverse());
+    }
     const entry = ctx.db.entries.find((e) => e.out.id === p[2]);
     if (!entry) return json(404, { detail: "Not in Trash" });
-    if (m === "POST" && p[3] === "restore") return json(200, restore(ctx, entry, now));
+    if (m === "POST" && p[3] === "restore") {
+      if (!mayRestore(entry, ctx.me)) return json(403, { detail: "Only an owner, or whoever deleted it, restores this" });
+      return json(200, restore(ctx, entry, now));
+    }
+    if (!owner) return ownerOnly;
     if (m === "DELETE" && !p[3]) {
       purge(ctx.db, entry, now);
       return json(204, undefined);
@@ -305,7 +325,7 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
     released: ctx.onTrash?.([...ids]),
   };
   ctx.db.entries.push(entry);
-  return json(200, entryOut(entry, now));
+  return json(200, entryOut(entry, now, true));
 }
 
 function latestVersion<D extends TrashDocument, V extends TrashVersion>(ctx: TrashContext<D, V>, doc: D): V | undefined {

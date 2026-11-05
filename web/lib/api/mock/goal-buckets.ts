@@ -7,7 +7,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { stableUuid } from "./ids";
-import { entryOut, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
+import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
 import { planGoalNames, planSlices } from "./simple-plan";
 
 // trash-features-goals: `trashed` while in Settings › Trash (left out of every read, kept for Restore).
@@ -145,8 +145,18 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
   const edits = role === "owner" || role === "approver";
   const m = req.method;
   if (!p[3] && m === "GET") return json(200, out(db, edits));
+  // trash-features-goals: a goal's restore, by an owner or whoever deleted it (mayRestore).
+  if (bin && p[3] === "goals" && p[4] && p[5] === "restore" && m === "POST") {
+    if (role === "viewer") return json(403, { detail: "Requires the commenter role" });
+    const entry = bin.trash.entries.find((e) => e.out.root.type === "goal" && e.out.root.id === p[4]);
+    if (!entry) return json(404, { detail: "goal not found in Trash" });
+    if (!mayRestore(entry, { id: bin.id, role })) {
+      return json(403, { detail: "Only an owner, or whoever deleted it, restores this" });
+    }
+    return json(200, restoreFromTrash(bin.trash, entry, bin.now(), { items: [], goal_buckets: db }));
+  }
   if (!edits) return json(403, { detail: "Requires the approver role" });
-  // trash-features-goals: DELETE .../goals/{id}?to_goal_id= (approvers and owners), and its restore (owners).
+  // trash-features-goals: DELETE .../goals/{id}?to_goal_id= (approvers and owners): whoever deletes it restores it.
   if (bin && p[3] === "goals" && p[4] && !p[5] && m === "DELETE") {
     const g = db.goals.find((x) => x.id === p[4] && !x.trashed);
     if (!g) return json(404, { detail: "No such goal" });
@@ -166,13 +176,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
       documents: [], versions: [], runs: [], intakes: [],
     };
     bin.trash.entries.push(row);
-    return json(200, { entry: entryOut(row, at), change: null, can_restore: role === "owner" });
-  }
-  if (bin && p[3] === "goals" && p[4] && p[5] === "restore" && m === "POST") {
-    if (role !== "owner") return json(403, { detail: "Requires the owner role" });
-    const entry = bin.trash.entries.find((e) => e.out.root.type === "goal" && e.out.root.id === p[4]);
-    if (!entry) return json(404, { detail: "goal not found in Trash" });
-    return json(200, restoreFromTrash(bin.trash, entry, bin.now(), { items: [], goal_buckets: db }));
+    return json(200, { entry: entryOut(row, at, true), change: null, can_restore: true });
   }
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   if (p[3] === "goals" && !p[4] && m === "POST") {

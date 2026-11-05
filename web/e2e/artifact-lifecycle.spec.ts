@@ -203,7 +203,7 @@ test("an owner sees Regenerate… and Delete…, the header opens the latest (qa
   await expect(menu.getByRole("menuitem")).toHaveText(["Regenerate…", "Delete…"]);
 });
 
-test("an approver sees Regenerate but no Delete, and no Trash", async ({ page }) => {
+test("an approver sees Regenerate but no Delete, and no document in Trash", async ({ page }) => {
   await asRole(page, "approver");
   await login(page);
   await openPrds(page);
@@ -223,7 +223,11 @@ test("an approver sees Regenerate but no Delete, and no Trash", async ({ page })
 
   await page.goto("/settings/members");
   await expect(page.getByTestId("settings-nav")).toBeVisible();
-  await expect(page.getByTestId("nav-trash")).toHaveCount(0);
+  // trash-features-goals (owner's answer, Nov 5): Trash shows an approver only the features
+  // and goals they deleted, so no document and no Restore here.
+  await page.getByTestId("nav-trash").filter({ visible: true }).click();
+  await expect(page.getByTestId("trash-empty")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Restore / })).toHaveCount(0);
 });
 
 for (const role of ["commenter", "viewer"] as const) {
