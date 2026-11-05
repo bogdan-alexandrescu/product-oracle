@@ -490,3 +490,62 @@ test("at 390 px the Propose toast covers neither the cut flag's buttons nor the 
   );
   expect(covered).toEqual([]);
 });
+
+/**
+ * fix 1 (the decider sees the roadmap waiting on them): a roadmap an owner sent for review
+ * waits for its decider's approval, though the decider is no required reviewer; the rail's
+ * Roadmap count and Home's "Also waiting for you" both show it, and approving it drops both.
+ * fails_when: the decider's Roadmap count or Home leaves it out (it lists only required
+ * reviewers); no_claim: the API's own rule (api/tests/test_simple_waiting_list.py).
+ */
+test("the decider of a draft another owner sent sees it on the rail and on Home", async ({ page }) => {
+  await open(page, "roadmap-two-drafts");
+  await strip(page).locator('[data-testid="conflict"][data-item="setup-tour"]').getByRole("button", { name: "Bring it back" }).click();
+  await expect(page.getByText(/Brought back 'In-app tour'/)).toBeVisible();
+  await page.getByTestId("draft-banner").getByRole("button", { name: "Send for review" }).click();
+  await expect(page.getByText(/Sent for review/).first()).toBeVisible();
+  // Priya Raman decides the Onboarding roadmap, with no required reviewer.
+  await signOut(page);
+  await login(page, "approver@example.com");
+  await page.goto("/simple");
+  const row = page.getByTestId("home-also-waiting-list").getByTestId("waiting-item").filter({ hasText: "A roadmap draft waits for your approval" });
+  await expect(row).toHaveCount(1);
+  const asks = async () => ((await badge(page).count()) ? Number(/(\d+) changes? or drafts?/.exec((await badge(page).getAttribute("aria-label")) ?? "")?.[1] ?? 0) : 0);
+  await expect.poll(asks).toBeGreaterThan(0);
+  const before = await asks();
+
+  // Approving it in place drops it from Home and from the rail's count at once.
+  await row.getByRole("button", { name: "Approve" }).click();
+  await expect(row).toHaveCount(0);
+  await expect.poll(asks).toBe(before - 1);
+});
+
+/**
+ * fix 1, minor 6: a message after an action on the roadmap shows at the top right on a desktop,
+ * clear of the open Ask panel and of the draft banner where the action was taken.
+ * fails_when: the message covers the Ask panel or the banner's buttons, or shows at the foot.
+ */
+test("the roadmap's top message keeps clear of the Ask panel and the draft banner", async ({ page }) => {
+  await open(page, "roadmap-two-drafts");
+  await page.getByTestId("simple-ask").click();
+  const ask = page.locator("#simple-ask-panel").filter({ visible: true });
+  await expect(ask).toBeVisible();
+  await strip(page).locator('[data-testid="conflict"][data-item="setup-tour"]').getByRole("button", { name: "Bring it back" }).click();
+  await expect(page.getByText(/Brought back 'In-app tour'/)).toBeVisible();
+  const banner = page.getByTestId("draft-banner");
+  await banner.getByRole("button", { name: "Send for review" }).click();
+  const toast = page.getByRole("status").filter({ hasText: /^Sent for review/ });
+  await expect(toast).toBeVisible();
+  const t = (await toast.boundingBox())!;
+  const view = page.viewportSize()!;
+  // At the top of the screen, not its foot.
+  expect(t.y).toBeLessThan(view.height / 2);
+  const overlap = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+    a.width > 0 && b.width > 0 && a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+  await expect(ask).toBeVisible();
+  expect(overlap(t, (await ask.boundingBox())!)).toBe(false);
+  for (const b of await banner.getByRole("button").all()) {
+    const box = await b.boundingBox();
+    if (box) expect(overlap(t, box), (await b.textContent()) ?? "").toBe(false);
+  }
+});
