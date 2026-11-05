@@ -1,9 +1,9 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo, useState, useSyncExternalStore } from "react";
 
-import { Button, Empty, Notice, Page, Panel, Split } from "@/components/ds";
+import { Button, Empty, Notice, Page, Panel, Sheet, Split } from "@/components/ds";
 import { startPrdHref } from "@/components/RequestsBehind";
 import { ErrorNote, INPUT_INLINE, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -24,6 +24,15 @@ export type RequestsView = "all" | "new" | "themes";
 
 /** A filter's control: its natural width beside the others, full width and 44 px high on a phone (qa-work-39). */
 const FILTER = `${INPUT_INLINE} max-w-full max-[600px]:min-h-11 max-[600px]:w-full`;
+
+// RQ-1: under 1100 px the Split puts the inspector after the whole list, so a tap there opens it as a sheet.
+const NARROW = "(width < 1100px)";
+const onNarrow = (change: () => void) => {
+  const mq = window.matchMedia(NARROW);
+  mq.addEventListener("change", change);
+  return () => mq.removeEventListener("change", change);
+};
+const useNarrow = () => useSyncExternalStore(onNarrow, () => window.matchMedia(NARROW).matches, () => false);
 
 /**
  * Requests (C1): the All requests, To decide and Themes tabs, one screen under the shared
@@ -77,6 +86,13 @@ function Requests({ view }: { view: RequestsView }) {
   // A request picked by hand stays picked across the tabs; a new ?request= (the Inbox's Open) wins.
   const selected = picked && picked.under === wanted ? picked.id : wanted;
   const setSelected = (id: string | null) => setPicked(id ? { id, under: wanted } : null);
+  const narrow = useNarrow();
+  // The sheet closed on this request: the row stays picked; a tap on a row opens it again.
+  const [dismissed, setDismissed] = useState<string | null>(null);
+  const pick = (id: string | null) => {
+    setDismissed(null);
+    setSelected(id);
+  };
   const router = useRouter();
   const canStart = can("create_intake", true);
   const filed = (request: Schemas["RequestOut"]) => {
@@ -86,7 +102,7 @@ function Requests({ view }: { view: RequestsView }) {
     if (view === "themes") return router.push(`/requests?request=${encodeURIComponent(request.id)}`);
     requests.setData((list) => list && { ...list, items: [request, ...list.items], total: list.total + 1 });
     undecided.setData((list) => list && { ...list, items: [request, ...list.items], total: list.total + 1 });
-    setSelected(request.id);
+    pick(request.id);
   };
   const changed = (request: Schemas["RequestOut"]) => {
     requests.setData((list) => list && { ...list, items: list.items.map((r) => (r.id === request.id ? request : r)) });
@@ -128,6 +144,24 @@ function Requests({ view }: { view: RequestsView }) {
       {onlySearch ? "Clear search" : "Clear filters"}
     </Button>
   );
+  const inspector = current && (
+    <div className="flex min-w-0 flex-col gap-2">
+      {hidden && (
+        <Notice testId="request-hidden" action={clear}>
+          {onlySearch ? "Your search hides this request from the list." : "Your filters hide this request from the list."}
+        </Notice>
+      )}
+      <RequestInspector
+        key={current.id}
+        request={current}
+        requests={context}
+        themes={themes.data ?? []}
+        goalTitles={goalTitles}
+        onChange={changed}
+        onTheme={themeChanged}
+      />
+    </div>
+  );
   // qa4-work-13: the page draws once what the role may do, the list and Oracle's finds are in,
   // so the owner's controls and the finds never push the list down under the cursor. Once
   // drawn it stays: a later read (a triage run's new finds) does not blank it.
@@ -162,26 +196,7 @@ function Requests({ view }: { view: RequestsView }) {
             </Panel>
           ) : (
             <Split
-              inspector={
-                current && (
-                  <div className="flex min-w-0 flex-col gap-2">
-                    {hidden && (
-                      <Notice testId="request-hidden" action={clear}>
-                        {onlySearch ? "Your search hides this request from the list." : "Your filters hide this request from the list."}
-                      </Notice>
-                    )}
-                    <RequestInspector
-                      key={current.id}
-                      request={current}
-                      requests={context}
-                      themes={themes.data ?? []}
-                      goalTitles={goalTitles}
-                      onChange={changed}
-                      onTheme={themeChanged}
-                    />
-                  </div>
-                )
-              }
+              inspector={!narrow && inspector}
             >
               <Panel
                 title={view === "new" ? "To decide" : "All requests"}
@@ -252,7 +267,7 @@ function Requests({ view }: { view: RequestsView }) {
                       requests={shown}
                       goalTitles={goalTitles}
                       selected={selected}
-                      onSelect={setSelected}
+                      onSelect={pick}
                       chosen={view === "all" && canStart ? chosen : undefined}
                       onChoose={setChosen}
                       empty={
@@ -284,6 +299,11 @@ function Requests({ view }: { view: RequestsView }) {
                 )}
               </Panel>
             </Split>
+          )}
+          {narrow && current && view !== "themes" && (
+            <Sheet open={dismissed !== current.id} title="Request" onClose={() => setDismissed(current.id)} full testId="request-sheet">
+              <div className="p-2">{inspector}</div>
+            </Sheet>
           )}
         </div>
       )}

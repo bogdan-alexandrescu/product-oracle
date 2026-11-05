@@ -123,13 +123,16 @@ export function RequestList({
             PRD
           </span>
         )}
-        {/* qa4-work-15: one line of headers, each over its own column's values (the bold title needs none). */}
-        <div data-testid="request-list-head-cols" className={`${META_GRID} max-[600px]:hidden`}>
-          {META_COLS.map((c) => (
-            <span key={c.key} className="truncate">
-              {c.label}
-            </span>
-          ))}
+        {/* RQ-3: Request heads the title, then each column's label over its values under it. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-1 max-[600px]:hidden">
+          <span data-testid="request-list-head-title">Request</span>
+          <div data-testid="request-list-head-cols" className={META_GRID}>
+            {META_COLS.map((c) => (
+              <span key={c.key} className="truncate">
+                {c.label}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
       <ul className="divide-y divide-line" data-testid="request-list">
