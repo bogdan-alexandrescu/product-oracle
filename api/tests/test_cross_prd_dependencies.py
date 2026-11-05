@@ -153,9 +153,11 @@ async def test_a_dependency_on_a_key_no_roadmap_knows_is_still_refused():
     summary = await _summary(w, "made-up-feature")
     assert [p["code"] for p in summary["problems"]] == ["unknown_dependency"]
     assert summary["elsewhere"] == {}
-    # With no company roadmap, another PRD's feature is not known either.
+    # With no company roadmap, a key Ground Truth does not know is refused too.
     bare = await world(roadmap=False)
-    assert [p["code"] for p in (await _summary(bare))["problems"]] == ["unknown_dependency"]
+    assert [p["code"] for p in (await _summary(bare, "made-up-feature"))["problems"]] == [
+        "unknown_dependency"
+    ]
 
 
 async def test_a_dependency_waived_at_the_feature_set_stop_passes_the_engineering_check():
@@ -268,3 +270,167 @@ def test_the_scope_review_row_reads_needs_x_from_its_prd_and_does_not_block():
     assert reason.label == "Needs Account health ledger from Safety PRD"
     assert reason.severity == "to_confirm"
     assert reason.waivable is False
+
+
+# --------------------------------------------------------------------------- review round 1
+
+
+async def test_a_run_already_waiting_at_the_engineering_check_is_read_again():
+    # protects=a run stopped at the Engineering check before cross-PRD links were accepted
+    # shows its briefs and may be approved once the stop is read, with no rerun;
+    # fails_when=the stored check is read as it was stored ("could not be read").
+    from oracle.runs import gate, service
+    from oracle.runs.models import RunSegment
+
+    w = await world()
+    text = BRIEFS.replace("DEP", "account-health-ledger")
+    async with tenant_session(w["tenant"]) as s:
+        # The stored check of the old rules: the dependency refused as unknown.
+        old = check._summarize(text, frozenset({"observability"}), None)
+        assert [p["code"] for p in old["problems"]] == ["unknown_dependency"]
+        s.add(RunSegment(run_id=w["run"], seq=3, name="eng_review", status="succeeded",
+                         artifacts={"files": {check.briefs.FILE: text}}))  # fmt: skip
+        cp = await _add(s, Checkpoint(run_id=w["run"], kind=check.KIND, status="pending",
+                                      payload={"segment_seq": 3, check.PAYLOAD_KEY: old}))  # fmt: skip
+        await s.commit()
+        cp_id = cp.id
+    async with tenant_session(w["tenant"]) as s:
+        out = await service.read_run(s, w["run"], None)
+    shown = next(c for c in out.checkpoints if c.id == cp_id)
+    assert shown.payload[check.PAYLOAD_KEY]["problems"] == []
+    async with tenant_session(w["tenant"]) as s:
+        cp = await s.get(Checkpoint, cp_id)
+        stored = cp.payload[check.PAYLOAD_KEY]
+        assert stored["problems"] == []
+        assert [f["key"] for f in stored["features"]] == ["observability"]
+        assert stored["elsewhere"] == {
+            "account-health-ledger": "Account health ledger (Safety PRD)"
+        }
+        verdict = CheckpointAction(checkpoint_id=cp.id, item_key="observability", kind="edit",
+                                   field="verdict", state="staged",
+                                   value={"verdict": "feasible"})  # fmt: skip
+        g = gate.approve_gate(cp, None, [verdict])
+        assert g is not None and g.file_problems == 0 and g.open
+
+
+async def _two_prds_on_the_roadmap(scale_items=(), safety_deps=("observability",)) -> dict:
+    """world(), with the Safety item waiting on the Scale PRD's ``observability`` (a cycle
+    when Scale's observability also waits on the ledger)."""
+    w = await world()
+    async with tenant_session(w["tenant"]) as s:
+        item = await s.scalar(
+            select(RoadmapItem).where(RoadmapItem.item_key == "account-health-ledger")
+        )
+        item.depends_on = list(safety_deps)
+        for row in scale_items:
+            s.add(row(item))
+        await s.commit()
+    return w
+
+
+ITEMS = (
+    "version: 1\nprd: {document: scale, version: 1}\nitems:\n"
+    "  - {id: observability, title: Observability, outcome: Health is charted,\n"
+    "     horizon: HORIZON, depends_on: [DEP]}\n"
+)
+
+
+async def _items_check(w: dict, horizon: str = "now", dep: str = "account-health-ledger"):
+    async with tenant_session(w["tenant"]) as s:
+        others = await company.other_prds(s, w["scale"])
+    return items_file.check_items(
+        ITEMS.replace("HORIZON", horizon).replace("DEP", dep),
+        prd_slug="scale",
+        prd_version=1,
+        prd_name="Scale PRD",
+        elsewhere=others,
+    )
+
+
+async def test_a_cycle_across_two_prds_is_reported_naming_both_features_and_prds():
+    # protects=a cycle through another PRD's feature is a problem named in plain words;
+    # fails_when=the cross-PRD link skips the cycle check and the queue keeps any order.
+    w = await _two_prds_on_the_roadmap()
+    checked = await _items_check(w, "next")
+    cycles = [p for p in checked.problems if p["code"] == "dependency_cycle"]
+    assert [p["message"] for p in cycles] == [
+        "Observability (Scale PRD) and Account health ledger (Safety PRD) wait on each other"
+    ]
+    # No cycle when the Safety item waits on nothing.
+    w = await _two_prds_on_the_roadmap(safety_deps=())
+    assert "dependency_cycle" not in [p["code"] for p in (await _items_check(w, "next")).problems]
+
+
+async def test_a_cross_prd_dependency_in_a_later_horizon_is_reported():
+    # protects=an item in Now waiting on another PRD's item in Next is told plainly;
+    # fails_when=the cross-PRD link skips the horizon check.
+    w = await _two_prds_on_the_roadmap(safety_deps=())
+    checked = await _items_check(w, "now")
+    assert [p["message"] for p in checked.problems if p["code"] == "horizon_breaks_dependency"] == [
+        "Observability is in Now but waits on Account health ledger (Safety PRD) in Next"
+    ]
+    later = await _items_check(w, "later")
+    assert "horizon_breaks_dependency" not in [p["code"] for p in later.problems]
+
+
+async def _ledger_by_feature_key(w: dict) -> None:
+    """The Safety item is keyed ``ahl-1`` and linked to the account-health-ledger feature;
+    the Scale item ``observability`` (Now) depends on the feature's key, listed first."""
+    async with tenant_session(w["tenant"]) as s:
+        ledger = await s.scalar(select(Entity).where(Entity.key == "account-health-ledger"))
+        item = await s.scalar(
+            select(RoadmapItem).where(RoadmapItem.item_key == "account-health-ledger")
+        )
+        item.item_key = "ahl-1"
+        item.feature_id = ledger.id
+        item.position = 5
+        s.add(RoadmapItem(roadmap_document_id=item.roadmap_document_id,
+                          roadmap_version_id=item.roadmap_version_id, item_key="observability",
+                          title="Observability", horizon="now", position=0,
+                          prd_document_id=w["scale"],
+                          depends_on=["account-health-ledger"]))  # fmt: skip
+        await s.commit()
+
+
+async def test_a_dependency_on_a_feature_key_orders_the_queue_by_its_items():
+    # protects=a dependency named by another PRD's feature key (accepted by the checks)
+    # orders the company queue by that feature's items; fails_when=it is matched by item key
+    # only and silently dropped.
+    w = await world()
+    await _ledger_by_feature_key(w)
+    async with tenant_session(w["tenant"]) as s:
+        _, queued = await company.queue(s)
+    assert [q.item.item_key for q in queued] == ["ahl-1", "observability"]
+
+
+async def test_the_simple_panel_shows_a_dependency_named_by_a_feature_key():
+    # protects=the feature panel's depends on / needed by hold the other PRD's item when the
+    # dependency names its feature; fails_when=the link is matched by item key only.
+    from oracle.simple import service as simple
+
+    w = await world()
+    await _ledger_by_feature_key(w)
+    async with tenant_session(w["tenant"]) as s:
+        read = await simple.load(s)
+    by_key = {e.row.item_key: e for e in read.entries}
+    assert by_key["observability"].depends_on == [by_key["ahl-1"].row.id]
+    assert by_key["ahl-1"].needed_by == [by_key["observability"].row.id]
+
+
+async def test_a_confirmed_ground_truth_feature_passes_both_stops():
+    # protects=the four area PRDs, none on the company roadmap yet, may depend on each
+    # other's confirmed features at the Engineering check, as at the feature set stop;
+    # fails_when=the feature set passes and the Engineering check refuses the briefs.
+    w = await world(roadmap=False)
+    async with tenant_session(w["tenant"]) as s:
+        known = await feature_set.known_for_run(s, w["run"])
+    out = feature_set.check_feature_set(
+        FEATURE_SET.replace("DEP", "export-logs").replace("excluded:\n  - {key: export-logs, "
+                                                          "reason: Lives in another PRD}\n", ""),
+        document="scale",
+        known=known,
+    )  # fmt: skip
+    assert out.blocking == 0
+    summary = await _summary(w, "export-logs")
+    assert summary["problems"] == []
+    assert summary["elsewhere"] == {"export-logs": "Export logs"}
