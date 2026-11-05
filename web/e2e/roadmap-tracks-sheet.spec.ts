@@ -59,13 +59,18 @@ test.describe("Tracks sheet", () => {
 
     await sheet(page).getByTestId("track-add").click();
     await sheet(page).getByLabel("New track name").fill("Partner setup track");
+    // A PRD has one track: only the PRD with none is offered.
+    await expect(sheet(page).getByLabel("PRD").locator("option")).toHaveText(["Plan changes"]);
+    await sheet(page).getByLabel("PRD").selectOption({ label: "Plan changes" });
     await sheet(page).getByRole("button", { name: "Add", exact: true }).click();
     await expect(toasts(page)).toContainText("Added Partner setup track");
     await expect(row(page, "Partner setup track")).toContainText("No owner · 0 features");
     await expect(page.getByTestId("tracks-open")).toHaveText("Tracks · 4");
 
     await row(page, "Setup and onboarding").getByRole("button", { name: "Move to Trash" }).click();
-    await expect(toasts(page)).toContainText("Moved Setup and onboarding to Trash");
+    await expect(row(page, "Setup and onboarding").getByTestId("track-trash-confirm")).toContainText("Its 3 features move to No track.");
+    await row(page, "Setup and onboarding").getByTestId("track-trash-confirm").getByRole("button", { name: "Move to Trash" }).click();
+    await expect(toasts(page)).toContainText("Moved Setup and onboarding to Trash · 3 features now have no track");
     await expect(row(page, "Setup and onboarding")).toHaveCount(0);
     await expect(page.getByTestId("tracks-open")).toHaveText("Tracks · 3");
 
@@ -76,12 +81,69 @@ test.describe("Tracks sheet", () => {
     await expect(page.getByTestId("tracks-open")).toHaveText("Tracks · 4");
   });
 
-  test("the sheet counts a track's features as its Gantt lane draws them", async ({ page }) => {
+  test("the sheet counts each track's features over the whole roadmap, whatever the filters show", async ({ page }) => {
+    await open(page);
+    await page.getByLabel("Track", { exact: true }).selectOption({ label: "Guided setup track" });
+    await expect(page.getByText("Alert rules engine")).toHaveCount(0);
+    await page.getByTestId("tracks-open").click();
+    await expect(row(page, "Usage alerts track")).toContainText("No owner · 5 features");
+    await expect(row(page, "Guided setup track")).toContainText("3 features");
+    await expect(row(page, "Welcome media track")).toContainText("0 features");
+  });
+
+  test("Move to Trash on a track with features asks once and names the count; Undo brings both back", async ({ page }) => {
     await open(page);
     await page.getByRole("radio", { name: "Gantt" }).or(page.getByRole("button", { name: "Gantt", exact: true })).first().click();
     await page.getByTestId("group-track").click();
+    const chart = page.getByTestId("simple-roadmap");
+    await expect(chart.getByText("Usage alerts track", { exact: true })).not.toHaveCount(0);
     await page.getByTestId("tracks-open").click();
-    await expect(row(page, "Usage alerts track")).toContainText(/ · \d+ features?/);
+    const r = row(page, "Usage alerts track");
+    await sheet(page).getByRole("button", { name: "Change Usage alerts track" }).click();
+    await r.getByRole("button", { name: "Move to Trash" }).click();
+    const confirm = r.getByTestId("track-trash-confirm");
+    await expect(confirm).toHaveText(/Its 5 features move to No track\./);
+    // Cancel keeps it; asking again then confirming moves it.
+    await confirm.getByRole("button", { name: "Cancel" }).click();
+    await expect(confirm).toHaveCount(0);
+    await expect(r).toBeVisible();
+    await r.getByRole("button", { name: "Move to Trash" }).click();
+    await confirm.getByRole("button", { name: "Move to Trash" }).click();
+    await expect(toasts(page)).toContainText("Moved Usage alerts track to Trash · 5 features now have no track");
+    await expect(row(page, "Usage alerts track")).toHaveCount(0);
+    await page.getByRole("button", { name: "Close" }).first().click();
+    // Its features now sit under No track on the Gantt.
+    await expect(chart.getByText("Usage alerts track", { exact: true })).toHaveCount(0);
+    await expect(chart.getByText("No track", { exact: true }).first()).toBeVisible();
+    await toasts(page).getByRole("button", { name: "Undo" }).click();
+    await expect(chart.getByText("Usage alerts track", { exact: true })).not.toHaveCount(0);
+    await page.getByTestId("tracks-open").click();
+    await expect(row(page, "Usage alerts track")).toContainText("5 features");
+  });
+
+  test("a track with no features moves to Trash at once", async ({ page }) => {
+    await open(page);
+    await page.getByTestId("tracks-open").click();
+    await sheet(page).getByRole("button", { name: "Change Welcome media track" }).click();
+    await row(page, "Welcome media track").getByRole("button", { name: "Move to Trash" }).click();
+    await expect(sheet(page).getByTestId("track-trash-confirm")).toHaveCount(0);
+    await expect(toasts(page)).toContainText("Moved Welcome media track to Trash");
+    await expect(toasts(page)).not.toContainText("no track");
+    await expect(row(page, "Welcome media track")).toHaveCount(0);
+  });
+
+  test("when every PRD has a track, the add form says so and Add stays off", async ({ page }) => {
+    await open(page);
+    await page.getByTestId("tracks-open").click();
+    await sheet(page).getByTestId("track-add").click();
+    await sheet(page).getByLabel("New track name").fill("Pricing track");
+    await sheet(page).getByRole("button", { name: "Add", exact: true }).click();
+    await expect(toasts(page)).toContainText("Added Pricing track");
+    await sheet(page).getByTestId("track-add").click();
+    await sheet(page).getByLabel("New track name").fill("One more track");
+    await expect(sheet(page).getByText("Every PRD has a track")).toBeVisible();
+    await expect(sheet(page).getByLabel("PRD")).toHaveCount(0);
+    await expect(sheet(page).getByRole("button", { name: "Add", exact: true })).toBeDisabled();
   });
 
   test("an approver who does not decide proposes, naming who decides", async ({ page }) => {
@@ -93,8 +155,10 @@ test.describe("Tracks sheet", () => {
     await expect(r.getByRole("button", { name: "Move to Trash" })).toHaveCount(0);
     await shot(page, "et-b-propose");
     await r.getByRole("button", { name: "Paused" }).click();
-    await expect(toasts(page)).toContainText("Proposed · waits for Avery Stone");
+    await expect(toasts(page)).toContainText("Pause proposed · waits for Avery Stone");
     await expect(r).not.toContainText("· Paused");
+    await toasts(page).getByRole("button", { name: "Withdraw" }).click();
+    await expect(toasts(page)).toContainText("Withdrawn");
   });
 
   test("a viewer reads", async ({ page }) => {
