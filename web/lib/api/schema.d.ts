@@ -41800,6 +41800,11 @@ export interface components {
              * @default 0
              */
             feature_count: number;
+            /**
+             * Moves Count
+             * @default 0
+             */
+            moves_count: number;
         };
         /** SimpleTracks */
         SimpleTracks: {

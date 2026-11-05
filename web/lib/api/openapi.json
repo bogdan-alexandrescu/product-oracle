@@ -124225,6 +124225,11 @@
             "type": "integer",
             "title": "Feature Count",
             "default": 0
+          },
+          "moves_count": {
+            "type": "integer",
+            "title": "Moves Count",
+            "default": 0
           }
         },
         "type": "object",

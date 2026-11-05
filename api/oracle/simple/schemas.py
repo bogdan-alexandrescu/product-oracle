@@ -2491,8 +2491,10 @@ class SimpleTrackRow(BaseModel):
     can_decide: bool = False
     decider_name: str | None = None
     # Its live features over the whole roadmap (cut and merged ones left out), whatever
-    # the roadmap's filters show: what Move to Trash sends to no track.
+    # the roadmap's filters show.
     feature_count: int = 0
+    # Every feature on it, cut and merged ones too: what Move to Trash sends to no track.
+    moves_count: int = 0
 
 
 class SimplePerson(BaseModel):
