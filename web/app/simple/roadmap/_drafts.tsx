@@ -230,7 +230,7 @@ export function DraftDetails({ item, prd, canChange, onChanged, onClose }: { ite
         </button>
       </div>
       <p className="mt-1 text-base">{item.owner_name ? `${draftSpan(item)} · ${item.owner_name}` : draftSpan(item)}</p>
-      <p className="mt-1 simple-small">{`Dates from ${prd.title}'s run (engineering dates). Not approved: it joins the roadmap when the PRD is approved.`}</p>
+      <p className="mt-1 simple-small">{`Dates from ${prd.title.endsWith("s") ? `${prd.title}'` : `${prd.title}'s`} run (engineering dates). Not approved: it joins the roadmap when the PRD is approved.`}</p>
       {canChange && !editing && (
         <div className="mt-3 flex flex-wrap gap-2">
           <Button className={PHONE_TAP} disabled={busy} onClick={() => setEditing(true)}>

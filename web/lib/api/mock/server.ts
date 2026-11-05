@@ -6517,9 +6517,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       const state = (id: string) => {
         const doc = db.documents.find((d) => d.id === id);
         return {
-          visible: !!doc && (doc.visibility !== "approvers" || atLeast(me.role, "approver")),
+          // docs.visibility.visible_to: a commenter or a viewer sees company documents only.
+          visible: !!doc && ((doc.visibility ?? "company") === "company" || atLeast(me.role, "approver")),
           replaced: !!doc?.replaced_by?.length,
-          approved: (n: number) => !!doc && !!findVersion(db, doc, n)?.approved_at,
+          // A version at or after the drafted one approved (roadmap_drafts._drafts).
+          approved: (n: number) => !!doc && db.versions.some((v) => v.document_id === doc.id && v.number >= n && !!v.approved_at),
         };
       };
       if (!p[4] && r.method === "GET") return json(200, draftPrdsOut(rm, state, atLeast(me.role, "approver")));

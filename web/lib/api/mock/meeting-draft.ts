@@ -58,8 +58,9 @@ export const CANCELLED_DRAFT: DraftRow[] = [["C-1", "Outreach letters", "next", 
 export type DraftPrdState = { visible: boolean; replaced: boolean; approved: (version: number) => boolean };
 
 /** GET /v1/simple/roadmap/draft-prds (oracle.simple.roadmap_drafts.draft_prds): each PRD the reader may
- * see whose run's draft holds dated items not approved yet; a replaced PRD, a cancelled run and an
- * approved PRD version are left out. By PRD title. */
+ * see whose run's draft holds dated items not approved yet; a replaced PRD, a cancelled run and a
+ * PRD with a version at or after the drafted one approved are left out. One card per PRD (its run's
+ * newest draft); an undated item is not listed, as approval does not place it. By PRD title. */
 export function draftPrdsOut(db: SimpleDb, state: (prdId: string) => DraftPrdState, canChange: boolean): Schemas["SimpleRoadmapDraftPrd"][] {
   const all = roadmapOut(db, "owner", new URLSearchParams({ draft_roadmap: "1" }))?.items ?? [];
   const prds = new Map<string, { id: string; slug: string; title: string }>();
@@ -75,11 +76,13 @@ export function draftPrdsOut(db: SimpleDb, state: (prdId: string) => DraftPrdSta
       prd,
       run_id: db.draft_runs?.[prd.id]?.run_id ?? null,
       can_change: canChange,
-      items: drafts(db, [prd.id]).map((s) => {
+      // Only what approval would place (roadmap_drafts._placed): an item with its own dates.
+      items: drafts(db, [prd.id]).filter((s) => !!db.own[s.key]?.end).map((s) => {
         const i = all.find((x) => x.id === db.ids[s.key])!;
         return { id: i.id, key: s.key, title: s.title, horizon: s.horizon, start: i.start.date, end: i.end.date, owner_name: s.draft_owner ?? null };
       }),
-    }));
+    }))
+    .filter((d) => d.items.length > 0);
 }
 
 /** The dated items an approval takes from the PRD's run draft (the API's derived items of the version). */

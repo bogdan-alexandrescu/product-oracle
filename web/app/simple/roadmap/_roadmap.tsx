@@ -998,6 +998,16 @@ export function SimpleRoadmap() {
   const shownDrafts = f.goal || f.track ? [] : f.prd ? draftList.filter((d) => d.prd.slug === f.prd) : draftList;
   const [draftOpen, setDraftOpen] = useState<string | null>(null);
   const openDraft = draftList.flatMap((d) => d.items.filter((i) => i.id === draftOpen).map((item) => ({ item, prd: d })))[0] ?? null;
+  // The draft item's panel starts under the toolbar, as the Needs-a-decision tray (measured as it opens).
+  const [draftTop, setDraftTop] = useState(0);
+  useEffect(() => {
+    if (!draftOpen) return;
+    const id = requestAnimationFrame(() => {
+      const r = document.querySelector('[data-testid="roadmap-actions"]')?.getBoundingClientRect();
+      setDraftTop(r ? Math.max(12, Math.round(r.bottom + 8)) : 0);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [draftOpen]);
   // One panel at a time: a roadmap item's card closes a draft item's panel.
   if (card && draftOpen) setDraftOpen(null);
   const byId = useMemo(() => new Map((all?.items ?? []).map((i) => [i.id, i])), [all]);
@@ -1514,6 +1524,7 @@ export function SimpleRoadmap() {
           phone={phone}
           canChange={openDraft.prd.can_change}
           onClose={() => setDraftOpen(null)}
+          top={draftTop}
           draft={{
             item: openDraft.item,
             prd: openDraft.prd as DraftPrd,

@@ -33,6 +33,7 @@ export function FeaturePanel({
   canChange,
   onClose,
   draft,
+  top,
 }: {
   feature: { code: string; name: string; prd?: { id: string; slug: string } | null };
   phone: boolean;
@@ -40,6 +41,8 @@ export function FeaturePanel({
   onClose: () => void;
   /** RP2 'Draft layer on roadmap': a draft PRD's item, not on a roadmap yet; its changes go to the run's draft. */
   draft?: { item: DraftItem; prd: DraftPrd; onChanged: (said: string) => Promise<unknown> };
+  /** Where the desktop panel starts (px from the top), when not its corner: under the page's toolbar. */
+  top?: number;
 }) {
   const roadmap = useQuery("simple-roadmap:{}", () =>
     unwrap(api.GET("/v1/simple/roadmap", {})).then((d) => {
@@ -131,6 +134,7 @@ export function FeaturePanel({
           ? "fixed inset-x-0 bottom-0 z-40 rounded-t-xl border border-line bg-surface shadow-tip"
           : "fixed right-3 top-3 z-40 max-h-[calc(100dvh-24px)] w-[400px] overflow-y-auto rounded-xl border border-line bg-surface shadow-tip"
       }
+      style={!phone && top ? { top, maxHeight: `calc(100dvh - ${top + 12}px)` } : undefined}
     >
       {body}
     </aside>
