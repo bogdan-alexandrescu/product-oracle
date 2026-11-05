@@ -70,7 +70,8 @@ async function snap(page: Page, name: string) {
     `<meta name="mockup-viewport" content="${vp.width}x${vp.height}">` +
     `<style>${css}</style>` +
     `<script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t)document.documentElement.setAttribute("data-theme",t);` +
-    `addEventListener("DOMContentLoaded",function(){document.querySelectorAll("[data-mk-scroll]").forEach(function(e){var p=e.getAttribute("data-mk-scroll").split(",");e.scrollLeft=+p[0];e.scrollTop=+p[1];});});})();</script>`;
+    // MOCK-HOOK: scrolled again once the fonts are in, as they change the heights above.
+    `function s(){document.querySelectorAll("[data-mk-scroll]").forEach(function(e){var p=e.getAttribute("data-mk-scroll").split(",");e.scrollLeft=+p[0];e.scrollTop=+p[1];});}addEventListener("DOMContentLoaded",s);addEventListener("load",s);document.fonts&&document.fonts.ready.then(s);})();</script>`;
   const html = "<!doctype html>" + r.html.replace(/<head([^>]*)>/, (m) => m + extra); // MOCK-HOOK
   expect(html.includes("<style>") && html.includes('name="mockup-viewport"'), `${name}: styles and viewport inlined`).toBe(true); // MOCK-HOOK
   fs.writeFileSync(`${OUT}/frames/${name}.html`, html);
@@ -119,6 +120,20 @@ const tasksInView = (page: Page) =>
     p.scrollTop += el.getBoundingClientRect().top - top - 8;
   });
 const tasks = (page: Page) => page.getByTestId("card-tasks").first();
+// MOCK-HOOK: the panel's scroll box starts on a whole row or heading, never a half one under its sticky header.
+const wholeTop = (page: Page) =>
+  page.getByTestId("card-tasks").first().evaluate((el) => {
+    let p = el.parentElement;
+    while (p && !(p.scrollHeight > p.clientHeight + 2 && /(auto|scroll)/.test(getComputedStyle(p).overflowY))) p = p.parentElement;
+    if (!p) return;
+    const sticky = Array.from(p.querySelectorAll("*")).find((e) => getComputedStyle(e).position === "sticky");
+    const top = sticky ? sticky.getBoundingClientRect().bottom : p.getBoundingClientRect().top;
+    const cut = Array.from(p.querySelectorAll("li, h3, p, dt, dd")).find((e) => {
+      const r = e.getBoundingClientRect();
+      return r.top < top && r.bottom > top && r.height < 120;
+    });
+    if (cut) p.scrollTop += cut.getBoundingClientRect().top - top - 1;
+  });
 const NEW = "Send a test digest to the support team"; // MOCK-HOOK
 
 // MOCK-HOOK Decision 1: each proposal's story.
@@ -206,7 +221,20 @@ for (const v of Object.keys(EC1)) {
     await s.open(page);
     await s.mid(page);
     await s.done(page);
-    await page.getByTestId("card-proposals").first().evaluate((el) => el.scrollIntoView({ block: "center" })).catch(() => undefined);
+    for (let i = 0; i < 4; i++) {
+      // MOCK-HOOK each queued toast off the proposals
+      await page.waitForTimeout(250);
+      if (!(await page.getByRole("button", { name: "Dismiss" }).count())) break;
+      await page.getByRole("button", { name: "Dismiss" }).first().click().catch(() => undefined);
+    }
+    // MOCK-HOOK: the proposals whole.
+    await page.getByTestId("card-proposals").first().evaluate((el) => {
+      el.scrollIntoView({ block: "end" });
+      let p = el.parentElement;
+      while (p && !(p.scrollHeight > p.clientHeight + 2 && /(auto|scroll)/.test(getComputedStyle(p).overflowY))) p = p.parentElement;
+      if (p) p.scrollTop += 90;
+    }).catch(() => undefined);
+    await wholeTop(page);
     await snap(page, `ec1-${v}-propose`);
     await page.context().clearCookies();
     await page.evaluate(() => localStorage.clear());
@@ -323,4 +351,30 @@ test("ec2 c", async ({ page }) => {
   await page.goto("/simple/roadmap?roadmap=alerts-roadmap&ec2=c&open=1");
   await page.getByRole("dialog", { name: "Removed" }).waitFor();
   await snap(page, "ec2-c-readonly");
+});
+
+// MOCK-HOOK: every saved frame opens styled, inside its own width, where its PNG was taken, light and dark.
+test("frames open as their PNGs", async ({ page }) => {
+  const dir = `${OUT}/frames`;
+  const look = process.env.MK_LOOK; // MOCK-HOOK a folder for the light and dark shots to look at
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith(".html")).sort()) {
+    const html = fs.readFileSync(`${dir}/${f}`, "utf8");
+    const [w, h] = /name="mockup-viewport" content="(\d+)x(\d+)"/.exec(html)!.slice(1).map(Number);
+    await page.setViewportSize({ width: w, height: h });
+    for (const theme of ["light", "dark"]) {
+      await page.goto(`file://${dir}/${f}?theme=${theme}`);
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(150);
+      const r = await page.evaluate(() => ({
+        wide: document.documentElement.scrollWidth,
+        off: Array.from(document.querySelectorAll("[data-mk-scroll]")).filter((e) => {
+          const [x, y] = e.getAttribute("data-mk-scroll")!.split(",").map(Number);
+          return Math.abs(e.scrollLeft - x) > 2 || Math.abs(e.scrollTop - y) > 2;
+        }).length,
+      }));
+      expect.soft(r.wide, `${f} lays out inside ${w}px`).toBeLessThanOrEqual(w);
+      expect.soft(r.off, `${f} opens where its PNG was taken`).toBe(0);
+      if (look) await page.screenshot({ path: `${look}/${f.replace(".html", "")}--${theme}.png` });
+    }
+  }
 });

@@ -52,7 +52,7 @@ export function SettingsGate({ children }: { children: ReactNode }) {
       <PageHeader title={tab.label} />
       <Panel testId="not-for-role" bodyClassName="flex flex-col items-center gap-3 pb-8">
         <Empty icon="lock">Not available for your role</Empty>
-        <p className="text-[15px] text-text2">{ELSEWHERE[pathname]?.text ?? askOwner}</p>
+        {!(typeof window !== "undefined" && new URLSearchParams(window.location.search).has("ec2")) /* MOCK-HOOK mk-edit-tasks-restore: no explanation line in its frames */ && <p className="text-[15px] text-text2">{ELSEWHERE[pathname]?.text ?? askOwner}</p>}
         {ELSEWHERE[pathname] ? (
           <LinkButton href={ELSEWHERE[pathname].href} variant="secondary">
             {ELSEWHERE[pathname].label}

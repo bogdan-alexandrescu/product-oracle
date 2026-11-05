@@ -222,7 +222,7 @@ function Checklist({ item, act, canChange }: P) {
           <input
             type="checkbox"
             aria-label={`${t.title} is done`}
-            className="mt-1 size-4 accent-[var(--color-accent)]"
+            className="mt-1 size-4 accent-[var(--color-accent)] disabled:opacity-50"
             checked={t.status === "done"}
             disabled={!canChange}
             onChange={() => void send.status(t, t.status === "done" ? "todo" : "done")}
