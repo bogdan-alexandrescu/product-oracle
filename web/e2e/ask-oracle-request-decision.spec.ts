@@ -42,7 +42,7 @@ test.beforeEach(async ({ page }) => {
  * Card ask-actions-request-decision: protects = "ask <person> to decide <title>" in the Ask
  * Oracle panel is one card naming the person Slack pings ("Sends a Slack message to Priya
  * Raman asking for a decision"), with no Undo once applied, and Apply puts the request on the
- * Decisions page with Priya Raman as its approver, waiting for a decider; a person the company
+ * Decisions page with "Priya Raman decides"; a person the company
  * does not have gets no card; fails_when = no card, a card that does not name who is pinged,
  * an Undo on the applied card, or the request missing from the Decisions page; no_claim = the
  * Slack message itself (the API's test_ask_oracle_actions.py).
@@ -69,6 +69,6 @@ test("the owner asks Oracle to request a decision, and it waits on the Decisions
   await page.goto("/simple/decisions");
   const row = page.getByRole("region", { name: "Outside meetings" }).getByTestId("decision-row").filter({ hasText: TITLE });
   await expect(row).toHaveCount(1);
-  await expect(row).toContainText(APPROVER);
-  await expect(row).toContainText("waiting for a decider");
+  // ec1 b: an open row names who decides.
+  await expect(row).toContainText(`${APPROVER} decides`);
 });
