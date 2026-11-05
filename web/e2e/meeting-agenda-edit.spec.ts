@@ -9,7 +9,9 @@ import { expect, test, type Locator, type Page } from "./test";
  * export skipped; Priya Raman decides the PRD), the strip says Now, Next and Item 2 of 5 and
  * Edit agenda opens the Agenda sheet. The owner adds a topic and a feature, renames, reorders
  * by arrows and by drag, removes with Undo; Dana (an approver, not the decider) proposes and
- * the proposal waits for Priya; a viewer reads; on a phone the sheet is a bottom sheet.
+ * the proposal waits for Priya, whose Accept she can Undo; an op of Dana's proposal whose item
+ * the owner removed since is left out, and the proposal says so; a viewer reads; on a phone
+ * the sheet is a bottom sheet.
  */
 
 async function tap(l: Locator) {
@@ -74,7 +76,8 @@ test.describe("desktop", () => {
     await s.getByLabel("Item name").fill("Quiet hours by default");
     await tap(s.getByRole("button", { name: "Save" }));
     await expect(rows(page).nth(2)).toContainText("Quiet hours by default");
-    // A typed topic and a feature.
+    // A typed topic and a feature: four features of the PRD are not on the agenda yet.
+    for (const f of ["Alert routing by team", "Alert snooze", "Spend limit alerts", "Alert email templates"]) await expect(s.getByRole("button", { name: `+ ${f}` })).toBeVisible();
     await s.getByLabel("Add a feature or a topic").fill("Beta date sign-off");
     await s.getByLabel("Add a feature or a topic").press("Enter");
     await expect(rows(page).last()).toContainText("Beta date sign-off");
@@ -91,7 +94,7 @@ test.describe("desktop", () => {
     await page.keyboard.press("Escape");
     await expect(s).toBeHidden();
     const done = page.getByTestId("agenda-done");
-    await expect(done).toContainText("Moved Quiet hours for muted teams up, renamed Quiet hours for muted teams to Quiet hours by default, added Beta date sign-off, added Alert routing by team, moved Mobile alert push down and removed Alert history export.");
+    await expect(done).toContainText("Moved Quiet hours for muted teams up and renamed it, added Beta date sign-off, added Alert routing by team, moved Mobile alert push down and removed Alert history export.");
     await expect(strip(page)).toContainText("Next: Quiet hours by default · topic");
     await expect(strip(page)).toContainText("Item 2 of 6");
     await tap(done.getByRole("button", { name: "Undo" }));
@@ -124,8 +127,44 @@ test.describe("desktop", () => {
     await switchTo(page, "approver@example.com", url);
     await tap(page.getByTestId("agenda-proposal").getByRole("button", { name: "Accept" }));
     await expect(page.getByTestId("agenda-proposal")).toBeHidden();
+    // The accept is Priya's own change: its Undo line shows to her.
+    const done = page.getByTestId("agenda-done");
+    await expect(done).toContainText("Renamed Quiet hours for muted teams to Quiet hours by default.");
     await tap(strip(page).getByRole("button", { name: "Edit agenda" }));
     await expect(rows(page).nth(3)).toContainText("Quiet hours by default");
+    await page.keyboard.press("Escape");
+    await tap(done.getByRole("button", { name: "Undo" }));
+    await expect(done).toBeHidden();
+    await tap(strip(page).getByRole("button", { name: "Edit agenda" }));
+    await expect(rows(page).nth(3)).toContainText("Quiet hours for muted teams");
+  });
+
+  test("an approver's proposal leaves out an op whose item was removed since, and says so", async ({ page }) => {
+    test.setTimeout(120_000);
+    const url = await startReview(page);
+    await switchTo(page, "dana.whitfield@example.com", url);
+    await tap(strip(page).getByRole("button", { name: "Edit agenda" }));
+    await tap(sheet(page).getByRole("button", { name: "Rename Quiet hours for muted teams" }));
+    await sheet(page).getByLabel("Item name").fill("Quiet hours by default");
+    await tap(sheet(page).getByRole("button", { name: "Propose" }));
+    await expect(page.getByTestId("agenda-proposal")).toBeVisible();
+
+    // The owner removes the topic Dana's proposal renames.
+    await switchTo(page, "admin@example.com", url);
+    await tap(strip(page).getByRole("button", { name: "Edit agenda" }));
+    await tap(sheet(page).getByRole("button", { name: "Remove Quiet hours for muted teams" }));
+    await expect.poll(() => names(page)).not.toContain("Quiet hours for muted teams");
+
+    // Dana's next op still goes through; the rename is left out, and the line says so.
+    await switchTo(page, "dana.whitfield@example.com", url);
+    await tap(strip(page).getByRole("button", { name: "Edit agenda" }));
+    await sheet(page).getByLabel("Add a feature or a topic").fill("Help text");
+    await sheet(page).getByLabel("Add a feature or a topic").press("Enter");
+    await page.keyboard.press("Escape");
+    const line = page.getByTestId("agenda-proposal");
+    await expect(line.getByTestId("agenda-dropped")).toHaveText("Left out, since the item was removed: Renamed Quiet hours for muted teams to Quiet hours by default.");
+    await tap(line.getByRole("button", { name: "About What is proposed" }));
+    await expect(page.getByText("Added Help text.")).toBeVisible();
   });
 
   test("a viewer reads the agenda with no controls", async ({ page }) => {

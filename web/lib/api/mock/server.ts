@@ -977,6 +977,11 @@ function seedMeetingAgendaSheetScenario(): Db {
   const rm = (db.simple_roadmap = seedSimpleRoadmap());
   rm.prd_deciders = { "usage-alerts": db.members.find((m) => m.email === "approver@example.com")!.id };
   rm.agenda_midway = { topic: "Quiet hours for muted teams", by: dana.id };
+  // Four features of the PRD not on the agenda yet, for the sheet's Add list as the frames draw it.
+  for (const [key, title] of [["alert-snooze", "Alert snooze"], ["alert-spend", "Spend limit alerts"], ["alert-email", "Alert email templates"]] as const) {
+    rm.items.push({ key, title, horizon: "next", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium" });
+    rm.ids[key] = stableUuid(`simple-item/${key}`);
+  }
   return db;
 }
 

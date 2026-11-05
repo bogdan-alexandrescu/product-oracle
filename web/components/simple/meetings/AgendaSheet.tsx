@@ -88,7 +88,7 @@ export function AgendaSheet({ meetingId, agenda, can, phone, reload }: { meeting
   const send = async (op: Op) => {
     setBusy(true);
     try {
-      await unwrap(api.POST("/v1/simple/meetings/{meeting_id}/agenda", { params: { path: { meeting_id: meetingId } }, body: { ...op, batch: batch.current } }));
+      await unwrap(api.POST("/v1/simple/meetings/{meeting_id}/agenda", { params: { path: { meeting_id: meetingId } }, body: { batch: batch.current, ...op } }));
       await reload();
       return true;
     } catch (e) {
@@ -102,6 +102,12 @@ export function AgendaSheet({ meetingId, agenda, can, phone, reload }: { meeting
     batch.current = crypto.randomUUID();
     setMine((was) => [...was, batch.current]);
     setOpen(true);
+  };
+  // The decider's accept is their own batch, so its Undo line shows to them.
+  const accept = () => {
+    const b = crypto.randomUUID();
+    setMine((was) => [...was, b]);
+    return send({ op: "accept", batch: b });
   };
   const move = (x: Row, to: number) => send({ op: "move", item_id: x.id, to });
   const add = async (body: Op) => {
@@ -139,7 +145,7 @@ export function AgendaSheet({ meetingId, agenda, can, phone, reload }: { meeting
       {showDone && (
         <p role="status" className="flex flex-wrap items-center gap-x-3 border-b border-line bg-[var(--simple-edited)] px-4 py-1.5 text-base" data-testid="agenda-done">
           {agendaSentence(agenda.words)}
-          <button type="button" className={LINK} disabled={busy} onClick={() => send({ op: "undo" })}>
+          <button type="button" className={LINK} disabled={busy} onClick={() => send({ op: "undo", batch: agenda.batch })}>
             Undo
           </button>
         </p>
@@ -154,7 +160,7 @@ export function AgendaSheet({ meetingId, agenda, can, phone, reload }: { meeting
           </span>
           <span>Waits for {prop.decider?.name ?? "an owner"}</span>
           {mode === "save" && (
-            <button type="button" className={LINK} disabled={busy} onClick={() => send({ op: "accept" })}>
+            <button type="button" className={LINK} disabled={busy} onClick={accept}>
               Accept
             </button>
           )}
@@ -162,6 +168,11 @@ export function AgendaSheet({ meetingId, agenda, can, phone, reload }: { meeting
             <button type="button" className={LINK} disabled={busy} onClick={() => send({ op: "withdraw" })}>
               {mode === "save" ? "Decline" : "Withdraw"}
             </button>
+          )}
+          {mode === "propose" && (prop.dropped ?? []).length > 0 && (
+            <span className="basis-full text-text2" data-testid="agenda-dropped">
+              Left out, since the item was removed: {agendaSentence(prop.dropped ?? [])}
+            </span>
           )}
         </p>
       )}
