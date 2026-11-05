@@ -97,6 +97,8 @@ for (const view of VIEWS) {
       const lastBox = await box(last);
       const barAt = await box(b);
       expect(lastBox.y + lastBox.height).toBeLessThanOrEqual(barAt.y + 0.5);
+      // …right above it: the page keeps the bar's room, not an empty band besides.
+      expect(barAt.y - (lastBox.y + lastBox.height)).toBeLessThan(48);
       await shot(page, `b02-review-stop-end-${tag}`);
     });
 

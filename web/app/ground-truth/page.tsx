@@ -21,7 +21,7 @@ import { goalTags, KPI_PHONE } from "@/app/baseline/_components/common";
 import { ConflictsTab } from "@/app/baseline/_components/ConflictsTab";
 import { EntityDrawer } from "@/app/baseline/_components/EntityDrawer";
 import { FlaggedTab } from "@/app/baseline/_components/FlaggedTab";
-import { FromRunBand, FromRunTab, RowActions, WhyCard } from "@/app/baseline/_components/FromRunTab";
+import { BottomBar, FromRunBand, FromRunTab, RowActions, WhyCard } from "@/app/baseline/_components/FromRunTab";
 import { fillNotice } from "@/app/baseline/_components/goal-fields";
 import type { Stepper } from "@/app/baseline/_components/GoalInterview";
 import { GraphTab } from "@/app/baseline/_components/GraphTab";
@@ -704,6 +704,7 @@ export default function BaselinePage() {
             </>
           )}
         </div>
+        {active === "from-run" && view && <BottomBar view={view} busy={busy} act={act} />}
       </Split>
     </Page>
   );

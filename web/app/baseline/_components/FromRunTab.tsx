@@ -375,7 +375,7 @@ export function FromRunTab({ view, entities, busy, selectedId, act, onOpen }: Pr
   const parentOf = (r: Row) =>
     r.entity.parent_id ? (view.rows.find((x) => x.entity.id === r.entity.parent_id)?.entity ?? entities.find((x) => x.id === r.entity.parent_id)) : undefined;
   return (
-    <div className="flex min-w-0 flex-col gap-3 pb-40">
+    <div className="flex min-w-0 flex-col gap-3">
       <FilterChips<Filter>
         label="Show"
         value={filter}
@@ -437,13 +437,16 @@ export function FromRunTab({ view, entities, busy, selectedId, act, onOpen }: Pr
           </ul>
         </details>
       )}
-      <BottomBar view={view} busy={busy} act={act} />
     </div>
   );
 }
 
-/** Approvers, while the stop waits: the tally, staged look agains, the note, Approve and Send back. */
-function BottomBar({ view, busy, act }: { view: FromRunOut; busy: boolean; act: Act }) {
+/**
+ * Approvers, while the stop waits: the tally, staged look agains, the note, Approve and Send back.
+ * The page puts it last in its column, sticky at the window's foot: it keeps clear of the Ask
+ * dock and leaves its place below the last row (visual QA B-02).
+ */
+export function BottomBar({ view, busy, act }: { view: FromRunOut; busy: boolean; act: Act }) {
   const cp = view.checkpoint;
   const [note, setNote] = useState(cp?.note ?? "");
   const [sheet, setSheet] = useState(false);
