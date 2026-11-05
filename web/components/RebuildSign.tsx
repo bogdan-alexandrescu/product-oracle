@@ -44,6 +44,8 @@ let timer: ReturnType<typeof setTimeout> | null = null;
 /** The read out now (its number), 0 when none. */
 let reading = 0;
 let reads = 0;
+/** The newest read whose answer the sign shows: an older answer arriving late never replaces it. */
+let applied = 0;
 let again = false;
 let opened: string[] | null = null;
 /** The first read has answered (or failed), or Home waited ANSWER_LIMIT_MS for it. */
@@ -86,7 +88,10 @@ async function read() {
   }, READ_LIMIT_MS);
   try {
     const { data: got } = await api.GET("/v1/rebuilds");
-    if (got && reading === mine) {
+    // A given-up read's answer still counts while no newer answer has been shown: with every
+    // read slower than READ_LIMIT_MS, the sign would otherwise never show anything.
+    if (got && mine > applied) {
+      applied = mine;
       data = got;
       emit();
     }
@@ -94,8 +99,12 @@ async function read() {
     // A failed read keeps what the sign said; the next read tries again.
   }
   clearTimeout(giveUp);
-  // Given up: a newer read has taken over (or will at the next wake).
-  if (reading !== mine) return;
+  // Given up: a newer read has taken over (or will at the next wake). Its late answer, shown
+  // after that read already ended, sets the next read's time itself.
+  if (reading !== mine) {
+    if (!reading && applied === mine) schedule();
+    return;
+  }
   reading = 0;
   markAnswered();
   if (again) {
