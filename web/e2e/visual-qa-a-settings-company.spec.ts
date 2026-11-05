@@ -33,7 +33,7 @@ async function openSources(page: Page) {
 test("ST-1: a viewer's Sources page says View only and has no write controls", async ({ page }) => {
   await login(page, VIEWER);
   await openSources(page);
-  await expect(page.getByTestId("view-only")).toBeVisible();
+  await expect(page.locator('main [data-testid="view-only"]:visible')).toHaveText("View only");
   const main = page.getByRole("main");
   for (const name of ["Add a source", "Sync now", "Pause", "Resume", "Upload files", "Map the code", "Use"]) {
     await expect(main.getByRole("button", { name, exact: true })).toHaveCount(0);
