@@ -384,7 +384,8 @@ async def test_version_without_a_brief_opens_full_and_has_no_brief_exports(clien
     for q in ("layer=brief&format=html", "layer=deck&format=pptx"):
         resp = await client.get(f"{base}/export?{q}", headers=h)
         assert resp.status_code == 422 and "no brief" in resp.json()["detail"]
-    assert (await client.get(f"{base}/deck", headers=h)).status_code == 422
+    # B-04: Present mode shows the full document's sections instead.
+    assert (await client.get(f"{base}/deck", headers=h)).status_code == 200
     assert (await client.get(f"{base}/export?format=html", headers=h)).status_code == 200
 
 
