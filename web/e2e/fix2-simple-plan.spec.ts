@@ -289,7 +289,8 @@ test.describe("QA pass 2: simple-plan, Goal buckets", () => {
     await expect(page.getByTestId("buckets-summary")).toContainText(/^This plan, Nov 2 – Feb 12: \d+ engineer-weeks over three milestones/);
     await expect(head).not.toContainText(/\d\.0\b/);
     await expect(page.getByTestId("buckets-footnote")).not.toContainText("PRD");
-    await expect(page.getByTestId("prio-subtitle")).toContainText("Nov 2 – Feb 12");
+    // mk-goalbuckets (train AL's picked frame): Goal buckets' line names the plan's quarter; its summary gives the dates.
+    await expect(page.getByTestId("prio-subtitle")).toHaveText("Where the engineer-weeks go, goal by goal. Q4 2026.");
     await expect(page.getByTestId("plan-goal-count").first()).toContainText("in the plan");
     for (const card of await page.locator('[data-testid="plan-goal"][data-goal]:not([data-goal=""])').all()) {
       await expect(card.getByTestId("goal-suggest-feature")).toHaveCount(1);
