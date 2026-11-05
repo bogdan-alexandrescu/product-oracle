@@ -82,6 +82,22 @@ for (const role of [undefined, "approver", "commenter"] as const) {
   });
 }
 
+test("D-2: an approver's decision to make has its own chip, counted in the total", async ({ page }) => {
+  await openHome(page, "approver");
+  const needs = page.getByTestId("home-needs");
+  await expect(needs.getByTestId("home-needs-table")).toBeVisible();
+  const waiting = page.getByText(/^\d+ waiting$/).first();
+  await expect(waiting).toBeVisible();
+  await expect(needs.getByTestId("home-count-decisions")).toBeVisible();
+  await expect
+    .poll(async () => {
+      const total = Number((await waiting.textContent())!.split(" ")[0]);
+      const counts = await needs.locator("[data-testid^='home-count-']").evaluateAll((els) => els.map((el) => Number(el.querySelector("b")?.textContent ?? "0")));
+      return counts.reduce((x, y) => x + y, 0) - total;
+    })
+    .toBe(0);
+});
+
 test("D-2: the Approvals chip opens the Inbox on approvals only", async ({ page }) => {
   await openHome(page);
   const approvals = page.getByTestId("home-needs").getByTestId("home-count-approvals");
