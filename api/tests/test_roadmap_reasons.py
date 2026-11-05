@@ -348,6 +348,17 @@ def test_a_milestone_moment_reads_as_its_calendar_day_month_first():
     assert "2027-02-03" not in reason["text"]
 
 
+def test_a_milestone_date_given_as_a_quoted_string_reads_month_first():
+    body = """\
+  - {id: a, title: A, outcome: o, horizon: now, prd_section: s-1,
+     milestone: {name: Beta, date: "2026-11-30", date_source: a hunch}}
+"""
+    items, problems = check(FILE.format(items=body), date_bases=[])
+    reason = next(r for r in reasons_for(items, problems, ctx()) if r["code"] == "unverified_date")
+    assert reason["text"].endswith("supports Nov 30, 2026.")
+    assert "2026-11-30" not in reason["text"]
+
+
 def test_file_problems_are_not_reasons_and_are_counted():
     items, problems = check("version: 1\nitems: []\n")
     out = reasons_for(items, problems, ctx())
