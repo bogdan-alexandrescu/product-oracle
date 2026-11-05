@@ -766,19 +766,22 @@ const joinRow = (cells: string[]) => `| ${cells.join(" | ")} |`;
  */
 export function readerBody(md: string, sectionKey: string): string {
   const group = GROUP_KEY.test(sectionKey);
+  const when = group ? HORIZON_WORDS[sectionKey.split("-group-")[0]] : undefined;
   const lines = (md ?? "").split("\n").filter((l) => !LEFT_OUT.test(l.trim()) && l.trim() !== NO_GOAL_FLAG);
   const out: string[] = [];
   for (let i = 0; i < lines.length; ) {
-    const head = lines[i].trim().startsWith("|") ? splitRow(lines[i]) : null;
+    const cols = lines[i].trim().startsWith("|") ? splitRow(lines[i]) : null;
     const delim = lines[i + 1]?.trim() ?? "";
-    if (!head || !/^\|?[\s:|-]+\|?$/.test(delim) || !delim.includes("-") || splitRow(delim).length !== head.length) {
+    if (!cols || !/^\|?[\s:|-]+\|?$/.test(delim) || !delim.includes("-") || splitRow(delim).length !== cols.length) {
       out.push(lines[i]);
       i += 1;
       continue;
     }
     let end = i + 2;
     while (end < lines.length && lines[end].trim().startsWith("|")) end += 1;
-    const rows = lines.slice(i + 2, end).map((l) => [...splitRow(l), ...head.map(() => "")]);
+    let rows = lines.slice(i + 2, end).map((l) => [...splitRow(l), ...cols.map(() => "")]);
+    let head = cols;
+    if (when) [head, rows] = withWhen(cols, rows, when);
     const keep = head
       .map((name, n) => ({ name: name.replace(/^[*\s]+|[*\s]+$/g, "").toLowerCase(), n }))
       .filter(({ name, n }) => n === 0 || (!(group && (name === "goal" || name === "goals")) && rows.some((r) => r[n].trim())))
@@ -787,6 +790,24 @@ export function readerBody(md: string, sectionKey: string): string {
     i = end;
   }
   return out.join("\n").replace(/\n{3,}/g, "\n\n").replace(/^\n+|\n+$/g, "");
+}
+
+const HORIZON_WORDS: Record<string, string> = { now: "Now", next: "Next", later: "Later" };
+
+/**
+ * E-14 (as the API's render._with_when): a goal group's item table as a link holder reads it: each item's name,
+ * when (its horizon) and status (its confidence, in words: "High confidence"), then the other columns; the
+ * reader styles draw each row as a card.
+ */
+function withWhen(head: string[], rows: string[][], when: string): [string[], string[][]] {
+  const names = head.map((h) => h.replace(/^[*\s]+|[*\s]+$/g, "").toLowerCase());
+  const status = names.indexOf("confidence");
+  const rest = head.map((_, n) => n).filter((n) => n > 0 && n !== status);
+  const words = (cell: string) => (cell.trim() ? `${cell.trim()[0].toUpperCase()}${cell.trim().slice(1)} confidence` : "");
+  return [
+    [head[0], "When", "Status", ...rest.map((n) => head[n])],
+    rows.map((r) => [r[0], when, status >= 0 ? words(r[status]) : "", ...rest.map((n) => r[n])]),
+  ];
 }
 
 /** An audience rendering's sections as a link holder reads them (`readerBody`). */
@@ -809,6 +830,15 @@ const READER_CSS =
   "th,td{word-break:normal;overflow-wrap:normal;hyphens:manual}" +
   "th:first-child,td:first-child{min-width:8rem}" +
   "@media (max-width:640px){body{margin:0;padding:0}table{display:block;overflow-x:auto;max-width:100%}}" +
+  // E-14: a goal group's items (name, when, status) are cards that fill the column, one to a row on a phone.
+  ".section-wide table{display:block;width:100%;max-width:100%;overflow:visible;border:0}" +
+  ".section-wide thead{display:none}" +
+  ".section-wide tbody{display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:.6rem}" +
+  ".section-wide tr{display:flex;flex-direction:column;gap:.15rem;min-width:0;border:1px solid #d0d5dd;border-radius:8px;padding:.6rem .75rem}" +
+  ".section-wide td{display:block;border:0;padding:0;min-width:0!important}" +
+  ".section-wide td:first-child{font-weight:600}" +
+  ".section-wide td+td{font-size:.875rem;color:#475569}" +
+  ".section-wide td:empty{display:none}" +
   "@media (prefers-color-scheme:dark){html,body{background:#0f172a!important;color:#e2e8f0!important}" +
   "body *{color:inherit!important;background-color:transparent!important;border-color:#334155!important}" +
   "body a{color:#93c5fd!important}body th{background-color:#1e293b!important}}";
@@ -894,7 +924,8 @@ function showPage(ctx: SharesContext, link: LinkRow, kind: "page"): Response {
   // qa-docs-14: the same day as the header's (the status's expires_on), in its words; "by" only with a company name.
   const zone = ctx.zone?.() ?? "America/Los_Angeles";
   const by = ctx.company.trim() ? ` by ${ctx.company.trim()}` : "";
-  const footer = `Shared with you${by} on ${day(link.created_at, zone)} · link expires ${day(link.expires_at, zone)}`;
+  // E-14: the page's header says when the link ends; the footer does not say it again.
+  const footer = `Shared with you${by} on ${day(link.created_at, zone)}`;
   let content: string;
   if (link.audience === "public") {
     if (!publicChecked(ctx, doc, pub!)) content = page(UPDATING, `<p>${UPDATING}.</p>`);

@@ -319,7 +319,8 @@ async def test_the_right_passcode_opens_the_page_with_a_cookie_on_the_links_path
     assert OWNER_MARK not in page.text and REVENUE_MARK not in page.text
     assert "[c:" not in page.text and "<script" not in page.text.lower()
     assert "<!--" not in page.text
-    assert "expires" in body_text.lower()
+    # E-14: when the link ends is the header's (the status's expires_on), not the page's.
+    assert "expires" not in body_text.lower()
     status = await client.get(f"{PUBLIC}/{token}/status", headers={"Cookie": cookie_of(resp)})
     got = status.json()
     # qa-docs-71: the page's header names the roadmap, who shared it and when the link ends.

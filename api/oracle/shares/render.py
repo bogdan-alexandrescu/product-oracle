@@ -68,6 +68,18 @@ READER_CSS = (
     # still stacks its cards in one column on a phone.
     ".section-group>.group-body{grid-template-columns:minmax(0,1fr)!important}"
     ".section-group>.group-body>.section-wide{grid-column:auto!important}}"
+    # E-14: a goal group's items (name, when, status) are cards that fill the column, as
+    # many to a row as fit and one to a row on a phone; no table header over them.
+    ".section-wide table{display:block;width:100%;max-width:100%;overflow:visible;border:0}"
+    ".section-wide thead{display:none}"
+    ".section-wide tbody{display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));"
+    "gap:.6rem}"
+    ".section-wide tr{display:flex;flex-direction:column;gap:.15rem;min-width:0;"
+    "border:1px solid #d0d5dd;border-radius:8px;padding:.6rem .75rem}"
+    ".section-wide td{display:block;border:0;padding:0;min-width:0!important}"
+    ".section-wide td:first-child{font-weight:600}"
+    ".section-wide td+td{font-size:.875rem;color:#475569}"
+    ".section-wide td:empty{display:none}"
     "@media (prefers-color-scheme:dark){html,body{background:#0f172a!important;"
     "color:#e2e8f0!important}body *{color:inherit!important;"
     "background-color:transparent!important;border-color:#334155!important}"
@@ -142,15 +154,16 @@ def day_with_year(moment: datetime, zone: str) -> str:
     return shown_day(company_time.day(moment, zone))
 
 
-def _footer(sender: str | None, ctx: ShareContext, zone: str) -> str:
+def _footer(sender: str | None, ctx: ShareContext, zone: str, ends: bool = False) -> str:
     # qa-docs-14: the same day as the page's header (the status's expires_on), in its words.
+    # E-14: the page's header says when the link ends, so only the PDF (no header) says it.
     shared = day_with_year(ctx.shared_at, zone)
     expires = day_with_year(ctx.expires_at, zone)
     by = f" by {html_lib.escape(sender)}" if sender else ""
+    end = f" · link expires {html_lib.escape(expires)}" if ends else ""
     return (
         '<footer class="share-footer" style="margin-top:2rem;font-size:.85rem;color:#4b5563">'
-        f"Shared with you{by} on {html_lib.escape(shared)} · "
-        f"link expires {html_lib.escape(expires)}</footer>"
+        f"Shared with you{by} on {html_lib.escape(shared)}{end}</footer>"
     )
 
 
@@ -180,6 +193,7 @@ def reader_body(body_md: str, section_key: str) -> str:
     from oracle.roadmap import variants
 
     group = variants.spans_row(section_key)
+    when = variants.HORIZON_SECTIONS.get(section_key.split("-group-")[0]) if group else None
     lines = [
         ln
         for ln in (body_md or "").split("\n")
@@ -199,6 +213,8 @@ def reader_body(body_md: str, section_key: str) -> str:
             end += 1
         head = variants._split_row(lines[i])
         rows = [variants._split_row(ln) + [""] * len(head) for ln in lines[i + 2 : end]]
+        if when:
+            head, rows = _with_when(head, rows, when)
         keep = [
             n
             for n, name in enumerate(head)
@@ -213,6 +229,26 @@ def reader_body(body_md: str, section_key: str) -> str:
         out += [variants._join_row([r[n] for n in keep]) for r in rows]
         i = end
     return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip("\n")
+
+
+def _with_when(head: list[str], rows: list[list[str]], when: str):
+    """E-14: a goal group's item table as a link holder reads it: each item's name, when
+    (its horizon) and status (its confidence, in words: "High confidence"), then the other
+    columns; the reader styles draw each row as a card."""
+    names = [h.strip("* ").lower() for h in head]
+    status = names.index("confidence") if "confidence" in names else None
+    rest = [n for n in range(1, len(head)) if n != status]
+    out_head = [head[0], "When", "Status"] + [head[n] for n in rest]
+
+    def words(cell: str) -> str:
+        cell = cell.strip()
+        return f"{cell[:1].upper()}{cell[1:]} confidence" if cell else ""
+
+    out_rows = [
+        [r[0], when, words(r[status]) if status is not None else ""] + [r[n] for n in rest]
+        for r in rows
+    ]
+    return out_head, out_rows
 
 
 def _with_footer(html: str, footer: str) -> str:
@@ -309,6 +345,7 @@ async def render_share(ctx: ShareContext, fmt: str = "html") -> str | bytes:
                                               shared_on, expires_on))  # fmt: skip
             return for_reader(str(_cache[key])) if fmt == "html" else _cache[key]
         footer = _footer(sender, ctx, zone)
+        pdf_footer = _footer(sender, ctx, zone, ends=True)
         ev = await load_export_version(db, str(document.id), version.number)
         ev = apply_layer(ev, "full")
         ev = await exports.with_audience(db, ev, ctx.audience)
@@ -326,5 +363,5 @@ async def render_share(ctx: ShareContext, fmt: str = "html") -> str | bytes:
         _remember(key, html)
         return for_reader(_with_footer(str(html), footer))
     # The PDF carries the link's footer in its own text: rendered per link, not cached.
-    html = _with_footer(str(await _on_pool(ctx, _render_audience, ev, "html")), footer)
+    html = _with_footer(str(await _on_pool(ctx, _render_audience, ev, "html")), pdf_footer)
     return await _on_pool(ctx, html_to_pdf, html)
