@@ -167,7 +167,19 @@ function savedDays(ids: string[]): number {
   const own = Object.entries(GOAL_WORK).reduce((t, [id, w]) => t + w.days - s * (ids.includes(id) ? w.left : w.days), 0);
   return Math.round(other + own);
 }
-const pwSaved = (ids: string[]) => Math.round(byId(ids).reduce((t, c) => t + c.pw_saved * (GOAL_WORK[c.id] ? share() : 1), 0) * 10) / 10;
+/** Python's round(x, 1), as the API rounds person-weeks: the number's exact value, a tie to the even tenth. */
+function round1(x: number): number {
+  const [whole, frac] = x.toFixed(60).split(".");
+  const tenths = Number(whole) * 10 + Number(frac[0]);
+  const rest = frac.slice(1);
+  const up = rest[0] > "5" || (rest[0] === "5" && (/[1-9]/.test(rest.slice(1)) || tenths % 2 === 1));
+  return (tenths + (up ? 1 : 0)) / 10;
+}
+/** A change's person-weeks under a smaller goal (the API's build_plan): its share, never under a tenth
+ * of its size rounded to a tenth of a week, and a small one keeps 0.1. */
+const shrunk = (pw: number, s: number) => Math.max(round1(pw * s), round1(pw * 0.1), Math.min(pw, 0.1));
+const changePw = (c: Change) => (GOAL_WORK[c.id] ? shrunk(c.pw_saved, share()) : c.pw_saved);
+const pwSaved = (ids: string[]) => round1(byId(ids).reduce((t, c) => t + changePw(c), 0));
 const at = (picks: string[]) => shift(PROJECTED, savedDays(picks));
 
 const HARM: Record<Change["cost_kind"], number> = { none: 0, risk: 1, gate: 2, goal: 3, must: 9 };
@@ -175,7 +187,7 @@ const HARM: Record<Change["cost_kind"], number> = { none: 0, risk: 1, gate: 2, g
  * saved for the least harm, the must-include change too (the API's answer). */
 function ranked(): Change[] {
   const s = share();
-  return CHANGES.map((c) => (GOAL_WORK[c.id] ? { ...c, days: Math.round(c.days * s), pw_saved: Math.max(Math.round(c.pw_saved * s * 10) / 10, c.pw_saved * 0.1) } : c)).sort(
+  return CHANGES.map((c) => (GOAL_WORK[c.id] ? { ...c, days: Math.round(c.days * s), pw_saved: changePw(c) } : c)).sort(
     (x, y) => y.days - x.days || HARM[x.cost_kind] - HARM[y.cost_kind] || x.item.localeCompare(y.item),
   );
 }
