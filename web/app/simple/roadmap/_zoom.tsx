@@ -784,7 +784,8 @@ function DayChart(props: TimelineProps) {
           {/* approved-roadmap-to-simple: the roadmap's milestones (an approved version's too),
            * each a dashed line on its day with its name, as the Gantt marks them. */}
           {marks.map(({ m, at }) =>
-            // A line under the names column would show through a goal's header row.
+            // A line under the names column would show through a goal's header row. It lies under
+            // the rows (a bar on it keeps the pointer), which let the pointer through elsewhere.
             fit || at >= sl ? (
               <button
                 key={m.id}
@@ -798,7 +799,7 @@ function DayChart(props: TimelineProps) {
                 onFocus={() => setMsTip({ id: m.id, left: labelW + at + 8, top: 48 })}
                 onBlur={() => setMsTip(null)}
                 onClick={() => openMs(m.id)}
-                className="absolute top-11 bottom-0 z-[25] w-[6px] cursor-pointer border-l-2 border-dashed border-text2 focus-visible:outline-2 focus-visible:outline-accent"
+                className="absolute top-11 bottom-0 z-10 w-[6px] cursor-pointer border-l-2 border-dashed border-text2 focus-visible:outline-2 focus-visible:outline-accent"
                 style={{ left: labelW + at }}
               />
             ) : null,
@@ -1138,8 +1139,9 @@ const TimelineRow = memo(function TimelineRow({
       data-open={sel || undefined}
       // A row out of sight is not painted (content-visibility), so a drag's frame repaints the
       // rows in sight and not the chart's 500. Its containment stacks the row on its own, so
-      // the row sits over the chart's today line and draws its own piece of it (below).
-      className="relative z-[11]"
+      // the row sits over the chart's today line and draws its own piece of it (below). Only its
+      // name and bar take the pointer: a milestone's line under the row takes the rest.
+      className="pointer-events-none relative z-[11]"
       style={
         live
           ? undefined
