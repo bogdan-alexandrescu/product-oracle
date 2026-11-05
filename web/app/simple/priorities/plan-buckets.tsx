@@ -104,10 +104,11 @@ export function CodeTag({ code, title }: { code: string; title?: string }) {
 }
 
 /**
- * A segment's label shows when it fits the segment with 6 px to spare each side; a narrower
- * segment is blank, its words in its title. Measured on the label as drawn, not guessed from
- * its length: the same font draws a few percent wider or narrower on another system, and a
- * guessed fit either cut a label at the segment's edge or hid one that fitted.
+ * A segment's label shows when it fits the segment by the picked frames' own margin (13 px type
+ * taken at 8 px a letter, plus 12 px) and, measured as drawn, with 6 px to spare each side; a
+ * narrower segment is blank, its words in its title. The measure catches the same font drawn a
+ * few percent wider on another system, which would cut a label at the segment's edge; the
+ * frames' margin keeps the frames' look where text draws as wide or narrower.
  */
 const LABEL_PAD = 12;
 
@@ -129,7 +130,8 @@ function useFittingLabels(track: React.RefObject<HTMLDivElement | null>, width: 
     const next = new Set<string>();
     for (const seg of t.querySelectorAll<HTMLElement>("[data-milestone]")) {
       const text = seg.querySelector<HTMLElement>("[data-label]");
-      if (text && text.offsetWidth + LABEL_PAD <= seg.clientWidth) next.add(seg.dataset.milestone!);
+      const room = seg.getBoundingClientRect().width;
+      if (text && text.textContent!.length * 8 + LABEL_PAD <= room && text.offsetWidth + LABEL_PAD <= seg.clientWidth) next.add(seg.dataset.milestone!);
     }
     // A measurement of the drawn labels, set only when the set changes.
     // eslint-disable-next-line react-hooks/set-state-in-effect

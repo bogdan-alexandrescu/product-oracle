@@ -1977,10 +1977,10 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
   const phone = usePhone();
   const [opened, setOpened] = useState<{ code: string; name: string } | null>(null);
   return (
-    <section aria-label="Goal buckets">
+    <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
       <PlanBucketsHead plan={plan} codeOf={codeOf} />
       <div ref={noteSlot} className="scroll-mt-4" />
-      {note && <UndoNote onUndo={note.undo ? () => void writes.undo(note.undo!) : undefined}>{note.text}</UndoNote>}
+      {note && <UndoNote id={note.id} clear='[data-testid="plan-goal"] h3' onUndo={note.undo ? () => void writes.undo(note.undo!) : undefined}>{note.text}</UndoNote>}
       {error && (
         <p role="alert" className="mt-3 text-[15px] text-warn">
           {error}
@@ -2154,9 +2154,10 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
           onArchive={async (to) => {
             if (!(await writes.archive(archivedGoal, to, archiveWords(plan, gb, archivedGoal, to)))) return;
             setArchiving(null);
-            // gb2-a-result: the archived bucket is gone, so the page scrolls back to the note's own
-            // place above the buckets, where it covers no goal's title.
-            if ((noteSlot.current?.getBoundingClientRect().top ?? 0) < 0) noteSlot.current?.scrollIntoView({ block: "start" });
+            // gb2-a-result: the archived bucket is gone, so on a wider screen the page scrolls back
+            // to the note's own place above the buckets, where it covers no goal's title. A phone's
+            // note is fixed above the bottom bar: the page stays, any title it covers lifted clear.
+            if (!phone && (noteSlot.current?.getBoundingClientRect().top ?? 0) < 0) noteSlot.current?.scrollIntoView({ block: "start" });
           }}
         />
       )}
