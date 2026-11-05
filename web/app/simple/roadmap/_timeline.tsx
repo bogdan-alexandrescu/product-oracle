@@ -3,7 +3,8 @@
 import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
 import { memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
-import { FeatureMarks, MarkForItem, pillWord } from "@/components/current-state/CurrentState";
+import { FeatureMarks, pillWord, type FeatureState } from "@/components/current-state/CurrentState";
+import { calendarDay } from "@/lib/dates";
 import { APPLIED_EVENT, lastPreview, PREVIEW_EVENT, type AppliedDetail, type ChatPreview, type PreviewDetail } from "@/lib/api/simple-chat";
 
 import {
@@ -491,10 +492,10 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     for (const i of data.items) {
       const f = states.get(`item:${i.id}`);
       // The pill's word in its 12 px capitals, its padding and the gap before it.
-      if (f) m.set(i.id, Math.ceil(textWidth(pillWord(f.mark, compact).toUpperCase(), 12, 600) * 1.05) + 16 + (compact ? 4 : 8));
+      if (f) m.set(i.id, Math.ceil(textWidth(markWords(f, compact, data.today).toUpperCase(), 12, 600) * 1.05) + 16 + (compact ? 4 : 8));
     }
     return m;
-  }, [compact, states, data.items]);
+  }, [compact, states, data.items, data.today]);
   const l = useMemo(() => layout(data, compact, lane, top, wrapRows ? { callW: chartW } : null, tails), [data, compact, lane, top, wrapRows, chartW, tails]);
   // fix4 qa-simple-roadmap-5: the part of the chart in view (it scrolls sideways), so a row whose
   // bar is out of view says where it lies, with a button that scrolls to it.
@@ -801,7 +802,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                 >
                   {r.item.title}
                 </span>
-                <MarkForItem itemId={r.item.id} compact={compact} />
+                <ItemMark f={states?.get(`item:${r.item.id}`)} compact={compact} today={data.today} />
               </span>
               {r.item.draft && !closedItem(r.item) && (
                 <span className="max-w-[48px] min-w-0 shrink truncate rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag" title="Draft">
@@ -841,6 +842,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
             width={chartW}
             height={l.height}
             data-testid="chart-svg"
+            data-head={l.top}
             className="block select-none"
             onPointerMove={onMoveEvt}
             onPointerUp={onUp}
@@ -1052,6 +1054,36 @@ function drawPhases(g: SVGGElement, phases: Item["phases"], sc: Scale, x: number
   }
 }
 
+/** E-16: a Current-state pill's words on the roadmap: a feature that runs reads "Exists",
+ * with the day its proof was last checked ("Exists · checked Sep 3") when that is old,
+ * never the internal "proof old". */
+function markWords(f: FeatureState, compact: boolean, today: string): string {
+  if (f.mark !== "exists_old") return pillWord(f.mark, compact);
+  if (compact || !f.checked_at) return "Exists";
+  const same = f.checked_at.slice(0, 4) === today.slice(0, 4);
+  return `Exists · checked ${calendarDay(f.checked_at, same ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" })}`;
+}
+
+const MARK_TONE: Record<FeatureState["mark"], string> = {
+  new: "bg-accent-soft text-accent-ink",
+  in_progress: "bg-warn-bg text-warn",
+  exists: "bg-pass-bg text-pass",
+  exists_old: "bg-warn-bg text-warn",
+};
+
+/** An item's Current-state pill beside its name (as MarkForItem draws it, in the roadmap's words). */
+function ItemMark({ f, compact, today }: { f: FeatureState | undefined; compact: boolean; today: string }) {
+  if (!f) return null;
+  const words = markWords(f, compact, today);
+  return (
+    <span title={words} className="inline-flex flex-none">
+      <span data-testid="cs-mark" data-mark={f.mark} className={`inline-flex flex-none items-center whitespace-nowrap rounded-full px-2 py-px text-[12px] font-semibold uppercase tracking-wide ${MARK_TONE[f.mark]}`}>
+        {words}
+      </span>
+    </span>
+  );
+}
+
 function Axis({ ticks, sc, height, format, drop, compact, monthly = false, view = null }: { ticks: { day: string; label: string; major: boolean }[]; sc: Scale; height: number; format: Format; drop: boolean; compact: boolean; monthly?: boolean; view?: [number, number] | null }) {
   // D: a week's date over each week (D3: every other week on a phone, or where a week is too
   // narrow for its date); the day scale numbers its days. fix4 qa-simple-roadmap-6: a phone's
@@ -1065,11 +1097,16 @@ function Axis({ ticks, sc, height, format, drop, compact, monthly = false, view 
         const next = ticks[n + 1] ? sc.x(ticks[n + 1].day) : sc.width;
         const labelled = format !== "gantt" || monthly || (weekly ? !everyOther || n % 2 === 0 : t.major || sc.px >= 20);
         // finding 28: a narrow quarter header still names its year ("Q4 '26"), not just "Q4".
+        // E-17: the quarters read one way: the year in full on the first quarter and each Q1
+        // ("Q4 2026", "Q1 2027"), the short form on the rest ("Q2 '27"); a Q1 too narrow for its
+        // full year takes the short form too.
         const [qWord, qYear] = t.label.split(" ");
         const short = `${qWord}${qYear ? ` '${qYear.slice(-2)}` : ""}`;
-        let text = format !== "gantt" && next - x < 64 ? short : t.label;
         const size = format !== "gantt" ? 13 : 11;
         const weight = format !== "gantt" ? 600 : 400;
+        const full = (n === 0 || qWord === "Q1") && next - x >= textWidth(t.label, size, weight) + 5;
+        const whole = format !== "gantt" ? (full ? t.label : short) : t.label;
+        let text = whole;
         // finding 19: the right-most ticks keep their whole label inside the chart instead of
         // running past its edge (where the svg clips them): they anchor from their end once
         // they would otherwise overflow.
@@ -1077,7 +1114,9 @@ function Axis({ ticks, sc, height, format, drop, compact, monthly = false, view 
         // A quarter's label in a chart that scrolls sideways (a phone) is never cut by the edge
         // of the part in view: it sits in its quarter's part in view, shortened ("Q2 '27") only
         // where the whole label cannot fit there, and is left out where not even that fits (a
-        // quarter wholly out of view keeps its label where it is).
+        // quarter wholly out of view keeps its label where it is). R1: the label's own words and
+        // place stay on it (data-whole*), so an export (a copy of the whole chart) draws every
+        // quarter's label whole at its line.
         let at = x + 3;
         if (view && format !== "gantt") {
           const lo = Math.max(x, view[0]);
@@ -1089,20 +1128,36 @@ function Axis({ ticks, sc, height, format, drop, compact, monthly = false, view 
           }
         }
         const anchorEnd = !view || format === "gantt" ? clipped : false;
+        const wholeX = clipped ? Math.max(0, sc.width - 2) : x + 3;
+        const moved = text !== whole || (anchorEnd ? Math.max(0, sc.width - 2) : at) !== wholeX || anchorEnd !== clipped;
+        // E-3: the week scale names the year over its first tick and each new year's first;
+        // E-4: the day scale names the month over its first day and each 1st (the year on the
+        // first and each January).
+        const yearMark = format === "gantt" && !monthly && weekly && (n === 0 || ticks[n - 1].day.slice(0, 4) !== t.day.slice(0, 4)) ? t.day.slice(0, 4) : "";
+        const monthMark = format === "gantt" && !monthly && !weekly && (n === 0 || t.day.endsWith("-01")) ? monthTick(t.day, n === 0) : "";
         return (
-          <g key={t.day}>
+          <g key={t.day} data-day={format === "gantt" ? t.day : undefined}>
             {format !== "gantt" && n % 2 === 1 && <rect x={x} y={0} width={next - x} height={height} fill="var(--bg)" opacity={0.5} />}
             {drop && <rect data-testid="quarter-drop" data-add-where={whereAttr("quarter", quarterValue(t.day))} data-add-label={t.label} x={x} y={0} width={next - x} height={height} fill="transparent" />}
             <line x1={x} x2={x} y1={0} y2={height} stroke="var(--line)" strokeWidth={t.major ? 1 : 0.5} />
-            {labelled && text && (
+            {(yearMark || monthMark) && (
+              <text x={x + 3} y={11} fontSize={10} fontWeight={600} fill="var(--text2)" data-testid={yearMark ? "axis-year" : "axis-month"}>
+                {yearMark || monthMark}
+              </text>
+            )}
+            {labelled && (text || moved) && (
               <text
                 x={anchorEnd ? Math.max(0, sc.width - 2) : at}
-                y={format !== "gantt" ? 24 : 22}
+                y={format !== "gantt" ? 24 : !weekly && !monthly ? 28 : 22}
                 fontSize={size}
                 fontWeight={weight}
                 fill="var(--text2)"
                 textAnchor={anchorEnd ? "end" : "start"}
-                data-testid="axis-tick"
+                // A label left out of the part in view keeps its place (for the export) under another name.
+                data-testid={text ? "axis-tick" : "axis-tick-out"}
+                data-whole={moved ? whole : undefined}
+                data-whole-x={moved ? wholeX : undefined}
+                data-whole-anchor={moved ? (clipped ? "end" : "start") : undefined}
               >
                 {text}
               </text>

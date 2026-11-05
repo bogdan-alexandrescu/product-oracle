@@ -137,7 +137,8 @@ test.describe("desktop", () => {
         for (const row of host.querySelectorAll('[data-testid="export-row"]')) {
           const bar = row.querySelector<SVGGraphicsElement>('[data-testid="export-bar"]');
           const words = row.querySelector<SVGGraphicsElement>('[data-testid="export-bar-words"]');
-          if (!bar || !words) continue;
+          // (A bar wider than the view, both its ends out of sight, carries its dates on it.)
+          if (!bar || !words || words.getAttribute("data-place") === "inside") continue;
           const b = bar.getBBox();
           const w = words.getBBox();
           if (w.x < b.x + b.width - 0.5 && w.x + w.width > b.x + 0.5) out.push(`words over bar: ${words.textContent}`);
