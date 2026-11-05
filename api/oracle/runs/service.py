@@ -2978,6 +2978,11 @@ async def _prompt_context(
         prior_files=prior_files,
         kind=kind,
         source=source,
+        loop_plan=await _loop_plan_inputs(db, run)
+        if kind == "roadmap"
+        and run.flow != "prd_to_roadmap"
+        and _flow(run).segment(segment.name).imports_draft
+        else None,
         draft=draft_ctx,
         extra_lines=[
             *await extensions.prompt_lines(db, run),
@@ -4697,13 +4702,83 @@ def _creator(principal_tenant: uuid.UUID, user: User | None, token: ApiToken | N
     raise LookupError("run creator not found")
 
 
+async def _loop_plan_inputs(
+    db: AsyncSession, run: Run
+) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """What a roadmap draft without an items file of its own (the feedback loop's next
+    draft, the owner Nov 4) builds its plan tables from, as the roadmap was when the run
+    started (so the brief and the check read the same): (its latest items of the PRD its
+    latest version came from, as an items file; that PRD's verified bases; on the company
+    roadmap, the shared queue with the other PRDs' items, as prd_to_roadmap reads it; the
+    items an approved version took off the plan, shipped or moved to the next PRD, whose
+    plan_state carry_forward keeps: {key, title, state}, so the tables show them with their
+    status and a draft that keeps their rows is not refused). A roadmap with no items (or
+    no document) gives an empty plan: its loop draft still needs both tables, empty."""
+    from oracle.roadmap import draft_items
+    from oracle.roadmap.models import RoadmapItem
+
+    doc = await db.get(Document, run.document_id) if run.document_id else None
+    if doc is None:
+        return "", [], [], []
+    latest = await db.scalar(
+        select(DocumentVersion)
+        .where(
+            DocumentVersion.document_id == doc.id,
+            DocumentVersion.created_at <= run.created_at,
+        )
+        .order_by(DocumentVersion.number.desc())
+        .limit(1)
+    )
+    source = (
+        await db.get(DocumentVersion, latest.source_version_id)
+        if latest is not None and latest.source_version_id
+        else None
+    )
+    prd_id = source.document_id if source is not None else None
+    version = await roadmap_company._items_version(db, doc.id, run.created_at)
+    rows: list[RoadmapItem] = []
+    kept: list[dict[str, Any]] = []
+    if version is not None:
+        replaced = await roadmap_company.replaced_prd_ids(db)
+        for r in await db.scalars(
+            select(RoadmapItem)
+            .where(RoadmapItem.roadmap_version_id == version.id)
+            .order_by(RoadmapItem.position)
+        ):
+            if r.prd_document_id in replaced:
+                continue
+            if r.plan_state is None:
+                rows.append(r)
+            else:
+                kept.append({"key": r.item_key, "title": r.title, "state": r.plan_state})
+    if doc.company_roadmap:
+        # The other PRDs' items are in the tables as the queue has them.
+        rows = [r for r in rows if r.prd_document_id == prd_id]
+    items = draft_items.items_yaml(doc.slug, version.number if version else 0, rows)
+    bases = [b.as_json() for b in await schedule.verified_bases(db, prd_id)]
+    queued = (
+        roadmap_company.with_run_items(
+            await roadmap_company.run_queue(db, prd_id, run.created_at), items
+        )
+        if doc.company_roadmap
+        else []
+    )
+    return items, bases, queued, kept
+
+
 async def _plan_table_problems(
     db: AsyncSession, run: Run, markdown: str, source_id: uuid.UUID | None
 ) -> list[ImportProblem]:
     """The draft's plan tables against the run's engineering dates (oracle.runs.plan_tables):
-    the items file the roadmap_items segment wrote and the source PRD's verified bases."""
+    the items file the roadmap_items segment wrote and the source PRD's verified bases;
+    any other run's roadmap draft (the feedback loop): the roadmap's own items."""
     from oracle.runs import plan_tables
 
+    today = await company_time.company_today(db)
+    if run.flow != "prd_to_roadmap":
+        items_text, loop_bases, queued, kept = await _loop_plan_inputs(db, run)
+        loop_plan = plan_tables.engineering_plan(items_text, loop_bases, others=queued, kept=kept)
+        return plan_tables.check(markdown, loop_plan, today, loop=True)
     items = None
     for seg in await db.scalars(
         select(RunSegment).where(RunSegment.run_id == run.id).order_by(RunSegment.seq)
@@ -4719,7 +4794,7 @@ async def _plan_table_problems(
     plan = plan_tables.engineering_plan(
         items, [b.as_json() for b in bases], others=roadmap_company.with_run_items(others, items)
     )
-    return plan_tables.check(markdown, plan, await company_time.company_today(db))
+    return plan_tables.check(markdown, plan, today)
 
 
 async def _draft_source(db: AsyncSession, run: Run) -> uuid.UUID | None:
@@ -4777,9 +4852,10 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
         if knobs.get("template") and knobs.get("template_version")
         else None
     )
-    if run.flow == "prd_to_roadmap" and kind == "roadmap":
+    if kind == "roadmap":
         # roadmap-plan-tables: a draft without the plan tables approving it applies to
-        # Simple, or with other items or dates than the run's, goes back to the writer.
+        # Simple, or with other items or dates than the run's, goes back to the writer;
+        # every roadmap draft, the feedback loop's too (the owner, Nov 4).
         problems = await _plan_table_problems(db, run, markdown, source_id)
         if problems:
             return rejection.refused(name, problems)

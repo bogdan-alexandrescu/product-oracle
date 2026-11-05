@@ -1657,6 +1657,13 @@ class PromptContext:
     kind: str = "prd"
     # prd_to_roadmap: the approved PRD version the roadmap is built from.
     source: SourceContext | None = None
+    # roadmap-plan-tables for any other roadmap draft (the feedback loop): what its plan
+    # tables are built from, (items file text, verified bases, the company queue, the items
+    # an approved version took off the plan)
+    # (oracle.runs.service._loop_plan_inputs).
+    loop_plan: (
+        tuple[str, list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]] | None
+    ) = None
     # The target document's template, theme and starting skeleton (prd_to_roadmap's
     # roadmap; baseline_to_prd's PRD when the run has a template, C4).
     draft: DraftContext | None = None
@@ -1768,8 +1775,12 @@ def step_prompt(
 ) -> str:
     """The prompt of one agent step (``first``: the step that starts the attempt)."""
     r = ROLES[role]
+    does = r.description.lower()
+    if role == "writer" and ctx.kind != "prd" and ctx.kind in KIND_NAMES:
+        # The feedback loop's writer of a roadmap (or another kind) writes that draft.
+        does = f"writes the {KIND_NAMES[ctx.kind]} draft"
     lines = [
-        f"You are the {r.title.lower()} ({r.description.lower()}) in Product Oracle's "
+        f"You are the {r.title.lower()} ({does}) in Product Oracle's "
         f"{flow.title} flow, segment '{segment.title}'.",
         f"Run {ctx.run_id}"
         + (f", {KIND_NAMES[ctx.kind]} document '{ctx.document}'" if ctx.document else "")
@@ -1902,6 +1913,15 @@ def step_prompt(
         )
         lines += company.queue_lines(queued)
         lines += plan_tables.prompt_lines(plan, critic=role == "critic")
+    elif segment.imports_draft and ctx.kind == "roadmap" and ctx.loop_plan is not None:
+        # The owner (Nov 4): every roadmap draft, the feedback loop's next draft too.
+        from oracle.roadmap import company
+        from oracle.runs import plan_tables
+
+        items, bases, queued, kept = ctx.loop_plan
+        plan = plan_tables.engineering_plan(items, bases, others=queued, kept=kept)
+        lines += company.queue_lines(queued)
+        lines += plan_tables.prompt_lines(plan, critic=role == "critic", loop=True)
     if ctx.extra_lines:
         lines += ["", *ctx.extra_lines]
     if flow.key == "update_draft" and ctx.document:
