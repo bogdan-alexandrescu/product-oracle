@@ -422,15 +422,46 @@ function DayChart(props: TimelineProps) {
     (cutAt + 1 >= months.length || x(months[cutAt + 1].day) - sl > 80)
       ? months[cutAt].day
       : undefined;
-  // Owner (Nov 4): 3 months marks each week, a line and its Monday's day under the month.
+  // Owner (Nov 4): 3 months marks each week, a line and its Monday's day in the months' row,
+  // between the month names. A month that starts on a Monday keeps only its month line.
   const weeks: string[] = [];
   if (zoom === "3m")
     for (let d = addDays(t0, (8 - new Date(ms(t0)).getUTCDay()) % 7); d <= t1; d = addDays(d, 7))
-      weeks.push(d);
+      if (d.slice(8, 10) !== "01") weeks.push(d);
   // The first month in sight carries its year.
   const firstSeen = fit
     ? months[0]?.day
     : (pinned ?? months.find((m) => x(m.day) >= sl - 2)?.day);
+  // The week marks in sight, each read without a hover: a month's first one names the month
+  // ("Nov 9"), the rest give the day ("16"). A mark gives way to a month's name, or to the mark
+  // before it, where they would touch.
+  const monthAt = months.map((m) => {
+    const at = m.day === pinned ? sl : x(m.day);
+    const words = m.day === firstSeen ? monthWord(m.day) : m.label;
+    return [at, at + 12 + words.length * 7];
+  });
+  const weekMarks: { day: string; words: string }[] = [];
+  let lastMonth = "";
+  let lastEnd = -Infinity;
+  for (const d of weeks) {
+    if (x(d) < sl + 2) continue;
+    const words = d.slice(0, 7) === lastMonth ? String(Number(d.slice(8, 10))) : shortDay(d);
+    const end = x(d) + 4 + words.length * 7;
+    if (x(d) < lastEnd + 6 || monthAt.some(([a, b]) => end > a - 6 && x(d) < b)) continue;
+    weekMarks.push({ day: d, words });
+    lastMonth = d.slice(0, 7);
+    lastEnd = end;
+  }
+  // A milestone whose line has slid under the names column keeps its label whole at the view's
+  // left edge, till all of it would be gone; then the label goes too.
+  const milestones = (data.milestones ?? [])
+    .filter((m) => m.date && m.status !== "dropped" && m.date >= t0 && m.date <= t1)
+    .map((m) => {
+      const at = x(m.date as string);
+      const words = `◆ ${m.name} · ${shortDay(m.date as string)}`;
+      const left = fit ? at : Math.max(at, sl);
+      return { m, at, words, left, gone: !fit && at + 26 + words.length * 7 < sl };
+    });
   // roadmap-r2: the Gantt's moves. A drag past DRAG_PX moves the bar by whole days (an end
   // grabbed near the bar's edge, grabAt, moves only that end); a shorter one is a click. A
   // finger picks a bar up with the Gantt's long press first. The arrow keys move a focused
@@ -674,24 +705,17 @@ function DayChart(props: TimelineProps) {
                     {m.day === firstSeen ? monthWord(m.day) : m.label}
                   </span>
                 ))}
-              {weeks
-                // A week's day gives way to a month's name where they would touch.
-                .filter((d) => x(d) >= sl + 2 && !months.some((m) => {
-                  const at = m.day === pinned ? sl : x(m.day);
-                  const words = m.day === firstSeen ? monthWord(m.day) : m.label;
-                  return x(d) > at - 22 && x(d) < at + 12 + words.length * 7;
-                }))
-                .map((d) => (
-                  <span
-                    key={d}
-                    data-testid="timeline-week"
-                    title={`Week of ${shortDay(d)}`}
-                    className="absolute top-1 text-xs whitespace-nowrap text-text2/80"
-                    style={{ left: x(d) + 4 }}
-                  >
-                    {Number(d.slice(8, 10))}
-                  </span>
-                ))}
+              {weekMarks.map(({ day, words }) => (
+                <span
+                  key={day}
+                  data-testid="timeline-week"
+                  title={`Week of ${shortDay(day)}`}
+                  className="absolute top-1 text-xs whitespace-nowrap text-text2/80"
+                  style={{ left: x(day) + 4 }}
+                >
+                  {words}
+                </span>
+              ))}
             </div>
           </div>
           <div
@@ -713,24 +737,24 @@ function DayChart(props: TimelineProps) {
           </span>
           {/* approved-roadmap-to-simple: the roadmap's milestones (an approved version's too),
            * each a dashed line on its day with its name, as the Gantt marks them. */}
-          {(data.milestones ?? [])
-            .filter((m) => m.date && m.status !== "dropped" && m.date >= t0 && m.date <= t1)
-            .map((m) => (
-              <div key={m.id}>
-                <div
-                  className="pointer-events-none absolute top-11 bottom-0 z-10 border-l-2 border-dashed border-text2"
-                  style={{ left: labelW + x(m.date as string) }}
-                />
+          {milestones.map(({ m, at, words, left, gone }) => (
+            <div key={m.id}>
+              <div
+                className="pointer-events-none absolute top-11 bottom-0 z-10 border-l-2 border-dashed border-text2"
+                style={{ left: labelW + at }}
+              />
+              {!gone && (
                 <span
                   data-testid="timeline-milestone"
                   title={`${m.name}, ${shortDay(m.date as string)}${m.done_when.length ? `: counts when ${m.done_when.join("; ")}` : ""}`}
                   className="absolute top-[21px] z-20 rounded-full border border-line bg-surface px-2 text-xs leading-4 whitespace-nowrap text-text"
-                  style={{ left: labelW + x(m.date as string) + 4 }}
+                  style={{ left: labelW + left + 4 }}
                 >
-                  ◆ {m.name} · {shortDay(m.date as string)}
+                  {words}
                 </span>
-              </div>
-            ))}
+              )}
+            </div>
+          ))}
           {/* Quick add's drop targets: a quarter's columns (transparent, under the rows). */}
           {props.canChange &&
             quarters(t0, t1).map((q) => (
@@ -754,6 +778,8 @@ function DayChart(props: TimelineProps) {
             <div
               key={m.day}
               aria-hidden
+              data-testid="timeline-month-line"
+              data-day={m.day}
               className="absolute top-11 bottom-0 border-l border-line/60"
               style={{ left: labelW + x(m.day) }}
             />
@@ -762,6 +788,8 @@ function DayChart(props: TimelineProps) {
             <div
               key={`w-${d}`}
               aria-hidden
+              data-testid="timeline-week-line"
+              data-day={d}
               className="absolute top-11 bottom-0 border-l border-dashed border-line/40"
               style={{ left: labelW + x(d) }}
             />
