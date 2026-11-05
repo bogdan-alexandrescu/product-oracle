@@ -209,7 +209,7 @@ test.describe("phone", () => {
 
   test("390 px keeps the list by quarter, every milestone named", async ({ page }) => {
     await open(page);
-    const q = page.getByTestId("timeline-quarter").filter({ hasText: "Jan" }).filter({ visible: true }).first();
+    const q = page.getByTestId("timeline-quarter").filter({ hasText: "Q1 2027" }).filter({ visible: true }).first();
     await expect(q).toBeVisible();
     for (const [name, day] of NAMES) await expect(q.getByTestId("timeline-milestone").filter({ hasText: `◆ ${name} · ${day}` })).toBeVisible();
   });
