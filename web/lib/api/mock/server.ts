@@ -163,7 +163,7 @@ import {
 import { routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith } from "./goal-buckets";
 import { featureKeyOf } from "./simple-priorities";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
-import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
+import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, sheetDecisionMade, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
 import { rebuildsOut } from "./rebuilds";
@@ -5745,7 +5745,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       // New PRD (4): a PRD moved to Trash releases its requests; Restore links back the free ones.
       // TRASH_KEPT_LINKS_SCENARIO: a PRD trashed before this release kept its request links.
       onTrash: (ids) => (localStorage.getItem(MOCK_SCENARIO_KEY) === TRASH_KEPT_LINKS_SCENARIO ? undefined : releaseDocuments(ensureRequests(db), ids)),
-      simple: () => db.simple_roadmap,
+      // edit-decisions: Restore puts a decision or a PRD's question back on Simple's Decisions too.
+      simple: () => db.simple_roadmap && { ...db.simple_roadmap, sheet: [...(db.simple_meetings?.decisions ?? []), ...(db.simple_meetings?.questions?.questions ?? [])] },
       onRestore: (released) => relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
       uuid,
       now,
@@ -6642,6 +6643,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     };
     // prd-questions: the remembered Decisions view and the judgement calls waiting for me.
     meetingsCtx.view = () => db.preferences?.[me.email]?.simple_decisions_view ?? null;
+    meetingsCtx.trash = () => (db.trash ??= emptyTrash());
     meetingsCtx.runs = (prd) => {
       db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
       const docs = db.documents.filter((d) => d.kind === "prd");
@@ -6743,6 +6745,15 @@ async function route(db: Db, req: Request): Promise<Response> {
   const decisionsCtx = decisionsContext(db, me);
   ensureDecisions(db, decisionsCtx);
   const decided = await routeDecisions(decisionsCtx, db.decisions!, req, p, q);
+  // edit-decisions: a decision made from Simple's sheet is listed there; Reassign shows there too.
+  if (decided?.ok && req.method === "POST" && p[1] === "decisions" && p.length === 2 && db.simple_meetings) {
+    sheetDecisionMade(db.simple_meetings, (await decided.clone().json()) as Schemas["DecisionOut"], me.id);
+  }
+  if (decided?.ok && req.method === "POST" && p[1] === "decisions" && p[3] === "reassign") {
+    const logged = (await decided.clone().json()) as Schemas["DecisionOut"];
+    const copy = db.simple_meetings?.decisions.find((d) => d.id === logged.id);
+    if (copy) copy.approver_id = logged.approver_id;
+  }
   if (decided?.ok && req.method === "POST" && p[1] === "decisions" && (p[3] === "decide" || p[3] === "withdraw")) {
     // An Ask proposal's Decide or Decline (withdraw) shows on Simple's Decisions page (one decisions row in the API).
     const logged = db.decisions!.decisions.find((d) => String(d.number) === p[2] || d.id === p[2]);

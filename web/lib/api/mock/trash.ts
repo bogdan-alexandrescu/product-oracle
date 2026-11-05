@@ -145,10 +145,10 @@ export const entryOut = (e: TrashEntryRow, now: string, canRestore = false): Sch
 });
 
 /** As oracle.trash.service.may_restore (owner's answer, Nov 5): an owner restores anything;
- * whoever deleted a feature or a goal restores it too. */
+ * whoever deleted a feature, a goal, a decision or a question restores it too. */
 export function mayRestore(entry: TrashEntryRow, me: { id: string; role: string }): boolean {
   if (me.role === "owner") return true;
-  return entry.out.deleted_by === me.id && (entry.out.root.type === "feature" || entry.out.root.type === "goal");
+  return entry.out.deleted_by === me.id && ["feature", "goal", "decision", "question"].includes(entry.out.root.type);
 }
 
 /** trash-features-goals: the Simple rows a feature's or a goal's entry marks `trashed`; the mock
@@ -156,6 +156,8 @@ export function mayRestore(entry: TrashEntryRow, me: { id: string; role: string 
 export type TrashedSimple = {
   items: { key: string; trashed?: boolean }[];
   goal_buckets?: { goals: { id: string; trashed?: boolean }[] };
+  /** edit-decisions: Simple's decisions and the PRD's questions (a question's `id` is set when it is trashed). */
+  sheet?: { id?: string; trashed?: boolean }[];
 };
 
 /** trash-features-goals: takes `entry` out of Trash, putting back the feature or the goal it
@@ -164,6 +166,7 @@ export function restoreFromTrash(db: TrashDb, entry: TrashEntryRow, now: string,
   const root = entry.out.root;
   if (root.type === "feature") simple?.items.filter((s) => s.key === root.slug).forEach((s) => (s.trashed = false));
   if (root.type === "goal") simple?.goal_buckets?.goals.filter((g) => g.id === root.id).forEach((g) => (g.trashed = false));
+  if (root.type === "decision" || root.type === "question") simple?.sheet?.filter((r) => r.id === root.id).forEach((r) => (r.trashed = false));
   db.entries = db.entries.filter((e) => e !== entry);
   return entryOut(entry, now);
 }
