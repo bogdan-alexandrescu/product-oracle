@@ -139,6 +139,13 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             return f"put Oracle's goal back on {x}"
         case "set_decider":
             return f"changed the decider of {x}"
+        # ask-oracle-actions: a dependency added or removed in the feature talk.
+        case "set_depends_on":
+            dep = target.get("dependency")
+            gone = len(after.get("depends_on") or []) < len(before.get("depends_on") or [])
+            if not dep:
+                return f"changed what {x} depends on"
+            return f"{x} no longer depends on {dep}" if gone else f"{x} now depends on {dep}"
         # prd-questions: a PRD question (a decision) answered, or its decider named.
         case "decide_question":
             return f"decided {x}"

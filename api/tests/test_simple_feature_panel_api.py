@@ -17,6 +17,11 @@ Test cards (protects / fails_when / no_claim):
   it out of depends_on and keeps it in ``links`` as removed, naming who removed it;
   ``restore_link`` puts it back as Oracle's; fails_when=the removed link is forgotten or
   Restore makes it a person's; no_claim=a person's link removed (it simply goes).
+- test_ask_oracle_link_reads_in_the_panel: protects=a dependency added or removed in Ask
+  Oracle's talk (``set_depends_on``, ask-oracle-actions) reads in the panel's ``links`` like
+  one made there: the added one names who added it; Oracle's removed one stays as removed,
+  naming who, and ``restore_link`` puts it back; fails_when=the panel shows such a link as
+  Oracle's or forgets the removed one; no_claim=undo (an undone change counts for nothing).
 """
 
 from datetime import date, timedelta
@@ -364,3 +369,24 @@ async def test_panel_reads_the_goals_reading_the_notes_and_the_starts_source(cli
     assert r.status_code == 201, r.text
     it = await item_of(client, ctx, "decider", a)
     assert (it["override"]["source"], it["override"]["start_source"]) == ("engineering",) * 2
+
+
+async def test_ask_oracle_link_reads_in_the_panel(client):
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, ops=["fp"])
+    a, b, u = (w.ids[f"fp-{x}"] for x in "abu")
+    r = await post(client, ctx, "decider", "set_depends_on", {"item_id": u},
+                   {"depends_on": []}, {"depends_on": ["fp-b"]})  # fmt: skip
+    assert r.status_code == 201, r.text
+    it = await item_of(client, ctx, "decider", u)
+    assert it["links"] == [{"item_id": b, "by": "Dee Cider", "removed": False, "removed_by": None}]
+    r = await post(client, ctx, "decider", "set_depends_on", {"item_id": b},
+                   {"depends_on": ["fp-a"]}, {"depends_on": []})  # fmt: skip
+    assert r.status_code == 201, r.text
+    it = await item_of(client, ctx, "decider", b)
+    assert it["links"] == [{"item_id": a, "by": None, "removed": True, "removed_by": "Dee Cider"}]
+    r = await post(client, ctx, "decider", "restore_link", {"item_id": b, "subject": a},
+                   {"depends_on": []})  # fmt: skip
+    assert r.status_code == 201, r.text
+    it = await item_of(client, ctx, "decider", b)
+    assert it["links"] == [{"item_id": a, "by": None, "removed": False, "removed_by": None}]

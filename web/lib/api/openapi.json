@@ -60446,7 +60446,8 @@
                   "restore_dates",
                   "set_goal",
                   "restore_goal",
-                  "edit_goal_milestone"
+                  "edit_goal_milestone",
+                  "set_depends_on"
                 ]
               },
               {
@@ -60458,7 +60459,8 @@
                   "agenda_next",
                   "agenda_skip",
                   "suggest_feature",
-                  "mark_shipped"
+                  "mark_shipped",
+                  "api_action"
                 ]
               }
             ],
@@ -60846,7 +60848,8 @@
               "restore_dates",
               "set_goal",
               "restore_goal",
-              "edit_goal_milestone"
+              "edit_goal_milestone",
+              "set_depends_on"
             ],
             "title": "Op"
           },
@@ -82340,7 +82343,8 @@
               "restore_dates",
               "set_goal",
               "restore_goal",
-              "edit_goal_milestone"
+              "edit_goal_milestone",
+              "set_depends_on"
             ],
             "title": "Op"
           },
@@ -116345,7 +116349,8 @@
               "restore_dates",
               "set_goal",
               "restore_goal",
-              "edit_goal_milestone"
+              "edit_goal_milestone",
+              "set_depends_on"
             ],
             "title": "Op"
           },
@@ -116492,7 +116497,8 @@
               "restore_dates",
               "set_goal",
               "restore_goal",
-              "edit_goal_milestone"
+              "edit_goal_milestone",
+              "set_depends_on"
             ],
             "title": "Op"
           },

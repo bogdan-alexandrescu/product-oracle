@@ -97,6 +97,8 @@ const FIELDS: Record<string, string[]> = {
   accept_risk: ["risk"],
   // S6: a draft item confirmed (changes.py confirm_item).
   confirm_item: ["draft"],
+  // ask-oracle-actions: an item's own depends_on, item keys of its roadmap (changes.py set_depends_on).
+  set_depends_on: ["depends_on"],
   // goal-buckets-tasks: the goals an item serves (changes.py set_goals).
   set_goals: ["goal_ids"],
   // build-feature-panel: an item's links, and Oracle's dates put back (./feature-panel.ts).
@@ -309,7 +311,7 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
     s.goals = keys.slice(1);
     if (s.own_goal !== undefined) s.own_goal = keys[0] ?? "";
   }
-  if ("depends_on" in values) s.depends = [...(values.depends_on as string[])];
+  if ("depends_on" in values) s.depends = [...((values.depends_on as string[] | null) ?? [])];
   if ("outcome" in values) s.outcome = (values.outcome as string | null) ?? null;
   if ("note" in values) s.note = (values.note as string | null) ?? null;
   if ("own_goal" in values) {
@@ -929,7 +931,14 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       if (!raw.length) return json(422, { detail: "after.goal_ids: one goal or more" });
       if (keys.some((k) => !k)) return json(422, { detail: "after.goal_ids: goals of this company" });
       after = { goal_ids: [...new Set(keys.map((k) => goalId(k!)))] };
-    } else {
+    }
+    else if ((body.op as string) === "set_depends_on") {
+      const keys = a.depends_on;
+      const mine = new Set(seen.items.filter((x) => x.roadmap === seed(seen, key).roadmap && x.key !== key).map((x) => x.key));
+      if (!Array.isArray(keys) || keys.some((k) => typeof k !== "string" || !mine.has(k))) return json(422, { detail: "after.depends_on: items of the same roadmap" });
+      after = { depends_on: [...new Set(keys as string[])] };
+    }
+    else {
       const note = String((a.risk as Values | undefined)?.note ?? "").trim();
       if (!note) return json(422, { detail: "after.risk.note: 1 to 500 characters" });
       target.subject = target.subject ?? null;

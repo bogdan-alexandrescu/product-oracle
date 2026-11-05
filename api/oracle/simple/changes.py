@@ -50,6 +50,8 @@ Ops and the fields they write (``before`` must name the key fields):
   back the goal_ids it had before. 422 for no change or an id that is not a goal.
 - ``set_owner`` / ``set_decider`` (chat-actions): the item's own owner_id / decider_id, a
   member of the company (null: back to its track's owner / its roadmap's decider).
+- ``set_depends_on`` (ask-oracle-actions): the item's own depends_on, the keys of items of
+  its roadmap (a dependency added or removed in the feature talk), into the working draft.
 - ``accept_risk``: the risk accepted on one flag (``target.flag``, ``target.subject``),
   ``{"risk": {"note"}}``; ``before`` ``{"risk": null}`` when none is.
 - ``shift_dependents``: the flagged item (``target.item_id``) starts the day after its
@@ -130,6 +132,7 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "set_goals": ("goal_ids",),
     "set_owner": ("owner_id",),
     "set_decider": ("decider_id",),
+    "set_depends_on": ("depends_on",),
     "add_link": ("depends_on",),
     "remove_link": ("depends_on",),
     "restore_link": ("depends_on",),
@@ -833,6 +836,16 @@ async def _plan(
         after = {field: str(person) if person else None}
         if after == current:
             raise ChangeError(422, "No change: it is so already")
+    elif op == "set_depends_on":
+        keys = a.get("depends_on")
+        if not isinstance(keys, list) or not all(isinstance(k, str) for k in keys):
+            raise ChangeError(422, "after.depends_on: a list of item keys")
+        mine = {e.row.item_key for e in by_id.values()
+                if e.row.roadmap_version_id == row.roadmap_version_id} - {row.item_key}  # fmt: skip
+        unknown = [k for k in keys if k not in mine]
+        if unknown:
+            raise ChangeError(422, "after.depends_on: items of the same roadmap")
+        after = {"depends_on": list(dict.fromkeys(keys))}
     elif op == "set_goal":
         ids = a.get("goal_ids") if isinstance(a.get("goal_ids"), list) else None
         if ids is None or len(ids) > 1:
@@ -1032,6 +1045,20 @@ async def _current(db: AsyncSession, c: SimpleChange, like: dict[str, Any]) -> d
     if row is None:
         raise ChangeError(404, "The item is gone")
     return read(await drafts.effective_row(db, row), list(like), c.target)
+
+
+def _depends_back(
+    current: dict[str, Any], before: dict[str, Any], after: dict[str, Any]
+) -> dict[str, Any] | None:
+    """The item's depends_on with only the change's own keys turned back: an added key
+    taken out, a removed one put back (None: one of them changed since)."""
+    now = list(current.get("depends_on") or [])
+    was, made = list(before.get("depends_on") or []), list(after.get("depends_on") or [])
+    added = [k for k in made if k not in was]
+    removed = [k for k in was if k not in made]
+    if any(k not in now for k in added) or any(k in now for k in removed):
+        return None
+    return {"depends_on": [*(k for k in now if k not in added), *removed]}
 
 
 async def _lock_change_items(db: AsyncSession, c: SimpleChange) -> None:
@@ -1324,12 +1351,19 @@ async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> Simple
         raise ChangeError(409, "Its session is closed: undo works only in the change's session")
     await _lock_change_items(db, c)
     current = await _current(db, c, c.after)
-    if current != c.after:
+    back = c.before
+    if c.op == "set_depends_on":
+        # ask-oracle-actions: only the dependency the change added or removed goes back;
+        # the item's other dependencies stay as they are now.
+        back = _depends_back(current, c.before, c.after)
+        if back is None:
+            raise await _conflict(db, current, _touched(c), "Changed since")
+    elif current != c.after:
         raise await _conflict(db, current, _touched(c), "Changed since")
     u = SimpleChange(session_id=c.session_id, document_id=c.document_id, op=c.op, target=c.target,
-                     before=c.after, after=c.before, status="undone", by=me, at=now,
+                     before=current, after=back, status="undone", by=me, at=now,
                      undoes_id=c.id, routed_to=[], draft_ids=list(c.draft_ids or []))  # fmt: skip
-    await _apply(db, u, c.before, principal, session, undo=True)
+    await _apply(db, u, back, principal, session, undo=True)
     db.add(u)
     session.last_change_at = now
     await db.flush()

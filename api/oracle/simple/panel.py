@@ -116,15 +116,28 @@ async def goal_sets(db: AsyncSession, docs: set[uuid.UUID]) -> dict[str, dict[st
     return out
 
 
+def _link_steps(c: SimpleChange) -> list[tuple[str, str]]:
+    """(link op, item key) of a change: a panel link change's own, or each key a
+    ``set_depends_on`` (Ask Oracle's talk, ask-oracle-actions) added or removed."""
+    if c.op != "set_depends_on":
+        key = (c.target or {}).get("subject_key")
+        return [(c.op, key)] if key else []
+    before = list((c.before or {}).get("depends_on") or [])
+    after = list((c.after or {}).get("depends_on") or [])
+    return [("remove_link", k) for k in before if k not in after] + [
+        ("add_link", k) for k in after if k not in before
+    ]
+
+
 async def item_panel(db: AsyncSession, read_: Any, shown: list) -> dict[uuid.UUID, dict]:
     """``override`` and ``links`` of the shown items, keyed by item id."""
     docs = {e.row.roadmap_document_id for e in shown}
-    rows = await _written(db, docs, DATE_OPS + LINK_OPS)
+    rows = await _written(db, docs, DATE_OPS + LINK_OPS + ("set_depends_on",))
     names = await _names(db, {c.by for c in rows} | {e.goal_set["by"] for e in shown if e.goal_set})
     by_version = {(e.row.roadmap_version_id, e.row.item_key): e for e in read_.entries}
     per_item: dict[str, list] = defaultdict(list)
     for c in rows:
-        if c.op in LINK_OPS:
+        if c.op in LINK_OPS or c.op == "set_depends_on":
             per_item[str((c.target or {}).get("item_id"))].append(c)
     out: dict[uuid.UUID, dict] = {}
     for e in shown:
@@ -133,20 +146,18 @@ async def item_panel(db: AsyncSession, read_: Any, shown: list) -> dict[uuid.UUI
         added: dict[str, str | None] = {}
         removed: dict[str, str | None] = {}
         for c in per_item.get(item, []):
-            key = (c.target or {}).get("subject_key")
-            if not key:
-                continue
             who = names.get(c.by)
-            if c.op == "add_link":
-                added[key] = who
-                removed.pop(key, None)
-            elif c.op == "remove_link":
-                if key in added:
-                    added.pop(key)
+            for op, key in _link_steps(c):
+                if op == "add_link":
+                    added[key] = who
+                    removed.pop(key, None)
+                elif op == "remove_link":
+                    if key in added:
+                        added.pop(key)
+                    else:
+                        removed[key] = who
                 else:
-                    removed[key] = who
-            else:
-                removed.pop(key, None)
+                    removed.pop(key, None)
         links: list[dict[str, Any]] = []
         for key in e.row.depends_on or []:
             dep = by_version.get((e.row.roadmap_version_id, key))
