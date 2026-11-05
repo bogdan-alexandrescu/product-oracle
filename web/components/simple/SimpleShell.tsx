@@ -53,7 +53,7 @@ function isActive(pathname: string, d: Dest): boolean {
  * only a meeting live now (an upcoming one waits on nobody). Inbox counts what waits on me as
  * /inbox's "N waiting" does (lib/waiting, inbox-meeting-proposals); what of it the Roadmap tab
  * does not count already (Oracle's dates, goal suggestions, one-pager wordings, question
- * proposals) is "Inbox beyond the tabs", which More sums. Read when the rail mounts, on a route
+ * proposals, versions waiting for my approval) is "Inbox beyond the tabs", which More sums. Read when the rail mounts, on a route
  * change and whenever something waiting changes.
  */
 function useSimpleCounts(enabled: boolean): Record<string, number> | null {
@@ -73,8 +73,10 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
         // The Roadmap's count is its "Needs a decision" count: the items with broken links (one
         // per item, however many links), the dates to confirm and the proposals on my items.
         const broken = new Set(items.filter((i) => i.kind === "broken_link").map((i) => i.ref_id));
-        // inbox-meeting-proposals fix: what of the Inbox is the roadmap's (a proposal on a PRD question or a one-pager line is not).
-        const inboxRoadmap = inbox ? inbox.simple_proposals.filter((x) => !["decide_question", "name_decider", "edit_line"].includes(x.op)).length + inbox.simple_approvals.length : 0;
+        // What of the Inbox the Roadmap tab counts already: its proposals (inbox-meeting-proposals fix:
+        // a proposal on a PRD question or a one-pager line is not the roadmap's); a version waiting
+        // for my approval is not in Needs a decision, so it lights More.
+        const inboxRoadmap = inbox ? inbox.simple_proposals.filter((x) => !["decide_question", "name_decider", "edit_line"].includes(x.op)).length : 0;
         const all = inbox ? waitingCount(inbox, questions) : 0;
         setCounts({
           Decisions: items.length,
