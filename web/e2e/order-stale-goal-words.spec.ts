@@ -33,6 +33,8 @@ async function openOrder(page: Page, run: string) {
 /** The baseline run's review of what it wrote to the baseline: Cut early churn's row. */
 async function churnRow(page: Page) {
   await page.goto(`/baseline?tab=from-run&run=${BASELINE_REVIEW_RUN}`);
+  // Decided, it no longer needs anyone: it is under All from this run.
+  await page.getByRole("button", { name: /All from this run/ }).click();
   const row = page.getByTestId("from-run-row").filter({ hasText: "Cut early churn" });
   await expect(row).toBeVisible();
   return row;
