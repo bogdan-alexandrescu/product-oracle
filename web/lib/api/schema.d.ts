@@ -5032,6 +5032,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/baseline/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Check
+         * @description The Ground Truth check (docs/ground-truth.md): every roadmap item, slice and PRD
+         *     feature not in the Ground Truth, and every feature with no F-code, no goal, or running
+         *     today while still on the roadmap; each with plain words and its fixes, counted per kind.
+         *     Flags only: nothing is refused on save.
+         */
+        get: operations["get_check"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/baseline/yaml": {
         parameters: {
             query?: never;
@@ -19183,12 +19206,68 @@ export interface components {
             /** Ask Id */
             ask_id?: string | null;
         };
-        /** CheckOut */
-        CheckOut: {
-            /** Opened */
-            opened: number;
-            /** Resolved */
-            resolved: number;
+        /** CheckDoc */
+        CheckDoc: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * CheckFix
+         * @description A fix a person makes in the UI. ``target``: the item's or feature's id, or for a PRD's
+         *     feature or slice the PRD feature's code (with ``where.prd``).
+         */
+        CheckFix: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "add_to_ground_truth" | "link_to_feature" | "give_code" | "pick_goal" | "take_off_roadmap";
+            /** Target */
+            target: string;
+        };
+        /**
+         * CheckFlag
+         * @description One place that breaks the Ground Truth: allowed, flagged "Not in the Ground Truth".
+         */
+        CheckFlag: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "unlinked_item" | "slice_parent_missing" | "prd_feature_missing" | "no_code" | "no_goal" | "runs_today_on_roadmap";
+            item?: components["schemas"]["CheckRef"] | null;
+            feature?: components["schemas"]["CheckRef"] | null;
+            where: components["schemas"]["CheckWhere"];
+            /** Words */
+            words: string;
+            /** Fixes */
+            fixes: components["schemas"]["CheckFix"][];
+        };
+        /**
+         * CheckRef
+         * @description A roadmap item, slice or feature: its id (none for a PRD's feature or slice that is no
+         *     row of its own), its code (F-15, F-15a; none when it has no F-code) and its name.
+         */
+        CheckRef: {
+            /** Id */
+            id: string | null;
+            /** Code */
+            code: string | null;
+            /** Name */
+            name: string;
+        };
+        /**
+         * CheckWhere
+         * @description Where the flag shows: the roadmap and the PRD (with its title), when it has them.
+         */
+        CheckWhere: {
+            roadmap?: components["schemas"]["CheckDoc"] | null;
+            prd?: components["schemas"]["CheckDoc"] | null;
         };
         /** CheckpointDecision */
         CheckpointDecision: {
@@ -47409,6 +47488,17 @@ export interface components {
              */
             notes: components["schemas"]["ImportIssue"][];
         };
+        /** CheckOut */
+        oracle__baseline__schemas__CheckOut: {
+            /** Flags */
+            flags: components["schemas"]["CheckFlag"][];
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Total */
+            total: number;
+        };
         /**
          * MergeIn
          * @description Merge into… (B2): the item to merge the duplicate into, and why.
@@ -47530,6 +47620,13 @@ export interface components {
              *     }
              */
             knobs: components["schemas"]["KnobsIn"];
+        };
+        /** CheckOut */
+        oracle__strategy__schemas__CheckOut: {
+            /** Opened */
+            opened: number;
+            /** Resolved */
+            resolved: number;
         };
         /** RegenerateIn */
         oracle__trash__schemas__RegenerateIn: {
@@ -58418,6 +58515,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TraceReport"];
+                };
+            };
+        };
+    };
+    get_check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["oracle__baseline__schemas__CheckOut"];
                 };
             };
         };
@@ -75498,7 +75615,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CheckOut"];
+                    "application/json": components["schemas"]["oracle__strategy__schemas__CheckOut"];
                 };
             };
         };
