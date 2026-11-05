@@ -60910,6 +60910,18 @@
               }
             ],
             "title": "Elsewhere"
+          },
+          "replaced_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaced By"
           }
         },
         "type": "object",

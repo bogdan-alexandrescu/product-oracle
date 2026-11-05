@@ -12,10 +12,11 @@ import { dayIn, formatInZone, todayIn, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { openStream } from "@/lib/stream";
 import { GENERAL, pageName, useCurrentScreenSubject, type ScreenSubject } from "@/lib/screen-subject";
-import { errorMessage } from "@/lib/use-query";
+import { dataChanged, errorMessage } from "@/lib/use-query";
+import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 import { AnswerSources, AnswerText, Who, chatTime, type AnswerCite } from "./AskAnswer";
-import { ChatComposer, ChatLine, shownLines, useCorrections, usePendingPoll, type Typed } from "./ChatThread";
+import { ChatComposer, ChatLine, shownLines, useActedNow, useCorrections, usePendingPoll, type Typed } from "./ChatThread";
 
 type AskMessage = Schemas["DiscussionMessageOut"];
 
@@ -535,6 +536,15 @@ function ChatView({
   }, [lines.length]);
   // roadmap-talk: the chat's open Correct forms, for Apply all.
   const corrected = useCorrections();
+  // chat-latest-card: a card acted on replaces the earlier lines' cards at once, until the chat reads again.
+  const acted = useActedNow(thread, lines.map((l) => l.plan?.id ?? l.ask?.id ?? ""));
+  // A card acted on here changes the page under the panel too: its data and every count read again at once.
+  const cardChanged = () => {
+    void load();
+    invalidateWaiting();
+    dataChanged();
+    waitingChanged();
+  };
   // "Suggest from the chat": the words a goal's drawer typed in, taken once by the box a person sees.
   const waiting = useAskDraft();
   const [typed, setTyped] = useState<Typed>({ text: "", n: 0 });
@@ -557,9 +567,9 @@ function ChatView({
             </p>
           )}
           <ol ref={list} className="flex flex-col gap-3" aria-label="Messages" data-testid="ask-chat-thread">
-            {lines.map((l) =>
+            {lines.map((l, i) =>
               l.plan ? (
-                <ChatLine key={l.plan.id} message={l.plan} onCardChanged={() => void load()} onThread={setThread} corrected={corrected} ask />
+                <ChatLine key={l.plan.id} message={l.plan} onCardChanged={cardChanged} onThread={setThread} corrected={corrected} ask replaced={acted.replacedFor(i)} onActed={acted.onActed} />
               ) : (
                 <AskLine key={l.ask!.id} message={l.ask!} askId={chat.askId!} onEnded={() => void loadAsk()} />
               ),

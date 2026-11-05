@@ -15,6 +15,16 @@ export type Query<T> = {
   setData: (update: (prev: T | undefined) => T | undefined) => void;
 };
 
+const CHANGED = "po:data-changed";
+
+/**
+ * After an action made beside the page (Ask Oracle's panel applied a card): every page's data
+ * on screen reads again in place, so it shows the change at once (the owner's full-awareness rule).
+ */
+export function dataChanged() {
+  window.dispatchEvent(new Event(CHANGED));
+}
+
 /** Message for an unknown thrown value; network failures read as "cannot reach". */
 export function errorMessage(e: unknown): string {
   if (e instanceof ApiError) return e.message;
@@ -79,6 +89,13 @@ export function useQuery<T>(key: string, load: () => Promise<T>, { keepPrevious 
       if (!onAuth(e) && keyRef.current === key && isLatest(key, n)) setState((s) => ({ ...s, key, error: errorMessage(e), loading: false }));
     }
   }, [key, onAuth]);
+
+  // An action beside the page (dataChanged): read again, the data kept on screen meanwhile.
+  useEffect(() => {
+    const again = () => void run();
+    window.addEventListener(CHANGED, again);
+    return () => window.removeEventListener(CHANGED, again);
+  }, [run]);
 
   useEffect(() => {
     let live = true;
