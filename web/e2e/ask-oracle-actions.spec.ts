@@ -116,7 +116,7 @@ async function apiActions(box: Locator) {
   const made = last(box).getByTestId("chat-card");
   await expect(made).toHaveCount(1);
   await expect(made.getByTestId("chat-card-summary")).toHaveText(
-    "Add a product record: type “assumption”, key “night-shift-nurse”, title “Night shift nurse”.",
+    "Add a product record: type “assumption”, title “Night shift nurse”.",
   );
   await tap(made.getByRole("button", { name: "Apply", exact: true }));
   await expect(made).toHaveAttribute("data-status", "applied");

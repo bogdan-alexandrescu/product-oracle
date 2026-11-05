@@ -11,8 +11,10 @@ import { ADMIN } from "./helpers";
  * the chat is replaced too (an applied card keeps its Undo), and a reload reads the same.
  * In the feature talk, the Ask Oracle panel and a meeting's chat. A card that makes a new
  * record (a note, a decision, a suggestion) is its own topic: two different notes both stay
- * active; a note offered again in other words replaces its earlier draft. Discard and Propose
- * replace earlier cards as Apply does. Mock-backed (invented items); desktop (1366x820).
+ * active, and so do two drafts sharing most words ("we launch billing in March" / "... in April");
+ * only a line asking to change the earlier draft ("make it April instead", "no, note: ...")
+ * replaces it. Discard and Propose replace earlier cards as Apply does. Apply in the Ask panel
+ * shows the change on the page under it at once. Mock-backed (invented items); desktop (1366x820).
  */
 
 async function tap(l: Locator) {
@@ -177,9 +179,10 @@ async function openAsk(page: Page) {
 
 /**
  * Card latest-card-new-records: protects = in a meeting's chat two different notes and two
- * different decisions all stay active and both notes apply; a note said again in other words
- * replaces the earlier draft, after a reload too; fails_when = the meeting makes every note
- * (or every decision) one topic, so the older reads "Replaced by a newer card".
+ * different decisions all stay active and both notes apply; a note said again with "no, ..."
+ * (asking to change it) replaces the earlier draft, after a reload too; a note sharing most of
+ * its words without that stays active; fails_when = the meeting makes every note (or every
+ * decision) one topic, or word overlap replaces a different note.
  */
 test("a meeting's chat keeps different notes and decisions active", async ({ context, page }) => {
   await openMeeting(page, context);
@@ -193,17 +196,22 @@ test("a meeting's chat keeps different notes and decisions active", async ({ con
   await say(box(), "decision: the tour stays optional");
   const d2 = await newest(box());
   for (const c of [n1, n2, d1, d2]) await active(c);
-  // The same note in other words replaces its earlier draft; the other note stays active.
-  await say(box(), "note: the budget is approved for the spring");
+  // Most of the same words, not asked as a change: another note, both active.
+  await say(box(), "note: the budget is approved for the summer");
+  const n0 = await newest(box());
+  await active(n0);
+  await active(n1);
+  // Asked as a change of the note ("no, ..."): it replaces the earlier draft; the others stay active.
+  await say(box(), "no, note: the budget is approved for the spring");
   const n3 = await newest(box());
   await active(n3);
-  await replaced(n1);
-  for (const c of [n2, d1, d2]) await active(c);
+  await replaced(n0);
+  for (const c of [n1, n2, d1, d2]) await active(c);
   const n3Id = await n3.getAttribute("data-card-id");
   await page.reload();
   await expect(page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
-  await replaced(n1);
-  for (const c of [n2, d1, d2]) await active(c);
+  await replaced(n0);
+  for (const c of [n1, n2, d1, d2]) await active(c);
   const again = box().locator(`[data-testid="chat-card"][data-card-id="${n3Id}"]`);
   await active(again);
   // Both different notes apply.
@@ -253,4 +261,63 @@ test("Propose on the newest card replaces the earlier ones", async ({ page }) =>
   await expect(b).toHaveAttribute("data-status", "proposed");
   await expect(a.getByTestId("chat-card-replaced")).toContainText("Replaced by a newer card");
   await expect(propose(a)).toHaveCount(0);
+});
+
+/**
+ * Card latest-card-not-words (fix round 2): protects = drafts sharing most words are different
+ * records: March vs April, Postgres vs Redis, Dana vs Lee all stay active in a meeting's chat;
+ * "make it April instead" (the reader's redo of the March draft) replaces the March card, after
+ * a reload too; fails_when = word overlap replaces a different decision or note, or the asked
+ * change leaves the March card active.
+ */
+test("drafts sharing most words stay active; only an asked change replaces one", async ({ context, page }) => {
+  await openMeeting(page, context);
+  const box = () => page.getByTestId("meeting-chat");
+  const pairs = [
+    ["decision: we launch billing in March", "decision: we launch billing in April"],
+    ["note: Use Postgres for the events store", "note: Use Redis for the events store"],
+    ["note: Ask Dana about the pricing page", "note: Ask Lee about the pricing page"],
+  ];
+  const cards: Locator[] = [];
+  for (const [one, two] of pairs) {
+    await say(box(), one);
+    cards.push(await newest(box()));
+    await say(box(), two);
+    cards.push(await newest(box()));
+  }
+  for (const c of cards) await active(c);
+  // The person asks to change the newest decision draft: the reader makes it a redo of that card.
+  await say(box(), "decision: we launch payroll in March");
+  const march = await newest(box());
+  await say(box(), "make it April instead");
+  const april = await newest(box());
+  await expect(april.getByTestId("chat-card-summary")).toContainText("April");
+  await active(april);
+  await replaced(march);
+  for (const c of cards) await active(c);
+  await page.reload();
+  await expect(page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
+  await replaced(march);
+  await active(april);
+  for (const c of cards) await active(c);
+});
+
+/**
+ * Card latest-card-page-updates (from PR 1229's review): protects = Apply in the Ask Oracle
+ * panel shows the change on the page under it at once (the roadmap reads the renamed feature),
+ * with no reload; fails_when = the page keeps the old name until a reload.
+ */
+test("Apply in the Ask panel updates the page under it at once", async ({ page }) => {
+  await signIn(page, "/simple/roadmap");
+  // The roadmap's own feature buttons (the Ask panel's card text is not a button).
+  const feature = (name: string) => page.getByRole("button", { name, exact: true });
+  await expect(feature("Setup checklist").first()).toBeVisible();
+  await openAsk(page);
+  const box = () => page.getByTestId("ask-chat").filter({ visible: true });
+  await say(box(), "rename Setup checklist to First-run checklist");
+  const card = await newest(box());
+  await tap(applyOf(card));
+  await expect(card).toHaveAttribute("data-status", "applied");
+  await expect(feature("First-run checklist").first()).toBeVisible();
+  await expect(feature("Setup checklist")).toHaveCount(0);
 });
