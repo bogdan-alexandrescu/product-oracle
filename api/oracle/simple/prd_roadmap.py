@@ -12,8 +12,12 @@ draft, for the roadmap's owner to review and publish. No run, no cost.
   ``engineering``), else the item's own; the start is the item's own (an end-only item stays
   end-only, its start estimated). An undated item is not added. Each is an item added to the
   working draft (``simple_draft_id``, as S7's additions), with the PRD as its PRD;
-- an item already on the published roadmap (same PRD, same key) only adds what changed:
-  its dates or title, as the draft's fields on the published item; unchanged, nothing;
+- an item already on the published roadmap (same PRD, same key, else same feature, else
+  same title) only adds what changed: its dates or title, as the draft's fields on the
+  published item; unchanged, nothing. approved-prd-shown-once: "published" is the version
+  the Simple roadmap shows (its latest approved with items, else its latest with items),
+  which is not the draft's base when a later unapproved version holds items; a copy added
+  before this is read as the shown item, once (oracle.simple.drafts.fold);
 - no key dates (ah-prd-milestones-once, the owner's pick: 'Read-only from the PRD'): its
   milestones show as read-only key dates drawn from the PRD (oracle.simple.key_dates
   .prd_key_dates), once each, and move when the PRD does. A draft made before this holds
