@@ -188,3 +188,44 @@ async def test_replaced_prds_past_meeting_and_its_decisions_stay_on_decisions(cl
     r = await client.get("/v1/simple/decisions?prd=trust-plan", headers=ctx.as_("owner"))
     assert r.status_code == 404, r.text
     assert r.json()["detail"] == "No such PRD"
+
+
+async def test_proposal_on_a_replaced_prds_item_leaves_simple_with_the_item(client):
+    """Re-review round 5: a proposal waiting on an item of a replaced PRD read as a nameless
+    "An item: change the horizon" row in Roadmap's "Pulled in, pending a decision", as the
+    item itself has left Simple. The proposal leaves GET /v1/simple/changes with it; one on
+    a live item stays, and a decided one stays as history."""
+    from sqlalchemy import select
+
+    from oracle.roadmap.models import RoadmapItem
+    from oracle.simple.models import SimpleChange
+    from tests.test_one_roadmap_many_prds_api import world as company_world
+
+    ctx, ids = await company_world(client)
+    owner = ctx.users["owner"].id
+    async with tenant_session(ctx.tenant_id) as s:
+        items = {r.item_key: r for r in await s.scalars(select(RoadmapItem))}
+        made = {}
+        for key, status in (("read-replicas", "proposed"), ("report-button", "proposed"),
+                            ("read-replicas", "accepted")):  # fmt: skip
+            c = SimpleChange(op="change_horizon", target={"item_id": str(items[key].id)},
+                             before={"horizon": "now"}, after={"horizon": "next"},
+                             status=status, by=owner, at=NOW)  # fmt: skip
+            s.add(c)
+            await s.flush()
+            made[(key, status)] = str(c.id)
+        await s.commit()
+    shown = {c["id"] for c in await _get(client, ctx, "/v1/simple/changes")}
+    assert set(made.values()) <= shown
+    # Scale is replaced by User Safety: Read replicas leaves Simple, and its proposal with it.
+    r = await client.post("/v1/documents/scale/replaced-by", headers=ctx.as_("owner"),
+                          json={"prds": ["user-safety"]})  # fmt: skip
+    assert r.status_code == 200, r.text
+    keys = {i["key"] for i in (await _get(client, ctx, "/v1/simple/roadmap"))["items"]}
+    assert keys == {"report-button"}
+    shown = {c["id"] for c in await _get(client, ctx, "/v1/simple/changes")}
+    assert made[("read-replicas", "proposed")] not in shown
+    assert made[("report-button", "proposed")] in shown
+    assert made[("read-replicas", "accepted")] in shown
+    waiting = await _get(client, ctx, "/v1/simple/changes?status=proposed")
+    assert [c["id"] for c in waiting] == [made[("report-button", "proposed")]]

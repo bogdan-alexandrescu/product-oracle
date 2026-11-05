@@ -166,6 +166,27 @@ test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
   await expect(buckets.getByText(/^Grouped by goal for this quarter/)).toBeVisible();
   for (const title of GONE) await expect(buckets.getByText(title, { exact: true })).toHaveCount(0);
 
+  // Round 5: Priorities' Ranked list leaves them out too.
+  await page.goto("/simple/priorities?tab=ranked");
+  const ranked = page.getByRole("list", { name: "Ranked list" }).first();
+  await expect(ranked.getByText("New plan tiers").first()).toBeVisible();
+  for (const title of GONE) await expect(ranked.getByText(title)).toHaveCount(0);
+
+  // Round 5: Needs a decision names none of them: no suggested feature "Looks like" one
+  // (additions.reconcile reads service.load), and a proposal on one (Team invite nudges, of
+  // Guided setup) leaves with its item, never a nameless "An item" row.
+  await page.goto("/simple/roadmap");
+  await page.getByTestId("needs-decision").filter({ visible: true }).click();
+  const tray = page.getByTestId("decision-tray");
+  const suggested = tray.getByTestId("tray-suggested");
+  await expect(suggested.getByText("Quiet hours for alerts").first()).toBeVisible();
+  await expect(suggested.getByText(/Looks like/).first()).toBeVisible();
+  for (const title of GONE) await expect(suggested.getByText(title)).toHaveCount(0);
+  const pulled = tray.locator("section").filter({ has: page.getByRole("heading", { name: "Pulled in, pending a decision" }) });
+  await expect(pulled.getByText(/^None\.$/)).toBeVisible();
+  await expect(tray.getByText(/An item/)).toHaveCount(0);
+  await expect(tray.getByText(/Team invite nudges/)).toHaveCount(0);
+
   await page.goto("/simple/meetings");
   const row = page.getByTestId("meetings-past").locator("li").filter({ has: page.getByRole("link", { name: "Review: Usage alerts" }) });
   await row.getByTestId("meetings-its-decisions").click();
