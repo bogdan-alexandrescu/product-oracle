@@ -89,11 +89,14 @@ test("ST-7: a source over the channel cap says what to do in plain words", async
   await expect(row.getByTestId("last-error")).toHaveText("Pick 100 channels or fewer, then it syncs again");
 });
 
-test("ST-7: a viewer reads who can fix a source over the channel cap, with no Edit", async ({ page }) => {
+test("ST-7: a viewer reads the role that can fix a source over the channel cap, with no Edit", async ({ page }) => {
   await login(page, VIEWER);
   await openSources(page);
   const row = page.getByRole("listitem", { name: "Legacy all-hands chat" });
-  await expect(row.getByTestId("last-error")).toHaveText("An owner or the source's owner can pick 100 channels or fewer, then it syncs again");
+  // Review r2 of PR 1286: a viewer edits no source, its own either; editing needs commenter or above.
+  await expect(row.getByTestId("last-error")).toHaveText(
+    "Over 100 channels: your role cannot edit sources; a commenter or above can. Ask an owner to raise your role.",
+  );
   await expect(row.getByRole("button", { name: "Edit Legacy all-hands chat" })).toHaveCount(0);
 });
 
@@ -103,7 +106,8 @@ test("ST-7: a source refused for any other cause names the edit to make", async 
   await page.goto("/settings/sources");
   const row = page.getByRole("listitem", { name: "Legacy all-hands chat" });
   await row.getByRole("button", { name: "Sync now" }).click();
-  await expect(row.getByTestId("last-error")).toHaveText("Until must be on or after since: edit this source to sync it again");
+  // Review r2 of PR 1286: plain words, one sentence each, no keys.
+  await expect(row.getByTestId("last-error")).toHaveText("The end date must be on or after the start date. Edit this source to sync it again.");
 });
 
 test("ST-7: Map the code and the Analytics title each have an (i)", async ({ page }) => {
@@ -165,6 +169,17 @@ test("CO-2: an empty Updates list says so in one line, with the header's New upd
   await expect(page.getByRole("button", { name: "Write an update" })).toHaveCount(0);
   await empty.getByRole("button", { name: "New update" }).click();
   await expect(page.getByRole("dialog", { name: "New update" })).toBeVisible();
+});
+
+test("CO-2: on a phone the empty Updates list's button reads as the header's", async ({ page }) => {
+  await page.setViewportSize(PHONE);
+  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "empty"));
+  await login(page);
+  await page.goto("/company/updates");
+  const header = page.getByTestId("company-action").getByRole("button", { name: "New update" });
+  const empty = page.getByTestId("updates-empty").getByRole("button", { name: "New update" });
+  await expect(header).toBeVisible();
+  await expect(empty).toHaveText((await header.innerText()).trim());
 });
 
 const FAILED: { name: string; path: string; url: string; what: string; after: (p: Page) => Promise<void> }[] = [
