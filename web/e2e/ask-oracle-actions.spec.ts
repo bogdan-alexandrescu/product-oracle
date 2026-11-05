@@ -165,3 +165,39 @@ test("a meeting's chat applies an action of the API, with Undo, and one that can
   await expect(page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
   await apiActions(page.getByTestId("meeting-chat"));
 });
+
+/**
+ * Card ask-actions-secret-value: protects = a token pasted into what a card would add gets a
+ * plain refusal and no card, in a feature's talk, the Ask Oracle panel and a meeting's chat;
+ * fails_when = a card (or its summary) carries the token; no_claim = the API's own check
+ * (tests/test_ask_oracle_actions.py).
+ */
+test("a pasted token never lands in a card, in the three chats", async ({ context, page }) => {
+  const token = "ghp_" + "Example0Token1Not2Real3Value4Abc5";
+  async function refused(box: Locator) {
+    await say(box, `add the assumption Use ${token}`);
+    const reply = last(box);
+    await expect(reply).toContainText("looks like a secret");
+    await expect(reply.getByTestId("chat-card")).toHaveCount(0);
+    await expect(box.getByTestId("chat-card-summary").filter({ hasText: token })).toHaveCount(0);
+  }
+  await signIn(page, "/simple/roadmap");
+  await tap(page.getByTestId("format-gantt"));
+  const bar = page.locator('[data-testid="bar"][data-item="alert-digest"]');
+  await expect(bar).toBeVisible();
+  await bar.click();
+  const panel = page.getByTestId("floating-card");
+  await tap(panel.getByRole("button", { name: "Talk to Oracle" }));
+  await refused(panel.getByTestId("item-talk"));
+
+  await page.goto("/simple/roadmap");
+  await tap(page.getByTestId("simple-ask").filter({ visible: true }).first());
+  const ask = page.getByTestId("ask-chat").filter({ visible: true });
+  await expect(ask).toBeVisible();
+  await refused(ask);
+
+  await context.addInitScript((key) => localStorage.setItem(key, "simple-chat"), MOCK_SCENARIO_KEY);
+  await page.goto(`/simple/meetings/${CHAT_MEETING_ID}/chat`);
+  await expect(page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
+  await refused(page.getByTestId("meeting-chat"));
+});

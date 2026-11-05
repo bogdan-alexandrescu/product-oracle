@@ -782,6 +782,10 @@ function rebaseShift(c: StoredCard, current: Record<string, unknown>) {
 const API_OP = "api_action";
 const API_CANNOT_UNDO = "This cannot be undone.";
 const API_ADD = /^(?:please\s+)?add\s+(?:the\s+|an?\s+)?(?:new\s+)?(assumption|gap)\s+(.+?)\.?$/i;
+/** ask_actions.SECRET_VALUE: a pasted key or token is never kept in a card (the API refuses it). */
+const API_SECRET =
+  /(sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|xox[abposr]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|bearer\s+\S{16,}|-----BEGIN [A-Z ]*PRIVATE KEY|(?<![A-Za-z0-9_+/=-])(?=[A-Za-z0-9_+/=]*\d)(?=[A-Za-z0-9_+/=]*[A-Za-z])[A-Za-z0-9_+/=]{32,})/i;
+export const API_SECRET_REFUSAL = "I can't do that from the chat: a value that looks like a secret is never kept in the chat.";
 
 function apiDraft(kind: string, text: string): Draft {
   const title = words(text);
@@ -860,7 +864,7 @@ export const mockReaderOps: Record<string, (a: ReaderArgs) => ReaderOut> = {
   set_decider: (a) => who(a, "decider"),
   api_add: ({ rest }) => {
     const [kind, text] = (rest ?? "").split("|");
-    return { card: apiDraft(kind, text) };
+    return API_SECRET.test(text) ? { refusal: API_SECRET_REFUSAL } : { card: apiDraft(kind, text) };
   },
   remove_dependency: (a) => dependsOn(a, true),
   add_dependency: (a) => dependsOn(a, false),
@@ -1330,6 +1334,7 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
     return { kind: "cards", body: `I understood: split ${about(i)} into ${n} slices.`, cards };
   }
   const api = API_ADD.exec(t);
+  if (api && API_SECRET.test(api[2])) return { kind: "note", body: API_SECRET_REFUSAL, cards: [] };
   if (api) return { kind: "cards", body: ONE_CHANGE, cards: [apiDraft(api[1], api[2])] };
   const dw = dependencyWords(t);
   if (dw && new RegExp(`^${it}$`, "i").test(dw.x.trim())) {
