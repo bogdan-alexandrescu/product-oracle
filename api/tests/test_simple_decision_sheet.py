@@ -36,6 +36,9 @@ Test cards (protects / fails_when / no_claim):
 - test_added_question_with_no_decider_is_not_accepted_by_its_proposer: protects=with no
   decider and no owner to route to, a proposed question is left open and its proposer may
   not accept it; an owner may; fails_when=the proposer accepts their own question.
+- test_add_question_takes_the_prd_by_its_slug: protects=``add_question`` names its PRD by
+  id or by the slug Decisions' PRD list gives (so + Ask a question offers every PRD the
+  person reads); fails_when=the slug is refused.
 """
 
 import uuid
@@ -375,3 +378,16 @@ async def test_added_question_with_no_decider_is_not_accepted_by_its_proposer(cl
     ok = await client.post(f"{CHANGES}/{change['id']}/accept", headers=ctx.as_("owner"),
                            json={})  # fmt: skip
     assert ok.status_code in (200, 201), ok.text
+
+
+async def test_add_question_takes_the_prd_by_its_slug(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    page = await _page(client, ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        slug = (await s.get(Document, ids["prd"])).slug
+    assert slug in [p["id"] for p in page["prds"]]
+    r = await _change(client, ctx, "owner", "add_question", {"document_id": slug},
+                      {"title": "Who can export a team's alert history?"})  # fmt: skip
+    assert r.status_code == 201, r.text
+    assert _q(await _page(client, ctx), "Q17") is not None
