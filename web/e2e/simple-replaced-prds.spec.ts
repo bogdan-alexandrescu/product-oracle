@@ -220,19 +220,19 @@ test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
   await expect(page).toHaveURL(/\/simple\/decisions\?meeting=/);
   const past = page.getByRole("region", { name: "Review: Usage alerts" });
   await expect(past.getByTestId("decision-row")).toHaveCount(1);
-  await expect(past.getByTestId("decision-row").first()).toContainText("D-4 Moved Weekly alert digest");
+  await expect(past.getByTestId("decision-row").first()).toContainText("D-9 Moved Weekly alert digest");
 
   // The meeting page's own links: its decision's code, and "Open the Decisions page".
   await page.goto("/simple/meetings");
   await page.getByTestId("meetings-past").getByRole("link", { name: "Review: Usage alerts" }).click();
   await expect(page).toHaveURL(/\/simple\/meetings\/[^/?]+$/);
-  await page.getByRole("list", { name: "Decisions taken" }).getByRole("link", { name: "D-4 Moved Weekly alert digest" }).click();
+  await page.getByRole("list", { name: "Decisions taken" }).getByRole("link", { name: "D-9 Moved Weekly alert digest" }).click();
   await expect(page).toHaveURL(/\/simple\/decisions#d-4$/);
-  await expect(page.getByTestId("decision-row").filter({ hasText: "D-4 Moved Weekly alert digest" }).filter({ visible: true }).first()).toBeVisible();
+  await expect(page.getByTestId("decision-row").filter({ hasText: "D-9 Moved Weekly alert digest" }).filter({ visible: true }).first()).toBeVisible();
   await page.goBack();
   await page.getByRole("status", { name: "Sent" }).getByRole("link", { name: "Open the Decisions page" }).click();
   await expect(page).toHaveURL(/\/simple\/decisions\?meeting=/);
-  await expect(past.getByTestId("decision-row").first()).toContainText("D-4 Moved Weekly alert digest");
+  await expect(past.getByTestId("decision-row").first()).toContainText("D-9 Moved Weekly alert digest");
 
   // The minutes in the Inbox: Open reads them beside their decision.
   await page.goto("/inbox");
@@ -241,7 +241,7 @@ test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
   await minutes.getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/simple\/decisions\?meeting=/);
   await expect(past.getByTestId("decision-row")).toHaveCount(1);
-  await expect(past.getByTestId("decision-row").first()).toContainText("D-4 Moved Weekly alert digest");
+  await expect(past.getByTestId("decision-row").first()).toContainText("D-9 Moved Weekly alert digest");
 
   await page.goto("/simple/decisions");
   await expect(page.getByRole("region", { name: "Outside meetings" })).toContainText("Q1 Data retention period");

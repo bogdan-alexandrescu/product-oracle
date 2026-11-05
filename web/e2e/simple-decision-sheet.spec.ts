@@ -3,7 +3,7 @@ import { expect, test, type Page } from "./test";
 
 /**
  * edit-decisions (the owner's picks, BGD Nov 5): ec1 b "Decision sheet" and eq2 b "Question
- * sheet", driven through Simple's Decisions page and Home on the mock's invented data (D-5 Keep
+ * sheet", driven through Simple's Decisions page and Home on the mock's invented data (D-10 Keep
  * the free plan's five-seat limit, outside meetings; the PRD "Guided setup"'s Q5 Reminder default
  * time), desktop and phone, light and dark.
  */
@@ -41,13 +41,13 @@ for (const phone of [false, true]) {
        */
       test("ec1: a decision's sheet edits every field and reassigns it", async ({ page }) => {
         await decisions(page);
-        const row = outside(page, "D-5");
+        const row = outside(page, "D-10");
         // ec1-b-rest: an open row names who decides, as its sheet does; no "waiting for a decider".
         await expect(row.locator(".simple-meta")).toHaveText(/^Avery Stone decides · /);
         await expect(row).not.toContainText("waiting for a decider");
         await row.getByTestId("decision-open").click();
         const s = sheet(page);
-        await expect(s.getByRole("heading", { name: "D-5 Keep the free plan's five-seat limit" })).toBeVisible();
+        await expect(s.getByRole("heading", { name: "D-10 Keep the free plan's five-seat limit" })).toBeVisible();
         await expect(s).toContainText("Keep the free plan's five-seat limit?");
         await expect(s).toContainText("Raised in the weekly product review.");
         await expect(s.getByRole("listitem")).toHaveText(["Yes, this quarter", "Not now"]);
@@ -65,7 +65,7 @@ for (const phone of [false, true]) {
         await expect(s.getByTestId("decision-sheet-review")).toHaveText("Dec 7, 2026");
         await s.getByRole("button", { name: "Save" }).click();
         await expect(s).toHaveCount(0);
-        await expect(toast(page, "Saved D-5")).toBeVisible();
+        await expect(toast(page, "Saved D-10")).toBeVisible();
         await expect(row).toContainText("edited by you just now");
 
         await row.getByTestId("decision-open").click();
@@ -74,7 +74,7 @@ for (const phone of [false, true]) {
         await s.getByRole("button", { name: "Reassign" }).click();
         await s.getByRole("group", { name: "Who decides" }).getByRole("button", { name: "Priya Raman" }).click();
         await expect(s.getByTestId("decision-sheet-decider")).toContainText("Priya Raman");
-        await expect(toast(page, "Priya Raman decides D-5")).toBeVisible();
+        await expect(toast(page, "Priya Raman decides D-10")).toBeVisible();
         await page.keyboard.press("Escape");
         await expect(s).toHaveCount(0);
         await expect(row).toContainText("Priya Raman");
@@ -90,7 +90,7 @@ for (const phone of [false, true]) {
        */
       test("ec1: Withdraw with Undo, and Delete to Settings › Trash and back", async ({ page }) => {
         await decisions(page);
-        const row = outside(page, "D-5");
+        const row = outside(page, "D-10");
         await row.getByTestId("decision-open").click();
         await sheet(page).getByRole("button", { name: "Withdraw" }).click();
         await expect(sheet(page)).toHaveCount(0);
@@ -101,7 +101,7 @@ for (const phone of [false, true]) {
 
         await row.getByTestId("decision-open").click();
         await sheet(page).getByRole("button", { name: "Delete" }).click();
-        await expect(toast(page, "D-5 is in Settings › Trash")).toBeVisible();
+        await expect(toast(page, "D-10 is in Settings › Trash")).toBeVisible();
         await expect(row).toHaveCount(0);
 
         await page.goto("/settings/trash");
@@ -111,7 +111,7 @@ for (const phone of [false, true]) {
         await page.getByRole("button", { name: "Restore Keep the free plan's five-seat limit" }).click();
         await expect(entry).toHaveCount(0);
         await page.goto("/simple/decisions");
-        await expect(outside(page, "D-5").getByTestId("decision-open")).toBeVisible();
+        await expect(outside(page, "D-10").getByTestId("decision-open")).toBeVisible();
       });
 
       /**
@@ -218,13 +218,13 @@ for (const phone of [false, true]) {
 
       /**
        * Card ec1-eq2-propose: protects = an approver who is not the decider gets Suggest a change (no
-       * Reassign, Withdraw or Delete) on D-5 and on Q5, and the sheet says who decides ("Avery Stone
+       * Reassign, Withdraw or Delete) on D-10 and on Q5, and the sheet says who decides ("Avery Stone
        * decides"); Send sends it to Avery Stone; fails_when = Edit, Withdraw, Delete or Reassign
        * shows, or the toast does not name the decider; no_claim = the decider's inbox.
        */
       test("an approver suggests a change to whoever decides", async ({ page }) => {
         await decisions(page, "approver@example.com");
-        await outside(page, "D-5").getByTestId("decision-open").click();
+        await outside(page, "D-10").getByTestId("decision-open").click();
         const s = sheet(page);
         await expect(s.getByRole("button", { name: "Suggest a change" })).toBeVisible();
         for (const name of ["Edit", "Withdraw", "Delete", "Reassign"]) await expect(s.getByRole("button", { name, exact: true })).toHaveCount(0);
@@ -233,7 +233,7 @@ for (const phone of [false, true]) {
         await s.getByRole("textbox", { name: "Title", exact: true }).fill("Keep the free plan's five-seat limit for now");
         await s.getByRole("button", { name: "Send" }).click();
         await expect(toast(page, "Sent to Avery Stone to decide")).toBeVisible();
-        await expect(outside(page, "D-5")).toContainText("Keep the free plan's five-seat limit");
+        await expect(outside(page, "D-10")).toContainText("Keep the free plan's five-seat limit");
 
         await question(page, "Q5").getByTestId("question-open").click();
         await expect(s.getByRole("button", { name: "Suggest a change" })).toBeVisible();
@@ -339,15 +339,55 @@ for (const phone of [false, true]) {
       });
 
       /**
-       * Card ec1-outdated: protects = an approver's suggestion on D-5 Keep the free plan's five-seat
+       * Card ec1-one-number: protects = on Decisions every D-number names one decision: each open
+       * row of Outside meetings and each call Waiting for you opens a sheet headed by its number and
+       * title, and no number heads two titles (Waiting for you's D-5 is Outside meetings' D-5);
+       * fails_when = the mock numbers Simple's decisions apart from the decision log's (two D-5s);
+       * no_claim = the company's decision log page.
+       */
+      test("ec1: every D-number on Decisions names one decision", async ({ page }) => {
+        await decisions(page, "approver@example.com");
+        const s = sheet(page);
+        const named = new Map<string, string>();
+        const read = async (open: ReturnType<Page["locator"]>) => {
+          await open.scrollIntoViewIfNeeded();
+          await open.click();
+          const heading = s.getByRole("heading", { name: /^D-\d+ / });
+          await expect(heading).toBeVisible();
+          const [, code, title] = /^(D-\d+) (.+)$/.exec((await heading.textContent())!.trim())!;
+          expect(named.get(code) ?? title, `${code} names one decision`).toBe(title);
+          named.set(code, title);
+          await page.keyboard.press("Escape");
+          await expect(s).toHaveCount(0);
+          return code;
+        };
+        const rows = region(page, "Outside meetings").getByTestId("decision-row").filter({ hasText: /^D-\d+ / });
+        await expect(rows.first()).toBeVisible();
+        const codes = (await rows.allTextContents()).map((t) => /^(D-\d+) /.exec(t)![1]);
+        expect(new Set(codes).size).toBe(codes.length);
+        for (const row of await rows.all()) {
+          const open = row.getByTestId("decision-open");
+          if (await open.count()) expect(codes).toContain(await read(open));
+        }
+        const calls = page.getByTestId("questions-mine").getByTestId("waiting-decision-open");
+        await expect(calls.first()).toBeVisible();
+        for (const call of await calls.all()) {
+          const code = await read(call);
+          if (codes.includes(code)) await expect(outside(page, code)).toContainText(named.get(code)!);
+        }
+        expect(named.get("D-5")).toBe("Ship usage caps before anomaly detection");
+      });
+
+      /**
+       * Card ec1-outdated: protects = an approver's suggestion on D-10 Keep the free plan's five-seat
        * limit waits for Avery Stone with Accept on Decisions' Waiting for you and Home; Avery edits
-       * D-5 first, and Accept opens D-5's sheet as it is now, saying the suggestion is out of date
+       * D-10 first, and Accept opens D-10's sheet as it is now, saying the suggestion is out of date
        * (no toast); fails_when = the refusal is only a toast, the suggestion overwrites the newer
        * edit, or the mock has no Accept for it; no_claim = Decline.
        */
       test("ec1: an out-of-date suggestion's Accept opens the sheet saying so", async ({ page }) => {
         await decisions(page, "approver@example.com");
-        await outside(page, "D-5").getByTestId("decision-open").click();
+        await outside(page, "D-10").getByTestId("decision-open").click();
         const s = sheet(page);
         await s.getByRole("button", { name: "Suggest a change" }).click();
         await s.getByRole("textbox", { name: "Title", exact: true }).fill("Keep the free plan's six-seat limit");
@@ -355,7 +395,7 @@ for (const phone of [false, true]) {
         await expect(toast(page, "Sent to Avery Stone to decide")).toBeVisible();
 
         await decisions(page, undefined, true);
-        await outside(page, "D-5").getByTestId("decision-open").click();
+        await outside(page, "D-10").getByTestId("decision-open").click();
         await s.getByRole("button", { name: "Edit" }).click();
         await s.getByRole("textbox", { name: "Title", exact: true }).fill("Keep the free plan's seven-seat limit");
         await s.getByRole("button", { name: "Save" }).click();
@@ -363,19 +403,23 @@ for (const phone of [false, true]) {
 
         for (const where of ["/simple/decisions", "/simple"]) {
           await page.goto(where);
-          const accept = (where === "/simple" ? page.getByTestId("home-proposal").filter({ hasText: "D-5" }) : page.getByTestId("waiting-item").and(page.locator('[data-kind="proposal"]')))
-            .first()
-            .getByRole("button", { name: "Accept", exact: true });
+          // Home and Waiting for you name the suggestion's decision as it is now.
+          const item = (where === "/simple" ? page.getByTestId("home-proposal").filter({ hasText: "D-10" }) : page.getByTestId("waiting-item").and(page.locator('[data-kind="proposal"]'))).first();
+          await expect(item).toContainText("D-10 Keep the free plan's seven-seat limit");
+          await expect(item).not.toContainText("A proposed change");
+          const accept = item.getByRole("button", { name: "Accept", exact: true });
           await accept.scrollIntoViewIfNeeded();
           await accept.click();
-          await expect(s.getByRole("heading", { name: "D-5 Keep the free plan's seven-seat limit" })).toBeVisible();
+          await expect(s.getByRole("heading", { name: "D-10 Keep the free plan's seven-seat limit" })).toBeVisible();
           await expect(s.getByRole("alert")).toHaveText("Not accepted: this decision changed since the suggestion was made. Here it is as it is now.");
+          // At the top of the sheet, above its fields.
+          await expect(s.getByTestId("decision-sheet-body").locator("> *").first()).toHaveAttribute("role", "alert");
           await expect(page.getByTestId("toasts").getByText(/outdated/i)).toHaveCount(0);
           await page.keyboard.press("Escape");
           await expect(s).toHaveCount(0);
         }
         await page.goto("/simple/decisions");
-        await expect(outside(page, "D-5")).toContainText("Keep the free plan's seven-seat limit");
+        await expect(outside(page, "D-10")).toContainText("Keep the free plan's seven-seat limit");
       });
 
       /** Card eq2-home: protects = Home's question titles open the same sheet; fails_when = they do not. */

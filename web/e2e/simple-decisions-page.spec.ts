@@ -36,34 +36,36 @@ for (const phone of [false, true]) {
         await expect(past).toContainText("1 decision taken.");
         await expect(past).not.toContainText("Comment:");
         await expect(past).toContainText("Attendees: Avery Stone, Priya Raman, Theo Brandt");
-        await expect(past).toContainText("D-3: Should muted teams still get the weekly digest?");
+        await expect(past).toContainText("D-8: Should muted teams still get the weekly digest?");
         await expect(past).toContainText("Draft the quiet hours copy · Theo Brandt · by");
         await expect(past).toContainText("Usage alerts: the working draft is not approved yet");
         const rows = past.getByTestId("decision-row");
         await expect(rows).toHaveCount(1);
-        await expect(rows.first()).toContainText("D-4 Moved Weekly alert digest");
+        await expect(rows.first()).toContainText("D-9 Moved Weekly alert digest");
         const outside = group(page, "Outside meetings");
         // prd-decisions A1: a PRD's decided question sits here too, with its code and answer.
-        // qa-simple-decide-20: D-3 is listed once, beside its meeting, not here as well.
-        // edit-decisions: D-5, an open decision with every field the sheet shows, is here too.
-        await expect(outside.getByTestId("decision-row")).toHaveCount(4);
+        // qa-simple-decide-20: D-8 is listed once, beside its meeting, not here as well.
+        // edit-decisions: D-10, an open decision with every field the sheet shows, is here too, and
+        // so is the decision log's open call D-5 (one decisions table, one number each).
+        await expect(outside.getByTestId("decision-row")).toHaveCount(5);
+        await expect(outside).toContainText("D-5 Ship usage caps before anomaly detection");
         await expect(outside.getByTestId("decision-row").first()).toContainText("Q1 Data retention period");
         await expect(outside.getByTestId("decision-row").first()).toContainText("Keep 90 days · Avery Stone");
-        await expect(outside).not.toContainText("D-3");
-        await expect(outside).toContainText("D-1 Start guided setup with the checklist");
+        await expect(outside).not.toContainText("D-8");
+        await expect(outside).toContainText("D-6 Start guided setup with the checklist");
 
         await page.getByRole("combobox", { name: "PRD", exact: true }).selectOption({ label: "Guided setup" });
         await expect(page).toHaveURL(/\?prd=guided-setup$/);
         await expect(past).toHaveCount(0);
         await expect(outside.getByTestId("decision-row")).toHaveCount(2);
         await expect(outside).toContainText("Q1 Data retention period");
-        await expect(outside).toContainText("D-1 Start guided setup with the checklist");
+        await expect(outside).toContainText("D-6 Start guided setup with the checklist");
 
         await page.getByRole("combobox", { name: "PRD", exact: true }).selectOption({ label: "All PRDs" });
         await page.getByRole("combobox", { name: "Goal", exact: true }).selectOption({ label: "Faster activation" });
         await expect(page).toHaveURL(/\?goal=faster-activation$/);
         await expect(past).toHaveCount(0);
-        await expect(outside).toContainText("D-1 Start guided setup with the checklist");
+        await expect(outside).toContainText("D-6 Start guided setup with the checklist");
 
         await page.getByRole("combobox", { name: "Goal", exact: true }).selectOption({ label: "All goals" });
         // qa-simple-decide-11: each meeting carries its day ("· live" for the one on).
