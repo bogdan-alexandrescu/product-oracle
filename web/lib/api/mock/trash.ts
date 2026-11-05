@@ -41,6 +41,11 @@ export interface TrashEntryRow {
   intakes: Intake[];
   /** What the delete released (New PRD 4: the requests linked to its PRDs), for Restore. */
   released?: unknown;
+  /** trash-features-goals: a feature's roadmap (slug), so Restore and the purge touch only its rows. */
+  roadmap?: string;
+  /** trash-features-goals: a goal deleted with features moved to another goal: their goal_ids
+   * as they were (trash_items' `links`), put back on Restore. */
+  goal_links?: { id: string; goal_ids: string[] }[];
 }
 
 export interface TrashDb {
@@ -76,9 +81,25 @@ export interface TrashContext<D extends TrashDocument, V extends TrashVersion> {
 
 export const emptyTrash = (): TrashDb => ({ entries: [], estimates: {} });
 
-/** Deletes an entry for good, noting the kinds of documents it held (as trash.purge's audit event). */
-function purge(db: TrashDb, entry: TrashEntryRow, now: string) {
+/** Deletes an entry for good, noting the kinds of documents it held (as trash.purge's audit event).
+ * trash-features-goals: a feature's or a goal's rows go too (trash_items.before_purge): the items
+ * that depended on the feature drop its key, and the features drop the goal. */
+function purge(db: TrashDb, entry: TrashEntryRow, now: string, simple?: TrashedSimple) {
   db.entries = db.entries.filter((e) => e !== entry);
+  const root = entry.out.root;
+  if (simple && root.type === "feature") {
+    const ours = (s: TrashedSimple["items"][number]) => s.key === root.slug && (!entry.roadmap || s.roadmap === entry.roadmap);
+    const gone = simple.items.filter((s) => ours(s) && s.trashed);
+    simple.items.splice(0, simple.items.length, ...simple.items.filter((s) => !gone.includes(s)));
+    for (const s of simple.items) {
+      if ((!entry.roadmap || s.roadmap === entry.roadmap) && s.depends?.includes(root.slug!)) s.depends = s.depends.filter((k) => k !== root.slug);
+    }
+  }
+  if (simple?.goal_buckets && root.type === "goal") {
+    const gb = simple.goal_buckets;
+    gb.goals.splice(0, gb.goals.length, ...gb.goals.filter((g) => !(g.id === root.id && g.trashed)));
+    for (const f of gb.features ?? []) f.goal_ids = f.goal_ids.filter((g) => g !== root.id);
+  }
   const kinds = (entry.documents as { kind?: string }[]).flatMap((d) => (d.kind ? [d.kind] : []));
   db.purged = [...new Set([...(db.purged ?? []), ...kinds])];
   db.purged_at = { ...db.purged_at, ...Object.fromEntries(kinds.map((k) => [k, now])) };
@@ -154,16 +175,22 @@ export function mayRestore(entry: TrashEntryRow, me: { id: string; role: string 
 /** trash-features-goals: the Simple rows a feature's or a goal's entry marks `trashed`; the mock
  * db is kept as JSON, so Restore finds them by the entry's root, never through a closure. */
 export type TrashedSimple = {
-  items: { key: string; trashed?: boolean }[];
-  goal_buckets?: { goals: { id: string; trashed?: boolean }[] };
+  items: { key: string; roadmap?: string; depends?: string[]; trashed?: boolean }[];
+  goal_buckets?: { goals: { id: string; trashed?: boolean }[]; features?: { id: string; goal_ids: string[] }[] };
 };
 
 /** trash-features-goals: takes `entry` out of Trash, putting back the feature or the goal it
  * holds; the generic `/v1/trash/{id}/restore` and the type's own restore route both end here. */
 export function restoreFromTrash(db: TrashDb, entry: TrashEntryRow, now: string, simple?: TrashedSimple): Schemas["TrashEntryOut"] {
   const root = entry.out.root;
-  if (root.type === "feature") simple?.items.filter((s) => s.key === root.slug).forEach((s) => (s.trashed = false));
+  // Only that roadmap's rows of the key (another roadmap may use the same key).
+  if (root.type === "feature") simple?.items.filter((s) => s.key === root.slug && (!entry.roadmap || s.roadmap === entry.roadmap)).forEach((s) => (s.trashed = false));
   if (root.type === "goal") simple?.goal_buckets?.goals.filter((g) => g.id === root.id).forEach((g) => (g.trashed = false));
+  // trash_items.after_restore: the features a delete moved get their goals back exactly.
+  for (const l of entry.goal_links ?? []) {
+    const f = simple?.goal_buckets?.features?.find((x) => x.id === l.id);
+    if (f) f.goal_ids = [...l.goal_ids];
+  }
   db.entries = db.entries.filter((e) => e !== entry);
   return entryOut(entry, now);
 }
@@ -187,7 +214,7 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
   const now = ctx.now();
   // The purge the ticker does, on every request routed here (Home's included), not only Trash's:
   // entries past their 30 days are gone.
-  for (const e of ctx.db.entries) if (daysLeft(e, now) <= 0) purge(ctx.db, e, now);
+  for (const e of ctx.db.entries) if (daysLeft(e, now) <= 0) purge(ctx.db, e, now, ctx.simple?.());
 
   if (p[1] === "trash") {
     // Trash's list and Restore: commenters and up, each entry checked (mayRestore); purge: owners.
@@ -204,7 +231,7 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
     }
     if (!owner) return ownerOnly;
     if (m === "DELETE" && !p[3]) {
-      purge(ctx.db, entry, now);
+      purge(ctx.db, entry, now, ctx.simple?.());
       return json(204, undefined);
     }
     return null;

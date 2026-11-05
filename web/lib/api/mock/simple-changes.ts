@@ -28,7 +28,7 @@ import { draftDecisionNotes } from "./decision-notes";
 import { stableUuid } from "./ids";
 import { changeSentence } from "./simple-change-words";
 import { milestoneValue, writeMilestone } from "./simple-milestones";
-import { seedGoalBuckets } from "./goal-buckets";
+import { seedGoalBuckets, trashGoal } from "./goal-buckets";
 import { addToCompany, featureItem, featureKeyOf, priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
 import {
   canDecideItem,
@@ -207,6 +207,7 @@ function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op"
     return ctx.role === "owner" || (c.routed_to ?? []).includes(ctx.id) || (!!rm && canEditRoadmap(db, rm, ctx));
   }
   if (c.op === "add_item" && !keyOf(db, c.target.item_id)) return canEditRoadmap(db, slugOf(c.target.roadmap_id) ?? "", ctx);
+  if (c.op === "delete_goal") return ctx.role === "owner" || ctx.role === "approver";
   return decides(db, ctx, c.target.item_id);
 }
 
@@ -760,6 +761,7 @@ function createMilestoneChange(db: SimpleDb, ctx: SimpleChangesCtx, body: Schema
 function trashFeature(db: SimpleDb, ctx: SimpleChangesCtx, key: string, reason: string | null, now: string): TrashEntryRow {
   const s = seed(db, key);
   s.trashed = true;
+  closeProposals(db, ctx, "delete_item", "item_id", db.ids[key], now);
   const row: TrashEntryRow = {
     out: {
       id: crypto.randomUUID(),
@@ -767,11 +769,38 @@ function trashFeature(db: SimpleDb, ctx: SimpleChangesCtx, key: string, reason: 
       items: [], deleted_by: ctx.id, deleted_by_name: ctx.names[ctx.id] ?? "someone", deleted_at: now,
       reason, published: false, purge_after: new Date(Date.parse(now) + 30 * DAY).toISOString(),
     },
-    documents: [], versions: [], runs: [], intakes: [],
+    documents: [], versions: [], runs: [], intakes: [], roadmap: s.roadmap,
   };
   const trash = (ctx.trash ??= { entries: [], estimates: {} });
   trash.entries.push(row);
   return row;
+}
+
+/** trash_items._close_proposals: a proposal to delete what just went to Trash is closed, "Already in Trash". */
+export function closeProposals(db: { changes?: Change[] }, ctx: { id: string }, op: string, ref: string, id: string, now: string) {
+  for (const c of db.changes ?? []) {
+    if (c.op === op && c.status === "proposed" && c.target[ref] === id) {
+      Object.assign(c, { status: "declined", decided_by: ctx.id, decided_at: now, decision_reason: ALREADY });
+    }
+  }
+}
+
+const ALREADY = "Already in Trash";
+
+/** trash_items._propose_goal: a commenter's goal delete, proposed to the company's owners (an
+ * approver or up decides it). */
+export function proposeGoalDelete(db: SimpleDb, ctx: SimpleChangesCtx, goal: { id: string; title: string }, to: string | null, reason: string | null): Change | Response {
+  if ((db.changes ?? []).some((c) => c.op === "delete_goal" && c.status === "proposed" && c.target.goal_id === goal.id)) {
+    return json(409, { detail: "Moving this to Trash is proposed already" });
+  }
+  const change: Change = {
+    id: crypto.randomUUID(), session_id: null, document_id: null, draft_ids: [],
+    op: "delete_goal", target: { goal_id: goal.id, title: goal.title, to_goal_id: to }, before: { deleted: false }, after: { deleted: true },
+    status: "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
+    decided_by: null, decided_at: null, reason, decision_reason: null, routed_to: ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
+  };
+  (db.changes ??= []).push(change);
+  return view(db, ctx, change);
 }
 
 /** trash_items._propose: a `delete_item` already waits on this item (409). */
@@ -1234,8 +1263,17 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   } else if (p[4] === "decline" && c.op === "add_item") reopenSuggestion(db, c);
   else if (p[4] === "accept" && c.op === "delete_item") {
     const key = keyOf(db, c.target.item_id);
-    if (!key || seed(db, key).trashed) return json(404, { detail: "The feature is gone" });
+    if (!key) return json(404, { detail: "The feature is gone" });
+    if (seed(db, key).trashed) return alreadyInTrash(db, ctx, c, now);
     trashFeature(db, ctx, key, c.reason ?? null, now);
+  } else if (p[4] === "accept" && c.op === "delete_goal") {
+    const gb = (db.goal_buckets ??= seedGoalBuckets());
+    const g = gb.goals.find((x) => x.id === c.target.goal_id);
+    if (!g) return json(404, { detail: "The goal is gone" });
+    if (g.trashed) return alreadyInTrash(db, ctx, c, now);
+    const to = typeof c.target.to_goal_id === "string" ? c.target.to_goal_id : null;
+    const bin = { trash: (ctx.trash ??= { entries: [], estimates: {} }), id: ctx.id, name: ctx.names[ctx.id] ?? null, now: () => now };
+    trashGoal(gb, bin, g, to, c.reason ?? null, db);
   } else if (p[4] === "accept") {
     const now_ = current(db, c, c.before);
     if (!same(now_, c.before)) return conflict(db, ctx, now_, touched(c), "outdated");
@@ -1249,6 +1287,12 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   }
   Object.assign(c, { status: p[4] === "accept" ? "accepted" : "declined", decided_by: ctx.id, decided_at: now, decision_reason: body.reason ?? null });
   return json(200, { change: view(db, ctx, c), flags: TARGETS[c.op] || KEY_DATE_OPS.includes(c.op) ? [] : flagsFor(db, touched(c)) });
+}
+
+/** A proposal whose feature or goal went to Trash meanwhile: closed, not left open. */
+function alreadyInTrash(db: SimpleDb, ctx: SimpleChangesCtx, c: Change, now: string): Response {
+  Object.assign(c, { status: "declined", decided_by: ctx.id, decided_at: now, decision_reason: ALREADY });
+  return json(200, { change: view(db, ctx, c), flags: [] });
 }
 
 /**

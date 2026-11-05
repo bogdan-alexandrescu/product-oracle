@@ -135,8 +135,42 @@ function moveOff(db: GoalBucketsDb, g: Goal, to: string | null): Feature[] {
   return before;
 }
 
-/** trash-features-goals (oracle.simple.trash_items): Settings › Trash and who writes there. */
-export type GoalBucketsTrash = { trash: TrashDb; id: string; name: string | null; now: () => string };
+/** trash-features-goals (oracle.simple.trash_items): Settings › Trash and who writes there;
+ * `propose`: a commenter's goal delete as a `delete_goal` change (./simple-changes.ts). */
+export type GoalBucketsTrash = {
+  trash: TrashDb;
+  id: string;
+  name: string | null;
+  now: () => string;
+  propose?: (goal: { id: string; title: string }, to: string | null, reason: string | null) => unknown;
+};
+
+/** trash_items.trash_goal: the goal to Trash. With no `to` nothing is rewritten (the reads leave
+ * the trashed goal out of every feature's links); with `to` its features move there as Archive
+ * moves them, and their links as they were are kept on the entry for Restore. A proposal to
+ * delete it is closed, "Already in Trash". */
+export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, g: Goal, to: string | null, reason: string | null, simple?: { changes?: { op: string; status: string; target: Record<string, unknown> }[] }): TrashEntryRow {
+  const before = to ? moveOff(db, g, to) : [];
+  g.trashed = true;
+  const at = bin.now();
+  for (const c of simple?.changes ?? []) {
+    if (c.op === "delete_goal" && c.status === "proposed" && c.target.goal_id === g.id) {
+      Object.assign(c, { status: "declined", decided_by: bin.id, decided_at: at, decision_reason: "Already in Trash" });
+    }
+  }
+  const row: TrashEntryRow = {
+    out: {
+      id: crypto.randomUUID(),
+      root: { type: "goal", id: g.id, slug: null, title: g.title, kind: "goal", code: null },
+      items: [], deleted_by: bin.id, deleted_by_name: bin.name, deleted_at: at, reason,
+      published: false, purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
+    },
+    documents: [], versions: [], runs: [], intakes: [],
+    goal_links: before.map((f) => ({ id: f.id, goal_ids: f.goal_ids })),
+  };
+  bin.trash.entries.push(row);
+  return row;
+}
 
 /** /v1/simple/goal-buckets... (as the API: approvers and owners write; anyone reads). */
 export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb }, role: string, req: Request, p: string[], bin?: GoalBucketsTrash): Promise<Response | null> {
@@ -155,29 +189,24 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
     }
     return json(200, restoreFromTrash(bin.trash, entry, bin.now(), { items: [], goal_buckets: db }));
   }
-  if (!edits) return json(403, { detail: "Requires the approver role" });
-  // trash-features-goals: DELETE .../goals/{id}?to_goal_id= (approvers and owners): whoever deletes it restores it.
-  if (bin && p[3] === "goals" && p[4] && !p[5] && m === "DELETE") {
+  // trash-features-goals: DELETE .../goals/{id}?to_goal_id=: approvers and owners delete it (and
+  // restore it); a commenter proposes it to the owners; viewers are refused.
+  if (bin && p[3] === "goals" && p[4] && !p[5] && m === "DELETE" && role !== "viewer") {
     const g = db.goals.find((x) => x.id === p[4] && !x.trashed);
     if (!g) return json(404, { detail: "No such goal" });
     const q = new URL(req.url).searchParams;
     const to = q.get("to_goal_id");
     if (to && !db.goals.some((x) => x.id === to && !x.archived && !x.trashed && x.id !== g.id)) return json(422, { detail: "Pick another goal" });
-    moveOff(db, g, to);
-    g.trashed = true;
-    const at = bin.now();
-    const row: TrashEntryRow = {
-      out: {
-        id: crypto.randomUUID(),
-        root: { type: "goal", id: g.id, slug: null, title: g.title, kind: "goal", code: null },
-        items: [], deleted_by: bin.id, deleted_by_name: bin.name, deleted_at: at, reason: q.get("reason"),
-        published: false, purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
-      },
-      documents: [], versions: [], runs: [], intakes: [],
-    };
-    bin.trash.entries.push(row);
-    return json(200, { entry: entryOut(row, at, true), change: null, can_restore: true });
+    if (!edits) {
+      const change = bin.propose?.(g, to, q.get("reason"));
+      if (!change) return json(403, { detail: "Requires the approver role" });
+      if (change instanceof Response) return change;
+      return json(200, { entry: null, change, can_restore: false });
+    }
+    const row = trashGoal(db, bin, g, to, q.get("reason"), simple as { changes?: [] });
+    return json(200, { entry: entryOut(row, row.out.deleted_at, true), change: null, can_restore: true });
   }
+  if (!edits) return json(403, { detail: "Requires the approver role" });
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   if (p[3] === "goals" && !p[4] && m === "POST") {
     const b = body as GoalIn;

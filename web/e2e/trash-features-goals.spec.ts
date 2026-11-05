@@ -15,6 +15,11 @@ import { expect, test, type Page } from "./test";
  * name ("feature") shows, or Restore leaves it out of its page's read; no_claim = the delete
  * screens (not drawn yet).
  *
+ * Card tfg-code-links (review round 2): protects = the feature's row reads its code before its
+ * name ("F-26 Alert rules engine"); a goal deleted with its features moved to another goal gets
+ * every feature's goals back exactly on Restore; fails_when = the code is missing or a feature
+ * keeps the goal it was moved to, or loses the restored one; no_claim = the API's own links (pytest).
+ *
  * Card tfg-deleter-restores (owner's answer, Nov 5: "Whoever deleted it, too"): protects = an
  * approver (the pricing roadmap's decider) who deleted a feature and a goal finds Settings › Trash, sees both there with Restore
  * (and not what an owner deleted) and restores each without an owner; fails_when = the approver
@@ -35,7 +40,7 @@ async function call(page: Page, method: string, path: string): Promise<Call> {
   );
 }
 
-type Item = { id: string; title: string; can_decide: boolean };
+type Item = { id: string; title: string; code: string | null; can_decide: boolean };
 type Goal = { id: string; title: string };
 
 async function items(page: Page): Promise<Item[]> {
@@ -46,11 +51,18 @@ async function goals(page: Page): Promise<Goal[]> {
   return ((await call(page, "GET", "/v1/simple/goal-buckets")).body as { goals: Goal[] }).goals;
 }
 
+async function links(page: Page): Promise<Record<string, string[]>> {
+  const out = (await call(page, "GET", "/v1/simple/goal-buckets")).body as { features: { id: string; goal_ids: string[] }[] };
+  return Object.fromEntries(out.features.map((f) => [f.id, f.goal_ids]));
+}
+
 test("a deleted feature and goal are listed in Settings › Trash and restored from there", async ({ page }) => {
   await login(page);
-  const feature = (await items(page)).find((i) => i.can_decide)!;
+  const feature = (await items(page)).find((i) => i.can_decide && i.code)!;
   const [goal, other] = await goals(page);
   expect(feature && goal && other).toBeTruthy();
+  const before = await links(page);
+  expect(Object.values(before).some((ids) => ids[0] === goal.id)).toBe(true);
 
   expect((await call(page, "DELETE", `/v1/simple/roadmap/items/${feature.id}`)).status).toBe(200);
   expect((await call(page, "DELETE", `/v1/simple/goal-buckets/goals/${goal.id}?to_goal_id=${other.id}`)).status).toBe(200);
@@ -62,6 +74,7 @@ test("a deleted feature and goal are listed in Settings › Trash and restored f
   const featureRow = entries.filter({ hasText: feature.title });
   const goalRow = entries.filter({ hasText: goal.title });
   await expect(featureRow).toContainText("Feature");
+  await expect(featureRow).toContainText(`${feature.code} ${feature.title}`);
   await expect(featureRow).toContainText("Deleted by");
   await expect(featureRow).toContainText("30 days left");
   await expect(goalRow).toContainText("Goal");
@@ -75,6 +88,8 @@ test("a deleted feature and goal are listed in Settings › Trash and restored f
 
   expect((await items(page)).map((i) => i.id)).toContain(feature.id);
   expect((await goals(page)).map((g) => g.id)).toContain(goal.id);
+  // The features the delete moved to the other goal serve the restored one again, as before.
+  expect(await links(page)).toEqual(before);
 });
 
 test("whoever deleted a feature or a goal sees it in Trash and restores it, with no owner", async ({ page }) => {

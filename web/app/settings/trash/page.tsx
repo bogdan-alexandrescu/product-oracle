@@ -33,7 +33,8 @@ function Row({ e, onRestored }: { e: Entry; onRestored: () => void }) {
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-baseline gap-x-2">
           <span className="text-[13px] font-semibold text-text2">{itemKind(e.root)}</span>
-          <span className="min-w-0 font-semibold break-words">{e.root.title}</span>
+          {/* A feature's code before its name ("F-26 Alert rules engine"), as the roadmap reads it. */}
+          <span className="min-w-0 font-semibold break-words">{e.root.code ? `${e.root.code} ${e.root.title}` : e.root.title}</span>
           {e.published && <Chip kind="warn">Was published</Chip>}
         </p>
         {e.items.length > 0 && (
