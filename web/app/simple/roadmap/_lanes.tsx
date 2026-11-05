@@ -479,7 +479,8 @@ function monthLabels(months: { day: string; label: string; start: boolean }[], s
 }
 
 /** An export's quarter row: each quarter's name and months from its first day (or the chart's
- * left edge), kept inside the chart; one that has no room clear of the one before is left out. */
+ * left edge), kept inside the chart; one that has no room clear of the one before is left out
+ * (a first quarter cut by the left edge, rather, gives way to the next). */
 const QUARTER_H = 34;
 const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function quarterLabels(t0: string, t1: string, sc: Scale, width: number) {
@@ -491,7 +492,11 @@ function quarterLabels(t0: string, t1: string, sc: Scale, width: number) {
     const w = Math.max(textWidth(q.label, 13, 700), textWidth(months, 11, 400));
     const line = Math.max(0, sc.x(q.start));
     const x = Math.min(line + 6, width - w - 4);
-    if (x < end + 8) continue;
+    if (x < end + 8) {
+      // A sliver of a quarter at the chart's left edge gives way to the whole quarter after it.
+      if (out.length !== 1 || out[0].line > 0) continue;
+      out.pop();
+    }
     end = x + w;
     out.push({ start: q.start, label: q.label, months, x, line });
   }
