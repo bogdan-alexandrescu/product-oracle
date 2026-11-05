@@ -136,9 +136,25 @@ for (const phone of [false, true]) {
       test.setTimeout(120_000);
       await login(page);
       await page.setViewportSize(size);
-      // Straight to Simple: no roadmap read first.
+      // The first Simple page is Decisions: no roadmap read yet. The rail's count as it first shows.
+      await page.goto("/simple/decisions");
+      await expect(page.getByTestId("questions-mine")).toBeVisible();
+      let first: Locator;
+      if (phone) {
+        await tap(page.getByTestId("simple-tab-more"));
+        first = page.getByRole("dialog", { name: "More" }).getByTestId("simple-more-inbox-count");
+      } else first = page.getByTestId("simple-nav").getByTestId("simple-nav-inbox-count");
+      await expect(first).toBeVisible();
+      const shown = Number((await first.textContent())!.trim());
+      if (phone) await page.keyboard.press("Escape");
+      // Then the roadmap, and a moment there (past the 2 s the rail and the Inbox share one read for).
+      await page.goto("/simple/roadmap");
+      await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+      await page.waitForTimeout(2_500);
+      // Nothing was decided meanwhile: the Inbox counts what the rail first said.
       const n = await openInboxFromRail(page, phone);
-      expect(await waiting(page)).toBe(n);
+      expect(n).toBe(shown);
+      expect(await waiting(page)).toBe(shown);
     });
 
     // card: inbox-one-pager-proposal, more-counts-the-inbox
