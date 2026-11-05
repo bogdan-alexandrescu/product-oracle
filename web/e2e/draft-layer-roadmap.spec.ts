@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { DRAFT_LAYER_SCENARIO, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { DRAFT_LAYER_SCENARIO, MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /**
@@ -18,8 +18,12 @@ import { login } from "./helpers";
  *   fails_when=the layer, a card, a hatched bar, the switch, the "(draft)" entry or the panel's
  *   Draft line is missing, a replaced or cancelled draft shows, Show drafts is not remembered, or
  *   Leave out leaves the bar; no_claim=the real API (api/tests/test_simple_roadmap_draft_prds.py).
+ *   The panel starts under the roadmap's toolbar; fails_when=it covers the toolbar's right end.
  * - approval: protects=approving the PRD takes its card off the layer and its items onto the
- *   roadmap; fails_when=the card stays or the items are not on the roadmap.
+ *   roadmap, less the one left out; fails_when=the card stays, the items are not on the roadmap,
+ *   or the left-out item is.
+ * - commenter, viewer: protects=they read the draft panel with no Change dates or Leave out
+ *   (approvers and up, the owner's answer); fails_when=either button shows.
  * - phone 390: protects=frame rp2-a-rest-390; fails_when=the layer is not above the roadmap's
  *   chart, a row is missing, or the page scrolls sideways.
  */
@@ -28,8 +32,9 @@ const CARTS = ["Save a cart for later", "Carts kept across devices", "Price-drop
 
 const shot = (page: Page, name: string) => page.screenshot({ path: test.info().outputPath(`${name}.png`) });
 
-async function openRoadmap(page: Page) {
+async function openRoadmap(page: Page, role?: "viewer" | "commenter") {
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, DRAFT_LAYER_SCENARIO]);
+  if (role) await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_ROLE_KEY, role]);
   await login(page);
   await page.goto("/simple/roadmap");
   const layer = page.getByRole("region", { name: "Draft plans" });
@@ -90,7 +95,10 @@ for (const scheme of ["light", "dark"] as const) {
         await expect(panel).toHaveAttribute("aria-label", "Price-drop note on saved carts");
         await expect(panel.getByText("Draft", { exact: true })).toBeVisible();
         await expect(panel).toContainText("Jan 11 – Feb 12 · Priya Natarajan");
-        await expect(panel).toContainText("Dates from Saved carts's run (engineering dates). Not approved: it joins the roadmap when the PRD is approved.");
+        await expect(panel).toContainText("Dates from Saved carts' run (engineering dates). Not approved: it joins the roadmap when the PRD is approved.");
+        // The panel starts under the toolbar: its right end (Needs a decision) stays in sight.
+        const actions = (await page.getByTestId("roadmap-actions").boundingBox())!;
+        await expect.poll(async () => (await panel.boundingBox())!.y).toBeGreaterThanOrEqual(actions.y + actions.height);
         await shot(page, `rp2-a-open-${width}-${scheme}`);
 
         // Leave out takes it off the run's draft, and so off the layer.
@@ -110,6 +118,11 @@ test.describe("approval", () => {
   test("approving the PRD takes its card off the layer and its items onto the roadmap", async ({ page }) => {
     const layer = await openRoadmap(page);
     await expect(layer.getByRole("heading", { name: "Saved carts · draft" })).toBeVisible();
+    // Left out on the layer: approval does not put it on the roadmap.
+    await bar(page, "Turn a cart into a quote").click();
+    await page.getByTestId("item-panel").getByRole("button", { name: "Leave out" }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Leave out", exact: true }).click();
+    await expect(bar(page, "Turn a cart into a quote")).toHaveCount(0);
     await page.goto("/documents/saved-carts/publish");
     const publish = page.getByTestId("publish-button");
     await expect(publish).toBeEnabled();
@@ -123,8 +136,26 @@ test.describe("approval", () => {
     await expect(prd.locator("option", { hasText: "Saved carts (draft)" })).toHaveCount(0);
     await prd.selectOption({ label: "Saved carts" });
     await expect(page.getByRole("button", { name: /^Save a cart for later, / }).first()).toBeVisible();
+    await expect(page.getByText("Turn a cart into a quote")).toHaveCount(0);
   });
 });
+
+for (const role of ["commenter", "viewer"] as const) {
+  test.describe(`${role}`, () => {
+    test.use({ viewport: { width: 1440, height: 900 } });
+
+    test(`a ${role} reads the draft panel without Change dates or Leave out`, async ({ page }) => {
+      const layer = await openRoadmap(page, role);
+      await expect(layer.getByRole("heading", { name: "Saved carts · draft" })).toBeVisible();
+      await bar(page, "Price-drop note on saved carts").click();
+      const panel = page.getByTestId("item-panel");
+      await expect(panel).toContainText("Jan 11 – Feb 12 · Priya Natarajan");
+      await expect(panel.getByText("Draft", { exact: true })).toBeVisible();
+      await expect(panel.getByRole("button", { name: "Change dates" })).toHaveCount(0);
+      await expect(panel.getByRole("button", { name: "Leave out" })).toHaveCount(0);
+    });
+  });
+}
 
 for (const scheme of ["light", "dark"] as const) {
   test.describe(`phone 390 ${scheme}`, () => {
