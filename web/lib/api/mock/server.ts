@@ -175,7 +175,7 @@ import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStray
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
-import { appliedVersionOf, approvedPrdToDraft, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { appliedVersionOf, approvedPrdToDraft, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -931,6 +931,17 @@ function seedMeetingAgendaScenario(): Db {
   const db = seed();
   db.simple_roadmap = seedSimpleRoadmap();
   itemOfOtherPrd(db.simple_roadmap, "setup-video", "alerts-roadmap");
+  return db;
+}
+
+/**
+ * cross-prd-deps "simple-cross-prd-dates" scenario: "simple-home", with the Setup
+ * checklist (Guided setup, typed to start before) waiting on the Alert rules engine of the
+ * Usage alerts PRD: its warning names that PRD.
+ */
+function seedSimpleCrossPrdDates(): Db {
+  const db = seedSimpleHomeScenario();
+  dependOnOtherPrd(db.simple_roadmap!, "setup-checklist", "alert-rules");
   return db;
 }
 
@@ -3331,6 +3342,8 @@ function load(): Db {
                 ? seedSimpleDecidersScenario
               : scenario === "meeting-agenda"
                 ? seedMeetingAgendaScenario
+              : scenario === "simple-cross-prd-dates"
+                ? seedSimpleCrossPrdDates
               : scenario === "simple-home"
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-move"
