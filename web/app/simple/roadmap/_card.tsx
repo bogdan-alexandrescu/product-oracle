@@ -9,6 +9,8 @@ import { FlowPanel, type FlowSubject } from "@/components/simple/FlowVisual";
 import { flagKey } from "@/components/simple/chat/ChatCard";
 import { ItemTalk } from "@/components/simple/chat/ItemTalk";
 import { FeaturePanel } from "@/components/simple/FeaturePanel";
+import { MkTasks, useEc1 } from "./_mk_tasks"; // MOCK-HOOK
+import { MkCutOrDelete, MkRemovedLine, useEc2 } from "./_mk_removed"; // MOCK-HOOK
 import { askThread, itemTalkPage, type ChatCard } from "@/lib/api/simple-chat";
 import { DecidedWho } from "@/components/simple/DecidedWho";
 import { formatDay } from "@/lib/format";
@@ -651,6 +653,8 @@ export function FloatingCard({
 }) {
   // home-waiting-one-list: Oracle's dates are acted on by the one gate the Roadmap's popover uses.
   const { can } = useMe();
+  const ec1 = useEc1(); // MOCK-HOOK
+  const ec2 = useEc2(); // MOCK-HOOK
   // The widened card's visual: a draft's own flow ("item", S7) or a proposal's visual (S10).
   const [wide, setWide] = useState<FlowSubject | "item" | null>(null);
   // roadmap-talk: the item's talk with Oracle, open beside the details (a phone: its tab).
@@ -772,7 +776,7 @@ export function FloatingCard({
           Oracle is drafting…
         </p>
       )}
-      {cut && (
+      {cut && !(ec2 && ec2 !== "b") /* MOCK-HOOK */ && (
         <p className="mt-1 text-sm text-text2" data-testid="item-cut">
           Cut: it sits below the line, out of the plan
         </p>
@@ -936,7 +940,7 @@ export function FloatingCard({
               </ul>
             </Part>
           )}
-          {item.tasks.length > 0 && (
+          {ec1 && !cut ? <MkTasks v={ec1} item={item} act={act} canChange={canChange} /> /* MOCK-HOOK */ : item.tasks.length > 0 && (
             <Part title="Tasks" testId="card-tasks">
               <ul className="mt-1 space-y-1">
                 {item.tasks.map((t) => (
@@ -1078,6 +1082,7 @@ export function FloatingCard({
       onClose={onClose}
       talk={talkPanel}
       testId="floating-card"
+      headExtra={cut && ec2 && ec2 !== "b" ? <MkRemovedLine item={item} act={act} canChange={canChange} /> : ec2 === "d" ? <MkCutOrDelete item={item} act={act} canChange={canChange} /> : null} // MOCK-HOOK
       more={<section ref={ref} className="py-3" data-testid="fp-more" data-wide={wide ? "true" : "false"} data-flow-open={flowOpen ? "true" : "false"}>{details}</section>}
     />
   );

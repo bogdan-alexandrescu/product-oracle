@@ -4,6 +4,7 @@
  * will against the real API. State lives in localStorage, so it survives reloads.
  */
 import type { Schemas } from "@/lib/api/client";
+import { MK_SCENARIO, mkSeed } from "./mk-removed"; // MOCK-HOOK
 import { addMonths, todayIn } from "@/lib/dates";
 import { sectionDiff } from "@/lib/diff";
 import { citationHref, formatDate, formatDay } from "@/lib/format";
@@ -3411,6 +3412,12 @@ function load(): Db {
                     const db = seedSimpleWalkScenario();
                     db.simple_roadmap!.titles = { "onboarding-roadmap": "Guided setup for new workspace admins and their first teams roadmap" };
                     return db;
+                  }
+              : scenario === MK_SCENARIO // MOCK-HOOK
+                ? () => {
+                    const db = seed(); // MOCK-HOOK
+                    db.simple_roadmap = mkSeed(seedSimpleRoadmap(), db.members); // MOCK-HOOK
+                    return db; // MOCK-HOOK
                   }
               : scenario === "simple-unapproved-roadmap"
                 ? () => {

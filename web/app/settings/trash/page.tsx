@@ -8,6 +8,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { artifactsChanged } from "@/lib/artifacts";
 import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
+import { MkTrashPlans, useEc2 } from "@/app/simple/roadmap/_mk_removed"; // MOCK-HOOK
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 type Entry = Schemas["TrashEntryOut"];
@@ -68,6 +69,7 @@ function Row({ e, onRestored }: { e: Entry; onRestored: () => void }) {
 export default function TrashPage() {
   const { can, loading } = useMe();
   const owner = can("list_trash");
+  const ec2 = useEc2(); // MOCK-HOOK
   const q = useQuery(owner ? "trash" : "trash|none", () => (owner ? unwrap(api.GET("/v1/trash")) : Promise.resolve([] as Entry[])));
   return (
     <>
@@ -100,6 +102,7 @@ export default function TrashPage() {
           )}
         </Panel>
       )}
+      {!loading && owner && (ec2 === "b" || ec2 === "d") && <MkTrashPlans v={ec2} owner={owner} /> /* MOCK-HOOK */}
     </>
   );
 }

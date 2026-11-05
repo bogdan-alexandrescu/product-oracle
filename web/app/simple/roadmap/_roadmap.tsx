@@ -24,6 +24,7 @@ import { QuickAdd } from "./_add";
 import { MsCard, MsKey, MsLayer, MsProvider, MsToast, useMilestones, type MsLane, type MsRow } from "./_milestones";
 import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, MARK_WORDS, PM_LANE, type Horizon, type LegendEntry } from "./_board";
 import { useKeyBurst } from "./_burst";
+import { MkRemovedButton, MkShowRemoved, useEc2 } from "./_mk_removed"; // MOCK-HOOK
 import { changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
 import { boardPicture, chartPicture, exportView, type Brand } from "./_export";
 import { KeyDatesEditor } from "./_keydates";
@@ -932,6 +933,7 @@ export function SimpleRoadmap() {
   const byId = useMemo(() => new Map((data?.items ?? []).map((i) => [i.id, i])), [data]);
   const titleOf = useCallback((id: string | null) => (id ? byId.get(id)?.title : undefined), [byId]);
   const canChange = can("create_simple_change");
+  const ec2 = useEc2(); // MOCK-HOOK
   // build-milestones-on-roadmap: the milestones per goal, added on the time axis.
   const ms = useMilestones({ data, phone, canChange, reload: roadmap.reload, openItem: (id) => setCard({ id, ...anchorOf(id) }), knownGoals: suggestions.data?.goals.map((g) => g.goal) });
   // The items as last loaded, for a burst sent after the render that started it.
@@ -1314,6 +1316,7 @@ export function SimpleRoadmap() {
   const narrowed = [data.roadmap ? "roadmap" : "", f.prd, f.goal, f.track, f.from, f.to].filter(Boolean).length;
   const filters = (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="filters">
+      {ec2 === "c" && <MkRemovedButton items={data.items} act={act} canChange={canChange} decide={data.items.some((i) => i.can_decide)} onOpen={(id) => (setPop(null), setCard({ id, ...anchorOf(id) }))} /> /* MOCK-HOOK */}
       {phone ? (
         <Button data-filters-toggle="" data-testid="filters-toggle" aria-expanded={pickersOpen} aria-controls="roadmap-pickers" onClick={() => setPickersOpen(!pickersOpen)}>
           {narrowed ? `Filters · ${narrowed}` : "Filters"}
@@ -1473,6 +1476,7 @@ export function SimpleRoadmap() {
       {/* #36: on a phone, Roadmap/Goal/Track and Group by read before the chart, not after
        * the legend and goal cards at the page's foot. */}
       {!blank && filters}
+      {!blank && ec2 === "a" && <MkShowRemoved items={data.items} act={act} canChange={canChange} decide={data.items.some((i) => i.can_decide)} roadmap={data.roadmap?.title ?? null} /> /* MOCK-HOOK */}
       {!blank && <MsKey />}
       {blank && (
         <p className="text-[15px] text-text2" data-testid="roadmap-empty">

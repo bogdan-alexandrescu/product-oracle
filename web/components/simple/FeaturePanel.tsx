@@ -695,7 +695,7 @@ function Links({ c, late, onAdded }: { c: Ctx; late: Item[]; onAdded: (i: Item) 
   );
 }
 
-export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk, more, onSuggest, testId = "feature-panel" }: { item: Item; items: Map<string, Item>; act: Act; canChange: boolean; phone: boolean; onClose: () => void; talk: ReactNode; more?: ReactNode; onSuggest?: () => void; testId?: string }) {
+export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk, more, onSuggest, testId = "feature-panel", headExtra }: { item: Item; items: Map<string, Item>; act: Act; canChange: boolean; phone: boolean; onClose: () => void; talk: ReactNode; more?: ReactNode; onSuggest?: () => void; testId?: string; headExtra?: ReactNode /* MOCK-HOOK */ }) {
   const [tab, setTab] = useState<"details" | "talk">("details");
   // The link added here last: while it is late, the clash offers to remove it.
   const [added, setAdded] = useState<string | null>(null);
@@ -729,6 +729,7 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
         {item.confidence && <span data-testid="fp-confidence">{confidenceWord(item.confidence)} confidence</span>}
         {clash && <span className="rounded-full bg-crit-bg px-2 py-px font-medium text-crit" data-testid="fp-clash-flag">Dates clash</span>}
       </p>
+      {headExtra /* MOCK-HOOK */}
       {!canChange && (
         <p className="mt-2 rounded-lg bg-surface2 px-3 py-2 text-sm text-text2" data-testid="fp-read-only">
           You can read this feature. Its owner and approvers can change it.{" "}
