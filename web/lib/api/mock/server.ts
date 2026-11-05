@@ -952,16 +952,19 @@ function seedMeetingAgendaOwnerScenario(): Db {
  * inbox-meeting-proposals fix "inbox-reviewer" scenario: "meeting-agenda-owner" with
  * approver@example.com a required reviewer of the Alerts roadmap, so a draft of it sent for
  * review waits in that person's Inbox; and commenter@example.com's feature ask Bulk export,
- * on no roadmap, waiting on the owners.
+ * on no roadmap, and their new name for Weekly alert digest, both waiting on the owners.
  */
 function seedInboxReviewerScenario(): Db {
   const db = seedMeetingAgendaOwnerScenario();
   const approver = db.members.find((m) => m.email === "approver@example.com")!;
   db.simple_roadmap!.reviewers = { "alerts-roadmap": [approver.id] };
-  // A teammate's feature ask on no roadmap waits on the owners (decided in Requests).
+  // A teammate's feature ask on no roadmap waits on the owners (decided in its Inbox row, then filed in Requests).
   const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
   const owners = db.members.filter((m) => m.role === "owner").map((m) => m.id);
   seedFeatureAskProposal(db.simple_roadmap!, { id: commenter.id, name: commenter.name ?? commenter.email, owners }, "Bulk export", "2026-10-26T15:00:00Z");
+  // And their new name for an item on the Alerts roadmap (decided in Needs a decision there).
+  const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
+  seedSimpleProposal(db.simple_roadmap!, { id: commenter.id, name: commenter.name ?? commenter.email, owners, roles }, "edit_title", "alert-digest", { title: "Weekly alert digest" }, { title: "Weekly alert digest for leads" }, "2026-10-26T14:00:00Z");
   return db;
 }
 
@@ -6477,7 +6480,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
   // S9: a feature ask applied from Simple is a request in Requests (targets.py add_feature_ask).
   const askFiling: Pick<SimpleChangesCtx, "fileAsk" | "dropAsk"> = {
-    fileAsk: (input) => addFeatureAskRequest(ensureRequests(db), input),
+    fileAsk: (input) => {
+      // With no one named (not a customer's), asked by the teammate who filed it (targets.py _create).
+      const filer = input.requester_name === null && ["unknown", "team"].includes(input.requester_kind) ? db.members.find((x) => x.id === input.filed_by) : undefined;
+      addFeatureAskRequest(ensureRequests(db), filer ? { ...input, requester_name: filer.name ?? filer.email, requester_kind: "team" } : input);
+    },
     dropAsk: (id) => dropFeatureAskRequest(ensureRequests(db), id),
   };
   const simpleRoute = async (r: Request): Promise<Response | null> => {

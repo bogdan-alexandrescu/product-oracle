@@ -36,7 +36,8 @@ company's owners. A proposal writes nothing, an add creates no row, until accept
 - ``add_feature_ask`` (S9): a feature ask filed in Oracle's Requests (``product_requests``,
   state new, ``target.request_id``): ``after`` {title, requester_name, requester_kind,
   channel}. Anyone who may file a request (commenter and up) files it directly, as in
-  Requests; its undo deletes it while it is still new and unchanged.
+  Requests; its undo deletes it while it is still new and unchanged. With no one named
+  (not a customer's), it was asked by the teammate who filed it.
 - ``add_launch_task`` / ``set_launch_task_status``: a task on the item's live launch
   (a launch of its track whose items include it; ``target.launch_id``, ``task_id`` once
   added) through oracle.launches.service. The launches service deletes no task: the undo
@@ -594,10 +595,14 @@ async def _apply(
 async def _create(db: AsyncSession, principal: Any, c: SimpleChange) -> None:
     kind, t, a = KIND[c.op], c.target, c.after
     if kind == "ask":
+        name, rkind = a["requester_name"], a["requester_kind"]
+        if name is None and rkind in ("unknown", "team"):
+            # Named by no one (a teammate's own ask): asked by the teammate who filed it.
+            u = await db.get(User, c.by)
+            name, rkind = (u.name or u.email, "team") if u is not None else (None, rkind)
         db.add(ProductRequest(id=uuid.UUID(t["request_id"]), title=a["title"],
-                              channel=a["channel"], origin="person",
-                              requester_name=a["requester_name"],
-                              requester_kind=a["requester_kind"], filed_by=c.by))  # fmt: skip
+                              channel=a["channel"], origin="person", requester_name=name,
+                              requester_kind=rkind, filed_by=c.by))  # fmt: skip
         return
     item = await db.get(RoadmapItem, uuid.UUID(t["item_id"])) if t.get("item_id") else None
     if t.get("item_id") and item is None:

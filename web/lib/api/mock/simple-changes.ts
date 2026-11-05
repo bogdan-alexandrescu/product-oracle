@@ -959,7 +959,7 @@ export function seedSimpleProposal(
 
 /**
  * inbox-meeting-proposals fix: a feature ask proposed by a teammate, on no roadmap (its
- * document_id null), waiting on the company's owners; decided in Requests.
+ * document_id null), waiting on the company's owners; decided in its Inbox row and, accepted, filed in Requests.
  */
 export function seedFeatureAskProposal(db: SimpleDb, who: Pick<SimpleChangesCtx, "owners"> & { id: string; name: string }, title: string, at: string): void {
   (db.changes ??= []).push({
@@ -990,6 +990,12 @@ export function proposeOffAgenda(db: SimpleDb, ctx: SimpleChangesCtx, body: Sche
   return { change: view(db, ctx, c), flags: [] };
 }
 
+/** A title in curly quotes, as change_words._quoted; null when blank. */
+function quotedTitle(value: unknown, limit = 80): string | null {
+  const text = String(value ?? "").split(/\s+/).filter(Boolean).join(" ");
+  return text ? `“${text.slice(0, limit)}${text.length > limit ? "…" : ""}”` : null;
+}
+
 /** Inbox rows (changes.inbox_rows): proposals waiting for me, decisions on mine. */
 export function simpleInboxRows(
   db: SimpleDb | undefined,
@@ -1007,7 +1013,11 @@ export function simpleInboxRows(
       reason: c.reason, decision_reason: c.decision_reason, state: state ?? (!seen || (at && at > seen) ? "new" : "open"),
       from_meeting: c.from_meeting ?? null,
       // inbox-meeting-proposals: what was asked, the item by its name, and whether I may decide it now.
-      asked: changePhrase(c.op, c.target, c.before, c.after, title),
+      // A feature ask is not filed in Requests until it is accepted (changes.inbox_rows).
+      asked:
+        c.op === "add_feature_ask" && (c.status === "proposed" || c.status === "declined")
+          ? `proposed ${quotedTitle(c.after.title) ? `the feature ask ${quotedTitle(c.after.title)}` : "a feature ask"}`
+          : changePhrase(c.op, c.target, c.before, c.after, title),
       can_decide: !!db && !!who.role && c.status === "proposed" && decidesChange(db, { ...who, id: me, role: who.role, names: {} }, c),
       // inbox-meeting-proposals owner: asked through Ask Oracle, not on the page nor in a meeting.
       from_ask: !c.from_meeting && c.status === "proposed" && !!db?.ask_proposals?.includes(c.id),

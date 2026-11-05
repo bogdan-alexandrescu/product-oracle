@@ -11,7 +11,7 @@ import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { Loading } from "@/components/ui";
 import { getBranding, logoDataUrl } from "@/lib/api/branding";
-import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
+import { reloadWaiting } from "@/lib/waiting";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { CARD_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { displayZone, plainClock } from "@/lib/dates";
@@ -1068,7 +1068,8 @@ export function SimpleRoadmap() {
       } catch (e) {
         toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not decide it" });
       }
-      await reload();
+      // The rail's and More's counts read again at once (a decided proposal leaves the Inbox).
+      await reloadWaiting(reload);
     },
     [reload],
   );
@@ -1084,7 +1085,8 @@ export function SimpleRoadmap() {
         toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not do that" });
       }
       setPop(null);
-      await reload();
+      // As a decided proposal: Oracle's dates leave the Inbox, and the counts read again at once.
+      await reloadWaiting(reload);
     },
     [reload],
   );
@@ -1398,10 +1400,7 @@ export function SimpleRoadmap() {
         const r = await api.POST("/v1/simple/drafts/{draft_id}/approve", { params: { path: { draft_id: d.id } } });
         toast({ message: !r.data ? `${d.document.title} could not be approved` : r.data.status === "approved" ? `Approved: ${d.document.title} is published` : "Approved: it waits for the other approvals" });
         // The rail's and More's counts read again at once (the approval leaves the Inbox).
-        invalidateWaiting();
-        const reloaded = reload();
-        waitingChanged();
-        await reloaded;
+        await reloadWaiting(reload);
       }}
     />
   );
