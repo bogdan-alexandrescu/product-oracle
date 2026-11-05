@@ -26,20 +26,27 @@ import uuid
 import pytest
 
 from oracle import company_time
+from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
-from tests.test_simple_goal_milestones_api import (
-    CHANGES,
-    MILESTONES,
-    by_code,
-    get_roadmap,
-    seed_roadmap,
-)
-from tests.test_simple_roadmap_api import NOW
+from tests.test_simple_goal_milestones_api import CHANGES, MILESTONES, by_code, get_roadmap
+from tests.test_simple_roadmap_api import NOW, Seed
 
 
 @pytest.fixture(autouse=True)
 def clock(monkeypatch):
     monkeypatch.setattr(company_time, "now", lambda: NOW)
+
+
+async def seed_roadmap(ctx: Ctx) -> dict:
+    """A roadmap with one item (the proposals read covers the roadmaps it reads items of),
+    its track owned by no one: only the company's owner changes its milestones."""
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        _, pv, rm, rv = await seed.roadmap("launch")
+        await seed.item(rv, pv, "f-01", track_id=None)
+        goal = await seed.entity("goal", "activation")
+        await s.commit()
+        return {"roadmap_id": str(rm.id), "goal_id": str(goal.id)}
 
 
 async def own_milestone(client, ctx: Ctx) -> tuple[dict, dict]:
@@ -64,8 +71,9 @@ def proposal(m: dict, after: dict | None) -> dict:
 async def test_an_approver_who_is_not_the_owner_is_refused_and_proposes(client):
     ctx = await make_ctx()
     _, m = await own_milestone(client, ctx)
-    for role, change, propose in [("owner", True, False), ("approver", False, True),
-                                  ("commenter", False, True), ("viewer", False, False)]:  # fmt: skip
+    rights = [("owner", True, False), ("approver", False, True), ("commenter", False, True),
+              ("viewer", False, False)]  # fmt: skip
+    for role, change, propose in rights:
         got = by_code(await get_roadmap(client, ctx, role))["M1"]
         assert (got["can_change"], got["can_propose"]) == (change, propose), role
     url = f"{MILESTONES}/{m['id']}"

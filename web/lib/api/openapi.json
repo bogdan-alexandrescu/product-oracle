@@ -118496,6 +118496,11 @@
             "title": "Can Change",
             "default": false
           },
+          "can_propose": {
+            "type": "boolean",
+            "title": "Can Propose",
+            "default": false
+          },
           "carried_from": {
             "anyOf": [
               {
