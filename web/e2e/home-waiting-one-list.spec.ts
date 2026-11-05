@@ -100,20 +100,24 @@ for (const phone of [false, true]) {
       await page.goto("/simple");
       const tile = page.getByTestId("home-summary-decisions").locator(".simple-number");
       await expect(tile).toHaveText(/^\d+$/);
-      const n = (await tile.textContent())!;
-      await expect(decisionsCount(page)).toHaveText(n);
+      const onHome = Number(await tile.textContent());
       await expect(page.getByTestId("home-decisions").getByTestId("home-decision").filter({ hasText: "Ship usage caps before anomaly detection" })).toBeVisible();
 
       await nav(page, "Decisions").click();
       await expect(page).toHaveURL(/\/simple\/decisions/);
       const mine = page.getByTestId("questions-mine");
-      await expect(page.getByTestId("questions-mine-count")).toHaveText(n);
       const call = mine.getByRole("listitem", { name: "Decision: Ship usage caps before anomaly detection" });
       await expect(call).toBeVisible();
+      const n = Number(await page.getByTestId("questions-mine-count").textContent());
+      await expect(decisionsCount(page)).toHaveText(String(n));
       await call.getByRole("button", { name: "Decide: Caps first" }).click();
       await expect(call).toHaveCount(0);
-      await expect(page.getByTestId("questions-mine-count")).toHaveText(String(Number(n) - 1));
-      await expect(decisionsCount(page)).toHaveText(String(Number(n) - 1));
+      await expect(page.getByTestId("questions-mine-count")).toHaveText(String(n - 1));
+      await expect(decisionsCount(page)).toHaveText(String(n - 1));
+
+      await nav(page, "Home").click();
+      await expect(page.getByTestId("home-decision").filter({ hasText: "Ship usage caps" })).toHaveCount(0);
+      if (onHome > 1) await expect(tile).toHaveText(String(onHome - 1));
     });
 
     test("Home's broken-links tile counts only the links on items you decide", async ({ page }) => {
@@ -126,8 +130,9 @@ for (const phone of [false, true]) {
       expect(new Set(names).size).toBe(names.length);
       await nav(page, "Home").click();
       await expect(page.getByTestId("home-summary-broken-links").locator(".simple-number")).toHaveText(String(names.length));
+    });
 
-      await page.context().clearCookies();
+    test("A commenter's broken-links tile says it counts the links they can propose fixes for", async ({ page }) => {
       await login(page, COMMENTER);
       await page.goto("/simple");
       // A commenter decides none: the tile says it counts the links they can propose fixes for.
