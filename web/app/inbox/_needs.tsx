@@ -1302,12 +1302,12 @@ function baselineLabel(title: string, summary: { need_you: number; blocking: num
 }
 
 /**
- * B-22: runs waiting at the same stop of the same document read as one row, "Feature set and
- * dependencies · 10 runs", each run under it with its own Open. A row with its own rows under
- * it (a Roadmap items review) stays as it is.
+ * B-22: three or more runs of one flow waiting at the same stop read as one row, "Confirm the
+ * baseline · 11 runs", each run under it with its own action. A row with its own rows under it
+ * (a Roadmap items review) stays as it is.
  */
 function groupCheckpoints(rows: InboxOut["checkpoints"], needs: Need[]): Need[] {
-  const keyOf = (c: InboxOut["checkpoints"][number]) => [c.kind, c.flow, c.document_title ?? c.document_slug ?? "", c.can_decide].join("|");
+  const keyOf = (c: InboxOut["checkpoints"][number]) => [c.kind, c.flow, c.can_decide].join("|");
   const byKey = new Map<string, Need[]>();
   needs.forEach((n, i) => {
     if (n.children?.length) return;
@@ -1317,10 +1317,13 @@ function groupCheckpoints(rows: InboxOut["checkpoints"], needs: Need[]): Need[] 
   const done = new Set<string>();
   return needs.flatMap((n, i) => {
     const same = n.children?.length ? [] : byKey.get(keyOf(rows[i]))!;
-    if (same.length < 2) return [n];
+    if (same.length < 3) return [n];
     if (done.has(same[0].key)) return [];
     done.add(same[0].key);
     const c = rows[i];
+    const members = rows.filter((r) => same.some((x) => x.key === r.id));
+    const docs = new Set(members.map((r) => r.document_title ?? r.document_slug));
+    const where = docs.size === 1 && c.document_title ? `${c.flow_title} · ${c.document_title}` : c.flow_title;
     const title = `${CHECKPOINT_LABEL[c.kind]} · ${plural(same.length, "run")}`;
     const latest = same.map((x) => x.at ?? "").sort().at(-1) || null;
     return [
@@ -1333,8 +1336,8 @@ function groupCheckpoints(rows: InboxOut["checkpoints"], needs: Need[]): Need[] 
           </span>
         ),
         context: (
-          <span className="block truncate" title={c.document_title ?? c.flow_title}>
-            {c.document_title ?? c.flow_title}
+          <span className="block truncate" title={where}>
+            {where}
           </span>
         ),
         at: latest,
