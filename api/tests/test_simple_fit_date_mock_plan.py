@@ -13,7 +13,9 @@ Test cards (protects / fails_when / no_claim):
   and the slices sized by build_plan itself (a split, a lever build_plan never names, is sized
   by build_plan's own _slice_pw); fails_when=the pinned days, person-weeks, ranking, pick or
   dates drift from fit_date.answer on build_plan's plan (a hand-set "5 days sooner" for a slice
-  that saves 4 person-weeks, or build_plan's shrink or slice sizing changes); no_claim=the
+  that saves 4 person-weeks, or build_plan's shrink or slice sizing changes), or build_plan
+  names a lever for an item the fixture gives none (views, assign, drafts, guard, redact,
+  edit); no_claim=the
   wording of costs, owners and the wait's name (invented fixture text layered on afterwards).
 """
 
@@ -112,6 +114,11 @@ def _plan(raw: dict, goal_target: float, hard: bool = False) -> fd.Plan:
             )
         elif lever:
             assert it.lever == lever, it.id
+        else:
+            # An item the fixture gives no lever (views, assign, drafts, guard, redact, edit)
+            # gets none other from build_plan: no lever is the engine's default, a move
+            # (fit_date.Item.lever), and build_plan names that one.
+            assert (it.lever or "move") == "move", (it.id, it.lever)
         items.append(dataclasses.replace(it, owner=i.get("owner"), cost=i.get("cost")))
     waits = {m["code"]: m for m in raw["milestones"]}
     milestones = []

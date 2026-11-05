@@ -174,7 +174,7 @@ export function ItemInspector({
                 {row.depends_on.map((k) => {
                   const dep = byKey.get(k);
                   return (
-                    <li key={k} className="flex min-h-8 items-center gap-2">
+                    <li key={k} className="flex min-h-8 flex-wrap items-center gap-2">
                       {dep ? (
                         <>
                           <span className={`min-w-0 flex-1 truncate ${removedDependencies.includes(k) ? "text-text2 line-through" : ""}`}>{dep.title}</span>

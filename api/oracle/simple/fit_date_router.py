@@ -317,7 +317,8 @@ def build_plan(
             # Never under a tenth of its own effort, rounded to a tenth of a week like every
             # size here; a small item keeps 0.1 (or its whole size, if less).
             pw = max(round(pw * scale, 1), round(pw * 0.1, 1), min(pw, 0.1))
-        lever = _lever(sl, asked_goal)
+        # A must-include item is only ever measured as a move (fit_date.answer), never cut.
+        lever = "move" if kind == "must-include" else _lever(sl, asked_goal)
         items.append(fd.Item(
             id=sl.code, title=sl.name, pw=pw, milestone=sl.milestone, guard=guard,
             must=kind == "must-include", lever=lever,

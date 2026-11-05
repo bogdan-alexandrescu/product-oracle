@@ -52959,6 +52959,17 @@
               }
             ],
             "title": "Note"
+          },
+          "keep_origin": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Origin"
           }
         },
         "type": "object",
