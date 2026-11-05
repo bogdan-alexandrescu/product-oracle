@@ -637,7 +637,12 @@ const mineAction = (a: Action, meId: string | null) => a.created_by?.id != null 
  * it: the API keeps one per item, and only its author or an approver changes it (a 403).
  */
 function othersRemoval(fix: Fix, it: Item, mode: Mode, meId: string | null): Action | undefined {
-  if (mode !== "commenter" || !removalOf(fix, it)) return undefined;
+  return removalOf(fix, it) ? othersDepsEdit(it, mode, meId) : undefined;
+}
+
+/** Another person's dependency edit on the item that a commenter may not change (as the panel's × meets it). */
+function othersDepsEdit(it: Item, mode: Mode, meId: string | null): Action | undefined {
+  if (mode !== "commenter") return undefined;
   return it.actions.find((a) => a.kind === "edit" && a.field === "depends_on" && !mineAction(a, meId));
 }
 
@@ -683,7 +688,7 @@ type FixProps = { fix: Fix; reason: Reason; it: Item; mode: Mode; ops: Ops; meId
 
 export function FixButton({ fix, reason, it, mode, ops, primary, meId, titleOf, ask }: FixProps & { primary?: boolean }) {
   const theirs = othersRemoval(fix, it, mode, meId);
-  if (theirs) return <TheirRemoval fix={fix} it={it} theirs={theirs} titleOf={titleOf} ask={ask} />;
+  if (theirs) return <TheirRemoval deps={removalOf(fix, it) ?? []} theirs={theirs} titleOf={titleOf} ask={ask} />;
   return (
     <Button
       variant={primary ? "primary" : "secondary"}
@@ -700,11 +705,11 @@ export function FixButton({ fix, reason, it, mode, ops, primary, meId, titleOf, 
  * A commenter's Remove dependency where another person's dependency change already holds the
  * item: whose it is, and theirs sent as a separate suggestion (Ask a teammate, filled in).
  */
-function TheirRemoval({ fix, it, theirs, titleOf, ask }: { fix: Fix; it: Item; theirs: Action; titleOf: (k: string) => string; ask: (text: string) => void }) {
+function TheirRemoval({ deps: keys, theirs, titleOf, ask, className = "" }: { deps: string[]; theirs: Action; titleOf: (k: string) => string; ask: (text: string) => void; className?: string }) {
   const who = theirs.created_by?.name ?? "Someone";
-  const deps = (removalOf(fix, it) ?? []).map(titleOf).join(", ");
+  const deps = keys.map(titleOf).join(", ");
   return (
-    <span className="flex flex-wrap items-center justify-end gap-1 text-sm text-text2" data-testid="their-removal">
+    <span className={`flex flex-wrap items-center justify-end gap-1 text-sm text-text2 ${className}`} data-testid="their-removal">
       <span>
         {who} {theirs.state === "staged" ? "staged" : "suggested"} this item&apos;s dependency change
       </span>
@@ -734,7 +739,7 @@ function ConfirmFix({ fix, reason, it, mode, ops, onDone, meId, titleOf, ask }: 
       }}
     >
       {theirs ? (
-        <TheirRemoval fix={fix} it={it} theirs={theirs} titleOf={titleOf} ask={ask} />
+        <TheirRemoval deps={removalOf(fix, it) ?? []} theirs={theirs} titleOf={titleOf} ask={ask} />
       ) : (
         <Button variant="primary" className="h-8 px-2.5 text-sm max-[600px]:h-10" onClick={() => void applyFix(fix, reason, ops, it, mode, meId).then(onDone)}>
           Confirm: {fix.label}
@@ -944,6 +949,8 @@ function ReviewInspector({
   meId: string | null;
 }) {
   const [editing, setEditing] = useState(false);
+  // The dependency whose × met another person's dependency change: whose, and theirs sent separately.
+  const [heldDep, setHeldDep] = useState<string | null>(null);
   const { can } = useMe();
   // Another PRD's feature is not a row: its reasons name it ("Account health ledger (Safety PRD)").
   const otherTitles: Record<string, string> = {};
@@ -959,7 +966,11 @@ function ReviewInspector({
   const outcome = (staged("outcome")?.value as string | undefined) ?? item.outcome ?? "";
   const removedDeps = ((staged("depends_on")?.value as { remove?: string[] } | undefined)?.remove ?? []) as string[];
   // An approver's × joins the item's dependency edit, a commenter's suggestion too (as Remove dependency does).
-  const joinDeps = mode === "approver" ? removedBy(item.actions.find((a) => a.kind === "edit" && a.field === "depends_on") ?? { value: null }) : removedDeps;
+  const depsEdit = mode === "approver" ? item.actions.find((a) => a.kind === "edit" && a.field === "depends_on") : staged("depends_on");
+  const joinDeps = depsEdit ? removedBy(depsEdit) : [];
+  // The joined edit keeps what it adds, as Remove dependency's does.
+  const joinAdds = ((depsEdit?.value ?? {}) as { add?: string[] }).add ?? [];
+  const theirDeps = othersDepsEdit(item, mode, meId);
   const act = ops.act;
   const row = { ...toRow(item, prd), outcome: outcome || null };
 
@@ -1077,16 +1088,21 @@ function ReviewInspector({
       dependencyTitles={otherTitles}
       dependencyAction={
         edit
-          ? (d) => (
-              <Button
-                variant="ghost"
-                className="h-7 w-7 justify-center px-0"
-                aria-label={`Remove dependency ${titleOf(d)}`}
-                onClick={() => void act({ item_key: item.key, kind: "edit", field: "depends_on", value: { add: [], remove: [...new Set([...joinDeps, d])] }, answers: [] })}
-              >
-                ×
-              </Button>
-            )
+          ? (d) =>
+              theirDeps && heldDep === d ? (
+                <TheirRemoval deps={[d]} theirs={theirDeps} titleOf={titleOf} ask={(text) => setForm({ key: item.key, kind: "ask", where: "inspector", text })} className="basis-full" />
+              ) : (
+                <Button
+                  variant="ghost"
+                  className="h-7 w-7 justify-center px-0"
+                  aria-label={`Remove dependency ${titleOf(d)}`}
+                  onClick={() =>
+                    theirDeps ? setHeldDep(d) : void act({ item_key: item.key, kind: "edit", field: "depends_on", value: { add: joinAdds, remove: [...new Set([...joinDeps, d])] }, answers: [] })
+                  }
+                >
+                  ×
+                </Button>
+              )
           : undefined
       }
       priority={item.rank != null ? { rank: item.rank, explanation: `Ranked ${item.rank} in the priority order this run read.` } : undefined}
