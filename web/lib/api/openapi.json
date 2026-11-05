@@ -43477,6 +43477,66 @@
         "x-min-role": "approver"
       }
     },
+    "/v1/simple/removed": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "List Simple Removed",
+        "operationId": "list_simple_removed",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleRemovedList"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/tracks": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "List Simple Tracks",
+        "operationId": "list_simple_tracks",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleTracks"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/simple/sessions": {
       "post": {
         "tags": [
@@ -60622,7 +60682,12 @@
                   "set_goal",
                   "restore_goal",
                   "edit_goal_milestone",
-                  "set_depends_on"
+                  "set_depends_on",
+                  "unarchive_goal",
+                  "restore_goal_milestone",
+                  "add_track",
+                  "edit_track",
+                  "delete_track"
                 ]
               },
               {
@@ -61024,7 +61089,12 @@
               "set_goal",
               "restore_goal",
               "edit_goal_milestone",
-              "set_depends_on"
+              "set_depends_on",
+              "unarchive_goal",
+              "restore_goal_milestone",
+              "add_track",
+              "edit_track",
+              "delete_track"
             ],
             "title": "Op"
           },
@@ -82527,7 +82597,12 @@
               "set_goal",
               "restore_goal",
               "edit_goal_milestone",
-              "set_depends_on"
+              "set_depends_on",
+              "unarchive_goal",
+              "restore_goal_milestone",
+              "add_track",
+              "edit_track",
+              "delete_track"
             ],
             "title": "Op"
           },
@@ -116605,7 +116680,12 @@
               "set_goal",
               "restore_goal",
               "edit_goal_milestone",
-              "set_depends_on"
+              "set_depends_on",
+              "unarchive_goal",
+              "restore_goal_milestone",
+              "add_track",
+              "edit_track",
+              "delete_track"
             ],
             "title": "Op"
           },
@@ -116753,7 +116833,12 @@
               "set_goal",
               "restore_goal",
               "edit_goal_milestone",
-              "set_depends_on"
+              "set_depends_on",
+              "unarchive_goal",
+              "restore_goal_milestone",
+              "add_track",
+              "edit_track",
+              "delete_track"
             ],
             "title": "Op"
           },
@@ -121027,6 +121112,25 @@
         ],
         "title": "SimpleOwnerRef"
       },
+      "SimplePerson": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "SimplePerson"
+      },
       "SimplePersonRef": {
         "properties": {
           "id": {
@@ -121639,6 +121743,25 @@
         ],
         "title": "SimplePlanStrip",
         "description": "The plan strip (the owner's pick for Home and the one-pager): the PRD's span by\nmonth with its milestones, today's line and how many commitments end past the edge."
+      },
+      "SimplePrdRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SimplePrdRef"
       },
       "SimplePrioritiesOut": {
         "properties": {
@@ -122650,6 +122773,108 @@
         "type": "object",
         "title": "SimpleQuestionSource",
         "description": "Where Oracle read the question: the PRD's approved version, and when."
+      },
+      "SimpleRemovedItem": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "feature",
+              "goal",
+              "milestone"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "where": {
+            "type": "string",
+            "title": "Where"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By Name"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          },
+          "decider_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decider Name"
+          },
+          "roadmap_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "title",
+          "where"
+        ],
+        "title": "SimpleRemovedItem",
+        "description": "Something removed in Simple, to put back: a cut feature, an archived goal or a removed\ngoal milestone, with who removed it and when."
+      },
+      "SimpleRemovedList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleRemovedItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "SimpleRemovedList"
       },
       "SimpleResumeOut": {
         "properties": {
@@ -123920,6 +124145,139 @@
           "title"
         ],
         "title": "SimpleTrackRef"
+      },
+      "SimpleTrackRow": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "closed"
+            ],
+            "title": "Status"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "owner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name"
+          },
+          "prd_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Prd Id"
+          },
+          "prd_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Title"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          },
+          "decider_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decider Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "prd_id"
+        ],
+        "title": "SimpleTrackRow"
+      },
+      "SimpleTracks": {
+        "properties": {
+          "tracks": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleTrackRow"
+            },
+            "type": "array",
+            "title": "Tracks"
+          },
+          "can_add": {
+            "type": "boolean",
+            "title": "Can Add",
+            "default": false
+          },
+          "add_decider_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Add Decider Name"
+          },
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePerson"
+            },
+            "type": "array",
+            "title": "People"
+          },
+          "prds": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePrdRef"
+            },
+            "type": "array",
+            "title": "Prds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tracks",
+          "people",
+          "prds"
+        ],
+        "title": "SimpleTracks"
       },
       "SimpleUpcomingMeeting": {
         "properties": {
@@ -134735,7 +135093,8 @@
             "enum": [
               "document",
               "intake",
-              "run"
+              "run",
+              "track"
             ],
             "title": "Type"
           },
