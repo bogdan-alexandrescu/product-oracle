@@ -170,7 +170,7 @@ import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimple
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
-import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
+import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, seedTwoDependencies, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
@@ -3427,7 +3427,7 @@ function load(): Db {
                     db.simple_roadmap!.plan!.goalless = true;
                     return db;
                   }
-              : scenario === "simple-chat" || scenario === "simple-chat-stray" || scenario === "meet-chat-right-prd" || scenario === "roadmap-talk" || scenario === "roadmap-talk-own-decider" || scenario === "roadmap-talk-tracker-done"
+              : scenario === "simple-chat" || scenario === "simple-chat-stray" || scenario === "meet-chat-right-prd" || scenario === "roadmap-talk" || scenario === "roadmap-talk-own-decider" || scenario === "roadmap-talk-tracker-done" || scenario === "roadmap-talk-two-deps"
                 ? () => {
                     const db = seedSimpleHomeScenario();
                     db.simple_chat = seedSimpleChat(db.members);
@@ -3444,6 +3444,9 @@ function load(): Db {
                       const owner = db.members.find((m) => m.role === "owner")!;
                       seedStrayReply(db.simple_chat, { id: owner.id, name: displayName(owner.email, owner.name) });
                     }
+                    // roadmap-decide review: Alert SLA report waits on Alert rules engine and on Reliability
+                    // work (another goal); Uptime alerts (another goal) waits on Alert rules engine too.
+                    if (scenario === "roadmap-talk-two-deps" && db.simple_roadmap) seedTwoDependencies(db.simple_roadmap);
                     // fix5-cut-dependents review: approver@example.com is Alert rules engine's own
                     // decider; the company's owners decide the items that wait on it.
                     if (scenario === "roadmap-talk-own-decider" && db.simple_roadmap) {
@@ -3451,6 +3454,14 @@ function load(): Db {
                       const r = db.simple_roadmap;
                       r.targets = { ...r.targets, [r.ids["alert-rules"]]: { ...r.targets?.[r.ids["alert-rules"]], decider_id: approver.id } };
                     }
+                    return db;
+                  }
+              : scenario === "roadmap-reviewers"
+                ? () => {
+                    // roadmap-decide review: Alerts roadmap has a required reviewer, approver@example.com.
+                    const db = seed();
+                    const approver = db.members.find((m) => m.email === "approver@example.com")!;
+                    if (db.simple_roadmap) db.simple_roadmap.reviewers = { "alerts-roadmap": [approver.id] };
                     return db;
                   }
               : scenario === APPROVED_ROADMAP_SCENARIO

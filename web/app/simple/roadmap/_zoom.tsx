@@ -210,6 +210,9 @@ interface Common {
   act: Act;
   canChange: boolean;
   byId: Map<string, Item>;
+  /** Review: under a filter, the whole roadmap's broken links (the side menu's count), and how to see them all. */
+  all?: number;
+  onAll?: () => void;
 }
 
 export interface TimelineProps extends Common {
@@ -297,34 +300,55 @@ export function ConflictPanel({
   byId,
   onShow,
   phone,
+  all,
+  onAll,
 }: Common & { onShow: (key: string) => void }) {
   // roadmap-decide: every broken link of the working draft, a cut item others depend on
   // included: the same ones Needs a decision, Home and the side menu count.
   const list = data.items.flatMap((i) => brokenLinks(i).map((f) => ({ i, f })));
   const [shut, setShut] = useState(false);
+  // Review: a filter hides some: "1 broken link here, 3 in all", with Clear filters.
+  const elsewhere = all !== undefined && all > 0 && !!onAll;
+  const showAll = elsewhere ? (
+    <span className="flex flex-none items-center gap-2 text-sm font-normal text-text2" data-testid="conflicts-all">
+      {all} in all
+      <button type="button" onClick={onAll} className="font-semibold text-accent-ink hover:underline">
+        Clear filters
+      </button>
+    </span>
+  ) : null;
   if (!list.length)
     return (
-      <p
+      <div
         data-testid="conflicts"
-        className="mb-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-text2"
+        className="mb-2 flex flex-wrap items-center gap-x-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-text2"
       >
-        No broken links
-      </p>
+        {elsewhere ? "No broken links here," : "No broken links"}
+        {showAll}
+      </div>
     );
   return (
     <section
       data-testid="conflicts"
       className="mb-2 rounded-xl border border-crit bg-surface"
     >
-      <button
-        type="button"
-        aria-expanded={!shut}
-        onClick={() => setShut(!shut)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-crit"
-      >
-        ⚠ {list.length} broken {list.length === 1 ? "link" : "links"}{" "}
-        <span className="ml-auto text-text2">{shut ? "Show" : "Hide"}</span>
-      </button>
+      <div className="flex w-full flex-wrap items-center gap-x-2 px-3 py-2 text-sm">
+        <button
+          type="button"
+          aria-expanded={!shut}
+          onClick={() => setShut(!shut)}
+          className={`flex min-w-0 items-center gap-2 text-left font-semibold text-crit ${elsewhere ? "" : "flex-1"}`}
+        >
+          ⚠ {list.length} broken {list.length === 1 ? "link" : "links"}
+          {elsewhere ? " here," : <span className="ml-auto font-normal text-text2">{shut ? "Show" : "Hide"}</span>}
+        </button>
+        {showAll}
+        {elsewhere && (
+          <button type="button" aria-expanded={!shut} onClick={() => setShut(!shut)} className="ml-auto text-text2">
+            {shut ? "Show" : "Hide"}
+          </button>
+        )}
+      </div>
       {!shut && (
         <ul className="divide-y divide-line border-t border-line">
           {list.map(({ i, f }) => (

@@ -111,6 +111,8 @@ interface SimpleDb {
   targets?: Record<string, Record<string, unknown>>;
   /** D-a (#730 review): each roadmap's designated decider (roadmap slug -> person id). */
   deciders?: Record<string, string>;
+  /** roadmap-decide review: each roadmap's required reviewers (its review policy's mandatory_reviewer_ids). */
+  reviewers?: Record<string, string[]>;
   /** D-a: each track's owner (track key -> person id); their role (Who.roles) says whether they decide. */
   track_owners?: Record<string, string>;
   /** S4: people's display names (person id -> name), for the items' owners. */
@@ -205,7 +207,7 @@ export interface Who {
 /** A working draft of one roadmap (oracle.simple.drafts): the items in `db.items` are the
  * draft's; `published` keeps the roadmap's published items for those who may not see it. */
 interface MockDraft {
-  out: Omit<Schemas["SimpleDraftOut"], "changes" | "can_submit" | "can_resume" | "can_approve" | "can_publish" | "change_log" | "can_withdraw" | "from_prds" | "published">;
+  out: Omit<Schemas["SimpleDraftOut"], "changes" | "can_submit" | "can_resume" | "can_approve" | "can_publish" | "required_reviewers" | "change_log" | "can_withdraw" | "from_prds" | "published">;
   roadmap: string;
   published: { items: SeedItem[]; own: SimpleDb["own"]; key_dates?: MockKeyDate[] };
   /** approved-prd-roadmap: what each approved PRD put in it (PRD slug -> item keys, key date ids). */
@@ -676,7 +678,7 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
   const out: Flag[] = [];
   const flag = (kind: Flag["kind"], reason: string, fixes: Flag["fixes"], subject: string | null = null): void => {
     const risk = s.risks?.find((x) => x.flag === kind && (!x.subject || x.subject === subject));
-    out.push({ kind, reason, fixes, state: risk ? "amber" : "red", subject, risk_note: risk?.note ?? null, moves: [] });
+    out.push({ kind, reason, fixes, state: risk ? "amber" : "red", subject, risk_note: risk?.note ?? null, moves: [], dependents: [] });
   };
   // roadmap-done, as constraints.check: a done item is not checked, and a dependency on one is met.
   if (doneItem(s)) return out;
@@ -1030,6 +1032,14 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const byItem = new Map(items.map((i) => [i.id, i]));
   for (const i of items)
     for (const f of i.flags) if (f.kind === "dependency_order" && f.fixes.includes("shift_dependents") && f.subject) f.moves = Object.keys(shiftPlan(byItem, i.id, f.subject));
+  // roadmap-decide review (service.load): a cut item's live dependents, read before any filter.
+  for (const i of items)
+    for (const f of i.flags)
+      if (f.kind === "cut_with_dependents")
+        f.dependents = i.needed_by
+          .map((id) => byItem.get(id))
+          .filter((n): n is Item => !!n && n.status !== "cut" && n.status !== "done")
+          .map((n) => ({ id: n.id, title: n.title, can_decide: n.can_decide }));
   // The Roadmap filter (service.build's ``roadmap``): one readable roadmap, by id or slug.
   const readable = ROADMAP_SLUGS().filter((r) => readsRoadmap(r, role));
   const chosen = readableRoadmap(q.get("roadmap"), role);
@@ -1287,6 +1297,12 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
     if (q.get("roadmap") && !readableRoadmap(q.get("roadmap"), me.role)) return json(404, { detail: "No such roadmap" });
     const out = roadmapOut(db, me.role, q, me);
     return out ? json(200, out) : json(422, { detail: "group: goal, track or prd" });
+  }
+  if (p[3] === "waiting" && !p[4] && m === "GET") {
+    // roadmap-decide review (GET /v1/simple/roadmap/waiting): the whole roadmap's broken links, no filter.
+    const items = roadmapOut(db, me.role, new URLSearchParams(), me)?.items ?? [];
+    const links = items.filter((i) => i.status !== "done").flatMap((i) => i.flags).filter((f) => f.state === "red" && f.fixes.length > 0 && (f.kind === "dependency_order" || f.kind === "cut_with_dependents"));
+    return json(200, { broken_links: links.length });
   }
   const slugOf = (id: string) => Object.keys(ROADMAPS).find((r) => roadmapId(r) === id) ?? null;
   const ms = await routeMilestones(db, me, req, p, slugOf, (r) => canEditRoadmap(db, r, me));

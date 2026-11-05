@@ -67,19 +67,19 @@ export function FixButtons({
   const [note, setNote] = useState<string | null>(null);
   if (!canChange) return null;
   const dep = flag.subject ? items.get(flag.subject) : undefined;
-  // roadmap-decide: a cut item others depend on: bring it back, or a dependent drops it.
-  const live = item.needed_by.map((id) => items.get(id)).filter((n): n is Item => !!n && n.status !== "cut" && n.status !== "done");
+  // roadmap-decide: a cut item others depend on: bring it back, or a dependent drops it. Review:
+  // every live dependent the API names, one a filter hides too.
+  const live = flag.dependents ?? [];
   const restore = () =>
     void act(`Brought back '${item.title}'`, { op: "restore", target: { item_id: item.id }, before: { cut: true }, after: { cut: false } });
-  const unlink = (n: Item) => {
-    const keys = n.depends_on.map((id) => items.get(id)?.key).filter((k): k is string => !!k);
+  // Review: the API checks only that the item still depends on this one (a filter may hide its other dependencies).
+  const unlink = (n: Flag["dependents"][number]) =>
     void act(`Removed '${n.title}''s dependency on '${item.title}'`, {
       op: "remove_dependency",
       target: { item_id: n.id, subject: item.id },
-      before: { depends_on: keys },
-      after: { depends_on: keys.filter((k) => k !== item.key) },
+      before: {},
+      after: {},
     });
-  };
   const fix = (kind: "shift_dependents" | "move_dependency") => {
     if (!dep) return;
     void act(

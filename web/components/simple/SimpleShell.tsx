@@ -14,7 +14,6 @@ import { setPanelOpen, usePanelOpen } from "@/components/hop/open-state";
 import { SIMPLE_HOME, switchTarget } from "@/lib/experience";
 import { useMe } from "@/lib/me";
 import { api, unwrap } from "@/lib/api/client";
-import { brokenLinks } from "@/lib/simple-home";
 import { loadInbox, onWaitingChanged } from "@/lib/waiting";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string };
@@ -63,12 +62,13 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
     if (!enabled) return;
     let alive = true;
     // prd-questions: Decisions counts the product decisions waiting for me (Oracle's run approvals never).
-    // roadmap-decide: Roadmap adds the broken links of the working draft as I see it, the same
-    // ones the roadmap's strip, its Needs a decision and Home count (web/lib/simple-home.ts).
-    Promise.all([loadInbox(), unwrap(api.GET("/v1/simple/decisions/waiting")), unwrap(api.GET("/v1/simple/roadmap")).catch(() => undefined)])
+    // roadmap-decide: Roadmap adds the broken links of the whole working draft as I see it, the
+    // same ones the roadmap's strip ("N here, M in all"), its Needs a decision and Home count;
+    // review: a light count (GET /v1/simple/roadmap/waiting), not the whole roadmap read.
+    Promise.all([loadInbox(), unwrap(api.GET("/v1/simple/decisions/waiting")), unwrap(api.GET("/v1/simple/roadmap/waiting")).catch(() => undefined)])
       .then(([inbox, waiting, roadmap]) => {
         if (!alive) return;
-        const links = brokenLinks(roadmap).length;
+        const links = roadmap?.broken_links ?? 0;
         const asks = inbox.simple_proposals.length + inbox.simple_approvals.length;
         setCounts({
           Decisions: waiting.count,

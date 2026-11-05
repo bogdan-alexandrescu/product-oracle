@@ -1098,6 +1098,23 @@ export function seedTalkItems(db: SimpleDb): void {
   knowTalkGoals(db);
 }
 
+/**
+ * roadmap-decide review (the "roadmap-talk-two-deps" scenario): Alert SLA report waits on Alert
+ * rules engine and on Reliability work, whose goal differs; Uptime alerts, also under another
+ * goal, waits on Alert rules engine. Invented items.
+ */
+export function seedTwoDependencies(db: SimpleDb): void {
+  const add: SimpleDb["items"] = [
+    { key: "alert-sla", title: "Alert SLA report", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 55, end: 75, source: "typed", depends: ["alert-rules", "reliability-work"] },
+    { key: "uptime-alerts", title: "Uptime alerts", horizon: "now", roadmap: "alerts-roadmap", goal: "reliability", track: "alerts", confidence: "medium", start: 50, end: 70, source: "typed", depends: ["alert-rules"] },
+  ];
+  for (const s of add) {
+    if (db.items.some((x) => x.key === s.key)) continue;
+    db.items.push(s);
+    db.ids[s.key] = stableUuid(`simple-item/${s.key}`);
+  }
+}
+
 /** A move restated ("Move F-16 Adaptive pacing two weeks later, to Nov 30 – Dec 11, 2026"), its words and Correct. */
 function talkMove(db: SimpleDb, i: Item, start: string, end: string, how = "", shift?: [number, number]): Draft {
   const d = moveDraft(db, i, start, end, shift);

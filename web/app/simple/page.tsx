@@ -219,7 +219,7 @@ export default function SimpleHome() {
     return { next: list.upcoming[0] ?? null };
   });
   const personIds = useMemo(() => {
-    const ids = new Set<string>((drafts.data ?? []).flatMap((d) => d.waiting_on));
+    const ids = new Set<string>((drafts.data ?? []).flatMap((d) => [...d.waiting_on, ...(d.required_reviewers ?? [])]));
     for (const c of changes.data ?? []) if (c.status === "proposed") c.routed_to.forEach((id) => ids.add(id));
     return [...ids].sort();
   }, [drafts.data, changes.data]);

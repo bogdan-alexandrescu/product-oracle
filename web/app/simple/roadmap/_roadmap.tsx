@@ -339,7 +339,7 @@ function prdWords(p: { prd: { title: string }; version?: number | null; items: n
 }
 
 /** The working-draft banner (D18 as amended: one shared draft per roadmap). */
-function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onReview, titleOf }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; onApprove: (d: Draft[]) => void; onReview: (prdSlug: string) => void; titleOf: (id: string | null) => string | undefined }) {
+function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onReview, titleOf, nameOf }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; onApprove: (d: Draft[]) => void; onReview: (prdSlug: string) => void; titleOf: (id: string | null) => string | undefined; nameOf?: (id: string) => string }) {
   const [open, setOpen] = useState(false);
   const working = drafts.filter((d) => d.status === "working" || d.status === "submitted");
   if (!working.length) {
@@ -363,7 +363,7 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onRe
   // walkb-roadmap review 5a: a roadmap built from a PRD and not approved yet has no approved roadmap to keep published.
   const published = working.every((d) => d.published);
   // roadmap-decide: what happens next and who acts, with that person's button (Send for review, or the decider's Approve).
-  const next = draftNext({ ...working[0], published });
+  const next = draftNext({ ...working[0], published }, nameOf);
   const approvable = working.filter((d) => d.status === "submitted" && d.can_approve);
   return (
     <section data-testid="draft-banner" className="rounded-xl border border-accent-mid bg-accent-soft px-4 py-2.5 text-accent-ink">
@@ -379,11 +379,13 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onRe
         <Button variant="ghost" className="max-[640px]:px-1.5" aria-expanded={open} onClick={() => setOpen(!open)}>
           See changes
         </Button>
-        {publishable.length > 0 ? (
+        {/* Review: each draft's own next step: Approve and publish for the decider's, Send for review for the others. */}
+        {publishable.length > 0 && (
           <Button variant="solid" className="max-[640px]:px-2.5" data-testid="draft-publish" onClick={() => onApprove(publishable)}>
             Approve and publish
           </Button>
-        ) : (
+        )}
+        {(submittable.length > 0 || !publishable.length) && (
           <Button variant="solid" disabled={!submittable.length} onClick={() => onSubmit(submittable)}>
             Send for review
           </Button>
@@ -537,6 +539,8 @@ function DecisionTray({
   phone,
   suggestions,
   top,
+  allLinks,
+  onAll,
 }: {
   items: Item[];
   byId: Map<string, Item>;
@@ -550,6 +554,9 @@ function DecisionTray({
   suggestions: GoalSuggestionsApi;
   /** Where the desktop panel starts: under the toolbar's button. */
   top: number;
+  /** Review: under a filter, the whole roadmap's broken links, and how to clear the filters. */
+  allLinks?: number;
+  onAll?: () => void;
 }) {
   const twins = items.filter((i) => i.can_decide && i.looks_like.length > 0);
   // qa4-simple-roadmap-14: Escape closes the drawer, focus back on its button.
@@ -595,7 +602,7 @@ function DecisionTray({
   const pulled = counts.pulled;
   const others = counts.proposals;
   const counters: [string, number][] = [
-    ["Broken links", counts.links],
+    ["Broken links", allLinks ?? counts.links],
     ["Dates to confirm", dateRows.length],
     ["Proposals", others.length],
     ["Pulled in", pulled.length],
@@ -635,7 +642,16 @@ function DecisionTray({
       </div>
       {/* roadmap-decide: what the button's count is, said in words; the broken links are the same ones Home and the side menu count. */}
       <p className="mt-1 text-sm text-text2" data-testid="tray-scope">
-        {counts.total} to decide in this roadmap&apos;s working draft: broken links, dates to confirm, proposals and items pulled in.
+        {counts.total - counts.links + (allLinks ?? counts.links)} to decide in this roadmap&apos;s working draft: broken links, dates to confirm, proposals and items pulled in.
+        {allLinks !== undefined && allLinks !== counts.links && (
+          <span data-testid="tray-links-here">
+            {" "}
+            {counts.links} of the {allLinks} broken {allLinks === 1 ? "link is" : "links are"} in these filters.{" "}
+            <button type="button" onClick={onAll} className="font-semibold text-accent-ink hover:underline">
+              Clear filters
+            </button>
+          </span>
+        )}
       </p>
       <ul className="mt-3 grid grid-cols-2 gap-2 min-[420px]:grid-cols-4" data-testid="tray-counters">
         {counters.map(([label, n]) => (
@@ -851,12 +867,21 @@ export function SimpleRoadmap() {
   const startOptions = useQuery("simple-meeting-options||", () =>
     unwrap(api.GET("/v1/simple/meetings/options", { params: { query: { prd: undefined, occurrence: undefined } } })),
   );
+  // Review: the whole roadmap's broken links (the side menu's light count), whatever the filters.
+  const wholeLinks = useQuery("simple-roadmap-waiting", () => unwrap(api.GET("/v1/simple/roadmap/waiting")));
+  // Review: the people a draft's next step names (who it waits on, who reviews it after the decider).
+  const draftIds = [...new Set((drafts.data ?? []).flatMap((d) => [...d.waiting_on, ...(d.required_reviewers ?? [])]))].sort();
+  const draftPeople = useQuery(
+    `people|${draftIds.join(",")}`,
+    () => (draftIds.length ? unwrap(api.GET("/v1/people", { params: { query: { ids: draftIds } } })) : Promise.resolve([] as Schemas["PersonOut"][])),
+    { keepPrevious: true },
+  );
   const reload = useCallback(async () => {
-    await Promise.all([roadmap.reload(), proposals.reload(), drafts.reload()]);
+    await Promise.all([roadmap.reload(), proposals.reload(), drafts.reload(), wholeLinks.reload()]);
     // roadmap-decide: the side menu's Roadmap count reads the same working draft again.
     invalidateWaiting();
     waitingChanged();
-  }, [roadmap, proposals, drafts]);
+  }, [roadmap, proposals, drafts, wholeLinks]);
   // roadmap-talk: a chat card applied, proposed, rejected or undone (the item's talk, the Ask panel) reads the roadmap again.
   useEffect(() => {
     const on = () => void reload();
@@ -1168,7 +1193,10 @@ export function SimpleRoadmap() {
   // no PRD) sees no Start review at all, once the start options say so (busy until then).
   const startsReviews = mayStartReview || (!startOptions.data && !startOptions.error);
   // fix4 qa-simple-roadmap-8: the tray's own counts (one helper), so the button and its tiles agree.
-  const waiting = decisionCounts(data.items, allProposals).total;
+  // Review: under a filter, Needs a decision counts the whole roadmap's broken links, as the side menu does.
+  const counted = decisionCounts(data.items, allProposals);
+  const allLinks = f.prd || f.goal || f.track || f.from || f.to || f.roadmap ? wholeLinks.data?.broken_links : undefined;
+  const waiting = counted.total - counted.links + (allLinks ?? counted.links);
   const qList = quarters(data.windows.now.start, data.windows.later.end);
   // qa-shell-8: a new company's roadmap has nothing on it (no item, milestone or key date, and
   // no filter narrowing it): one line on what shows here and the next step, no empty chart and
@@ -1335,6 +1363,11 @@ export function SimpleRoadmap() {
     setF({ ...NO_FILTERS, group: f.group, roadmap: f.roadmap });
     void remember({ simple_filters: { prd: "", goal: "", track: "" } }, "Could not remember these filters for next time");
   };
+  // Review: the strip's and the tray's Clear filters show every broken link (all roadmaps too).
+  const showAllLinks = () => {
+    clearFilters();
+    if (f.roadmap) setF({ ...NO_FILTERS, group: f.group });
+  };
   // D1: PRD, Goal, Track, From, To, Group by and the Gantt's scale on one line (each select as wide as its choice).
   const pickers = (
     <>
@@ -1402,6 +1435,7 @@ export function SimpleRoadmap() {
     <DraftBanner
       drafts={drafts.data ?? []}
       titleOf={titleOf}
+      nameOf={(id) => draftPeople.data?.find((p) => p.user_id === id)?.name ?? "a reviewer"}
       onReview={(slug) => pickFilter("prd", slug)}
       inReview={data.changes_in_review ?? 0}
       meId={me?.user_id ?? null}
@@ -1573,6 +1607,8 @@ export function SimpleRoadmap() {
           // above, an open item in a panel at the right (a sheet on a phone).
           <ZoomTimeline
             data={goalLaned ?? data}
+            all={allLinks}
+            onAll={showAllLinks}
             phone={phone}
             act={act}
             canChange={canChange}
@@ -1610,6 +1646,8 @@ export function SimpleRoadmap() {
           {/* mk-qa4-roadmap QR3 A: the broken links sit in the panel above the chart, never over a bar. */}
           <ConflictPanel
             data={laned ?? data}
+            all={allLinks}
+            onAll={showAllLinks}
             phone={phone}
             act={act}
             canChange={canChange}
@@ -1772,6 +1810,8 @@ export function SimpleRoadmap() {
           phone={phone}
           suggestions={suggestions}
           top={trayTop}
+          allLinks={allLinks}
+          onAll={showAllLinks}
         />
       )}
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} start={goalStart} onClose={() => setGoalPanel(null)} />}

@@ -425,6 +425,8 @@ function draftOut(db: SimpleDb, ctx: SimpleChangesCtx, d: MockDraft): Schemas["S
     can_approve: d.out.status === "submitted" && edits,
     // roadmap-decide (drafts.outs): the decider's Approve and publish on a working draft (with no decider, an owner's).
     can_publish: d.out.status === "working" && edits && (decider ? decider === ctx.id : true),
+    // roadmap-decide review: who still reviews a working draft after the decider's approval.
+    required_reviewers: d.out.status === "working" ? (db.reviewers?.[d.roadmap] ?? []).filter((r) => r !== ctx.id) : [],
     can_withdraw: d.out.status === "submitted" && (d.out.created_by === ctx.id || edits),
     published: !(db.unapproved ?? []).includes(d.roadmap),
     // decisions-reversed-or-trashed: notes on decisions it cited that were reversed since.
@@ -454,14 +456,20 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
   }
   if (p[4] === "approve") {
     // roadmap-decide (drafts.approve): the decider's approval of a working draft sends it first.
-    if (d.out.status === "working" && draftOut(db, ctx, d).can_publish) {
+    if (d.out.status === "working") {
+      // Review minor 6: one rule (can_publish) for the button and the endpoint.
+      if (!draftOut(db, ctx, d).can_publish) return json(403, { detail: "Only the roadmap's decider approves and publishes this draft" });
       if (!draftChanges(db, d.out.id) && !draftPrds(d).length) return json(422, { detail: "Nothing to submit: the draft has no changes" });
       Object.assign(d.out, { status: "submitted", version: (d.out.base_version ?? 1) + 1, submitted_at: now, submitted_by: ctx.id });
     }
     if (d.out.status !== "submitted") return json(409, { detail: `This draft is ${d.out.status}: only a submitted draft is approved` });
-    if (!canEditRoadmap(db, d.roadmap, ctx)) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
-    // No required reviewers in the mock: the approval publishes the version.
-    Object.assign(d.out, { decider_approved: true, status: "approved", approved_at: now });
+    const reviewers = db.reviewers?.[d.roadmap] ?? [];
+    if (!canEditRoadmap(db, d.roadmap, ctx) && !reviewers.includes(ctx.id)) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
+    // The decider's approval waits for the required reviewers (drafts._settle); the last one publishes it.
+    const left = (canEditRoadmap(db, d.roadmap, ctx) ? (d.out.decider_approved ? d.out.waiting_on : reviewers) : d.out.waiting_on).filter((r) => r !== ctx.id);
+    const decided = d.out.decider_approved || canEditRoadmap(db, d.roadmap, ctx);
+    if (left.length || !decided) Object.assign(d.out, { decider_approved: decided, waiting_on: left });
+    else Object.assign(d.out, { decider_approved: true, status: "approved", approved_at: now, waiting_on: [] });
     return json(200, draftOut(db, ctx, d));
   }
   if (p[4] === "withdraw") {
@@ -712,6 +720,8 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     after = Object.fromEntries(cut.map((i) => [i.id, { cut: true }]));
   } else {
     const fields = FIELDS[body.op];
+    // roadmap-decide review (changes.py): the page may not see every stored key; only the subject is checked.
+    if (body.op === "remove_dependency") body.before = read(seen, key, fields, target);
     const missing = fields.filter((f) => !(f in body.before));
     if (missing.length) return json(422, { detail: `before: ${missing.join(", ")} as you saw them` });
     const now_ = read(seen, key, fields, target);
