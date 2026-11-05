@@ -18,8 +18,9 @@ import uuid
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from oracle import audit, company_time
 from oracle.authz import has_role
@@ -39,41 +40,24 @@ def _is_owner(principal: Any) -> bool:
     return has_role(principal.role, "owner")
 
 
-async def _company_items(db: AsyncSession, company_id: uuid.UUID) -> list[RoadmapItem]:
-    """The company roadmap's items as Simple shows them (oracle.simple.service.load): its
-    latest approved version with items, else its latest; no replaced PRD's, none shipped."""
-    from oracle.simple.service import _versions
-
-    versions = (
-        await db.execute(
-            select(
-                DocumentVersion.id,
-                DocumentVersion.document_id,
-                DocumentVersion.number,
-                DocumentVersion.approved_at,
-            ).where(DocumentVersion.document_id == company_id)
-        )
-    ).all()
-    with_items = set(
-        await db.scalars(
-            select(RoadmapItem.roadmap_version_id)
-            .where(RoadmapItem.roadmap_document_id == company_id)
-            .distinct()
-        )
+async def _shown_version(db: AsyncSession, company_id: uuid.UUID) -> uuid.UUID | None:
+    """The company roadmap's version Simple shows (oracle.simple.service._versions): its
+    latest approved version with items, else its latest with items."""
+    has_items = (
+        select(RoadmapItem.id).where(RoadmapItem.roadmap_version_id == DocumentVersion.id).exists()
     )
-    shown = _versions(versions, with_items).get(company_id)
-    if shown is None:
-        return []
-    replaced = await company.replaced_prd_ids(db)
-    return [
-        r
-        for r in await db.scalars(
-            select(RoadmapItem)
-            .where(RoadmapItem.roadmap_version_id == shown, RoadmapItem.plan_state.is_(None))
-            .order_by(RoadmapItem.position, RoadmapItem.item_key)
-        )
-        if r.prd_document_id not in replaced
-    ]
+    return await db.scalar(
+        select(DocumentVersion.id)
+        .where(DocumentVersion.document_id == company_id, has_items)
+        .order_by(DocumentVersion.approved_at.is_(None), DocumentVersion.number.desc())
+        .limit(1)
+    )
+
+
+def _replaced() -> Any:
+    """The PRDs a person marked replaced (oracle.roadmap.company.replaced_prd_ids)."""
+    prd = aliased(Document)
+    return select(prd.id).where(prd.kind == "prd", prd.replaced_by != [])
 
 
 class _Plan:
@@ -91,18 +75,41 @@ class _Plan:
     def with_twins(self, row: TrackMilestone) -> list[TrackMilestone]:
         return [row, *self.twins.get(row.id, [])]
 
+    def first_of(self, milestone_id: uuid.UUID) -> TrackMilestone | None:
+        """The row waiting for ``milestone_id``: itself, or the first copy of its twin."""
+        return next(
+            (r for r in self.rows if milestone_id in {t.id for t in self.with_twins(r)}), None
+        )
+
     def needs_call(self, row: TrackMilestone) -> bool:
         return bool(row.item_ids) and not self.targets[row.id]
 
 
 async def _plan(db: AsyncSession, lock: bool = False) -> _Plan:
+    """A bounded read however many old milestones there are: the company roadmap, its shown
+    version and the old milestones (with their roadmaps and goals) left to bring; only while
+    some are left, the company items and the old items they gated."""
     plan = _Plan()
     plan.company = await company.active(db)
     if plan.company is None:
         return plan
+    shown = await _shown_version(db, plan.company.id)
+    # A PRD's own milestone is read from its plan while the PRD has an item on the company
+    # roadmap as Simple shows it; it is never carried, so it is left out here.
+    feeds = (
+        select(RoadmapItem.id)
+        .where(
+            RoadmapItem.roadmap_version_id == shown,
+            RoadmapItem.plan_state.is_(None),
+            RoadmapItem.prd_document_id == TrackMilestone.origin_prd_id,
+            RoadmapItem.prd_document_id.not_in(_replaced()),
+        )
+        .exists()
+    )
     q = (
-        select(TrackMilestone)
+        select(TrackMilestone, Document, Entity.title)
         .join(Document, Document.id == TrackMilestone.roadmap_id)
+        .outerjoin(Entity, Entity.id == TrackMilestone.goal_id)
         .where(
             TrackMilestone.roadmap_id != plan.company.id,
             TrackMilestone.deleted_at.is_(None),
@@ -110,31 +117,40 @@ async def _plan(db: AsyncSession, lock: bool = False) -> _Plan:
             TrackMilestone.carry_dropped_at.is_(None),
             Document.kind == "roadmap",
             Document.deleted_at.is_(None),
+            or_(TrackMilestone.origin_prd_id.is_(None), ~feeds) if shown else true(),
         )
         .order_by(TrackMilestone.target_date.nulls_last(), TrackMilestone.name)
     )
     if lock:
         q = q.with_for_update(of=TrackMilestone)
-    plan.rows = list(await db.scalars(q))
-    if not plan.rows:
-        return plan
-    items = await _company_items(db, plan.company.id)
-    feeding = {r.prd_document_id for r in items}
     first: dict[tuple[uuid.UUID, str | None], TrackMilestone] = {}
-    rows: list[TrackMilestone] = []
-    for row in plan.rows:
-        if row.origin_prd_id is None:
-            rows.append(row)
-        elif row.origin_prd_id not in feeding:
+    for row, rm, goal in (await db.execute(q)).all():
+        plan.roadmaps[rm.id] = rm
+        if row.goal_id and goal is not None:
+            plan.goals[row.goal_id] = goal
+        if row.origin_prd_id is not None:
             key = (row.origin_prd_id, row.code)
             if key in first:
                 plan.twins.setdefault(first[key].id, []).append(row)
-            else:
-                first[key] = row
-                rows.append(row)
-    plan.rows = rows
+                continue
+            first[key] = row
+        plan.rows.append(row)
     if not plan.rows:
         return plan
+    items = list(
+        await db.scalars(
+            select(RoadmapItem)
+            .where(
+                RoadmapItem.roadmap_version_id == shown,
+                RoadmapItem.plan_state.is_(None),
+                or_(
+                    RoadmapItem.prd_document_id.is_(None),
+                    RoadmapItem.prd_document_id.not_in(_replaced()),
+                ),
+            )
+            .order_by(RoadmapItem.position, RoadmapItem.item_key)
+        )
+    ) if shown else []  # fmt: skip
     by_feature: dict[uuid.UUID, RoadmapItem] = {}
     by_key: dict[str, RoadmapItem] = {}
     for r in items:
@@ -158,17 +174,6 @@ async def _plan(db: AsyncSession, lock: bool = False) -> _Plan:
             if to is not None:
                 found.setdefault(to.id, to)
         plan.targets[row.id] = list(found.values())
-    plan.roadmaps = {
-        d.id: d
-        for d in await db.scalars(
-            select(Document).where(Document.id.in_({r.roadmap_id for r in plan.rows}))
-        )
-    }
-    goal_ids = {r.goal_id for r in plan.rows if r.goal_id}
-    plan.goals = {
-        e.id: e.title
-        for e in await db.scalars(select(Entity).where(Entity.id.in_(goal_ids)))
-    } if goal_ids else {}  # fmt: skip
     return plan
 
 
@@ -246,7 +251,7 @@ async def decide(
     left; one already carried, dropped or with items to bring is 409."""
     _refuse(principal)
     plan = await _plan(db, lock=True)
-    row = next((r for r in plan.rows if r.id == milestone_id), None)
+    row = plan.first_of(milestone_id)
     if row is None:
         gone = await db.get(TrackMilestone, milestone_id)
         if gone is None or gone.roadmap_id is None:
