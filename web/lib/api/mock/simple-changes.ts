@@ -27,7 +27,8 @@ import { mockNowMs } from "./clock";
 import { draftDecisionNotes } from "./decision-notes";
 import { stableUuid } from "./ids";
 import { changeSentence } from "./simple-change-words";
-import { priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
+import { seedGoalBuckets } from "./goal-buckets";
+import { featureKeyOf, priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
 import {
   canDecideItem,
   canEditRoadmap,
@@ -565,9 +566,30 @@ function fixPlan(db: SimpleDb, op: string, itemId: string, depId: string): Recor
   return shiftPlan(items, itemId, depId);
 }
 
+/**
+ * changes._move_feature: set_goals on an item with a baseline feature moves the feature too, as a
+ * goal-bucket move does: the goal it now moves most becomes the feature's first goal link (what the
+ * dated goal buckets place it by), and the goal it showed under is dropped unless the item still
+ * serves it. A roadmap goal is the goal buckets' goal of the same name.
+ */
+function moveFeature(db: SimpleDb, key: string, goalIds: string[]): void {
+  const code = featureKeyOf(db, key);
+  const gb = (db.goal_buckets ??= seedGoalBuckets());
+  const f = code ? gb.features.find((x) => x.key.toLowerCase() === code.toLowerCase()) : undefined;
+  const ids = goalIds.flatMap((id) => {
+    const name = GOALS[Object.keys(GOALS).find((k) => goalId(k) === id) ?? ""];
+    const g = gb.goals.find((x) => !x.archived && (x.id === id || (!!name && x.title === name)));
+    return g ? [g.id] : [];
+  });
+  if (!f || !ids.length) return;
+  const shown = f.goal_ids[0];
+  f.goal_ids = [ids[0], ...f.goal_ids.filter((g) => g !== ids[0] && (g !== shown || ids.includes(shown)))];
+}
+
 function apply(db: SimpleDb, c: Change, values: Values, undo = false): void {
   if (KEYED.includes(c.op)) for (const [id, v] of Object.entries(values)) write(db, keyOf(db, id)!, v as Values, c.target);
   else write(db, keyOf(db, c.target.item_id)!, values, c.target);
+  if (c.op === "set_goals") moveFeature(db, keyOf(db, c.target.item_id)!, values.goal_ids as string[]);
   if (c.op === "accept_date_suggestion") {
     const s = db.suggestions.find((x) => x.id === c.target.suggestion_id);
     // plan-model: a slice's suggestion is decided with the item's other open slices (and undone with them).

@@ -20,8 +20,9 @@ Test cards (protects / fails_when / no_claim):
 - test_accepted_set_goals_moves_the_goal_bucket_link: protects=a commenter's proposed
   move of a planned item (one with a baseline feature) to another goal writes nothing,
   and once the decider accepts it, the goal buckets (what the dated view places it by)
-  list the new goal as its feature's first link, and the old one is gone;
-  fails_when=the feature stays under its old goal after the accept; no_claim=the web.
+  list the new goal as its feature's first link, and the old one is gone; the owner's own
+  move applies at once and its Undo puts the link back; fails_when=the feature stays
+  under its old goal after the accept, or Undo leaves it moved; no_claim=the web.
 - test_added_item_is_in_the_draft_only: protects=an added item is read by those who see
   the roadmap's working draft and never by others or by the published version (Detailed's
   rows are untouched); submitting the draft carries the item into the next version;
@@ -238,6 +239,18 @@ async def test_accepted_set_goals_moves_the_goal_bucket_link(client):
     r = await client.post(f"{CHANGES}/{c['id']}/accept", headers=w.as_("decider"), json={})
     assert r.status_code == 200, r.text
     assert r.json()["change"]["status"] == "accepted"
+    assert await links() == [quiet]
+    # The owner's own move applies at once, and its Undo puts the link back.
+    was = (await w.items(client))[item_id]["goal_ids"]
+    assert was[0] == quiet
+    r = await client.post(CHANGES, headers=w.as_("owner"), json={
+        "op": "set_goals", "target": {"item_id": item_id}, "before": {"goal_ids": was},
+        "after": {"goal_ids": [grow]}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    assert r.json()["change"]["status"] == "applied"
+    assert await links() == [grow]
+    r = await client.post(f"{CHANGES}/{r.json()['change']['id']}/undo", headers=w.as_("owner"))
+    assert r.status_code == 201, r.text
     assert await links() == [quiet]
 
 

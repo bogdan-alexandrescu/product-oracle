@@ -52,6 +52,11 @@ function planCode(db: SimpleDb, key: string): string | null {
   return m ? `F-${m[1]}` : (PLAN_EXISTING[key] ?? null);
 }
 
+/** The baseline feature key of an item (its plan code, else its own code), or null when it has none. */
+export function featureKeyOf(db: SimpleDb, key: string): string | null {
+  return planCode(db, key) ?? FEATURES[key]?.code ?? null;
+}
+
 /** The plan's engineer-weeks of a feature across its slices; null when it is all PM-owned (no engineer-weeks, as plan.py). */
 function planWeeks(code: string): number | null {
   const of = planSlices().filter((x) => x.feature_code === code);
