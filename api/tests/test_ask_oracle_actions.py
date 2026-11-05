@@ -545,7 +545,8 @@ async def test_an_allowed_route_that_pings_names_each_person_on_its_card(client)
             continue  # its card: test_a_reassigned_question_names_the_new_person
         m = await _called(client, ctx, "approver", {"action": n, "args": calls[n]})
         [card] = m["cards"]
-        assert f"{name} sees it in their Inbox; Slack is not connected." in card["summary"], card["summary"]
+        said = f"{name} sees it in their Inbox; Slack is not connected."
+        assert said in card["summary"], card["summary"]
         assert str(ctx.users["decider"].id) not in card["summary"]
 
 
@@ -737,7 +738,10 @@ async def test_a_question_names_whom_it_asks_and_a_reassigned_one_the_new_person
            "args": _pinging(ctx.users["decider"].id, entity)["create_question"]}  # fmt: skip
     [card] = (await _called(client, ctx, "owner", ask))["cards"]
     assert "entity “Night shift nurse”" in card["summary"], card["summary"]
-    assert f"{decider} gets a Slack message with the question and sees it in their Inbox." in card["summary"]
+    assert (
+        f"{decider} gets a Slack message with the question and sees it in their Inbox."
+        in (card["summary"])
+    )
     await _apply(client, ctx, "owner", card)
     assert [p.recipient_id for p in await pings_of(ctx)] == [ctx.users["decider"].id]
     async with tenant_session(ctx.tenant_id) as s:
@@ -749,7 +753,10 @@ async def test_a_question_names_whom_it_asks_and_a_reassigned_one_the_new_person
             "args": {"question_id": str(q.id),
                      "body": {"asked_to": str(ctx.users["approver"].id)}}}  # fmt: skip
     [card] = (await _called(client, ctx, "owner", move))["cards"]
-    assert f"{approver} gets a Slack message with the question and sees it in their Inbox." in card["summary"]
+    assert (
+        f"{approver} gets a Slack message with the question and sees it in their Inbox."
+        in (card["summary"])
+    )
     assert card["summary"].endswith(ask_actions.CANNOT_UNDO)
     await _apply(client, ctx, "owner", card)
     assert [p.recipient_id for p in await pings_of(ctx)][-1] == ctx.users["approver"].id
@@ -759,7 +766,10 @@ async def test_a_question_names_whom_it_asks_and_a_reassigned_one_the_new_person
             "args": {"question_id": str(q.id),
                      "body": {"asked_to": str(ctx.users["decider"].id)}}}  # fmt: skip
     [card] = (await _called(client, ctx, "owner", back))["cards"]
-    assert f"{decider} gets a Slack message with the question and sees it in their Inbox." in card["summary"]
+    assert (
+        f"{decider} gets a Slack message with the question and sees it in their Inbox."
+        in (card["summary"])
+    )
     r = await client.patch(f"/v1/questions/{q.id}", headers=ctx.as_("owner"),
                            json={"asked_to": str(ctx.users["decider"].id)})  # fmt: skip
     assert r.status_code == 200, r.text
@@ -806,7 +816,7 @@ async def test_a_card_names_an_intake_a_prd_version_and_a_document(client):
     assert f"PRD version “{doc.title} version {version.number}”" in card["summary"], card["summary"]
 
 
-# --------------------------------------------------------------------------- chat-latest-card fix round 2
+# ------------------------------------------------------------- chat-latest-card fix round 2
 # - test_a_pinging_card_says_truthfully_whether_slack_goes (from PR 1229's review):
 #   protects=the card says "<name> gets a Slack message … and sees it in their Inbox" only
 #   while Slack is connected and the person keeps the ping on; otherwise "<name> sees it in
