@@ -16,7 +16,7 @@ import { GoalsPanel } from "../home/_goals-panel";
 import { useGoals } from "../home/_use-goals";
 import { approvedRoadmaps, draftOnlyRoadmaps, EditPlanButton, PlanChanges, roadmapName, useRoadmapDocs } from "./_edit-plan";
 import { PlanInspector } from "./_inspector";
-import type { PlanItem } from "./_lib";
+import { wantedRow, type PlanItem } from "./_lib";
 import { MissingItem } from "./_missing-item";
 import { PrdCards } from "./_prd-cards";
 import { grouped, PlanTable, type GroupBy } from "./_table";
@@ -121,11 +121,8 @@ export default function PlanPage() {
   const data = q.data;
   const prdOrder = useMemo(() => (data?.prds ?? []).map((p) => p.document.slug), [data]);
   const ordered = data ? grouped(data.items, by, tags, prdOrder).rows : [];
-  // plan-open-from-simple: the key and PRD when both match, else the key alone (Simple's card can
-  // name another PRD than the Plan reads the item under); an item asked for and not found is
-  // never stood in for by the first row.
-  const wantedItem =
-    wanted == null ? undefined : (ordered.find((i) => i.key === wanted && wantedPrd != null && i.prd?.id === wantedPrd) ?? ordered.find((i) => i.key === wanted));
+  // plan-open-from-simple: an item asked for and not found is never stood in for by the first row.
+  const wantedItem = wanted == null ? undefined : wantedRow(ordered, wanted, wantedPrd);
   const fallback = wanted == null || picked != null ? ordered[0] : undefined;
   const item = ordered.find((i) => i.id === picked) ?? (picked == null ? wantedItem : undefined) ?? fallback ?? null;
   // Once per link: the asked-for row scrolls into view, and on a phone its sheet opens.

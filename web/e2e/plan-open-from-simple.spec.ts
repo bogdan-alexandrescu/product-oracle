@@ -1,3 +1,4 @@
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, openRoadmapItem } from "./helpers";
 import { expect, test, type Page } from "./test";
 
@@ -65,3 +66,17 @@ for (const [where, use] of [
     });
   });
 }
+
+/** A weekly report's item link names the PRD by its slug ("/plan?item=<prd>:<key>"): it lands on that item too. */
+test("a report's item link opens that item on the Plan", async ({ page }) => {
+  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "alignment-report"] as const);
+  await login(page);
+  await page.goto("/plan/reports");
+  await page.getByRole("link", { name: /week of Oct 12/ }).first().click();
+  const track = page.getByTestId("report-track").filter({ visible: true }).first();
+  await track.getByTestId("needs-attention").getByRole("link", { name: "Daily alert digest email" }).click();
+  await expect(page).toHaveURL(/\/plan\?item=usage-alerts:alert-digest$/);
+  await expect(page.locator('[data-testid="plan-row"][data-item="alert-digest"]')).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("plan-inspector").filter({ visible: true })).toContainText("Daily alert digest email");
+  await expect(page.getByTestId("plan-missing-item")).toHaveCount(0);
+});
