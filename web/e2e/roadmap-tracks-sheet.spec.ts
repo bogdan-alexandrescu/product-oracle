@@ -160,11 +160,11 @@ test.describe("Tracks sheet", () => {
     await r.getByRole("button", { name: "Paused" }).click();
     await expect(toasts(page)).toContainText("Pause proposed · waits for Avery Stone");
     await expect(r).not.toContainText("· Paused");
-    // After Withdraw the sheet reads its tracks again.
-    const reread = page.waitForResponse((res) => res.url().includes("/v1/simple/tracks") && res.request().method() === "GET");
     await toasts(page).getByRole("button", { name: "Withdraw" }).click();
     await expect(toasts(page)).toContainText("Withdrawn");
-    await reread;
+    // Read again after Withdraw, the track is as it was.
+    await expect(r).toContainText("No owner · 5 features");
+    await expect(r).not.toContainText("· Paused");
   });
 
   test("a viewer reads", async ({ page }) => {
