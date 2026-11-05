@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { PRIORITY_DUPLICATE_RUN, PRIORITY_NO_GOAL_RUN, PRIORITY_ROWLESS_RUN, PRIORITY_RUN } from "../lib/api/mock/runs";
+import { PRIORITY_DUPLICATE_RUN, PRIORITY_NO_GOAL_RUN, PRIORITY_ROWLESS_RUN, PRIORITY_RUN, PRIORITY_STALE_GOAL_RUN } from "../lib/api/mock/runs";
 import { login } from "./helpers";
 
 /**
@@ -251,6 +251,33 @@ test.describe("RP1 a: the run's priority order", () => {
     await expect(list.getByText("Gift receipt by email is in the approved PRD scope and not ranked")).toBeVisible();
   });
 
+  test("a goal rejected after the check refuses Approve order, named, and the band says it", async ({ page }) => {
+    await withScenario(page, "priority-order");
+    await login(page);
+    // The order is clean; its new feature serves Cut early churn, still proposed.
+    await page.goto(`/runs/${PRIORITY_STALE_GOAL_RUN}`);
+    await page.getByTestId("checkpoint-priority_order").getByRole("link", { name: "Review the order" }).click();
+    const band = page.getByTestId("snapshot-band");
+    await expect(band.getByRole("button", { name: "Approve order" })).toBeEnabled();
+    await expect(page.getByTestId("priority-row-N-10")).toContainText("Cut early churn");
+    const order = page.url();
+
+    // Then a person rejects that goal.
+    await page.goto("/baseline");
+    await page.getByRole("grid", { name: "Goals" }).getByRole("button", { name: "Cut early churn" }).click();
+    const d = page.getByRole("dialog", { name: "Cut early churn" });
+    await d.getByRole("button", { name: "Reject" }).click();
+    await d.getByRole("form", { name: "Reject" }).getByRole("button", { name: "Reject" }).click();
+    await expect(d.getByRole("status")).toContainText("Rejected");
+
+    await page.goto(order);
+    await band.getByRole("button", { name: "Approve order" }).click();
+    await expect(band).toContainText(STALE_GOAL);
+    await expect(band.getByTestId("cannot-approve")).toHaveText("1 blocking problem left. Order problems cannot be waived: request changes so the run names the goal.");
+    await expect(band.getByRole("button", { name: "Approve order" })).toBeDisabled();
+    await expect(band).toContainText("Proposed");
+  });
+
   test("a feature ranked twice is one problem, said once", async ({ page }) => {
     await withScenario(page, "priority-order");
     await login(page, "approver@example.com");
@@ -267,6 +294,7 @@ test.describe("RP1 a: the run's priority order", () => {
 // Review of PR 1244, round 3: an order's blocking problems are said in full under the band,
 // with what to do (order problems are never waived), at 1440 and on a phone.
 const NO_GOAL = "Gift notes at checkout is new and names no goal it serves: the run must name one";
+const STALE_GOAL = "Gift box sizes serves the goal Cut early churn, which was rejected after the order was checked: the run must name a goal of the Ground Truth";
 // The goal's key is no name: the sentence says "an unknown goal", the key in its tooltip.
 const UNKNOWN_GOAL = "Gift wrap choice names an unknown goal, which is not a goal in the Ground Truth: the run must name one that is";
 

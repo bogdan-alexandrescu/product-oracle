@@ -142,6 +142,16 @@ const PROBLEMS: Record<string, string> = {
 /** A goal the Ground Truth does not have: its key is all the run gave, so it has no name. */
 const isUnknownGoal = (g: { goal: string; title?: string | null }) => !g.title || g.title === g.goal;
 
+/**
+ * A run row's goals by their names: a new feature's goal that no live feature serves yet comes
+ * with its key as its title, so the company's goals name it; one they lack stays unknown.
+ */
+function withGoalNames(f: RankedFeature, names: Names | null | undefined): RankedFeature {
+  if (!names || !f.explanation.goals.some(isUnknownGoal)) return f;
+  const goals = f.explanation.goals.map((g) => (isUnknownGoal(g) && names.byKey.get(g.goal) ? { ...g, title: names.byKey.get(g.goal)!.title } : g));
+  return { ...f, explanation: { ...f.explanation, goals } };
+}
+
 /** A goal with no name: "Unknown goal", its key only in the tooltip. */
 function UnknownGoal({ goal }: { goal: string }) {
   return (
@@ -969,6 +979,8 @@ function SnapshotBand({ c, onDecided }: { c: CompareOut; onDecided: () => void }
       onDecided();
     } catch (e) {
       setError(e instanceof Error && e.message ? e.message : errorMessage(e));
+      // A refusal may add a problem to the order (a goal rejected since its check): read it again.
+      if (decision === "approved") onDecided();
     } finally {
       setBusy(false);
     }
@@ -1119,7 +1131,7 @@ function Priorities() {
   const byKey = new Map(cmp?.rows.map((c) => [c.key, c]) ?? []);
   // Run mode: the run's order, each row its live RankedFeature at the run's rank.
   const stored = new Map(cmp?.snapshot.ranking.map((f) => [f.key, f]) ?? []);
-  const runRows = cmp?.rows.map((c) => ({ ...(stored.get(c.key) ?? placeholder(c, method)), rank: c.run_rank }));
+  const runRows = cmp?.rows.map((c) => withGoalNames({ ...(stored.get(c.key) ?? placeholder(c, method)), rank: c.run_rank }, names));
   const rows = cmp ? runRows : r?.features;
   const features = rows ?? [];
   // The selected feature, else the top of the ranking.

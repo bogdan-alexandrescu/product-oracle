@@ -209,6 +209,8 @@ export interface RunsContext {
   acceptNewFeatures?: (snap: SnapshotRow, by: string | null, scope: PrdScopeOut["features"]) => void;
   /** The baseline's non-rejected goal keys (api run_order.Known.goals): only these count as a new feature's goal. Absent: any named goal counts (older mock data). */
   goalKeys?: () => string[];
+  /** A goal's title in the baseline, rejected ones too (api stale_goals names a rejected goal by it). */
+  goalTitle?: (key: string) => string | undefined;
   uuid: () => string;
   now: () => string;
 }
@@ -1450,7 +1452,7 @@ function decideOrder(ctx: Pick<RunsContext, "db" | "now" | "documents" | "accept
  * As oracle.priorities.run_order.stale_goals at approval: each goal an order's new feature serves
  * that is no goal of the Ground Truth now is a blocking unknown_goal, added to the order's check.
  */
-function recheckOrderGoals(ctx: Pick<RunsContext, "db" | "goalKeys">, cp: CheckpointOut): PriorityCheck["problems"] {
+function recheckOrderGoals(ctx: Pick<RunsContext, "db" | "goalKeys" | "goalTitle">, cp: CheckpointOut): PriorityCheck["problems"] {
   const goals = goalSet(ctx);
   const snap = (ctx.db.priority_snapshots ?? []).find((x) => x.id === cp.payload.priority_snapshot_id && x.status === "proposed");
   if (!goals || !snap) return [];
@@ -1460,9 +1462,9 @@ function recheckOrderGoals(ctx: Pick<RunsContext, "db" | "goalKeys">, cp: Checkp
   for (const row of snap.ranking.filter((x) => x.new)) {
     for (const g of row.explanation.goals ?? []) {
       if (goals.has(String(g.goal)) || g.contribution === 0) continue;
-      const message =
-        g.title && g.title !== g.goal
-          ? `${row.title} serves the goal ${g.title}, which was rejected after the order was checked: the run must name a goal of the Ground Truth`
+      const title = ctx.goalTitle?.(String(g.goal));
+      const message = title
+          ? `${row.title} serves the goal ${title}, which was rejected after the order was checked: the run must name a goal of the Ground Truth`
           : `${row.title} names the goal ${g.goal}, which is not a goal in the Ground Truth: the run must name one that is`;
       if (said.has(message)) continue;
       said.add(message);
@@ -3122,6 +3124,7 @@ export const PRIORITY_BLOCKED_RUN = "7a11c0de-0000-4000-8000-0000000000c9";
 export const PRIORITY_NO_GOAL_RUN = "7a11c0de-0000-4000-8000-0000000000ca";
 export const PRIORITY_ROWLESS_RUN = "7a11c0de-0000-4000-8000-0000000000cb";
 export const PRIORITY_DUPLICATE_RUN = "7a11c0de-0000-4000-8000-0000000000cc";
+export const PRIORITY_STALE_GOAL_RUN = "7a11c0de-0000-4000-8000-0000000000cd";
 
 /**
  * Saved addresses: one feature ranked well above the live ranking (differs_from_live,
@@ -3191,6 +3194,15 @@ const GIFT_CARDS_ORDER: OrderSpec = {
   ],
 };
 
+/** Gift boxes: clean; its new feature serves Cut early churn, a proposed goal a person may reject before Approve. */
+const GIFT_BOXES_ORDER: OrderSpec = {
+  method: "goal_weighted",
+  order: [
+    { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
+    { key: "N-10", title: "Gift box sizes", goal: "g.early-churn", weight: 0.2, contribution: 1, confidence: 0.5, effort: 1, score: 0.1, explanation: "New in this PRD. Buyers pick a box that fits." },
+  ],
+};
+
 /** A Baseline to PRD run for `document`, its baseline and feature set approved, waiting at the priority stop with `spec`. */
 function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, document: string, created_at: string, spec: OrderSpec, briefTitle?: string, scope?: PrdScopeOut["features"]): RunOut {
   const { from, now } = seedClock();
@@ -3238,6 +3250,7 @@ export function seedPriorityRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
   seedAtPriority(db, ctx, PRIORITY_NO_GOAL_RUN, "gift-notes", "2026-10-18T08:00:00Z", GIFT_NOTES_ORDER, "Gift notes");
   seedAtPriority(db, ctx, PRIORITY_ROWLESS_RUN, "gift-receipts", "2026-10-18T07:00:00Z", GIFT_RECEIPTS_ORDER, "Gift receipts", GIFT_RECEIPTS_SCOPE);
   seedAtPriority(db, ctx, PRIORITY_DUPLICATE_RUN, "gift-cards", "2026-10-18T06:00:00Z", GIFT_CARDS_ORDER, "Gift cards");
+  seedAtPriority(db, ctx, PRIORITY_STALE_GOAL_RUN, "gift-boxes", "2026-10-18T05:00:00Z", GIFT_BOXES_ORDER, "Gift boxes");
   const checkout = ctx.documents.find((d) => d.slug === "checkout-redesign");
   const earlier = db.runs.find((r) => r.document_slug === "checkout-redesign") ?? db.runs[0];
   const spec: OrderSpec = { method: "goal_weighted", order: ranking("goal_weighted").features.slice(0, 4).map((f) => ({ key: f.key, score: f.score ?? 0, explanation: "As the live ranking" })) };
