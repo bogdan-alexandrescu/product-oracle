@@ -266,11 +266,12 @@ async def trash_goal(
     for row in await db.scalars(
         select(RoadmapItem).where(RoadmapItem.goal_ids.contains([goal.id])).with_for_update()
     ):
-        items.append(ItemGoalsSnap(item_id=row.id, goal_ids=list(row.goal_ids)))
         ids = [i for i in row.goal_ids if i != goal.id]
-        if to_goal_id is not None and to_goal_id not in ids:
-            ids = [to_goal_id, *ids]
-        row.goal_ids = ids
+        added = to_goal_id if to_goal_id is not None and to_goal_id not in ids else None
+        at = row.goal_ids.index(goal.id)
+        items.append(ItemGoalsSnap(item_id=row.id, goal_id=goal.id, index=at,
+                                   added_goal_id=added))  # fmt: skip
+        row.goal_ids = [added, *ids] if added else ids
         moved.append(str(row.id))
     to = str(to_goal_id) if to_goal_id else None
     entry = await _new_entry(db, principal, goal, [goal],
@@ -352,7 +353,7 @@ async def delete_goal(
     if to_goal_id is not None:
         to = await goal_buckets._entity(db, to_goal_id, "goal")
         if to.id == g.id or to.status == "rejected":
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Pick another goal")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Pick another goal")
     entry, undo = await trash_goal(db, principal, g, to_goal_id, reason)
     out = TrashedOut(entry=_entry_out(entry), can_restore=_restores(principal, entry),
                      undo=goal_buckets._signed(principal.tenant_id, undo))  # fmt: skip

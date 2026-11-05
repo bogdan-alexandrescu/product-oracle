@@ -86291,22 +86291,36 @@
             "format": "uuid",
             "title": "Item Id"
           },
-          "goal_ids": {
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "type": "array",
-            "title": "Goal Ids"
+          "goal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Goal Id"
+          },
+          "index": {
+            "type": "integer",
+            "title": "Index",
+            "default": 0
+          },
+          "added_goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Added Goal Id"
           }
         },
         "type": "object",
         "required": [
           "item_id",
-          "goal_ids"
+          "goal_id"
         ],
         "title": "ItemGoalsSnap",
-        "description": "A roadmap item's own goals (``goal_ids``) before a goal's delete took one off."
+        "description": "What a goal's delete did to a roadmap item's own goals (``goal_ids``): it took\n``goal_id`` off from place ``index`` and, if ``added_goal_id`` is set, added that goal.\nUndo reverses just that, so goal changes made since stay."
       },
       "ItemHistoryOut": {
         "properties": {

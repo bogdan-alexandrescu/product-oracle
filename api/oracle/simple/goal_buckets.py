@@ -116,10 +116,14 @@ class GoalSnap(BaseModel):
 
 
 class ItemGoalsSnap(BaseModel):
-    """A roadmap item's own goals (``goal_ids``) before a goal's delete took one off."""
+    """What a goal's delete did to a roadmap item's own goals (``goal_ids``): it took
+    ``goal_id`` off from place ``index`` and, if ``added_goal_id`` is set, added that goal.
+    Undo reverses just that, so goal changes made since stay."""
 
     item_id: uuid.UUID
-    goal_ids: list[uuid.UUID]
+    goal_id: uuid.UUID
+    index: int = 0
+    added_goal_id: uuid.UUID | None = None
 
 
 class GoalBucketsUndo(BaseModel):
@@ -524,6 +528,15 @@ async def move_bucket_feature(
     return GoalBucketWrite(undo=_signed(principal.tenant_id, undo))
 
 
+def _goal_back(ids: list[uuid.UUID], it: ItemGoalsSnap) -> list[uuid.UUID]:
+    """The item's goals with a delete's change reversed: the goal it added off, the goal it
+    took off back in its place."""
+    ids = [i for i in ids if i != it.added_goal_id]
+    if it.goal_id not in ids:
+        ids.insert(min(it.index, len(ids)), it.goal_id)
+    return ids
+
+
 @router.post("/undo", response_model=GoalBucketsOut, name="undo_goal_buckets")
 async def undo_goal_buckets(
     body: GoalBucketsUndo, principal: Approver, db: TenantDB
@@ -543,7 +556,7 @@ async def undo_goal_buckets(
         for it in body.items:
             row = await db.get(RoadmapItem, it.item_id, with_for_update=True)
             if row is not None:
-                row.goal_ids = list(it.goal_ids)
+                row.goal_ids = _goal_back(list(row.goal_ids), it)
     if body.added_goal_id is not None:
         (await _entity(db, body.added_goal_id, "goal")).status = "rejected"
     await db.commit()

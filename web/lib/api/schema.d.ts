@@ -27865,7 +27865,9 @@ export interface components {
         };
         /**
          * ItemGoalsSnap
-         * @description A roadmap item's own goals (``goal_ids``) before a goal's delete took one off.
+         * @description What a goal's delete did to a roadmap item's own goals (``goal_ids``): it took
+         *     ``goal_id`` off from place ``index`` and, if ``added_goal_id`` is set, added that goal.
+         *     Undo reverses just that, so goal changes made since stay.
          */
         ItemGoalsSnap: {
             /**
@@ -27873,8 +27875,18 @@ export interface components {
              * Format: uuid
              */
             item_id: string;
-            /** Goal Ids */
-            goal_ids: string[];
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+            /**
+             * Index
+             * @default 0
+             */
+            index: number;
+            /** Added Goal Id */
+            added_goal_id?: string | null;
         };
         /** ItemHistoryOut */
         ItemHistoryOut: {
