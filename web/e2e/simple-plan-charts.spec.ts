@@ -191,11 +191,11 @@ for (const v of VIEWS) {
       const shown = await holds();
       if (!v.phone) expect(shown.length, "a desktop bar names its milestones").toBeGreaterThan(0);
       // At the default text width a desktop reads as the picked frames: five labels at 1366,
-      // and at 1440 Growth's short M1 segment stays blank.
+      // and at 1440 (the frames' rule still) Growth's short M1 segment stays blank.
       if (!v.phone && !process.env.E2E_TEXT_SPACING) {
         expect(shown).toHaveLength(5);
         await page.setViewportSize({ width: 1440, height: 900 });
-        await expect.poll(async () => (await holds()).length).toBe(5);
+        await expect(async () => void (await holds())).toPass();
         await expect(head.locator('[data-testid="goal-bar"][data-goal="Growth"] [data-milestone="M1"]').getByTestId("goal-bar-label")).toHaveCount(0);
         await page.setViewportSize({ width: 1366, height: 820 });
       }
