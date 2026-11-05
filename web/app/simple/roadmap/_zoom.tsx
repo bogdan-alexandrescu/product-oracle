@@ -7,6 +7,7 @@ import { MsLayer, type MsLane, type MsRow } from "./_milestones";
 import {
   memo,
   useContext,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -18,7 +19,7 @@ import {
 } from "react";
 
 import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
-import { addMonths } from "@/lib/dates";
+import { addMonths, calendarDay } from "@/lib/dates";
 
 import { FixButtons, type Act } from "./_card";
 import {
@@ -234,6 +235,9 @@ export interface TimelineProps extends Common {
 }
 
 const LABEL_W = 232;
+/** A milestone label's "+N" chip, about its width. */
+const MS_CHIP_W = 30;
+const fullDay = (d: string) => calendarDay(d, { month: "short", day: "numeric", year: "numeric" });
 const ROW_H = 34;
 
 /** The Timeline (QR1 A): six months around today, one row per item, names fixed on the left;
@@ -453,25 +457,52 @@ function DayChart(props: TimelineProps) {
     lastEnd = end;
   }
   // A milestone whose line has slid under the names column keeps its label whole at the view's
-  // left edge, till all of it would be gone; then the label goes too. A label gives way to the
-  // next one, scrolled or not: it ends short of it (its words cut with "…", whole in its hover)
-  // and goes once too little of it is left to read.
-  const milestones = (data.milestones ?? [])
+  // left edge, till all of it would be gone; then the label goes too. Re-review (Nov 5): no name
+  // is ever lost. A label that would meet the one before folds into that one's "+N" chip, right
+  // after its label; a label ends short of the next (its words cut with "…", whole in its tip).
+  const marks = (data.milestones ?? [])
     .filter((m) => m.date && m.status !== "dropped" && m.date >= t0 && m.date <= t1)
     .sort((a, b) => (a.date as string).localeCompare(b.date as string))
     .map((m) => {
       const at = x(m.date as string);
       const words = `◆ ${m.name} · ${shortDay(m.date as string)}`;
       const left = fit ? at : Math.max(at, sl);
-      return { m, at, words, left, room: Infinity, gone: !fit && at + 26 + words.length * 7 < sl };
+      return { m, at, words, left, gone: !fit && at + 26 + words.length * 7 < sl };
     });
-  let nextStart = Infinity;
-  for (const m of [...milestones].reverse()) {
-    if (m.gone) continue;
-    m.room = nextStart - 6 - (m.left + 4);
-    if (m.room < 56) m.gone = true;
-    else nextStart = m.left + 4;
+  const msGroups: { head: (typeof marks)[number]; more: (typeof marks)[number][]; room: number }[] = [];
+  for (const k of marks) {
+    if (k.gone) continue;
+    const g = msGroups[msGroups.length - 1];
+    const room = g ? k.left - 6 - g.head.left - (g.more.length ? MS_CHIP_W + 2 : 0) : Infinity;
+    if (g && room < 56) g.more.push(k);
+    else {
+      if (g) g.room = room;
+      msGroups.push({ head: k, more: [], room: Infinity });
+    }
   }
+  const msById = new Map(marks.map((k) => [k.m.id, k]));
+  const [msTip, setMsTip] = useState<{ id: string; left: number; top: number } | null>(null);
+  const [msList, setMsList] = useState<string | null>(null);
+  const [msCard, setMsCard] = useState<string | null>(null);
+  useEffect(() => {
+    if (!msCard && !msList) return;
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setMsCard(null);
+      setMsList(null);
+    };
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [msCard, msList]);
+  const msWords = (m: (typeof marks)[number]["m"]) =>
+    `${m.name}, ${fullDay(m.date as string)}${m.done_when.length ? ` · counts when ${m.done_when.join("; ")}` : ""}`;
+  // A tip or a card stays inside the chart's view, right of the names column.
+  const inView = (l: number, width: number) => Math.max(labelW + sl + 6, Math.min(l, sl + w - width - 6));
+  const openMs = (id: string) => {
+    setMsList(null);
+    setMsTip(null);
+    setMsCard((c) => (c === id ? null : id));
+  };
   // roadmap-r2: the Gantt's moves. A drag past DRAG_PX moves the bar by whole days (an end
   // grabbed near the bar's edge, grabAt, moves only that end); a shorter one is a click. A
   // finger picks a bar up with the Gantt's long press first. The arrow keys move a focused
@@ -747,28 +778,142 @@ function DayChart(props: TimelineProps) {
           </span>
           {/* approved-roadmap-to-simple: the roadmap's milestones (an approved version's too),
            * each a dashed line on its day with its name, as the Gantt marks them. */}
-          {milestones.map(({ m, at, words, left, room, gone }) => (
-            <div key={m.id}>
-              {/* A line under the names column would show through a goal's header row. */}
-              {(fit || at >= sl) && (
-                <div
-                  data-testid="timeline-milestone-line"
-                  className="pointer-events-none absolute top-11 bottom-0 z-10 border-l-2 border-dashed border-text2"
-                  style={{ left: labelW + at }}
-                />
-              )}
-              {!gone && (
-                <span
-                  data-testid="timeline-milestone"
-                  title={`${m.name}, ${shortDay(m.date as string)}${m.done_when.length ? `: counts when ${m.done_when.join("; ")}` : ""}`}
-                  className="absolute top-[21px] z-20 overflow-hidden rounded-full border border-line bg-surface px-2 text-xs leading-4 text-ellipsis whitespace-nowrap text-text"
-                  style={{ left: labelW + left + 4, maxWidth: room < Infinity ? room : undefined }}
-                >
-                  {words}
-                </span>
+          {marks.map(({ m, at }) =>
+            // A line under the names column would show through a goal's header row.
+            fit || at >= sl ? (
+              <button
+                key={m.id}
+                type="button"
+                data-testid="timeline-milestone-line"
+                data-day={m.date}
+                aria-label={msWords(m)}
+                onPointerEnter={(e) => setMsTip({ id: m.id, left: labelW + at + 8, top: e.clientY - e.currentTarget.getBoundingClientRect().top + 44 + 12 })}
+                onPointerMove={(e) => setMsTip({ id: m.id, left: labelW + at + 8, top: e.clientY - e.currentTarget.getBoundingClientRect().top + 44 + 12 })}
+                onPointerLeave={() => setMsTip(null)}
+                onFocus={() => setMsTip({ id: m.id, left: labelW + at + 8, top: 48 })}
+                onBlur={() => setMsTip(null)}
+                onClick={() => openMs(m.id)}
+                className="absolute top-11 bottom-0 z-[25] w-[6px] cursor-pointer border-l-2 border-dashed border-text2 focus-visible:outline-2 focus-visible:outline-accent"
+                style={{ left: labelW + at }}
+              />
+            ) : null,
+          )}
+          {msGroups.map(({ head: { m, left, words }, more, room }) => (
+            <div
+              key={m.id}
+              className="absolute top-[21px] z-[25] flex items-start gap-0.5"
+              style={{ left: labelW + left + 4 }}
+            >
+              <button
+                type="button"
+                data-testid="timeline-milestone"
+                aria-label={msWords(m)}
+                aria-expanded={msCard === m.id}
+                onPointerEnter={(e) => setMsTip({ id: m.id, left: labelW + left + 4, top: 42 + (e.currentTarget.offsetHeight - 18) })}
+                onPointerLeave={() => setMsTip(null)}
+                onFocus={() => setMsTip({ id: m.id, left: labelW + left + 4, top: 42 })}
+                onBlur={() => setMsTip(null)}
+                onClick={() => openMs(m.id)}
+                className="min-w-0 cursor-pointer overflow-hidden rounded-full border border-line bg-surface px-2 text-xs leading-4 text-ellipsis whitespace-nowrap text-text hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+                style={{ maxWidth: room < Infinity ? room : undefined }}
+              >
+                {words}
+              </button>
+              {more.length > 0 && (
+                <div className="group relative flex-none">
+                  <button
+                    type="button"
+                    data-testid="timeline-milestone-more"
+                    aria-label={`${more.length} more ${more.length === 1 ? "milestone" : "milestones"}: ${more.map((k) => k.m.name).join(", ")}`}
+                    aria-expanded={msList === m.id}
+                    onClick={() => setMsList((l) => (l === m.id ? null : m.id))}
+                    className="cursor-pointer rounded-full border border-line bg-surface px-1.5 text-xs leading-4 font-semibold text-text2 hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+                    style={{ minWidth: MS_CHIP_W - 4 }}
+                  >
+                    +{more.length}
+                  </button>
+                  <div className={`absolute top-full left-0 z-40 pt-1 ${msList === m.id ? "block" : "hidden group-focus-within:block group-hover:block"}`}>
+                    <ul
+                      data-testid="timeline-milestone-list"
+                      aria-label="More milestones here"
+                      className="min-w-48 rounded-lg border border-line bg-surface py-1 shadow-lg"
+                    >
+                      {more.map((k) => (
+                        <li key={k.m.id}>
+                          <button
+                            type="button"
+                            data-testid="timeline-milestone-entry"
+                            aria-label={msWords(k.m)}
+                            onClick={() => openMs(k.m.id)}
+                            className="block w-full px-3 py-1 text-left text-xs whitespace-nowrap text-text hover:bg-surface2 focus-visible:bg-surface2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+                          >
+                            {k.words}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
               )}
             </div>
           ))}
+          {msTip && msById.has(msTip.id) && (
+            <span
+              data-testid="timeline-milestone-tip"
+              role="tooltip"
+              className="pointer-events-none absolute z-40 max-w-80 rounded bg-tip px-2 py-0.5 text-xs text-tip-text"
+              style={{ left: inView(msTip.left, 240), top: msTip.top }}
+            >
+              {msWords(msById.get(msTip.id)!.m)}
+            </span>
+          )}
+          {msCard &&
+            msById.has(msCard) &&
+            (() => {
+              const { m, at } = msById.get(msCard)!;
+              const gates = m.item_ids.map((id) => data.items.find((i) => i.id === id)).filter((i) => i !== undefined);
+              return (
+                <div
+                  data-testid="timeline-milestone-card"
+                  role="dialog"
+                  aria-label={`${m.name}, ${fullDay(m.date as string)}`}
+                  className="absolute top-12 z-40 flex w-72 flex-col gap-2 rounded-xl border border-line bg-surface p-3 text-sm shadow-xl"
+                  style={{ left: inView(labelW + at + 4, 288) }}
+                >
+                  <div className="flex items-start gap-2">
+                    <span className="min-w-0 flex-1 font-semibold text-text">◆ {m.name}</span>
+                    <button
+                      type="button"
+                      aria-label="Close"
+                      onClick={() => setMsCard(null)}
+                      className="flex-none rounded px-1 text-text2 hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-accent"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <span className="text-text2">{fullDay(m.date as string)}</span>
+                  {m.done_when.length > 0 && <span className="text-text">Counts when {m.done_when.join("; ")}</span>}
+                  {gates.length > 0 && (
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs font-semibold text-text2">Waits on</span>
+                      {gates.map((i) => (
+                        <button
+                          key={i.id}
+                          type="button"
+                          onClick={() => {
+                            setMsCard(null);
+                            onOpen(i.key);
+                          }}
+                          className="text-left text-accent-ink hover:underline focus-visible:outline-2 focus-visible:outline-accent"
+                        >
+                          {i.title}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           {/* Quick add's drop targets: a quarter's columns (transparent, under the rows). */}
           {props.canChange &&
             quarters(t0, t1).map((q) => (
@@ -858,9 +1003,10 @@ function DayChart(props: TimelineProps) {
             trackW={trackW}
             phone={phone}
             span={[labelW + sl, sl + w]}
-            keepOff={milestones
-              .filter((m) => !m.gone)
-              .map((m): [number, number] => [labelW + m.left + 4, labelW + m.left + 4 + Math.min(m.room, 16 + m.words.length * 7)])}
+            keepOff={msGroups.map(({ head, more, room }): [number, number] => [
+              labelW + head.left + 4,
+              labelW + head.left + 4 + Math.min(room, 16 + head.words.length * 7) + (more.length ? MS_CHIP_W + 2 : 0),
+            ])}
           />
         </div>
       </div>
