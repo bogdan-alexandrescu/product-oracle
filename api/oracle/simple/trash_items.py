@@ -417,11 +417,20 @@ _OWN = frozenset({"id", "roadmap_version_id", "draft_roadmap_id", "simple_draft_
                   "trash_entry_id"})  # fmt: skip
 
 
+async def _person(db: AsyncSession, user_id: uuid.UUID | None) -> uuid.UUID | None:
+    """``user_id`` when it is a person's (an entry's deleted_by may be a token's id)."""
+    from oracle.auth.models import User
+
+    return user_id if user_id and await db.get(User, user_id) else None
+
+
 async def _reopened(db: AsyncSession, row: RoadmapItem, principal: Any, entry: TrashEntry) -> Any:
     """A feature only ever in a Simple draft that was approved while it was in Trash (so
     without it): its row moves to the roadmap's open draft, the working one (opened on the
     published version when there is none) or, while one waits for approval, that one; the
-    change that added it counts in that draft too, so the draft can be sent with it."""
+    change that added it counts in that draft too, so the draft can be sent with it. A
+    draft opened here is a person's, as the rest of Simple: whoever restores it, or for a
+    workspace API token (no person), whoever deleted it, else who opened the approved one."""
     from oracle.simple.additions import _shown_version
     from oracle.simple.drafts import OPEN
     from oracle.simple.models import SimpleChange, SimpleDraft
@@ -436,7 +445,10 @@ async def _reopened(db: AsyncSession, row: RoadmapItem, principal: Any, entry: T
     )
     d = next((x for x in open_ if x.status == "working"), None) or next(iter(open_), None)
     if d is None:
-        me = getattr(principal, "id", None) or entry.deleted_by
+        me = _me(principal) or await _person(db, entry.deleted_by)
+        if me is None:
+            own = await db.get(SimpleDraft, row.simple_draft_id) if row.simple_draft_id else None
+            me = own.created_by if own else entry.deleted_by
         base = await _shown_version(db, doc, draft=False)
         d = SimpleDraft(document_id=doc, base_version_id=base, status="working", overlay={},
                         created_by=me, participant_ids=[me])  # fmt: skip
