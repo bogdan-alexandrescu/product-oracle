@@ -190,11 +190,11 @@ def amount(v: float, unit: str) -> str:
 
 
 def _short(d: date | None) -> str | None:
-    return f"{d:%b} {d.day}" if d else None
+    return company_time.calendar_day(d) if d else None
 
 
 def in_words(d: date) -> str:
-    return f"{d:%b} {d.day}, {d.year}"
+    return company_time.calendar_day_with_year(d)
 
 
 def goal_status(current: float | None, target: float) -> Status:
@@ -378,7 +378,7 @@ async def build(db: AsyncSession, can_edit: bool) -> GoalMapOut:
                 areas=list(m.gate_area_ids or []),
                 depends=[m.after_id] if m.after_id in on_map else [],
                 # Undated (a proposal, say): this month, until it gets a date.
-                month=f"{m.target_date or today:%b}",
+                month=company_time.calendar_month(m.target_date or today),
                 due=_short(m.target_date),
                 days=list(days),
                 confirmed=m.gate_confirmed_by,
@@ -435,7 +435,7 @@ async def build(db: AsyncSession, can_edit: bool) -> GoalMapOut:
         guardrail=guardrail,
         milestones=ms_out,
         features=list(feats.values()),
-        today=f"{today:%b} {today.day}",
+        today=company_time.calendar_day(today),
         reps=reps,
         approver=owner.name if owner else None,
         can_edit=can_edit,

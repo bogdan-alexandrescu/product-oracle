@@ -5909,14 +5909,24 @@ class CheckedItems:
 
 async def _version_source(db: AsyncSession, source_id: uuid.UUID) -> Any:
     """A PRD version's slug, number and title (once per Inbox call, oracle.runs.batch)."""
-    return await once(
-        ("version_source", source_id),
-        lambda: _source_of(db, source_id),
-    )
+    found = await _prd_source(db, source_id)
+    return found[0] if found is not None else None
 
 
-async def _source_of(db: AsyncSession, source_id: uuid.UUID) -> Any:
-    return (await docs_service.version_sources(db, [source_id])).get(source_id)
+async def _prd_source(db: AsyncSession, source_id: uuid.UUID) -> tuple[VersionSource, str] | None:
+    """A PRD version's source and its markdown, in one read (once per Inbox call)."""
+    return await once(("version_source", source_id), lambda: _source_of(db, source_id))
+
+
+async def _source_of(db: AsyncSession, source_id: uuid.UUID) -> tuple[VersionSource, str] | None:
+    row = (
+        await db.execute(
+            select(DocumentVersion, Document)
+            .join(Document, Document.id == DocumentVersion.document_id)
+            .where(DocumentVersion.id == source_id)
+        )
+    ).first()
+    return (docs_service.version_source(*row), row[0].markdown) if row is not None else None
 
 
 async def _section_keys(db: AsyncSession, version_id: uuid.UUID) -> list[str]:
@@ -5934,12 +5944,13 @@ async def items_check(db: AsyncSession, run: Run, text: str) -> roadmap.ItemsChe
 async def _checked(
     db: AsyncSession, run: Run, text: str
 ) -> tuple[roadmap.ItemsCheck, str | None, int | None, set[str] | None]:
-    slug = version = prd_id = None
+    slug = version = prd_id = markdown = None
     keys: set[str] | None = None
     source_id = _source_id(run)
     if source_id is not None:
-        source = await _version_source(db, source_id)
-        if source is not None:
+        found = await _prd_source(db, source_id)
+        if found is not None:
+            source, markdown = found
             slug, version, prd_id = source.slug, source.version, source.document_id
             keys = set(
                 await once(("section_keys", source_id), lambda: _section_keys(db, source_id))
@@ -5950,23 +5961,21 @@ async def _checked(
     check = await roadmap.check_items_async(
         text, prd_slug=slug, prd_version=version, prd_sections=keys, date_bases=bases
     )
-    if source_id is not None and check.items:
-        check = await _with_work_problems(db, source_id, check)
+    if source_id is not None and markdown is not None and check.items:
+        check = await _with_work_problems(db, source_id, markdown, check)
     return check, slug, version, keys
 
 
 async def _with_work_problems(
-    db: AsyncSession, source_id: uuid.UUID, check: roadmap.ItemsCheck
+    db: AsyncSession, source_id: uuid.UUID, markdown: str, check: roadmap.ItemsCheck
 ) -> roadmap.ItemsCheck:
-    """``check`` with the items' problems with the work the PRD version planned from its
-    brief's answers (walk 2 problem 19: a finding-out is never a blocker). A new check:
-    ``check`` may be the parse cache's."""
+    """``check`` with the items' problems with the work the PRD version (``markdown``)
+    planned from its brief's answers (walk 2 problem 19: a finding-out is never a blocker).
+    A new check: ``check`` may be the parse cache's."""
     from oracle.intake import discovery
 
-    prd = await db.get(DocumentVersion, source_id)
-    if prd is None:
-        return check
-    found = discovery.items_problems(check.items, await discovery.version_work(db, prd.markdown))
+    work = await once(("version_work", source_id), lambda: discovery.version_work(db, markdown))
+    found = discovery.items_problems(check.items, work)
     if not found:
         return check
     out = roadmap.ItemsCheck(list(check.items), list(check.problems), list(check.resolutions))

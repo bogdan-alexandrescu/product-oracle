@@ -31,6 +31,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import company_time
 from oracle.baseline.models import Edge, Entity
 from oracle.currentstate.models import PROOF_KINDS, FeatureProof, FeatureState
 from oracle.currentstate.schemas import FeatureProofOut, FeatureStateOut, FeatureStatesOut
@@ -271,8 +272,9 @@ async def read_measured(db: AsyncSession, f: Entity, proof: FeatureProof, now: d
         value, week, unit = latest
         number = f"{value:,.0f}" if value == value.to_integral_value() else f"{value:,}"
         proof.value = f"{number} {unit}".strip()
-        proof.period = week.strftime("%b")
-    proof.still_true = bool(proof.value) and not _past_period(proof.period, now)
+        proof.period = company_time.calendar_month(week)
+    month = company_time.month_in_words(now, await company_time.company_time_zone(db))
+    proof.still_true = bool(proof.value) and not _past_period(proof.period, month)
     return latest is not None and bool(proof.still_true)
 
 
@@ -296,8 +298,9 @@ READERS: dict[str, Reader] = {
 }
 
 
-def _past_period(period: str | None, now: datetime) -> bool:
-    return bool(period) and period != now.strftime("%b")
+def _past_period(period: str | None, month: str) -> bool:
+    """A measured proof's month (``period``) is not the company's month now (``month``)."""
+    return bool(period) and period != month
 
 
 def _ok(proof: FeatureProof) -> bool:
@@ -389,8 +392,8 @@ async def _goals(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, str]
     return out
 
 
-def _proof_out(p: FeatureProof, now: datetime) -> FeatureProofOut:
-    note = NOT_READ_YET if p.kind == "measured" and _past_period(p.period, now) else None
+def _proof_out(p: FeatureProof, month: str) -> FeatureProofOut:
+    note = NOT_READ_YET if p.kind == "measured" and _past_period(p.period, month) else None
     return FeatureProofOut(kind=p.kind, count=p.count, total=p.total, value=p.value,  # type: ignore[arg-type]
                            period=p.period, ok=p.ok, still_true=p.still_true,
                            checked_at=p.checked_at, note=note)  # fmt: skip
@@ -432,6 +435,7 @@ async def outs(db: AsyncSession, features: list[Entity], now: datetime) -> list[
         if fid is not None and t.status in UNDER_WAY:
             under_way.add(fid)
     goals = await _goals(db, ids)
+    month = company_time.month_in_words(now, await company_time.company_time_zone(db))
     out = []
     for f in features:
         st = states.get(f.id)
@@ -465,7 +469,7 @@ async def outs(db: AsyncSession, features: list[Entity], now: datetime) -> list[
                 answered_at=st.answered_at if st else None,
                 moved_at=st.moved_at if st else None,
                 move_how=_move_how(st),  # type: ignore[arg-type]
-                proofs=[_proof_out(p, now) for p in ps],
+                proofs=[_proof_out(p, month) for p in ps],
                 item_ids=[i.id for i in items.get(f.id, [])],
             )
         )

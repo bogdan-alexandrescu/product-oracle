@@ -20,13 +20,13 @@ a carried decision or drops a carried item without saying why.
 import re
 import uuid
 from dataclasses import dataclass, field
-from datetime import date
 from typing import Any
 
 from pydantic import BaseModel
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import company_time
 from oracle.decisions import standing
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document, DocumentVersion
@@ -246,11 +246,6 @@ async def of_run(db: AsyncSession, run: Any) -> Inputs | None:
 # --- the writer's prompt -------------------------------------------------------------------
 
 
-def _month_first(iso: str) -> str:
-    d = date.fromisoformat(iso)
-    return f"{d:%b} {d.day}, {d.year}"
-
-
 MAX_OLD_TEXT = 30_000
 
 
@@ -278,7 +273,7 @@ def prompt_lines(got: Inputs) -> list[str]:
     lines.append("Carried verified estimates and commitments:")
     lines += [
         f"- {b.kind} {b.reference} for {b.item_key} {titles.get(b.item_key, '')}".rstrip()
-        + f": supports {_month_first(b.supports_date)}"
+        + f": supports {company_time.calendar_day_with_year(b.supports_date)}"
         + (f" ({b.detail})" if b.detail else "")
         for b in c.bases
     ] or ["- none"]

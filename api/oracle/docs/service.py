@@ -208,18 +208,20 @@ async def version_sources(
         .join(Document, Document.id == DocumentVersion.document_id)
         .where(DocumentVersion.id.in_(ids))
     )
-    return {
-        v.id: VersionSource(
-            document_id=d.id,
-            slug=d.slug,
-            title=d.title,
-            kind=d.kind,  # type: ignore[arg-type]
-            version=v.number,
-            version_id=v.id,
-            approved_at=v.approved_at,
-        )
-        for v, d in rows.all()
-    }
+    return {v.id: version_source(v, d) for v, d in rows.all()}
+
+
+def version_source(v: DocumentVersion, d: Document) -> VersionSource:
+    """The provenance of version ``v`` of document ``d``."""
+    return VersionSource(
+        document_id=d.id,
+        slug=d.slug,
+        title=d.title,
+        kind=d.kind,  # type: ignore[arg-type]
+        version=v.number,
+        version_id=v.id,
+        approved_at=v.approved_at,
+    )
 
 
 def _summary(

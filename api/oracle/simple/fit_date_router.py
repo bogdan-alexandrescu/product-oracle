@@ -595,7 +595,7 @@ async def list_fit_dates(principal: Reader, db: TenantDB) -> list[FitGoalOut]:
 
 
 def _day(d: dt.date | None) -> str:
-    return f"{d:%b} {d.day}" if d else "not dated"
+    return company_time.calendar_day(d) if d else "not dated"
 
 
 def _effect(p: fd.Plan, c: fd.Change) -> str:
@@ -686,7 +686,7 @@ def _draft_out(document, v, p: fd.Plan, d: fd.Draft) -> FitDraftOut:
         if what == "Target":
             what = f"{p.milestone} target"
             note = (
-                f"No set of changes reaches {before:%b} {before.day}, "
+                f"No set of changes reaches {company_time.calendar_day(before)}, "
                 "so you approve the new target too"
             )
         dates.append(FitDateMove(what=what, before=before, after=after,
@@ -730,10 +730,11 @@ def replan_markdown(text: str, p: fd.Plan, d: fd.Draft, picks: list[str]) -> str
         lines.append(f"- {head}: {c.title.lower()}.")
     out = text.rstrip()
     if d.new_target:
-        when = f"{d.new_target:%b} {d.new_target.day}, {d.new_target.year}"
+        when = company_time.calendar_day_with_year(d.new_target)
+        was = re.escape(company_time.calendar_day(p.target))
         out = re.sub(
             rf"^(\|\s*{re.escape(p.milestone)}\b[^\n]*)$",
-            lambda m: re.sub(rf"{p.target:%b} {p.target.day}(, {p.target.year})?", when, m[1]),
+            lambda m: re.sub(rf"{was}(, {p.target.year})?", when, m[1]),
             out, flags=re.M,
         )  # fmt: skip
     if "## Re-plan" not in out:
@@ -870,7 +871,7 @@ async def fit_date_approve(
     was = fd.schedule(p).milestones[p.milestone]
     date = fd.schedule(d.plan).milestones[p.milestone]
     moves = [
-        m.what + (f": {m.after:%b} {m.after.day}" if m.after else ": not dated")
+        m.what + (f": {company_time.calendar_day(m.after)}" if m.after else ": not dated")
         for m in _draft_out(document, v, p, d).dates
         if m.what != f"{p.milestone} target"
     ]
