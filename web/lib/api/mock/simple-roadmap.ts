@@ -48,6 +48,8 @@ interface SeedItem {
   source?: Exclude<Dated["source"], "estimated">;
   depends?: string[];
   status?: Item["status"];
+  /** one-feature-panel: the status the tracker gave it, kept once its panel sets one (planned reads it again). */
+  tracked?: Item["status"];
   /** item-chat-understands (RoadmapItem.shipped): its own "already shipped" mark, apart from a status its tracker gives it. */
   shipped?: { note: string; on: string } | null;
   draft?: boolean;
@@ -392,6 +394,8 @@ const SEED: SeedItem[] = [
   { key: "setup-tour", title: "In-app tour", horizon: "later", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", status: "cut", start: 30, end: 75, source: "typed" },
   { key: "setup-video", title: "Welcome video", horizon: "later", roadmap: "onboarding-roadmap", track: "onboarding", depends: ["setup-tour"] },
   { key: "setup-ideas", title: "Team invite nudges", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", draft: true },
+  // one-feature-panel: the Guided setup PRD's F-03 (the feature its decisions block), on its roadmap as the API has it.
+  { key: "setup-health-log", title: "Health log", horizon: "later", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "low", section: "f-03", heading: "F-03 Health log" },
   { key: "price-tiers", title: "New plan tiers", horizon: "next", roadmap: "pricing-roadmap", confidence: "medium" },
 ];
 
@@ -764,6 +768,15 @@ export function itemOfOtherPrd(db: SimpleDb, key: string, roadmap: string): void
   if (s) s.prd_doc = itemPrd({ ...s, roadmap });
 }
 
+/** one-feature-panel: the Goal map's features as roadmap items (once the map is read), each its own. */
+export function knowGoalMapItems(db: SimpleDb | undefined, items: { key: string; id: string; title: string; section: string }[]): void {
+  for (const it of items) {
+    if (!db || db.ids[it.key]) continue;
+    db.items.push({ key: it.key, title: it.title, horizon: "next", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", section: it.section, heading: `${it.section.toUpperCase()} ${it.title}` });
+    db.ids[it.key] = it.id;
+  }
+}
+
 /** hotfix-2 ("simple-dated-move"): an Alerts PRD item dated only by its date source (engineering's
  * end, no start), as approving the PRD stores it on the draft; its start is estimated. */
 export function dateSourceItem(db: SimpleDb): void {
@@ -914,10 +927,10 @@ export function shiftPlan(items: Map<string, Item>, itemId: string, depId: strin
   return moves;
 }
 
-/** S4: the item's track owner, by name (service: an enabled track owner). */
-function ownerOf(db: SimpleDb, s: SeedItem): Item["owner"] {
+/** S4: the item's owner, by name (service: an enabled track owner), from the people /v1/people lists. */
+function ownerOf(db: SimpleDb, s: SeedItem, names?: Record<string, string>): Item["owner"] {
   const id = itemOwnerId(db, s.key);
-  return id ? { id, name: db.people?.[id] ?? "Track owner" } : null;
+  return id ? { id, name: names?.[id] ?? db.people?.[id] ?? "Track owner" } : null;
 }
 
 /** A chat card's set_owner / set_decider (the targets kept by item id), if any: the item's own owner or decider. */
@@ -1215,7 +1228,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       depends_on: (s.depends ?? []).filter((k) => all.has(k)).map((k) => db.ids[k]),
       needed_by: seeds.filter((x) => x.depends?.includes(s.key)).map((x) => db.ids[x.key]),
       flags: flagsOf(s, r, all, w[s.horizon]),
-      owner: ownerOf(db, s),
+      owner: ownerOf(db, s, me?.names),
       // one-feature-panel: the item's own owner (set_owner's before) and its stored dependency keys.
       own_owner_id: namedOn(db, s.key, "owner_id") ?? null,
       depends_keys: s.depends ?? [],

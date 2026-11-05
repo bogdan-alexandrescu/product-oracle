@@ -11,3 +11,8 @@ export type OpenFeature = (f: { id?: string | null; code: string; name: string; 
 export const OpenFeatureContext = createContext<OpenFeature | null>(null);
 
 export const useOpenFeature = () => useContext(OpenFeatureContext);
+
+/** Whether a feature has a roadmap item the panel can open (the page's roadmap read); none: all do. */
+export const FeatureFoundContext = createContext<((f: Parameters<OpenFeature>[0]) => boolean) | null>(null);
+
+export const useFeatureFound = () => useContext(FeatureFoundContext);

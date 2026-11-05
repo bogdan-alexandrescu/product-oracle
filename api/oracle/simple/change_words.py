@@ -133,6 +133,8 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             return f"changed the goal of {x}"
         case "set_depends":
             return f"changed what {x} depends on"
+        case "set_goal_measure":
+            return f"changed how the goal of {x} is measured"
         case "set_status":
             word = "cut" if after.get("cut") else "done" if after.get("shipped") else "planned"
             return f"marked {x} {word}"

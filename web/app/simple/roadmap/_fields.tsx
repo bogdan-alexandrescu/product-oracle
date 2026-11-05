@@ -5,12 +5,10 @@
 
 import { useState } from "react";
 
-import { toast as dsToast } from "@/components/ds";
 import { Icon } from "@/components/ds/Icon";
 
 import { api, unwrap } from "@/lib/api/client";
-import { sendCardChanged } from "@/lib/api/simple-chat";
-import { useMe } from "@/lib/me";
+import { calendarDay } from "@/lib/dates";
 import { useQuery } from "@/lib/use-query";
 
 import type { Act } from "./_card";
@@ -36,32 +34,8 @@ export function Named({ item }: { item: Pick<Item, "code" | "title"> }) {
   );
 }
 
-/** How a goal is measured, changed through the goal's own edit; Undo puts it back. */
-async function saveMeasure(goal: NonNullable<Item["goal"]>, measure: string) {
-  const toast = (ask: Parameters<typeof dsToast>[0]) => dsToast({ place: "corner", ...ask });
-  try {
-    const r = await unwrap(
-      api.PATCH("/v1/simple/goal-buckets/goals/{goal_id}", {
-        params: { path: { goal_id: goal.id } },
-        body: { title: goal.title, measure, target: goal.target!, due: goal.due! },
-      }),
-    );
-    toast({
-      message: `${goal.title} is now measured by ${measure}`,
-      action: {
-        label: "Undo",
-        onClick: () =>
-          void unwrap(api.POST("/v1/simple/goal-buckets/undo", { body: r.undo })).then(
-            sendCardChanged,
-            () => toast({ message: "Oracle could not undo it" }),
-          ),
-      },
-    });
-  } catch {
-    toast({ message: "Oracle could not change the measure" });
-  }
-  sendCardChanged();
-}
+/** "Mar 31, 2027": a goal's date, month first. */
+const dayWords = (day: string) => calendarDay(day, { month: "short", day: "numeric", year: "numeric" });
 
 /** One field: its value, and (canChange) a Change button that opens its editor in place. */
 function Field({
@@ -212,9 +186,7 @@ export function PanelFields({
   onOpen?: (id: string) => void;
 }) {
   const [why, setWhy] = useState(false);
-  const { can } = useMe();
   const goal = item.goal;
-  const canEditGoal = can("update_bucket_goal");
   const people = useQuery(`people:panel:${canChange}`, () =>
     canChange
       ? unwrap(api.GET("/v1/people", { params: { query: { limit: 200 } } }))
@@ -226,7 +198,8 @@ export function PanelFields({
     op: string,
     before: Record<string, unknown>,
     after: Record<string, unknown>,
-  ) => act(what, { op: op as never, target, before, after });
+    more?: Record<string, string>,
+  ) => act(what, { op: op as never, target: { ...target, ...more }, before, after });
   const others = [...items.values()].filter(
     (i) => i.id !== item.id && i.status !== "merged",
   );
@@ -253,10 +226,16 @@ export function PanelFields({
       <Named item={i} />
     );
   const deps = item.depends_on.map(shown).filter((i): i is Item => !!i);
-  // A key no item of this read answers to (another PRD's feature key): listed as typed.
-  const loose = item.depends_keys.filter(
-    (k) => !deps.some((d) => keyOf(d) === k),
-  );
+  // A key the dependency checks did not match here (another PRD's feature key): the item the
+  // roadmap read has under that key or code, else the key as typed.
+  const loose = item.depends_keys
+    .filter((k) => !deps.some((d) => keyOf(d) === k))
+    .map((k) => ({
+      k,
+      found: others.find(
+        (i) => i.key === k || (!!i.code && i.code.toLowerCase() === k.toLowerCase()),
+      ),
+    }));
 
   return (
     <dl
@@ -479,25 +458,46 @@ export function PanelFields({
         )}
       />
       {goal && (
-        // How the goal is measured: the goal's own edit (it takes the whole goal), with Undo.
-        <Field
-          label="Measure"
-          testId="card-goal-measure"
-          canChange={canEditGoal && !!goal.target && !!goal.due}
-          value={
-            goal.metric ?? (
-              <span className="text-text2">No measure set for this goal yet</span>
-            )
-          }
-          editor={(done) => (
-            <TextEdit
-              label="Measure"
-              value={goal.metric ?? ""}
-              done={done}
-              save={(v) => saveMeasure(goal, v)}
-            />
-          )}
-        />
+        // How the goal is measured, its target and date: one change to the goal (set_goal_measure),
+        // checked against what was read, with Undo; a commenter's is a suggestion.
+        <>
+          {(["measure", "target", "due"] as const).map((f) => {
+            const now = { measure: goal.metric ?? null, target: goal.target ?? null, due: goal.due ?? null };
+            const label = { measure: "Measure", target: "Target", due: "Date" }[f];
+            const value = now[f];
+            return (
+              <Field
+                key={f}
+                label={label}
+                testId={`card-goal-${f === "due" ? "date" : f}`}
+                canChange={canChange}
+                value={
+                  value ? (f === "due" ? dayWords(value) : value) : (
+                    <span className="text-text2">{f === "measure" ? "No measure set for this goal yet" : `No ${label.toLowerCase()} yet`}</span>
+                  )
+                }
+                editor={(done) => (
+                  <TextEdit
+                    label={label}
+                    value={value ?? ""}
+                    type={f === "due" ? "date" : undefined}
+                    optional={f !== "measure"}
+                    done={done}
+                    save={(v) =>
+                      change(
+                        `${label} changed`,
+                        "set_goal_measure",
+                        now,
+                        { ...now, [f]: v || null },
+                        { goal_id: goal.id },
+                      )
+                    }
+                  />
+                )}
+              />
+            );
+          })}
+        </>
       )}
       <Field
         label="PRD"
@@ -561,18 +561,18 @@ export function PanelFields({
               )}
             </li>
           ))}
-          {loose.map((k) => (
+          {loose.map(({ k, found }) => (
             <li
               key={k}
               className="flex flex-wrap items-baseline gap-x-2"
               data-testid="card-depends-row"
             >
-              <span>Feature {k}</span>
+              {found ? featureButton(found) : <span>{k}</span>}
               {canChange && (
                 <button
                   type="button"
                   className={LINK}
-                  aria-label={`Remove ${k} from what it depends on`}
+                  aria-label={`Remove ${found?.title ?? k} from what it depends on`}
                   onClick={() =>
                     void change(
                       "Dependency removed",
@@ -592,7 +592,7 @@ export function PanelFields({
         {canChange && (
           <AddDependency
             item={item}
-            options={others.filter((o) => !item.depends_on.includes(o.id))}
+            options={others.filter((o) => !item.depends_on.includes(o.id) && !loose.some((l) => l.found?.id === o.id))}
             add={(key) =>
               change(
                 "Dependency added",
@@ -627,12 +627,18 @@ function TextEdit({
   label,
   value,
   multiline,
+  type,
+  optional,
   save,
   done,
 }: {
   label: string;
   value: string;
   multiline?: boolean;
+  /** "date": a day picker (YYYY-MM-DD). */
+  type?: "date";
+  /** May be saved empty (cleared). */
+  optional?: boolean;
   save: (v: string) => Promise<void>;
   done: () => void;
 }) {
@@ -657,13 +663,14 @@ function TextEdit({
       ) : (
         <input
           aria-label={label}
+          type={type}
           className={INPUT}
           value={v}
           onChange={(e) => setV(e.target.value)}
           autoFocus
         />
       )}
-      <SaveCancel onCancel={done} disabled={!multiline && !v.trim()} />
+      <SaveCancel onCancel={done} disabled={!multiline && !optional && !v.trim()} />
     </form>
   );
 }
@@ -785,6 +792,8 @@ function AddDependency({
         e.preventDefault();
         if (!key) return;
         setOpen(false);
+        setPick("");
+        setTyped("");
         void add(key);
       }}
     >

@@ -55,6 +55,8 @@ import {
   draftPrds,
   readableRoadmap,
   readDates,
+  roadmapGoal,
+  roadmapGoalKey,
   seesDraft,
   settleDrafting,
   simpleWindows,
@@ -201,7 +203,17 @@ const TARGETS: Record<string, { id: string; adds?: boolean }> = {
   // Chat actions: an item's owner or decider (stored by item id; simple-roadmap's itemOwnerId / itemDeciderId read them).
   set_owner: { id: "item_id" },
   set_decider: { id: "item_id" },
+  // one-feature-panel: how the item's goal is measured (targets.py set_goal_measure), into the goal.
+  set_goal_measure: { id: "goal_id" },
 };
+
+/** targets.py goal_measure: the goal's measure, target and date as the roadmap read shows them. */
+function goalMeasure(db: SimpleDb, goalId: unknown): Values | null {
+  const k = roadmapGoalKey(String(goalId ?? ""));
+  if (!k) return null;
+  const g = roadmapGoal(db, k);
+  return { measure: g.metric, target: g.target, due: g.due };
+}
 
 /** Roadmap-plus: a roadmap's key dates (api/oracle/simple/key_dates.py), into its working draft. */
 const KEY_DATE_OPS = ["add_key_date", "edit_key_date", "remove_key_date"];
@@ -368,7 +380,11 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
     if (x) s.prd_doc = ownPrd(x);
   }
   if ("depends_on" in values) s.depends = [...((values.depends_on as string[]) ?? [])];
-  if ("status" in values) s.status = values.status as typeof s.status;
+  if ("status" in values) {
+    // changes.py set_status: planned is the tracker's status again (a shipped mark from elsewhere stays).
+    if (s.tracked === undefined) s.tracked = !s.status || s.status === "cut" || s.status === "draft" ? "planned" : s.status;
+    s.status = values.status === "planned" ? s.tracked : (values.status as typeof s.status);
+  }
   if ("risk" in values) {
     const kept = (s.risks ?? []).filter((r) => !(r.flag === target.flag && (r.subject ?? null) === (target.subject ?? null)));
     const risk = values.risk as { flag: never; note: string; subject?: string | null } | null;
@@ -401,7 +417,7 @@ function newSession(db: SimpleDb, me: string, kind: Session["kind"]): Session {
 
 function conflict(db: SimpleDb, ctx: SimpleChangesCtx, current: Values, ids: string[], lead: string): Response {
   const last = (db.changes ?? [])
-    .filter((c) => ["applied", "accepted", "undone"].includes(c.status) && touched(c).some((i) => ids.includes(i)))
+    .filter((c) => ["applied", "accepted", "undone"].includes(c.status) && (c.op === "set_goal_measure" ? [String(c.target.goal_id)] : touched(c)).some((i) => ids.includes(i)))
     .map((c) => ({ at: c.status === "accepted" && c.decided_at ? c.decided_at : c.at, who: c.status === "accepted" && c.decided_by ? c.decided_by : c.by }))
     .sort((a, b) => (a.at < b.at ? 1 : -1))[0];
   const who = last ? { id: last.who, name: ctx.names[last.who] ?? "someone" } : null;
@@ -576,6 +592,17 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     if (hit) Object.assign(after, { owner_id: hit[0], owner_name: hit[1] });
   }
   if (body.op === "add_item_task" && after.owner_id && !after.owner_name) after.owner_name = ctx.names[String(after.owner_id)] ?? null;
+  if (body.op === "set_goal_measure") {
+    // targets.py: the goal the item's read shows; a measure (target and date may be empty); before as read, else 409.
+    if (!target.item_id || read(db, keyOf(db, target.item_id)!, ["goal_id"], target).goal_id !== target.goal_id) return json(422, { detail: "target.goal_id: the goal the item serves" });
+    const line = (v: unknown) => String(v ?? "").trim().replace(/\s+/g, " ") || null;
+    const measure = line(body.after?.measure);
+    if (!measure || measure.length > 300) return json(422, { detail: "after.measure: required, at most 300 characters" });
+    const due = line(body.after?.due);
+    if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) return json(422, { detail: "after.due: a day as YYYY-MM-DD" });
+    Object.assign(after, { measure, target: line(body.after?.target), due });
+    for (const k of Object.keys(after)) if (!["measure", "target", "due"].includes(k)) delete after[k];
+  }
   const before: Values = ranking
     ? priorityBefore(db, keyOf(db, target.item_id)!, body.op, id)
     : (body.op as string) === "set_owner"
@@ -583,8 +610,10 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
         { owner_id: body.before.owner_id === (namedOn(db, keyOf(db, target.item_id)!, "owner_id") ?? null) ? (body.before.owner_id ?? null) : itemOwnerId(db, keyOf(db, target.item_id)!) }
       : (body.op as string) === "set_decider"
         ? { decider_id: itemDeciderId(db, keyOf(db, target.item_id)!, ctx.roles) }
-        : spec.adds ? {} : Object.fromEntries(Object.keys(body.before).map((k) => [k, stored[k] ?? null]));
-  const seen = ranking ? Object.fromEntries(Object.keys(before).map((k) => [k, body.before[k] ?? null])) : body.before;
+        : (body.op as string) === "set_goal_measure"
+          ? goalMeasure(db, target.goal_id)!
+          : spec.adds ? {} : Object.fromEntries(Object.keys(body.before).map((k) => [k, stored[k] ?? null]));
+  const seen = ranking || (body.op as string) === "set_goal_measure" ? Object.fromEntries(Object.keys(before).map((k) => [k, body.before[k] ?? null])) : body.before;
   if (!spec.adds && !same(before, seen)) return conflict(db, ctx, before, [id], "Changed since you saw it");
   if (body.op === "override_priority" && after.override === null && !before.override) return json(409, { detail: "It is at Oracle's rank already" });
   const change: Change = {
@@ -605,6 +634,11 @@ function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false): voi
   const spec = TARGETS[c.op];
   const id = String(c.target[spec.id]);
   const targets = (db.targets ??= {});
+  if (c.op === "set_goal_measure") {
+    const k = roadmapGoalKey(id)!;
+    (db.goal_edits ??= {})[k] = { title: roadmapGoal(db, k).title, metric: (values.measure as string | null) ?? null, target: (values.target as string | null) ?? null, due: (values.due as string | null) ?? null };
+    return;
+  }
   if (spec.adds && undo) delete targets[id];
   // walkc-roadmap-tasks: a task is stored under its item, open, as RoadmapItemTask is.
   else if (c.op === "add_item_task") targets[id] = { status: "todo", owner_id: null, due_date: null, ...values, kind: "item_task", item_id: c.target.item_id, at: c.at };
@@ -956,6 +990,10 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       if (!Array.isArray(keys) || keys.length > 50) return json(422, { detail: "after.depends_on: a list of at most 50 keys" });
       const clean = [...new Set(keys.map((k) => String(k ?? "").trim()))];
       if (clean.some((k) => !k) || clean.includes(key)) return json(422, { detail: "after.depends_on: item or feature keys, never the item's own" });
+      // changes._unknown_keys: a new key names an item (its key or code) or a feature.
+      const names = new Set(seen.items.flatMap((x) => [x.key, prdCode(x.section)]).filter((k): k is string => !!k).map((k) => k.toLowerCase()));
+      const unknown = clean.find((k) => !(seen.items.find((x) => x.key === key)?.depends ?? []).includes(k) && !names.has(k.toLowerCase()));
+      if (unknown) return json(422, { detail: `after.depends_on: no item or feature has the key ${unknown}` });
       after = { depends_on: clean };
     } else if (body.op === "set_status") {
       if (!["planned", "done", "cut"].includes(String(a.status))) return json(422, { detail: "after.status: planned, done or cut" });
@@ -1073,6 +1111,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     if ((db.changes ?? []).some((x) => x.undoes_id === c.id)) return json(409, { detail: "This change is undone already" });
     const s = (db.sessions ?? []).find((x) => x.id === c.session_id);
     if (!s || s.closed_at || idle(s)) return json(409, { detail: "Its session is closed: undo works only in the change's session" });
+    if (c.op === "set_goal_measure" && !same(goalMeasure(db, c.target.goal_id), c.after)) return conflict(db, ctx, goalMeasure(db, c.target.goal_id)!, [String(c.target.goal_id)], "Changed since");
     if (TARGETS[c.op]) writeTarget(db, c, c.before, true);
     else if (KEY_DATE_OPS.includes(c.op)) {
       const rm = roadmapOfDoc(db, c.target.document_id)!;
@@ -1101,6 +1140,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   if (!decidesChange(db, ctx, c)) return json(403, { detail: "Only an owner or the roadmap's decider (with no decider, its owner) decides proposals" });
   if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
   const body = (await req.json().catch(() => ({}))) as { reason?: string | null };
+  if (p[4] === "accept" && c.op === "set_goal_measure" && !same(goalMeasure(db, c.target.goal_id), c.before)) return conflict(db, ctx, goalMeasure(db, c.target.goal_id)!, [String(c.target.goal_id)], "outdated");
   if (p[4] === "accept" && TARGETS[c.op]) writeTarget(db, c, c.after);
   else if (p[4] === "accept" && KEY_DATE_OPS.includes(c.op)) {
     const rm = roadmapOfDoc(db, c.target.document_id)!;

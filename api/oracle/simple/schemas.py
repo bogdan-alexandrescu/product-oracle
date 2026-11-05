@@ -573,6 +573,8 @@ ChangeOp = Literal[
     "set_goal",
     "set_depends",
     "set_status",
+    # one-feature-panel: how the goal the item serves is measured (its target and date).
+    "set_goal_measure",
     # chat-actions: the item's own owner and decider (into the working draft).
     "set_owner",
     "set_decider",

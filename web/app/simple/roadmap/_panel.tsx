@@ -28,6 +28,20 @@ export function itemFor(items: Item[], f: { code: string; name: string; prd?: { 
 /** What opens the panel: a roadmap item's id when the page has it, else its code, PRD and name. */
 export type PanelFeature = { id?: string | null; code: string; name: string; prd?: { id: string; slug: string } | null };
 
+/**
+ * The item a panel shows: the one it moved to (a dependency), else the one it showed first (kept
+ * after a rename), else the item of the feature's id when its name is the card's, else the item
+ * with its code, then its name. Never another feature's item under a wrong id.
+ */
+export function usePanelItem(items: Item[], feature: PanelFeature, opened: string | null): Item | undefined {
+  const [pinned, setPinned] = useState<string | null>(null);
+  const byId = (id?: string | null) => (id ? items.find((i) => i.id === id) : undefined);
+  const own = byId(feature.id);
+  const found = byId(opened) ?? byId(pinned) ?? (own && own.title === feature.name ? own : undefined) ?? itemFor(items, feature);
+  if (found && !opened && !pinned) setPinned(found.id);
+  return found;
+}
+
 /** The feature's item panel (a side panel; a phone's bottom sheet), as the roadmap opens it. */
 export function FeaturePanel({
   feature,
@@ -65,7 +79,7 @@ export function FeaturePanel({
   const items = data?.items ?? [];
   // one-feature-panel: a dependency (or a feature that needs this one) opens in its place.
   const [opened, setOpened] = useState<string | null>(null);
-  const item = (opened ? items.find((i) => i.id === opened) : undefined) ?? (feature.id ? items.find((i) => i.id === feature.id) : undefined) ?? itemFor(items, feature);
+  const item = usePanelItem(items, feature, opened);
   const act: Act = useCallback(
     async (what, body) => {
       try {

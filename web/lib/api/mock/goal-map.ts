@@ -27,12 +27,25 @@ export type GmLift = GmFeature["lift"];
 
 /** The mock's ids: stable UUIDs, as the API's. */
 const id = (k: string) => stableUuid(`goal-map/${k}`);
-/** The Simple roadmap items the first features are (so their item panel opens). */
-const ITEM_KEYS = ["alert-rules", "alert-digest", "alert-mobile", "alert-export", "alert-sso", "setup-checklist", "setup-import", "setup-tour", "setup-video", "setup-ideas"];
+/**
+ * one-feature-panel: each feature is its own Simple roadmap item ("gm-f1", ...), as the API's map
+ * reads the roadmap's items, so its item panel opens on it (server.ts adds the items: goalMapItems).
+ */
+const ITEM_OF = new Map<string, string>();
 const fid = (k: string) => {
-  const n = Number(k.slice(1));
-  return k.startsWith("f") && n <= ITEM_KEYS.length ? stableUuid(`simple-item/${ITEM_KEYS[n - 1]}`) : id(k);
+  if (!/^f\d+$/.test(k)) return id(k);
+  const uid = stableUuid(`simple-item/gm-${k}`);
+  ITEM_OF.set(uid, `gm-${k}`);
+  return uid;
 };
+// Known before any map is seeded (a map read back from storage names them too).
+for (let n = 1; n <= 60; n++) fid(`f${n}`);
+/** The roadmap items the map's features are: key, id, name and the PRD section that gives its code (F-101, ...). */
+export const goalMapItems = (map: GoalMap): { key: string; id: string; title: string; section: string }[] =>
+  map.features.flatMap((f) => {
+    const key = ITEM_OF.get(f.id);
+    return key ? [{ key, id: f.id, title: f.name, section: `f-${100 + Number(key.slice(4))}` }] : [];
+  });
 
 const GOALS: GmGoal[] = [
   {
