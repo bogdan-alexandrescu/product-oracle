@@ -299,3 +299,34 @@ test("an approver's × on a dependency joins a commenter's suggested removal on 
   await expect(inspector(page).getByTestId("item-depends").getByRole("button", { name: /^Remove dependency / })).toHaveCount(0);
   await expect(page.getByTestId("review-summary")).toHaveText("2 blocking · 7 to confirm");
 });
+
+// Review follow-up (PR 1275, major): protects = a commenter's × in the panel never meets
+// another person's dependency change with a refusal: pressed, it says whose change holds the
+// item and offers theirs as a separate suggestion, as the reason cards do; fails_when = the ×
+// posts its own edit and the page shows only the 403; no_claim = what the approver does next.
+test("a commenter's × on a dependency where an approver's change holds the item says whose and offers theirs separately", async ({ page }) => {
+  await openReview(page);
+  await row(page, "budget-caps").locator('[data-phone="title"]').click();
+  await inspector(page).getByTestId("item-depends").getByRole("button", { name: "Remove dependency Anomaly detection" }).click();
+  await expect(card(page, LOCAL)).toContainText("✓ Dependency removed");
+  await signOut(page);
+
+  await login(page, COMMENTER);
+  await goToReview(page);
+  await row(page, "budget-caps").locator('[data-phone="title"]').click();
+  const depends = inspector(page).getByTestId("item-depends");
+  await depends.getByRole("button", { name: "Remove dependency Account health ledger (Safety PRD)" }).click();
+  await expect(depends.getByTestId("their-removal")).toContainText("Avery Stone staged this item's dependency change");
+  await expect(page.getByText("Only its author or an approver can change this action")).toHaveCount(0);
+
+  await depends.getByRole("button", { name: "Suggest yours separately…" }).click();
+  const form = inspector(page).getByTestId("form-ask");
+  await expect(form.getByRole("textbox", { name: "Question" })).toHaveValue("Please also remove the dependency on Account health ledger (Safety PRD).");
+  await form.getByRole("combobox", { name: "Ask" }).selectOption({ label: "Priya Raman" });
+  await form.getByRole("button", { name: "Ask", exact: true }).click();
+  await expect(row(page, "budget-caps").getByTestId("asked-chip")).toHaveText("Asked Priya Raman");
+  await expect(page.getByText("Only its author or an approver can change this action")).toHaveCount(0);
+  // The approver's change is still theirs: Account health ledger is not removed.
+  await expect(card(page, CROSS).getByRole("button", { name: "Move to Next", exact: true })).toBeVisible();
+  await expect(card(page, LOCAL)).toContainText("✓ Dependency removed");
+});
