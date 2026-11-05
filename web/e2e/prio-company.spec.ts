@@ -1,5 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { COMPANY_TITLE, OLD_ITEM } from "../lib/api/mock/one-roadmap";
+import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
 import { login } from "./helpers";
 import { expect, test } from "./test";
@@ -13,20 +14,23 @@ import { expect, test } from "./test";
  * - "N of M miss this quarter" is a count with "Show them", which lists each feature on its own
  *   line, each opening the feature's panel;
  * - a PM-owned row (no engineer-weeks, no score) gets "Add effort" in place, and its score shows;
- * - the Line picker names each line's PRD.
+ * - the Line picker names each line's PRD, each PRD once;
+ * - on the "one-roadmap" scenario, a feature with no item on the company roadmap says a move adds
+ *   it there; the owner's move does, and an approver reads that only the owner can add it.
  * Desktop 1440x900 and phone 390x844, light and dark.
  */
 
 const PHONE = { width: 390, height: 844 };
 
-async function setUp(page: Page, scheme: "light" | "dark", phone: boolean, scenario = "simple-plan"): Promise<void> {
+async function setUp(page: Page, scheme: "light" | "dark", phone: boolean, scenario = "simple-plan", role = ""): Promise<void> {
   await page.setViewportSize(phone ? PHONE : { width: 1440, height: 900 });
   await page.context().addInitScript(
-    ([key, value, themeKey, theme]) => {
+    ([key, value, themeKey, theme, roleKey, as]) => {
       if (value) localStorage.setItem(key, value);
       localStorage.setItem(themeKey, theme);
+      if (as) localStorage.setItem(roleKey, as);
     },
-    [MOCK_SCENARIO_KEY, scenario, THEME_KEY, scheme] as const,
+    [MOCK_SCENARIO_KEY, scenario, THEME_KEY, scheme, MOCK_ROLE_KEY, role] as const,
   );
   await page.emulateMedia({ colorScheme: scheme });
   await login(page);
@@ -86,7 +90,13 @@ for (const scheme of ["light", "dark"] as const) {
         const pricing = rowByTitle(page, "Pricing page words");
         await expect(pricing.getByTestId("prio-pm-owned")).toBeVisible();
         await pricing.getByRole("button", { name: "Add effort" }).click();
-        await pricing.getByLabel("Effort for Pricing page words, in engineer-weeks").fill("2");
+        const input = pricing.getByLabel("Effort for Pricing page words, in engineer-weeks");
+        // "Effort" and "wk" stand apart from the box.
+        const edit = pricing.getByTestId("prio-effort-edit");
+        const [word, box, unit] = [await edit.getByText("Effort", { exact: true }).boundingBox(), await input.boundingBox(), await edit.getByText("wk", { exact: true }).boundingBox()];
+        expect(box!.x - (word!.x + word!.width)).toBeGreaterThanOrEqual(6);
+        expect(unit!.x - (box!.x + box!.width)).toBeGreaterThanOrEqual(6);
+        await input.fill("2");
         await pricing.getByRole("button", { name: "Save" }).click();
         await expect(pricing.getByTestId("prio-pm-owned")).toHaveCount(0);
         await expect(pricing.getByTestId("prio-score")).toBeVisible();
@@ -103,11 +113,42 @@ for (const scheme of ["light", "dark"] as const) {
           expect(await g.getAttribute("label")).toBeTruthy();
           for (const t of await g.locator("option").allTextContents()) expect(t).toMatch(/^(From the PRD|Milestone): /);
         }
+        // Each PRD is one group, even when its lines are not next to each other by date.
+        const labels = await groups.evaluateAll((gs) => gs.map((g) => g.getAttribute("label")));
+        expect(new Set(labels).size, labels.join("\n")).toBe(labels.length);
         // Every PRD milestone sits under its PRD; each line once; no placeholder name.
         const loose = await select.locator(":scope > option").allTextContents();
         expect(loose.filter((t) => t.startsWith("From the PRD: ")), loose.join("\n")).toEqual([]);
         expect(new Set(options).size, options.join("\n")).toBe(options.length);
         expect(options.join("\n")).not.toMatch(/(^|\s)N(\s|$)/m);
+      });
+
+      test("a feature not on the company roadmap: the owner's move adds it there", async ({ page }) => {
+        await setUp(page, scheme, phone, "one-roadmap");
+        const badge = rowByTitle(page, OLD_ITEM);
+        await expect(badge.getByTestId("prio-adds")).toHaveText(`Not on ${COMPANY_TITLE} yet: moving it adds it there, under Later.`);
+        await badge.getByRole("button", { name: /^Drag .* to reorder$/ }).focus();
+        await page.keyboard.press("ArrowUp");
+        const dialog = page.getByRole("dialog", { name: /^Why move / });
+        await dialog.getByLabel("Reason").fill("Sellers asked for it at the example.com meetup");
+        await dialog.getByRole("button", { name: "Move", exact: true }).click();
+        await expect(dialog).toBeHidden();
+        await expect(badge.getByTestId("prio-adds")).toHaveCount(0);
+        await expect(badge.getByTestId("prio-override")).toBeVisible();
+        // It is on the company roadmap now.
+        await page.getByRole("link", { name: "Roadmap", exact: true }).first().click();
+        await expect(page.getByTestId("simple-roadmap").getByText(OLD_ITEM, { exact: true }).first()).toBeAttached();
+        await page.getByRole("link", { name: "Priorities", exact: true }).first().click();
+        await expect(rowByTitle(page, OLD_ITEM)).toBeVisible();
+        await expect(page.getByTestId("prio-adds")).toHaveCount(0);
+      });
+
+      test("an approver reads that only the owner adds a feature to the roadmap", async ({ page }) => {
+        await setUp(page, scheme, phone, "one-roadmap", "approver");
+        const badge = rowByTitle(page, OLD_ITEM);
+        await expect(badge.getByTestId("prio-locked")).toHaveText("Only the owner can add this to the roadmap.");
+        await expect(badge.locator("[data-handle]")).toHaveCount(0);
+        await expect(badge.getByTestId("prio-adds")).toHaveCount(0);
       });
     });
   }

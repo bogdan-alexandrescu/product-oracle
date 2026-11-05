@@ -9,7 +9,7 @@ Test cards (protects / fails_when / no_claim):
   with no item on the company roadmap marked ``on_roadmap`` false (the row says a move adds
   it); a commenter, who may not add to the roadmap, cannot move that one row and every other;
   fails_when=the owner gets a row they cannot move, or the off-roadmap row is not marked;
-  no_claim=the web (priorities-company.spec.ts).
+  no_claim=the web (prio-company.spec.ts).
 - test_a_move_adds_the_feature_to_the_company_roadmap: protects=an override_priority on a
   feature with no item (``target.feature_id``) adds it to the company roadmap, then pins it;
   the row then has its item; fails_when=the move is refused (422) or nothing is added;
@@ -24,6 +24,12 @@ Test cards (protects / fails_when / no_claim):
   fails_when=a generated code shows.
 - test_a_placeholder_milestone_never_shows: protects=a milestone named with a literal
   placeholder ("Milestone N agents") is not a row's milestone nor a line; fails_when=it shows.
+- test_a_bracketed_milestone_name_shows: protects=a real name with brackets ("Beta
+  [internal]") is a row's milestone and a line; only a lone "N" is a placeholder;
+  fails_when=it is dropped as a placeholder.
+- test_a_move_reuses_the_features_draft_item: protects=moving a feature whose only item on
+  the company roadmap is a draft confirms that item, never a second one; fails_when=a second
+  item is added for the feature.
 """
 
 import uuid
@@ -136,3 +142,38 @@ async def test_a_placeholder_milestone_never_shows(client):
     assert rows["ledger"]["milestone"] is None
     assert rows["exports"]["milestone"] == "Beta"
     assert not [ln for ln in out["lines"] if " N " in f" {ln['label']} "], out["lines"]
+
+
+async def test_a_bracketed_milestone_name_shows(client):
+    w = await company_world()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        row = await s.get(RoadmapItem, uuid.UUID(w.ids["pay-1"]))
+        row.milestone = {"name": "Beta [internal]"}
+        m = TrackMilestone(track_id=row.track_id, name="Beta [internal]",
+                           target_date=date(2027, 1, 31), horizon="next", status="planned",
+                           basis_ids=[uuid.uuid4()], item_keys=["pay-2"])  # fmt: skip
+        s.add(m)
+        await s.commit()
+    out = await w.read(client)
+    assert by_feature(out, w)["ledger"]["milestone"] == "Beta [internal]"
+    assert [ln for ln in out["lines"] if "Beta [internal]" in ln["label"]], out["lines"]
+
+
+async def test_a_move_reuses_the_features_draft_item(client):
+    w = await company_world()
+    assert by_feature(await w.read(client), w)["widgets"]["on_roadmap"] is False
+    body = {"op": "override_priority", "target": {"feature_id": w.ids["widgets"]},
+            "before": {"override": None},
+            "after": {"position": 1, "reason": REASON, "confirm": True}}  # fmt: skip
+    r = await client.post(CHANGES, json=body, headers=w.ctx.as_("owner"))
+    assert r.status_code in (200, 201), r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        items = (
+            await s.scalars(
+                select(RoadmapItem).where(RoadmapItem.feature_id == uuid.UUID(w.ids["widgets"]))
+            )
+        ).all()
+        assert [str(i.id) for i in items] == [w.ids["pay-5"]], "a second item was added"
+        assert items[0].draft is False
+    row = by_feature(await w.read(client), w)["widgets"]
+    assert row["on_roadmap"] is True and row["item_id"] == w.ids["pay-5"]
