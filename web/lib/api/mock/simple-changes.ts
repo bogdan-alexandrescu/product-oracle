@@ -575,7 +575,7 @@ function fixPlan(db: SimpleDb, op: string, itemId: string, depId: string): Recor
 function moveFeature(db: SimpleDb, key: string, goalIds: string[]): void {
   const code = featureKeyOf(db, key);
   const gb = (db.goal_buckets ??= seedGoalBuckets());
-  const f = code ? gb.features.find((x) => x.key.toLowerCase() === code.toLowerCase()) : undefined;
+  const f = gb.features.find((x) => x.key.toLowerCase() === code.toLowerCase());
   const ids = goalIds.flatMap((id) => {
     const name = GOALS[Object.keys(GOALS).find((k) => goalId(k) === id) ?? ""];
     const g = gb.goals.find((x) => !x.archived && (x.id === id || (!!name && x.title === name)));
@@ -827,7 +827,7 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     session!.last_change_at = now;
   } else {
     // As if applied: on a copy of the roadmap.
-    const copy = structuredClone({ items: db.items, own: db.own, suggestions: db.suggestions });
+    const copy = structuredClone({ items: db.items, own: db.own, suggestions: db.suggestions, goal_buckets: db.goal_buckets });
     apply(db, change, after);
     flags = flagsFor(db, touched(change));
     Object.assign(db, copy);
