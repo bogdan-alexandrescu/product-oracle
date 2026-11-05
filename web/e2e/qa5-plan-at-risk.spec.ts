@@ -18,7 +18,7 @@ import { login } from "./helpers";
  *   fails_when=the milestone reads only a track milestone's own items (none), so never at risk;
  *   no_claim=which basis supports the date. "report-item-milestone" is "alignment-report" with
  *   no First release track milestone: the Plan's Now items name it, Nov 20 the earliest verified
- *   date, and the Daily alert digest email slips past its Nov 30.
+ *   date, and the Weekly alert digest slips past its Nov 30.
  * - "long goal": protects=a long goal name in Priorities' Goal column is shown whole, inside
  *   its cell, wrapped between words; fails_when=the name is cut (clamped), a word breaks across
  *   lines, or the chip runs past its cell; no_claim=a single word wider than the column.

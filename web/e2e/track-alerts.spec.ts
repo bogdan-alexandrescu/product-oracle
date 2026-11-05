@@ -6,13 +6,13 @@ import { login } from "./helpers";
 /*
  * F2 Track health in Plan and Inbox, driven through the UI on the mock layer
  * (NEXT_PUBLIC_API_MOCKS=1). The "track-alerts" scenario (lib/api/mock/roadmap.ts) seeds one
- * open date slip on the Usage alerts track: ENG-405, the tracker issue of "Daily alert digest
- * email", moved to Dec 9 while Beta rests on Nov 30. The mock stands in for the API's alert
+ * open date slip on the Usage alerts track: ENG-405, the tracker issue of "Weekly alert
+ * digest", moved to Dec 9 while Beta rests on Nov 30. The mock stands in for the API's alert
  * rules (proven by api/tests/test_track_alerts.py); each test here proves what a person sees
  * and does on the screen.
  */
 
-const ITEM = "Daily alert digest email";
+const ITEM = "Weekly alert digest";
 const LABEL = "Usage alerts PRD · At risk · 1 need you";
 
 async function withSlip(page: Page, role?: "viewer" | "approver") {

@@ -250,6 +250,12 @@ const ROADMAPS: Record<string, { title: string; visibility: "company" | "approve
   "onboarding-roadmap": { title: "Onboarding roadmap", visibility: "company", prd: "Guided setup", draft: 2 },
   "pricing-roadmap": { title: "Pricing roadmap", visibility: "approvers", prd: "Plan changes", draft: 3 },
 };
+/**
+ * plan-open-from-simple: an item's roadmap as the API names it, by its document's slug, the one
+ * the Plan's rows carry (the Alerts roadmap is the usage-alerts-roadmap document); the picker
+ * keeps the mock's own key.
+ */
+const ROADMAP_DOC_SLUG: Record<string, string> = { "alerts-roadmap": "usage-alerts-roadmap" };
 /** S7 adds Keep alerts quiet, a goal with no items yet (Oracle suggested features for it on its own). */
 export const GOALS: Record<string, string> = { "grow-retention": "Grow retention", "faster-activation": "Faster activation", "quiet-alerts": "Keep alerts quiet" };
 /** roadmap-talk's goals (the "roadmap-talk" scenario's items name them); known once such an item is seeded. */
@@ -1096,7 +1102,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     return {
       id: db.ids[s.key], key: s.key, title: s.title, outcome: s.outcome ?? null, horizon: s.horizon,
       code: prdCode(s.section),
-      roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
+      roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: ROADMAP_DOC_SLUG[s.roadmap] ?? s.roadmap, title: rm.title },
       prd: ownPrd(s),
       goal: goalOfSeed(s) ? { id: stableUuid(`simple-goal/${goalOfSeed(s)}`), key: goalOfSeed(s)!, title: GOALS[goalOfSeed(s)!] ?? PLAN_GOALS[goalOfSeed(s)!], metric: METRICS[goalOfSeed(s)!] ?? null, position: goalPositionOf(goalOfSeed(s)!), ...READINGS[goalOfSeed(s)!] } : null,
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
@@ -1166,7 +1172,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const shown = items.filter(
     (i) =>
       (q.get("draft_roadmap") === "1" || !onDraft.has(i.id)) &&
-      (!q.get("roadmap") || i.roadmap.slug === chosen) &&
+      (!q.get("roadmap") || i.roadmap.slug === (ROADMAP_DOC_SLUG[chosen ?? ""] ?? chosen)) &&
       (!prd || i.prd?.slug === prd || i.prd?.id === prd) &&
       (!goal || i.goal?.key === goal || i.goal?.id === goal) &&
       (!track || i.track?.id === track) &&

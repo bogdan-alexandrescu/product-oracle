@@ -132,7 +132,7 @@ for (const size of SIZES) {
       await scenario(page, "track-alerts");
       await login(page);
       await page.goto("/plan");
-      await page.getByTestId("plan-row").filter({ visible: true }).filter({ hasText: "Daily alert digest" }).getByTestId("plan-title").click();
+      await page.getByTestId("plan-row").filter({ visible: true }).filter({ hasText: "Weekly alert digest" }).getByTestId("plan-title").click();
       const card = page.getByTestId("plan-inspector").filter({ visible: true }).getByTestId("plan-alert");
       await card.getByRole("button", { name: "Re-plan…" }).click();
       const dialog = page.getByRole("dialog", { name: "Re-plan this track" });
