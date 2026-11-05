@@ -91,6 +91,12 @@ def describe(row: Any) -> dict[str, Any]:
         from oracle.simple import trash_items
 
         return trash_items.describe(row)
+    from oracle.decisions.models import Decision
+
+    if isinstance(row, Decision):
+        from oracle.simple import decision_sheet
+
+        return decision_sheet.describe(row)
     if isinstance(row, Document):
         return {
             "type": "document",
@@ -197,6 +203,13 @@ async def find_root(db: AsyncSession, root_type: str, ref: str, *, trashed: bool
         stmt = select(kind).where(kind.id == uuid.UUID(ref))  # type: ignore[attr-defined]
         if root_type == "goal":
             stmt = stmt.where(kind.type == "goal")  # type: ignore[attr-defined]
+    elif root_type in ("decision", "question"):
+        # edit-decisions (oracle.simple.decision_sheet): a decision or a PRD question.
+        from oracle.decisions.models import Decision
+
+        stmt = select(Decision).where(Decision.id == uuid.UUID(ref))
+        prd = Decision.origin == "prd"
+        stmt = stmt.where(prd if root_type == "question" else ~prd)
     elif root_type == "intake":
         stmt = select(ProductIntake).where(ProductIntake.id == uuid.UUID(ref))
     else:
@@ -369,8 +382,14 @@ def _feature_goal_models() -> dict[str, type]:
     return {"feature": RoadmapItem, "goal": Entity}
 
 
+def _decision_model() -> type:
+    from oracle.decisions.models import Decision
+
+    return Decision
+
+
 def _models() -> tuple[type, ...]:
-    return (Document, ProductIntake, Run, *_feature_goal_models().values())
+    return (Document, ProductIntake, Run, *_feature_goal_models().values(), _decision_model())
 
 
 async def get_entry(db: AsyncSession, entry_id: uuid.UUID) -> TrashEntry:
@@ -442,8 +461,9 @@ async def _not_restored(db: AsyncSession, entry: TrashEntry) -> list[dict[str, A
 
 
 # trash-features-goals (owner's answer, Nov 5): whoever deleted a feature or a goal restores
-# it too; everything else in Trash is the owners' alone.
-OWN_RESTORE = frozenset({"feature", "goal"})
+# it too (edit-decisions: and a decision or a PRD question); everything else in Trash is the
+# owners' alone.
+OWN_RESTORE = frozenset({"feature", "goal", "decision", "question"})
 
 
 def may_restore(principal: Any, entry: TrashEntry) -> bool:
@@ -510,7 +530,13 @@ async def purge_entry(
     db: AsyncSession, principal: Principal | str | None, entry: TrashEntry
 ) -> None:
     """Delete the entry's rows for good (what hangs off them goes by cascade)."""
-    for model in (Run, Document, ProductIntake, *_feature_goal_models().values()):
+    for model in (
+        Run,
+        Document,
+        ProductIntake,
+        *_feature_goal_models().values(),
+        _decision_model(),
+    ):
         await db.execute(
             delete(model)
             .where(model.trash_entry_id == entry.id, model.deleted_at.is_not(None))

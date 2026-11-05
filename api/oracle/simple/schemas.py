@@ -682,6 +682,12 @@ ChangeOp = Literal[
     # trash-features-goals: a feature moved to Trash, proposed to its decider by who may
     # not decide on it (oracle.simple.trash_items).
     "delete_item",
+    # edit-decisions (oracle.simple.decision_sheet): an open decision's or a PRD question's
+    # fields, its withdrawal (the "not now"), and a question added to a PRD.
+    "edit_decision",
+    "edit_question",
+    "withdraw_decision",
+    "add_question",
 ]
 # chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
 # the change engine (oracle.simple.chat_actions).
@@ -2217,6 +2223,15 @@ class SimpleDecisionRow(BaseModel):
     # prd-questions: a PRD's question keeps its code ("Q10"); a decided one, its answer.
     code: str | None = None
     chosen: str | None = None
+    # edit-decisions (ec1 b): every field the sheet shows and changes, what the reader may
+    # do there, and the last change made from it.
+    question: str | None = None
+    context: str | None = None
+    options: list["SimpleQuestionOption"] = []
+    review_at: dt.date | None = None
+    can: "SimpleDecisionCan | None" = None
+    edited_at: dt.datetime | None = None
+    edited_by: SimplePersonRef | None = None
 
 
 class SimpleMeetingGroup(BaseModel):
@@ -2274,6 +2289,24 @@ class SimpleQuestionCan(BaseModel):
     propose: bool = False
     # Names the decider (owners and the decider; others propose).
     name_decider: bool = False
+    # edit-decisions (eq2 b): changes its text, recommendation and other answers at once
+    # (owners and the decider; ``propose`` suggests the change instead); withdraws it (the
+    # "not now", with Undo); deletes it to Trash.
+    edit: bool = False
+    withdraw: bool = False
+    delete: bool = False
+
+
+class SimpleDecisionCan(BaseModel):
+    """edit-decisions (ec1 b): what the reader may do on an open decision's sheet, from
+    the decision's own rights (its creator, its decider or an owner edits, withdraws and
+    deletes; owners reassign; another commenter or approver proposes an edit)."""
+
+    edit: bool = False
+    propose: bool = False
+    withdraw: bool = False
+    delete: bool = False
+    reassign: bool = False
 
 
 class SimpleQuestionSource(BaseModel):
@@ -2318,6 +2351,10 @@ class SimpleQuestion(BaseModel):
     # A live review meeting's agenda: the change that decided it in this meeting, for its
     # Undo (only who made it, while the meeting runs).
     undo_id: uuid.UUID | None = None
+    # edit-decisions: the last change made from the sheet, who and when ("Edited by you
+    # just now").
+    edited_at: dt.datetime | None = None
+    edited_by: SimplePersonRef | None = None
 
 
 class SimpleRunStepOut(BaseModel):
@@ -2448,3 +2485,4 @@ OnePagerOut.model_rebuild()
 
 
 SimpleMeetingOut.model_rebuild()
+SimpleDecisionRow.model_rebuild()

@@ -233,7 +233,8 @@ def criteria() -> dict[type, Callable[[Any], ColumnElement[bool]]]:
         _CRITERIA[StakeholderQuestion] = lambda cls: and_(
             asked(cls), _question_checkpoint_live(cls)
         )
-        _CRITERIA[Decision] = _prd_question_live
+        # edit-decisions: a decision or PRD question in Trash is left out too.
+        _CRITERIA[Decision] = lambda cls: and_(_prd_question_live(cls), cls.deleted_at.is_(None))
     return _CRITERIA
 
 

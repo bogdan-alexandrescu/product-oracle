@@ -157,7 +157,10 @@ FLAG_KINDS = (
 WRITTEN = ("applied", "accepted", "undone")
 # Roadmap-plus: a roadmap's key dates (oracle.simple.key_dates).
 KEY_DATE_OPS = ("add_key_date", "edit_key_date", "remove_key_date")
-QUESTION_OPS = ("decide_question", "name_decider")
+# edit-decisions (oracle.simple.decision_sheet): the sheet's ops name a decision too and go
+# to its decider now, as a question's do.
+SHEET_OPS = ("edit_decision", "edit_question", "withdraw_decision", "add_question")
+QUESTION_OPS = ("decide_question", "name_decider", *SHEET_OPS)
 
 
 class ChangeError(Exception):
@@ -1107,6 +1110,7 @@ async def create(
     from oracle.simple import (
         additions,
         agenda,
+        decision_sheet,
         goal_milestones,
         key_dates,
         one_pager,
@@ -1130,6 +1134,8 @@ async def create(
         return await goal_milestones.create_change(db, principal, body)
     if body.op in trash_items.OPS:
         return await trash_items.create_change(db, principal, body)
+    if body.op in decision_sheet.OPS:
+        return await decision_sheet.create(db, principal, body)
     me, now = _me(principal), company_time.now()
     ids = [_uuid(body.target.get("item_id"), "item_id")]
     if body.op in FIXES and body.target.get("subject"):
@@ -1261,6 +1267,10 @@ async def decide(
         return await goal_milestones.decide(db, principal, c, action, reason)
     if c.op in trash_items.OPS:
         return await trash_items.decide(db, principal, c, action, reason)
+    from oracle.simple import decision_sheet
+
+    if c.op in decision_sheet.OPS:
+        return await decision_sheet.decide(db, principal, c, action, reason)
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     entry = read_.by_id().get(uuid.UUID(c.target["item_id"]))
     if entry is None:
@@ -1356,6 +1366,10 @@ async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> Simple
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
+    from oracle.simple import decision_sheet
+
+    if c.op in decision_sheet.OPS:
+        return await decision_sheet.undo(db, principal, c)
     if c.op in questions.OPS:
         return await questions.undo(db, principal, c)
     if c.op in key_dates.OPS:
@@ -1471,6 +1485,7 @@ class _View:
     def may_decide(self, c: SimpleChange) -> bool:
         from oracle.simple import (
             additions,
+            decision_sheet,
             goal_milestones,
             key_dates,
             one_pager,
@@ -1478,6 +1493,8 @@ class _View:
             targets,
         )
 
+        if c.op in decision_sheet.OPS:
+            return decision_sheet.may_decide_change(self.principal, c, self.questions)
         if c.op in questions.OPS:
             return questions.may_decide_change(self.principal, c, self.questions)
         if c.op in key_dates.OPS:
@@ -1500,7 +1517,7 @@ class _View:
         owners, decider and reviewers (#723 owner answer)."""
         # S5: a one-pager line's change is on a PRD, not a roadmap of this read.
         if (c.document_id is not None and c.document_id not in self.docs
-                and c.op not in ("edit_line", "decide_question", "name_decider")):  # fmt: skip
+                and c.op not in ("edit_line", *QUESTION_OPS)):  # fmt: skip
             return False
         if self.me is None:
             return False

@@ -98,6 +98,7 @@ from oracle.simple.schemas import (
     SimpleMinutesIn,
     SimpleOpenDecision,
     SimplePersonRef,
+    SimpleQuestionOption,
     SimpleRunGroup,
     SimpleRunStepOut,
     SimpleRunStopOut,
@@ -2333,16 +2334,26 @@ async def decided_flows(db: AsyncSession, links: list) -> dict[uuid.UUID, Simple
 # --------------------------------------------------------------------------- the page
 
 
-def _row(d: Decision, names: dict) -> SimpleDecisionRow:
+def _row(d: Decision, names: dict, principal: Any = None, edited: dict | None = None
+         ) -> SimpleDecisionRow:  # fmt: skip
+    from oracle.simple import decision_sheet
+
     chosen = next(
         (o.get("label") for o in d.options or [] if o.get("key") == d.chosen_option), None
     )
+    at, by = (edited or {}).get(str(d.id), (None, None))
     return SimpleDecisionRow(
         id=d.id, number=d.number, title=d.title, origin=d.origin, status=d.status,
         approver=_ref(d.approver_id, names) if d.approver_id else None,
         decided_at=d.decided_at, created_at=d.created_at, subjects=list(d.subjects or []),
         code=(d.prd_question or {}).get("code") if d.origin == "prd" else None,
         chosen=chosen,
+        # edit-decisions (ec1 b): the sheet's fields and rights.
+        question=d.question, context=d.context,
+        options=[SimpleQuestionOption(key=str(o.get("key")), label=str(o.get("label")))
+                 for o in d.options or []],
+        review_at=d.review_at, can=decision_sheet.can(principal, d),
+        edited_at=at, edited_by=_ref(by, names) if by else None,
     )  # fmt: skip
 
 
@@ -2434,8 +2445,14 @@ async def decisions_page(
             q = q.where(or_(*[Decision.subjects.contains([{"id": i}]) for i in match]))
         q = q.order_by(Decision.number.desc()).limit(200)
         others = [d for d in await db.scalars(q) if keep(d)]
+    from oracle.simple import decision_sheet
+
+    edited = await decision_sheet.edits(
+        db, {d.id for lst in links.values() for _, d in lst} | {d.id for d in others}
+    )
     names = await _names(db, {d.approver_id for lst in links.values() for _, d in lst}
-                         | {d.approver_id for d in others} | _note_authors(shown_ms))  # fmt: skip
+                         | {d.approver_id for d in others} | _note_authors(shown_ms)
+                         | {by for _, by in edited.values()})  # fmt: skip
     flows = await decided_flows(db, [x for m in shown_ms for x in links[m.id]])
     groups = []
     for b, m in zip(await briefs(db, shown_ms), shown_ms, strict=True):
@@ -2445,7 +2462,8 @@ async def decisions_page(
         groups.append(SimpleMeetingGroup(
             meeting=b,
             minutes=await _named(db, minutes) if minutes else None,
-            decisions=[_row(d, names).model_copy(update={"flow": flows.get(d.id)})
+            decisions=[_row(d, names, principal, edited).model_copy(
+                           update={"flow": flows.get(d.id)})
                        for _, d in links[m.id] if whole or keep(d)],
             notes=[n for n in await _notes_out(db, m, names) if n.kind in ("note", "comment")],
             delivery=await delivery_out(db, m) if m.minutes_state == "sent" else None,
@@ -2476,7 +2494,7 @@ async def decisions_page(
     return SimpleDecisionsOut(
         **await questions.page_fields(db, principal, qdocs, only, replaced),
         meetings=groups,
-        other=[_row(d, names) for d in others],
+        other=[_row(d, names, principal, edited) for d in others],
         prds=[SimpleFilterOption(id=d.slug, title=d.title)
               for d in sorted(docs.values(), key=lambda d: d.title)
               if d.id in readable and d.id not in replaced],

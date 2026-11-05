@@ -81,8 +81,8 @@ def _row(page: dict, did: str) -> dict | None:
 
 
 async def _change(client, ctx, role, op, target, after=None):
-    return await client.post(CHANGES, headers=ctx.as_(role),
-                             json={"op": op, "target": target, "after": after or {}})  # fmt: skip
+    body = {"op": op, "target": target, "before": {}, "after": after or {}}
+    return await client.post(CHANGES, headers=ctx.as_(role), json=body)
 
 
 EDIT = {
@@ -189,8 +189,13 @@ async def _meeting_link(ctx, decision_id: str) -> uuid.UUID:
 
 async def test_delete_a_decision_to_trash_and_restore_it(client):
     ctx = await make_ctx()
-    d = await _decision(client, ctx, approver="approver", by="approver",
-                        subjects=[{"kind": "document", "id": str(uuid.uuid4()), "ref": "x"}])
+    d = await _decision(
+        client,
+        ctx,
+        approver="approver",
+        by="approver",
+        subjects=[{"kind": "document", "id": str(uuid.uuid4()), "ref": "x"}],
+    )
     meeting = await _meeting_link(ctx, d["id"])
     other = await _decision(client, ctx, approver="owner", by="owner")
     # who may not edit it is refused
