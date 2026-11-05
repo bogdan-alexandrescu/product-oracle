@@ -542,10 +542,12 @@ async def test_reader_prompt_is_a_new_version(client):
     from oracle.jobs import prompting
 
     name, text = prompting.current("chat_reader")
-    assert name == "chat_reader.v5"
+    assert name == "chat_reader.v6"
     assert "under_discussion" in text and "open_decisions" in text
     # fix4-simple-decide review (qa-simple-decide-24): a part no op does is listed, not left out.
     assert "`skipped`" in text and "leave it out" not in text
+    # chat-latest-card fix round 2: the reader marks a redo of an open draft (`redo_of`).
+    assert "`cards`" in text and "`redo_of`" in text
 
 
 async def test_review_nothing_is_dropped_without_a_word(client):

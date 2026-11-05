@@ -136,8 +136,8 @@ async def test_apply_all_applies_only_active_cards(client):
 
 
 # Fix round 1 (review major): a card that makes a new record (a note, a question, a
-# decision, a suggestion) is its own topic; only a reworded draft of an earlier open card of
-# the same op replaces it.
+# decision, a suggestion) is its own topic; only a card its builder marks a redo of an
+# earlier open draft (the person asked to change that draft) replaces it.
 #
 # - test_two_notes_in_a_meeting_both_stay_active: protects=two different notes (and two
 #   different open questions) in one meeting chat both stay active and both apply;
@@ -147,9 +147,14 @@ async def test_apply_all_applies_only_active_cards(client):
 #   them one topic.
 # - test_two_suggestions_for_one_goal_both_stay_active: protects=two different features
 #   suggested for one goal stay active; fails_when=the goal makes them one topic.
-# - test_a_reworded_note_replaces_its_earlier_draft: protects=a note offered again in other
-#   words replaces the earlier open draft; a note acted on is not a draft;
-#   fails_when=both drafts stay active.
+# - test_drafts_sharing_most_words_are_different_records (fix round 2): protects=two drafts
+#   of one op that share most words (March vs April, Postgres vs Redis, Dana vs Lee) stay
+#   active; only a line answering with "no, ..." replaces the earlier draft of its op;
+#   fails_when=word overlap makes them one topic, or "no, ..." leaves both active.
+# - test_make_it_april_instead_replaces_the_march_draft (fix round 2): protects=the reader
+#   marks "make it April instead" a redo of the March card (redo_of), which replaces it; a
+#   redo_of naming another op's card is ignored; fails_when=both stay active, or a wrong
+#   redo_of replaces a card.
 # - test_concurrent_apply_of_an_older_and_a_newer_card: protects=the chat is locked for
 #   the check and the apply: while a newer card applies, an older card's Apply waits and
 #   then gets the replaced message; fails_when=both apply.
@@ -204,20 +209,56 @@ async def test_two_suggestions_for_one_goal_both_stay_active(client):
     assert r.status_code == 200, r.text
 
 
-async def test_a_reworded_note_replaces_its_earlier_draft(client):
+async def test_drafts_sharing_most_words_are_different_records(client):
     from tests.test_simple_chat_actions import one_card
 
     w = await world()
     mid = (await start(client, w))["id"]
+    pairs = [
+        ("decided: we launch billing in March", "decided: we launch billing in April"),
+        ("note: Use Postgres for the events store", "note: Use Redis for the events store"),
+        ("note: Ask Dana about the pricing page", "note: Ask Lee about the pricing page"),
+    ]
+    for one, two in pairs:
+        a = await one_card(client, w, "decider", one, mid)
+        b = await one_card(client, w, "decider", two, mid)
+        got = await _active(client, w, "decider", [a, b], mid)
+        assert got == [(None, "apply")] * 2, (one, two)
+    # The person's line answering a card with "no, ..." asks to change that draft.
     a = await one_card(client, w, "decider", "note: the budget is approved", mid)
-    b = await one_card(client, w, "decider", "note: the budget is approved for the spring", mid)
+    b = await one_card(client, w, "decider", "no, note: the budget is approved for the spring", mid)
     got = await _active(client, w, "decider", [a, b], mid)
     assert got == [(b["id"], None), (None, "apply")]
     r = await client.post(f"{CARDS}/{a['id']}/apply", headers=w.ctx.as_("decider"))
     assert r.status_code == 409 and r.json()["detail"] == card_order.REPLACED
-    # Another op with the same words is another record.
-    q = await one_card(client, w, "decider", "open question: the budget is approved?", mid)
+    # Another op is another record, whatever the line says.
+    q = await one_card(client, w, "decider", "no, open question: is the budget approved?", mid)
     assert await _active(client, w, "decider", [b, q], mid) == [(None, "apply")] * 2
+
+
+async def test_make_it_april_instead_replaces_the_march_draft(client):
+    from tests.test_simple_chat_actions import one_card
+
+    w = await world()
+    mid = (await start(client, w))["id"]
+    march = await one_card(client, w, "decider", "decided: we launch billing in March", mid)
+    seen: list = []
+    await post(client, w, "decider", "make it April instead", mid)
+    redo = act("record_decision", text="We launch billing in April")
+    assert await read(w, actions({**redo, "redo_of": march["id"]}), seen) == 1
+    # The reader is shown the open drafts it may redo.
+    assert [c["id"] for c in seen[0]["cards"]] == [march["id"]]
+    [april] = (await last(client, w, "decider", mid))["cards"]
+    got = await _active(client, w, "decider", [march, april], mid)
+    assert got == [(april["id"], None), (None, "apply")]
+    r = await client.post(f"{CARDS}/{march['id']}/apply", headers=w.ctx.as_("decider"))
+    assert r.status_code == 409 and r.json()["detail"] == card_order.REPLACED
+    # A redo_of naming a card of another op (or no card in the chat) is ignored.
+    await post(client, w, "decider", "and a note about it", mid)
+    note = act("minutes_note", text="Billing needs a launch note")
+    assert await read(w, actions({**note, "redo_of": april["id"]})) == 1
+    [n] = (await last(client, w, "decider", mid))["cards"]
+    assert await _active(client, w, "decider", [april, n], mid) == [(None, "apply")] * 2
 
 
 async def test_concurrent_apply_of_an_older_and_a_newer_card(client, monkeypatch):
@@ -245,4 +286,44 @@ async def test_concurrent_apply_of_an_older_and_a_newer_card(client, monkeypatch
     assert newer.status_code == 200, newer.text
     assert older.status_code == 409, older.text
     assert older.json()["detail"] == card_order.REPLACED
+    assert (await w.item("Alert digest")).title == "Alert digest"
+
+
+# - test_a_retry_on_a_closed_session_checks_replaced_again (fix round 2): protects=Apply in
+#   a meeting whose session is closed rolls back (releasing the chat's lock) and retries;
+#   the replaced check runs again after the lock is taken again, so a newer card acted on
+#   meanwhile refuses the older; fails_when=the retry applies the older card.
+
+
+async def test_a_retry_on_a_closed_session_checks_replaced_again(client, meetings, monkeypatch):  # noqa: F811
+    import uuid
+
+    from sqlalchemy import update
+
+    from oracle.simple import changes
+    from oracle.simple.changes import ChangeError
+    from oracle.simple.models import SimpleChatCard
+    from oracle.tenancy import tenant_session
+
+    ctx = await make_people()
+    w = await World(ctx).build()
+    mid = _meeting(ctx, meetings, "everyone")
+    meetings.rules[mid].session_id = uuid.uuid4()
+    old = (await say(client, ctx, "owner", "rename Alert digest to Alert digest A", mid))["cards"]
+    new = (await say(client, ctx, "owner", "rename Alert export to Alert export B", mid))["cards"]
+    real = changes.create
+
+    async def closed(db, principal, body, **kw):
+        if body.session_id is not None:
+            # While the chat's lock is let go, the newer card is acted on elsewhere.
+            async with tenant_session(ctx.tenant_id) as s:
+                await s.execute(update(SimpleChatCard).where(SimpleChatCard.id == new[0]["id"])
+                                .values(status="discarded"))  # fmt: skip
+                await s.commit()
+            raise ChangeError(409, "That session is closed")
+        return await real(db, principal, body, **kw)
+
+    monkeypatch.setattr(changes, "create", closed)
+    r = await client.post(f"{CARDS}/{old[0]['id']}/apply", headers=ctx.as_("owner"))
+    assert r.status_code == 409 and r.json()["detail"] == card_order.REPLACED, r.text
     assert (await w.item("Alert digest")).title == "Alert digest"
