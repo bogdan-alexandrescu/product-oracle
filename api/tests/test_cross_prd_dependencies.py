@@ -500,10 +500,12 @@ async def test_the_simple_panel_shows_a_dependency_named_by_a_feature_key():
     assert by_key["ahl-1"].needed_by == [by_key["observability"].row.id]
 
 
-async def test_a_confirmed_ground_truth_feature_passes_both_stops():
-    # protects=the four area PRDs, none on the company roadmap yet, may depend on each
-    # other's confirmed features at the Engineering check, as at the feature set stop;
-    # fails_when=the feature set passes and the Engineering check refuses the briefs.
+async def test_a_confirmed_ground_truth_feature_in_no_prd_is_named_at_the_engineering_check():
+    # protects=the feature set stop lets a brief depend on a confirmed feature, and the
+    # Engineering check names it plainly while no PRD holds it (follow-ups: not first at
+    # the roadmap items stop); area PRDs drafted side by side see each other's approved
+    # scopes (test_a_new_prd_s_approved_scope_counts_before_its_import_and_any_roadmap);
+    # fails_when=the Engineering check accepts a feature no PRD will build.
     w = await world(roadmap=False)
     async with tenant_session(w["tenant"]) as s:
         known = await feature_set.known_for_run(s, w["run"])
@@ -515,8 +517,10 @@ async def test_a_confirmed_ground_truth_feature_passes_both_stops():
     )  # fmt: skip
     assert out.blocking == 0
     summary = await _summary(w, "export-logs")
-    assert summary["problems"] == []
-    assert summary["elsewhere"] == {"export-logs": "Export logs"}
+    assert [p["message"] for p in summary["problems"]] == [
+        "Export logs is in no PRD yet: Observability depends on it"
+    ]
+    assert summary["elsewhere"] == {}
 
 
 async def test_a_new_prd_s_approved_scope_counts_before_its_import_and_any_roadmap():
