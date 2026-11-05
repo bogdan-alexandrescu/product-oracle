@@ -117,3 +117,27 @@ async def test_a_busy_check_for_a_person_with_parses_running_is_429(monkeypatch)
 def test_doc_dates_words_a_day_through_company_time():
     assert doc_dates.shown_day is company_time.calendar_day_with_year
     assert doc_dates.shown_day(dt.date(2026, 11, 30)) == "Nov 30, 2026"
+
+
+# --- run_imported_into reads an index, not the whole audit table ----------------------------
+
+
+async def test_run_imported_into_reads_its_index(db):  # noqa: F811
+    """The lookup (oracle.docs.service.run_imported_into) has its own partial index on the
+    import events, by run and document: no sequential scan of every audit event."""
+    from sqlalchemy import text
+
+    await db.execute(text("SET LOCAL enable_seqscan = off"))
+    plan = "\n".join(
+        await db.scalars(
+            text(
+                "EXPLAIN SELECT id FROM audit_events WHERE action = 'document.version_imported' "
+                "AND data ->> 'document_id' = :doc AND data ->> 'run_id' = :run LIMIT 1"
+            ),
+            {
+                "doc": "00000000-0000-0000-0000-00000000000d",
+                "run": "00000000-0000-0000-0000-0000000000a1",
+            },
+        )
+    )
+    assert "ix_audit_events_version_imported" in plan, plan
