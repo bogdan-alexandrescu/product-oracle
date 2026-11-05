@@ -638,3 +638,107 @@ async def test_restore_reaches_a_version_proposed_from_a_detailed_change_set(cli
     items = await _items(client, w)
     assert "gift-cards" in items, "v2 is the roadmap now"
     assert "move_dates-b" in items and "move_dates-b" in await _detailed(client, w)
+
+
+async def _on_versions(w, key: str) -> dict[int, int]:
+    """How many live rows of ``key`` each version of the roadmap has, by version number."""
+    from oracle.docs.models import DocumentVersion
+
+    async with tenant_session(w.ctx.tenant_id) as s:
+        rows = await s.execute(
+            select(DocumentVersion.number, func.count(RoadmapItem.id))
+            .join(RoadmapItem, RoadmapItem.roadmap_version_id == DocumentVersion.id)
+            .where(DocumentVersion.document_id == uuid.UUID(w.roadmap_id),
+                   RoadmapItem.item_key == key)
+            .group_by(DocumentVersion.number)
+        )  # fmt: skip
+        return dict(rows.all())
+
+
+@pytest.mark.asyncio
+async def test_a_feature_only_in_the_draft_is_restored_to_the_draft_only(client):
+    """protects=(review round 5) a feature added in the open Simple draft (never approved),
+    deleted, then restored, is back in that draft and on no version: a viewer, who sees the
+    published roadmap, does not see it; fails_when=Restore copies it onto the published
+    version (or an approved one); no_claim=the web."""
+    from tests.test_simple_additions_api import World as Additions
+
+    w = await Additions().build()
+    iid = (await w.add(client, "owner", "Guided setup"))["change"]["target"]["item_id"]
+    r = await client.delete(f"{ITEMS}/{iid}", headers=w.as_("decider"))
+    assert r.status_code == 200 and r.json()["change"] is None, r.text
+    assert iid not in await w.items(client, "decider")
+
+    r = await client.post(f"{ITEMS}/{iid}/restore", headers=w.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert iid in await w.items(client, "decider")
+    assert iid not in await w.items(client, "viewer")
+    assert "Guided setup" not in {i["title"] for i in (await w.items(client, "viewer")).values()}
+    async with tenant_session(w.ctx.tenant_id) as s:
+        rows = list(await s.scalars(select(RoadmapItem).where(RoadmapItem.title == "Guided setup")))
+    assert [(str(r.id), r.roadmap_version_id, r.simple_draft_id is not None) for r in rows] == [
+        (iid, None, True)
+    ]
+
+
+@pytest.mark.asyncio
+async def test_restore_never_rewrites_an_older_approved_version(client):
+    """protects=(review round 5) a feature deleted on v1, then v2 and v3 published without
+    it, then restored: it is on v3 (the published version) and v1 (its own row), never on
+    v2, an older approved version kept as it was approved; fails_when=Restore copies it
+    onto v2 too; no_claim=Detailed's version history screen."""
+    from tests import test_simple_drafts_api as D
+
+    w = await D.world()
+    victim = w.ids["move_dates-b"]
+    r = await client.delete(f"{ITEMS}/{victim}", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    before = D.TITLE
+    for title in ("Ledger v2", "Ledger v3"):
+        a = (await _items(client, w, "decider"))["edit_title-a"]["id"]
+        r = await D.edit_title(client, w, "decider", title, target={"item_id": a},
+                               before={"title": before})  # fmt: skip
+        assert r.status_code == 201, r.text
+        await _publish(client, w)
+        before = title
+    assert set(await _on_versions(w, "edit_title-a")) == {1, 2, 3}
+
+    r = await client.post(f"{ITEMS}/{victim}/restore", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert "move_dates-b" in await _items(client, w)
+    assert await _on_versions(w, "move_dates-b") == {1: 1, 3: 1}
+
+
+@pytest.mark.asyncio
+async def test_restore_skips_a_version_that_can_no_longer_be_approved(client):
+    """protects=(review round 5) a change set's proposal v2 waits, then a Simple draft is
+    submitted as v3 (waiting on a reviewer): v2 is no longer the latest, so it can never be
+    approved; Restore puts the feature on v3 and leaves v2 as it is; fails_when=a copy
+    lands on v2; no_claim=withdrawn and superseded versions (skipped before)."""
+    from tests import test_simple_drafts_api as D
+
+    w = await D.world(reviewers=("reviewer2",))
+    victim = w.ids["move_dates-b"]
+    r = await client.delete(f"{ITEMS}/{victim}", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    sets = f"/v1/roadmaps/{await D.slug(w)}/change-sets"
+    r = await client.post(sets, headers=w.ctx.as_("decider"))
+    assert r.status_code == 201, r.text
+    out = r.json()
+    r = await client.patch(
+        f"{sets}/{out['id']}", headers=w.ctx.as_("decider"),
+        json={"changes": [{"op": "add", "title": "Gift cards", "horizon": "next"}],
+              "lock_version": out["lock_version"]},
+    )  # fmt: skip
+    assert r.status_code == 200, r.text
+    r = await client.post(f"{sets}/{out['id']}/propose", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200 and r.json()["proposed_version"] == 2, r.text
+    assert (await D.edit_title(client, w, "decider")).status_code == 201
+    d = await D.the_draft(client, w)
+    r = await client.post(f"{D.DRAFTS}/{d['id']}/submit", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200 and r.json()["status"] == "submitted", r.text
+    assert set(await _on_versions(w, "edit_title-a")) == {1, 2, 3}
+
+    r = await client.post(f"{ITEMS}/{victim}/restore", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert await _on_versions(w, "move_dates-b") == {1: 1, 3: 1}
