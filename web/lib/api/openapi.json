@@ -123215,7 +123215,8 @@
               "date",
               "draft",
               "proposal",
-              "goal_suggestion"
+              "goal_suggestion",
+              "goal"
             ],
             "title": "Kind"
           },

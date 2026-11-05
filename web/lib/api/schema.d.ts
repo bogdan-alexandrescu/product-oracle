@@ -41431,7 +41431,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "run_stop" | "question" | "decision" | "broken_link" | "date" | "draft" | "proposal" | "goal_suggestion";
+            kind: "run_stop" | "question" | "decision" | "broken_link" | "date" | "draft" | "proposal" | "goal_suggestion" | "goal";
             /** Key */
             key: string;
             /** Ref Id */

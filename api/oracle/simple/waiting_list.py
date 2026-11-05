@@ -3,9 +3,9 @@ waiting cards, the Decisions page's "Waiting for you" and the rail's counts read
 (GET /v1/simple/decisions/waiting ``items``): the run stops they may decide, the roadmap's
 broken links on items they decide, the drafts waiting for their approval, the PRD questions
 they own, the decision-log calls proposed to them, the proposals on their items, the dates to
-confirm and the goal suggestions they decide. Each item says what it is, its action in words
-and where it is done; acting on it (through that kind's own endpoint) drops it from the next
-read, so every page and the rail agree.
+confirm, the goal suggestions they decide and the proposed goals they may confirm. Each item
+says what it is, its action in words and where it is done; acting on it (through that kind's
+own endpoint) drops it from the next read, so every page and the rail agree.
 """
 
 from __future__ import annotations
@@ -16,6 +16,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import company_time
+from oracle.authz import has_role
+from oracle.baseline.models import Entity
 from oracle.decisions.models import Decision
 from oracle.simple.schemas import SimpleQuestion, SimpleWaitingItem
 
@@ -149,6 +151,31 @@ async def _goal_suggestions(db: AsyncSession, principal: Any) -> list[SimpleWait
     ]
 
 
+async def _goals(db: AsyncSession, principal: Any) -> list[SimpleWaitingItem]:
+    """Proposed goals, for whoever may confirm them (POST /v1/baseline/entities/{id}/confirm
+    takes an approver), confirmed or set aside in place as Home's goals card does."""
+    if not has_role(getattr(principal, "role", ""), "approver"):
+        return []
+    rows = await db.scalars(
+        select(Entity)
+        .where(Entity.type == "goal", Entity.status == "proposed")
+        .order_by(Entity.created_at)
+    )
+    return [
+        SimpleWaitingItem(
+            kind="goal",
+            key=f"goal:{g.id}",
+            ref_id=str(g.id),
+            title=g.title,
+            detail="A proposed goal",
+            action="Confirm",
+            href="/simple",
+            at=g.created_at,
+        )  # fmt: skip
+        for g in rows
+    ]
+
+
 def _questions(qs: list[SimpleQuestion]) -> list[SimpleWaitingItem]:
     return [
         SimpleWaitingItem(
@@ -189,8 +216,8 @@ async def items(
     db: AsyncSession, principal: Any, qs: list[SimpleQuestion]
 ) -> list[SimpleWaitingItem]:
     """The one list, run stops first, then the questions, decision-log calls, roadmap,
-    drafts, proposals and goal suggestions. Each source is read as its own page reads it, so
-    what this person cannot see or decide is never here."""
+    drafts, proposals, goal suggestions and proposed goals. Each source is read as its own
+    page reads it, so what this person cannot see or decide is never here."""
     if getattr(principal, "user_id", None) is None:
         return []
     out = await _stops(db, principal)
@@ -200,6 +227,7 @@ async def items(
     out += await _drafts(db, principal)
     out += await _proposals(db, principal)
     out += await _goal_suggestions(db, principal)
+    out += await _goals(db, principal)
     return out
 
 

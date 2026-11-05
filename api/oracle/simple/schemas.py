@@ -2268,10 +2268,11 @@ class SimpleWaitingItem(BaseModel):
         "draft",
         "proposal",
         "goal_suggestion",
+        "goal",
     ]
     # Unique in the list (kind and id); ``ref_id`` is the id its own endpoint acts on (the
-    # checkpoint, question, decision's number, item, date suggestion, draft, change or goal
-    # suggestion).
+    # checkpoint, question, decision's number, item, date suggestion, draft, change, goal
+    # suggestion or proposed goal).
     key: str
     ref_id: str
     title: str
