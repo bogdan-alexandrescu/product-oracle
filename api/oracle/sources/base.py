@@ -82,7 +82,14 @@ class ConnectorError(Exception):
 
 
 class ConnectorConfigError(ConnectorError):
-    """The config or credential is invalid (bad repo name, missing scope, ...)."""
+    """The config or credential is invalid (bad repo name, missing scope, ...).
+
+    ``is_action``: the message already says what to do ("pick 100 channels or fewer"),
+    so a source it stops reads it as the fix, not as a cause to edit away."""
+
+    def __init__(self, message: str = "", *, is_action: bool = False) -> None:
+        super().__init__(message)
+        self.is_action = is_action
 
 
 class ConnectorBadInput(ConnectorConfigError):

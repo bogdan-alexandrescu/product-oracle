@@ -89,6 +89,15 @@ test("ST-7: a source over the channel cap says what to do in plain words", async
   await expect(row.getByTestId("last-error")).toHaveText("Pick 100 channels or fewer, then it syncs again");
 });
 
+test("ST-7: a source refused for any other cause names the edit to make", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "source-refused-order"));
+  await login(page);
+  await page.goto("/settings/sources");
+  const row = page.getByRole("listitem", { name: "Legacy all-hands chat" });
+  await row.getByRole("button", { name: "Sync now" }).click();
+  await expect(row.getByTestId("last-error")).toHaveText("Until must be on or after since: edit this source to sync it again");
+});
+
 test("ST-7: Map the code and the Analytics title each have an (i)", async ({ page }) => {
   await login(page);
   await page.goto("/settings/sources");

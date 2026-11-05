@@ -543,5 +543,8 @@ def _needs_attention(connector: base.Connector, config: dict[str, Any]) -> str |
         check(config)
     except base.ConnectorConfigError as e:
         message = str(e)
-        return f"{message[:1].upper()}{message[1:]}, then it syncs again"
+        # Review of PR 1286: only a message that is itself the fix reads "then it syncs
+        # again"; any other cause names the edit to make.
+        then = ", then it syncs again" if e.is_action else ": edit this source to sync it again"
+        return f"{message[:1].upper()}{message[1:]}{then}"
     return None

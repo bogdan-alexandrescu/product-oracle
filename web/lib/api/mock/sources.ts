@@ -150,6 +150,8 @@ const RATE_LIMITED_CHANNEL = "C0RATELIMIT";
 
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
 
+const LEGACY_ID = "50000000-0000-4000-8000-000000000003";
+
 function seed(): SourcesDb {
   const chat: Source = {
     id: PRODUCT_CHAT_ID,
@@ -189,7 +191,7 @@ function seed(): SourcesDb {
   // Saved before the 100-channel rule (as the API's 0016 migration leaves such a source):
   // syncs answer needs_attention until it is edited back within the rules.
   const legacy: Source = {
-    id: "50000000-0000-4000-8000-000000000003",
+    id: LEGACY_ID,
     kind: "slack",
     name: "Legacy all-hands chat",
     connection_id: CONNECTIONS.slack[0].id,
@@ -392,8 +394,19 @@ function load(scenario: string | null = localStorage.getItem("po-mock-scenario")
   }
   // A new company: nobody has connected anything yet.
   if (scenario === "empty") return { sources: [], items: [], snapshots: [], team: {} };
-  return seeded("sources", seed);
+  const db = seeded("sources", seed);
+  // Saved before the date-order rule: its next sync needs attention for a cause, not the cap.
+  if (scenario === REFUSED_ORDER_SCENARIO) {
+    const legacy = db.sources.find((s) => s.id === LEGACY_ID);
+    if (legacy) {
+      Object.assign(legacy, { config: { channels: ["C0100GENERAL"], since: "2026-03-01", until: "2026-02-01" }, status: "active", last_error: null });
+    }
+  }
+  return db;
 }
+
+/** A Slack source whose saved until is before its since (e2e/visual-qa-a-settings-company.spec.ts). */
+export const REFUSED_ORDER_SCENARIO = "source-refused-order";
 
 function store(db: SourcesDb) {
   localStorage.setItem(SOURCES_STORAGE_KEY, JSON.stringify(db));
@@ -587,6 +600,9 @@ function search(db: SourcesDb, q: URLSearchParams): Schemas["SearchResults"] {
  * connector words them: at most 100 channels, dates from 2000-01-01 to 2100-12-31, until
  * not before since; Notion needs a root. Other kinds pass.
  */
+/** The Slack channel cap's refusal: a message that is itself the fix (the API's is_action). */
+const CAP_MESSAGE = `pick ${MAX_CHANNELS} channels or fewer`;
+
 function badConfig(kind: Source["kind"], config: Record<string, unknown>): string | null {
   const rule = LABELLED[kind];
   if (rule && config.labels !== undefined) {
@@ -608,7 +624,7 @@ function badConfig(kind: Source["kind"], config: Record<string, unknown>): strin
   const channels = config.channels;
   // As the Slack connector's _channels: a source reads at least one channel (qa-onboarding-4).
   if (!Array.isArray(channels) || channels.length === 0) return "allowlist at least one channel id";
-  if (channels.length > MAX_CHANNELS) return `pick ${MAX_CHANNELS} channels or fewer`;
+  if (channels.length > MAX_CHANNELS) return CAP_MESSAGE;
   for (const key of ["since", "until"] as const) {
     const v = config[key];
     if (v == null) continue;
@@ -800,7 +816,9 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     const broken = badConfig(s.kind, s.config);
     if (broken) {
       s.status = "needs_attention";
-      s.last_error = `${broken[0].toUpperCase()}${broken.slice(1)}, then it syncs again`;
+      // As the API's _needs_attention: only the channel cap is itself the fix.
+      const then = broken === CAP_MESSAGE ? ", then it syncs again" : ": edit this source to sync it again";
+      s.last_error = `${broken[0].toUpperCase()}${broken.slice(1)}${then}`;
       return json(200, { source_id: s.id, outcome: "needs_attention", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: s.last_error, source: counted(db, s) });
     }
     // As the API's credential_for: a source a Disconnect left without a connection.
