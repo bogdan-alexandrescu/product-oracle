@@ -218,7 +218,7 @@ function Checklist({ item, act, canChange }: P) {
   return (
     <ul className="mt-1">
       {live(item).map((t) => (
-        <li key={t.id} data-testid="card-task" className="group relative flex items-start gap-2 rounded-md px-1 py-1 hover:bg-surface2 max-[600px]:flex-wrap">
+        <li key={t.id} data-testid="card-task" className={`group relative flex items-start gap-2 rounded-md px-1 py-1 hover:bg-surface2 max-[600px]:flex-wrap ${menu === t.id ? "bg-surface2" : ""}`}>
           <input
             type="checkbox"
             aria-label={`${t.title} is done`}
@@ -301,7 +301,7 @@ function RowMenu({ item, act, canChange }: P) {
     <>
       <ul className="mt-1 space-y-1">
         {live(item).map((t) => (
-          <li key={t.id} data-testid="card-task" className="relative">
+          <li key={t.id} data-testid="card-task" className={`relative rounded-md ${menu === t.id ? "bg-surface2" : ""}`}>
             <div className="flex items-start gap-2">
               <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
                 {t.title}

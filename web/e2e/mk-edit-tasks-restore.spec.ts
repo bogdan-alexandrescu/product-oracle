@@ -17,8 +17,10 @@ test.setTimeout(240_000); // MOCK-HOOK
 
 async function snap(page: Page, name: string) {
   // MOCK-HOOK
-  await page.waitForTimeout(450);
   const vp = page.viewportSize()!;
+  // MOCK-HOOK: the pointer off the page's controls, so the PNG shows no hover the copy cannot keep.
+  await page.mouse.move(vp.width - 1, vp.height - 1);
+  await page.waitForTimeout(450);
   fs.mkdirSync(`${OUT}/frames`, { recursive: true });
   fs.mkdirSync(`${OUT}/assets`, { recursive: true });
   const r = await page.evaluate(() => {
@@ -46,9 +48,50 @@ async function snap(page: Page, name: string) {
     const all = [document.documentElement, ...Array.from(document.documentElement.querySelectorAll("*"))];
     const copy = [doc, ...Array.from(doc.querySelectorAll("*"))]; // MOCK-HOOK the clone itself first, as in all
     const head = doc.querySelector("head");
+    const at = new Map(all.map((el, i) => [el, i]));
+    // MOCK-HOOK: a box that scrolls for itself (not one that only clips).
+    const scrolls = (e: Element) => e === document.documentElement || (e.scrollHeight > e.clientHeight + 2 && /(auto|scroll)/.test(getComputedStyle(e).overflowY));
+    const topOf = (c: Element) => (c === document.documentElement ? 0 : c.getBoundingClientRect().top + c.clientTop);
     all.forEach((el, i) => {
-      if ((el.scrollTop || el.scrollLeft) && copy[i]) copy[i].setAttribute("data-mk-scroll", `${el.scrollLeft},${el.scrollTop}`);
+      if (!((el.scrollTop || el.scrollLeft) && copy[i])) return;
+      copy[i].setAttribute("data-mk-scroll", `${el.scrollLeft},${el.scrollTop}`);
+      if (!el.scrollTop || !scrolls(el)) return;
+      // MOCK-HOOK: the scroll is kept as an element and its distance from the box's top (the Tasks heading when it
+      // shows, else the first named part at the top), so a copy whose heights differ still opens on the same thing.
+      const top = topOf(el);
+      const own = (e: Element) => {
+        for (let p = e.parentElement; p && p !== el; p = p.parentElement) if (p.scrollTop && scrolls(p)) return false;
+        return true;
+      };
+      const seen = (e: Element) => {
+        const r = e.getBoundingClientRect();
+        return r.height > 0 && r.top >= top - 1 && r.top < top + el.clientHeight * 0.6 && own(e);
+      };
+      const tasks = Array.from(el.querySelectorAll('[data-testid="card-tasks"] h3, [data-testid="card-tasks"]')).find(seen);
+      const anchor = tasks ?? Array.from(el.querySelectorAll("[data-testid], h1, h2, h3")).filter(seen).sort((x, y) => x.getBoundingClientRect().top - y.getBoundingClientRect().top)[0];
+      const k = at.get(anchor!);
+      if (anchor && k !== undefined && copy[k]) {
+        copy[i].setAttribute("data-mk-key", `k${i}`);
+        copy[k].setAttribute("data-mk-anchor", `k${i}:${Math.round(anchor.getBoundingClientRect().top - top)}`);
+      }
     });
+    // MOCK-HOOK: the focus ring the PNG shows, kept on the copy (it has no :focus), in the theme's own colours.
+    const f = document.activeElement;
+    const fk = f ? at.get(f) : undefined;
+    if (f && fk !== undefined && copy[fk] && f !== document.body) {
+      const probe = document.createElement("i");
+      document.body.append(probe);
+      const vars = ["--color-accent", "--color-line-strong", "--color-line"].map((v) => {
+        probe.style.color = `var(${v})`;
+        return [getComputedStyle(probe).color, `var(${v})`];
+      });
+      probe.remove();
+      const cs = getComputedStyle(f);
+      const ring = ["outline-style", "outline-width", "outline-color", "outline-offset", "box-shadow", "border-color"]
+        .map((p) => `${p}:${vars.reduce((v, [rgb, name]) => v.split(rgb).join(name), cs.getPropertyValue(p))}`)
+        .join(";");
+      copy[fk].setAttribute("style", `${copy[fk].getAttribute("style") ?? ""};${ring}`);
+    }
     doc.querySelectorAll("script, link[rel=stylesheet], link[rel=preload], link[rel=modulepreload], style, noscript, next-route-announcer").forEach((n) => n.remove());
     void head;
     return { css, html: doc.outerHTML };
@@ -71,7 +114,10 @@ async function snap(page: Page, name: string) {
     `<style>${css}</style>` +
     `<script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t)document.documentElement.setAttribute("data-theme",t);` +
     // MOCK-HOOK: scrolled again once the fonts are in, as they change the heights above.
-    `function s(){document.querySelectorAll("[data-mk-scroll]").forEach(function(e){var p=e.getAttribute("data-mk-scroll").split(",");e.scrollLeft=+p[0];e.scrollTop=+p[1];});}addEventListener("DOMContentLoaded",s);addEventListener("load",s);document.fonts&&document.fonts.ready.then(s);})();</script>`;
+    `function s(){var d=document.documentElement;document.querySelectorAll("[data-mk-scroll]").forEach(function(e){var p=e.getAttribute("data-mk-scroll").split(",");e.scrollLeft=+p[0];e.scrollTop=+p[1];` +
+    // MOCK-HOOK: then its anchor is brought to where it sat, as scrollIntoView would, inside this box only.
+    `var k=e.getAttribute("data-mk-key"),a=k&&document.querySelector('[data-mk-anchor^="'+k+':"]');if(a){var t=e===d?0:e.getBoundingClientRect().top+e.clientTop;e.scrollTop+=a.getBoundingClientRect().top-t-Number(a.getAttribute("data-mk-anchor").split(":")[1]);}});}` +
+    `addEventListener("DOMContentLoaded",s);addEventListener("load",s);document.fonts&&document.fonts.ready.then(s);})();</script>`;
   const html = "<!doctype html>" + r.html.replace(/<head([^>]*)>/, (m) => m + extra); // MOCK-HOOK
   expect(html.includes("<style>") && html.includes('name="mockup-viewport"'), `${name}: styles and viewport inlined`).toBe(true); // MOCK-HOOK
   fs.writeFileSync(`${OUT}/frames/${name}.html`, html);
@@ -335,6 +381,9 @@ test("ec2 c", async ({ page }) => {
   await page.getByRole("dialog", { name: "Removed" }).getByRole("button", { name: "Restore" }).first().click();
   await expect(page.getByText("Restored Alert routing by team").first()).toBeVisible();
   await expect(page.getByTestId("mk-removed-button").getByRole("button", { name: "Removed · 5" })).toBeVisible();
+  // MOCK-HOOK: the list closed, the restored feature back on the timeline.
+  await expect(page.getByRole("dialog", { name: "Removed" })).toHaveCount(0);
+  await expect(page.locator('[data-testid="timeline-row"]').filter({ hasText: "Alert routing by team" }).first()).toBeVisible();
   await snap(page, "ec2-c-result");
   await page.setViewportSize(PHONE);
   await page.context().clearCookies();
@@ -367,13 +416,19 @@ test("frames open as their PNGs", async ({ page }) => {
       await page.waitForTimeout(150);
       const r = await page.evaluate(() => ({
         wide: document.documentElement.scrollWidth,
-        off: Array.from(document.querySelectorAll("[data-mk-scroll]")).filter((e) => {
+        // MOCK-HOOK: each scrolled box reached the scroll asked, and its anchor sits where it sat in the PNG.
+        off: Array.from(document.querySelectorAll("[data-mk-scroll]")).flatMap((e) => {
           const [x, y] = e.getAttribute("data-mk-scroll")!.split(",").map(Number);
-          return Math.abs(e.scrollLeft - x) > 2 || Math.abs(e.scrollTop - y) > 2;
-        }).length,
+          const k = e.getAttribute("data-mk-key");
+          const a = k ? document.querySelector(`[data-mk-anchor^="${k}:"]`) : null;
+          const t = e === document.documentElement ? 0 : e.getBoundingClientRect().top + e.clientTop;
+          const moved = a ? Math.round(a.getBoundingClientRect().top - t - Number(a.getAttribute("data-mk-anchor")!.split(":")[1])) : 0;
+          return Math.abs(e.scrollLeft - x) > 2 || Math.abs(e.scrollTop - y) > 2 || Math.abs(moved) > 2 ? [`${e.tagName} asked ${x},${y} reached ${e.scrollLeft},${e.scrollTop} anchor off ${moved}`] : [];
+        }),
       }));
       expect.soft(r.wide, `${f} lays out inside ${w}px`).toBeLessThanOrEqual(w);
-      expect.soft(r.off, `${f} opens where its PNG was taken`).toBe(0);
+      expect.soft(r.off, `${f} ${theme} opens where its PNG was taken`).toEqual([]);
+      if (process.env.MK_LOG) fs.appendFileSync(process.env.MK_LOG, `${f} ${theme} ${w}x${h} ${r.off.length ? r.off.join("; ") : "ok"}\n`); // MOCK-HOOK
       if (look) await page.screenshot({ path: `${look}/${f.replace(".html", "")}--${theme}.png` });
     }
   }

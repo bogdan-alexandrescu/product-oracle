@@ -42,7 +42,7 @@ function Row({ r, can, decide, onRestore, onOpen }: { r: MkRemoved; can: boolean
         ) : (
           <span className="font-semibold [overflow-wrap:anywhere]">{r.title}</span>
         )}
-        <span className="block text-[13px] text-text2">{KIND[r.kind]} · {r.where} · {when(r)}</span>
+        <span className="block text-[13px] text-text2">{KIND[r.kind]} · {r.where} · <span className="inline-block">{when(r)}</span></span>
       </span>
       {can && <Button className="!h-8 flex-none" onClick={onRestore}>{decide ? "Restore" : "Propose restoring"}</Button>}
     </li>
@@ -84,12 +84,12 @@ export function MkRemovedButton({ items, act, canChange, decide, onOpen }: { ite
     <div className="relative" data-testid="mk-removed-button">
       <Button className="!h-8" aria-expanded={open} onClick={() => setOpen(!open)}>Removed · {rows.length}</Button>
       {open && (
-        <div role="dialog" aria-label="Removed" className="absolute top-10 left-0 z-30 w-[min(460px,calc(100vw-32px))] rounded-xl border border-line bg-surface shadow-xl">
+        <div role="dialog" aria-label="Removed" className="absolute top-10 left-0 z-30 w-[min(560px,calc(100vw-32px))] rounded-xl border border-line bg-surface shadow-xl">
           <p className="border-b border-line px-3 py-2 text-[13px] font-semibold text-text2">Removed from your plans</p>
           <ul className="divide-y divide-line">
             {rows.map((r) => {
               const i = items.find((x) => x.key === r.key); // MOCK-HOOK
-              return <Row key={r.id} r={r} can={canChange} decide={decide} onRestore={() => void restore(r)} onOpen={i ? () => (setOpen(false), onOpen(i.id)) : undefined} />;
+              return <Row key={r.id} r={r} can={canChange} decide={decide} onRestore={() => (r.kind === "feature" && setOpen(false), void restore(r))} onOpen={i ? () => (setOpen(false), onOpen(i.id)) : undefined} />; // MOCK-HOOK a restored feature: the list closes on the roadmap it is back on
             })}
             {rows.length === 0 && <li className="px-3 py-2 text-text2">Nothing removed</li>}
           </ul>

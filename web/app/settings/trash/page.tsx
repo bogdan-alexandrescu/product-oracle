@@ -87,7 +87,8 @@ export default function TrashPage() {
       ) : (
         <Panel title="Deleted" count={q.data?.length}>
           {q.error && <Notice tone="error">{q.error}</Notice>}
-          {q.data && q.data.length === 0 && (
+          {q.data && q.data.length === 0 && ec2 === "b" && <Empty testId="trash-empty">Nothing deleted</Empty> /* MOCK-HOOK */}
+          {q.data && q.data.length === 0 && ec2 !== "b" && (
             <Empty testId="trash-empty">
               Trash is empty. Deleted documents, requests and runs wait here for 30 days, with everything that went with
               them. Until then an owner can restore them; after that they are gone for good.
