@@ -104,7 +104,9 @@ async def _drafts(db: AsyncSession, principal: Any) -> list[SimpleWaitingItem]:
         return []
     out = []
     for d in await drafts.listing(db, principal):
-        if me not in d.waiting_on:
+        # A required reviewer's, or the decider's whose final approval is not in yet (the
+        # drafts drafts.inbox_rows lists to them): can_approve says both.
+        if not d.can_approve:
             continue
         out.append(SimpleWaitingItem(
             kind="draft", key=f"draft:{d.id}", ref_id=str(d.id), title=d.document.title,

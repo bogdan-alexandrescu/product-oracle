@@ -180,7 +180,7 @@ export const broken = (i: Item): Flag[] => i.flags.filter((f) => f.state === "re
 /** fix4 qa-simple-roadmap-8: the flags that are a broken link between items (a dependency
  * out of order, a cut item others still depend on); a draft with no owner or an end past its
  * milestone is red too, but it is not a broken link. */
-const LINK_KINDS: Flag["kind"][] = ["dependency_order", "cut_with_dependents"];
+export const LINK_KINDS: Flag["kind"][] = ["dependency_order", "cut_with_dependents"];
 export const brokenLinks = (i: Item): Flag[] => broken(i).filter((f) => LINK_KINDS.includes(f.kind));
 
 /** fix4 qa-simple-roadmap-8: what "Needs a decision" counts, read by its toolbar button and its

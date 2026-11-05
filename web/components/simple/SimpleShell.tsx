@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { LINK_KINDS } from "@/app/simple/roadmap/_lib";
 import { Mark } from "@/components/ds/Brand";
 import { Icon, type IconName } from "@/components/ds/Icon";
 import { ModeSwitch, SEGMENTED } from "@/components/ds/ModeSwitch";
@@ -52,9 +53,10 @@ function isActive(pathname: string, d: Dest): boolean {
  * (items with a broken link once each, dates to confirm, proposals on my items). Meetings counts
  * only a meeting live now (an upcoming one waits on nobody). Inbox counts what waits on me as
  * /inbox's "N waiting" does (lib/waiting, inbox-meeting-proposals); what of it the Roadmap tab
- * does not count already (Oracle's dates, goal suggestions, one-pager wordings, question
- * proposals) is "Inbox beyond the tabs", which More sums. Read when the rail mounts, on a route
- * change and whenever something waiting changes.
+ * does not count already (goal suggestions, one-pager wordings, question proposals) is "Inbox
+ * beyond the tabs", which More sums: Oracle's dates, the roadmap's proposals and the drafts the
+ * Roadmap tab counts are left out of it, so each counts once. Read when the rail mounts, on a
+ * route change and whenever something waiting changes.
  */
 function useSimpleCounts(enabled: boolean): Record<string, number> | null {
   const pathname = usePathname();
@@ -80,15 +82,20 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
       .then(([waiting, roadmap, inbox, questions]) => {
         if (!alive) return;
         const items = waiting.items;
-        const links = roadmap?.broken_links ?? new Set(items.filter((i) => i.kind === "broken_link").map((i) => i.ref_id)).size;
+        // Without the light count, the strip's own rule over the list: each link between items
+        // (a dependency out of order, a cut item others depend on), not an end past its milestone.
+        const links = roadmap?.broken_links ?? items.filter((i) => i.kind === "broken_link" && LINK_KINDS.some((k) => i.key.split(":")[2] === k)).length;
         const dates = roadmap?.dates_to_confirm ?? items.filter((i) => i.kind === "date" && !i.key.startsWith("proposal:")).length;
         const asks = items.filter((i) => i.kind === "proposal" || i.kind === "draft" || (i.kind === "date" && i.key.startsWith("proposal:"))).length;
-        // What of the Inbox the Roadmap tab counts already: its proposals (inbox-meeting-proposals fix:
-        // a proposal on a PRD question or a one-pager line is not the roadmap's) and the versions
-        // waiting for my approval (roadmap-decide: the Roadmap's asks count them), so More does not
-        // count those drafts twice.
+        // What of the Inbox the Roadmap tab counts already, so More counts none of it twice: its
+        // proposals (inbox-meeting-proposals fix: a proposal on a PRD question or a one-pager line
+        // is not the roadmap's), Oracle's dates (its dates to confirm) and the versions waiting for
+        // my approval that its asks count (roadmap-decide).
+        const drafts = new Set(items.filter((i) => i.kind === "draft").map((i) => i.ref_id));
         const inboxRoadmap = inbox
-          ? inbox.simple_proposals.filter((x) => !["decide_question", "name_decider", "edit_line"].includes(x.op)).length + inbox.simple_approvals.length
+          ? inbox.simple_proposals.filter((x) => !["decide_question", "name_decider", "edit_line"].includes(x.op)).length +
+            Math.min(dates, inbox.simple_date_suggestions.length) +
+            inbox.simple_approvals.filter((x) => drafts.has(x.draft_id)).length
           : 0;
         const all = inbox ? waitingCount(inbox, questions) : 0;
         setCounts({
