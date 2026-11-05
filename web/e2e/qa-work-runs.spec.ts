@@ -119,7 +119,7 @@ test("qa-work-8, 24, 26, 4: a roadmap run's page in words, one Review items, the
   for (const text of await roles.allInnerTexts()) expect(text).toMatch(/^[A-Z]/);
   const file = segment.getByTestId("artifacts-current").getByRole("button").first();
   await expect(file).toHaveText("Roadmap items");
-  await expect(file).toHaveAttribute("title", "roadmap_items.yaml");
+  await expect(file).toHaveAttribute("title", "File: roadmap_items.yaml");
   // qa-work-24: a segment's name wraps rather than being cut.
   await expect(segment.getByTestId("segment-title")).toHaveCSS("white-space", "normal");
   // qa-work-26: one Review items action, no header Decide to the same screen.
