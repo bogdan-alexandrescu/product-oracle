@@ -519,8 +519,8 @@ function ReasonsCell({ it, showDiff }: { it: Item; showDiff: boolean }) {
   return (
     <span className="flex min-w-0 flex-col gap-1">
       <span className="flex min-w-0 flex-wrap gap-1" data-testid="row-reasons">
-        {shown.slice(0, 2).map((r) => (
-          <span key={r.code} data-testid="reason-chip" className="max-w-full">
+        {shown.slice(0, 2).map((r, n) => (
+          <span key={`${r.code}:${n}`} data-testid="reason-chip" className="max-w-full">
             <Chip kind={!open.includes(r) ? "na" : r.severity === "blocking" ? "crit" : "warn"} title={datesInWords(r.text)} wrap>
               {r.label}
             </Chip>
@@ -835,7 +835,13 @@ function ReviewInspector({
 }) {
   const [editing, setEditing] = useState(false);
   const { can } = useMe();
-  const titleOf = (key: string) => items.find((x) => x.key === key)?.title ?? key;
+  // Another PRD's feature is not a row: its reasons name it ("Account health ledger (Safety PRD)").
+  const otherTitles: Record<string, string> = {};
+  for (const r of item.reasons) {
+    const d = r.data as { dependency?: unknown; dependency_title?: unknown };
+    if (typeof d.dependency === "string" && typeof d.dependency_title === "string") otherTitles[d.dependency] = d.dependency_title;
+  }
+  const titleOf = (key: string) => items.find((x) => x.key === key)?.title ?? otherTitles[key] ?? key;
   const open = openReasons(item);
   const edit = mode !== "viewer" && item.position != null;
   const staged = (field: string) => item.actions.find((a) => a.kind === "edit" && a.field === field && (a.state === "staged" || a.created_by?.id === meId));
@@ -850,11 +856,11 @@ function ReviewInspector({
       {item.reasons.length > 0 && (
         <InspectorSection label="Needs you because" testId="item-reasons-cards">
           <ul className="flex flex-col gap-2">
-            {item.reasons.map((r) => {
+            {item.reasons.map((r, n) => {
               const isOpen = open.includes(r);
               const by = item.actions.find((a) => answersReason(a, r));
               return (
-                <li key={r.code} className="rounded-button border border-line p-2.5" data-testid="reason-card">
+                <li key={`${r.code}:${n}`} className="rounded-button border border-line p-2.5" data-testid="reason-card">
                   <Chip kind={!isOpen ? "na" : r.severity === "blocking" ? "crit" : "warn"} wrap>
                     {r.severity === "blocking" ? "Blocking" : "To confirm"} · {r.label}
                   </Chip>
@@ -947,6 +953,7 @@ function ReviewInspector({
         ) : null
       }
       removedDependencies={removedDeps}
+      dependencyTitles={otherTitles}
       dependencyAction={
         edit
           ? (d) => (

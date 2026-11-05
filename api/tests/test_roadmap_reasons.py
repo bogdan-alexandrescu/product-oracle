@@ -697,6 +697,7 @@ def test_a_cross_prd_and_a_local_dependency_each_get_their_own_reason_and_fixes(
         "before what it depends on."
     )
     assert cross["data"]["dependency"] == "account-health-ledger"
+    assert cross["data"]["dependency_title"] == "Account health ledger (Safety PRD)"
     assert [(f["label"], f["action"]) for f in cross["fixes"]] == [
         ("Move to Later", {"kind": "edit", "item": "obs", "field": "horizon", "value": "later"}),
         ("Remove dependency", {"kind": "edit", "item": "obs", "field": "depends_on",

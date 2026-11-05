@@ -492,7 +492,11 @@ def _blocking(
                 dep_title=elsewhere.label, dep_horizon=_h(elsewhere.horizon)
             ),
             [move(key, elsewhere.horizon), remove_dependency(key, dep)],
-            {"dependency": dep, "dependency_horizon": elsewhere.horizon},
+            {
+                "dependency": dep,
+                "dependency_horizon": elsewhere.horizon,
+                "dependency_title": elsewhere.label,
+            },
         )
     if code in DEPENDENCY_CODES and dep is not None:
         other = by_id.get(dep) or {}

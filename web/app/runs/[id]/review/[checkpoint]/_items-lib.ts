@@ -117,7 +117,18 @@ export function describe(a: Action, item: Item | undefined, title: (key: string)
  * names none, but a waiver naming none never one only an owner waives (H4 §5). Questions answer nothing.
  */
 export const answersReason = (a: Action, r: Reason) =>
-  a.state === "staged" && a.kind !== "question" && (a.answers.length ? a.answers.includes(r.code) : a.kind !== "waive" || r.code !== "stopped_but_planned");
+  a.state === "staged" && a.kind !== "question" && (a.answers.length ? a.answers.includes(r.code) && isItsFix(a, r) : a.kind !== "waive" || r.code !== "stopped_but_planned");
+
+/**
+ * As the API (reasons.is_its_fix): an edit naming a reason's code answers it only when it is one
+ * of its edits of that item and field, if it has any, so of an item's two dependency reasons
+ * Remove dependency on one clears that one; any other action always.
+ */
+function isItsFix(a: Action, r: Reason): boolean {
+  if (a.kind !== "edit") return true;
+  const mine = r.fixes.filter((f) => f.action.item === a.item_key && f.action.kind === a.kind && (f.action.field ?? null) === (a.field ?? null));
+  return !mine.length || mine.some((f) => isFix(a, f));
+}
 
 export const openReasons = (it: Item, actions: Action[] = it.actions): Reason[] => it.reasons.filter((r) => !actions.some((a) => answersReason(a, r)));
 
