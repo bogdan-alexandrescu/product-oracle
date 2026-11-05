@@ -161,7 +161,7 @@ test("a commenter reads the run review without deciding it", async ({ page }) =>
   await page.goto(VERSION);
   await expect(barText(page)).toHaveText("This run's review · 0 of 3 sections reviewed");
   await expect(bar(page)).toContainText("An approver decides");
-  await expect(bar(page).getByRole("button")).toHaveCount(0);
+  await expect(bar(page).getByRole("button", { name: /^(?!About this run's review$)/ })).toHaveCount(0);
 });
 
 test("only the designated decider approves or sends back the run review; others see who decides", async ({ page }) => {
@@ -173,7 +173,7 @@ test("only the designated decider approves or sends back the run review; others 
   await page.goto(VERSION);
   await expect(barText(page)).toHaveText("This run's review · 0 of 3 sections reviewed");
   await expect(bar(page)).toContainText("Priya Raman decides (designated decider)");
-  await expect(bar(page).getByRole("button")).toHaveCount(0);
+  await expect(bar(page).getByRole("button", { name: /^(?!About this run's review$)/ })).toHaveCount(0);
 
   await signOut(page);
   await login(page, "approver@example.com");
@@ -195,7 +195,7 @@ test("with a designated decider, someone else's last section approval leaves the
   for (const key of KEYS) await approveSection(page, key);
   await expect(barText(page)).toHaveText("This run's review · 3 of 3 sections reviewed");
   await expect(bar(page)).toContainText("Every section is approved · waits for Priya Raman, the designated decider");
-  await expect(bar(page).getByRole("button")).toHaveCount(0);
+  await expect(bar(page).getByRole("button", { name: /^(?!About this run's review$)/ })).toHaveCount(0);
 
   await signOut(page);
   await login(page, "approver@example.com");

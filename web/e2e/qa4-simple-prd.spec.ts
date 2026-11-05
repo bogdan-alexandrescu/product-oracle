@@ -52,11 +52,11 @@ test.describe("desktop", () => {
     await expect(page.getByRole("link", { name: "Open in Detailed" })).toHaveAttribute("href", "/documents/saved-carts");
 
     // vqa B-13: Saved carts' own "Non-goals", never the seed's invented page.
-    await page.getByRole("button", { name: "Edit “Carts for guests without an account" }).click();
+    await page.getByRole("button", { name: "Edit “Carts for guests without an" }).click();
     // qa4-simple-prd-16: the editor and its Save come into view.
-    await expect(page.getByRole("button", { name: "Save" })).toBeInViewport();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeInViewport();
     await page.getByLabel("New wording for").fill("Carts for guests without an account, for now");
-    await page.getByRole("button", { name: "Save" }).click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
     const banner = page.getByRole("status", { name: "Working draft" });
     await expect(banner).toContainText("nothing is published until approved");
     await expect(banner).not.toContainText("published v");
@@ -64,9 +64,9 @@ test.describe("desktop", () => {
 
   test("the change card says You, once a before/after, and Hide closes it (qa4-simple-prd-17, 18, 23)", async ({ page }) => {
     await openFromList(page, "Saved carts PRD");
-    await page.getByRole("button", { name: "Edit “Carts for guests without an account" }).click();
+    await page.getByRole("button", { name: "Edit “Carts for guests without an" }).click();
     await page.getByLabel("New wording for").fill("Carts for guests without an account, for now");
-    await page.getByRole("button", { name: "Save" }).click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
     const note = page.getByRole("note").filter({ visible: true }).filter({ hasText: "changed “Carts for guests" });
     await expect(note).toContainText("You changed");
     await note.getByRole("button", { name: "See before/after" }).click();
@@ -173,7 +173,7 @@ test.describe("desktop", () => {
     await page.keyboard.press("Enter");
     const sources = page.getByRole("region", { name: /^Sources of/ });
     await sources.getByRole("button", { name: "Edit this line" }).press("Enter");
-    await expect(page.getByRole("button", { name: "Save" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
   });
 
   test("a bet's first flow is titled after its line, as Version 1 (qa4-simple-prd-22)", async ({ page }) => {
@@ -187,11 +187,12 @@ test.describe("desktop", () => {
     await page.goto("/simple/one-pagers");
     await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Saved carts PRD", exact: true }).click();
     await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
-    const line = page.locator("li", { hasText: "Invite suggestions from the admin" }).first();
+    // vqa B-13: Saved carts' one-pager has its own lines; its first flow is its own Version 1.
+    const line = page.locator("li", { hasText: "Beta: Save cart" }).first();
     await line.getByRole("button", { name: "Draw the flow" }).click();
-    await page.getByRole("button", { name: /^Flow for “Invite suggestions/ }).click();
+    await page.getByRole("button", { name: /^Flow for “Beta: Save cart/ }).click();
     const opened = page.getByTestId("flow-detail");
-    await expect(opened).toContainText("Invite suggestions from the admin's calendar · flow");
+    await expect(opened).toContainText("Save cart · flow");
     await expect(opened.getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
     await expect(opened).not.toContainText("(revised)");
   });
