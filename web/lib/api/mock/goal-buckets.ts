@@ -191,6 +191,19 @@ export function bucketGoalsInOrder(simple: { goal_buckets?: GoalBucketsDb }, bas
 }
 
 /**
+ * goal-order: each live goal's place stored as it is listed (1 = first), on the bucket goal and on
+ * the baseline's goal of the same key, so the goal buckets, Priorities and the Roadmap's goal rows
+ * read one order from the start (a scenario's seed).
+ */
+export function placeBucketGoals(db: GoalBucketsDb, baseline: { key: string; type: string; attrs?: Record<string, unknown> | null }[]): void {
+  for (const g of db.goals.filter((x) => !x.archived && !x.trashed)) {
+    g.position = g.order;
+    const e = baseline.find((x) => x.type === "goal" && x.key === orderKey(g));
+    if (e) e.attrs = { ...e.attrs, position: g.order };
+  }
+}
+
+/**
  * goal-order: PATCH /v1/baseline/entities/{id} naming a bucket goal (the API's buckets are the
  * baseline's goals): its attrs.position is its place in the one goal order, and the baseline's goal
  * of the same key takes it too, so every page follows. Approvers and owners, as the API.

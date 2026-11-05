@@ -160,7 +160,7 @@ import {
   type PricingContext,
   type PricingDb,
 } from "./pricing";
-import { bucketGoalsInOrder, placeBucketGoal, routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith } from "./goal-buckets";
+import { bucketGoalsInOrder, placeBucketGoal, placeBucketGoals, routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith } from "./goal-buckets";
 import { featureKeyOf } from "./simple-priorities";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
@@ -1268,6 +1268,9 @@ function seedGoalBucketsUndatedScenario(): Db {
     [...new Set(items.flatMap((s) => [...(s.goal ? [s.goal] : []), ...(s.goals ?? [])]).map(name))],
     items.map((s) => ({ key: featureKeyOf(rm, s.key), title: s.title, goals: [...(s.goal ? [s.goal] : []), ...(s.goals ?? [])].map(name) })),
   );
+  // goal-order: the company's goal order is the buckets' (each goal's place stored), so Move up and
+  // Move down on Priorities read the same order as its buckets and the Roadmap's goal rows.
+  placeBucketGoals(rm.goal_buckets, db.baseline.entities);
   return db;
 }
 
