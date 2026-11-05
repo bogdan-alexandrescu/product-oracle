@@ -616,7 +616,8 @@ export default function SimpleHome() {
   }
 
   // The rebuild card sits under the greeting (rebuild-sign pick A): until the runs being rebuilt
-  // are read, Home keeps its skeleton, so the card lands with the goal band and nothing moves.
+  // are read (ANSWER_LIMIT_MS at most), Home keeps its skeleton, so the card lands with the goal
+  // band and nothing moves.
   if (!rebuildsAnswered) return <HomeSkeleton />;
 
   return (

@@ -29,19 +29,44 @@ export const OPENED_KEY = "po-rebuild-opened";
 /** A change that may start, move or end a run: the sign re-reads at once. */
 export const REBUILDS_CHANGED = "po-rebuilds-changed";
 
+/**
+ * Home draws what sits under its greeting (the rebuild card, the goal band, the cards) once the
+ * first read answers, or after this at most: a slow or hung read never keeps Home blank, and a
+ * card that answers later lands late (rare, better than a blank Home).
+ */
+export const ANSWER_LIMIT_MS = 1200;
+/** A read out this long is given up: it no longer blocks the next one, which starts at once. */
+export const READ_LIMIT_MS = 10_000;
+
 // One shared read for every sign on the page.
 let data: Data | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
-let reading = false;
+/** The read out now (its number), 0 when none. */
+let reading = 0;
+let reads = 0;
 let again = false;
 let opened: string[] | null = null;
-/** The first read has answered (or failed): Home draws what sits under its greeting only then. */
+/** The first read has answered (or failed), or Home waited ANSWER_LIMIT_MS for it. */
 let answered = false;
+let limit: ReturnType<typeof setTimeout> | null = null;
 const listeners = new Set<() => void>();
-const emit = () => listeners.forEach((l) => l());
+/** Home's wait on the first read (the layout's skeleton waits without starting it). */
+const waiters = new Set<() => void>();
+const emit = () => {
+  listeners.forEach((l) => l());
+  waiters.forEach((l) => l());
+};
 /** How soon to read again: soon while a run runs, slowly while one waits, else never. */
 const pollMs = (d: Data | null) =>
   d?.rebuilds.some((r) => r.state === "running") ? POLL_MS : d?.rebuilds.some((r) => r.state === "waiting" || r.state === "scheduled") ? WAIT_POLL_MS : null;
+
+function markAnswered() {
+  if (limit) clearTimeout(limit);
+  limit = null;
+  if (answered) return;
+  answered = true;
+  emit();
+}
 
 async function read() {
   if (timer) clearTimeout(timer);
@@ -50,22 +75,29 @@ async function read() {
     again = true;
     return;
   }
-  reading = true;
+  const mine = (reading = ++reads);
+  // A hung read is given up: the next read starts, never blocked behind it.
+  const giveUp = setTimeout(() => {
+    if (reading !== mine) return;
+    reading = 0;
+    again = false;
+    markAnswered();
+    refreshRebuilds();
+  }, READ_LIMIT_MS);
   try {
     const { data: got } = await api.GET("/v1/rebuilds");
-    if (got) {
+    if (got && reading === mine) {
       data = got;
       emit();
     }
   } catch {
     // A failed read keeps what the sign said; the next read tries again.
-  } finally {
-    reading = false;
-    if (!answered) {
-      answered = true;
-      emit();
-    }
   }
+  clearTimeout(giveUp);
+  // Given up: a newer read has taken over (or will at the next wake).
+  if (reading !== mine) return;
+  reading = 0;
+  markAnswered();
   if (again) {
     again = false;
     return read();
@@ -121,6 +153,20 @@ function subscribe(l: () => void) {
   };
 }
 
+/** Home waits on the first read: at most ANSWER_LIMIT_MS from when it first waits. */
+function subscribeAnswered(l: () => void) {
+  waiters.add(l);
+  if (!answered && !limit)
+    limit = setTimeout(() => {
+      limit = null;
+      // Nobody waits now (Home was left): the next Home starts its own wait.
+      if (waiters.size) markAnswered();
+    }, ANSWER_LIMIT_MS);
+  return () => {
+    waiters.delete(l);
+  };
+}
+
 function openedIds(): string[] {
   if (opened) return opened;
   try {
@@ -170,11 +216,15 @@ export function useRebuilds(own?: string) {
 }
 
 /**
- * Whether the first read of the runs being rebuilt has answered; it starts that read. Home waits
- * on it so its rebuild card lands with the goal band and cards, never pushing them down after.
+ * Whether the first read of the runs being rebuilt has answered, or Home has waited
+ * ANSWER_LIMIT_MS for it. Home waits on it so its rebuild card lands with the goal band and
+ * cards, never pushing them down after, and never waits long. With `read` it starts that read;
+ * without (Simple not yet known to be on), only the wait's clock runs.
  */
-export function useRebuildsAnswered() {
-  return useSyncExternalStore(subscribe, getAnswered, () => false);
+export function useRebuildsAnswered(read = true) {
+  const done = useSyncExternalStore(subscribeAnswered, getAnswered, () => false);
+  useSyncExternalStore(read ? subscribe : noop, getData, () => null);
+  return done;
 }
 
 /** The version page (and a page showing a version): it marks that version opened. */

@@ -9,12 +9,14 @@ import { SimplePage } from "@/components/simple/SimplePage";
  * first paint was seconds of a blank page): the page frame at once, the greeting, the goal band
  * and the cards as placeholders the size of the real ones, so nothing jumps as they fill. The
  * cards carry no titles: which cards show depends on the permissions still on their way.
- * What sits under the greeting waits on the first read of the runs being rebuilt (it starts that
- * read): the rebuild card, when there is one, then lands under the greeting with the band and the
- * cards, so nothing below it moves after it is drawn, and no gap is kept when there is none.
+ * What sits under the greeting waits on the first read of the runs being rebuilt, ANSWER_LIMIT_MS
+ * at most: the rebuild card, when there is one, then lands under the greeting with the band and
+ * the cards, so nothing below it moves after it is drawn, and no gap is kept when there is none.
+ * `read` starts that read: the layout's skeleton, drawn before Simple is known to be on, only
+ * runs the wait's clock (with Simple off, Detailed opens and the runs are never read).
  */
-export function HomeSkeleton() {
-  const answered = useRebuildsAnswered();
+export function HomeSkeleton({ read = true }: { read?: boolean }) {
+  const answered = useRebuildsAnswered(read);
   return (
     <SimplePage title="Home">
       <header data-testid="home-greeting" data-skeleton="true" className="-mt-4 flex flex-col gap-1">
