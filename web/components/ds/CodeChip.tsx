@@ -192,6 +192,9 @@ export function HoverCard({
         data-testid={testId}
         onMouseEnter={() => (open ? stay() : later(show, OPEN_DELAY))}
         onMouseLeave={leave}
+        // Open, the card takes Escape (the document listener closes it): a panel or sheet
+        // around the chip, which skips an Escape already taken, stays open.
+        onKeyDown={(e) => open && e.key === "Escape" && e.preventDefault()}
         onBlur={(e) => {
           if (!card.current?.contains(e.relatedTarget as Node) && !pinned.current) setOpen(false);
         }}
@@ -221,6 +224,9 @@ export function HoverCard({
             onMouseEnter={stay}
             onMouseLeave={leave}
             onKeyDown={(e) => {
+              // The card sits in a portal, but React bubbles its keys through the chip's
+              // parents: Escape is the card's, as on the chip.
+              if (e.key === "Escape") return e.preventDefault();
               if (e.key !== "Tab") return;
               // Tab moves through the card; past its last link it closes and goes on from the
               // chip, before its first it closes onto the chip: never a trap, one stop each.
