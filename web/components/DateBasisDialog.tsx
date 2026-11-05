@@ -99,8 +99,8 @@ export function DateBasisDialog({
   const [key, setKey] = useState(prefill.item_key ?? "");
   const [recordId, setRecordId] = useState("");
   const [detail, setDetail] = useState("");
-  // The PRD's roadmap items as people see them on the roadmap (hotfix-2: the approved plan's and
-  // the Simple roadmap's draft, one per key, by name) and the tracker records of its tracks.
+  // The PRD's roadmap items as people see them on the roadmap (hotfix-2: the Simple roadmap's
+  // draft and the approved plan, one per key (the plan's), by name) and the tracker records of its tracks.
   const plan = useQuery("plan|approved|basis", () => unwrap(api.GET("/v1/plan", { params: { query: { scope: "approved" } } })));
   const roadmap = useQuery("simple|roadmap|basis", () => unwrap(api.GET("/v1/simple/roadmap")));
   const records = useQuery("tracker|records", () => unwrap(api.GET("/v1/tracker/records", { params: { query: { limit: 500 } } })));
@@ -109,8 +109,8 @@ export function DateBasisDialog({
   const ofPrd = (p: { id: string; slug?: string } | null | undefined) => !!p && (p.id === prdId || (!!doc && p.slug === doc.slug));
   const items = [
     ...new Map<string, { key: string; title: string; track_id: string | null | undefined }>([
-      ...(plan.data?.items ?? []).filter((i) => ofPrd(i.prd)).map((i) => [i.key, { key: i.key, title: i.title, track_id: i.track_id }] as const),
       ...(roadmap.data?.items ?? []).filter((i) => ofPrd(i.prd)).map((i) => [i.key, { key: i.key, title: i.title, track_id: i.track?.id }] as const),
+      ...(plan.data?.items ?? []).filter((i) => ofPrd(i.prd)).map((i) => [i.key, { key: i.key, title: i.title, track_id: i.track_id }] as const),
     ]).values(),
   ].sort((a, b) => a.title.localeCompare(b.title));
   const tracks = new Set(items.map((i) => i.track_id).filter(Boolean));
