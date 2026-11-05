@@ -60,6 +60,7 @@ from sqlalchemy import func, select
 
 from oracle.baseline.models import Edge, Entity
 from oracle.roadmap.models import RoadmapItem, TrackMilestone
+from oracle.simple.models import SimpleDraft
 from oracle.tenancy import tenant_session
 from oracle.trash import service as trash_service
 from oracle.trash.filter import INCLUDE_TRASHED
@@ -656,12 +657,14 @@ async def _on_versions(w, key: str) -> dict[int, int]:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("then", ["draft_open", "draft_in_review"])
+@pytest.mark.parametrize("then", ["draft_open", "draft_in_review", "draft_approved"])
 async def test_a_feature_only_in_the_draft_is_restored_to_the_draft_only(client, then):
     """protects=(review round 5) a feature added in the open Simple draft (never approved),
     deleted, then restored, is back in that draft and on no version: a viewer, who sees the
-    published roadmap, does not see it; fails_when=Restore copies it onto the published
-    version (or an approved one); no_claim=the web."""
+    published roadmap, does not see it; (round 6) its draft approved while it was in Trash
+    keeps its row (Trash lists it) and Restore puts it in the roadmap's working draft,
+    opened for it; fails_when=Restore copies it onto the published version (or an approved
+    one), or approving the draft hard-deletes the row in Trash; no_claim=the web."""
     from tests.test_simple_additions_api import World as Additions
 
     w = await Additions().build()
@@ -669,7 +672,7 @@ async def test_a_feature_only_in_the_draft_is_restored_to_the_draft_only(client,
     r = await client.delete(f"{ITEMS}/{iid}", headers=w.as_("decider"))
     assert r.status_code == 200 and r.json()["change"] is None, r.text
     assert iid not in await w.items(client, "decider")
-    if then == "draft_in_review":
+    if then != "draft_open":
         # The draft sent for review while the feature is in Trash: v2 waits without it.
         r = await client.post("/v1/simple/changes", headers=w.as_("decider"), json={
             "op": "edit_title", "target": {"item_id": w.ids["import-b"]},
@@ -679,6 +682,14 @@ async def test_a_feature_only_in_the_draft_is_restored_to_the_draft_only(client,
         d = next(x for x in drafts if x["document"]["id"] == w.roadmap_id)
         r = await client.post(f"/v1/simple/drafts/{d['id']}/submit", headers=w.as_("decider"))
         assert r.status_code == 200 and r.json()["status"] == "submitted", r.text
+    if then == "draft_approved":
+        # Approved while the feature is in Trash: its row stays there, still listed.
+        for who in ("decider", "approver"):
+            r = await client.post(f"/v1/simple/drafts/{d['id']}/approve", headers=w.as_(who))
+            assert r.status_code == 200, r.text
+        assert r.json()["status"] == "approved", r.text
+        listed = (await client.get("/v1/trash", headers=w.as_("owner"))).json()
+        assert [e["root"]["title"] for e in listed] == ["Guided setup"]
 
     r = await client.post(f"{ITEMS}/{iid}/restore", headers=w.as_("owner"))
     assert r.status_code == 200, r.text
@@ -697,11 +708,13 @@ async def test_a_feature_only_in_the_draft_is_restored_to_the_draft_only(client,
     assert iid in await w.items(client, "decider")
     assert iid not in await w.items(client, "viewer")
     assert "Guided setup" not in {i["title"] for i in (await w.items(client, "viewer")).values()}
+    assert await _on_versions(w, "guided-setup") == {}
     async with tenant_session(w.ctx.tenant_id) as s:
         rows = list(await s.scalars(select(RoadmapItem).where(RoadmapItem.title == "Guided setup")))
-    assert [(str(r.id), r.roadmap_version_id, r.simple_draft_id is not None) for r in rows] == [
-        (iid, None, True)
-    ]
+        drafts = [await s.get(SimpleDraft, r.simple_draft_id) for r in rows]
+    assert [(str(r.id), r.roadmap_version_id) for r in rows] == [(iid, None)]
+    # Back in the roadmap's working draft (when its own was approved, a new one).
+    assert [d.status for d in drafts] == ["working"]
 
 
 @pytest.mark.asyncio
