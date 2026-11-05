@@ -158,12 +158,13 @@ test("review 1: a tracker issue's date source names its item, never its bare key
   await page.getByTestId("dates-filter").getByRole("button", { name: /^All/ }).click();
   const named = dateRow(page, "EST-7");
   await expect(named.getByTestId("basis-title")).toHaveText("Threshold alerts on spend (EST-7)");
-  await expect(named).not.toContainText("ENG-402");
+  // The key is only in Applies to's (i), not in the row's visible text.
+  expect(await named.innerText()).not.toContain("ENG-402");
   await named.getByRole("button", { name: "About tracker issue" }).click();
   await expect(page.getByRole("tooltip").filter({ visible: true })).toContainText("ENG-402");
   const unknown = dateRow(page, "EST-8");
   await expect(unknown.getByTestId("basis-title")).toHaveText("A tracker item (EST-8)");
-  await expect(unknown).not.toContainText("ENG-999");
+  expect(await unknown.innerText()).not.toContain("ENG-999");
   await unknown.getByRole("button", { name: "Withdraw" }).click();
   await expect(page.getByRole("dialog", { name: "Withdraw the Dec 11 date for a tracker item" })).toBeVisible();
 });
