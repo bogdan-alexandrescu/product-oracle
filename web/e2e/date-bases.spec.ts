@@ -176,7 +176,7 @@ test("plan inspector: a withdrawn date is struck through with its reason, and Re
   // date's source, here ENG-412, and the plan's engineering.basis_ids lists those bases);
   // no_claim=the API's plan rules (api/tests/test_plan.py).
   await asScenario(page);
-  let line = await selectPlanItem(page, "Daily alert digest email");
+  let line = await selectPlanItem(page, "Weekly alert digest");
   await expect(line).toContainText("Nov 30 ✓ ENG-412, verified by Avery Stone");
 
   await openDates(page);
@@ -187,7 +187,7 @@ test("plan inspector: a withdrawn date is struck through with its reason, and Re
   await withdraw.getByRole("button", { name: "Withdraw date basis" }).click();
   await expect(withdraw).toBeHidden();
 
-  line = await selectPlanItem(page, "Daily alert digest email");
+  line = await selectPlanItem(page, "Weekly alert digest");
   await expect(line.locator("s")).toHaveText("Nov 30");
   await expect(line).toContainText("date withdrawn");
   await expect(line).toContainText("The team re-estimated");
@@ -199,7 +199,7 @@ test("plan inspector: a withdrawn date is struck through with its reason, and Re
   await dialog.getByLabel("Reference").fill("ENG-450");
   await dialog.getByRole("button", { name: "Record and verify" }).click();
   await expect(dialog).toBeHidden();
-  line = await selectPlanItem(page, "Daily alert digest email");
+  line = await selectPlanItem(page, "Weekly alert digest");
   await expect(line).toContainText("date withdrawn");
   await expect(line).not.toContainText("✓");
   // A new basis under the reference the date names verifies it again.
@@ -221,7 +221,7 @@ test("plan inspector: a withdrawn date is struck through with its reason, and Re
   await expect(dialog).toBeHidden();
   await page.getByTestId("dates-filter").getByRole("button", { name: "Verified" }).click();
   await expect(row(page, "CAP-9")).toHaveAttribute("data-status", "verified");
-  line = await selectPlanItem(page, "Daily alert digest email");
+  line = await selectPlanItem(page, "Weekly alert digest");
   await expect(line).toContainText("Nov 30 ✓ ENG-412, verified by Avery Stone");
   await expect(line).not.toContainText("CAP-9");
 });
@@ -248,7 +248,7 @@ test("plan inspector: an unverified date offers Verify date; the dialog picks th
   await expect(dialog.getByLabel("For")).toHaveValue("item");
   const itemPicker = dialog.getByLabel("Item");
   await expect(itemPicker).toHaveValue("slack-alerts");
-  await expect(itemPicker.locator("option", { hasText: "Daily alert digest email" })).toHaveCount(1);
+  await expect(itemPicker.locator("option", { hasText: "Weekly alert digest" })).toHaveCount(1);
 
   await dialog.getByLabel("From a tracker record (optional)").selectOption({ label: "ENG-431 · Alerts in the team chat · Dec 15" });
   await expect(dialog.getByLabel("Reference")).toHaveValue("ENG-431");

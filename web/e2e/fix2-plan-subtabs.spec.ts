@@ -36,14 +36,14 @@ test("qa-plan-3, qa-plan-41: the slipping date is pinned on the item that owns E
   await start(page, { scenario: "alignment-report" });
   const track = await openReport(page);
   const attention = track.getByTestId("needs-attention");
-  await expect(attention).toContainText("Daily alert digest email · Now: ENG-405 targets Dec 9");
+  await expect(attention).toContainText("Weekly alert digest · Now: ENG-405 targets Dec 9");
   await expect(attention).not.toContainText("Threshold alerts");
   const drift = track.getByTestId("report-drift").first();
   await expect(drift.getByRole("link")).toHaveText("Spend forecast for the month");
   await expect(track).not.toContainText("Digest emails");
 
   // The item opens on the Plan, where ENG-405 is its issue.
-  await expect(attention.getByRole("link", { name: "Daily alert digest email" })).toHaveAttribute(
+  await expect(attention.getByRole("link", { name: "Weekly alert digest" })).toHaveAttribute(
     "href",
     "/plan?item=usage-alerts:alert-digest",
   );
