@@ -106,7 +106,7 @@ test("a citation of Oracle's baseline reads 'Oracle baseline', its ref as text, 
       id: crypto.randomUUID(),
       cite_key: "o-g1",
       source: "oracle",
-      ref: "Ground Truth goal g1 (activation), locked",
+      ref: "baseline goal g1 (activation), locked",
       title: "Goal G1: raise first-order completion",
       excerpt: "Raise first-order completion from 61% to 70% by the end of Q4.",
       retrieved_at: "2026-10-20T17:02:00Z",
@@ -206,7 +206,7 @@ test("open the diff: section badges and word-level changes", async ({ page }) =>
   await expect(byKey("metrics").locator("ins").first()).toContainText("Refund rate");
   // A markdown table is drawn as a table, as in the version view, not as pipe text.
   const table = byKey("metrics").getByTestId("diff-table");
-  await expect(table.getByRole("columnheader")).toHaveText(["Metric", "Ground Truth", "Target"]);
+  await expect(table.getByRole("columnheader")).toHaveText(["Metric", "Baseline", "Target"]);
   await expect(table.getByRole("row").filter({ hasText: "Refund rate" }).locator("ins").first()).toBeVisible();
   await expect(byKey("metrics")).not.toContainText("Metric | Baseline");
 
