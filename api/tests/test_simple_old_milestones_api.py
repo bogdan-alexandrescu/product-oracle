@@ -326,8 +326,10 @@ async def test_the_preview_is_a_bounded_read(client):
 
     async with tenant_session(ctx.tenant_id) as s:
         feeding = await s.scalar(select(Document).where(Document.slug == "trail-app-prd"))
-        s.add(TrackMilestone(track_id=None, roadmap_id=ids["old"], origin_prd_id=feeding.id,
-                             code="M1", name="Read from its plan", target_date=date(2026, 12, 1)))  # fmt: skip
+        s.add(
+            TrackMilestone(track_id=None, roadmap_id=ids["old"], origin_prd_id=feeding.id,
+                           code="M1", name="Read from its plan", target_date=date(2026, 12, 1))
+        )  # fmt: skip
         await s.commit()
     r = await client.post(CARRY, headers=ctx.as_("owner"))
     assert r.status_code == 200, r.text
