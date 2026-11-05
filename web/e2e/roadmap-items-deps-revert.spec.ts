@@ -36,6 +36,6 @@ test("an approver's × on a dependency keeps the dependency the item's edit adds
   await expect(depends.getByRole("button", { name: /^Remove dependency / })).toHaveCount(0);
   // The joined edit still adds Budget caps back.
   await expect(card).toContainText("✓ Depends on Budget caps");
-  await inspector(page).getByRole("tab", { name: "History" }).click();
+  await inspector(page).getByRole("group", { name: "Inspector tab" }).getByRole("button", { name: "History" }).click();
   await expect(inspector(page).getByTestId("item-history")).toContainText("staged: Depends on Budget caps");
 });
