@@ -66,6 +66,7 @@ import {
 } from "./simple-roadmap";
 import { routeGoalSuggestions } from "./simple-suggestions";
 import { goalSetOf, linkPlan, overrideOf } from "./feature-panel";
+import { entryOut, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
 
 type Change = Schemas["SimpleChangeOut"];
 type Session = Schemas["SimpleSessionOut"];
@@ -85,6 +86,8 @@ export interface SimpleChangesCtx {
   companyGoals?: { id: string; key: string; title: string }[];
   /** simple-replaced-prds: the slugs and ids of the PRDs marked replaced (their open drafts are never listed in Simple). */
   replaced?: string[];
+  /** trash-features-goals: Settings › Trash (./trash.ts), shared with documents, intakes and runs. */
+  trash?: TrashDb;
 }
 
 const IDLE_MS = 30 * 60_000;
@@ -382,11 +385,13 @@ function view(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): Change {
   };
 }
 
-/** The walk (H2): "F-08 Billing page", the item's code and name as the change's words name it. */
+/** The walk (H2): "F-08 Billing page", the item's code and name as the change's words name
+ * it; trash-features-goals: once it is in Trash, its name with "(deleted)" (changes.deleted_names). */
 function itemLabel(db: SimpleDb, id: unknown): string | null {
   const key = id ? keyOf(db, id) : undefined;
   const s = key ? db.items.find((x) => x.key === key) : undefined;
-  return s ? `${prdCode(s.section) ?? ""} ${s.title}`.trim() : null;
+  if (!s) return null;
+  return s.trashed ? `${s.title} (deleted)` : `${prdCode(s.section) ?? ""} ${s.title}`.trim();
 }
 
 /** simple-replaced-prds (changes.listing): a proposal waiting on a replaced PRD's item leaves Simple with the item. */
@@ -746,6 +751,83 @@ function createMilestoneChange(db: SimpleDb, ctx: SimpleChangesCtx, body: Schema
   return json(201, { change: view(db, ctx, change), flags: [] });
 }
 
+/**
+ * trash-features-goals (oracle.simple.trash_items): DELETE .../roadmap/items/{id} moves the
+ * feature to Settings › Trash; who may not decide on it proposes it instead, as a
+ * `delete_item` change (routed, accepted or declined like any other). Restore brings it back
+ * with its links, goal and milestone, which were never touched.
+ */
+function trashFeature(db: SimpleDb, ctx: SimpleChangesCtx, key: string, reason: string | null, now: string): TrashEntryRow {
+  const s = seed(db, key);
+  s.trashed = true;
+  const row: TrashEntryRow = {
+    out: {
+      id: crypto.randomUUID(),
+      root: { type: "feature", id: db.ids[key], slug: key, title: s.title, kind: "feature", code: prdCode(s.section) },
+      items: [], deleted_by: ctx.id, deleted_by_name: ctx.names[ctx.id] ?? "someone", deleted_at: now,
+      reason, published: false, purge_after: new Date(Date.parse(now) + 30 * DAY).toISOString(),
+    },
+    documents: [], versions: [], runs: [], intakes: [],
+    restoreExtra: () => { s.trashed = false; },
+  };
+  const trash = (ctx.trash ??= { entries: [], estimates: {} });
+  trash.entries.push(row);
+  return row;
+}
+
+/** trash_items._propose: a `delete_item` already waits on this item (409). */
+function openDelete(db: SimpleDb, itemId: unknown): boolean {
+  return (db.changes ?? []).some((c) => c.op === "delete_item" && c.status === "proposed" && c.target.item_id === itemId);
+}
+
+/** Applies (the decider) or proposes (everyone else) a feature's delete, shared by the
+ * `delete_item` change and the DELETE route. */
+function doDeleteItem(db: SimpleDb, ctx: SimpleChangesCtx, itemId: string, reason: string | null): { change: Change; row: TrashEntryRow | null } | Response {
+  const key = keyOf(db, itemId);
+  if (!key || seed(db, key).trashed) return json(404, { detail: "No such roadmap item" });
+  const applies = decides(db, ctx, itemId);
+  if (!applies && openDelete(db, itemId)) return json(409, { detail: "Moving this to Trash is proposed already" });
+  const now = iso(mockNowMs());
+  const s = seed(db, key);
+  const name = `${prdCode(s.section) ?? ""} ${s.title}`.trim();
+  const change: Change = {
+    id: crypto.randomUUID(), session_id: null, document_id: stableUuid(`simple-doc/${s.roadmap}`), draft_ids: [],
+    op: "delete_item", target: { item_id: itemId, title: s.title, name }, before: { deleted: false }, after: { deleted: true },
+    status: applies ? "applied" : "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: now,
+    decided_by: null, decided_at: null, reason, decision_reason: null, routed_to: [], undoes_id: null, undone: false, can_decide: false, can_undo: false,
+  };
+  const row = applies ? trashFeature(db, ctx, key, reason, now) : null;
+  if (!applies) change.routed_to = route(db, ctx, change);
+  (db.changes ??= []).push(change);
+  return { change, row };
+}
+
+/** POST /v1/simple/changes op `delete_item` (target.item_id): the same as the DELETE route, as a change. */
+function createDeleteItem(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"]): Response {
+  const res = doDeleteItem(db, ctx, String(body.target.item_id ?? ""), body.reason ?? null);
+  if (res instanceof Response) return res;
+  return json(201, { change: view(db, ctx, res.change), flags: [] });
+}
+
+/** DELETE /v1/simple/roadmap/items/{id}: a `TrashedOut` (the entry, or the change proposed). */
+function deleteItemRoute(db: SimpleDb, ctx: SimpleChangesCtx, itemId: string, reason: string | null): Response {
+  const res = doDeleteItem(db, ctx, itemId, reason);
+  if (res instanceof Response) return res;
+  return json(200, {
+    entry: res.row ? entryOut(res.row, iso(mockNowMs())) : null,
+    change: res.row ? null : view(db, ctx, res.change),
+    can_restore: ctx.role === "owner",
+  });
+}
+
+/** POST /v1/simple/roadmap/items/{id}/restore (owners): puts the feature back from Trash. */
+function restoreItemRoute(db: SimpleDb, ctx: SimpleChangesCtx, itemId: string): Response {
+  if (ctx.role !== "owner") return json(403, { detail: "Requires the owner role" });
+  const entry = ctx.trash?.entries.find((e) => e.out.root.type === "feature" && e.out.root.id === itemId);
+  if (!entry) return json(404, { detail: "No such roadmap item" });
+  return json(200, restoreFromTrash(ctx.trash!, entry, iso(mockNowMs())));
+}
+
 /** add_key_date / edit_key_date / remove_key_date (key_dates.create). */
 function createKeyDate(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"], session: Session | undefined, applies: boolean): Response {
   const now = iso(mockNowMs());
@@ -787,6 +869,7 @@ function createKeyDate(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simpl
 async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"]): Promise<Response> {
   if (S7_OPS.includes(body.op)) return createS7(db, ctx, body);
   if (body.op === MILESTONE_OP) return createMilestoneChange(db, ctx, body);
+  if (body.op === "delete_item") return createDeleteItem(db, ctx, body);
   const now = iso(mockNowMs());
   if (KEY_DATE_OPS.includes(body.op)) {
     // The Roadmap filter names the roadmap as roadmap_id (as add_item does); either works.
@@ -1031,6 +1114,12 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     return json(200, prioritiesOut(db, ctx, (c) => route(db, ctx, c), (itemId) => decides(db, ctx, itemId), q.get("line")));
   }
   const now = iso(mockNowMs());
+  // trash-features-goals: DELETE .../roadmap/items/{id} and its restore (oracle.simple.trash_items).
+  if (p[2] === "roadmap" && p[3] === "items" && p[4] && !p[5] && m === "DELETE") {
+    if (ctx.role === "viewer") return json(403, { detail: "Requires the commenter role" });
+    return deleteItemRoute(db, ctx, p[4], q.get("reason"));
+  }
+  if (p[2] === "roadmap" && p[3] === "items" && p[4] && p[5] === "restore" && m === "POST") return restoreItemRoute(db, ctx, p[4]);
   const accepting = p[2] === "roadmap" && p[3] === "date-suggestions" && m === "POST" && ["accept", "edit"].includes(p[5] ?? "");
   if (p[2] === "roadmap" && !accepting) return null;
   if (m === "POST" && ctx.role === "viewer") return json(403, { detail: "Requires the commenter role" });
@@ -1142,7 +1231,11 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     session.last_change_at = now;
     applyS7(db, c);
   } else if (p[4] === "decline" && c.op === "add_item") reopenSuggestion(db, c);
-  else if (p[4] === "accept") {
+  else if (p[4] === "accept" && c.op === "delete_item") {
+    const key = keyOf(db, c.target.item_id);
+    if (!key || seed(db, key).trashed) return json(404, { detail: "The feature is gone" });
+    trashFeature(db, ctx, key, c.reason ?? null, now);
+  } else if (p[4] === "accept") {
     const now_ = current(db, c, c.before);
     if (!same(now_, c.before)) return conflict(db, ctx, now_, touched(c), "outdated");
     // Into the decider's working draft (their editing session's).

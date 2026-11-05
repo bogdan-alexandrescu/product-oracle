@@ -7,9 +7,11 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { stableUuid } from "./ids";
+import { entryOut, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
 import { planGoalNames, planSlices } from "./simple-plan";
 
-type Goal = { id: string; title: string; order: number; measure: string | null; target: string | null; due: string | null; archived: boolean };
+// trash-features-goals: `trashed` while in Settings › Trash (left out of every read, kept for Restore).
+type Goal = { id: string; title: string; order: number; measure: string | null; target: string | null; due: string | null; archived: boolean; trashed?: boolean };
 type Feature = { id: string; key: string; title: string; goal_ids: string[] };
 export type GoalBucketsDb = { goals: Goal[]; features: Feature[] };
 type Undo = Schemas["GoalBucketsUndo"];
@@ -94,7 +96,7 @@ function json(status: number, body: unknown): Response {
 }
 
 function out(db: GoalBucketsDb, edits: boolean): Schemas["GoalBucketsOut"] {
-  const live = db.goals.filter((g) => !g.archived);
+  const live = db.goals.filter((g) => !g.archived && !g.trashed);
   const ids = new Set(live.map((g) => g.id));
   return {
     can_edit: edits,
@@ -121,14 +123,58 @@ const signed = (u: Omit<Undo, "sig">): Undo => ({ ...u, sig: sigOf(u) });
 type GoalIn = { title?: string; measure?: string; target?: string; due?: string };
 const complete = (b: GoalIn) => !!(b.title?.trim() && b.measure?.trim() && b.target?.trim() && b.due && /^\d{4}-\d{2}-\d{2}$/.test(b.due));
 
+/** Archive and a delete to Trash: the goal's features leave it; those that serve another goal
+ * keep it (now first), the rest go to `to` or to no goal. */
+function moveOff(db: GoalBucketsDb, g: Goal, to: string | null): Feature[] {
+  const held = db.features.filter((f) => f.goal_ids.includes(g.id));
+  const before = held.map((f) => ({ ...f, goal_ids: [...f.goal_ids] }));
+  for (const f of held) {
+    const rest = f.goal_ids.filter((x) => x !== g.id);
+    f.goal_ids = f.goal_ids[0] === g.id && !rest.length && to ? [to] : rest;
+  }
+  return before;
+}
+
+/** trash-features-goals (oracle.simple.trash_items): Settings › Trash and who writes there. */
+export type GoalBucketsTrash = { trash: TrashDb; id: string; name: string | null; now: () => string };
+
 /** /v1/simple/goal-buckets... (as the API: approvers and owners write; anyone reads). */
-export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb }, role: string, req: Request, p: string[]): Promise<Response | null> {
+export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb }, role: string, req: Request, p: string[], bin?: GoalBucketsTrash): Promise<Response | null> {
   if (p[1] !== "simple" || p[2] !== "goal-buckets") return null;
   const db = (simple.goal_buckets ??= seedGoalBuckets());
   const edits = role === "owner" || role === "approver";
   const m = req.method;
   if (!p[3] && m === "GET") return json(200, out(db, edits));
   if (!edits) return json(403, { detail: "Requires the approver role" });
+  // trash-features-goals: DELETE .../goals/{id}?to_goal_id= (approvers and owners), and its restore (owners).
+  if (bin && p[3] === "goals" && p[4] && !p[5] && m === "DELETE") {
+    const g = db.goals.find((x) => x.id === p[4] && !x.trashed);
+    if (!g) return json(404, { detail: "No such goal" });
+    const q = new URL(req.url).searchParams;
+    const to = q.get("to_goal_id");
+    if (to && !db.goals.some((x) => x.id === to && !x.archived && !x.trashed && x.id !== g.id)) return json(422, { detail: "Pick another goal" });
+    moveOff(db, g, to);
+    g.trashed = true;
+    const at = bin.now();
+    const row: TrashEntryRow = {
+      out: {
+        id: crypto.randomUUID(),
+        root: { type: "goal", id: g.id, slug: null, title: g.title, kind: "goal", code: null },
+        items: [], deleted_by: bin.id, deleted_by_name: bin.name, deleted_at: at, reason: q.get("reason"),
+        published: false, purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
+      },
+      documents: [], versions: [], runs: [], intakes: [],
+      restoreExtra: () => { g.trashed = false; },
+    };
+    bin.trash.entries.push(row);
+    return json(200, { entry: entryOut(row, at), change: null, can_restore: role === "owner" });
+  }
+  if (bin && p[3] === "goals" && p[4] && p[5] === "restore" && m === "POST") {
+    if (role !== "owner") return json(403, { detail: "Requires the owner role" });
+    const entry = bin.trash.entries.find((e) => e.out.root.type === "goal" && e.out.root.id === p[4]);
+    if (!entry) return json(404, { detail: "goal not found in Trash" });
+    return json(200, restoreFromTrash(bin.trash, entry, bin.now()));
+  }
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   if (p[3] === "goals" && !p[4] && m === "POST") {
     const b = body as GoalIn;
@@ -152,12 +198,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
     if (!g) return json(404, { detail: "No such goal" });
     const to = (body.to_goal_id as string | null | undefined) ?? null;
     if (to && !db.goals.some((x) => x.id === to && !x.archived && x.id !== g.id)) return json(422, { detail: "Pick another goal" });
-    const held = db.features.filter((f) => f.goal_ids.includes(g.id));
-    const undo = signed({ goals: [goalSnap(g)], features: held.map(featureSnap), added_goal_id: null });
-    for (const f of held) {
-      const rest = f.goal_ids.filter((x) => x !== g.id);
-      f.goal_ids = f.goal_ids[0] === g.id && !rest.length && to ? [to] : rest;
-    }
+    const undo = signed({ goals: [goalSnap(g)], features: moveOff(db, g, to).map(featureSnap), added_goal_id: null });
     g.archived = true;
     return json(200, { goal: null, undo });
   }

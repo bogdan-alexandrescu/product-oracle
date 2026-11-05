@@ -30,6 +30,9 @@ type Horizon = Item["horizon"];
 type Role = Schemas["Me"]["role"];
 
 interface SeedItem {
+  /** trash-features-goals: moved to Trash (oracle.trash.filter.INCLUDE_TRASHED): left out of
+   * every read (visibleItems) but kept here, as they were, for Restore. */
+  trashed?: boolean;
   /** build-feature-panel: Oracle's links a person removed before the mock's story (the panel shows them struck, with Restore). */
   unlinked?: { key: string; by: string }[];
   /** build-feature-panel review 3: links a person added before the mock's story (the panel names who). */
@@ -909,7 +912,7 @@ export function fileUnderCurrentPrd(db: SimpleDb, s: SeedItem): void {
 
 function visibleItems(db: SimpleDb, role: Role): SeedItem[] {
   const restricted = role === "commenter" || role === "viewer";
-  return db.items.filter((s) => (!db.company_roadmap || s.roadmap === db.company_roadmap) && (!restricted || ROADMAPS[s.roadmap].visibility === "company") && !ofReplacedPrd(db, s));
+  return db.items.filter((s) => !s.trashed && (!db.company_roadmap || s.roadmap === db.company_roadmap) && (!restricted || ROADMAPS[s.roadmap].visibility === "company") && !ofReplacedPrd(db, s));
 }
 
 /** plan-model (suggestions._planned): the item's dated slices in its PRD's plan; none when the plan does not place it. */

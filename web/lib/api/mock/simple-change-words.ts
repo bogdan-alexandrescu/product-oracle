@@ -95,6 +95,8 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
       return name ? `changed the milestone ${name}` : "changed a milestone";
     }
     case "name_decider": return `named who decides ${x}`;
+    // trash-features-goals: a feature moved to Trash (its name reads "(deleted)" once it is gone).
+    case "delete_item": return `moved ${x} to Trash`;
   }
   return `changed ${x}`;
 }

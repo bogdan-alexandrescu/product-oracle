@@ -41,6 +41,9 @@ export interface TrashEntryRow {
   intakes: Intake[];
   /** What the delete released (New PRD 4: the requests linked to its PRDs), for Restore. */
   released?: unknown;
+  /** trash-features-goals: puts back what this entry holds besides a document, a version, a
+   * run or an intake (a roadmap feature's row, a goal), on Restore. */
+  restoreExtra?: () => void;
 }
 
 export interface TrashDb {
@@ -135,7 +138,16 @@ function daysLeft(entry: TrashEntryRow, now: string): number {
   return Math.max(0, Math.ceil(ms / DAY_MS));
 }
 
-const entryOut = (e: TrashEntryRow, now: string): Schemas["TrashEntryOut"] => ({ ...e.out, days_left: daysLeft(e, now), not_restored: [] });
+export const entryOut = (e: TrashEntryRow, now: string): Schemas["TrashEntryOut"] => ({ ...e.out, days_left: daysLeft(e, now), not_restored: [] });
+
+/** trash-features-goals: takes `entry` out of Trash, restoring what `restoreExtra` holds (a
+ * feature's row, a goal); the generic `/v1/trash/{id}/restore` and the type's own restore
+ * route both end here. */
+export function restoreFromTrash(db: TrashDb, entry: TrashEntryRow, now: string): Schemas["TrashEntryOut"] {
+  entry.restoreExtra?.();
+  db.entries = db.entries.filter((e) => e !== entry);
+  return entryOut(entry, now);
+}
 
 function take<T>(rows: T[], keep: (row: T) => boolean): T[] {
   const taken = rows.filter((r) => !keep(r));
@@ -298,7 +310,7 @@ function restore<D extends TrashDocument, V extends TrashVersion>(ctx: TrashCont
   ctx.versions.push(...(entry.versions as V[]));
   ctx.runs().push(...entry.runs);
   ctx.intakes().push(...entry.intakes);
-  ctx.db.entries = ctx.db.entries.filter((e) => e !== entry);
+  const out = restoreFromTrash(ctx.db, entry, now);
   if (entry.released !== undefined) ctx.onRestore?.(entry.released);
-  return entryOut(entry, now);
+  return out;
 }
