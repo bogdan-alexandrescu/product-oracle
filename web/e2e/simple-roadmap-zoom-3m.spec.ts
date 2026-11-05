@@ -57,8 +57,8 @@ test.describe("desktop", () => {
     await page.getByRole("button", { name: "3 months", exact: true }).click();
     await expect(page.getByTestId("zoom-3m")).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByTestId("zoom-6m")).toHaveAttribute("aria-pressed", "false");
-    // About three months from today: from October (with its year) to January, no further.
-    await expect.poll(() => monthsInView(page)).toEqual(["Oct 2026", "Nov", "Dec", "Jan"]);
+    // About three months from today: from October to January (each year shown once), no further.
+    await expect.poll(() => monthsInView(page)).toEqual(["Oct 2026", "Nov", "Dec", "Jan 2027"]);
 
     // Weeks are marked, each one wide enough to read.
     const weeks = page.getByTestId("timeline-week");
