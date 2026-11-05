@@ -2,6 +2,8 @@ import { expect, test, type Page } from "./test";
 
 import { login, seedRoadmapCrossPrd } from "./helpers";
 
+const COMMENTER = "commenter@example.com";
+
 /**
  * The owner, Nov 4: a roadmap item may depend on another PRD's feature on the company roadmap.
  * Budget caps (Now) waits on Account health ledger, the Safety PRD's item in Next, and on its
@@ -83,4 +85,63 @@ test("Remove dependency pressed on both reasons removes both and clears both", a
   // The first removal stays: its dependency does not come back and its reason stays answered.
   await expect(cross).toContainText("✓ Dependency removed");
   await expect(page.getByTestId("review-summary")).toHaveText("2 blocking · 7 to confirm");
+});
+
+test("Undo on one of two joined removals brings back that dependency only; the other stays removed", async ({ page }) => {
+  await openReview(page);
+  await row(page, "budget-caps").locator('[data-phone="title"]').click();
+  const cross = card(page, CROSS);
+  const local = card(page, LOCAL);
+  await cross.getByRole("button", { name: "Remove dependency", exact: true }).click();
+  await expect(cross).toContainText("✓ Dependency removed");
+  await local.getByRole("button", { name: "Remove dependency", exact: true }).click();
+  await expect(local).toContainText("✓ Dependency removed");
+  await expect(page.getByTestId("review-summary")).toHaveText("2 blocking · 7 to confirm");
+
+  // Undo on the ledger's card: its reason and its dependency come back, Anomaly detection stays removed.
+  await cross.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(cross.getByRole("button", { name: "Move to Next", exact: true })).toBeVisible();
+  await expect(local).toContainText("✓ Dependency removed");
+  await expect(local.getByRole("button", { name: "Move to Later", exact: true })).toHaveCount(0);
+  const depends = inspector(page).getByTestId("item-depends");
+  await expect(depends.getByRole("button", { name: "Remove dependency Account health ledger (Safety PRD)" })).toBeVisible();
+  await expect(depends.getByRole("button", { name: "Remove dependency Anomaly detection" })).toHaveCount(0);
+  // One reason open on Budget caps: it stays blocking, and nothing else changes.
+  await expect(page.getByTestId("review-summary")).toHaveText("3 blocking · 7 to confirm");
+
+  // A reload reads the same: one removal staged.
+  await page.reload();
+  await row(page, "budget-caps").locator('[data-phone="title"]').click();
+  await expect(card(page, LOCAL)).toContainText("✓ Dependency removed");
+  await expect(card(page, CROSS).getByRole("button", { name: "Move to Next", exact: true })).toBeVisible();
+});
+
+test("a commenter's two Remove dependency suggestions both stay, each card with its own Undo", async ({ page }) => {
+  await login(page, COMMENTER);
+  await seedRoadmapCrossPrd(page);
+  await page.goto("/runs");
+  await page.locator('[data-testid="run-row"][data-document="usage-alerts-roadmap-6"]').getByRole("link").first().click();
+  await page.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Roadmap items" })).toBeVisible();
+  await row(page, "budget-caps").locator('[data-phone="title"]').click();
+  const cross = card(page, CROSS);
+  const local = card(page, LOCAL);
+  const depends = inspector(page).getByTestId("item-depends");
+
+  await cross.getByRole("button", { name: "Remove dependency", exact: true }).click();
+  await expect(cross).toContainText("Suggested: Dependency removed");
+  await local.getByRole("button", { name: "Remove dependency", exact: true }).click();
+  await expect(local).toContainText("Suggested: Dependency removed");
+  // The first suggestion stays: both dependencies read as removed.
+  await expect(cross).toContainText("Suggested: Dependency removed");
+  await expect(depends.getByRole("button", { name: /^Remove dependency / })).toHaveCount(0);
+  // A suggestion answers nothing until an approver stages it.
+  await expect(page.getByTestId("review-summary")).toHaveText("3 blocking · 7 to confirm");
+
+  // Undo on Anomaly detection's card takes back that suggestion only.
+  await local.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(local.getByRole("button", { name: "Remove dependency", exact: true })).toBeVisible();
+  await expect(cross).toContainText("Suggested: Dependency removed");
+  await expect(depends.getByRole("button", { name: "Remove dependency Anomaly detection" })).toBeVisible();
+  await expect(depends.getByRole("button", { name: "Remove dependency Account health ledger (Safety PRD)" })).toHaveCount(0);
 });
