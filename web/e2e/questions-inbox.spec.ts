@@ -65,8 +65,8 @@ test("answer from the Inbox: Oracle asks, Answer in place, the badge drops, then
   await expect(row).toContainText("Before drafting · Clinic waitlist");
   await expect(questionRow(page, TIERS)).toContainText("Priya Raman asks");
   await expect(questionRow(page, TIERS)).toContainText("Checkout redesign PRD · Success metrics");
-  // The pending access request (A5, #203 part 3) counts too.
-  await expect(badge(page)).toHaveText("13");
+  // The pending access request (A5, #203 part 3) and Oracle's 7 Simple date and goal suggestions count too.
+  await expect(badge(page)).toHaveText("20");
 
   await row.getByRole("button", { name: "Answer" }).click();
   const form = page.getByTestId("answer-question");
@@ -83,8 +83,8 @@ test("answer from the Inbox: Oracle asks, Answer in place, the badge drops, then
   // In place until the tab changes; the badge counts it no more.
   await expect(row).toContainText("Answered ✓");
   await expect(page.getByTestId("answer-question")).toHaveCount(0);
-  await expect(badge(page)).toHaveText("12");
-  await expect(page.getByText("12 waiting")).toBeVisible();
+  await expect(badge(page)).toHaveText("19");
+  await expect(page.getByText("19 waiting")).toBeVisible();
 
   await tab(page, "Done").click();
   await expect(questionRow(page, CLINIC)).toContainText("Answered ✓");
@@ -119,7 +119,7 @@ test("the other paths: I don't know, Defer and Ask someone leave Open; the deleg
   await form.getByRole("option", { name: /Priya/ }).click();
   await expect(questionRow(page, TIERS)).toContainText("Asked Priya Raman ✓");
   // The "I don't know" question still counts in Needs you (owner 2026-10-29): open until a real answer.
-  await expect(badge(page)).toHaveText("11");
+  await expect(badge(page)).toHaveText("18");
 
   // Neither under New nor under Open any more: all three are Done.
   for (const name of ["New", "Seen"]) {
@@ -190,7 +190,7 @@ test("Home: Needs you shows the same question row; answered, it leaves with its 
   await form.getByRole("button", { name: "Send answer" }).click();
   await expect(page.getByTestId("home-needs").getByTestId("inbox-acted")).toContainText(`Answered: ${CLINIC}`);
   await expect(row).toHaveCount(0);
-  await expect(badge(page)).toHaveText("12");
+  await expect(badge(page)).toHaveText("19");
 });
 
 test("private finding: Ask someone is refused until it is shared, and the question stays mine", async ({ page }) => {
