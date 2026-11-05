@@ -61,6 +61,53 @@ for (const [name, viewport] of [
   });
 }
 
+test("RQ-1: a closed sheet stays closed across the tabs; a tap on a row opens it again (900 px)", async ({ page }) => {
+  await page.setViewportSize(TABLET);
+  await login(page);
+  await openRequests(page);
+  const tabs = page.getByTestId("requests-nav");
+  const sheet = page.getByRole("dialog", { name: "Request" });
+  await tabs.getByRole("link", { name: "To decide", exact: true }).click();
+  const row = page.getByTestId("new-requests").getByTestId("request-row").first();
+  const title = (await row.getByRole("button").first().textContent())!.trim();
+  await row.getByRole("button", { name: title, exact: true }).click();
+  await expect(sheet.getByTestId("request-inspector")).toContainText(title);
+  await sheet.getByRole("button", { name: "Close Request" }).click();
+  await expect(sheet).toHaveCount(0);
+
+  // To decide -> All requests -> To decide, then Themes -> All requests: no sheet comes back.
+  for (const [tab, list] of [
+    ["All requests", "all-requests"],
+    ["To decide", "new-requests"],
+    [/^Themes/, null],
+    ["All requests", "all-requests"],
+  ] as const) {
+    await tabs.getByRole("link", { name: tab }).click();
+    if (list) await expect(page.getByTestId(list).getByTestId("request-row").first()).toBeVisible();
+    else await expect(page.getByTestId("requests-nav")).toBeVisible();
+    await expect(sheet).toHaveCount(0);
+  }
+  // The row stays picked; a tap on it opens the sheet again.
+  const again = page.getByTestId("all-requests").getByTestId("request-row").filter({ hasText: title }).first();
+  await expect(again).toHaveAttribute("aria-current", "true");
+  await again.getByRole("button", { name: title, exact: true }).click();
+  await expect(sheet.getByTestId("request-inspector")).toContainText(title);
+});
+
+test("RQ-1: a tap on a row's details opens the sheet, and closing it puts focus back on that row (900 px)", async ({ page }) => {
+  await page.setViewportSize(TABLET);
+  await login(page);
+  await openRequests(page);
+  const row = page.getByTestId("request-row").nth(1);
+  const title = (await row.getByRole("button").first().textContent())!.trim();
+  await row.getByTestId("request-age").click();
+  const sheet = page.getByRole("dialog", { name: "Request" });
+  await expect(sheet.getByTestId("request-inspector")).toContainText(title);
+  await sheet.getByRole("button", { name: "Close Request" }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(row.getByRole("button", { name: title, exact: true })).toBeFocused();
+});
+
 test("RQ-1: over 1100 px the request still opens beside the list, with no sheet", async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   await login(page);
