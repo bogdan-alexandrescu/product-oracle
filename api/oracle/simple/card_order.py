@@ -35,9 +35,15 @@ _NOT_TOPIC = ("note_id", "suggestion_id", "meeting_id", "dependency_id", "decide
 # Cards that make a new record when applied (with no item yet): each its own topic.
 NEW_OPS = ("minutes_note", "open_question", "record_decision", "suggest_feature",
            "add_feature_ask", "add_item")  # fmt: skip
-# The person's line answering the previous card to change it: "no, ...", "instead, ...",
-# "... instead". What follows (or comes before "instead") is the change itself.
-_REDO = re.compile(r"^(?:no|nope|rather|instead)\b[,:;.!]?\s+(.+)$|^(.+?),?\s+instead[.!]?$", re.I)
+# The person's line answering the previous card to change it: "no, ...", "instead, ..."
+# (what follows is the change itself), or a short change request ending "instead" with no
+# record prefix ("make it April instead", "April instead"), read in the person's own words.
+_REDO = re.compile(r"^(?:no|nope|rather|instead)\b[,:;.!]?\s+(.+)$", re.I)
+_INSTEAD = re.compile(
+    r"^(?!(?:note|decided|decision|open|question|suggest|add|idea)\b)"
+    r"(?:[^\s:]+\s+){0,4}[^\s:]+,?\s+instead[.!]?$",
+    re.I,
+)
 
 
 def _api_topic(target: dict[str, Any]) -> str:
@@ -71,9 +77,13 @@ def topic(card: SimpleChatCard) -> str:
 
 def redo_line(line: str) -> str | None:
     """The change a line asks for when it answers the previous card to change it ("no,
-    note: ..."), else None."""
-    m = _REDO.match(" ".join(line.split()))
-    return (m[1] or m[2]) if m else None
+    note: ...": what follows; "make it April instead": the line itself), else None. A
+    longer line or one with a record prefix ("note: we use Redis instead") is no redo."""
+    line = " ".join(line.split())
+    m = _REDO.match(line)
+    if m:
+        return m[1]
+    return line if _INSTEAD.match(line) else None
 
 
 async def redo_of(
@@ -82,8 +92,9 @@ async def redo_of(
 ) -> uuid.UUID | None:  # fmt: skip
     """The earlier open draft a new record's card (the dict built for ``answer``) redoes:
     the one the reader named (``named``, an open draft of the same op in this chat), else,
-    when the person's line asks to change the previous card (``explicit``), that reply's
-    open draft of the same op. Else None: the card is its own topic."""
+    when the person's line asks to change the previous card (``explicit``), the open draft
+    of the same op on the reply right before (none if that reply has none). Else None: the
+    card is its own topic."""
     if card.get("item_id") is not None or card.get("op") not in NEW_OPS:
         return None
     if named is None and not explicit:
@@ -104,8 +115,17 @@ async def redo_of(
 
     if named is not None:
         return next((r.id for r in rows if draft(r) and str(r.id) == str(named)), None)
-    previous = [r for r in rows if rows and r.message_id == rows[-1].message_id]
-    same = [r for r in previous if draft(r)]
+    # The reply right before this one, cards or not ("no, ..." after a plain answer: new).
+    before = await db.scalar(
+        select(DiscussionMessage.id)
+        .where(DiscussionMessage.discussion_id == answer.discussion_id,
+               DiscussionMessage.author_kind == "oracle",
+               DiscussionMessage.id != answer.id,
+               DiscussionMessage.created_at < answer.created_at)
+        .order_by(DiscussionMessage.created_at.desc())
+        .limit(1)
+    )  # fmt: skip
+    same = [r for r in rows if r.message_id == before and draft(r)]
     return same[-1].id if same else None
 
 

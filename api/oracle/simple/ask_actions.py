@@ -166,6 +166,8 @@ OWN_WHY = "only you read your own sources, so not in a meeting's chat."
 APPLYING = "This card was applied already"
 # A body field's words on a card (its "_id" dropped).
 FIELD_WORDS = {"src": "from", "dst": "to", "prd_version": "PRD version"}
+# A body field whose value is a code, not words (a record's key, slug, id): never on a card.
+CODE_FIELDS = ("key", "slug", "id", "code", "external_id")
 # What the reader is offered of each action (the model's budget).
 SUMMARY_MAX = 90
 RESULT_MAX = 6000
@@ -589,11 +591,16 @@ def _field(key: str) -> str:
     return FIELD_WORDS.get(stem, stem).replace("_", " ")
 
 
+def _code(key: str) -> bool:
+    return key in CODE_FIELDS or key.endswith(("_key", "_slug"))
+
+
 def _words(value: Any, names: dict[str, str] | None = None) -> str:
     names = names or {}
     if isinstance(value, dict):
         return ", ".join(f"{_field(k)} {_words(v, names)}" for k, v in value.items()
-                         if v is not None and (not _is_id(v) or str(v) in names))  # fmt: skip
+                         if v is not None and not _code(k)
+                         and (not _is_id(v) or str(v) in names))  # fmt: skip
     if isinstance(value, list):
         return ", ".join(_words(v, names) for v in value if not _is_id(v) or str(v) in names)
     if isinstance(value, str) and value in names:
