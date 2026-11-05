@@ -28,6 +28,10 @@ proposer withdraws it); a viewer reads.
 - test_stale_proposal_op_is_dropped: protects=an approver's later op saves when an item
   their earlier proposal named was removed, and the proposal says what it dropped;
   fails_when=every later op is a 404.
+- test_dropped_move_and_rename_read_as_one_clause: protects=a proposal's dropped move and
+  rename of one item read "moved X up and renamed it"; fails_when=they read two clauses.
+- test_accept_says_what_it_left_out: protects=the accept names the proposal's ops whose
+  item is gone (``left_out``) and Undo clears it; fails_when=they are skipped silently.
 - test_feature_gone_from_the_prd_keeps_its_name: protects=a row whose feature left the PRD
   reads its last known name; fails_when=it reads "Untitled".
 - test_other_company_cannot_edit: protects=tenant isolation; fails_when=an owner of another
@@ -257,6 +261,53 @@ async def test_stale_proposal_op_is_dropped(client):
     r = await op(client, w, "decider", mid, op="accept", batch="a1")
     assert r.status_code == 200, r.text
     assert titles(r.json())[-1] == "Help text"
+
+
+async def test_dropped_move_and_rename_read_as_one_clause(client):
+    w = await world()
+    mid = await live(client, w)
+    for t in ("Launch email", "Quiet hours"):
+        r = await op(client, w, "owner", mid, op="add", title=t, batch="o1")
+    rows = r.json()["agenda"]["items"]
+    quiet = rows[-1]["id"]
+    r = await op(client, w, "approver", mid, op="move", item_id=quiet, to=len(rows) - 2,
+                 batch="p1")  # fmt: skip
+    assert r.status_code == 200, r.text
+    r = await op(client, w, "approver", mid, op="rename", item_id=quiet, title="Quiet time",
+                 batch="p1")  # fmt: skip
+    assert r.status_code == 200, r.text
+    r = await op(client, w, "owner", mid, op="remove", item_id=quiet, batch="o2")
+    assert r.status_code == 200, r.text
+
+    r = await op(client, w, "approver", mid, op="add", title="Help text", batch="p1")
+    assert r.status_code == 200, r.text
+    prop = r.json()["agenda"]["proposal"]
+    assert prop["words"] == ["added Help text"]
+    assert prop["dropped"] == ["moved Quiet hours up and renamed it"]
+
+
+async def test_accept_says_what_it_left_out(client):
+    w = await world()
+    mid = await live(client, w)
+    r = await op(client, w, "owner", mid, op="add", title="Quiet hours", batch="o1")
+    first = titles(r.json())
+    quiet = r.json()["agenda"]["items"][-1]["id"]
+    r = await op(client, w, "approver", mid, op="rename", item_id=quiet, title="Quiet time",
+                 batch="p1")  # fmt: skip
+    r = await op(client, w, "approver", mid, op="add", title="Help text", batch="p1")
+    assert r.status_code == 200, r.text
+    r = await op(client, w, "owner", mid, op="remove", item_id=quiet, batch="o2")
+    assert r.status_code == 200, r.text
+
+    r = await op(client, w, "decider", mid, op="accept", batch="a1")
+    assert r.status_code == 200, r.text
+    out = r.json()["agenda"]
+    assert out["words"] == ["added Help text"]
+    assert out["left_out"] == ["renamed Quiet hours to Quiet time"]
+    r = await op(client, w, "decider", mid, op="undo", batch="a1")
+    assert r.status_code == 200, r.text
+    assert r.json()["agenda"]["left_out"] == []
+    assert titles(r.json()) == first[:-1]
 
 
 async def test_feature_gone_from_the_prd_keeps_its_name(client):
