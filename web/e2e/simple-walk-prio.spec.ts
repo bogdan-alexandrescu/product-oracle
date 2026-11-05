@@ -171,9 +171,10 @@ for (const [where, size] of [
           const before = (await goals.boundingBox())!;
           // Cards are measured from the band's foot: the band itself grows with the goals there are.
           const foot = async () => (await goals.boundingBox())!.y + (await goals.boundingBox())!.height;
-          const firstCard = (await cards.first().boundingBox())!.y - (await foot());
+          const firstCard = (await cards.evaluateAll((els, y) => els.map((e) => e.getBoundingClientRect().top).filter((t) => t > y), before.y))[0] - (await foot());
           const named = await cards.evaluateAll((els) => els.filter((e) => e.getAttribute("aria-label")).map((e) => [e.getAttribute("aria-label")!, e.getBoundingClientRect().top] as const));
           const skeletonFoot = await foot();
+          const rebuildInSkeleton = await page.getByTestId("rb-home").count();
           await expect(page.getByTestId("home-sentence")).toBeVisible({ timeout: 8000 });
           await expect(page.getByTestId("home-goal").first()).toBeVisible();
           await expect(page.getByTestId("simple-nav-skeleton")).toHaveCount(0);
@@ -184,11 +185,20 @@ for (const [where, size] of [
           else expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(1);
           expect(Math.abs(after.x - before.x)).toBeLessThanOrEqual(1);
           const filledFoot = await foot();
+          // The rebuild card lands with the skeleton's band, never after it.
+          await expect(page.getByTestId("rb-home")).toHaveCount(rebuildInSkeleton);
           for (const [name, top] of named) {
             const now = await page.getByRole("region", { name, exact: true }).evaluate((e) => e.getBoundingClientRect().top);
-            expect(Math.abs(now - filledFoot - (top - skeletonFoot)), name).toBeLessThanOrEqual(1);
+            // Rebuild-sign pick A: the rebuild card sits under the greeting, above the band. It is
+            // drawn with the skeleton's band and stays as the band does (a viewer's moves up once).
+            if (top < before.y) {
+              if (role === "viewer") expect(now, name).toBeLessThanOrEqual(top + 1);
+              else expect(Math.abs(now - top), name).toBeLessThanOrEqual(1);
+            } else expect(Math.abs(now - filledFoot - (top - skeletonFoot)), name).toBeLessThanOrEqual(1);
           }
-          expect(Math.abs((await cards.first().boundingBox())!.y - filledFoot - firstCard)).toBeLessThanOrEqual(1);
+          // The first card under the band (the rebuild card, when there is one, is above it).
+          const under = async () => (await cards.evaluateAll((els, y) => els.map((e) => e.getBoundingClientRect().top).filter((t) => t > y), (await goals.boundingBox())!.y))[0];
+          expect(Math.abs((await under()) - filledFoot - firstCard)).toBeLessThanOrEqual(1);
           await page.evaluate(([slow, ms]) => [slow, ms].forEach((k) => localStorage.removeItem(k)), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
         });
       }
