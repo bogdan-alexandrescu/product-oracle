@@ -452,8 +452,8 @@ export function QuestionRow({
       <div className="simple-rb">
         <span className="break-words">
           {plain ? (
-            <b className="font-[650]" title={`${q.code} · ${q.title}`}>
-              {q.title}
+            m.mk.eq2 === "b" ? <button type="button" className="text-left font-[650] hover:underline" title={`${q.code} · ${m.s.title}`} onClick={() => m.setMode("sheet")}>{m.s.title}</button> /* MOCK-HOOK */ : <b className="font-[650]" title={`${q.code} · ${q.title}`}>
+              {m.mk.eq2 ? m.s.title /* MOCK-HOOK */ : q.title}
             </b>
           ) : (
             <>
