@@ -28,7 +28,7 @@ async function lowerTheGoal(page: Page) {
   await page.getByRole("button", { name: "Keep Jan 8 with a smaller goal" }).click();
   const sheet = page.getByTestId("fit-goal-sheet");
   await expect(sheet.getByRole("dialog", { name: "Goal: 40 replied threads per agent per day" })).toBeVisible();
-  await expect(sheet).toContainText("The PRD asks for At least 40 threads.");
+  await expect(sheet).toContainText("The PRD asks for at least 40 threads.");
   // Target and due only: one value to type; the comparison and the counted noun are words, not
   // controls (no Comparison or Unit select, no Counted noun field).
   const value = sheet.getByLabel("Target", { exact: true });
@@ -45,7 +45,7 @@ async function lowerTheGoal(page: Page) {
   await sheet.getByRole("button", { name: "Save" }).click();
   await expect(sheet).toBeHidden();
   const smaller = page.getByTestId("fit-smaller");
-  await expect(smaller).toContainText("Counted against the smaller goal: At least 30 threads (the PRD asks for At least 40 threads).");
+  await expect(smaller).toContainText("Counted against the smaller goal: At least 30 threads (the PRD asks for at least 40 threads).");
   await expect(smaller).toContainText("M2 Agent reply flow now reaches Jan 8.");
   await expect(page.getByTestId("fit-meter-date")).toHaveAttribute("data-state", "reach");
   await expect(page.getByTestId("fit-meter")).toContainText("Reaches Jan 8");
@@ -104,7 +104,7 @@ test.describe("desktop", () => {
 
   test("a viewer sees the smaller-goal option without a button", async ({ page }) => {
     await openHard(page, "fit-date-hard", "viewer@example.com");
-    await expect(page.getByTestId("fit-keep-date")).toContainText("Or keep Jan 8 and ask for less: the goal is At least 40 threads. Only an owner or approver can change it.");
+    await expect(page.getByTestId("fit-keep-date")).toContainText("Or keep Jan 8 and ask for less: the goal is at least 40 threads. Only an owner or approver can change it.");
     await expect(page.getByRole("button", { name: "Keep Jan 8 with a smaller goal" })).toHaveCount(0);
   });
 
@@ -115,7 +115,49 @@ test.describe("desktop", () => {
     );
     await expect(page.getByRole("button", { name: "Keep Jan 8 with a smaller goal" })).toHaveCount(0);
   });
+
+  test("a smaller goal's person-weeks are rounded to a tenth, as the API rounds them", async ({ page }) => {
+    // At 25 the goal's own work counts at a quarter: the bulk reply's 5 person-weeks are 1.25, read
+    // 1.2 as the API's round(…, 1) reads it (ties to even), and the slice's 2 are 0.5.
+    await openHard(page);
+    await page.getByRole("button", { name: "Keep Jan 8 with a smaller goal" }).click();
+    const sheet = page.getByTestId("fit-goal-sheet");
+    await sheet.getByLabel("Target", { exact: true }).fill("25");
+    await sheet.getByRole("button", { name: "Save" }).click();
+    await expect(sheet).toBeHidden();
+    await expect(page.getByTestId("fit-smaller")).toContainText("Counted against the smaller goal: At least 25 threads");
+    await expect(page.getByTestId("fit-change-bulk")).toContainText("Saves 1.2 person-weeks.");
+    await expect(page.getByTestId("fit-change-summary")).toContainText("Saves 0.5 person-weeks.");
+  });
 });
+
+/** Nothing in the open sheet reaches past the screen's right edge, and nothing scrolls sideways. */
+async function fitsTheWidth(page: Page, width: number) {
+  const sheet = page.getByTestId("fit-goal-sheet");
+  await expect(sheet.getByLabel("Target", { exact: true })).toBeVisible();
+  const over = await page.evaluate((w) => {
+    const dialog = document.querySelector('[data-testid="fit-goal-sheet"] [role="dialog"]')!;
+    const wide = [dialog, ...dialog.querySelectorAll("*")].filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && (r.right > w + 0.5 || r.left < -0.5);
+    });
+    const scrolls = [document.scrollingElement!, dialog, ...dialog.querySelectorAll("*")].filter((el) => el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX !== "hidden");
+    return { wide: wide.map((el) => el.outerHTML.slice(0, 80)), scrolls: scrolls.map((el) => el.outerHTML.slice(0, 80)) };
+  }, width);
+  expect(over).toEqual({ wide: [], scrolls: [] });
+}
+
+for (const width of [390, 393]) {
+  test.describe(`${width} wide`, () => {
+    test.use({ ...PHONE, viewport: { width, height: 844 } });
+
+    test("the smaller-goal sheet fits with no sideways scroll", async ({ page }) => {
+      await openHard(page);
+      await page.getByRole("button", { name: "Keep Jan 8 with a smaller goal" }).click();
+      await fitsTheWidth(page, width);
+    });
+  });
+}
 
 test.describe("phone", () => {
   test.use(PHONE);
