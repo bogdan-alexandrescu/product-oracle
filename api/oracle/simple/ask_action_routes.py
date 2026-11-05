@@ -768,6 +768,7 @@ NOT_OFFERED: frozenset[str] = frozenset(
         "tell_reopened",
         "test_metric_query",
         "tick",
+        "unarchive_bucket_goal",
         "undo_accept_suggestion",
         "undo_goal_buckets",
         "undo_oracle_action",
