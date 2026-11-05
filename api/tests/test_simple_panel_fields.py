@@ -14,6 +14,11 @@ Test cards (protects / fails_when / no_claim):
 - test_panel_fields_roles_and_undo: protects=a commenter's edit is a proposal (nothing
   changes), a viewer is refused, an undo puts the goal and dependencies back;
   fails_when=any of these is let through; no_claim=meetings.
+- test_panel_goal_measure_edit: protects=the item's goal carries its measure, target and
+  date, so the panel edits how it is measured through the goal's own edit
+  (``PATCH /v1/simple/goal-buckets/goals/{id}``) and the item's read shows the new measure;
+  fails_when=the goal's target or date is missing from the read, or the edit is not shown;
+  no_claim=the goal bucket page.
 - test_panel_fields_bad_values: protects=an unknown confidence, track, PRD, goal, status, or
   the item depending on itself, is 422; fails_when=a bad value is stored; no_claim=the web.
 """
@@ -166,3 +171,27 @@ async def test_panel_fields_bad_values(client):
         r = await p.post(client, op, before, after)
         assert r.status_code == 422, (op, r.text)
     assert (await p.read(client))["a"]["confidence"] is None
+
+
+async def test_panel_goal_measure_edit(client):
+    p = await Panel().build(await make_people())
+    async with tenant_session(p.ctx.tenant_id) as s:
+        g = await s.get(type(p.g1), p.g1.id)
+        g.attrs = {"metric": "Weekly payers", "target_text": "500 payers", "due": "2027-03-31"}
+        await s.commit()
+    goal = (await p.read(client))["a"]["goal"]
+    assert goal["metric"] == "Weekly payers"
+    assert goal["target"] == "500 payers" and goal["due"] == "2027-03-31"
+    body = {
+        "title": goal["title"],
+        "measure": "Monthly payers",
+        "target": goal["target"],
+        "due": goal["due"],
+    }
+    r = await client.patch(
+        f"/v1/simple/goal-buckets/goals/{goal['id']}", json=body, headers=p.ctx.as_("owner")
+    )
+    assert r.status_code == 200, r.text
+    goal = (await p.read(client))["a"]["goal"]
+    assert goal["metric"] == "Monthly payers"
+    assert goal["target"] == "500 payers" and goal["due"] == "2027-03-31"
