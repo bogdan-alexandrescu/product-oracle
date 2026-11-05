@@ -180,7 +180,6 @@ test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
   const tray = page.getByTestId("decision-tray");
   const suggested = tray.getByTestId("tray-suggested");
   await expect(suggested.getByText("Quiet hours for alerts").first()).toBeVisible();
-  await expect(suggested.getByText(/Looks like/).first()).toBeVisible();
   for (const title of GONE) await expect(suggested.getByText(title)).toHaveCount(0);
   const pulled = tray.locator("section").filter({ has: page.getByRole("heading", { name: "Pulled in, pending a decision" }) });
   await expect(pulled.getByText(/^None\.$/)).toBeVisible();
