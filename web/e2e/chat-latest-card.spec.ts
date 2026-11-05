@@ -303,6 +303,30 @@ test("drafts sharing most words stay active; only an asked change replaces one",
 });
 
 /**
+ * Card latest-card-redo-rules (fix round 3): protects = a note ending "instead" is a note of its
+ * own, in the person's words ("we use Redis instead"), and leaves the earlier note active; "no,
+ * ..." after a plain answer in between is a new card, not a change of the older draft;
+ * fails_when = "instead" replaces the earlier note or drops the word, or "no, ..." replaces a
+ * draft from before the plain answer.
+ */
+test("only a short change request or a 'no' right after a card replaces a draft", async ({ context, page }) => {
+  await openMeeting(page, context);
+  const box = () => page.getByTestId("meeting-chat");
+  await say(box(), "note: the export runs nightly");
+  const a = await newest(box());
+  await say(box(), "note: we use Redis instead");
+  const b = await newest(box());
+  await expect(b.getByTestId("chat-card-summary")).toContainText("we use Redis instead");
+  await active(a);
+  await active(b);
+  await say(box(), "who owns Setup checklist?");
+  await expect(box().getByTestId("chat-message").last().getByTestId("chat-card")).toHaveCount(0);
+  await say(box(), "no, note: we use Redis for the export");
+  const c = await newest(box());
+  for (const x of [a, b, c]) await active(x);
+});
+
+/**
  * Card latest-card-page-updates (from PR 1229's review): protects = Apply in the Ask Oracle
  * panel shows the change on the page under it at once (the roadmap reads the renamed feature),
  * with no reload; fails_when = the page keeps the old name until a reload.
