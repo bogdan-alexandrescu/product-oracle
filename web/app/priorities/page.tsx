@@ -522,7 +522,8 @@ function FeatureInspector({
             ))}
           </>
         }
-        fitStats
+        // A run row's four figures sit two by two (RP1 a); fitting tiles would put three on one line.
+        fitStats={!runRow}
         stats={[
           {
             label: "Rank",
@@ -1275,24 +1276,14 @@ function Priorities() {
       wrap: true,
       cell: (f) => {
         const text = f.depends_on.map((k) => featureName(known, k)).join(", ");
-        // Run mode: a dependency the feature set left out is not in this PRD; say so.
-        const outside = cmp ? f.depends_on.filter((k) => !features.some((x) => x.key === k)) : [];
-        const note =
-          outside.length === 0
-            ? null
-            : outside.length === f.depends_on.length
-              ? "Outside this PRD's scope"
-              : `${outside.map((k) => featureName(known, k)).join(", ")}: outside this PRD's scope`;
+        // RP1 a draws the names only: a dependency on a baseline feature the PRD leaves out is
+        // not a problem, and a real one (a cycle, a feature ranked above what it needs) has its
+        // own banner and flag.
         return (
-          <span data-testid="row-deps" className="block text-[13px] leading-[18px] text-text2" title={[text, note].filter(Boolean).join(". ") || undefined}>
+          <span data-testid="row-deps" className="block text-[13px] leading-[18px] text-text2" title={text || undefined}>
             {/* Between words; a word wider than the column hyphenated, never cut bare
                 ("instrumentatio / n", priorities-words). */}
             {(fonts ? fitWords(text, depsRoom, 400, 13) : text) || "—"}
-            {note && (
-              <span data-testid="row-deps-outside" className="block text-[12px] leading-4 text-warn">
-                {fonts ? fitWords(note, depsRoom, 400, 12) : note}
-              </span>
-            )}
           </span>
         );
       },
@@ -1430,7 +1421,7 @@ function Priorities() {
             <>
               {capsReady && !canSnapshot && !canOverride && <ViewOnly />}
               {/* The run's order lists its own features, not the whole live ranking. */}
-              <Chip kind="acc">{cmp ? `${features.length} in the run's order` : `${counts.features} ranked`}</Chip>
+              <Chip kind="acc">{`${cmp ? features.length : counts.features} ranked`}</Chip>
               {counts.no_goal > 0 && <Chip kind="crit">{counts.no_goal} no goal</Chip>}
               {counts.unscored > 0 && <Chip kind="warn">{counts.unscored} unscored</Chip>}
               {counts.in_cycles > 0 && <Chip kind="warn">{counts.in_cycles} in a cycle</Chip>}

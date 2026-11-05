@@ -201,6 +201,12 @@ export interface RunsContext {
   vagueGoals?: () => number;
   /** C7: Approve with edits: the requirements a person added, written to the baseline as `by`'s. */
   scopeApproved?: (scope: StoredScope, by: string) => void;
+  /**
+   * C8 RP1 (api run_order.accept_new): an approved order's new features (`new: true` ranking
+   * rows) join the baseline as proposed, and the live ranking; `by` null when Oracle saved the
+   * order itself. Absent: nothing is added (older mock data).
+   */
+  acceptNewFeatures?: (snap: SnapshotRow, by: string | null) => void;
   uuid: () => string;
   now: () => string;
 }
@@ -1391,12 +1397,19 @@ function newFeature(o: OrderEntry, rank: number, method: Method, live: SnapshotR
   };
 }
 
-/** As the API (rules 3-5): approving saves the order for the PRD (`by` null: Oracle, the stop was off); requesting changes discards it. */
-function decideOrder(ctx: Pick<RunsContext, "db" | "now" | "documents">, r: RunOut, cp: CheckpointOut, decision: "approved" | "changes_requested", by: string | null) {
+/**
+ * As the API (rules 3-5): approving saves the order for the PRD (`by` null: Oracle, the stop
+ * was off); requesting changes discards it. RP1: approving also adds the order's new features
+ * to the baseline as proposed (and the live ranking), for both the person's and Oracle's save.
+ */
+function decideOrder(ctx: Pick<RunsContext, "db" | "now" | "documents" | "acceptNewFeatures">, r: RunOut, cp: CheckpointOut, decision: "approved" | "changes_requested", by: string | null) {
   const snap = (ctx.db.priority_snapshots ?? []).find((x) => x.id === cp.payload.priority_snapshot_id && x.status === "proposed");
   if (!snap) return;
   Object.assign(snap, { status: decision === "approved" ? "saved" : "discarded", decided_by: by, decided_at: ctx.now() });
-  if (decision === "approved") snap.document = orderDocument(ctx, r) ?? snap.document;
+  if (decision === "approved") {
+    snap.document = orderDocument(ctx, r) ?? snap.document;
+    ctx.acceptNewFeatures?.(snap, by);
+  }
 }
 
 /** The priority stop's note when Oracle saved the order itself (H11 ``priorities`` at Act). */

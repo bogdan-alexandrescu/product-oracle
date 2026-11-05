@@ -869,6 +869,110 @@ export function addDecisionEntity(s: BaselineState, d: { number: number; title: 
   return e.id;
 }
 
+/** The fields a C8 priority order's new-feature ranking row needs for accept_new below (RankedFeature's `explanation.inputs` is a generic record, read with effortOf). */
+export type NewOrderRow = {
+  key: string;
+  title: string;
+  new: boolean;
+  depends_on: string[];
+  explanation: {
+    inputs: Record<string, unknown>;
+    confidence: { value: number };
+    goals: { goal: string; weight: number; contribution: number }[];
+  };
+};
+
+/** A new-feature row's effort input (explanation.inputs.effort), as newFeature (./runs.ts) sets it. */
+export const effortOf = (row: NewOrderRow): number | null => (row.explanation.inputs.effort as { value: number | null } | undefined)?.value ?? null;
+
+/** Why an approved order rejects a second open create of a feature it already added (api run_order.SAME_FEATURE). */
+export const SAME_FEATURE_NOTE = "The same feature as one the approved order added";
+/** The accepted note an approved order's own create proposal gets (api run_order.accept_new). */
+export const ADDED_BY_ORDER_NOTE = "Added by the approved order";
+
+/**
+ * C8 RP1 (api run_order.accept_new): an approved order adds the features new in its PRD
+ * (`new: true` ranking rows) to the baseline as proposed. The run's open create proposals
+ * for the same keys are accepted, one per key; a second open create of a key already added
+ * is rejected (SAME_FEATURE_NOTE). A key with no open create gets its proposed entity built
+ * straight from the ranking row (key, title, depends_on, effort, confidence, goals).
+ * Idempotent: a key that is already a feature entity is left alone. Returns how many
+ * features were added.
+ */
+export function acceptNewFeatures(s: BaselineState, runId: string | null | undefined, rows: NewOrderRow[], by: string | null): number {
+  const keys = new Set(rows.filter((r) => r.new).map((r) => r.key));
+  if (!keys.size) return 0;
+  const at = now();
+  const open = runId ? s.proposals.filter((p) => p.run_id === runId && p.status === "open").sort((a, b) => a.created_at.localeCompare(b.created_at)) : [];
+  const first = new Map<string, ProposalRow>();
+  for (const p of open) {
+    const payload = p.payload as { op?: string; fields?: { key?: string } };
+    const key = payload.fields?.key;
+    if (payload.op !== "create" || !key || !keys.has(key)) continue;
+    if (first.has(key)) {
+      // Rejected before the first is accepted (as the API: it would otherwise close it as already done).
+      Object.assign(p, { status: "rejected", decided_by: by, decided_at: at, payload: { ...p.payload, note: SAME_FEATURE_NOTE } });
+      continue;
+    }
+    first.set(key, p);
+  }
+  let added = 0;
+  for (const key of keys) {
+    if (s.entities.some((e) => e.type === "feature" && e.key === key)) continue;
+    const row = rows.find((r) => r.key === key)!;
+    const proposal = first.get(key);
+    const fields = proposal?.payload.fields as { title?: string; attrs?: Attrs } | undefined;
+    const fieldAttrs = fields?.attrs ?? {};
+    const entity: EntityRow = {
+      id: newId(),
+      type: "feature",
+      key,
+      title: fields?.title ?? row.title,
+      body: null,
+      attrs: {
+        ...fieldAttrs,
+        effort: fieldAttrs.effort ?? effortOf(row),
+        confidence: fieldAttrs.confidence ?? row.explanation.confidence.value ?? null,
+        goals: row.explanation.goals.map((g) => g.goal),
+      },
+      status: "proposed",
+      origin: "agent",
+      locked: false,
+      locked_by: null,
+      locked_at: null,
+      confidence: row.explanation.confidence.value ?? null,
+      run_id: runId ?? null,
+      created_at: at,
+      updated_at: at,
+    };
+    s.entities.push(entity);
+    for (const dep of row.depends_on) {
+      const target = s.entities.find((e) => e.type === "feature" && e.key === dep);
+      if (target) {
+        s.edges.push({
+          id: newId(),
+          src_id: entity.id,
+          dst_id: target.id,
+          type: "depends_on",
+          attrs: {},
+          status: "confirmed",
+          origin: "agent",
+          locked: false,
+          locked_by: null,
+          locked_at: null,
+          confidence: null,
+          run_id: runId ?? null,
+          created_at: at,
+          updated_at: at,
+        });
+      }
+    }
+    if (proposal) Object.assign(proposal, { status: "accepted", decided_by: by, decided_at: at, payload: { ...proposal.payload, note: ADDED_BY_ORDER_NOTE } });
+    added++;
+  }
+  return added;
+}
+
 /** A person's new link, as service.create_edge: both ends exist, a supports link carries its contribution 0-3. */
 function createEdge(s: BaselineState, input: Schemas["EdgeCreate"], userId: string): EdgeRow {
   if (!s.entities.some((e) => e.id === input.src_id) || !s.entities.some((e) => e.id === input.dst_id)) {

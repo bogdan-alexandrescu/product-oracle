@@ -7,7 +7,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { goalPosition, sortGoals } from "@/lib/goal-order";
 import { plainText } from "@/lib/markdown";
-import { LONG_WORDS_SCENARIO } from "./baseline";
+import { effortOf, LONG_WORDS_SCENARIO, type NewOrderRow } from "./baseline";
 import { presenterNotes, resolveBrief } from "./brief";
 import { MOCK_SCENARIO_KEY, mockUuid, seeded } from "./ids";
 import { calibration } from "./quality";
@@ -45,6 +45,8 @@ export interface LaneFState {
   /** People's moves and pins (C9), newest last; absent in data saved before them. */
   overrides?: OverrideRow[];
   reason_checks?: ReasonCheckRow[];
+  /** C8 RP1: features an approved order's new rows added, read into the live ranking beside the fixed set. */
+  extraFeatures?: FeatureSeed[];
 }
 
 const SEEDED_AT = "2026-10-01T09:00:00Z";
@@ -78,8 +80,8 @@ export const FORMULAS: Record<Method, string> = {
 const METHODS = Object.keys(FORMULAS) as Method[];
 const MOSCOW: Record<string, number> = { must: 4, should: 3, could: 2, wont: 1, "won't": 1 };
 
-type GoalLink = { goal: string; title: string; weight: number | null; contribution: number | null };
-type FeatureSeed = {
+export type GoalLink = { goal: string; title: string; weight: number | null; contribution: number | null };
+export type FeatureSeed = {
   key: string;
   title: string;
   status: string;
@@ -393,8 +395,9 @@ function findCycles(deps: Record<string, string[]>): string[][] {
   return out;
 }
 
-export function ranking(method: Method, cal: TrackRecord = null): Schemas["PriorityRanking"] {
-  const scored = featureSeeds().map((f) => scoreFeature(f, method, cal));
+/** C8 RP1: `extra` are features an approved order added since (./server.ts addLiveFeature), scored and ranked beside the fixed set. */
+export function ranking(method: Method, cal: TrackRecord = null, extra: FeatureSeed[] = []): Schemas["PriorityRanking"] {
+  const scored = [...featureSeeds(), ...extra].map((f) => scoreFeature(f, method, cal));
   const byScore = [...scored].sort(
     (a, b) => a.group - b.group || b.order_score - a.order_score || a.key.localeCompare(b.key),
   );
@@ -2012,6 +2015,30 @@ function state(db: Db, scenario?: string | null): LaneFState {
   return db.lane_f;
 }
 
+/**
+ * C8 RP1: an approved order's new feature (accepted into the baseline by acceptNewFeatures,
+ * ./baseline.ts) joins this db's live ranking too, scored from the same row (effort,
+ * confidence, goal links). Idempotent: a key already in the fixed set or added before is
+ * left alone.
+ */
+export function addLiveFeature(db: Db, rows: NewOrderRow[]): void {
+  const st = state(db);
+  const extra = (st.extraFeatures ??= []);
+  for (const row of rows) {
+    if (!row.new) continue;
+    if (featureSeeds().some((f) => f.key === row.key) || extra.some((f) => f.key === row.key)) continue;
+    extra.push({
+      key: row.key,
+      title: row.title,
+      status: "proposed",
+      goals: row.explanation.goals.map((g) => ({ goal: g.goal, title: g.goal, weight: g.weight, contribution: g.contribution })),
+      attrs: { effort: effortOf(row) ?? 1, confidence: row.explanation.confidence.value },
+      evidence: [],
+      depends_on: row.depends_on,
+    });
+  }
+}
+
 const isMethod = (m: string | null): m is Method => !!m && (METHODS as string[]).includes(m);
 const KEY_RE = /^[a-z0-9][a-z0-9-]{1,62}$/;
 
@@ -2065,7 +2092,7 @@ export async function laneF(
       const people = q.get("overrides") !== "false";
       const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => [e.id, e.title]);
       const track = calibration(db.quality, Object.fromEntries(goals));
-      return json(200, goalTitles(db, applyOverrides(ranking(method, track), people ? overrideInputs(st.overrides ?? []) : []), scenario));
+      return json(200, goalTitles(db, applyOverrides(ranking(method, track, st.extraFeatures), people ? overrideInputs(st.overrides ?? []) : []), scenario));
     }
     if (p[2] === "overrides") return overridesRoute(st, db.session ?? "someone", req, p, m);
     if (p[2] === "snapshots") {

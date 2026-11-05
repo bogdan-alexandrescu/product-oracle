@@ -408,8 +408,8 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
                 {m.meeting_decisions.map((d) => (
                   <li key={d.id} data-testid="meeting-decision">
                     <strong>{code(d)}</strong> {d.title}
-                    {/* qa-simple-decide-50: the day too, as elsewhere in Simple; qa4-simple-decide-19: the meeting's one format, no zone letters. */}
-                    <span className="block text-sm text-text-faint">{d.approver.name} · {momentWords(d.at, zone)}</span>
+                    {/* qa-simple-decide-50: the day too, as elsewhere in Simple; RP2 c: the decision stamp keeps its zone ("Wed Nov 4, 4:41 PM PST"). */}
+                    <span className="block text-sm text-text-faint" data-testid="decision-stamp">{d.approver.name} · {momentWords(d.at, zone, false, true)}</span>
                   </li>
                 ))}
               </ul>
