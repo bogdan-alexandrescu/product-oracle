@@ -117,11 +117,16 @@ test.describe("desktop", () => {
     const waiting = (await page.getByTestId("nav-inbox-badge").first().textContent())!.trim();
     await expect(page.getByText(`${waiting} waiting`)).toBeVisible();
     await expect(page.getByTestId("inbox-needs").getByTestId("panel-count")).toHaveText(waiting);
-    // Each run of the group is a line under it with one action of its own.
+    // The group is one line, its runs folded under Show runs; opened, each run is a line
+    // under it with one action of its own.
     const groupRow = page.getByRole("row").filter({ has: group });
-    await expect(groupRow.getByRole("link")).toHaveCount(0);
     const under = page.locator("tr[data-child-of]").filter({ has: page.getByTestId("checkpoint-label") });
+    await expect(under).toHaveCount(0);
+    await groupRow.getByRole("button", { name: "Show runs" }).click();
     await expect(under).toHaveCount(n);
+    for (const row of await under.all()) await expect(row.getByRole("link", { name: /^(Review|Decide|Open)$/ })).toHaveCount(1);
+    await groupRow.getByRole("button", { name: "Hide runs" }).click();
+    await expect(under).toHaveCount(0);
   });
 
   test("B-19: Priorities follows the scenario: none for a new company, many for a large one", async ({ browser }) => {

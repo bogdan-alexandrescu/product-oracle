@@ -82,6 +82,8 @@ export type Need = {
   childOf?: string;
   /** B-22: how many items the row stands for (a group of checkpoints counts each of its runs). */
   size?: number;
+  /** B-22: its children stay folded until "Show runs" opens them. */
+  folded?: boolean;
 };
 
 /**
@@ -219,7 +221,14 @@ export function NeedTable({
 }) {
   const headingId = useId();
   const [shown, setShown] = useState<ReadonlySet<string>>(new Set());
+  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(new Set());
   if (rows.length === 0) return null;
+  const unfold = (key: string) =>
+    setUnfolded((s) => {
+      const next = new Set(s);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
   const toggle = (key: string) =>
     setShown((s) => {
       const next = new Set(s);
@@ -227,7 +236,17 @@ export function NeedTable({
       return next;
     });
   // D9: each row's children right under it (Home passes none).
-  const flat = rows.flatMap((r) => [r, ...(r.children ?? []).map((c) => ({ ...c, childOf: r.key }))]);
+  // B-22: a folded group shows its runs once opened, its toggle where an action would be.
+  const flat = rows.flatMap((r) => {
+    if (!r.folded) return [r, ...(r.children ?? []).map((c) => ({ ...c, childOf: r.key }))];
+    const open = unfolded.has(r.key);
+    const action = (
+      <Button aria-expanded={open} onClick={() => unfold(r.key)} data-testid="checkpoint-group-toggle">
+        {open ? "Hide runs" : "Show runs"}
+      </Button>
+    );
+    return [{ ...r, action }, ...(open ? (r.children ?? []).map((c) => ({ ...c, childOf: r.key })) : [])];
+  });
   const drawn = flat.map((n) =>
     n.quote
       ? {
@@ -1344,6 +1363,7 @@ function groupCheckpoints(rows: InboxOut["checkpoints"], needs: Need[]): Need[] 
         left: null,
         action: null,
         size: same.length,
+        folded: true,
         // Each run keeps its own line and Open; its context names the run.
         children: same,
       },
