@@ -2065,6 +2065,19 @@ function seedPriorityOrder(): Db {
 }
 
 /**
+ * Follow-up to PR 1244 "priority-order-goal-review" scenario: "priority-order" plus a Build the
+ * baseline run waiting at Confirm the baseline that proposed Cut early churn (the goal the Gift
+ * boxes order's new feature serves), so a person rejects it in that review, and Undo brings it back.
+ */
+function seedPriorityOrderGoalReview(): Db {
+  const db = seedPriorityOrder();
+  const run = seeded("priority-order-goal-review", () => seedBaselineReviewRun(db.runs!, runsContext(db)));
+  const churn = db.baseline.entities.find((e) => e.type === "goal" && e.key === "g.early-churn");
+  if (churn) churn.run_id = run.id;
+  return db;
+}
+
+/**
  * build-runplan RP2 "meeting-draft-dates" scenario: the Simple home's data, the Saved carts PRD a
  * draft whose run dated six items on its draft roadmap (./meeting-draft.ts).
  */
@@ -3429,6 +3442,8 @@ function load(): Db {
             ? seedRunReviewDecider
           : scenario === "priority-order"
             ? seedPriorityOrder
+          : scenario === "priority-order-goal-review"
+            ? seedPriorityOrderGoalReview
           : scenario === "meeting-draft-dates"
             ? seedMeetingDraftDatesScenario
           : scenario === "next-draft" || scenario === "next-draft-costly"
