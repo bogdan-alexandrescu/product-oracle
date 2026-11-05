@@ -8,8 +8,10 @@ import { expect, test, type Page } from "./test";
  * the days left), and Restore puts each back where it was. A feature is deleted from its Timeline
  * row's context menu (Delete feature) and a goal from its bucket's ⋯ on Priorities (Delete goal),
  * as trash-feature-rows.spec.ts drives them; Settings › Trash and every other step is driven on
- * its screen. One step has no screen on this branch and goes through the mock API's route: the
- * required reviewer's approval of a roadmap draft (Home's waiting list for it is on the AN line).
+ * its screen. Two steps go through the mock API's route: the required reviewer's approval of a
+ * roadmap draft (no screen for it on this branch; Home's waiting list for it is on the AN line),
+ * and the approver's goal delete in the "simple-deciders" scenario, whose Goal buckets show no
+ * bucket for its goals.
  * The API is read (never changed) to pick the example feature and goal and to check what a
  * page's read holds.
  * The feature panel's own Delete is another lane's.
@@ -82,32 +84,45 @@ async function deleteFeature(page: Page, item: { key: string; title: string }) {
   await expect(bar).toHaveCount(0);
 }
 
-const bucket = (page: Page, goal: string) => page.locator(`[data-testid="plan-goal"][data-goal="${goal}"]`);
+/** The goal's bucket on Priorities › Goal buckets, with a dated plan or without one. */
+const bucket = (page: Page, goal: Goal) => page.locator(`[data-goal-id="${goal.id}"]`);
 
-/** Deletes the goal from its bucket's ⋯ on Priorities, its features moved to `to`. */
-async function deleteGoal(page: Page, goal: string, to: string) {
+/** The goals with a bucket on Priorities › Goal buckets that this person may delete, in order. */
+async function shownGoals(page: Page): Promise<Goal[]> {
   await page.goto("/simple/priorities?tab=buckets");
-  await expect(page.getByTestId("buckets-head")).toBeVisible();
-  await bucket(page, goal).getByRole("button", { name: `More for ${goal}` }).click();
+  const shown = page.locator("[data-goal-id]");
+  await expect(shown.first()).toBeVisible();
+  const all = await goals(page);
+  const ids = await shown.evaluateAll((els) => els.map((e) => e.getAttribute("data-goal-id")));
+  return ids.map((id) => all.find((g) => g.id === id)).filter((g): g is Goal => !!g);
+}
+
+/** Deletes the goal from its bucket's ⋯ on Priorities (Delete goal), its features moved to `to`. */
+async function deleteGoal(page: Page, goal: Goal, to: Goal) {
+  await page.goto("/simple/priorities?tab=buckets");
+  await bucket(page, goal).getByRole("button", { name: `More for ${goal.title}` }).click();
   await page.getByRole("menuitem", { name: "Delete goal" }).click();
-  const dialog = page.getByRole("dialog", { name: `Delete ${goal}` });
+  const dialog = page.getByRole("dialog", { name: `Delete ${goal.title}` });
   const pick = dialog.getByLabel("Goal", { exact: true });
-  const label = (await pick.locator("option").allTextContents()).find((o) => o.endsWith(` ${to}`) || o === to)!;
+  const label = (await pick.locator("option").allTextContents()).find((o) => o === to.title || o.endsWith(` ${to.title}`))!;
   await pick.selectOption({ label });
   await dialog.getByRole("button", { name: "Delete goal" }).click();
   await expect(bucket(page, goal)).toHaveCount(0);
 }
 
 test("a deleted feature and goal are listed in Settings › Trash and restored from there", async ({ page }) => {
+  // A plan whose Goal buckets are the goals Priorities lists ("simple-plan").
+  await page.addInitScript((key) => localStorage.setItem(key, "simple-plan"), MOCK_SCENARIO_KEY);
   await login(page);
   const feature = (await items(page)).find((i) => i.can_decide && i.code)!;
-  const [goal, other] = await goals(page);
-  expect(feature && goal && other).toBeTruthy();
   const before = await links(page);
-  expect(Object.values(before).some((ids) => ids[0] === goal.id)).toBe(true);
+  const shown = await shownGoals(page);
+  const goal = shown.find((g) => Object.values(before).some((ids) => ids[0] === g.id))!;
+  const other = shown.find((g) => g.id !== goal?.id)!;
+  expect(feature && goal && other).toBeTruthy();
 
   await deleteFeature(page, feature);
-  await deleteGoal(page, goal.title, other.title);
+  await deleteGoal(page, goal, other);
   expect((await items(page)).map((i) => i.id)).not.toContain(feature.id);
   expect((await goals(page)).map((g) => g.id)).not.toContain(goal.id);
 
@@ -148,7 +163,10 @@ test("whoever deleted a feature or a goal sees it in Trash and restores it, with
   const [goal, other] = await goals(page);
   expect(feature && goal && other).toBeTruthy();
   await deleteFeature(page, feature);
-  await deleteGoal(page, goal.title, other.title);
+  // This scenario's Goal buckets show no bucket for its goals (its Priorities buckets are other
+  // names), so the approver's goal delete goes through the mock route; the bucket menu's Delete
+  // goal is driven in the test above.
+  expect((await call(page, "DELETE", `/v1/simple/goal-buckets/goals/${goal.id}?to_goal_id=${other.id}`)).status).toBe(200);
 
   await page.goto("/settings");
   await page.getByTestId("nav-trash").filter({ visible: true }).click();
