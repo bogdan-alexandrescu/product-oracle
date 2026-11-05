@@ -40624,6 +40624,10 @@ export interface components {
             metric?: string | null;
             /** Position */
             position?: number | null;
+            /** Target */
+            target?: string | null;
+            /** Due */
+            due?: string | null;
         };
         /** SimpleGoalSuggestion */
         SimpleGoalSuggestion: {

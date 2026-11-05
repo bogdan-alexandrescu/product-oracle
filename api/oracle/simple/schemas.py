@@ -76,6 +76,10 @@ class SimpleGoalRef(BaseModel):
     metric: str | None = None
     # goal-order: the goal's place (its attrs.position, 1 = first); none when unset.
     position: int | None = None
+    # one-feature-panel: its target and date, as the goal bucket edit reads and writes them
+    # (the panel edits how it is measured through that edit, which takes the whole goal).
+    target: str | None = None
+    due: dt.date | None = None
 
 
 class SimpleTrackRef(BaseModel):

@@ -916,6 +916,8 @@ def item_out(
             title=e.goal.title,
             metric=_metric(e.goal),
             position=goal_position(e.goal.attrs),
+            target=_goal_target(e.goal),
+            due=_goal_due(e.goal),
         )
         if e.goal
         else None,
@@ -1063,6 +1065,20 @@ def _milestone_out(m: TrackMilestone, keyed: dict, ids: set, view: Any) -> Simpl
         out.effort_weeks, out.done_when, out.targets = pm.effort_weeks, pm.done_when, pm.targets
         out.date = out.date or pm.end_date
     return out
+
+
+def _goal_target(goal: Entity) -> str | None:
+    """one-feature-panel: the goal's target as the goal bucket edit reads it."""
+    from oracle.simple.goal_buckets import _target  # goal_buckets imports the router
+
+    return _target(goal.attrs or {})
+
+
+def _goal_due(goal: Entity) -> date | None:
+    """one-feature-panel: the goal's date as the goal bucket edit reads it."""
+    from oracle.simple.goal_buckets import _due
+
+    return _due(goal.attrs or {})
 
 
 def _metric(goal: Entity) -> str | None:
