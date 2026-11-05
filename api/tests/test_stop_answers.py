@@ -155,7 +155,9 @@ async def test_the_decisions_list_each_answer_under_its_stop(
     for a in d["answers"]:
         assert a["answered_by_name"] == d["decided_by_name"]
         assert a["answered_at"]
-        assert a["feature"] == "price-early Show the price early"
+        # The feature's name and its key apart: a person reads the name, never a slug.
+        assert (a["feature_key"], a["feature_title"]) == ("price-early", "Show the price early")
+        assert "feature" not in a
     others = [x for x in decisions if x["kind"] != "eng_review"]
     assert all(x["answers"] == [] for x in others)
 
@@ -219,6 +221,13 @@ async def test_answers_to_the_agents_questions_at_the_feature_set_reach_the_prd_
     assert [(a["question"], a["answer"]) for a in d["answers"]] == [
         (AQ, "Reuse the old sender. Note: It ships this month.")
     ]
+    # A card names its feature by key only: its title is the run's feature set's.
+    scope = (await client.get(f"/v1/runs/{run['id']}/scope", headers=auth)).json()
+    title = next(f["title"] for f in scope["features"] if f["key"] == "price-early")
+    assert (d["answers"][0]["feature_key"], d["answers"][0]["feature_title"]) == (
+        "price-early",
+        title,
+    ), d["answers"]
     await tick(client, auth)
     run = await get(client, auth, run["id"])
     assert run["waiting_on"] == "eng_review", run["waiting_on"]
@@ -228,6 +237,9 @@ async def test_answers_to_the_agents_questions_at_the_feature_set_reach_the_prd_
     prompt = _writer_prompt(runtime)
     assert f'"{AQ}" Decided: "Reuse the old sender. Note: It ships this month."' in prompt
     assert "Feature set" in prompt
+    # The writer reads the feature's name, and its key apart, for citing only.
+    line = next(ln for ln in prompt.splitlines() if AQ in ln)
+    assert f'{title} (feature key price-early, for citing only): "{AQ}"' in line, line
 
 
 # ------------------------------------------------------------------ review round 1
@@ -544,3 +556,44 @@ async def test_reading_the_answers_of_many_stops_is_batched(
     one, six = await reads(1), await reads(6)
     assert six == one, (one, six)
     assert six <= 5, six
+
+
+# ------------------------------------------------------------------ review round 2
+
+
+def test_a_negated_or_longer_question_is_not_an_answered_one():
+    # protects=only the answered question itself, or one of the same length differing in a
+    # word, is taken for it; fails_when=a negated copy ("should not") or a question one
+    # word longer is refused at import as already answered; no_claim=paraphrases.
+    long_q = (
+        "Should the archive keep every export of the finance team for seven years "
+        "in the cold storage bucket that the records team already runs today?"
+    )
+    answers = [_answered(long_q)]
+    negated = long_q.replace("Should the archive", "Should the archive not")
+    longer = long_q.replace("today?", "today, too?")
+    for listed in (negated, longer):
+        assert listed_open(answers, _prd(f"- {listed}")) == [], listed
+    # The same length, one word apart: still the answered question.
+    swapped = long_q.replace("seven years", "seven yrs")
+    assert len(listed_open(answers, _prd(f"- {swapped}"))) == 1
+    shorter = "Should the archive keep exports?"
+    assert listed_open([_answered("Should the archive not keep exports?")],
+                       _prd(f"- {shorter}")) == []  # fmt: skip
+
+
+def test_only_an_owner_or_due_tail_is_stripped_not_a_due_in_the_question():
+    # protects=the owner and due day are stripped only in their listed forms ("Owner: …",
+    # "needed by …", "(due …)"); fails_when="Is the invoice due on delivery?" is read as
+    # "Is the invoice" and refused because "Is the invoice?" was answered; no_claim=other
+    # tail wordings.
+    answers = [_answered("Is the invoice?"), _answered("Should the owner see it?")]
+    for listed in ("Is the invoice due on delivery?", "Is the invoice, due to tax, final?"):
+        assert listed_open(answers, _prd(f"- {listed}")) == [], listed
+    for listed in (
+        "Is the invoice? (due Nov 30)",
+        "Is the invoice? Owner: Rae Example",
+        "Is the invoice? Needed by Nov 30.",
+        "Should the owner see it? Owner: Rae Example",
+    ):
+        assert len(listed_open(answers, _prd(f"- {listed}"))) == 1, listed
