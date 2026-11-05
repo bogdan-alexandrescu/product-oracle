@@ -285,6 +285,99 @@ for (const phone of [false, true]) {
         await expect(s.getByRole("button", { name: "Edit" })).toBeVisible();
       });
 
+      /**
+       * Card ec1-home-one-store: protects = Save and Withdraw on Home's decision-log call (D-5 Ship
+       * usage caps before anomaly detection) change that one decision: Home's row and Decisions'
+       * Waiting for you read the new title, then neither lists it once withdrawn, and Outside
+       * meetings never lists a number twice; fails_when = the sheet changes a copy (Home keeps the
+       * old title, the withdrawn call still waits with Decide, a second D-5 row); no_claim = the
+       * log's own page.
+       */
+      test("ec1: Save and Withdraw from Home change the one decision everywhere", async ({ page }) => {
+        const codes = async () => {
+          const rows = region(page, "Outside meetings").getByTestId("decision-row");
+          await expect(rows.first()).toBeVisible();
+          const all = (await rows.allTextContents()).map((t) => /^([A-Z]+-\d+) /.exec(t)?.[1]).filter(Boolean);
+          expect(new Set(all).size).toBe(all.length);
+        };
+        await login(page, "approver@example.com");
+        await page.goto("/simple");
+        const home = page.getByTestId("home-decision");
+        const open = home.filter({ hasText: "Ship usage caps before anomaly detection" }).getByTestId("home-decision-open");
+        await open.scrollIntoViewIfNeeded();
+        await open.click();
+        const s = sheet(page);
+        await expect(s.getByRole("heading", { name: "D-5 Ship usage caps before anomaly detection" })).toBeVisible();
+        await s.getByRole("button", { name: "Edit" }).click();
+        await s.getByRole("textbox", { name: "Title", exact: true }).fill("Ship usage caps before usage alerts");
+        await s.getByRole("button", { name: "Save" }).click();
+        await expect(s).toHaveCount(0);
+        await expect(toast(page, "Saved D-5")).toBeVisible();
+        await expect(home.filter({ hasText: "Ship usage caps before usage alerts" })).toHaveCount(1);
+        await expect(home.filter({ hasText: "Ship usage caps before anomaly detection" })).toHaveCount(0);
+
+        await page.goto("/simple/decisions");
+        const waiting = page.getByTestId("questions-mine");
+        await expect(waiting.getByRole("listitem", { name: "Decision: Ship usage caps before usage alerts" })).toBeVisible();
+        await expect(waiting.getByRole("listitem", { name: "Decision: Ship usage caps before anomaly detection" })).toHaveCount(0);
+        await codes();
+
+        await page.goto("/simple");
+        await home.filter({ hasText: "Ship usage caps before usage alerts" }).getByTestId("home-decision-open").click();
+        await expect(s.getByRole("heading", { name: "D-5 Ship usage caps before usage alerts" })).toBeVisible();
+        await s.getByRole("button", { name: "Withdraw" }).click();
+        await expect(s).toHaveCount(0);
+        await page.reload();
+        await expect(page.getByTestId("home-decision").first().or(page.getByRole("heading", { level: 1, name: "Home" }))).toBeVisible();
+        await expect(home.filter({ hasText: "Ship usage caps" })).toHaveCount(0);
+
+        await page.goto("/simple/decisions");
+        await expect(page.getByRole("heading", { level: 1, name: "Decisions" })).toBeVisible();
+        await expect(waiting.getByRole("listitem", { name: /Ship usage caps/ })).toHaveCount(0);
+        await expect(region(page, "Outside meetings")).not.toContainText("Ship usage caps");
+        await codes();
+      });
+
+      /**
+       * Card ec1-outdated: protects = an approver's suggestion on D-5 Keep the free plan's five-seat
+       * limit waits for Avery Stone with Accept on Decisions' Waiting for you and Home; Avery edits
+       * D-5 first, and Accept opens D-5's sheet as it is now, saying the suggestion is out of date
+       * (no toast); fails_when = the refusal is only a toast, the suggestion overwrites the newer
+       * edit, or the mock has no Accept for it; no_claim = Decline.
+       */
+      test("ec1: an out-of-date suggestion's Accept opens the sheet saying so", async ({ page }) => {
+        await decisions(page, "approver@example.com");
+        await outside(page, "D-5").getByTestId("decision-open").click();
+        const s = sheet(page);
+        await s.getByRole("button", { name: "Suggest a change" }).click();
+        await s.getByRole("textbox", { name: "Title", exact: true }).fill("Keep the free plan's six-seat limit");
+        await s.getByRole("button", { name: "Send" }).click();
+        await expect(toast(page, "Sent to Avery Stone to decide")).toBeVisible();
+
+        await decisions(page, undefined, true);
+        await outside(page, "D-5").getByTestId("decision-open").click();
+        await s.getByRole("button", { name: "Edit" }).click();
+        await s.getByRole("textbox", { name: "Title", exact: true }).fill("Keep the free plan's seven-seat limit");
+        await s.getByRole("button", { name: "Save" }).click();
+        await expect(s).toHaveCount(0);
+
+        for (const where of ["/simple/decisions", "/simple"]) {
+          await page.goto(where);
+          const accept = (where === "/simple" ? page.getByTestId("home-proposal").filter({ hasText: "D-5" }) : page.getByTestId("waiting-item").and(page.locator('[data-kind="proposal"]')))
+            .first()
+            .getByRole("button", { name: "Accept", exact: true });
+          await accept.scrollIntoViewIfNeeded();
+          await accept.click();
+          await expect(s.getByRole("heading", { name: "D-5 Keep the free plan's seven-seat limit" })).toBeVisible();
+          await expect(s.getByRole("alert")).toHaveText("Not accepted: this decision changed since the suggestion was made. Here it is as it is now.");
+          await expect(page.getByTestId("toasts").getByText(/outdated/i)).toHaveCount(0);
+          await page.keyboard.press("Escape");
+          await expect(s).toHaveCount(0);
+        }
+        await page.goto("/simple/decisions");
+        await expect(outside(page, "D-5")).toContainText("Keep the free plan's seven-seat limit");
+      });
+
       /** Card eq2-home: protects = Home's question titles open the same sheet; fails_when = they do not. */
       test("eq2: Home's question titles open the same sheet", async ({ page }) => {
         await login(page);
