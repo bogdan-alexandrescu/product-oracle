@@ -59,6 +59,7 @@ from oracle.simple import (
     service,
     targets,
 )
+from oracle.simple.card_order import refuse_replaced, replaced_in
 from oracle.simple.changes import ChangeError
 from oracle.simple.models import SimpleChange, SimpleChatCard, SimpleChatRead
 from oracle.simple.schemas import (
@@ -1950,6 +1951,9 @@ async def apply_all(
             .order_by(SimpleChatCard.created_at, SimpleChatCard.id)
         )
     )
+    # chat-latest-card: only the line's active cards; a newer card replaced the others.
+    gone = await replaced_in(db, cards)
+    cards = [c for c in cards if c.id not in gone]
     if not cards:
         raise ChatError(409, "No open cards on this line")
     todo = [(c.id, c.summary) for c in cards]
@@ -2152,6 +2156,8 @@ async def cards_out(
     # A meeting's cards may be on its PRD's draft-roadmap items (meet-chat-right-prd).
     await meeting_prd(db, read_, rules)
     proposals = await _proposals(db, cards)
+    # chat-latest-card: a card a newer one in its chat replaced is no longer actionable.
+    gone = await replaced_in(db, cards)
     routes = {i: list(r.routed_to or []) for i, r in proposals.items()}
     declined = {i: r for i, r in proposals.items() if r.status == "declined"}
     names = await _names(db, {c.decided_by for c in cards if c.decided_by}
@@ -2253,6 +2259,9 @@ async def cards_out(
                 asks, here = service.decider_ids(e, read_.deciders) or owners, False
                 asks_all, here_all = asks if may_all else [], False
                 names.update(await _names(db, {i for i in asks if i not in names}))
+        if c.status == "open" and c.id in gone:
+            may = may_all = bar = None
+            asks, asks_all, here, here_all = [], [], True, True
         # walkc-meeting r2: a proposal declined since reads as declined, by whom and when.
         no = declined.get(c.change_id) if c.status == "proposed" and c.change_id else None
         by, at = (no.decided_by, no.decided_at) if no is not None else (c.decided_by, c.decided_at)
@@ -2265,7 +2274,8 @@ async def cards_out(
             flow=await _flow(db, c), change_id=c.change_id,
             decided_by_name=names.get(by) if by else None,  # type: ignore[arg-type]
             decided_at=at, decision_id=c.decision_id, change_words=card_words,
-            correct=correct if c.status == "open" else None,
+            correct=correct if c.status == "open" and c.id not in gone else None,
+            replaced_by=gone.get(c.id),
             dependents=[x.row.title for x in waiting], dependent_ids=[x.row.id for x in waiting],
             may_with_dependents=may_all,  # type: ignore[arg-type]
             can_undo=c.status == "applied" and _undo_bar(principal, c, rules, read_) is None,
@@ -2312,6 +2322,7 @@ async def apply(
     ``dependents``: the ids the card listed; others waiting on it now are 409."""
     me = _me(principal)
     card, rules = await _get(db, principal, card_id)
+    await refuse_replaced(db, card)
     bar = _card_bar(principal, card, rules)
     if bar is not None:
         raise ChatError(403, bar)
@@ -2505,6 +2516,7 @@ async def discard(db: AsyncSession, principal: Any, card_id: uuid.UUID) -> ChatC
     card, rules = await _get(db, principal, card_id)
     if card.status != "open":
         raise ChatError(409, f"This card is {card.status} already")
+    await refuse_replaced(db, card)
     if not has_role(principal.role, "commenter"):
         raise ChatError(403, "Viewers ask questions; they don't discard cards")
     # Those the change mode bars from applying may not discard either.
