@@ -279,3 +279,21 @@ test("Undo on one dependency of a removal staged from a discussion keeps it the 
   await expect(chip).toHaveCount(1);
   await expect(chip.getByTestId("chip-discussion")).toHaveCount(1);
 });
+
+// Review follow-up (PR 1264, minor 2): protects = the panel's × of an approver joins a
+// commenter's suggested removal too; fails_when = it replaces the suggestion; no_claim = Stage.
+test("an approver's × on a dependency joins a commenter's suggested removal on the item", async ({ page }) => {
+  await openReview(page, COMMENTER);
+  await row(page, "budget-caps").locator('[data-phone="title"]').click();
+  await card(page, CROSS).getByRole("button", { name: "Remove dependency", exact: true }).click();
+  await expect(card(page, CROSS)).toContainText("Suggested: Dependency removed");
+  await signOut(page);
+
+  await login(page);
+  await goToReview(page);
+  await row(page, "budget-caps").locator('[data-phone="title"]').click();
+  await inspector(page).getByTestId("item-depends").getByRole("button", { name: "Remove dependency Anomaly detection" }).click();
+  await expect(card(page, LOCAL)).toContainText("✓ Dependency removed");
+  await expect(card(page, CROSS)).toContainText("✓ Dependency removed");
+  await expect(page.getByTestId("review-summary")).toHaveText("2 blocking · 7 to confirm");
+});

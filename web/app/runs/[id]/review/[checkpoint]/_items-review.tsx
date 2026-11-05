@@ -958,6 +958,8 @@ function ReviewInspector({
   const horizon = (staged("horizon")?.value as string | undefined) ?? item.horizon ?? "now";
   const outcome = (staged("outcome")?.value as string | undefined) ?? item.outcome ?? "";
   const removedDeps = ((staged("depends_on")?.value as { remove?: string[] } | undefined)?.remove ?? []) as string[];
+  // An approver's × joins the item's dependency edit, a commenter's suggestion too (as Remove dependency does).
+  const joinDeps = mode === "approver" ? removedBy(item.actions.find((a) => a.kind === "edit" && a.field === "depends_on") ?? { value: null }) : removedDeps;
   const act = ops.act;
   const row = { ...toRow(item, prd), outcome: outcome || null };
 
@@ -1080,7 +1082,7 @@ function ReviewInspector({
                 variant="ghost"
                 className="h-7 w-7 justify-center px-0"
                 aria-label={`Remove dependency ${titleOf(d)}`}
-                onClick={() => void act({ item_key: item.key, kind: "edit", field: "depends_on", value: { add: [], remove: [...removedDeps, d] }, answers: [] })}
+                onClick={() => void act({ item_key: item.key, kind: "edit", field: "depends_on", value: { add: [], remove: [...new Set([...joinDeps, d])] }, answers: [] })}
               >
                 ×
               </Button>
