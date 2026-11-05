@@ -316,6 +316,27 @@ def test_check_differs_from_live_and_no_goal_are_advisory():
     assert out.problems[0]["message"] == "d is ranked 1 here and 4 in the live ranking"
 
 
+def test_new_features_ranked_above_do_not_make_a_feature_differ_from_live():
+    """Review of PR 1244 (RP1 a): a feature is compared with the live ranking by where it sits
+    among the live features the run ranks, as outside_limits does: new features ranked above
+    it (n1-n3, not in the live ranking) do not move it. a keeps its place among a, b, c."""
+    k = known(("a", "b", "c"), live=[live_row("a", 1), live_row("b", 2), live_row("c", 3)])
+    for key in ("n1", "n2", "n3"):
+        k.features[key] = key.title()
+    out = run_order.check_order(
+        order(("n1", 1), ("n2", 2), ("n3", 3), ("a", 4), ("b", 5), ("c", 6)), known=k
+    )
+    assert out.problems == []
+    # A real move among the live features is still flagged, in the order's own ranks.
+    k = known(("a", "b", "c", "d", "e"))
+    k.features["n1"] = "N1"
+    out = run_order.check_order(
+        order(("n1", 1), ("e", 2), ("a", 3), ("b", 4), ("c", 5), ("d", 6)), known=k
+    )
+    assert codes(out) == [("differs_from_live", False, "e")]
+    assert out.problems[0]["message"] == "e is ranked 2 here and 5 in the live ranking"
+
+
 def test_live_rank_is_restricted_to_the_ranked_features():
     """The live ranking of the same method, restricted to the same features: x, ranked
     live between a and b and left out of the run's order, shifts nothing."""
