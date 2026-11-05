@@ -11,10 +11,11 @@ import { Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { useCompanyZone, dayIn } from "@/lib/dates";
 import { useQuery } from "@/lib/use-query";
+import { RebuildSign } from "@/components/RebuildSign";
 
 /** One-pagers (#723 S1): the PRDs I may read (the API lists only those), each opening its one-pager. */
 export default function OnePagers() {
-  const q = useQuery("simple|one-pagers", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
+  const q = useQuery("simple|one-pagers", () => unwrap(api.GET("/v1/simple/one-pagers")));
   const zone = useCompanyZone();
   const canStartPrd = useCanStartPrd();
   const [newPrd, setNewPrd] = useState(false);
@@ -59,6 +60,9 @@ export default function OnePagers() {
                   {d.title}
                 </Link>
                 <PrdStatus d={d} />
+                <span className="relative z-[1]">
+                  <RebuildSign slug={d.slug} compact />
+                </span>
                 <span className="simple-small ml-auto">Updated {dmy(dayIn(d.updated_at, zone))}</span>
               </li>
             ))}

@@ -228,6 +228,11 @@ async def test_segment_end_writes_the_proposed_scope_and_the_check(client, owner
         "excluded": 1,
         "problems": [],
         "flags": {"bulk-edit": ["serves_no_goal", "new_feature"]},
+        "titles": {
+            "saved-addresses": "Saved addresses",
+            "address-lookup": "Address lookup",
+            "bulk-edit": "Bulk edit",
+        },
     }
     cp = pending(run)
     assert cp["payload"]["feature_set_check"] == check

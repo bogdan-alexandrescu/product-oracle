@@ -16,8 +16,17 @@ async function tap(l: Locator) {
   await l.click();
 }
 
+// prio-company (the owner, Nov 4): the ranked rows show no made-up letters, only a real code beside
+// the name; the letters stay on Value / effort, where a mark and its side row read alike.
 const code = (page: Page, key: string): Locator =>
-  page.locator(`[data-testid="prio-row"][data-code="${key}"]`).getByTestId("prio-code");
+  page.locator(`[data-testid="side-row"][data-code="${key}"]`).getByTestId("side-code");
+
+async function rowsNameNoLetters(page: Page): Promise<void> {
+  await page.goto("/simple/priorities");
+  await expect(page.locator('[data-testid="prio-row"][data-code="setup-import"]').getByTestId("prio-own-key")).toHaveText("F-12");
+  await expect(page.locator('[data-testid="prio-row"][data-code="alert-sso"]').getByTestId("prio-own-key")).toHaveCount(0);
+  await expect(page.getByTestId("prio-code")).toHaveCount(0);
+}
 
 const mark = (page: Page, key: string): Locator =>
   page.locator(`[data-testid="vxe-point"][data-code="${key}"]`).getByTestId("vxe-code");
@@ -34,7 +43,8 @@ for (const phone of [false, true]) {
       // fails_when: a code comes from the internal key (AS), a real code turns into letters, or a rename leaves the old letters
       // no_claim: the API's rule (pytest test_short_codes_take_the_letters_of_the_shown_name, test_short_codes_follow_a_rename)
       await login(page);
-      await page.goto("/simple/priorities");
+      await rowsNameNoLetters(page);
+      await page.goto("/simple/priorities?tab=value-effort");
       await expect(code(page, "alert-sso")).toHaveText("ARB");
       await expect(code(page, "alert-sso")).toHaveAttribute("title", "Alert routing by team");
       await expect(code(page, "setup-import")).toHaveText("F-12");
@@ -48,7 +58,7 @@ for (const phone of [false, true]) {
       await tap(card.getByRole("button", { name: "Apply" }));
       await expect(card.getByTestId("chat-card-outcome")).toContainText("Applied by you");
 
-      await page.goto("/simple/priorities");
+      await page.goto("/simple/priorities?tab=value-effort");
       await expect(code(page, "alert-sso")).toHaveText("TAR");
       await expect(code(page, "alert-sso")).toHaveAttribute("title", "Team alert routing");
       await expect(code(page, "setup-import")).toHaveText("F-12");
@@ -71,7 +81,7 @@ for (const phone of [false, true]) {
       await tap(card.getByRole("button", { name: "Apply" }));
       await expect(card.getByTestId("chat-card-outcome")).toContainText("Applied by you");
 
-      await page.goto("/simple/priorities");
+      await page.goto("/simple/priorities?tab=value-effort");
       await expect(code(page, "alert-sso")).toHaveText("AR2");
       await expect(code(page, "alert-sso")).toHaveAttribute("title", "Alert routing 2");
       await expect(code(page, "setup-import")).toHaveText("F-12");

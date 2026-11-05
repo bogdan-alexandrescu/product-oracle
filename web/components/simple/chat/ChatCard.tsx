@@ -242,7 +242,15 @@ export function ChatCard({
         </p>
       )}
       {/* qa4-simple-decide-29: one line per change: no "Item:" line when the summary names the item already. */}
-      {!actionsOnly && card.item_title && !card.summary.includes(card.item_title) && <p className="simple-small text-text2">Item: {card.item_title}</p>}
+      {!actionsOnly && card.item_title && !card.summary.includes(card.item_title) && (
+        <p className="simple-small text-text2">
+          Item:{" "}
+          {/* build-feature-panel review 6: the card's feature opens the one feature panel. */}
+          <button type="button" data-feature={card.item_id ?? card.item_title} className="text-left hover:underline">
+            {card.item_title}
+          </button>
+        </p>
+      )}
       {!actionsOnly && changeWords(card) && (
         <p className="simple-small [overflow-wrap:anywhere]" data-testid="chat-card-change">
           <span className="text-text2">Before:</span> {changeWords(card)!.before} → <span className="text-text2">After:</span> {changeWords(card)!.after}

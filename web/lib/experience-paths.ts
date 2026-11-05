@@ -42,9 +42,17 @@ const PAIRS: [simple: string, detailed: string][] = [
  * The page the switch lands on in the other mode: Home <-> Home, a PRD's one-pager <-> that
  * PRD's page, One-pagers <-> PRDs, Roadmap <-> Plan, Priorities <-> Priorities, Meetings <->
  * Company › Rituals, Decisions <-> Company › Decisions; anything else, the other mode's home.
- * `documentHome`: the list an open document page said it belongs to ("/documents" for a PRD),
- * when known.
+ * `documentHome`: the list an open document page said it belongs to ("/documents" for a PRD,
+ * REPLACED_PRD_HOME for a replaced one), when known.
  */
+/**
+ * simple-replaced-prds: the home a PRD marked replaced reports (it is under "/documents", so the
+ * rail still lights PRDs); Simple shows no one-pager of it, so the switch opens One-pagers.
+ * It is a flag, compared only as `documentHome` in switchTarget; never navigated to (no page
+ * lives at this path).
+ */
+export const REPLACED_PRD_HOME = "/documents/replaced";
+
 export function switchTarget(pathname: string, to: Mode, documentHome?: string): string {
   if (to === modeOf(pathname)) return pathname;
   if (to === "detailed") {
@@ -59,6 +67,7 @@ export function switchTarget(pathname: string, to: Mode, documentHome?: string):
     return PAIRS.find(([, detailed]) => detailed !== "/documents" && under(documentHome, detailed))?.[0] ?? SIMPLE_HOME;
   }
   if (doc && doc !== "new") {
+    if (documentHome === REPLACED_PRD_HOME) return "/simple/one-pagers";
     if (!documentHome || documentHome === "/documents") return `/simple/one-pagers/${doc}`;
     // A document page of another kind (a roadmap, a strategy) has no one-pager: its list's match, else Home.
     return PAIRS.find(([, detailed]) => detailed !== "/documents" && under(documentHome, detailed))?.[0] ?? SIMPLE_HOME;

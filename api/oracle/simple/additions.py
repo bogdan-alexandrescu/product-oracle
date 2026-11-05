@@ -327,6 +327,44 @@ async def _plan(db: AsyncSession, principal: Any, body: SimpleChangeIn, read_: s
     return doc, target, after
 
 
+async def _home(
+    db: AsyncSession, doc: uuid.UUID
+) -> tuple[ProductTrack | None, uuid.UUID | None, uuid.UUID | None]:
+    """The track (so it has an owner) and the PRD a feature added in Simple is filed under:
+    the roadmap's first track of a current PRD. When every track's PRD is replaced
+    (simple-replaced-prds), the first track's, under the PRD that replaced it (its own track's
+    version, else its latest approved one), so service.load still reads the item."""
+    tracks = list(
+        await db.scalars(
+            select(ProductTrack)
+            .where(ProductTrack.roadmap_document_id == doc)
+            .order_by(ProductTrack.created_at)
+        )
+    )
+    if not tracks:
+        return None, None, None
+    replaced = await company.replaced_prd_ids(db)
+    if live := next((t for t in tracks if t.prd_document_id not in replaced), None):
+        return live, live.prd_document_id, live.current_version_id
+    first, prd, seen = tracks[0], tracks[0].prd_document_id, set[uuid.UUID]()
+    while prd in replaced and prd not in seen:
+        seen.add(prd)
+        d = await db.get(Document, prd)
+        prd = d.replaced_by[0] if d is not None and d.replaced_by else prd
+    if prd in replaced:
+        return first, first.prd_document_id, first.current_version_id
+    own = await db.scalar(select(ProductTrack).where(ProductTrack.prd_document_id == prd))
+    version = own.current_version_id if own is not None else None
+    if version is None:
+        version = await db.scalar(
+            select(DocumentVersion.id)
+            .where(DocumentVersion.document_id == prd, DocumentVersion.approved_at.is_not(None))
+            .order_by(DocumentVersion.number.desc())
+            .limit(1)
+        )
+    return first, prd, version
+
+
 async def _place(
     db: AsyncSession, principal: Any, c: SimpleChange, session: Any, me: uuid.UUID
 ) -> RoadmapItem:
@@ -357,13 +395,7 @@ async def _place(
         )
     )
     goal_ids = [uuid.UUID(g) for g in c.after.get("goal_ids") or []]
-    # Its track: the roadmap's track of the goal's items, else its first (so it has an owner).
-    track = await db.scalar(
-        select(ProductTrack)
-        .where(ProductTrack.roadmap_document_id == doc)
-        .order_by(ProductTrack.created_at)
-        .limit(1)
-    )
+    track, prd, prd_version = await _home(db, doc)
     row = RoadmapItem(
         id=item_id,
         roadmap_document_id=doc,
@@ -377,8 +409,8 @@ async def _place(
         draft=True,
         goal_ids=goal_ids,
         track_id=track.id if track is not None else None,
-        prd_document_id=track.prd_document_id if track is not None else None,
-        prd_version_id=track.current_version_id if track is not None else None,
+        prd_document_id=prd,
+        prd_version_id=prd_version,
         note="added in Simple",
         start_date=date.fromisoformat(c.after["start_date"]) if c.after.get("start_date") else None,
         end_date=date.fromisoformat(c.after["end_date"]) if c.after.get("end_date") else None,

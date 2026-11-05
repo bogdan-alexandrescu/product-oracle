@@ -16,7 +16,7 @@ import { fileItems } from "./checkpoint-review";
 import { agentQuestionsOut, seedAgentQuestions, type StoredAgentQuestion } from "./agent-questions";
 import { readableRefusal } from "./refusal";
 import { mockNowMs } from "./clock";
-import { applySuggestion, latestScope, prepareScope, recheck as recheckScope, routeScopes, SCOPE_EDIT_FIELDS, scopeEdits, scopeSendBack, type StoredScope } from "./scope";
+import { answerCode, applySuggestion, titled, latestScope, problemRef, REF_MARK, prepareScope, recheck as recheckScope, routeScopes, SCOPE_EDIT_FIELDS, scopeEdits, scopeSendBack, type StoredScope } from "./scope";
 
 type RunOut = Schemas["RunOut"];
 type SegmentOut = Schemas["SegmentOut"];
@@ -237,6 +237,13 @@ const BASELINE_SEGMENT: Schemas["FlowSegmentOut"] = {
 
 /** E1: the draft-items flow (the generated Flow literal gains it when the schema is regenerated). */
 export const DRAFT_ITEMS_FLOW: Schemas["FlowOut"]["key"] = "prd_draft_items";
+
+/**
+ * The outputs Oracle imports as a document's next version (the API's imports_draft segments);
+ * "{draft}" is the strategy draft's, named by the document it writes.
+ */
+export const DRAFT_OUTPUTS = ["prd.md", "roadmap.md", "update.md", "pricing.md", "{draft}"];
+export const importsDraft = (outputs: readonly string[]) => outputs.some((o) => DRAFT_OUTPUTS.includes(o));
 
 export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
   flows: [
@@ -683,7 +690,8 @@ function waivable(kind: string, code: string): boolean {
 }
 
 /** As oracle.runs.gate.BLOCKING_SOURCES: each kind's stored blocking reasons and file-level problems. */
-export type GateReason = Pick<ItemReason, "item" | "item_title" | "code" | "severity" | "label"> & { fixes?: ItemReason["fixes"] };
+export type GateReason = Pick<ItemReason, "item" | "item_title" | "code" | "severity" | "label"> & { fixes?: ItemReason["fixes"]; ref?: string };
+
 function blockingOf(cp: CheckpointOut, live?: GateReason[]): { reasons: GateReason[]; files: number } | null {
   // B2: Confirm the baseline's reasons are read live (a goal confirmed anywhere clears its own).
   if (cp.kind === "baseline_confirm") return live ? { reasons: live, files: 0 } : null;
@@ -698,7 +706,11 @@ function blockingOf(cp: CheckpointOut, live?: GateReason[]): { reasons: GateReas
   const fileLevel = (p: (typeof problems)[number]) => !p.feature || (cp.kind === "feature_set" && FEATURE_SET_FILE_PROBLEMS.includes(p.code));
   const reasons = problems
     .filter((p) => !fileLevel(p))
-    .map((p): GateReason => ({ item: p.feature!, item_title: null, code: p.code, severity: "blocking", label: p.message }));
+    .map((p): GateReason => {
+      // As oracle.runs.gate._problems: a C6 problem's feature by its title (C8's check has none).
+      const titles = (check as FeatureSetCheck | null)?.titles;
+      return { item: p.feature!, item_title: titles?.[p.feature!] ?? null, code: p.code, ref: problemRef(p), severity: "blocking", label: titled(p.message, titles) };
+    });
   return { reasons, files: problems.filter(fileLevel).length };
 }
 
@@ -734,12 +746,12 @@ function gateOf(cp: CheckpointOut, actions: DraftActionRow[], edits = true, live
   if (!blocking) return null;
   const waives = (x: GateReason) =>
     waivable(cp.kind, x.code) &&
-    actions.some((a) => a.state === "staged" && a.kind === "waive" && a.item_key === x.item && (!a.answers?.length || a.answers.includes(x.code)));
+    actions.some((a) => a.state === "staged" && a.kind === "waive" && a.item_key === x.item && (!a.answers?.length || a.answers.includes(x.code) || (!!x.ref && a.answers.includes(x.ref))));
   const applied = edits ? editsOf(cp, actions) : [];
   const fixed = (x: GateReason) => applied.some((a) => (a.kind === "drop" && a.item_key === x.item) || (x.fixes ?? []).some((f) => isFix(a, f)));
   const left = blocking.reasons
     .filter((x) => x.severity === "blocking" && !waives(x) && !fixed(x))
-    .map((x) => ({ item: x.item, item_title: x.item_title ?? null, code: x.code, label: x.label, waivable: waivable(cp.kind, x.code) }));
+    .map((x) => ({ item: x.item, item_title: x.item_title ?? null, code: x.code, ref: x.ref ?? x.code, label: x.label, waivable: waivable(cp.kind, x.code) }));
   const files = blocking.files;
   return { open: left.length === 0 && files === 0, blocking_open: left.length, file_problems: files, left };
 }
@@ -1113,6 +1125,7 @@ function checkOf(spec: FeatureSetSpec, problems: FeatureSetCheck["problems"] = [
     excluded: spec.excluded.length,
     problems,
     flags,
+    titles: Object.fromEntries(spec.features.map((f) => [f.key, f.title])),
   };
 }
 
@@ -1487,7 +1500,8 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     s.priority_check = checkOrder(LOCAL_ORDER, scopeOf(ctx, r));
     snapshot = proposeOrder(ctx, r, s.seq, attempt, LOCAL_ORDER, s.priority_check);
   }
-  if ((def.outputs.includes("prd.md") || def.outputs.includes("roadmap.md") || def.outputs.includes("update.md") || def.outputs.includes("pricing.md")) && r.document_slug) {
+  // The mock writes no strategy draft ("{draft}"): Company › Strategy keeps its own store.
+  if (importsDraft(def.outputs.filter((o) => o !== "{draft}")) && r.document_slug) {
     const imp = ctx.importDraft(r.document_slug, r);
     s.draft_import = { ...imp, created: true, warnings: [], error: null, problems: [], code_names: [], summary: null };
     r.document_id = imp.document_id ?? null;
@@ -2546,6 +2560,7 @@ function decisionsOf(ctx: RunsContext, r: RunOut): RunDecision[] {
         edits: extra.edits ?? null,
         review: extra.review ?? null,
         delivered: !c.delivery,
+        answers: stopAnswers(ctx, c, people),
       };
       return { ...d, summary: decisionSummary(d) };
     });
@@ -2750,7 +2765,7 @@ Returning buyers pick a saved address at checkout instead of typing it again.
  * waiting at its feature set, whose check found one blocking problem (bulk-address-edit
  * depends on a feature left out) and two flags, so Approve is refused until it is sent back.
  */
-export function seedFeatureSetRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOut {
+export function seedFeatureSetRun(db: RunsDb, ctx: Omit<RunsContext, "db">, twoOfOne = false): RunOut {
   const { from, now } = seedClock();
   // Its own runs list, so the ticks below move this run only.
   const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}) };
@@ -2775,6 +2790,18 @@ export function seedFeatureSetRun(db: RunsDb, ctx: Omit<RunsContext, "db">): Run
         requirement: null,
         message: "bulk-address-edit depends on shared-address-book-export, which is excluded",
       },
+      // "feature-set-two": a second problem of the same code on the same feature, waived on its own.
+      ...(twoOfOne
+        ? [
+            {
+              code: "depends_on_excluded",
+              blocking: true,
+              feature: "bulk-address-edit",
+              requirement: null,
+              message: "bulk-address-edit depends on address-sharing, which is excluded",
+            },
+          ]
+        : []),
     ],
     { "bulk-address-edit": ["serves_no_goal", "low_confidence"], "saved-addresses": ["new_feature"] },
   );
@@ -3777,19 +3804,59 @@ function engInvalid(cp: CheckpointOut, a: Schemas["ActionIn"]): string | null {
   return "edit takes the field verdict, size or answer:<question id>";
 }
 
+/** An answer to an architect's question as the approved check records it (who answered and when). */
+type EngAnswer = { question_id: string; question: string; answer: unknown; by: string | null; at: string };
+
+/**
+ * As oracle.runs.stop_answers: the questions answered at a decided stop, the architect's at the
+ * Engineering check and the agents' on the Questions from the agents cards, each with who and when.
+ */
+function stopAnswers(ctx: RunsContext, c: CheckpointOut, people: Map<string, string>): RunDecision["answers"] {
+  // A stop sent back keeps its answered cards (carried into the next attempt); only an approved
+  // check decides the architect's questions.
+  if (c.status !== "approved" && c.status !== "changes_requested") return [];
+  const out: NonNullable<RunDecision["answers"]> = [];
+  const check = c.status === "approved" ? briefsOf(c) : null;
+  const recorded = (c.payload.briefs as { answers?: Record<string, EngAnswer[]> } | undefined)?.answers ?? {};
+  for (const [key, listed] of Object.entries(check ? recorded : {})) {
+    const title = check?.features.find((f) => f.key === key)?.title;
+    for (const a of listed) {
+      // As the API: a non-text answer is dropped, a text one stripped.
+      const answer = typeof a.answer === "string" ? a.answer.trim() : "";
+      if (!a.question || !answer) continue;
+      const by = a.by ?? c.decided_by ?? null;
+      out.push({ question: a.question, answer, feature_key: key, feature_title: title && title !== key ? title : null, answered_by_name: (by && people.get(by)) || null, answered_at: a.at ?? c.decided_at ?? null });
+    }
+  }
+  // A card names its feature by key: its name is the run's feature set's (the latest scope listing it).
+  const titled = (key: string) => [...(ctx.db.scopes?.[c.run_id] ?? [])].reverse().flatMap((s) => s.features).find((f) => f.key === key)?.title;
+  for (const q of ctx.db.agent_questions?.[c.id] ?? []) {
+    if (!q.answer) continue;
+    const label = q.options.find((o) => o.key === q.answer!.option)?.label ?? q.answer.option;
+    const title = q.feature ? titled(q.feature) : undefined;
+    out.push({ question: q.question, answer: q.answer.note ? `${label}. Note: ${q.answer.note}` : label, feature_key: q.feature ?? null, feature_title: title && title !== q.feature ? title : null, answered_by_name: q.answer.by?.name ?? null, answered_at: q.answer.at });
+  }
+  return out;
+}
+
 /** As oracle.engineering.check.on_approved: the choices recorded, each changed size a person's locked effort. */
 function approveEngCheck(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged: DraftActionRow[]) {
   const check = briefsOf(cp);
   if (!check) return;
   const verdicts: Record<string, unknown> = {};
   const sizes: Record<string, string> = {};
+  const answers: Record<string, EngAnswer[]> = {};
   for (const f of check.features) {
     const v = stagedEdit(staged, f.key, "verdict");
     if (v) verdicts[f.key] = { value: (v.value as { verdict: string }).verdict, note: (v.value as { note?: string | null }).note ?? null };
     sizes[f.key] = (stagedEdit(staged, f.key, "size")?.value as string | undefined) ?? f.size;
     ctx.setEffort?.(f.key, sizes[f.key], r.id);
+    for (const q of f.questions) {
+      const a = stagedEdit(staged, f.key, `answer:${q.id}`);
+      if (a) (answers[f.key] ??= []).push({ question_id: q.id, question: q.question, answer: a.value, by: a.updated_by ?? a.created_by, at: a.updated_at ?? ctx.now() });
+    }
   }
-  cp.payload = { ...cp.payload, briefs: { verdicts, sizes } };
+  cp.payload = { ...cp.payload, briefs: { verdicts, sizes, answers } };
 }
 
 // ---------------------------------------------------------------- F4 lane B Engineering dates
@@ -4116,7 +4183,7 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
       // D3: never a date or the whole file; the approver's alone (a commenter cannot suggest one).
       if (a.item_key === "*") return fail(422, FILE_NOT_WAIVED);
       if (cp.kind === "priority_order") return fail(422, "a priority order checkpoint takes no item actions");
-      if ((a.answers ?? []).some((code) => !waivable(cp.kind, code))) return fail(422, cp.kind === "feature_set" ? UNKNOWN_NOT_WAIVED : DATE_NOT_WAIVED);
+      if ((a.answers ?? []).some((code) => !waivable(cp.kind, answerCode(code)))) return fail(422, cp.kind === "feature_set" ? UNKNOWN_NOT_WAIVED : DATE_NOT_WAIVED);
       if (!stages) return fail(403, `Only the ${cp.approver_role} role or above waives a problem`);
       // H4 §5, as the API: only an owner waives a planned item the product strategy stops.
       if (cp.kind === "roadmap_items" && (a.answers ?? []).includes("stopped_but_planned") && !atLeast(role, "owner")) {
@@ -4134,7 +4201,10 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
         ? (a.answers ?? []).some((c) => OWNER_WAIVES.includes(c))
           ? "owner"
           : null
-        : a.kind === "accept" && (cp.kind === "feature_set" || cp.kind === "roadmap_items") && (a.answers ?? []).length === 1
+        : a.kind === "waive" && (a.answers ?? []).length === 1 && a.answers![0].includes(REF_MARK)
+          ? // As the API: one problem waived by its own ref is its own action, with its own reason.
+            a.answers![0]
+          : a.kind === "accept" && (cp.kind === "feature_set" || cp.kind === "roadmap_items") && (a.answers ?? []).length === 1
           ? a.answers![0]
           : (a.field ?? null);
     const existing = draft.actions.find((x) => x.item_key === a.item_key && x.kind === a.kind && (x.field ?? "") === (field ?? ""));

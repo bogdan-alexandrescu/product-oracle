@@ -83,15 +83,15 @@ export function ItemTalk({
     }
   };
   // fix4 qa-simple-roadmap-3: the item by its title, no code.
-  const short = about;
   return (
     <section aria-label={`Talk about ${about}`} data-testid="item-talk" className="flex min-h-0 min-w-0 flex-1 flex-col">
       {!phone && (
         // fix4 qa-simple-roadmap-40: an opaque header with a divider under it; nothing of the lines shows through.
         <div className="relative z-[1] flex-none border-b border-line bg-surface px-4 pt-3.5 pb-2.5">
           <h3 data-testid="item-talk-title" className="flex min-w-0 items-center gap-2 text-[12px] leading-4 font-semibold tracking-[.06em] text-text2 uppercase before:h-px before:min-w-4 before:flex-1 before:bg-line after:h-px after:min-w-4 after:flex-1 after:bg-line">
+            {/* build-feature-panel review 2: the heading as drawn (mk-featurepanel FP1 B); the region still names the feature. */}
             <span className="min-w-0 truncate" title={about}>
-              Talk about {about}
+              Talk about this feature
             </span>
           </h3>
         </div>
@@ -127,7 +127,7 @@ export function ItemTalk({
       <div className="flex flex-none flex-col gap-1.5 border-t border-line px-4 pt-2.5 pb-3 [&>form]:flex-row [&>form]:flex-wrap [&>form]:items-end [&>form>p]:basis-full [&>form>textarea]:h-auto [&>form>textarea]:max-h-40 [&>form>textarea]:min-h-[66px] [&>form>textarea]:[field-sizing:content] [&>form>textarea]:min-w-0 [&>form>textarea]:flex-1 [&>form>textarea]:basis-0 [&>form>textarea]:resize-none [&>form>textarea]:rounded-[10px] [&>form>textarea]:py-2.5 [&>form>textarea]:text-[15px] [&>form>textarea]:leading-[22px] [&>form>textarea]:placeholder:text-text-faint">
         <ChatComposer
           send={async (text) => setThread(await askSay(text, page))}
-          placeholder={changes ? `Ask about ${short}, or ask for a change…` : `Ask about ${short}…`}
+          placeholder={changes ? "Ask about this feature, or ask for a change…" : "Ask about this feature…"}
           hint={changes ? undefined : "You can ask questions; changes need a commenter or above."}
         />
         <p className="flex items-center gap-1.5 text-[14px] leading-5 text-text2" data-testid="chat-note">

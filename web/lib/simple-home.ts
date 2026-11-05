@@ -120,6 +120,23 @@ export type BrokenLink = { item: Item; flag: Schemas["SimpleFlag"]; dependency: 
 
 export const isBrokenLink = (f: Schemas["SimpleFlag"]): boolean => f.state === "red" && f.fixes.length > 0;
 
+/** The dates an item stores (typed or accepted), as the change engine compares them; null for the others. */
+export function storedDates(i: Item): { start_date: string | null; end_date: string | null } {
+  const own = (d: Schemas["SimpleDate"]) => (d.source === "typed" || d.source === "accepted" ? d.date : null);
+  return { start_date: own(i.start), end_date: own(i.end) };
+}
+
+/** A broken link's one-click fixes (Home's broken-links card, Decisions' broken-link rows). */
+export type FixOp = "shift_dependents" | "move_dependency" | "accept_risk";
+
+/** A broken link's fix as one change through the engine (POST /v1/simple/changes). */
+export function fixChange(b: BrokenLink, op: FixOp, note = ""): Schemas["SimpleChangeIn"] {
+  const dep = b.dependency;
+  return op === "accept_risk"
+    ? { op, target: { item_id: b.item.id, flag: b.flag.kind, subject: b.flag.subject }, before: { risk: null }, after: { risk: { note: note.trim() } } }
+    : { op, target: { item_id: b.item.id, subject: b.flag.subject }, before: { [b.item.id]: storedDates(b.item), ...(dep ? { [dep.id]: storedDates(dep) } : {}) } };
+}
+
 export function brokenLinks(roadmap: Roadmap | undefined): BrokenLink[] {
   if (!roadmap) return [];
   const byId = new Map(roadmap.items.map((i) => [i.id, i]));
@@ -353,7 +370,9 @@ export const OP_WORDS: Record<string, string> = {
   add_key_date: "Add a key date",
   edit_key_date: "Change a key date",
   remove_key_date: "Remove a key date",
+  edit_goal_milestone: "Change a milestone",
   set_milestone: "Set a milestone",
+  set_goals: "Move to another goal",
   add_feature_ask: "File a feature ask",
   set_owner: "Change the owner",
   set_decider: "Change the decider",
@@ -392,10 +411,12 @@ const DONE_WORDS: Record<string, string> = {
   add_key_date: "Key date added",
   edit_key_date: "Key date changed",
   remove_key_date: "Key date removed",
+  edit_goal_milestone: "Milestone changed",
   add_item: "Added",
   merge_item: "Merged",
   keep_both: "Kept beside its look-alike:",
   set_milestone: "Milestone set for",
+  set_goals: "Moved to another goal:",
   add_feature_ask: "Feature ask filed:",
 };
 

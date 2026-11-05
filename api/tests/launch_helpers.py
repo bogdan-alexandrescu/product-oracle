@@ -10,6 +10,7 @@ from oracle.baseline.models import Entity
 from oracle.docs.models import Document
 from oracle.roadmap.models import RoadmapItem
 from oracle.runs import plan_tables
+from oracle.runs.roadmap import check_items
 from oracle.swarm import Outcome
 from oracle.tenancy import tenant_session
 from tests.test_roadmap import (
@@ -48,7 +49,7 @@ async def build_roadmap(client, auth, runtime, items: str = ITEMS_3) -> None:
     runtime.script["roadmap_items"] = [Outcome(artifacts={"roadmap_items.yaml": items})]
     # The plan tables of these items, without milestone rows: approving the roadmap sets
     # no track milestones the launch tests do not set themselves.
-    plan = plan_tables.engineering_plan(items, ENG_412)
+    plan = plan_tables.engineering_plan(check_items(items).items, ENG_412)
     plan.milestones = []
     md = ROADMAP_MD.replace(PLAN_TABLES, plan_tables.markdown(plan))
     runtime.script["roadmap_draft"] = [Outcome(artifacts={"roadmap.md": md})]

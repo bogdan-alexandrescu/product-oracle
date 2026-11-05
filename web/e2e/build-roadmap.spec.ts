@@ -150,24 +150,35 @@ for (const [name, use] of [
       await page.getByTestId("timeline-scroll").scrollIntoViewIfNeeded();
       const y = await page.evaluate(() => window.scrollY);
       await row(page, "alert-rules").getByTestId("timeline-bar").click();
-      const side = page.getByTestId("item-panel");
+      // build-feature-panel: the item opens Simple's one feature panel at the right, over a dimmed page.
+      const side = page.getByTestId("floating-card");
       await expect(side).toBeVisible();
-      await expect(side.getByTestId("floating-card")).toContainText("Alert rules engine");
+      await expect(side).toHaveAttribute("data-sheet", "panel");
+      await expect(side).toContainText("Alert rules engine");
       await expect(row(page, "alert-rules")).toHaveAttribute("data-open", "true");
       expect(await page.evaluate(() => window.scrollY)).toBe(y);
-      await expect(page.getByTestId("floating-card-backdrop")).toHaveCount(0);
-      // The panel sits at the chart's right; the chart narrows but still scrolls.
-      expect((await side.boundingBox())!.x).toBeGreaterThan((await box(page, "timeline-scroll")).x + 400);
+      await expect(page.getByTestId("feature-panel-backdrop")).toBeVisible();
+      // The 880 px panel sits at the right edge, the chart's left part (the names) still in sight; the chart under it still scrolls.
+      const vw = page.viewportSize()!.width;
+      const sb = (await side.boundingBox())!;
+      expect(Math.round(sb.width)).toBe(880);
+      expect(sb.x + sb.width).toBeGreaterThan(vw - 40);
+      expect(sb.x).toBeGreaterThan((await box(page, "timeline-scroll")).x + 200);
       const scroll = page.getByTestId("timeline-scroll");
       await scroll.evaluate((el) => (el.scrollLeft += 500));
       await expect.poll(() => scroll.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
-      // Clicking another item's name swaps the panel, no closing first.
+      // A click on the dimmed page closes the panel, the page still put; another item's name then opens its own.
+      await page.mouse.click(Math.round(sb.x / 2), 450);
+      await expect(side).toHaveCount(0);
+      await expect(row(page, "alert-rules")).not.toHaveAttribute("data-open", "true");
+      expect(await page.evaluate(() => window.scrollY)).toBe(y);
       await row(page, "setup-checklist").getByRole("button", { name: "Setup checklist", exact: true }).click();
-      await expect(side.getByTestId("floating-card")).toContainText("Setup checklist");
+      await expect(side).toContainText("Setup checklist");
       await expect(row(page, "setup-checklist")).toHaveAttribute("data-open", "true");
       await expect(row(page, "alert-rules")).not.toHaveAttribute("data-open", "true");
       await page.keyboard.press("Escape");
       await expect(side).toHaveCount(0);
+      await expect(row(page, "setup-checklist")).not.toHaveAttribute("data-open", "true");
     });
   });
 }
@@ -226,18 +237,28 @@ test.describe("phone", () => {
   });
 
   test("QR4 A: a phone opens the item as a sheet over the lower half, its row marked in sight above it", async ({ page }) => {
+    // build-feature-panel: a phone now opens Simple's one feature panel full screen, with Details
+    // and Talk to Oracle tabs; its row stays marked, and in sight where it was once the panel closes.
     await open(page);
     const item = row(page, "alert-mobile");
     await item.evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 140));
+    const before = (await item.boundingBox())!;
     await item.getByTestId("timeline-bar").click();
     const sheet = page.getByTestId("floating-card");
     await expect(sheet).toContainText("Mobile alert push");
+    await expect(sheet).toHaveAttribute("data-sheet", "full");
     await expect(item).toHaveAttribute("data-open", "true");
-    const r = (await item.boundingBox())!;
     const s = (await sheet.boundingBox())!;
-    expect(s.y).toBeGreaterThan(844 / 3);
-    expect(r.y + r.height).toBeLessThanOrEqual(s.y);
-    expect(r.y).toBeGreaterThanOrEqual(0);
+    expect(Math.round(s.y)).toBe(0);
+    expect(Math.round(s.width)).toBe(390);
+    expect(Math.round(s.height)).toBe(844);
+    await expect(sheet.getByRole("tab", { name: "Details" })).toHaveAttribute("aria-selected", "true");
     await expect(page.getByTestId("item-panel")).toHaveCount(0);
+    await sheet.getByRole("button", { name: "Close" }).click();
+    await expect(sheet).toHaveCount(0);
+    const r = (await item.boundingBox())!;
+    expect(Math.round(r.y)).toBe(Math.round(before.y));
+    expect(r.y).toBeGreaterThanOrEqual(0);
+    expect(r.y + r.height).toBeLessThanOrEqual(844);
   });
 });

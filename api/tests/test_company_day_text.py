@@ -269,6 +269,9 @@ def test_the_helper_words_a_moment_with_the_zones_short_name():
     assert company_time.stamp(LATE.replace(tzinfo=None), AUCKLAND) == "Oct 13, 2026, 9:00 AM NZDT"
     assert company_time.day_first_in_words(LATE, AUCKLAND) == "13 Oct"
     assert company_time.day_first_in_words(LATE, "America/Los_Angeles") == "12 Oct"
+    # A calendar day says its year only when it is not the company's year.
+    assert company_time.calendar_day(date(2026, 11, 4), date(2026, 11, 5)) == "Nov 4"
+    assert company_time.calendar_day(date(2027, 1, 8), date(2026, 11, 5)) == "Jan 8, 2027"
 
 
 def test_the_spec_sources_name_the_company_day_of_the_prd_approval():

@@ -42,15 +42,15 @@ test.describe("desktop", () => {
     await expect(page).toHaveURL(/\/simple\/priorities/);
   });
 
-  // Re-pointed: the Timeline's side panel dims nothing; the backdrop is the Gantt's card's.
+  // Re-pointed: the Gantt's card is Simple's one feature panel; its backdrop is feature-panel-backdrop.
   test("SimpleShell: a click on the backdrop away from the rail only closes the card", async ({ page }) => {
     await open(page);
     await page.getByTestId("format-gantt").click();
     await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
     await page.locator('g[data-testid="bar"][data-item="alert-rules"]').click();
     await expect(page.getByTestId("floating-card")).toBeVisible();
-    await expect(page.getByTestId("floating-card-backdrop")).toBeVisible();
-    await page.mouse.click(1400, 880);
+    await expect(page.getByTestId("feature-panel-backdrop")).toBeVisible();
+    await page.mouse.click(400, 880);
     await expect(page.getByTestId("floating-card")).toHaveCount(0);
     await expect(page).toHaveURL(/\/simple\/roadmap/);
   });
@@ -59,7 +59,8 @@ test.describe("desktop", () => {
     await open(page, { url: "/simple/roadmap?roadmap=onboarding-roadmap" });
     await openRoadmapItem(page, "setup-ideas");
     const card = page.getByTestId("floating-card");
-    await expect(card.getByTestId("draft-tag")).toHaveText("Draft");
+    // build-feature-panel: the panel's status chip says it is a draft (was the old card's draft tag).
+    await expect(card.getByTestId("fp-status")).toHaveText("Draft");
     await expect(card.getByTestId("item-flow-none")).toHaveText("No flow yet. Once the draft is confirmed, Oracle can draw one.");
     await card.getByRole("link", { name: "Confirm it in Priorities" }).click();
     await expect(page).toHaveURL(/\/simple\/priorities/);

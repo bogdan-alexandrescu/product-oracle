@@ -21066,6 +21066,37 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/rebuilds": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "List Rebuilds",
+        "description": "The rebuild sign: the runs that will make a new version of a document the caller\nmay read (scheduled, running, waiting, stopped, or landed and not approved yet).",
+        "operationId": "list_rebuilds",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RebuildsOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/runs/{run_id}/decisions": {
       "get": {
         "tags": [
@@ -42671,7 +42702,7 @@
           "simple"
         ],
         "summary": "Create Goal Milestone",
-        "description": "Add a milestone to a goal on a roadmap: coded the next \"M<n>\" in that goal on that\nroadmap. Who may change the roadmap directly (an owner, its decider, with none its\nowner while an approver, same as a key date); a commenter is refused (403: milestones\nare not proposed here, unlike key dates).",
+        "description": "Add a milestone to a goal on a roadmap: coded the next \"M<n>\" in that goal on that\nroadmap. Who may change the roadmap directly (an owner, its decider, with none its\nowner while an approver, same as a key date); a commenter is refused (403: milestones\nare not proposed here, unlike key dates). A roadmap that is history (the company\nroadmap exists) is 409.",
         "operationId": "create_goal_milestone",
         "requestBody": {
           "content": {
@@ -42717,13 +42748,153 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/simple/roadmap/milestones/carry-over": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Carry Over Old Milestones",
+        "description": "Bring old milestones over: copy every goal milestone of the older per-PRD roadmaps\n(history while the company roadmap exists) onto the company roadmap, same name, date\nand goal, its items re-pointed to the company roadmap's (same feature, else same item\nkey), each old one linked to its copy. One none of whose items are left is not copied:\nit stays in ``old_milestones.needs_call`` for Keep or Drop. Run once by an owner (a\nsecond run copies nothing), never on a read or a deploy.",
+        "operationId": "carry_over_old_milestones",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOldMilestonesResult"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "owner",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/roadmap/milestones/{milestone_id}/keep": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Keep Old Milestone",
+        "description": "Keep an old milestone with no items left: copied onto the company roadmap with no\nitems, linked. One not waiting on a call is 409.",
+        "operationId": "keep_old_milestone",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "milestone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Milestone Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOldMilestonesResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/roadmap/milestones/{milestone_id}/drop": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Drop Old Milestone",
+        "description": "Drop an old milestone with no items left: it stays behind on its old roadmap and\nleaves the list. One not waiting on a call is 409.",
+        "operationId": "drop_old_milestone",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "milestone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Milestone Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOldMilestonesResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner",
+        "x-per-item": "owner"
+      }
+    },
     "/v1/simple/roadmap/milestones/{milestone_id}": {
       "patch": {
         "tags": [
           "simple"
         ],
         "summary": "Patch Goal Milestone",
-        "description": "Edit a milestone's name, date, goal, items it waits on or counts-when rule. A PRD's\nown milestone is read-only here: a date or counts-when edit instead proposes a change\nto the PRD's owner (``pending`` filled, the milestone unchanged) through the change\nengine (``POST /v1/simple/changes/{id}/accept|decline``); its name, goal and items are\nthe PRD's own and are 422 here.",
+        "description": "Edit a milestone's name, date, goal, items it waits on or counts-when rule. A PRD's\nown milestone is read-only here: a date or counts-when edit instead proposes a change\nto the PRD's owner (``pending`` filled, the milestone unchanged) through the change\nengine (``POST /v1/simple/changes/{id}/accept|decline``); its name, goal and items are\nthe PRD's own and are 422 here, even beside a date. A milestone of a roadmap that is\nhistory (the company roadmap exists) is 409.",
         "operationId": "patch_goal_milestone",
         "security": [
           {
@@ -44266,6 +44437,41 @@
         },
         "x-min-role": "commenter",
         "x-per-item": null
+      }
+    },
+    "/v1/simple/one-pagers": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "List Simple One Pagers",
+        "description": "The PRDs Simple lists (One-pagers, Home), newest first, as GET /v1/documents?kind=prd\nhas them but without a PRD marked replaced (simple-replaced-prds): Simple shows the PRDs\nthat replaced it; Detailed keeps it as history.",
+        "operationId": "list_simple_one_pagers",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentSummary"
+                  },
+                  "type": "array",
+                  "title": "Response List Simple One Pagers"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/simple/one-pagers/{doc}": {
@@ -60378,6 +60584,7 @@
                   "restore",
                   "edit_title",
                   "edit_outcome",
+                  "edit_note",
                   "accept_date_suggestion",
                   "accept_risk",
                   "shift_dependents",
@@ -60402,11 +60609,18 @@
                   "keep_both",
                   "set_milestone",
                   "add_feature_ask",
+                  "set_goals",
                   "set_owner",
                   "set_decider",
                   "decide_question",
                   "name_decider",
                   "cut_with_dependents",
+                  "add_link",
+                  "remove_link",
+                  "restore_link",
+                  "restore_dates",
+                  "set_goal",
+                  "restore_goal",
                   "edit_goal_milestone",
                   "set_depends_on"
                 ]
@@ -60784,6 +60998,7 @@
               "restore",
               "edit_title",
               "edit_outcome",
+              "edit_note",
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
@@ -60808,11 +61023,18 @@
               "keep_both",
               "set_milestone",
               "add_feature_ask",
+              "set_goals",
               "set_owner",
               "set_decider",
               "decide_question",
               "name_decider",
               "cut_with_dependents",
+              "add_link",
+              "remove_link",
+              "restore_link",
+              "restore_dates",
+              "set_goal",
+              "restore_goal",
               "edit_goal_milestone",
               "set_depends_on"
             ],
@@ -63279,6 +63501,30 @@
           "title"
         ],
         "title": "CompanyRoadmapOut"
+      },
+      "CompanyRoadmapRebuilds": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "prds": {
+            "type": "integer",
+            "title": "Prds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "title",
+          "prds"
+        ],
+        "title": "CompanyRoadmapRebuilds",
+        "description": "The company roadmap every PRD feeds: a PRD's rebuild changes it too."
       },
       "CompareCheckpoint": {
         "properties": {
@@ -75312,6 +75558,14 @@
             "type": "object",
             "title": "Flags",
             "default": {}
+          },
+          "titles": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Titles",
+            "default": {}
           }
         },
         "type": "object",
@@ -77437,6 +77691,11 @@
           "code": {
             "type": "string",
             "title": "Code"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref",
+            "default": ""
           },
           "label": {
             "type": "string",
@@ -82234,6 +82493,7 @@
               "restore",
               "edit_title",
               "edit_outcome",
+              "edit_note",
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
@@ -82258,11 +82518,18 @@
               "keep_both",
               "set_milestone",
               "add_feature_ask",
+              "set_goals",
               "set_owner",
               "set_decider",
               "decide_question",
               "name_decider",
               "cut_with_dependents",
+              "add_link",
+              "remove_link",
+              "restore_link",
+              "restore_dates",
+              "set_goal",
+              "restore_goal",
               "edit_goal_milestone",
               "set_depends_on"
             ],
@@ -93881,6 +94148,18 @@
               }
             ]
           },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
           "decisions": {
             "items": {
               "$ref": "#/components/schemas/SimpleOpenDecision"
@@ -102025,6 +102304,292 @@
         ],
         "title": "ReassignIn"
       },
+      "Rebuild": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "flow": {
+            "type": "string",
+            "enum": [
+              "baseline_to_prd",
+              "feedback_loop",
+              "prd_to_roadmap",
+              "prd_to_spec",
+              "request_triage",
+              "strategy_draft",
+              "launch_kit",
+              "baseline",
+              "code_map",
+              "update_draft",
+              "prd_draft_items",
+              "ritual_summary",
+              "metrics_variance",
+              "pricing_memo",
+              "competitive_digest",
+              "discussion_research",
+              "intake_analysis"
+            ],
+            "title": "Flow"
+          },
+          "flow_title": {
+            "type": "string",
+            "title": "Flow Title"
+          },
+          "document_slug": {
+            "type": "string",
+            "title": "Document Slug"
+          },
+          "document_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Title"
+          },
+          "document_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "prd",
+                  "roadmap",
+                  "spec",
+                  "vision",
+                  "strategy",
+                  "update",
+                  "pricing"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Kind"
+          },
+          "new_document": {
+            "type": "boolean",
+            "title": "New Document",
+            "default": false
+          },
+          "source_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Slug"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "running",
+              "waiting",
+              "failed",
+              "done"
+            ],
+            "title": "State"
+          },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "step": {
+            "type": "integer",
+            "title": "Step"
+          },
+          "from_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Version"
+          },
+          "to_version": {
+            "type": "integer",
+            "title": "To Version"
+          },
+          "started_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started By"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "scheduled_for": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled For"
+          },
+          "minutes_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minutes Left"
+          },
+          "next_stop": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Stop"
+          },
+          "next_stop_who": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Stop Who"
+          },
+          "next_stop_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Stop Action"
+          },
+          "waits_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waits On"
+          },
+          "waits_on_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waits On Action"
+          },
+          "review_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Link"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "flow",
+          "flow_title",
+          "document_slug",
+          "state",
+          "steps",
+          "step",
+          "to_version"
+        ],
+        "title": "Rebuild",
+        "description": "The rebuild sign (owner's pick A): a run that will make a new version of a document,\nas the chip beside its version pill says it (``oracle.runs.rebuilds``)."
+      },
+      "RebuildsOut": {
+        "properties": {
+          "rebuilds": {
+            "items": {
+              "$ref": "#/components/schemas/Rebuild"
+            },
+            "type": "array",
+            "title": "Rebuilds"
+          },
+          "company_roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompanyRoadmapRebuilds"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "rebuilds"
+        ],
+        "title": "RebuildsOut"
+      },
       "RecommendIn": {
         "properties": {
           "kind": {
@@ -109026,6 +109591,14 @@
           "summary": {
             "type": "string",
             "title": "Summary"
+          },
+          "answers": {
+            "items": {
+              "$ref": "#/components/schemas/RunDecisionAnswer"
+            },
+            "type": "array",
+            "title": "Answers",
+            "default": []
           }
         },
         "type": "object",
@@ -109037,6 +109610,70 @@
         ],
         "title": "RunDecision",
         "description": "A decided checkpoint of a run, as its agents read it (``get_checkpoint_review``):\nwho decided (the person's name beside their role), when, and what. A console\nanswer is a decision once it is followed: one held for an approver is still pending\nand not listed."
+      },
+      "RunDecisionAnswer": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "feature_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Key"
+          },
+          "feature_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Title"
+          },
+          "answered_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answered By Name"
+          },
+          "answered_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answered At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "answer"
+        ],
+        "title": "RunDecisionAnswer",
+        "description": "A question answered at a decided stop: the architect's at an approved Engineering\ncheck, or the agents' on the Questions from the agents cards of a stop approved or sent\nback (``oracle.runs.stop_answers``)."
       },
       "RunDiscussion": {
         "properties": {
@@ -111647,6 +112284,11 @@
           "code": {
             "type": "string",
             "title": "Code"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref",
+            "default": ""
           },
           "severity": {
             "type": "string",
@@ -115929,6 +116571,7 @@
               "restore",
               "edit_title",
               "edit_outcome",
+              "edit_note",
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
@@ -115953,11 +116596,18 @@
               "keep_both",
               "set_milestone",
               "add_feature_ask",
+              "set_goals",
               "set_owner",
               "set_decider",
               "decide_question",
               "name_decider",
               "cut_with_dependents",
+              "add_link",
+              "remove_link",
+              "restore_link",
+              "restore_dates",
+              "set_goal",
+              "restore_goal",
               "edit_goal_milestone",
               "set_depends_on"
             ],
@@ -116069,6 +116719,7 @@
               "restore",
               "edit_title",
               "edit_outcome",
+              "edit_note",
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
@@ -116093,11 +116744,18 @@
               "keep_both",
               "set_milestone",
               "add_feature_ask",
+              "set_goals",
               "set_owner",
               "set_decider",
               "decide_question",
               "name_decider",
               "cut_with_dependents",
+              "add_link",
+              "remove_link",
+              "restore_link",
+              "restore_dates",
+              "set_goal",
+              "restore_goal",
               "edit_goal_milestone",
               "set_depends_on"
             ],
@@ -116703,6 +117361,14 @@
             },
             "type": "array",
             "title": "Tasks",
+            "default": []
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleWaitingItem"
+            },
+            "type": "array",
+            "title": "Items",
             "default": []
           }
         },
@@ -117913,6 +118579,21 @@
             "type": "boolean",
             "title": "Can Change",
             "default": false
+          },
+          "can_propose": {
+            "type": "boolean",
+            "title": "Can Propose",
+            "default": false
+          },
+          "carried_from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -118047,6 +118728,25 @@
         "type": "object",
         "title": "SimpleGoalMilestonePatch"
       },
+      "SimpleGoalPick": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SimpleGoalPick"
+      },
       "SimpleGoalRef": {
         "properties": {
           "id": {
@@ -118083,6 +118783,51 @@
               }
             ],
             "title": "Position"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
           }
         },
         "type": "object",
@@ -118092,6 +118837,57 @@
           "title"
         ],
         "title": "SimpleGoalRef"
+      },
+      "SimpleGoalSet": {
+        "properties": {
+          "oracle": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleGoalPick"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "measure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure"
+          }
+        },
+        "type": "object",
+        "title": "SimpleGoalSet",
+        "description": "build-feature-panel review 2: the goal (and measure) a person set on the item over\nOracle's: Oracle's goal as the item showed it (null: none), who set it and when."
       },
       "SimpleGoalSuggestion": {
         "properties": {
@@ -118744,6 +119540,48 @@
         ],
         "title": "SimpleLine",
         "description": "Roadmap-plus: where the line on priorities is drawn. ``now``: this quarter's plan\n(the Now horizon); ``key_date:<id>``, ``milestone:<id>``, ``date:<YYYY-MM-DD>``: planned\nto finish by that day."
+      },
+      "SimpleLink": {
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Item Id"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "removed": {
+            "type": "boolean",
+            "title": "Removed",
+            "default": false
+          },
+          "removed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Removed By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_id"
+        ],
+        "title": "SimpleLink",
+        "description": "build-feature-panel: one item the item depends on; ``by`` null: Oracle found it.\n``removed``: Oracle's link a person removed (``removed_by``), shown with Restore."
       },
       "SimpleMatch": {
         "properties": {
@@ -119941,6 +120779,123 @@
         "title": "SimpleNotApproved",
         "description": "A roadmap a meeting's session worked on that the caller does not approve."
       },
+      "SimpleOldMilestone": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "goal_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Title"
+          },
+          "from_roadmap": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "from_roadmap"
+        ],
+        "title": "SimpleOldMilestone",
+        "description": "old-milestones (owner, Nov 4): a goal milestone still on an older per-PRD roadmap\n(history) that is not on the company roadmap yet. ``items``: the titles of the items\nit gates that are on the company roadmap (it would gate those there); none left: it\nwaits on an owner's Keep or Drop."
+      },
+      "SimpleOldMilestones": {
+        "properties": {
+          "can_act": {
+            "type": "boolean",
+            "title": "Can Act",
+            "default": false
+          },
+          "moves": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleOldMilestone"
+            },
+            "type": "array",
+            "title": "Moves",
+            "default": []
+          },
+          "needs_call": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleOldMilestone"
+            },
+            "type": "array",
+            "title": "Needs Call",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "SimpleOldMilestones",
+        "description": "What \"Bring old milestones over\" would do: ``moves`` are copied (items re-pointed),\n``needs_call`` have no items left and wait on Keep or Drop. An owner's alone: anyone\nelse reads both empty and ``can_act`` false."
+      },
+      "SimpleOldMilestonesResult": {
+        "properties": {
+          "carried": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Carried",
+            "default": []
+          },
+          "old_milestones": {
+            "$ref": "#/components/schemas/SimpleOldMilestones"
+          }
+        },
+        "type": "object",
+        "required": [
+          "old_milestones"
+        ],
+        "title": "SimpleOldMilestonesResult",
+        "description": "After a carry-over, Keep or Drop: the ids of the company roadmap's new milestones\nand what is left."
+      },
       "SimpleOpenDecision": {
         "properties": {
           "id": {
@@ -119966,6 +120921,82 @@
         "title": "SimpleOpenDecision",
         "description": "S4: a proposed decision naming the item as a subject (the floating card's)."
       },
+      "SimpleOverride": {
+        "properties": {
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "start_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Source"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          }
+        },
+        "type": "object",
+        "title": "SimpleOverride",
+        "description": "build-feature-panel: Oracle's dates a person's replaced, and who set the new ones."
+      },
       "SimpleOwnerRef": {
         "properties": {
           "id": {
@@ -119976,6 +121007,21 @@
           "name": {
             "type": "string",
             "title": "Name"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "item",
+                  "track"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
           }
         },
         "type": "object",
@@ -120670,6 +121716,16 @@
             "title": "Lines",
             "default": []
           },
+          "company_roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "plan": {
             "anyOf": [
               {
@@ -121001,6 +122057,17 @@
             "title": "Short Code",
             "default": ""
           },
+          "own_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Own Key"
+          },
           "title": {
             "type": "string",
             "title": "Title"
@@ -121154,6 +122221,11 @@
           "can_reorder": {
             "type": "boolean",
             "title": "Can Reorder",
+            "default": false
+          },
+          "on_roadmap": {
+            "type": "boolean",
+            "title": "On Roadmap",
             "default": false
           },
           "applies": {
@@ -121755,6 +122827,17 @@
             ],
             "title": "Date Basis"
           },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
           "suggestion": {
             "anyOf": [
               {
@@ -121888,6 +122971,34 @@
             "description": "S7: the goals the item is linked to directly.",
             "default": []
           },
+          "override": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleOverride"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleLink"
+            },
+            "type": "array",
+            "title": "Links",
+            "default": []
+          },
+          "goal_set": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleGoalSet"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "decided_in": {
             "items": {
               "$ref": "#/components/schemas/SimpleDecidedRef"
@@ -121987,6 +123098,14 @@
             "type": "array",
             "title": "Goal Milestones",
             "default": []
+          },
+          "old_milestones": {
+            "$ref": "#/components/schemas/SimpleOldMilestones",
+            "default": {
+              "can_act": false,
+              "moves": [],
+              "needs_call": []
+            }
           },
           "changes_in_review": {
             "type": "integer",
@@ -122895,6 +124014,18 @@
               }
             ],
             "title": "Reviews Deleted"
+          },
+          "reviews_deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviews Deleted At"
           }
         },
         "type": "object",
@@ -123212,6 +124343,84 @@
         ],
         "title": "SimpleWait",
         "description": "What still waits on whom (an absent required reviewer's approval, a proposal)."
+      },
+      "SimpleWaitingItem": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "run_stop",
+              "question",
+              "decision",
+              "broken_link",
+              "date",
+              "draft",
+              "proposal",
+              "goal_suggestion",
+              "goal"
+            ],
+            "title": "Kind"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "ref_id": {
+            "type": "string",
+            "title": "Ref Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "default": ""
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "href": {
+            "type": "string",
+            "title": "Href"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "op": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Op"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "key",
+          "ref_id",
+          "title",
+          "action",
+          "href"
+        ],
+        "title": "SimpleWaitingItem",
+        "description": "home-decisions-one-list: one thing waiting on the signed-in person\n(oracle.simple.waiting_list): what it is, its action in words and where it is done."
       },
       "SimpleWindow": {
         "properties": {

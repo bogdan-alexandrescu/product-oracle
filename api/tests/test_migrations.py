@@ -189,7 +189,7 @@ def test_baseline_flow_check_up_down_up(scratch_db):
     script = ScriptDirectory.from_config(cfg)
     previous = script.get_revision(BASELINE_FLOW).down_revision
     # chat-latest-card: renumbered when trains merge.
-    assert script.get_heads() == ["0107_chat_card_redo_of"]
+    assert script.get_heads() == ["0110_chat_card_redo_of"]
 
     command.upgrade(cfg, previous)
     assert "'baseline'" not in _flow_check()

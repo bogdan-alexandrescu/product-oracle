@@ -147,7 +147,21 @@ async def test_the_prd_draft_prompt_names_the_template_and_pastes_the_skeleton(c
 # (oracle.runs.plan_tables.prompt_lines) in a draft with a source PRD;
 # ROADMAP_PINS_BEFORE_PLAN_TABLES proves nothing else moved. Refreshed again when the block
 # named a left-out item and the Dates from words (roadmap-plan-tables review).
+# Refreshed for loop-plan-tables, whose only change is the writer's role words: the
+# writer of a roadmap "writes the roadmap draft" (flows.step_prompt), not "writes the prd
+# draft"; the critic's prompt does not move. ROADMAP_PINS_BEFORE_LOOP_WORDS proves nothing
+# else moved (the loop's plan-table lines are only in a feedback-loop draft).
 ROADMAP_PINS = {
+    (True, "roadmap-board", False): ["c185af392009f513", "b22b851d6c2385d7"],
+    (True, "roadmap-board", True): ["a8c1184d428380b0", "353fa2fc5e4b7127"],
+    (True, None, False): ["9460831502ab3e9a", "8dbff203db77111d"],
+    (True, None, True): ["f234199e3059dee8", "38eed31be25e5459"],
+    (False, "roadmap-board", False): ["7e8edb3698f92d56", "b7500f7de560911b"],
+    (False, "roadmap-board", True): ["7e8edb3698f92d56", "b7500f7de560911b"],
+    (False, None, False): ["a88990871184d4fb", "36b2abd791eb6c40"],
+    (False, None, True): ["a88990871184d4fb", "36b2abd791eb6c40"],
+}
+ROADMAP_PINS_BEFORE_LOOP_WORDS = {
     (True, "roadmap-board", False): ["9dfc859b14298eed", "b22b851d6c2385d7"],
     (True, "roadmap-board", True): ["facb642d1bbb759c", "353fa2fc5e4b7127"],
     (True, None, False): ["e78152dee48bdddc", "8dbff203db77111d"],
@@ -157,6 +171,7 @@ ROADMAP_PINS = {
     (False, None, False): ["2e25bae37d8aa957", "36b2abd791eb6c40"],
     (False, None, True): ["2e25bae37d8aa957", "36b2abd791eb6c40"],
 }
+LOOP_WORDS = ("(writes the prd draft)", "(writes the roadmap draft)")
 ROADMAP_PINS_BEFORE_PLAN_TABLES = {
     (True, "roadmap-board", False): ["c1822234fcbf6ed6", "d629969c71f442c7"],
     (True, "roadmap-board", True): ["fad4e7a40af88bf5", "362224006ca4045c"],
@@ -259,6 +274,11 @@ def test_the_roadmap_draft_prompt_is_byte_for_byte_unchanged(case):
     digests = [hashlib.sha256(s[2].encode()).hexdigest()[:16] for s in steps]
     assert digests == ROADMAP_PINS[case]
     prompts = [s[2] for s in steps]
+    assert prompts[0].count(LOOP_WORDS[1]) == 1
+    prompts = [p.replace(*LOOP_WORDS[::-1], 1) for p in prompts]
+    assert [hashlib.sha256(p.encode()).hexdigest()[:16] for p in prompts] == (
+        ROADMAP_PINS_BEFORE_LOOP_WORDS[case]
+    )
     if with_source:
         plan = plan_tables.engineering_plan(None, [])
         blocks = [

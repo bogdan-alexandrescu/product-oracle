@@ -75,8 +75,9 @@ for (const phone of [false, true]) {
           // Labels beside the icons at 18 px.
           const home = page.getByTestId("simple-nav-home");
           expect(await home.evaluate((el) => getComputedStyle(el).fontSize)).toBe("18px");
-          // A yellow count only where something waits on me: the commenter's three proposals on the Roadmap.
-          await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveText("3");
+          // A yellow count only where something waits on me (home-waiting-one-list): on the Roadmap the items
+          // with a broken link, the dates to confirm and the proposals on my items.
+          await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveText("9");
           await expect(page.getByTestId("simple-nav-one-pagers-count")).toHaveCount(0);
           await expect(page.getByTestId("simple-nav-priorities-count")).toHaveCount(0);
           await expect(page.getByTestId("simple-person")).toContainText(/owner/i);
@@ -119,6 +120,7 @@ for (const phone of [false, true]) {
         await task.getByTestId("home-flow-thumb").click();
         await expect(task.getByTestId("home-flow-wide")).toContainText("No flow yet");
 
+        const railBefore = phone ? 0 : Number(await page.getByTestId("simple-nav-roadmap-count").textContent());
         await retitle.getByRole("button", { name: "Accept" }).click();
         await expect(page.getByText("Accepted", { exact: true })).toBeVisible();
         await expect(proposals.getByTestId("home-proposal")).toHaveCount(2);
@@ -127,7 +129,8 @@ for (const phone of [false, true]) {
         await expect(page.getByTestId("home-draft")).toContainText("It publishes as v");
         await proposals.getByTestId("home-proposal").filter({ hasText: "Move to another horizon" }).getByRole("button", { name: "Decline" }).click();
         await expect(proposals.getByTestId("home-proposal")).toHaveCount(1);
-        if (!phone) await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveText("1");
+        // The two proposals acted on leave the rail's Roadmap count at once.
+        if (!phone) await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveText(String(railBefore - 2));
 
         // A broken dependency: Move dependents applies into the roadmap's working draft, with Undo.
         const broken = card(page, "plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ });
