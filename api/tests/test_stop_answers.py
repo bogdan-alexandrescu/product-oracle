@@ -228,3 +228,319 @@ async def test_answers_to_the_agents_questions_at_the_feature_set_reach_the_prd_
     prompt = _writer_prompt(runtime)
     assert f'"{AQ}" Decided: "Reuse the old sender. Note: It ships this month."' in prompt
     assert "Feature set" in prompt
+
+
+# ------------------------------------------------------------------ review round 1
+
+from oracle.runs import stop_answers  # noqa: E402
+from oracle.runs.stop_answers import Answered, listed_open  # noqa: E402
+
+DB_Q = "Which database?"
+CSV_Q = "Should exports use CSV?"
+
+
+def _answered(question: str, answer: str = "Yes.") -> Answered:
+    return Answered(
+        checkpoint_id=uuid.uuid4(), kind="eng_review", question=question, answer=answer,
+        by_name="Rae Example",
+    )  # fmt: skip
+
+
+def _prd(open_lines: str, heading: str = "## Open questions {#open-questions}") -> str:
+    return (
+        "---\ntitle: Example archive PRD\ncitations: []\n---\n\n"
+        "# Example archive PRD {#title}\n\n"
+        "## Approach {#approach}\n\nKeep a year of records.\n\n"
+        f"{heading}\n\n{open_lines}\n"
+    )
+
+
+def test_a_longer_new_question_that_contains_an_answered_one_imports():
+    # protects=a new, longer question is not taken for an answered one; fails_when=a draft
+    # listing "Which database should hold the audit trail for the archive?" or "...CSVs or
+    # XLSX..." is refused because "Which database?" / "Should exports use CSV?" were
+    # answered; no_claim=a reworded copy of an answered question (it passes: fail safe).
+    answers = [_answered(DB_Q), _answered(CSV_Q)]
+    markdown = _prd(
+        "- Which database should hold the audit trail for the archive? Owner: Rae Example, "
+        "needed by Nov 30.\n"
+        "- Should exports use CSVs or XLSX for the finance team?\n"
+    )
+    assert listed_open(answers, markdown) == []
+    table = _prd(
+        "| Question | Owner | Needed by |\n|---|---|---|\n"
+        "| Which database should hold the audit trail for the archive? | Rae Example | Nov 30 |\n"
+    )
+    assert listed_open(answers, table) == []
+
+
+def test_an_exact_relisting_of_an_answered_question_is_refused_plainly():
+    # protects=the same question listed again as open is refused; fails_when=a bullet with
+    # its owner and due tail, or a table row, that is the answered question goes through,
+    # or the refusal does not name it plainly; no_claim=paraphrases.
+    answers = [_answered(DB_Q, "Postgres.")]
+    for markdown in (
+        _prd("- Which database? Owner: Rae Example, needed by Nov 30."),
+        _prd("- **Which database?** (owner: Rae Example)"),
+        _prd("| Question | Owner |\n|---|---|\n| Which database? | Rae Example |",
+             "## Decisions needed {#decisions}"),
+    ):  # fmt: skip
+        [problem] = listed_open(answers, markdown)
+        assert problem.message.startswith(
+            '"Which database?" was answered at Engineering review by Rae Example ("Postgres.")'
+        ), problem.message
+
+
+def test_a_risk_line_quoting_an_answered_question_is_not_an_open_question():
+    # protects=in "Risks and open questions" only the open-questions list is checked;
+    # fails_when=a risk that quotes an answered question refuses the draft, or the same
+    # question listed under its Open questions label goes through; no_claim=other
+    # templates' layouts.
+    answers = [_answered(DB_Q, "Postgres.")]
+    heading = "## Risks and open questions {#risks}"
+    risky = _prd(
+        "- Which database? If the choice slips, the archive ships late. Mitigation: "
+        "decided at the review.\n\n**Open questions**\n\n- Which regions launch first?",
+        heading,
+    )
+    assert listed_open(answers, risky) == []
+    only_risk = _prd("- Which database?\n", heading)
+    assert listed_open(answers, only_risk) == []
+    relisted = _prd(
+        "- Slow exports: batch them.\n\nOpen questions:\n\n- Which database? Owner: Rae Example.",
+        heading,
+    )
+    assert len(listed_open(answers, relisted)) == 1
+
+
+PRD_AQ = "Ship the archive search in v1, or after launch?"
+PRD_QUESTIONS = {
+    "questions": [
+        {
+            "id": "pq1",
+            "role": "writer",
+            "feature": "price-early",
+            "question": PRD_AQ,
+            "why": "Search doubles the scope.",
+            "options": [
+                {"key": "v1", "label": "In v1"},
+                {"key": "later", "label": "After launch"},
+            ],
+            "recommended": "later",
+        }
+    ]
+}
+
+
+async def _ask_at(tenant_id, cp_id: str, questions: dict) -> None:
+    async with tenant_session(tenant_id) as s:
+        row = await s.get(Checkpoint, uuid.UUID(cp_id))
+        segment = await s.scalar(
+            select(RunSegment).where(
+                RunSegment.run_id == row.run_id, RunSegment.seq == row.payload["segment_seq"]
+            )
+        )
+        arts = dict(segment.artifacts or {})
+        files = {**(arts.get("files") or {}), "agent_questions.yaml": yaml.dump(questions)}
+        segment.artifacts = {**arts, "files": files}
+        await s.commit()
+
+
+async def test_a_card_answered_at_a_sent_back_prd_review_reaches_the_next_attempt(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    # protects=answers on the PRD review's Questions from the agents cards survive Send
+    # back; fails_when=the attempt-2 writer prompt lacks the question, its answer, the
+    # person or the stop, or a draft re-listing it as open imports once the attempt's
+    # files are replaced; no_claim=what the writer writes.
+    from tests.review_v2_helpers import person
+
+    tenant_id, auth = owner
+    run = await _approved_check(client, auth)
+    run = await _to_prd_review(client, auth, run)
+    cp = pending(run)
+    await _ask_at(tenant_id, cp["id"], PRD_QUESTIONS)
+    rae = await person(tenant_id, "approver", "rae")
+    async with tenant_session(tenant_id) as s:
+        from oracle.models import User
+
+        (await s.get(User, rae.user_id)).name = "Rae Example"
+        await s.commit()
+    resp = await client.put(
+        f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/agent-questions/pq1/answer",
+        json={"option": "later", "note": None},
+        headers=rae.headers,
+    )
+    assert resp.status_code == 200, resp.text
+    resp = await client.post(
+        f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/decide",
+        json={"decision": "changes_requested", "note": "Tighten the scope section."},
+        headers=auth,
+    )
+    assert resp.status_code == 200, resp.text
+    assert runtime.submitted[-1].labels["attempt"] == "2", runtime.submitted[-1].labels
+    prompt = _writer_prompt(runtime)
+    line = next((ln for ln in prompt.splitlines() if PRD_AQ in ln), "")
+    assert "PRD review" in line and "answered by Rae Example" in line, prompt
+    assert 'Decided: "After launch"' in line, line
+    _assert_decided(prompt)
+    # The next attempt's files replace the asking attempt's: the answer still holds.
+    await _ask_at(tenant_id, cp["id"], {"questions": []})
+    async with tenant_session(tenant_id) as s:
+        row = await s.get(Run, uuid.UUID(run["id"]))
+        draft = OPEN_PRD.replace("- Which regions launch first?", f"- {PRD_AQ} Owner: product.")
+        problems = await stop_answers.open_problems(s, row, draft)
+        assert any(f'"{PRD_AQ}" was answered at PRD review' in p.message for p in problems)
+
+
+async def test_stop_notes_reach_the_writer_with_the_stop_name_person_and_record(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    # protects=an approved or sent-back stop's note is stated in the writer's decided block
+    # with the stop's name, its D-number, the person and the day; fails_when=it reaches the
+    # writer as "eng_review: <note>" with no person; no_claim=other segments' notes.
+    import re
+
+    tenant_id, auth = owner
+    run = await _at_check(client, auth)
+    await _answer_all(client, auth, run)
+    assert (await _approve(client, auth, run, "Keep the tax call async.")).status_code == 200
+    run = await get(client, auth, run["id"])
+    decisions = (await client.get(f"/v1/runs/{run['id']}/decisions", headers=auth)).json()
+    who = next(x for x in decisions if x["kind"] == "eng_review")["decided_by_name"]
+    run = await _to_prd_review(client, auth, run)
+    prompt = _writer_prompt(runtime)
+    assert "eng_review: Keep the tax call async." not in prompt, prompt
+    pattern = (
+        rf"Engineering review \(D-\d+\), approved by {re.escape(who)} on [A-Z][a-z]{{2}} "
+        r'\d{1,2}: note "Keep the tax call async\."'
+    )
+    assert re.search(pattern, prompt), prompt
+    cp = pending(run)
+    resp = await client.post(
+        f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/decide",
+        json={"decision": "changes_requested", "note": "Tighten the scope section."},
+        headers=auth,
+    )
+    assert resp.status_code == 200, resp.text
+    prompt = _writer_prompt(runtime)
+    assert re.search(
+        rf"PRD review \(D-\d+\), sent back by {re.escape(who)} on [A-Z][a-z]{{2}} \d{{1,2}}: "
+        r'note "Tighten the scope section\."',
+        prompt,
+    ), prompt
+
+
+async def test_the_feedback_loop_writer_reads_the_answers_too(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    # protects=the feedback loop's next draft (a PRD import, checked like the first) is
+    # told the answers; fails_when=prompt_lines for next_draft is empty; no_claim=the loop.
+    tenant_id, auth = owner
+    run = await _approved_check(client, auth)
+    async with tenant_session(tenant_id) as s:
+        row = await s.get(Run, uuid.UUID(run["id"]))
+        _assert_decided("\n".join(await stop_answers.prompt_lines(s, row, "next_draft")))
+
+
+async def test_the_answerer_is_who_staged_the_answer_not_who_approved(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    # protects=an answer is attributed to the person who gave it (the staged action's
+    # created_by/updated_by); fails_when=the approver is named for a lead's answer;
+    # no_claim=the console path.
+    from oracle.models import User
+    from tests.review_v2_helpers import person
+
+    tenant_id, auth = owner
+    run = await _at_check(client, auth)
+    lead = await person(tenant_id, "approver", "lead")
+    async with tenant_session(tenant_id) as s:
+        (await s.get(User, lead.user_id)).name = "Lee Example"
+        await s.commit()
+    await _answer_all(client, lead.headers, run)
+    assert (await _approve(client, auth, run)).status_code == 200
+    decisions = (await client.get(f"/v1/runs/{run['id']}/decisions", headers=auth)).json()
+    [d] = [x for x in decisions if x["kind"] == "eng_review"]
+    assert d["decided_by_name"] != "Lee Example"
+    assert {a["answered_by_name"] for a in d["answers"]} == {"Lee Example"}, d["answers"]
+
+
+async def test_reading_the_answers_of_many_stops_is_batched(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    # protects=pages that load the Decisions of many runs read the stops' answers in a
+    # fixed number of reads; fails_when=of_checkpoints reads once per stop (N+1);
+    # no_claim=the reads of the rest of the Decisions.
+    from sqlalchemy import event
+
+    from oracle.db import get_engine
+    from oracle.runs.models import AgentAnswer
+
+    tenant_id, auth = owner
+    run = await started(client, auth)
+    await tick(client, auth)
+    run = await decide(client, auth, await get(client, auth, run["id"]))
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    cp = pending(run)
+    await _ask_at(tenant_id, cp["id"], AGENT_QUESTIONS)
+    resp = await client.put(
+        f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/agent-questions/aq1/answer",
+        json={"option": "reuse", "note": None},
+        headers=auth,
+    )
+    assert resp.status_code == 200, resp.text
+    run = await decide(client, auth, run)
+
+    async def reads(copies: int) -> int:
+        async with tenant_session(tenant_id) as s:
+            row = await s.get(Run, uuid.UUID(run["id"]))
+            first = await s.get(Checkpoint, uuid.UUID(cp["id"]))
+            answer = await s.scalar(
+                select(AgentAnswer).where(AgentAnswer.checkpoint_id == first.id)
+            )
+            cps = []
+            for _ in range(copies):
+                # A stop decided before its answers were recorded: read live.
+                payload = {k: v for k, v in (first.payload or {}).items() if k != "stop_answers"}
+                c = Checkpoint(
+                    run_id=first.run_id, kind=first.kind, status="approved", payload=payload,
+                    decided_by=first.decided_by, decided_at=first.decided_at,
+                )  # fmt: skip
+                s.add(c)
+                await s.flush()
+                s.add(AgentAnswer(checkpoint_id=c.id, question_key="aq1", option="reuse",
+                                  answered_by=answer.answered_by,
+                                  answered_at=answer.answered_at))  # fmt: skip
+                cps.append(c)
+            await s.flush()
+            statements: list[str] = []
+
+            def count(conn, cursor, statement, *args):
+                statements.append(statement)
+
+            engine = get_engine().sync_engine
+            event.listen(engine, "before_cursor_execute", count)
+            try:
+                got = await stop_answers.of_checkpoints(s, {row.id: row}, cps)
+            finally:
+                event.remove(engine, "before_cursor_execute", count)
+            assert all(len(got[c.id]) == 1 for c in cps), got
+            assert all(got[c.id][0].by_name for c in cps), got
+            await s.rollback()
+            return len([st for st in statements if "SAVEPOINT" not in st])
+
+    one, six = await reads(1), await reads(6)
+    assert six == one, (one, six)
+    assert six <= 5, six
