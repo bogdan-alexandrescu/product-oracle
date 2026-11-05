@@ -1183,6 +1183,9 @@ export function simpleInboxRows(
 const S7_OPS: string[] = ["add_item", "merge_item", "keep_both"];
 /** How long Oracle's drafting job of a quick-added draft runs in the mock (ms of the mock clock). */
 export const DRAFTING_MS = 2_500;
+/** Tests set this localStorage key to hold Oracle's drafting longer (ms of the mock clock). */
+export const MOCK_DRAFTING_MS_KEY = "po-mock-drafting-ms";
+const draftingMs = () => Number(globalThis.localStorage?.getItem(MOCK_DRAFTING_MS_KEY)) || DRAFTING_MS;
 
 /** The change as intoDrafts reads it: an add_item names an item of its roadmap (the new one may not exist yet). */
 function anchored(db: SimpleDb, c: Change): Change {
@@ -1354,7 +1357,7 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
     db.items.push({
       key, title: String(a.title), horizon: a.horizon as SeedItem["horizon"], roadmap, goal: goalKey,
       track: db.items.find((x) => x.roadmap === roadmap && x.track)?.track, draft: true, outcome: typeof a.outcome === "string" ? a.outcome : null,
-      drafting_until: mockNowMs() + DRAFTING_MS, quarter: (a.quarter as { start: string; end: string } | undefined) ?? undefined,
+      drafting_until: mockNowMs() + draftingMs(), quarter: (a.quarter as { start: string; end: string } | undefined) ?? undefined,
       ...(a.milestone ? { milestone: { name: String((a.milestone as Values).name), day: dayIn(a.horizon as SeedItem["horizon"], (a.milestone as Values).date) } } : {}),
       looks_like: lookalikes(db, String(a.title), roadmap),
     });

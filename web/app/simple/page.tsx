@@ -27,21 +27,23 @@ import {
   beforeAfter,
   brokenLinks,
   changeWords,
+  fixChange,
   goalTiles,
   greeting,
   NEW_FLOW_OPS,
   OP_WORDS,
   opWords,
   planByMonth,
-  planInputs,
-  prdInPlay,
+  planInput,
   waitSentence,
   type BrokenLink,
+  type FixOp,
   type GoalTile,
 } from "@/lib/simple-home";
 import { errorMessage, useQuery } from "@/lib/use-query";
-import { invalidateWaiting, loadInbox, waitingChanged } from "@/lib/waiting";
+import { invalidateWaiting, loadInbox, loadWaiting, onWaitingChanged, waitingChanged } from "@/lib/waiting";
 import { RebuildHome } from "@/components/RebuildSign";
+import { WaitingRow } from "@/components/simple/WaitingItems";
 
 type Change = Schemas["SimpleChangeOut"];
 type Decision = Schemas["DecisionOut"];
@@ -50,7 +52,6 @@ type Decision = Schemas["DecisionOut"];
 const REVIEW = "/simple/roadmap?review=proposals";
 
 /** A broken link's one-click fixes, and what each did, in a toast ("Risk accepted in your working draft"). */
-type FixOp = "shift_dependents" | "move_dependency" | "accept_risk";
 const FIX_OPS = new Set<string>(["shift_dependents", "move_dependency", "accept_risk"]);
 const FIX_DONE: Record<FixOp, string> = {
   shift_dependents: "Dependents moved",
@@ -122,6 +123,29 @@ function problemWords(reason: string, title: string): string {
 
 const joinAnd = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}` : (xs[0] ?? ""));
 
+/** How often Home reads again while Oracle drafts a new item (backing off), and for how long. */
+const DRAFT_READ_DELAYS_MS = [1_000, 2_000, 4_000, 8_000];
+const DRAFT_READS_FOR_MS = 120_000;
+
+/** What else the one list holds beyond the decisions tile, in words, each kind with its number. */
+const BESIDES: [Schemas["SimpleWaitingItem"]["kind"], string, string][] = [
+  ["run_stop", "run stop", "run stops"],
+  ["broken_link", "broken link", "broken links"],
+  ["date", "date to confirm", "dates to confirm"],
+  ["draft", "draft", "drafts"],
+  ["proposal", "proposal", "proposals"],
+  ["goal_suggestion", "goal suggestion", "goal suggestions"],
+  ["goal", "proposed goal", "proposed goals"],
+];
+function allBesides(items: Schemas["SimpleWaitingItem"][]): string {
+  return joinAnd(
+    BESIDES.flatMap(([kind, one, many]) => {
+      const n = items.filter((i) => i.kind === kind).length;
+      return n ? [`${n} ${n === 1 ? one : many}`] : [];
+    }),
+  );
+}
+
 /**
  * What "Move the dependents" moves (qa-simple-home-1): the items the flag names (SimpleFlag.moves),
  * as the change engine moves them, the clicked item first.
@@ -171,9 +195,11 @@ export default function SimpleHome() {
   const k = (name: string) => `simple-home|${name}|${stamp}`;
   // qa-simple-home-30: Home's toasts sit bottom-left over the rail, clear of the rows' buttons.
   useEffect(() => setToastPlace("rail"), []);
+  // home-waiting-one-list: whatever changes what waits on me (an action here, in a row of the one
+  // list, or anywhere else) reads Home again, so what was acted on leaves Home with the rail's count.
+  useEffect(() => onWaitingChanged(() => setStamp((s) => s + 1)), []);
   const reloadAll = () => {
     invalidateWaiting();
-    setStamp((s) => s + 1);
     waitingChanged();
   };
 
@@ -202,19 +228,55 @@ export default function SimpleHome() {
     if (revisit && !inbox.loading) setRevisit(false);
   }, [revisit, inbox.loading]);
   const roadmap = useQuery(k("roadmap"), () => unwrap(api.GET("/v1/simple/roadmap")), { keepPrevious: true });
+  // home-waiting-one-list: a goal suggestion confirmed here (or anywhere) adds an item Oracle
+  // drafts; its dates to confirm wait on me once that is done, so while one drafts Home, its
+  // cards and the rail read again (until it is done).
+  // It backs off (1 s, 2 s, 4 s, then every 8 s) and stops after two minutes: a short line then
+  // offers Refresh, which starts it again.
+  const drafting = !!roadmap.data?.items.some((i) => i.drafting);
+  const draftReads = useRef<{ since: number; tries: number } | null>(null);
+  const [draftStalled, setDraftStalled] = useState(false);
+  useEffect(() => {
+    if (!drafting) {
+      draftReads.current = null;
+      return;
+    }
+    if (draftStalled) return;
+    const r = (draftReads.current ??= { since: Date.now(), tries: 0 });
+    const t = window.setTimeout(
+      () => {
+        if (Date.now() - r.since >= DRAFT_READS_FOR_MS) {
+          setDraftStalled(true);
+          return;
+        }
+        r.tries += 1;
+        invalidateWaiting();
+        waitingChanged();
+      },
+      DRAFT_READ_DELAYS_MS[Math.min(r.tries, DRAFT_READ_DELAYS_MS.length - 1)],
+    );
+    return () => window.clearTimeout(t);
+  }, [drafting, draftStalled, roadmap.data]);
+  const refreshDrafting = () => {
+    draftReads.current = null;
+    setDraftStalled(false);
+    reloadAll();
+  };
   const goals = useQuery(k("goals"), () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })), { keepPrevious: true });
   const changes = useQuery(k("changes"), () => unwrap(api.GET("/v1/simple/changes")), { keepPrevious: true });
   const drafts = useQuery(k("drafts"), () => unwrap(api.GET("/v1/simple/drafts")), { keepPrevious: true });
   // prd-questions: the one list of product decisions waiting for me (GET /v1/simple/decisions/waiting):
   // its count, its late count and the PRDs' questions; then the other judgement calls from the
   // Inbox, never Oracle's run approvals (class checkpoint) nor a PRD's question read twice.
-  const waiting = useQuery(k("waiting"), () => unwrap(api.GET("/v1/simple/decisions/waiting")), { keepPrevious: true });
+  // home-waiting-one-list: the one list of what waits on me, shared with Decisions and the rail.
+  const waiting = useQuery(k("waiting"), loadWaiting, { keepPrevious: true });
+  // home-waiting-one-list: the decision-log calls proposed to me, from the one list (kind
+  // "decision"), so this card and its tile count what Decisions and the rail count.
   const decisions = useQuery(
     k("decisions"),
     async (): Promise<Decision[]> => {
-      const rows = (await loadInbox()).decisions.filter((d) => d.counts && d.reason === "needs_decision");
-      const all = await Promise.all(rows.map((d) => unwrap(api.GET("/v1/decisions/{decision}", { params: { path: { decision: String(d.number) } } }))));
-      return all.filter((d) => d.class !== "checkpoint" && d.origin !== "checkpoint" && (d.origin as string) !== "prd");
+      const rows = (await loadWaiting()).items.filter((i) => i.kind === "decision");
+      return Promise.all(rows.map((i) => unwrap(api.GET("/v1/decisions/{decision}", { params: { path: { decision: i.ref_id } } }))));
     },
     { keepPrevious: true },
   );
@@ -290,7 +352,7 @@ export default function SimpleHome() {
     for (const b of broken) if (b.item.can_decide) ids.add(b.item.id);
     return ids;
   }, [toDecide, broken]);
-  const proposedGoals = (goals.data ?? []).filter((g) => g.type === "goal" && g.status === "proposed").length;
+  const proposedGoals = (goals.data ?? []).filter((g) => g.type === "goal" && g.status === "proposed");
   // build-goal-order-control: Change order turns the row into the numbered one (owners and approvers).
   const [ordering, setOrdering] = useState(false);
   const canOrder = can("update_entity");
@@ -298,18 +360,12 @@ export default function SimpleHome() {
   // A new company (no goals yet) leads with its setup; an established company's Simple Home keeps
   // its picked design (Detailed Home keeps the checklist behind its Set up chip).
   const setupFirst = !!setup && tiles !== undefined && tiles.length === 0;
-  // The plan this quarter: the PRD in play (the top PRD by priority when several) by month.
-  const priorities = useQuery(k("priorities"), () => unwrap(api.GET("/v1/simple/priorities")), { keepPrevious: true });
-  // With several PRDs in play, chosen once the ranking answered (or failed), so the strip never
-  // switches PRDs under the reader; with one, at once (undefined: waiting on the ranking).
-  const ranked = priorities.data !== undefined || !!priorities.error;
-  const planPrd = useMemo(
-    () => prdInPlay(roadmap.data, ranked ? (priorities.data?.rows ?? []).map((r) => r.item_id) : null),
-    [ranked, roadmap.data, priorities.data],
-  );
+  // home-waiting-one-list: the plan is the company roadmap's (GET /v1/simple/roadmap reads only
+  // it once there is one: oracle.roadmap.company feeding_ids), every PRD's items in the
+  // roadmap's own milestones by name, never one PRD's plan milestones.
   const plan = useMemo(
-    () => (roadmap.data && planPrd ? planByMonth(roadmap.data.items.filter((i) => i.prd?.id === planPrd.id && i.status !== "cut").flatMap(planInputs), roadmap.data.today, roadmap.data.windows.now.end) : null),
-    [roadmap.data, planPrd],
+    () => (roadmap.data ? planByMonth(roadmap.data.items.filter((i) => i.status !== "cut").map(planInput), roadmap.data.today, roadmap.data.windows.now.end) : null),
+    [roadmap.data],
   );
   // qa4-simple-home-12: every working draft of mine, each with its own count (one roadmap's draft never hides another's).
   const myDrafts = (drafts.data ?? []).filter((d) => d.status === "working" && d.changes > 0 && (d.created_by === myId || d.participant_ids.includes(myId)));
@@ -322,12 +378,19 @@ export default function SimpleHome() {
   const now = new Date();
   /** A moment's day in the company zone, comparable ("2026-10-30"). */
   const zoneDay = (iso: string) => formatInZone(iso, zone, { year: "numeric", month: "2-digit", day: "2-digit" }).replace(/(\d+)\/(\d+)\/(\d+)/, "$3-$1-$2");
+  /** Whether a moment falls in this year, in the company zone. */
+  const sameYear = (iso: string) => formatInZone(iso, zone, { year: "numeric" }) === formatInZone(now.toISOString(), zone, { year: "numeric" });
   const hour = Number(formatInZone(now.toISOString(), zone, { hour: "numeric", hourCycle: "h23" }).replace(/\D.*$/, "")) || 9;
   // A person with no name is greeted plainly, never by their email's local part.
   const firstName = (me?.name ?? "").trim().split(/\s/)[0];
   const decisionCount = waiting.data?.count ?? 0;
   // SW1: the run stops that wait on me, a card each under the summary (their work is on the run's page).
-  const runStops = revisit && inbox.loading ? undefined : runStopsOf(inbox.data);
+  // home-waiting-one-list: a stop shows while the one list holds it (acted on anywhere, it leaves).
+  const waitKeys = waiting.data ? new Set(waiting.data.items.map((i) => i.key)) : undefined;
+  const runStops = revisit && inbox.loading ? undefined : runStopsOf(inbox.data)?.filter((s) => !waitKeys || waitKeys.has(`run_stop:${s.id}`));
+  // What else waits on me and has no card of its own here: drafts for my approval, dates to
+  // confirm and goal suggestions I decide, each with its action in place.
+  const alsoWaiting = (waiting.data?.items ?? []).filter((i) => i.kind === "draft" || i.kind === "goal_suggestion" || (i.kind === "date" && !i.op));
   const stopCount = runStops?.length ?? 0;
   // walkc-roadmap-tasks: the open tasks on roadmap items that wait on me.
   const myTasks = waiting.data?.tasks ?? [];
@@ -365,7 +428,7 @@ export default function SimpleHome() {
   const prdWaiting = waitingByPrd([...(waiting.data?.questions ?? []).filter((q) => !decidedHere.some((d) => d.id === q.id)), ...decidedHere]);
   const decisionsEmpty = decisionRows !== undefined && decisionRows.length === 0;
   const proposalsEmpty = !!changes.data && proposalRows.length === 0;
-  const quiet = !(revisit && inbox.loading) && decisionsEmpty && prdWaiting.length === 0 && proposalsEmpty && mineApart.length === 0 && stopCount === 0 && myTasks.length === 0;
+  const quiet = !(revisit && inbox.loading) && decisionsEmpty && prdWaiting.length === 0 && proposalsEmpty && mineApart.length === 0 && stopCount === 0 && myTasks.length === 0 && alsoWaiting.length === 0;
   // qa-onboarding-21: a tile that cannot apply yet (no roadmap items, so no links to break) is not shown.
   const tilesShown = (
     [
@@ -377,9 +440,15 @@ export default function SimpleHome() {
         proposalRows === toDecide ? (proposalRows.length === 1 ? "proposal on your items" : "proposals on your items") : proposalRows.length === 1 ? "of your proposals waits" : "of your proposals waiting",
         proposalRows.length === 1 ? "proposal" : "proposals",
       ],
-      ["broken-links", roadmap.data ? broken.length : null, broken.length === 1 ? "broken link" : "broken links", broken.length === 1 ? "broken link" : "broken links"],
+      // home-waiting-one-list: only the links on items I decide wait on me (the one list's and the
+      // Roadmap count's); one who decides none of them reads those they can propose fixes for, said so.
+      brokenMine > 0 || brokenOthers === 0
+        ? (["broken-links", roadmap.data ? brokenMine : null, brokenMine === 1 ? "broken link" : "broken links", brokenMine === 1 ? "broken link" : "broken links"] as const)
+        : (["broken-links", brokenOthers, brokenOthers === 1 ? "broken link you can propose a fix for" : "broken links you can propose fixes for", brokenOthers === 1 ? "fix to propose" : "fixes to propose"] as const),
     ] as const
   ).filter(([id]) => (id === "broken-links" ? (roadmap.data?.items.length ?? 1) > 0 : id === "decisions" ? !decisionsEmpty || prdWaiting.length > 0 : !proposalsEmpty));
+  // The tiles show once each of their counts is read (or failed): never a 0 or a "–" that later changes.
+  const tilesReady = [waiting, decisions, changes, roadmap, drafts].every((q) => q.data !== undefined || !!q.error);
   // build-rundecide review: with no other judgement call the Decisions card is not drawn; its tile goes to the first PRD's card.
   const tileAnchor = (id: string) => (id === "decisions" && decisionsEmpty && prdWaiting[0] ? `waiting-${prdWaiting[0].prd.slug}` : id);
   // The goal band's weights as their share of the score ("50% of the score").
@@ -483,15 +552,7 @@ export default function SimpleHome() {
   }
 
   async function fix(b: BrokenLink, op: FixOp, note = "") {
-    const dep = b.dependency;
-    const body: Schemas["SimpleChangeIn"] =
-      op === "accept_risk"
-        ? { op, target: { item_id: b.item.id, flag: b.flag.kind, subject: b.flag.subject }, before: { risk: null }, after: { risk: { note: note.trim() } } }
-        : {
-            op,
-            target: { item_id: b.item.id, subject: b.flag.subject },
-            before: { [b.item.id]: stored(b.item), ...(dep ? { [dep.id]: stored(dep) } : {}) },
-          };
+    const body = fixChange(b, op, note);
     try {
       const r = await unwrap(api.POST("/v1/simple/changes", { body }));
       const message = await changeResult(r, `${FIX_DONE[op]} in your working draft${op === "accept_risk" ? "" : await movedWords(r.change)}`);
@@ -719,14 +780,48 @@ export default function SimpleHome() {
           }
         </Block>
         {/* qa4-simple-home-6: a goal still proposed is not on Home: said, so Detailed's extra goal is no surprise. */}
-        {proposedGoals > 0 && (
-          <p data-testid="home-goals-proposed" className="simple-small mt-2">
-            {proposedGoals === 1 ? "1 proposed goal is not shown here until it is confirmed." : `${proposedGoals} proposed goals are not shown here until they are confirmed.`}
-          </p>
+        {proposedGoals.length > 0 && (
+          <div data-testid="home-goals-proposed-list" className="simple-small mt-2">
+            <p data-testid="home-goals-proposed">
+              {proposedGoals.length === 1 ? "1 proposed goal is not shown here until it is confirmed." : `${proposedGoals.length} proposed goals are not shown here until they are confirmed.`}
+              {!can("confirm_entity") && " The goal's owner confirms it."}
+            </p>
+            {/* home-waiting-one-list: each proposed goal, with Confirm / Not this for who confirms goals. */}
+            <ul className="mt-1" aria-label="Proposed goals">
+              {proposedGoals.map((g) => (
+                <li key={g.id} data-testid="home-goal-proposed" className="flex flex-wrap items-center gap-2 border-t border-line py-2 first:border-t-0">
+                  <span className="min-w-0 flex-1 break-words">{g.title}</span>
+                  {can("confirm_entity") && (
+                    <span className="flex gap-2">
+                      <button type="button" className="simple-button simple-button-primary" onClick={() => void act(() => unwrap(api.POST("/v1/baseline/entities/{entity_id}/confirm", { params: { path: { entity_id: g.id } } })), `${g.title} confirmed`)}>
+                        Confirm
+                      </button>
+                      <button type="button" className="simple-button" onClick={() => void act(() => unwrap(api.POST("/v1/baseline/entities/{entity_id}/reject", { params: { path: { entity_id: g.id } } })), `${g.title} set aside`)}>
+                        Not this
+                      </button>
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </section>
 
-      {!reads && (tilesShown.length > 0 || myDrafts.length > 0) && (
+      {/* home-waiting-one-list: until every count is read the tiles say they are loading, never a 0 that is not true. */}
+      {!reads && !tilesReady && (
+        <section aria-label="Summary" aria-busy="true" data-testid="home-summary-loading" className="simple-card">
+          <ul role="status" aria-label="Loading what waits on you" className="grid grid-cols-3 gap-3 max-[600px]:gap-2">
+            {[0, 1, 2].map((i) => (
+              <li key={i} aria-hidden className="flex h-[76px] flex-col gap-2 rounded-xl bg-surface2 px-4 py-3 max-[600px]:h-[60px] max-[600px]:px-2.5 max-[600px]:py-2">
+                <span className="h-6 w-8 animate-pulse rounded bg-line" />
+                <span className="h-3 w-24 max-w-full animate-pulse rounded bg-line" />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {!reads && tilesReady && (tilesShown.length > 0 || myDrafts.length > 0) && (
         <section aria-label="Summary" data-testid="home-summary" className="simple-card">
           {tilesShown.length > 0 && (
           // qa4-simple-home-17: a lone tile keeps a third of the card; two or three share it as built.
@@ -746,6 +841,17 @@ export default function SimpleHome() {
               </li>
             ))}
           </ul>
+          )}
+          {/* home-waiting-one-list: the decisions tile counts the questions and calls I decide; the
+           * rail's Decisions count is everything in the one list. Said plainly when they differ. */}
+          {waiting.data && waiting.data.items.length !== decisionCount && allBesides(waiting.data.items) && (
+            <p data-testid="home-summary-all" className="simple-small mt-2">
+              In all, {waiting.data.items.length} {waiting.data.items.length === 1 ? "thing waits" : "things wait"} on you: the{" "}
+              <Link href="/simple/decisions" className="simple-link">
+                Decisions
+              </Link>{" "}
+              count also counts {allBesides(waiting.data.items)}.
+            </p>
           )}
           {myDrafts.map((draft) => (
             <p key={draft.id} data-testid="home-draft" className="flex flex-wrap items-center justify-between gap-3">
@@ -855,6 +961,24 @@ export default function SimpleHome() {
         </HomeCard>
       )}
 
+      {drafting && draftStalled && (
+        <p data-testid="home-drafting-slow" className="simple-card simple-small flex flex-wrap items-center gap-3" role="status">
+          <span className="flex-1">Oracle is still drafting the new item.</span>
+          <button type="button" className="simple-button" onClick={refreshDrafting}>
+            Refresh
+          </button>
+        </p>
+      )}
+      {!reads && alsoWaiting.length > 0 && (
+        <HomeCard id="also-waiting" icon="flag" title="Also waiting for you" count={alsoWaiting.length} all="/simple/decisions" allLabel="All that waits on you">
+          <ul data-testid="home-also-waiting-list">
+            {alsoWaiting.map((i) => (
+              <WaitingRow key={i.key} item={i} />
+            ))}
+          </ul>
+        </HomeCard>
+      )}
+
       {!reads && myTasks.length > 0 && (
         <HomeCard id="tasks" icon="check" title="Tasks waiting for you" count={myTasks.length} all="/simple/roadmap" allLabel="Open the roadmap">
           <ul className="space-y-2" data-testid="home-task-list">
@@ -903,13 +1027,23 @@ export default function SimpleHome() {
                     <span className="simple-date-tile tnum" aria-hidden>
                       <span>{formatInZone(next.due_at, zone, { month: "short" })}</span>
                       <strong>{formatInZone(next.due_at, zone, { day: "numeric" })}</strong>
+                      {/* home-waiting-one-list: a meeting in another year says its year on the tile too. */}
+                      {!sameYear(next.due_at) && <span className="text-[11px] leading-3">{formatInZone(next.due_at, zone, { year: "numeric" })}</span>}
                     </span>
                   }
                   title={next.ritual_title}
                   meta={
                     <>
                       <span className="tnum">
-                        {formatInZone(next.due_at, zone, { weekday: "short", hour: "numeric", minute: "2-digit", timeZoneName: "short" })} · {next.length_min} min
+                        {/* home-waiting-one-list: a meeting in another year says its day with the year ("Fri, Jan 8, 2027, 2:00 PM PST"). */}
+                        {formatInZone(next.due_at, zone, {
+                          weekday: "short",
+                          ...(sameYear(next.due_at) ? {} : { month: "short", day: "numeric", year: "numeric" }),
+                          hour: "numeric",
+                          minute: "2-digit",
+                          timeZoneName: "short",
+                        })}{" "}
+                        · {next.length_min} min
                       </span>
                       <br />
                       {next.attendees.length} {next.attendees.length === 1 ? "attendee" : "attendees"}
@@ -991,10 +1125,8 @@ export default function SimpleHome() {
                     : `${r.changes_in_review} changes are not approved yet. You see the published plan until they are.`}
                 </p>
               )}
-              {planPrd === undefined ? (
-                <SkeletonRows />
-              ) : plan && planPrd ? (
-                <PlanByMonth plan={plan} prd={planPrd} testId="home-strip" named />
+              {plan ? (
+                <PlanByMonth plan={plan} testId="home-strip" named />
               ) : (
                 <p className="simple-small" data-testid="home-plan-empty">
                   Nothing planned this quarter yet.
@@ -1266,12 +1398,6 @@ function SetupCard({ setup, owner, onHide }: { setup: Schemas["SetupOut"]; owner
       </ul>
     </HomeCard>
   );
-}
-
-/** The dates an item stores (typed or accepted), as the change engine compares them; null for the others. */
-function stored(i: Schemas["SimpleRoadmapItem"]) {
-  const own = (d: Schemas["SimpleDate"]) => (d.source === "typed" || d.source === "accepted" ? d.date : null);
-  return { start_date: own(i.start), end_date: own(i.end) };
 }
 
 /** build-rundecide RD3 a: the questions I own, one group per PRD, the PRD with the soonest due first; each soonest first. */

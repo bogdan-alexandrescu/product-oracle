@@ -38899,6 +38899,11 @@ export interface components {
              * @default []
              */
             tasks: components["schemas"]["SimpleTaskWaiting"][];
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["SimpleWaitingItem"][];
         };
         /** SimpleDelivery */
         SimpleDelivery: {
@@ -41634,6 +41639,37 @@ export interface components {
              * @default []
              */
             on: components["schemas"]["SimplePersonRef"][];
+        };
+        /**
+         * SimpleWaitingItem
+         * @description home-decisions-one-list: one thing waiting on the signed-in person
+         *     (oracle.simple.waiting_list): what it is, its action in words and where it is done.
+         */
+        SimpleWaitingItem: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "run_stop" | "question" | "decision" | "broken_link" | "date" | "draft" | "proposal" | "goal_suggestion" | "goal";
+            /** Key */
+            key: string;
+            /** Ref Id */
+            ref_id: string;
+            /** Title */
+            title: string;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+            /** Action */
+            action: string;
+            /** Href */
+            href: string;
+            /** At */
+            at?: string | null;
+            /** Op */
+            op?: string | null;
         };
         /** SimpleWindow */
         SimpleWindow: {

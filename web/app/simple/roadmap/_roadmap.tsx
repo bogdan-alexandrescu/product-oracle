@@ -18,6 +18,7 @@ import { formatDate } from "@/lib/format";
 import { goalNumbers } from "@/lib/goal-tree";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
+import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 import { QuickAdd } from "./_add";
 import { MsCard, MsKey, MsLayer, MsProvider, MsToast, useMilestones, type MsLane, type MsRow } from "./_milestones";
@@ -572,7 +573,7 @@ function DecisionTray({
       </div>
       {/* #37: what the button's count is, on screen: this view's own, not the side menu's badges. */}
       <p className="mt-1 text-sm text-text2" data-testid="tray-scope">
-        {counts.total} on this roadmap view. The side menu&apos;s Decisions and Roadmap counts cover other things, so they can differ.
+        {counts.total} on this roadmap view. The side menu&apos;s Roadmap count counts the same across the whole roadmap; its Decisions count holds all that waits on you.
       </p>
       <ul className="mt-3 grid grid-cols-2 gap-2 min-[420px]:grid-cols-4" data-testid="tray-counters">
         {counters.map(([label, n]) => (
@@ -788,8 +789,13 @@ export function SimpleRoadmap() {
   const startOptions = useQuery("simple-meeting-options||", () =>
     unwrap(api.GET("/v1/simple/meetings/options", { params: { query: { prd: undefined, occurrence: undefined } } })),
   );
+  // home-waiting-one-list: every action reloads through here, and each may change what waits
+  // on me (a date, a proposal, a broken link, a draft), so the rail and Home read again too.
   const reload = useCallback(async () => {
-    await Promise.all([roadmap.reload(), proposals.reload(), drafts.reload()]);
+    invalidateWaiting();
+    const done = Promise.all([roadmap.reload(), proposals.reload(), drafts.reload()]);
+    waitingChanged();
+    await done;
   }, [roadmap, proposals, drafts]);
   // roadmap-talk: a chat card applied, proposed, rejected or undone (the item's talk, the Ask panel) reads the roadmap again.
   useEffect(() => {
@@ -1020,6 +1026,20 @@ export function SimpleRoadmap() {
     return { left: Math.max(0, Math.min(r.left - box.left, box.width - 390)), top: r.bottom - box.top + 6, above: r.top - box.top - 6 };
   };
 
+  // home-waiting-one-list: a "waiting for you" row links ?item=<id> (Fix the link, Confirm the
+  // dates, Accept): the item's panel opens once, on what waits there, its actions in view.
+  const linkedItem = params.get("item");
+  const [opened, setOpened] = useState<string | null>(null);
+  useEffect(() => {
+    if (!linkedItem || opened === linkedItem || !byId.has(linkedItem)) return;
+    // Once the roadmap that holds it is read (the link is the outside system here).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOpened(linkedItem);
+    setPop(null);
+    setCard({ id: linkedItem, ...anchorOf(linkedItem) });
+    // anchorOf reads the drawn bars: once the item is known, not on every render.
+  }, [linkedItem, opened, byId]);
+
   const onDecide = useCallback(
     async (c: Change, how: "accept" | "decline") => {
       try {
@@ -1184,13 +1204,12 @@ export function SimpleRoadmap() {
     <div className={`flex flex-wrap items-center gap-2 ${phone ? "" : "ml-auto justify-end"}`} data-testid="roadmap-actions">
       {phone && canChange && addable.length > 0 && <QuickAdd phone options={addOptions} verb={addVerb} onAdd={onAdd} target={target?.title ?? null} roadmaps={askRoadmap ? addable.map((r) => r.roadmap) : []} />}
       {decides && !blank && (
-        // #37: this counts broken links, suggestions and proposals on THIS roadmap view,
-        // not the same things the side menu's Decisions (product decisions waiting on you,
-        // everywhere) or Roadmap (proposals and drafts in your inbox) badges count; the
-        // label and title say so rather than let the three numbers look like one metric.
+        // #37: this counts items with broken links, dates to confirm and proposals on THIS
+        // roadmap view; the side menu's Roadmap count counts the same for the whole roadmap
+        // (home-waiting-one-list), its Decisions count all that waits on you.
         <Button
           data-testid="needs-decision"
-          title="Broken dates, date suggestions and proposals on this roadmap view (not the same count as Decisions or Roadmap in the side menu)"
+          title="Items with broken links, dates to confirm and proposals on this roadmap view (the side menu's Roadmap count, for the whole roadmap)"
           onClick={() => setTray(true)}
           data-zero={waiting ? undefined : "true"}
           // fix4 qa-simple-roadmap-38: at 0 the button is muted (nothing waits), still opens the tray.
@@ -1528,6 +1547,8 @@ export function SimpleRoadmap() {
                 onDecide={(c, how) => void onDecide(c, how)}
                 onClose={onClose}
                 near={nearWords(it, data.key_dates ?? [])}
+                onSuggestion={(how, d) => void onSuggestion(it, how, d)}
+                focus={it.id === linkedItem}
               />
             )}
           />
@@ -1617,6 +1638,8 @@ export function SimpleRoadmap() {
             onDecide={(c, how) => void onDecide(c, how)}
             onClose={() => setCard(null)}
             near={nearWords(cardItem, data.key_dates ?? [])}
+            onSuggestion={(how, d) => void onSuggestion(cardItem, how, d)}
+            focus={cardItem.id === linkedItem}
             onHorizon={format === "board" && canChange && !closedItem(cardItem) ? (h) => onHorizon(cardItem, h) : undefined}
           />
         )}

@@ -12,6 +12,7 @@ import { FeaturePanel } from "@/components/simple/FeaturePanel";
 import { askThread, itemTalkPage, type ChatCard } from "@/lib/api/simple-chat";
 import { DecidedWho } from "@/components/simple/DecidedWho";
 import { formatDay } from "@/lib/format";
+import { useMe } from "@/lib/me";
 import { useScreenSubject } from "@/lib/screen-subject";
 
 import { HORIZONS, type Horizon } from "./_board";
@@ -270,52 +271,33 @@ export function Callout({
   );
 }
 
-/** Oracle's date suggestion: Accept · Edit dates · Dismiss (through the change engine). */
-export function SuggestionPopover({
+/** Oracle's dates and their actions (Accept · Edit dates · Dismiss): the popover's body, and
+ * the item panel's own section (home-waiting-one-list: a "Confirm the dates" link opens it). */
+export function SuggestionBody({
   item,
   canAct,
   onAccept,
   onEdit,
   onDismiss,
-  onClose,
-  style,
-  above,
+  onEditing,
 }: {
   item: Item;
   canAct: boolean;
   onAccept: () => void;
   onEdit: (start: string, end: string) => void;
   onDismiss: () => void;
-  onClose: () => void;
-  style: React.CSSProperties;
-  /** qa-simple-roadmap-29: the bar's top in the chart (px): with no room below the bar
-   * inside the chart, the popover opens above it, clear of the chart's foot and legend. */
-  above?: number;
+  onEditing?: (editing: boolean) => void;
 }) {
   const s = item.suggestion!;
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditingState] = useState(false);
+  const setEditing = (v: boolean) => {
+    setEditingState(v);
+    onEditing?.(v);
+  };
   const [start, setStart] = useState(s.start_date);
   const [end, setEnd] = useState(s.end_date);
-  const box = useRef<HTMLDivElement>(null);
-  const [flip, setFlip] = useState<number | null>(null);
-  useLayoutEffect(() => {
-    const el = box.current;
-    const parent = el?.offsetParent as HTMLElement | null;
-    if (!el || !parent || above == null) return setFlip(null);
-    const top = Number(style.top ?? 0);
-    const h = el.offsetHeight;
-    setFlip(top + h > parent.clientHeight && above - h >= 0 ? above - h : null);
-  }, [above, style.top, editing]);
   return (
-    <div
-      ref={box}
-      role="dialog"
-      aria-label="Oracle's date suggestion"
-      data-testid="suggestion-popover"
-      data-side={flip != null ? "above" : "below"}
-      style={flip != null ? { ...style, top: flip } : style}
-      className="absolute z-30 w-[340px] max-w-[92vw] rounded-xl border border-line bg-surface p-3 shadow-tip"
-    >
+    <>
       <p className="text-sm font-semibold">
         Oracle suggests {yearSpan(s.start_date, s.end_date)}
       </p>
@@ -366,6 +348,54 @@ export function SuggestionPopover({
           </div>
         )
       )}
+    </>
+  );
+}
+
+/** Oracle's date suggestion: Accept · Edit dates · Dismiss (through the change engine). */
+export function SuggestionPopover({
+  item,
+  canAct,
+  onAccept,
+  onEdit,
+  onDismiss,
+  onClose,
+  style,
+  above,
+}: {
+  item: Item;
+  canAct: boolean;
+  onAccept: () => void;
+  onEdit: (start: string, end: string) => void;
+  onDismiss: () => void;
+  onClose: () => void;
+  style: React.CSSProperties;
+  /** qa-simple-roadmap-29: the bar's top in the chart (px): with no room below the bar
+   * inside the chart, the popover opens above it, clear of the chart's foot and legend. */
+  above?: number;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const [flip, setFlip] = useState<number | null>(null);
+  const [editing, setEditing] = useState(false);
+  useLayoutEffect(() => {
+    const el = box.current;
+    const parent = el?.offsetParent as HTMLElement | null;
+    if (!el || !parent || above == null) return setFlip(null);
+    const top = Number(style.top ?? 0);
+    const h = el.offsetHeight;
+    setFlip(top + h > parent.clientHeight && above - h >= 0 ? above - h : null);
+  }, [above, style.top, editing]);
+  return (
+    <div
+      ref={box}
+      role="dialog"
+      aria-label="Oracle's date suggestion"
+      data-testid="suggestion-popover"
+      data-side={flip != null ? "above" : "below"}
+      style={flip != null ? { ...style, top: flip } : style}
+      className="absolute z-30 w-[340px] max-w-[92vw] rounded-xl border border-line bg-surface p-3 shadow-tip"
+    >
+      <SuggestionBody item={item} canAct={canAct} onAccept={onAccept} onEdit={onEdit} onDismiss={onDismiss} onEditing={setEditing} />
       <button
         type="button"
         aria-label="Close"
@@ -597,9 +627,16 @@ export function FloatingCard({
   onClose,
   onHorizon,
   near,
+  onSuggestion,
+  focus,
 }: {
   /** Roadmap-plus: the key dates the item ends within 2 weeks of, in words (none: no line). */
   near?: string | null;
+  /** home-waiting-one-list: Oracle's open dates for the item, acted on in the panel. */
+  onSuggestion?: (how: "accept" | "edit" | "dismiss", dates?: { start_date: string; end_date: string }) => void;
+  /** home-waiting-one-list: opened from a "waiting for you" row: what waits (a broken link's
+   * fixes, Oracle's dates, a proposal) is scrolled into view. */
+  focus?: boolean;
   item: Item;
   items: Map<string, Item>;
   proposals: Change[];
@@ -612,6 +649,8 @@ export function FloatingCard({
   /** The board's horizon control (a phone cannot always drag a card to a column off the screen). */
   onHorizon?: (h: Horizon) => void;
 }) {
+  // home-waiting-one-list: Oracle's dates are acted on by the one gate the Roadmap's popover uses.
+  const { can } = useMe();
   // The widened card's visual: a draft's own flow ("item", S7) or a proposal's visual (S10).
   const [wide, setWide] = useState<FlowSubject | "item" | null>(null);
   // roadmap-talk: the item's talk with Oracle, open beside the details (a phone: its tab).
@@ -624,6 +663,11 @@ export function FloatingCard({
   };
   // fix4 qa-simple-roadmap-3: the card, its talk and the chat name the item by its title, no code.
   const about = item.title;
+  // The card opened from a waiting row (?item=): scroll its fix into view.
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (focus) ref.current?.querySelector("[data-waits]")?.scrollIntoView({ block: "center" });
+  }, [focus]);
   // fix4 qa-simple-roadmap-16: the changes waiting in the item's talk (cards not yet applied,
   // proposed or discarded) are proposals on it too: one source, the talk's own thread, read
   // when the card opens and kept as the talk changes.
@@ -812,8 +856,19 @@ export function FloatingCard({
           )}
         </dl>
         <div>
+          {item.suggestion?.status === "open" && onSuggestion && (
+            <section className="mt-3 rounded-lg border border-line p-2" data-testid="card-suggestion" data-waits>
+              <SuggestionBody
+                item={item}
+                canAct={can("accept_date_suggestion")}
+                onAccept={() => onSuggestion("accept")}
+                onEdit={(start_date, end_date) => onSuggestion("edit", { start_date, end_date })}
+                onDismiss={() => onSuggestion("dismiss")}
+              />
+            </section>
+          )}
           {others.length > 0 && (
-            <section className="mt-3 space-y-1" data-testid="card-flags">
+            <section className="mt-3 space-y-1" data-testid="card-flags" data-waits>
               {others.map((f) => (
                 <div key={`${f.kind}-${f.subject}`}>
                   <FlagLine flag={f} />
@@ -917,7 +972,7 @@ export function FloatingCard({
               </ul>
             )}
             {proposals.length ? (
-              <ul className="mt-1 space-y-2" data-testid="card-proposals">
+              <ul className="mt-1 space-y-2" data-testid="card-proposals" data-waits>
                 {proposals.map((c) => (
                   <li key={c.id} className="flex items-center gap-2">
                     {featureProposal(c, items) && (
@@ -1023,7 +1078,7 @@ export function FloatingCard({
       onClose={onClose}
       talk={talkPanel}
       testId="floating-card"
-      more={<section className="py-3" data-testid="fp-more" data-wide={wide ? "true" : "false"} data-flow-open={flowOpen ? "true" : "false"}>{details}</section>}
+      more={<section ref={ref} className="py-3" data-testid="fp-more" data-wide={wide ? "true" : "false"} data-flow-open={flowOpen ? "true" : "false"}>{details}</section>}
     />
   );
 }
