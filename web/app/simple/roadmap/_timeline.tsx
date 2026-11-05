@@ -339,6 +339,8 @@ export interface ChartProps {
   onOffscreen?: (code: string | null) => void;
   /** roadmap-milestones D: items pulled into another horizon by a change still waiting for its decider ("pending", amber). */
   pulled?: ReadonlySet<string>;
+  /** B-26: the label column's heading when the rows are grouped another way (the Plan's "Horizon"); unset: the lane's word. */
+  laneWord?: string;
 }
 
 /** An item the plan dates by its slices: drawn one bar per slice, its dates the plan's (not dragged). */
@@ -385,7 +387,7 @@ declare global {
   }
 }
 
-export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef, dropTargets, lane = data.group, noWork = [], onOffscreen, pulled }: ChartProps) {
+export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef, dropTargets, lane = data.group, noWork = [], onOffscreen, pulled, laneWord }: ChartProps) {
   const box = useRef<HTMLDivElement>(null);
   // build-goal-order-control: a goal lane's header leads with the goal's number.
   const numbers = useContext(GoalNumbers);
@@ -660,7 +662,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
       <div className="min-w-0 flex-none border-r border-line" style={{ width: l.labelW }} data-testid="chart-labels">
         {/* fix4 qa-simple-roadmap-34: the grouping as the Group by names it ("PRD", "Goal"), not in capitals. */}
         <div style={{ height: l.top }} className="flex items-end px-3 pb-1.5 text-xs font-semibold text-text2">
-          {LANE_WORDS[lane]}
+          {laneWord ?? LANE_WORDS[lane]}
         </div>
         {l.rows.map((r, n) =>
           r.kind === "group" ? (

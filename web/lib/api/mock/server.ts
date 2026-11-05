@@ -1462,6 +1462,30 @@ function seedPlanSameKeyScenario(): Db {
 }
 
 /**
+ * B-26 "plan-timeline": the default company whose Simple roadmap also dates the Plan's Usage
+ * alerts items (the same keys on the same roadmap), with a milestone and dependencies; Budgets
+ * per team has no item there, so the Plan's Timeline lists it as not on the timeline.
+ */
+export const PLAN_TIMELINE_SCENARIO = "plan-timeline";
+function seedPlanTimelineScenario(): Db {
+  const db = seed();
+  const rm = seedSimpleRoadmap();
+  const add = [
+    { key: "threshold-alerts", title: "Threshold alerts on spend", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 35, source: "typed", milestone: { name: "Alpha", day: 35 } },
+    { key: "alert-rules-api", title: "Alert rules API", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 20, source: "typed" },
+    { key: "slack-alerts", title: "Alerts in the team chat", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 40, end: 75, source: "typed", depends: ["threshold-alerts"] },
+    { key: "usage-dashboard", title: "Usage dashboard", horizon: "now", roadmap: "alerts-roadmap", goal: "faster-activation", track: "alerts", confidence: "medium", start: 20, end: 60, source: "typed", depends: ["alert-rules-api"] },
+    { key: "spend-forecast", title: "Spend forecast for the month", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", confidence: "low" },
+  ] as const;
+  for (const it of add) {
+    rm.items.push({ ...it, depends: "depends" in it ? [...it.depends] : undefined, milestone: "milestone" in it ? { ...it.milestone } : undefined });
+    rm.ids[it.key] = stableUuid(`simple-item/${it.key}`);
+  }
+  db.simple_roadmap = rm;
+  return db;
+}
+
+/**
  * one-roadmap-many-prds ("one-roadmap", ./one-roadmap.ts): the default company plus the area PRDs
  * User Safety and Scale feeding the one Product roadmap, and the older PRD Trust plan replaced by
  * both (read-only), whose own roadmap stays as history.
@@ -3520,6 +3544,8 @@ function load(): Db {
                 ? seedMeetingAgendaOwnerScenario
               : scenario === PLAN_SAME_KEY_SCENARIO
                 ? seedPlanSameKeyScenario
+              : scenario === PLAN_TIMELINE_SCENARIO
+                ? seedPlanTimelineScenario
               : scenario === REPORT_DRAFT_ITEM_SCENARIO
                 ? seedReportDraftItemScenario
               : scenario === "simple-home"

@@ -60,9 +60,10 @@ export function StateChip({ item, hero = false, split = false }: { item: PlanIte
 /** On a phone an empty cell ("—") is dropped rather than left alone on a line (qa-plan-54). */
 const EMPTY_ON_PHONE = "max-[600px]:has-[[data-empty]]:hidden";
 
-function NextCell({ item, me, onLink }: { item: PlanItem; me: string | null | undefined; onLink?: (i: PlanItem) => void }) {
+function NextCell({ item, me, onLink, repeat = false }: { item: PlanItem; me: string | null | undefined; onLink?: (i: PlanItem) => void; repeat?: boolean }) {
   const n = item.next;
-  if (!n.action)
+  // B-26: a PRD's review shows once in its group, on its first row; the PRD column names it on the rest.
+  if (!n.action || repeat)
     return (
       <span data-testid="plan-next" data-empty className="text-text2">
         —
@@ -146,6 +147,19 @@ export function grouped(items: PlanItem[], by: GroupBy, tags: Map<string, GoalVi
   return { rows, group, counts };
 }
 
+/** B-26: the rows whose PRD review an earlier row of their group already shows (one PRD, one "Review the PRD"). */
+export function repeatedReviews(rows: PlanItem[], group: (i: PlanItem) => string): Set<string> {
+  const seen = new Set<string>();
+  const repeats = new Set<string>();
+  for (const r of rows) {
+    if (r.next.action !== "review_prd") continue;
+    const k = `${group(r)}|${r.prd?.id ?? ""}|${r.next.href ?? ""}`;
+    if (seen.has(k)) repeats.add(r.id);
+    else seen.add(k);
+  }
+  return repeats;
+}
+
 export function PlanTable({
   items,
   by,
@@ -169,6 +183,7 @@ export function PlanTable({
   onLink?: (i: PlanItem) => void;
 }) {
   const { rows, group, counts } = grouped(items ?? [], by, tags, prdOrder);
+  const repeats = repeatedReviews(rows, group);
   const columns: Column<PlanItem>[] = [
     {
       key: "item",
@@ -253,7 +268,7 @@ export function PlanTable({
       className: EMPTY_ON_PHONE,
       cell: (i) => <EngineeringCell item={i} />,
     },
-    { key: "next", header: "Next", width: "144px", wrap: true, className: EMPTY_ON_PHONE, cell: (i) => <NextCell item={i} me={me} onLink={onLink} /> },
+    { key: "next", header: "Next", width: "144px", wrap: true, className: EMPTY_ON_PHONE, cell: (i) => <NextCell item={i} me={me} onLink={onLink} repeat={repeats.has(i.id)} /> },
   ];
   return (
     <DataTable<PlanItem>

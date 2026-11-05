@@ -9,7 +9,7 @@ import { Chip, InfoTip, Notice, PageHeader, Panel, SegmentedControl, Sheet, Spli
 import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
-import { usePlanScope, type PlanScope } from "@/lib/preferences";
+import { usePlanScope, usePlanView, type PlanScope, type PlanView } from "@/lib/preferences";
 import { useQuery } from "@/lib/use-query";
 
 import { GoalsPanel } from "../home/_goals-panel";
@@ -20,6 +20,7 @@ import { wantedRow, type PlanItem } from "./_lib";
 import { MissingItem } from "./_missing-item";
 import { PrdCards } from "./_prd-cards";
 import { grouped, PlanTable, type GroupBy } from "./_table";
+import { PlanTimeline } from "./_timeline";
 import { MilestoneEditor, TrackPanel, useTracks, type MilestonePick } from "./_tracks";
 
 /** The goals band; with no confirmed goal, one line and the way to the Baseline. */
@@ -95,6 +96,8 @@ export default function PlanPage() {
   );
   const canEditMilestone = can("update_milestone");
   const [scope, setScope, ready] = usePlanScope(userId ?? (me ? "token" : null));
+  // B-26: the roadmap as a table or a timeline, remembered per viewer.
+  const [view, setView] = usePlanView(userId ?? (me ? "token" : null));
   const q = useQuery(
     `plan|${ready ? scope : "wait"}`,
     () => (ready ? unwrap(api.GET("/v1/plan", { params: { query: { scope } } })) : new Promise<never>(() => {})),
@@ -287,6 +290,16 @@ export default function PlanPage() {
                         { value: "approved", label: "Approved only" },
                       ]}
                     />
+                    <SegmentedControl<PlanView>
+                      label="Roadmap view"
+                      size="sm"
+                      value={view}
+                      onChange={setView}
+                      items={[
+                        { value: "table", label: "Table" },
+                        { value: "timeline", label: "Timeline" },
+                      ]}
+                    />
                   </span>
                   <SegmentedControl<GroupBy>
                     label="Group by"
@@ -306,6 +319,16 @@ export default function PlanPage() {
                 </>
               }
             >
+              {view === "timeline" && data && data.items.length > 0 ? (
+                <PlanTimeline
+                  items={data.items}
+                  by={by}
+                  tags={tags}
+                  prdOrder={prdOrder}
+                  selected={msTrack ? null : (item?.id ?? null)}
+                  onSelect={onSelect}
+                />
+              ) : (
               <PlanTable
                 items={data?.items}
                 by={by}
@@ -318,6 +341,7 @@ export default function PlanPage() {
                 loading={q.loading}
                 onLink={canLink ? onLink : undefined}
               />
+              )}
               {data && data.items.length === 0 && <BuildRoadmaps />}
             </Panel>
           </Split>
