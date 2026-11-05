@@ -324,7 +324,7 @@ export function GoalDelete({ title, features, measure, onClose }: { title: strin
   });
   if (mkParam("pm2", "b") === "d") return null;
   const rows: [string, ReactNode][] = [
-    ["Features", features.length ? <>{andList(features)} <span className="text-text2">stay, under No goal</span></> : <span className="text-text2">None</span>],
+    ["Features", features.length ? <>{features.length > 5 ? `${features.slice(0, 4).join(", ")} and ${features.length - 4} more` : andList(features)} <span className="text-text2">stay, under No goal</span></> : <span className="text-text2">None</span>],
     ["Measured by", measure],
   ];
   return <DeleteConfirm kind="goal" title={title} rows={rows} counts={`${plural(features.length, "feature")} ${features.length === 1 ? "loses" : "lose"} this goal and stay on the roadmap.`} dependents={features} decides={decides} decider="the company's owners" onClose={onClose} onDelete={done} />;
