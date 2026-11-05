@@ -192,13 +192,23 @@ test("qa-simple-home-25 and -36: a viewer with no name is greeted plainly, with 
   await expect(lead).toHaveText(/^Good (morning|afternoon|evening)\. Here is where the plan stands\.$/);
   await expect(page.getByTestId("home-walk-slot")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Walk me through it" })).toHaveCount(0);
+  await expect(page.getByTestId("home-goal").first()).toBeVisible();
   const leadBox = (await lead.boundingBox())!;
   const goals = (await page.getByTestId("home-goals").boundingBox())!;
-  expect(goals.y - (leadBox.y + leadBox.height)).toBeLessThan(40);
+  // Rebuild-sign pick A: the rebuild card, when runs are being rebuilt, sits right under the
+  // greeting and the goal band right under it; with none, the band sits right under the greeting.
+  const rebuild = page.getByTestId("rb-home");
+  let above = leadBox.y + leadBox.height;
+  if (await rebuild.count()) {
+    const card = (await rebuild.boundingBox())!;
+    expect(card.y - above).toBeLessThan(40);
+    above = card.y + card.height;
+  }
+  expect(goals.y - above).toBeLessThan(40);
 });
 
 test("qa-simple-home-26: Decided lately is newest first and each row opens its decision; milestone rows open their item", async ({ page }) => {
-  // fails_when: the rows are in no date order, or a row is plain text
+  // fails_when: the rows are in no date order, a row is plain text, or a milestone row opens nothing
   await signIn(page, EMAILS.viewer);
   const rows = page.getByTestId("home-decided").getByTestId("home-decided-row");
   await expect(rows.first()).toBeVisible();
@@ -211,7 +221,15 @@ test("qa-simple-home-26: Decided lately is newest first and each row opens its d
   expect(stamps.every((t) => !Number.isNaN(t))).toBe(true);
   expect([...stamps].sort((a, b) => b - a)).toEqual(stamps);
   const milestone = page.getByTestId("home-next-milestone").getByTestId("home-milestone-row");
-  await expect(milestone.first().getByRole("link")).toHaveAttribute("href", /^\/simple\/roadmap\?(prd|roadmap)=/);
+  // build-feature-panel (PR 1204): a milestone row's name opens the one feature panel, in place.
+  const feature = milestone.first().getByRole("button");
+  const title = (await feature.innerText()).trim();
+  await feature.click();
+  const panel = page.getByRole("dialog", { name: title });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByTestId("fp-details")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
   await links.first().click();
   await expect(page).toHaveURL(/\/simple\/decisions#d-\d+$/);
 });
