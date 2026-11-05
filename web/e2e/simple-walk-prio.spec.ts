@@ -201,6 +201,40 @@ for (const [where, size] of [
           expect(Math.abs((await under()) - filledFoot - firstCard)).toBeLessThanOrEqual(1);
           await page.evaluate(([slow, ms]) => [slow, ms].forEach((k) => localStorage.removeItem(k)), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
         });
+
+        /**
+         * Card walk-prio-home-slow-rebuilds: protects = Home's wait on the runs being rebuilt is
+         * capped (ANSWER_LIMIT_MS, 1.2 s): with that read slowed far past it, the goal band and
+         * the cards' placeholders show under the greeting within the limit, for an owner and a
+         * viewer alike, and Home fills in; fails_when = Home shows only its greeting until the
+         * slow read answers (or forever, if it hangs); no_claim = where a late rebuild card lands
+         * (the first-paint test above: with a quick read it lands with the band).
+         */
+        test(`Home's band shows within the limit while the rebuild read is slow (${role})`, async ({ page, context }) => {
+          await login(page, email);
+          await page.goto("/home");
+          await context.addInitScript(
+            ([slow, ms]) => {
+              if (!sessionStorage.getItem("walk-prio-slow-rb")) {
+                localStorage.setItem(slow, "/v1/rebuilds");
+                localStorage.setItem(ms, "8000");
+                sessionStorage.setItem("walk-prio-slow-rb", "1");
+              }
+            },
+            [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY],
+          );
+          const opened = Date.now();
+          await page.goto("/simple");
+          await expect(page.getByTestId("home-greeting")).toBeVisible();
+          // ANSWER_LIMIT_MS (1.2 s) and a little room for the first paint: far short of the read's 8 s.
+          await expect(page.getByTestId("home-goals")).toBeVisible({ timeout: 2500 });
+          expect(Date.now() - opened).toBeLessThan(4000);
+          // Home fills in while the read is still out: the greeting's sentence and the goals.
+          await expect(page.getByTestId("home-sentence")).toBeVisible({ timeout: 4000 });
+          await expect(page.getByTestId("home-goal").first()).toBeVisible();
+          expect(Date.now() - opened).toBeLessThan(7000);
+          await page.evaluate(([slow, ms]) => [slow, ms].forEach((k) => localStorage.removeItem(k)), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
+        });
       }
     });
   }
@@ -208,28 +242,34 @@ for (const [where, size] of [
 
 /**
  * Card walk-prio-home-off: protects = with Simple off, opening Simple's Home starts none of its
- * queries before Detailed's Home opens instead (#725: nothing of Simple while it is off);
- * fails_when = Home's queries (its working drafts among them) run while Simple is off;
+ * queries before Detailed's Home opens instead (#725: nothing of Simple while it is off), its
+ * read of the runs being rebuilt among them (the layout's skeleton only waits, it reads nothing);
+ * fails_when = Home's queries (its working drafts, the rebuild list) run while Simple is off;
  * no_claim = Detailed's Home, the switch (simple-mode spec).
  */
-test("with Simple off, Simple's Home starts none of its queries before Detailed opens", async ({ page }) => {
-  await login(page);
-  await page.goto("/home");
-  await page.evaluate(
-    ([mode, once]) => {
-      localStorage.setItem(mode, "off");
-      // Home's working drafts are read on Simple's Home alone: a call would use this up.
-      localStorage.setItem(once, "GET /v1/simple/drafts");
-    },
-    [MOCK_SIMPLE_MODE_KEY, MOCK_FAIL_ONCE_KEY],
-  );
-  await page.goto("/simple");
-  await expect(page).toHaveURL(/localhost:\d+\/home$/);
-  await expect(page.locator('[data-mode="detailed"]')).toHaveCount(1);
-  await expect(page.getByRole("heading", { level: 1, name: "Home", exact: true })).toBeVisible();
-  expect(await page.evaluate((once) => localStorage.getItem(once), MOCK_FAIL_ONCE_KEY)).toBe("GET /v1/simple/drafts");
-  await page.evaluate(([mode, once]) => [mode, once].forEach((k) => localStorage.removeItem(k)), [MOCK_SIMPLE_MODE_KEY, MOCK_FAIL_ONCE_KEY]);
-});
+for (const [query, call] of [
+  ["its working drafts", "GET /v1/simple/drafts"],
+  ["the rebuild list", "GET /v1/rebuilds"],
+] as const) {
+  test(`with Simple off, Simple's Home starts none of its queries before Detailed opens (${query})`, async ({ page }) => {
+    await login(page);
+    await page.goto("/home");
+    await page.evaluate(
+      ([mode, once, call]) => {
+        localStorage.setItem(mode, "off");
+        // Read on Simple's Home alone: a call would use this up.
+        localStorage.setItem(once, call);
+      },
+      [MOCK_SIMPLE_MODE_KEY, MOCK_FAIL_ONCE_KEY, call],
+    );
+    await page.goto("/simple");
+    await expect(page).toHaveURL(/localhost:\d+\/home$/);
+    await expect(page.locator('[data-mode="detailed"]')).toHaveCount(1);
+    await expect(page.getByRole("heading", { level: 1, name: "Home", exact: true })).toBeVisible();
+    expect(await page.evaluate((once) => localStorage.getItem(once), MOCK_FAIL_ONCE_KEY)).toBe(call);
+    await page.evaluate(([mode, once]) => [mode, once].forEach((k) => localStorage.removeItem(k)), [MOCK_SIMPLE_MODE_KEY, MOCK_FAIL_ONCE_KEY]);
+  });
+}
 
 /**
  * Card walk-prio-side-caption: protects = Value/effort's 320 px side list names at most three

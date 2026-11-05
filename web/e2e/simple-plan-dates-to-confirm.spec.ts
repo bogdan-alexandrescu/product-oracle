@@ -90,6 +90,9 @@ for (const [where, use] of [
         const [from, to] = shown.split(" – ");
         await expect(panel.getByTestId("fp-start")).toContainText(from);
         await expect(panel.getByTestId("fp-delivery")).toContainText(to);
+        // The panel says where the dates came from: Oracle's capacity plan, for its start and delivery.
+        await expect(panel.getByTestId("fp-start-note")).toHaveText("From the capacity plan");
+        await expect(panel.getByText("From the capacity plan", { exact: true })).toHaveCount(2);
 
         if (where === "phone") expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
       });
