@@ -52,7 +52,7 @@ test("with Approved only, a line names the draft item and Show drafts opens it",
   // The other roadmap's row with the same key is on the Plan, but nothing stands in for the item.
   await expect(page.locator('[data-testid="plan-row"][data-item="threshold-alerts"]').filter({ visible: true })).toHaveCount(1);
   await expect(picked(page)).toHaveCount(0);
-  await expect(inspector(page)).not.toContainText(OTHER);
+  await expect(page.getByTestId("plan-inspector").filter({ hasText: OTHER })).toHaveCount(0);
   await line.getByRole("button", { name: "Show drafts" }).click();
   await expect(page.getByRole("group", { name: "Plan scope" }).getByRole("button", { name: "Approved + drafts" })).toHaveAttribute(
     "aria-pressed",
