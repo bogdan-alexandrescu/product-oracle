@@ -161,7 +161,10 @@ async def test_a_dependency_on_a_key_no_roadmap_knows_is_still_refused():
     ]
 
 
-async def test_a_dependency_waived_at_the_feature_set_stop_passes_the_engineering_check():
+# The waiver names the problem by its code, or by its own ref (gate.problem_ref: train AN's
+# merge of main, review major 5).
+@pytest.mark.parametrize("answer", ["depends_on_excluded", "depends_on_excluded~3f9a1c2e"])
+async def test_a_dependency_waived_at_the_feature_set_stop_passes_the_engineering_check(answer):
     # protects=a dependency waived at this run's feature set stop is accepted; fails_when=
     # a waived dependency still refuses the briefs.
     w = await world(roadmap=False)
@@ -179,7 +182,7 @@ async def test_a_dependency_waived_at_the_feature_set_stop_passes_the_engineerin
         cp = await _add(s, Checkpoint(run_id=w["run"], kind="feature_set", status="approved"))
         scope.checkpoint_id = cp.id
         s.add(CheckpointAction(checkpoint_id=cp.id, item_key="observability", kind="waive",
-                               answers=["depends_on_excluded"], state="staged"))  # fmt: skip
+                               answers=[answer], state="staged"))  # fmt: skip
         await s.commit()
     summary = await _summary(w, "export-logs")
     assert summary["problems"] == []

@@ -856,3 +856,41 @@ async def test_a_run_items_goal_comes_from_the_feature_its_prd_section_links(cli
     # Its section links a feature that serves a company goal: it goes first in Beta.
     assert [r["key"] for r in queued] == ["safety-reports", "report-button", "read-replicas"]
     assert await _landed(ctx, ids, SECTION_ITEMS) == _planned(queued)
+
+
+DEPENDENT_ITEMS = """\
+version: 1
+prd: {{document: user-safety, version: 1}}
+items:
+  - id: report-button
+    title: Report button for every post
+    outcome: People report harm in one tap
+    horizon: now
+    depends_on: [{dep}]
+"""
+
+
+@pytest.mark.parametrize("dep", ["read-replicas", "replica-fleet"])
+async def test_a_run_item_depending_on_another_prds_is_never_dated_before_it(client, dep):
+    # protects=in a run's prompt and its plan tables (with_run_items), an item depending on
+    # another PRD's item, by item key or by its feature's key, is queued after it, as the
+    # company queue puts it (train AN's merge of main, review major 6); fails_when=the
+    # run's queue re-sorts by place only and dates the item first.
+    from oracle.roadmap import company
+
+    ctx, ids = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        fleet = await _add(s, Entity(type="feature", key="replica-fleet", title="Replica fleet",
+                                     status="confirmed", origin="user"))  # fmt: skip
+        replicas = await s.scalar(select(RoadmapItem).where(
+            RoadmapItem.roadmap_version_id == ids["v1"],
+            RoadmapItem.item_key == "read-replicas"))  # fmt: skip
+        replicas.feature_id = fleet.id
+        await s.commit()
+        frozen = await company.frozen_queue(s, ids["safety"])
+    plan = {k: v for k, v in frozen.items() if k != "rows"}
+    items = check_items(DEPENDENT_ITEMS.format(dep=dep)).items
+    queued = company.with_run_items(frozen["rows"], items, **plan)
+    assert [r["key"] for r in queued] == ["read-replicas", "report-button"]
+    by = {r["key"]: r for r in queued}
+    assert by["report-button"]["start"] >= by["read-replicas"]["end"]
