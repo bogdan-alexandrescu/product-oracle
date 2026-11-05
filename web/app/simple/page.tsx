@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { copyOf, setupOpen } from "@/app/home/_setup";
 import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRows, Top } from "@/app/simple/_home/cards";
@@ -87,6 +87,30 @@ const withoutCodes = (text: string) => text.replace(/\b[A-Z]{1,3}-\d{1,4}\s+/g, 
  * The sentence under a broken link's item, without the item's name the heading already says
  * (qa-simple-home-11; qa4-simple-home-28: quoted straight or curly, or not quoted at all).
  */
+/** The problem in words, the other feature it names a button that opens the one feature panel (build-feature-panel review 5). */
+function ProblemWords({ words, other }: { words: string; other?: { id: string; title: string } }) {
+  const at = other ? words.indexOf(other.title) : -1;
+  if (!other || at < 0) return <>{words}</>;
+  return (
+    <>
+      {words.slice(0, at)}
+      <button type="button" data-feature={other.id} className="text-left underline decoration-dotted underline-offset-2 hover:text-accent-ink">
+        {other.title}
+      </button>
+      {words.slice(at + other.title.length)}
+    </>
+  );
+}
+
+/** build-feature-panel review 7: a feature's name in a sentence, opening its one panel. */
+function FeatureName({ id, title }: { id: string; title: string }) {
+  return (
+    <button type="button" data-feature={id} className="text-left underline decoration-dotted underline-offset-2 hover:text-accent-ink">
+      {title}
+    </button>
+  );
+}
+
 function problemWords(reason: string, title: string): string {
   const names = [title, title.length <= 40 ? title : `${title.slice(0, 39)}…`];
   const own = names.flatMap((t) => [`'${t}' `, `‘${t}’ `, `${t} `]).find((p) => reason.startsWith(p));
@@ -836,7 +860,11 @@ export default function SimpleHome() {
                 <Link href={`/simple/roadmap?roadmap=${t.roadmap_id}`} className="simple-link">
                   {t.title}
                 </Link>{" "}
-                · {t.item_title}
+                ·{" "}
+                {/* build-feature-panel review 6: the task's feature opens the one feature panel. */}
+                <button type="button" data-feature={t.item_id} className="text-left hover:underline">
+                  {t.item_title}
+                </button>
                 {t.due_date ? ` · due ${calendarDay(t.due_date)}` : ""}
                 {t.late ? " · late" : ""}
               </li>
@@ -904,7 +932,8 @@ export default function SimpleHome() {
                         <>
                           <br />
                           <span data-testid="home-meeting-deleted">
-                            Its roadmap was deleted ·{" "}
+                            Its roadmap was deleted
+                            {next.reviews_deleted_at && ` for good on ${formatInZone(next.reviews_deleted_at, zone, { month: "short", day: "numeric" })}`} ·{" "}
                             <Link className="underline" href={`/company/rituals?ritual=${next.ritual_id}`}>
                               Ritual settings
                             </Link>
@@ -997,7 +1026,10 @@ export default function SimpleHome() {
                         lead={<RowIcon name="alert" />}
                         title={
                           <>
-                            <span className="text-crit">{links[0].item.title}</span>
+                            {/* build-feature-panel: a feature's name opens the one feature panel. */}
+                            <button type="button" data-feature={links[0].item.id} className="text-left text-crit hover:underline">
+                              {links[0].item.title}
+                            </button>
                             {/* qa4-simple-home-7: the plan draws one PRD; with links on several roadmaps each item says its own. */}
                             {brokenRoadmaps.length > 1 && (
                               <span data-testid="home-broken-roadmap" className="font-normal text-text2">
@@ -1018,9 +1050,14 @@ export default function SimpleHome() {
                                 moves={b.flag.fixes.includes("shift_dependents") ? shiftMoves(b, roadmap.data?.items ?? []) : []}
                                 proposed={mine.find((c) => FIX_OPS.has(c.op) && c.target.item_id === b.item.id && (c.target.subject ?? null) === (b.flag.subject ?? null))}
                                 movedWith={movedWith(b)?.item.title}
+                                movedWithId={movedWith(b)?.item.id}
                                 coveredBy={(() => {
                                   const c = coveredBy(b);
                                   return c ? { title: itemTitle(c.target.item_id), waitingFor: c.routed_to.map((id) => nameOf(id, "the decider")).join(", ") || "the decider" } : undefined;
+                                })()}
+                                other={(() => {
+                                  const o = b.flag.subject ? roadmap.data?.items.find((i) => i.id === b.flag.subject) : undefined;
+                                  return o ? { id: o.id, title: o.title } : undefined;
                                 })()}
                                 nameOf={nameOf}
                               />
@@ -1052,9 +1089,10 @@ export default function SimpleHome() {
                         testId="home-milestone-row"
                         lead={<RowIcon name="roadmap" />}
                         title={
-                          <Link href={i.prd ? `/simple/roadmap?prd=${encodeURIComponent(i.prd.slug)}` : `/simple/roadmap?roadmap=${encodeURIComponent(i.roadmap.id)}`} className="hover:underline">
+                          // build-feature-panel: a feature's name opens the one feature panel.
+                          <button type="button" data-feature={i.id} className="text-left hover:underline">
                             {i.title}
-                          </Link>
+                          </button>
                         }
                         meta={`${m.name} · ${i.outcome ?? i.roadmap.title}`}
                       />
@@ -1312,7 +1350,9 @@ function BrokenRow({
   moves,
   proposed,
   movedWith,
+  movedWithId,
   coveredBy,
+  other,
   nameOf,
 }: {
   b: BrokenLink;
@@ -1324,8 +1364,11 @@ function BrokenRow({
   proposed?: Change;
   /** qa4-simple-home-5: the item above whose "Move the dependents" moves this one too (its control is there). */
   movedWith?: string;
+  movedWithId?: string;
   /** qa4-simple-home-18: my waiting proposal on another item that moves this one too. */
   coveredBy?: { title: string; waitingFor: string };
+  /** The other feature the link names (its subject), when the roadmap has it. */
+  other?: { id: string; title: string };
   nameOf: (id: string, fallback: string) => string;
 }) {
   const [noting, setNoting] = useState(false);
@@ -1349,7 +1392,7 @@ function BrokenRow({
     <li data-testid="home-broken" className="flex flex-col gap-2">
       <span className="text-text">
         <span className="sr-only">{b.item.title}: </span>
-        {problemWords(b.flag.reason, b.item.title)}
+        <ProblemWords words={problemWords(b.flag.reason, b.item.title)} other={other} />
       </span>
       {proposed && (
         <span data-testid="home-broken-proposed" className="block font-semibold text-text">
@@ -1363,12 +1406,20 @@ function BrokenRow({
       )}
       {showFixes && !coveredBy && movedWith && (
         <span data-testid="home-broken-moved-with" className="simple-small">
-          {applies ? FIX_WORDS.shift_dependents : `Propose: ${FIX_WORDS.shift_dependents.toLowerCase()}`} on {movedWith} above moves this one too.
+          {applies ? FIX_WORDS.shift_dependents : `Propose: ${FIX_WORDS.shift_dependents.toLowerCase()}`} on {movedWithId ? <FeatureName id={movedWithId} title={movedWith} /> : movedWith} above moves this one too.
         </span>
       )}
       {showFixes && shifts && b.dependency && moves.length > 0 && (
         <span id={moveId} data-testid="home-broken-moves" className="simple-small">
-          Moving the dependents starts {joinAnd(moves.map((m) => m.title))} after {b.dependency.title} ends.
+          {/* build-feature-panel review 7: each name it moves, and the one it waits on, opens the one feature panel. */}
+          Moving the dependents starts{" "}
+          {moves.map((m, i) => (
+            <Fragment key={m.id}>
+              {i > 0 && (i === moves.length - 1 ? " and " : ", ")}
+              <FeatureName id={m.id} title={m.title} />
+            </Fragment>
+          ))}{" "}
+          after <FeatureName id={b.dependency.id} title={b.dependency.title} /> ends.
         </span>
       )}
       {showFixes && (

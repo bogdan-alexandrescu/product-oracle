@@ -36,8 +36,8 @@ async function openCard(page: Page, key: string): Promise<Locator> {
 }
 
 async function openTalk(card: Locator): Promise<Locator> {
-  await card.getByRole("button", { name: "Talk to Oracle" }).click();
-  await expect(card).toHaveAttribute("data-talk", "true");
+  // build-feature-panel: the talk is always open beside the details (FP1 B).
+  await expect(card.getByTestId("item-talk")).toBeVisible();
   return card.getByTestId("item-talk");
 }
 
@@ -70,11 +70,11 @@ test.describe("desktop 1440x900", () => {
     await expect(card.getByTestId("card-decisions").getByRole("link", { name: "Send the digest weekly or daily?" })).toBeVisible();
     await expect(card.getByTestId("card-reasons")).not.toContainText("(draft");
     await expect(card.getByTestId("card-reasons")).not.toContainText("F-06");
-    await expect(card.getByTestId("card-needed")).toHaveText("None");
+    await expect(card.getByTestId("fp-list-needed").getByRole("heading")).toHaveText("Needed by (0)");
     await expect(card).not.toContainText(/\b[FD]-\d/);
     const talk = await openTalk(card);
-    await expect(talk.getByRole("heading", { name: "Talk about Weekly alert digest", exact: true })).toBeVisible();
-    await expect(talk.getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", "Ask about Weekly alert digest, or ask for a change…");
+    await expect(talk.getByRole("heading", { name: "Talk about this feature", exact: true })).toBeVisible();
+    await expect(talk.getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", "Ask about this feature, or ask for a change…");
     await expect(card).not.toContainText(/\b[FD]-\d/);
 
     await card.getByRole("button", { name: "Close" }).click();
@@ -86,18 +86,18 @@ test.describe("desktop 1440x900", () => {
   test("qa-simple-roadmap-18: a commenter's fixes say they only propose", async ({ page }) => {
     await open(page, { email: "commenter@example.com" });
     const card = await openCard(page, "alert-digest");
-    const fixes = card.getByTestId("card-flags").getByTestId("fixes");
+    const fixes = card.getByTestId("fp-clash");
     await expect(fixes.getByRole("button", { name: "Propose: move the dependents" })).toBeVisible();
     await expect(fixes.getByRole("button", { name: "Propose: move the dependency" })).toBeVisible();
     await expect(fixes.getByRole("button", { name: "Propose: accept as risk" }).first()).toBeVisible();
-    await expect(fixes.getByRole("button", { name: "Move the dependents", exact: true })).toHaveCount(0);
+    await expect(fixes.getByRole("button", { name: /^Move the dependents/ })).toHaveCount(0);
   });
 
   test("qa-simple-roadmap-18: the owner's fixes stay plain", async ({ page }) => {
     await open(page);
     const card = await openCard(page, "alert-digest");
-    const fixes = card.getByTestId("card-flags").getByTestId("fixes");
-    await expect(fixes.getByRole("button", { name: "Move the dependents", exact: true })).toBeVisible();
+    const fixes = card.getByTestId("fp-clash");
+    await expect(fixes.getByRole("button", { name: /^Move the dependents: / })).toBeVisible();
     await expect(fixes.getByRole("button", { name: /^Propose/ })).toHaveCount(0);
   });
 

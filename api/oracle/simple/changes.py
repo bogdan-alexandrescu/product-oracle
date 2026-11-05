@@ -35,7 +35,8 @@ Ops and the fields they write (``before`` must name the key fields):
   draft is a ``cut`` with the reason "Merged into <code>".
 - ``change_horizon``: horizon, and the item's own dates (if any) shifted by as many days as
   the new window starts after the old one's. ``reorder``: position. ``cut`` / ``restore``: cut.
-- ``edit_title``: title. ``edit_outcome``: outcome.
+- ``edit_title``: title. ``edit_outcome``: outcome. ``edit_note`` (build-feature-panel
+  review 3): note, at most 500 characters.
 - ``set_milestone`` (S9): the item's own milestone, ``{"milestone": {name, date,
   date_source: "typed"}}`` (date optional), or null to clear it.
   Its ``before`` is compared by name and date only: the read shows no date_source.
@@ -43,6 +44,10 @@ Ops and the fields they write (``before`` must name the key fields):
   first), each a live goal; the goal buckets carry a task added there to another goal.
   An item with a baseline feature takes the feature along (applied, accepted or undone):
   the first goal becomes its first "supports" link, as a goal-bucket move.
+- ``set_goal`` / ``restore_goal`` (build-feature-panel review 2): the item's own goal
+  (``{"goal_ids": [id] or []}``, with an optional ``measure``, kept on the change's target),
+  which wins over the goal its feature supports (oracle.simple.panel); ``restore_goal`` puts
+  back the goal_ids it had before. 422 for no change or an id that is not a goal.
 - ``set_owner`` / ``set_decider`` (chat-actions): the item's own owner_id / decider_id, a
   member of the company (null: back to its track's owner / its roadmap's decider).
 - ``accept_risk``: the risk accepted on one flag (``target.flag``, ``target.subject``),
@@ -83,6 +88,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.baseline.models import Entity
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import HORIZONS, RoadmapItem
 from oracle.simple import drafts, service
@@ -116,6 +122,7 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "restore": ("cut",),
     "edit_title": ("title",),
     "edit_outcome": ("outcome",),
+    "edit_note": ("note",),
     "accept_risk": ("risk",),
     "confirm_item": ("draft",),
     "keep_both": ("kept_both",),
@@ -123,7 +130,14 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "set_goals": ("goal_ids",),
     "set_owner": ("owner_id",),
     "set_decider": ("decider_id",),
+    "add_link": ("depends_on",),
+    "remove_link": ("depends_on",),
+    "restore_link": ("depends_on",),
+    "restore_dates": DATES,
+    "set_goal": ("goal_ids",),
+    "restore_goal": ("goal_ids",),
 }
+LINK_OPS = ("add_link", "remove_link", "restore_link")
 FIXES = ("shift_dependents", "move_dependency")
 # fix5-cut-dependents: the item and every item that waits on it, cut as one change.
 CUT_ALL = "cut_with_dependents"
@@ -336,14 +350,11 @@ def write(row: RoadmapItem, values: dict[str, Any], target: dict[str, Any]) -> N
             setattr(row, f, drafts._typed(f, v))
 
 
-def _seen(op: str, fields: tuple[str, ...], values: dict[str, Any]) -> dict[str, Any]:
-    """``values`` as the stale check compares them: an item's milestone by its name and
-    date (the read shows no date_source, so a caller never sends it)."""
-    out = _normal(fields, values)
-    if op == "set_milestone" and isinstance(out["milestone"], dict):
-        m = out["milestone"]
-        out["milestone"] = {"name": m.get("name"), "date": _iso(_day(m.get("date"), "date"))}
-    return out
+def _seen_milestone(m: Any) -> tuple | None:
+    """A milestone as the item reads it: its name and day, None when it has neither."""
+    if not isinstance(m, dict) or not (m.get("name") or m.get("date")):
+        return None
+    return (m.get("name") or None, _iso(_day(m.get("date"), "milestone.date")))
 
 
 def _normal(fields: tuple[str, ...], values: dict[str, Any]) -> dict[str, Any]:
@@ -580,6 +591,43 @@ def dependents(entry: service.Entry, by_id: dict[uuid.UUID, service.Entry]) -> l
     return out
 
 
+async def _link_plan(
+    op: str, entry: service.Entry, target: dict[str, Any], by_id: dict
+) -> list[str]:
+    """build-feature-panel: the item's depends_on after adding, removing or restoring the
+    link to ``target.subject``; 422 for a link already there, one not there, one across
+    roadmaps, or one that would make a loop."""
+    dep_id = _uuid(target.get("subject"), "subject")
+    target["subject"] = str(dep_id)
+    dep = by_id.get(dep_id)
+    if dep is None or dep is entry:
+        raise ChangeError(422, "target.subject: another item of the roadmap")
+    if dep.row.roadmap_version_id != entry.row.roadmap_version_id:
+        raise ChangeError(422, "A link joins two items of one roadmap")
+    key = dep.row.item_key
+    target["subject_key"], target["subject_title"] = key, dep.row.title
+    now_ = list(entry.row.depends_on or [])
+    if op == "remove_link":
+        if key not in now_:
+            raise ChangeError(422, "No such link")
+        return [k for k in now_ if k != key]
+    if key in now_:
+        raise ChangeError(422, f"{entry.row.title} already depends on {dep.row.title}")
+    # A loop: the new dependency already waits on the item, directly or through others.
+    seen, queue = {dep_id}, deque([dep_id])
+    while queue:
+        cur = by_id.get(queue.popleft())
+        for nid in cur.depends_on if cur is not None else []:
+            if nid == entry.row.id:
+                raise ChangeError(
+                    422, f"{dep.row.title} needs {entry.row.title}: it would make a loop"
+                )
+            if nid not in seen:
+                seen.add(nid)
+                queue.append(nid)
+    return [*now_, key]
+
+
 async def _plan(
     db: AsyncSession, principal: Any, body: SimpleChangeIn, read_: service.Read
 ) -> tuple[service.Entry, dict[str, Any], dict[str, Any], dict[str, Any]]:
@@ -650,7 +698,13 @@ async def _plan(
     current = read(row, fields, target)
     # A suggestion accepted after the item got dates is "outdated" (S2-minor).
     lead = "outdated" if op == "accept_date_suggestion" else "Changed since you saw it"
-    if _seen(op, fields, body.before) != _seen(op, fields, current):
+    seen = _normal(fields, body.before)
+    if op == "set_milestone":
+        # build-feature-panel review 2: the milestone as the item reads it (name, date).
+        same = _seen_milestone(seen["milestone"]) == _seen_milestone(current["milestone"])
+    else:
+        same = seen == current
+    if not same:
         raise await _conflict(db, current, {str(row.id)}, lead)
     a = body.after
     after: dict[str, Any]
@@ -661,6 +715,12 @@ async def _plan(
             raise ChangeError(422, "after: start_date and end_date, the end not before the start")
         after = {"start_date": _iso(start), "end_date": _iso(end), "date_source": "typed"}
         stored = (*DATES, "date_source")
+        r = entry.resolved
+        if r.source != "typed" and not r.end.estimated:
+            # build-feature-panel: Oracle's dates as the item showed them, kept for the
+            # panel's "Oracle suggested ...; set to ... by ..." line (oracle.simple.panel).
+            target["oracle"] = {"start_date": _iso(r.start.date), "end_date": _iso(r.end.date),
+                                "source": r.source, "start_source": r.start.source}  # fmt: skip
     elif op == "accept_date_suggestion":
         sid = _uuid(target.get("suggestion_id"), "suggestion_id")
         target["suggestion_id"] = str(sid)
@@ -694,6 +754,16 @@ async def _plan(
                 )
             target["edited"] = True
         after = {"start_date": _iso(start), "end_date": _iso(end), "date_source": "accepted"}
+        stored = (*DATES, "date_source")
+    elif op in LINK_OPS:
+        after = {"depends_on": await _link_plan(op, entry, target, by_id)}
+    elif op == "restore_dates":
+        from oracle.simple import panel
+
+        kept = await panel.override_of(db, row)
+        if kept is None or not kept.get("end_date"):
+            raise ChangeError(422, "No dates of Oracle's to restore")
+        after = dict(kept["restore"])
         stored = (*DATES, "date_source")
     elif op == "change_horizon":
         if a.get("horizon") not in HORIZONS:
@@ -733,8 +803,6 @@ async def _plan(
             after = {"milestone": {"name": name, "date": _iso(day),
                                    "date_source": "typed" if day else None}}  # fmt: skip
     elif op == "set_goals":
-        from oracle.baseline.models import Entity
-
         raw = a.get("goal_ids")
         if not isinstance(raw, list) or not raw:
             raise ChangeError(422, "after.goal_ids: one goal or more")
@@ -763,12 +831,53 @@ async def _plan(
             ):
                 raise ChangeError(422, f"after.{field}: a member of this company")
         after = {field: str(person) if person else None}
+        if after == current:
+            raise ChangeError(422, "No change: it is so already")
+    elif op == "set_goal":
+        ids = a.get("goal_ids") if isinstance(a.get("goal_ids"), list) else None
+        if ids is None or len(ids) > 1:
+            raise ChangeError(422, "after.goal_ids: one goal, or none")
+        goal_ids = [str(_uuid(g, "after.goal_ids")) for g in ids]
+        if (
+            goal_ids
+            and (
+                await db.scalar(
+                    select(Entity.id).where(
+                        Entity.id == uuid.UUID(goal_ids[0]), Entity.type == "goal"
+                    )
+                )
+            )
+            is None
+        ):
+            raise ChangeError(422, "after.goal_ids: a goal of this company")
+        measure = " ".join(str(a.get("measure") or "").split())[:TITLE_MAX] or None
+        now_goal = str(entry.goal.id) if entry.goal is not None else None
+        own = entry.goal_set or {}
+        if (goal_ids[0] if goal_ids else None) == now_goal and measure == own.get("measure"):
+            raise ChangeError(422, "No change: it is so already")
+        target["measure"] = measure
+        if entry.goal_set is None:
+            # Oracle's goal as the item showed it, for the panel's "Oracle suggested" line.
+            target["oracle"] = (
+                {"id": now_goal, "title": entry.goal.title} if entry.goal is not None else None
+            )
+        after = {"goal_ids": goal_ids}
+    elif op == "restore_goal":
+        if entry.goal_set is None:
+            raise ChangeError(422, "No goal of Oracle's to restore")
+        after = {"goal_ids": list(entry.goal_set["restore"])}
     elif op == "edit_outcome":
         outcome = a.get("outcome")
         outcome = str(outcome).strip() if outcome is not None else None
         if outcome is not None and len(outcome) > OUTCOME_MAX:
             raise ChangeError(422, f"after.outcome: at most {OUTCOME_MAX} characters")
         after = {"outcome": outcome or None}
+    elif op == "edit_note":
+        note = a.get("note")
+        note = str(note).strip() if note is not None else None
+        if note is not None and len(note) > NOTE_MAX:
+            raise ChangeError(422, f"after.note: at most {NOTE_MAX} characters")
+        after = {"note": note or None}
     else:  # accept_risk
         if target.get("flag") not in FLAG_KINDS:
             raise ChangeError(422, "target.flag: a constraint flag's kind")
@@ -792,7 +901,6 @@ async def _merge_plan(
     db: AsyncSession, entry: service.Entry, target: dict[str, Any], by_id: dict
 ) -> tuple[service.Entry, dict[str, Any], dict[str, Any], dict[str, Any]]:
     """S7: merge_item's writes, keyed by item id (see the module's docstring)."""
-    from oracle.baseline.models import Entity
 
     row = entry.row
     if not row.draft or entry.status in ("merged", "cut"):
@@ -893,7 +1001,6 @@ async def _move_feature(db: AsyncSession, c: SimpleChange, values: dict[str, Any
     bucket move does: the goal it now moves most becomes the feature's first goal link
     (what the dated goal buckets place it by), and the link to the goal it showed under
     is dropped unless the item still serves it. Applied, accepted or undone alike."""
-    from oracle.baseline.models import Entity
     from oracle.simple import goal_buckets
 
     row = await db.get(RoadmapItem, uuid.UUID(c.target["item_id"]))

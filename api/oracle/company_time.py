@@ -88,6 +88,12 @@ def calendar_day(d: date | str) -> str:
     return f"{d:%b} {d.day}"
 
 
+def calendar_day_with_year(d: date | None) -> str:
+    """A calendar day with its year, month first, as "Nov 30, 2026" (the plan tables, the
+    company queue); empty for no day."""
+    return f"{calendar_day(d)}, {d.year}" if d else ""
+
+
 def day_first_in_words(moment: datetime | str, zone: str = DEFAULT_ZONE) -> str:
     """The company's day at ``moment`` as "25 Oct"."""
     local = _local(moment, zone)

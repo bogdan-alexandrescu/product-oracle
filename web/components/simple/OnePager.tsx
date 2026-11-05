@@ -666,6 +666,12 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                                   Draw the flow
                                 </button>
                               )}
+                              {b.key === "bets" && !presenting && l.item_id && (
+                                // build-feature-panel review 7: a bet is a feature: the roadmap item built from it (the API's item_id) opens its one panel; a bet no item came from offers none.
+                                <button type="button" className="simple-noprint ml-2 text-sm text-text2 underline max-md:min-h-11" aria-label={`Open the feature ${words.get(l.id)}`} data-feature={l.item_id}>
+                                  Open the feature
+                                </button>
+                              )}
                             </span>
                             {(v.can_edit || v.can_propose) && !presenting && (
                               // The owner's P6: "Edit" shows when the line is pointed at or tapped, not on every line.

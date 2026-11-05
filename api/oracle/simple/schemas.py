@@ -76,6 +76,12 @@ class SimpleGoalRef(BaseModel):
     metric: str | None = None
     # goal-order: the goal's place (its attrs.position, 1 = first); none when unset.
     position: int | None = None
+    # build-feature-panel review 3: the panel's Reading row, from the goal's attrs: its
+    # latest reading, its target, their unit and the day the target is due.
+    current: float | None = None
+    target: float | None = None
+    unit: str | None = None
+    due: dt.date | None = None
 
 
 class SimpleTrackRef(BaseModel):
@@ -99,6 +105,9 @@ class SimpleItemMilestone(BaseModel):
 class SimpleOwnerRef(BaseModel):
     id: uuid.UUID
     name: str
+    # build-feature-panel review: "item" when the item has its own owner (set_owner), "track"
+    # for its track's owner (null: not said, as on a task's owner).
+    source: Literal["item", "track"] | None = None
 
 
 class SimpleMilestoneTarget(BaseModel):
@@ -267,6 +276,44 @@ class DateSuggestionOut(BaseModel):
     can_decide: bool = False
 
 
+class SimpleOverride(BaseModel):
+    """build-feature-panel: Oracle's dates a person's replaced, and who set the new ones."""
+
+    start_date: dt.date | None = None
+    end_date: dt.date | None = None
+    source: str | None = None
+    # build-feature-panel review 3: the start's own source as the item showed it (Start's
+    # note keeps it while only the delivery moved).
+    start_source: str | None = None
+    by: str | None = None
+    at: dt.datetime | None = None
+
+
+class SimpleLink(BaseModel):
+    """build-feature-panel: one item the item depends on; ``by`` null: Oracle found it.
+    ``removed``: Oracle's link a person removed (``removed_by``), shown with Restore."""
+
+    item_id: uuid.UUID
+    by: str | None = None
+    removed: bool = False
+    removed_by: str | None = None
+
+
+class SimpleGoalPick(BaseModel):
+    id: uuid.UUID
+    title: str
+
+
+class SimpleGoalSet(BaseModel):
+    """build-feature-panel review 2: the goal (and measure) a person set on the item over
+    Oracle's: Oracle's goal as the item showed it (null: none), who set it and when."""
+
+    oracle: SimpleGoalPick | None = None
+    by: str | None = None
+    at: dt.datetime | None = None
+    measure: str | None = None
+
+
 class SimpleRoadmapItem(BaseModel):
     id: uuid.UUID
     key: str
@@ -292,6 +339,8 @@ class SimpleRoadmapItem(BaseModel):
     # ("engineering estimate", "founder commitment", "set by <person>"); null when the
     # dates are not the version's (none applied, or a person changed them since).
     date_basis: str | None = None
+    # build-feature-panel review 3: the item's notes (edit_note); null when none.
+    note: str | None = None
     suggestion: DateSuggestionOut | None = None
     milestone: SimpleItemMilestone | None = None
     phases: list[SimplePhase]
@@ -324,6 +373,12 @@ class SimpleRoadmapItem(BaseModel):
         default=[], description="S7: the goals the item is linked to directly."
     )
 
+    # build-feature-panel (oracle.simple.panel): Oracle's dates kept under a person's, and
+    # the item's links with who made them (Oracle's removed ones too).
+    override: SimpleOverride | None = None
+    links: list[SimpleLink] = []
+    # build-feature-panel review 2: the goal a person set over Oracle's (``goal`` is it).
+    goal_set: SimpleGoalSet | None = None
     # S8: the decided decisions that changed the item (newest first; the Decisions page).
     decided_in: list["SimpleDecidedRef"] = []
     # walkc-roadmap-tasks: the work under the item (not dropped), in order.
@@ -522,6 +577,8 @@ ChangeOp = Literal[
     "restore",
     "edit_title",
     "edit_outcome",
+    # build-feature-panel review 3: the item's notes (the panel's Notes row).
+    "edit_note",
     "accept_date_suggestion",
     "accept_risk",
     "shift_dependents",
@@ -568,6 +625,15 @@ ChangeOp = Literal[
     # fix5-cut-dependents: an item cut with every item that waits on it (transitively), as
     # one change keyed by item id (oracle.simple.changes).
     "cut_with_dependents",
+    # build-feature-panel: an item's links (a dependency added, removed, or Oracle's link
+    # put back) and Oracle's dates put back over a person's (oracle.simple.panel).
+    "add_link",
+    "remove_link",
+    "restore_link",
+    "restore_dates",
+    # build-feature-panel review 2: an item's own goal and measure, and Oracle's put back.
+    "set_goal",
+    "restore_goal",
     # build-milestones-on-roadmap: a proposed date/counts_when on a PRD's own goal
     # milestone, on the PRD document, routed to its owner (oracle.simple.goal_milestones).
     "edit_goal_milestone",
@@ -1204,6 +1270,9 @@ class OnePagerLine(BaseModel):
     # S10: a bet's ("What we will build") visual subject and its newest drawing.
     flow_subject: uuid.UUID | None = None
     flow: "OnePagerFlow | None" = None
+    # build-feature-panel review 7: a bet's roadmap item, the one built from it
+    # (service.own_bet); null for a bet no item came from and for every other line.
+    item_id: uuid.UUID | None = None
     # S8: the decisions that changed this line (newest first; the Decisions page).
     decisions: list[SimpleOpenDecision] = []
     # Reads clearly (2026-10-30, oracle.simple.one_pager_checks): an outcome's measure (what
@@ -2016,6 +2085,8 @@ class SimpleUpcomingMeeting(BaseModel):
     # What the ritual reviews when all of it was deleted for good (purged from Trash, none
     # left); Home says "Its roadmap was deleted" and links the ritual's settings.
     reviews_deleted: Literal["roadmap"] | None = None
+    # home-deleted-roadmap: when it was deleted for good (its last purge); Home shows the day.
+    reviews_deleted_at: dt.datetime | None = None
 
 
 class SimpleMeetingsOut(BaseModel):

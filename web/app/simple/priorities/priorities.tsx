@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as R
 
 import { Button, Sheet, toast } from "@/components/ds";
 import { FlowThumb } from "@/components/simple/Flow";
+import { openFeaturePanel } from "@/components/simple/FeaturePanelHost";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief, type GoalPanelStart, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
 import { FlowPanel, subjectOf } from "@/components/simple/FlowVisual";
 import { usePanelOpen } from "@/components/hop/open-state";
@@ -566,7 +567,12 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
                 data-testid="prio-line-mark"
               />
               <span className="min-w-[12rem] flex-1 font-medium">
-                <span data-testid="prio-title">{r.title}</span>
+                {/* build-feature-panel: a feature's name opens the one feature panel, by its
+                 * roadmap item id (the stable feature key, r.code, when the role cannot see
+                 * the item): two features sharing a title would else open the wrong one. */}
+                <button type="button" data-testid="prio-title" data-feature={r.item_id ?? r.code} className="text-left hover:underline">
+                  {r.title}
+                </button>
                 <OwnKey r={r} />
               </span>
               {/* walkb-priorities: no ml-auto, so details that wrap under the title start at the left on every row. */}
@@ -616,7 +622,12 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
             )}
             {r.after && (
               <p className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12" data-testid="prio-after">
-                After {r.after.title}, which it needs.
+                After{" "}
+                {/* build-feature-panel review 6: the feature it needs opens the one feature panel. */}
+                <button type="button" data-feature={data.rows.find((x) => x.code === r.after!.code)?.item_id ?? r.after.code} className="hover:underline">
+                  {r.after.title}
+                </button>
+                , which it needs.
               </p>
             )}
             {r.override && (
@@ -688,8 +699,11 @@ function OracleOrder({ data }: { data: Out }) {
                 title={r.above_line ? "Above the line" : "Below the line"}
                 className={`inline-block h-3 w-3 flex-none rounded-full border-2 border-accent ${r.above_line ? "bg-accent" : "bg-transparent"}`}
               />
+              {/* build-feature-panel review 6: the feature's name opens the one feature panel. */}
               <span className="min-w-[8rem] flex-1 font-medium">
-                {r.title}
+                <button type="button" data-feature={r.item_id ?? r.code} className="text-left hover:underline">
+                  {r.title}
+                </button>
                 <OwnKey r={r} />
               </span>
               <span className="flex flex-wrap items-center gap-x-3 text-[length:var(--simple-small)] text-text2">
@@ -958,7 +972,12 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
           <li key={d.item_id} data-testid="prio-draft" data-code={d.code} data-shown={show === d.item_id ? "true" : undefined} className={`rounded-[var(--simple-card-radius)] border border-dashed bg-surface p-3 ${show === d.item_id ? "border-accent ring-2 ring-accent" : "border-line-strong"}`}>
             <div className="flex flex-wrap items-center gap-3">
               <span className="rounded-full bg-na-bg px-2 text-[length:var(--simple-small)] text-na">Draft</span>
-              <span className="flex-1 font-medium">{d.title}</span>
+              {/* build-feature-panel review 7: a draft's name opens the one feature panel too. */}
+              <span className="flex-1 font-medium">
+                <button type="button" data-feature={d.item_id} className="text-left hover:underline">
+                  {d.title}
+                </button>
+              </span>
               <span className="text-[length:var(--simple-small)] text-text2">{d.goal?.title ?? "No goal"}</span>
               {mayChange && (
                 <span className="flex gap-2">
@@ -1414,6 +1433,8 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                       return;
                     }
                     select(r.feature_id, "mark");
+                    // build-feature-panel review 5: a mark clicked, not dragged, also opens the one feature panel.
+                    openFeaturePanel(r.item_id ?? r.code);
                   }}
                   onPointerDown={(e) => {
                     dragged.current = false;
@@ -1505,7 +1526,15 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                 data-selected={isSelected ? "true" : undefined}
                 className={`scroll-my-4 rounded-lg border text-[15px] leading-[22px] ${isSelected ? "border-accent bg-accent-soft ring-2 ring-accent" : words ? "border-accent ring-2 ring-accent" : "border-line"} ${isSelected ? "" : r.above_line ? "bg-surface" : "bg-surface2 text-text2"}`}
               >
-                <button type="button" aria-pressed={isSelected} onClick={() => select(r.feature_id, "row")} className="flex w-full items-center gap-1.5 rounded-lg px-2 py-0.5 text-left">
+                <button
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={(e) => {
+                    select(r.feature_id, "row");
+                    // build-feature-panel review 6: Enter or Space on the row opens the one feature panel too (a mouse opens it from the title).
+                    if (e.detail === 0) openFeaturePanel(r.item_id ?? r.code);
+                  }}
+                  className="flex w-full items-center gap-1.5 rounded-lg px-2 py-0.5 text-left">
                   <span className="w-5 flex-none text-right font-[650] tabular-nums" data-testid="side-rank">
                     {r.rank}
                   </span>
@@ -1513,7 +1542,8 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   <span className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text" data-testid="side-code" title={r.title}>
                     {r.short_code || r.title}
                   </span>
-                  <span className="min-w-0 flex-1 truncate" data-testid="prio-title" title={r.title}>
+                  {/* build-feature-panel review 5: the title opens the one feature panel (the row still selects it). */}
+                  <span className="min-w-0 flex-1 truncate hover:underline" data-testid="prio-title" data-feature={r.item_id ?? r.code} title={r.title}>
                     {r.title}
                   </span>
                   {/* qa4-simple-plan-8: why a score is out of order: a person's move, or a feature it needs. */}
@@ -2467,7 +2497,10 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
                     <span key={r.code} className="inline-flex items-center gap-1.5">
                       {k > 0 && ", "}
                       <CodeChip r={r} />
-                      {r.title}
+                      {/* build-feature-panel review 6: the feature's name opens the one feature panel. */}
+                      <button type="button" data-feature={r.item_id ?? r.code} className="text-left hover:underline">
+                        {r.title}
+                      </button>
                     </span>
                   ))}
                   <span className="whitespace-nowrap text-text2"> · {fmt(rows.reduce((n, r) => n + (r.effort ?? 0), 0))}{"\u00a0"}wk</span>

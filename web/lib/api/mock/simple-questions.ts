@@ -99,7 +99,7 @@ export function seedQuestions(ctx: QuestionsCtx): QuestionsDb {
       q(7, "Legal input on health notes", approver, -2, "M1", ["F-03", "Health log"], "Ask outside counsel", ["Use our own template"]),
       q(8, "Sign-in choice: Google at launch", owner, 7, "M1", ["F-01", "Sign in"], "Yes, at launch", ["After launch"]),
       q(9, "Onboarding checklist length", owner, 12, "M1", ["F-04", "Onboarding checklist"], "Five steps", ["Three steps", "Seven steps"]),
-      q(10, "Weekly summary email", owner, 15, "M2", ["F-08", "Weekly summary"], "Monday mornings", ["Friday afternoons"]),
+      q(10, "Weekly summary email", owner, 15, "M2", ["F-06", "Weekly alert digest"], "Monday mornings", ["Friday afternoons"]),
       q(11, "Dark mode in the first release", owner, 20, "M2", ["F-12", "Themes"], "Yes", ["Later"]),
       q(12, "Status page provider", approver, 22, "M2", ["F-14", "Status page"], "Host our own", ["Use a vendor"]),
       q(13, "Usage-based add-on", owner, 29, "M3", ["F-18", "Add-ons"], "Not this year", ["Pilot with five teams"]),

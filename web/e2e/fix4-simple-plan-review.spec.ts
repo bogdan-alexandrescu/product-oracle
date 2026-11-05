@@ -76,6 +76,10 @@ test.describe("fix4-simple-plan review: Priorities", () => {
     }
     await expect(mark).toHaveAttribute("aria-label", /goal value 0,/);
     await mark.click();
+    // build-feature-panel review 5: a mark clicked opens the one feature panel; Escape closes it.
+    await expect(page.getByRole("dialog", { name: "Setup checklist" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.locator('[data-testid="side-row"][data-code="setup-checklist"]').getByTestId("side-numbers")).toHaveText(/^goal value 0 · confidence [\d.]+ · [\d.]+ wk · score 0$/);
   });
 
@@ -98,8 +102,8 @@ test.describe("fix4-simple-plan review: Priorities", () => {
     await expect(rowByTitle(page, "Setup checklist").getByTestId("prio-rank")).toHaveText(rank!);
   });
 
-  /* qa-simple-plan-34: a look-alike links to its own row (marked there); its button says what it does. */
-  test("a look-alike opens its own row and says it declines the suggestion", async ({ page }) => {
+  /* qa-simple-plan-34: a look-alike opens the one feature panel (build-feature-panel review 6); its button says what it does. */
+  test("a look-alike opens its feature panel and says it declines the suggestion", async ({ page }) => {
     await setUp(page, { scenario: "simple-plan" });
     await open(page, "?tab=buckets");
     await page.getByTestId("goal-ask-oracle").first().click();
@@ -111,13 +115,9 @@ test.describe("fix4-simple-plan review: Priorities", () => {
     const link = looks.first().getByTestId("looks-like-link");
     const title = ((await link.textContent()) ?? "").trim();
     await link.click();
-    await expect(page).toHaveURL(/show=/);
-    await expect(drawer).toHaveCount(0);
-    await expect(page.getByRole("tab", { name: "Ranked list" })).toHaveAttribute("aria-selected", "true");
-    const shown = page.locator('[data-shown="true"]');
-    await expect(shown).toHaveCount(1);
-    await expect(shown).toBeInViewport();
-    await expect(shown).toContainText(title.replace(/^[A-Z]{1,3}-\d+ /, ""));
+    const panel = page.getByRole("dialog", { name: title.replace(/^[A-Z]{1,3}-\d+ /, ""), exact: true });
+    await expect(panel.getByTestId("fp-details")).toBeVisible();
+    await expect(drawer).toBeVisible();
   });
 
   /* qa-simple-plan-42: a tab clicked while the remembered line is put back stays after a reload. */

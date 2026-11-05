@@ -86,8 +86,8 @@ export interface MeetingsCtx {
   othersWaiting?: () => number;
   /** home-honest-loading: every document of this kind is in Trash (and there is one). */
   onlyInTrash?: (kind: string) => boolean;
-  /** home-deleted-roadmap: no document of this kind is left, live or in Trash, and one was purged. */
-  deletedForGood?: (kind: string) => boolean;
+  /** home-deleted-roadmap: when the last of this kind was purged, when none is left, live or in Trash; else null. */
+  deletedForGood?: (kind: string) => string | null;
   /** qa4-simple-prd-1: every PRD document (as the API's start options list each readable PRD by its own title). */
   documents?: () => { id: string; slug: string; title: string }[];
   /** build-rundecide RD1 a: the runs' decided stops on the PRDs shown (./simple-runs.ts), for the Runs card. */
@@ -644,11 +644,12 @@ function upcoming(ctx: MeetingsCtx, db: MeetingsDb, only?: string): Schemas["Sim
   // home-honest-loading: a ritual whose roadmaps are all in Trash says so (meetings.REVIEWS).
   const kindOf = new Map(rituals.map((r) => [r.id, r.kind]));
   const inTrash = ctx.onlyInTrash?.("roadmap") ?? false;
-  const deleted = ctx.deletedForGood?.("roadmap") ?? false;
+  const deleted = ctx.deletedForGood?.("roadmap") ?? null;
   for (const row of rows) {
     const reviewsRoadmap = kindOf.get(row.ritual_id) === "roadmap_refresh";
     row.reviews_in_trash = inTrash && reviewsRoadmap ? "roadmap" : null;
     row.reviews_deleted = deleted && reviewsRoadmap ? "roadmap" : null;
+    row.reviews_deleted_at = reviewsRoadmap ? deleted : null;
   }
   return rows.sort((a, b) => a.due_at.localeCompare(b.due_at)).slice(0, 20);
 }
@@ -731,7 +732,7 @@ function record(db: MeetingsDb, ctx: MeetingsCtx, m: Meeting, title: string, sub
 
 const OP_WORDS: Record<string, string> = {
   move_dates: "New dates for", accept_date_suggestion: "Accepted Oracle's dates for", change_horizon: "Moved", reorder: "Reordered", cut: "Cut",
-  restore: "Restored", edit_title: "Renamed", edit_outcome: "New outcome for", accept_risk: "Accepted a risk on", confirm_item: "Confirmed", edit_line: "New wording for",
+  restore: "Restored", edit_title: "Renamed", edit_outcome: "New outcome for", edit_note: "New notes for", accept_risk: "Accepted a risk on", confirm_item: "Confirmed", edit_line: "New wording for",
   cut_with_dependents: "Cut with its dependents:",
 };
 
@@ -741,7 +742,7 @@ const HORIZON_TO: Record<string, string> = { now: "Now", next: "Next", later: "L
 /** walkc-meeting r2 (meetings.PROPOSAL_WORDS): what a proposal asked for. */
 const PROPOSAL_WORDS: Record<string, string> = {
   move_dates: "new dates for", accept_date_suggestion: "accept Oracle's dates for", change_horizon: "move", reorder: "reorder", cut: "cut",
-  restore: "restore", edit_title: "rename", edit_outcome: "new outcome for", accept_risk: "accept a risk on", shift_dependents: "move the dependents of",
+  restore: "restore", edit_title: "rename", edit_outcome: "new outcome for", edit_note: "new notes for", accept_risk: "accept a risk on", shift_dependents: "move the dependents of",
   move_dependency: "move the dependency of", confirm_item: "confirm", edit_line: "new wording for", add_key_date: "add the key date",
   edit_key_date: "change the key date", remove_key_date: "remove the key date", add_item: "add", merge_item: "merge",
   keep_both: "keep beside its look-alikes:", cut_with_dependents: "cut with its dependents:", set_goals: "move to another goal:",
