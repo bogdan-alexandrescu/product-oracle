@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "./test";
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_FAIL_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /**
@@ -88,17 +88,18 @@ for (const view of VIEWS) {
         const dock = await box(page.getByTestId("hop-dock"));
         expect(barBox.x + barBox.width).toBeLessThanOrEqual(dock.x + 0.5);
         const approveBox = await box(approve);
-        const onTop = await page.evaluate(
-          ([x, y]) => document.elementFromPoint(x, y)?.closest("[data-testid]")?.getAttribute("data-testid") ?? null,
-          [approveBox.x + approveBox.width / 2, approveBox.y + approveBox.height / 2] as const,
-        );
-        // Below 1600 px the open panel lies over the page as a modal: its scrim covers the bar,
-        // as designed, until Ask is closed. Otherwise the bar's button is the one under a click.
+        // What a click on the bar's button lands on: the bar, or Ask lying over it.
+        const onTop = await page.evaluate(([x, y]) => {
+          const el = document.elementFromPoint(x, y);
+          return el?.closest('[data-testid="from-run-bar"]') ? "bar" : el?.closest('[data-testid="hop-dock"]') ? "ask" : null;
+        }, [approveBox.x + approveBox.width / 2, approveBox.y + approveBox.height / 2] as const);
+        // Below 1600 px the open panel lies over the page as a modal, its scrim over the rest: the
+        // bar is covered, as designed, until Ask is closed. Otherwise the bar takes the click.
         if (view.ask && view.viewport.width < 1600) {
           await expect(page.getByTestId("hop-backdrop")).toBeVisible();
-          expect(onTop).toBe("hop-backdrop");
+          expect(onTop).toBe("ask");
         } else {
-          expect(onTop).toBe("from-run-bar");
+          expect(onTop).toBe("bar");
         }
       } else {
         // On a phone it sits above the tab bar, not under it.
@@ -143,13 +144,14 @@ test("B-03: switching to a run whose review cannot load says so above the earlie
   await expect(page.getByTestId("from-run-row")).toHaveCount(4);
   await expect(page.getByTestId("from-run-view")).toHaveAttribute("data-current", "true");
   await expect(page.getByTestId("load-error")).toHaveCount(0);
-  // Another run in the Proposals tab's From select: one without a review of its own.
+  // Another run in the Proposals tab's From select, whose review fails to load (mock).
   await page.getByRole("tab", { name: "Proposals" }).click();
   const from = page.getByLabel("From", { exact: true });
   const other = await from
     .locator("option")
     .evaluateAll((opts, run) => (opts as HTMLOptionElement[]).map((o) => o.value).find((v) => v && v !== "none" && v !== run), RUN);
   expect(other).toBeTruthy();
+  await page.evaluate(([key, path]) => localStorage.setItem(key, path), [MOCK_FAIL_KEY, `/v1/baseline/from-run/${other}`] as const);
   await from.selectOption(other!);
   await page.getByRole("tab", { name: /From this run/ }).click();
   const panel = page.getByRole("tabpanel");
