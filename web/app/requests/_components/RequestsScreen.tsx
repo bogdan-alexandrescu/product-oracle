@@ -87,10 +87,16 @@ function Requests({ view }: { view: RequestsView }) {
   const selected = picked && picked.under === wanted ? picked.id : wanted;
   const setSelected = (id: string | null) => setPicked(id ? { id, under: wanted } : null);
   const narrow = useNarrow();
-  // The sheet closed on this request: the row stays picked; a tap on a row opens it again.
-  const [dismissed, setDismissed] = useState<string | null>(null);
+  // Under 1100 px the sheet opens only on a tap of a row, or a new ?request= (the Inbox's Open);
+  // closing it keeps the row picked. A tab change remounts this page, so a closed sheet stays closed.
+  const [open, setOpen] = useState<string | null>(wanted);
+  const [linked, setLinked] = useState(wanted);
+  if (linked !== wanted) {
+    setLinked(wanted);
+    setOpen(wanted);
+  }
   const pick = (id: string | null) => {
-    setDismissed(null);
+    setOpen(id);
     setSelected(id);
   };
   const router = useRouter();
@@ -301,7 +307,7 @@ function Requests({ view }: { view: RequestsView }) {
             </Split>
           )}
           {narrow && current && view !== "themes" && (
-            <Sheet open={dismissed !== current.id} title="Request" onClose={() => setDismissed(current.id)} full testId="request-sheet">
+            <Sheet open={open === current.id} title="Request" onClose={() => setOpen(null)} full testId="request-sheet">
               <div className="p-2">{inspector}</div>
             </Sheet>
           )}

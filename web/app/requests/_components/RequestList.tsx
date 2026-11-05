@@ -195,7 +195,11 @@ export function RequestList({
               data-testid="request-row"
               data-channel={r.channel}
               aria-current={on ? "true" : undefined}
-              onClick={() => onSelect(r.id)}
+              onClick={(e) => {
+                // A tap on the row's details focuses its title, so a closed sheet hands focus back to the row.
+                e.currentTarget.querySelector("button")?.focus();
+                onSelect(r.id);
+              }}
               className={`flex cursor-pointer items-start gap-3 px-4 py-2.5 ${on ? "bg-accent-soft shadow-[inset_4px_0_0_var(--accent)]" : "hover:bg-surface2"}`}
             >
               {ticking && (

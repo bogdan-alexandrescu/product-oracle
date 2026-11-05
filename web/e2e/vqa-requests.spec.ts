@@ -76,15 +76,15 @@ test("RQ-1: a closed sheet stays closed across the tabs; a tap on a row opens it
   await expect(sheet).toHaveCount(0);
 
   // To decide -> All requests -> To decide, then Themes -> All requests: no sheet comes back.
-  for (const [tab, list] of [
-    ["All requests", "all-requests"],
-    ["To decide", "new-requests"],
-    [/^Themes/, null],
-    ["All requests", "all-requests"],
+  for (const [tab, url] of [
+    ["All requests", /\/requests$/],
+    ["To decide", /\/requests\/to-decide$/],
+    [/^Themes/, /\/requests\/themes$/],
+    ["All requests", /\/requests$/],
   ] as const) {
-    await tabs.getByRole("link", { name: tab }).click();
-    if (list) await expect(page.getByTestId(list).getByTestId("request-row").first()).toBeVisible();
-    else await expect(page.getByTestId("requests-nav")).toBeVisible();
+    await tabs.first().getByRole("link", { name: tab }).click();
+    await expect(page).toHaveURL(url);
+    await expect(page.getByTestId(tab === "All requests" ? "all-requests" : tab === "To decide" ? "new-requests" : "requests-nav").first()).toBeVisible();
     await expect(sheet).toHaveCount(0);
   }
   // The row stays picked; a tap on it opens the sheet again.
