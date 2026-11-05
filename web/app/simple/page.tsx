@@ -98,6 +98,29 @@ function problemWords(reason: string, title: string): string {
 
 const joinAnd = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}` : (xs[0] ?? ""));
 
+/** How often Home reads again while Oracle drafts a new item (backing off), and for how long. */
+const DRAFT_READ_DELAYS_MS = [1_000, 2_000, 4_000, 8_000];
+const DRAFT_READS_FOR_MS = 120_000;
+
+/** What else the one list holds beyond the decisions tile, in words, each kind with its number. */
+const BESIDES: [Schemas["SimpleWaitingItem"]["kind"], string, string][] = [
+  ["run_stop", "run stop", "run stops"],
+  ["broken_link", "broken link", "broken links"],
+  ["date", "date to confirm", "dates to confirm"],
+  ["draft", "draft", "drafts"],
+  ["proposal", "proposal", "proposals"],
+  ["goal_suggestion", "goal suggestion", "goal suggestions"],
+  ["goal", "proposed goal", "proposed goals"],
+];
+function allBesides(items: Schemas["SimpleWaitingItem"][]): string {
+  return joinAnd(
+    BESIDES.flatMap(([kind, one, many]) => {
+      const n = items.filter((i) => i.kind === kind).length;
+      return n ? [`${n} ${n === 1 ? one : many}`] : [];
+    }),
+  );
+}
+
 /**
  * What "Move the dependents" moves (qa-simple-home-1): the items the flag names (SimpleFlag.moves),
  * as the change engine moves them, the clicked item first.
@@ -183,15 +206,37 @@ export default function SimpleHome() {
   // home-waiting-one-list: a goal suggestion confirmed here (or anywhere) adds an item Oracle
   // drafts; its dates to confirm wait on me once that is done, so while one drafts Home, its
   // cards and the rail read again (until it is done).
+  // It backs off (1 s, 2 s, 4 s, then every 8 s) and stops after two minutes: a short line then
+  // offers Refresh, which starts it again.
   const drafting = !!roadmap.data?.items.some((i) => i.drafting);
+  const draftReads = useRef<{ since: number; tries: number } | null>(null);
+  const [draftStalled, setDraftStalled] = useState(false);
   useEffect(() => {
-    if (!drafting) return;
-    const t = window.setTimeout(() => {
-      invalidateWaiting();
-      waitingChanged();
-    }, 900);
+    if (!drafting) {
+      draftReads.current = null;
+      return;
+    }
+    if (draftStalled) return;
+    const r = (draftReads.current ??= { since: Date.now(), tries: 0 });
+    const t = window.setTimeout(
+      () => {
+        if (Date.now() - r.since >= DRAFT_READS_FOR_MS) {
+          setDraftStalled(true);
+          return;
+        }
+        r.tries += 1;
+        invalidateWaiting();
+        waitingChanged();
+      },
+      DRAFT_READ_DELAYS_MS[Math.min(r.tries, DRAFT_READ_DELAYS_MS.length - 1)],
+    );
     return () => window.clearTimeout(t);
-  }, [drafting, roadmap.data]);
+  }, [drafting, draftStalled, roadmap.data]);
+  const refreshDrafting = () => {
+    draftReads.current = null;
+    setDraftStalled(false);
+    reloadAll();
+  };
   const goals = useQuery(k("goals"), () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })), { keepPrevious: true });
   const changes = useQuery(k("changes"), () => unwrap(api.GET("/v1/simple/changes")), { keepPrevious: true });
   const drafts = useQuery(k("drafts"), () => unwrap(api.GET("/v1/simple/drafts")), { keepPrevious: true });
@@ -772,13 +817,13 @@ export default function SimpleHome() {
           )}
           {/* home-waiting-one-list: the decisions tile counts the questions and calls I decide; the
            * rail's Decisions count is everything in the one list. Said plainly when they differ. */}
-          {waiting.data && waiting.data.items.length !== decisionCount && (
+          {waiting.data && waiting.data.items.length !== decisionCount && allBesides(waiting.data.items) && (
             <p data-testid="home-summary-all" className="simple-small mt-2">
               In all, {waiting.data.items.length} {waiting.data.items.length === 1 ? "thing waits" : "things wait"} on you: the{" "}
               <Link href="/simple/decisions" className="simple-link">
                 Decisions
               </Link>{" "}
-              count also counts run stops, broken links, dates, drafts and goal suggestions.
+              count also counts {allBesides(waiting.data.items)}.
             </p>
           )}
           {myDrafts.map((draft) => (
@@ -889,6 +934,14 @@ export default function SimpleHome() {
         </HomeCard>
       )}
 
+      {drafting && draftStalled && (
+        <p data-testid="home-drafting-slow" className="simple-card simple-small flex flex-wrap items-center gap-3" role="status">
+          <span className="flex-1">Oracle is still drafting the new item.</span>
+          <button type="button" className="simple-button" onClick={refreshDrafting}>
+            Refresh
+          </button>
+        </p>
+      )}
       {!reads && alsoWaiting.length > 0 && (
         <HomeCard id="also-waiting" icon="flag" title="Also waiting for you" count={alsoWaiting.length} all="/simple/decisions" allLabel="All that waits on you">
           <ul data-testid="home-also-waiting-list">

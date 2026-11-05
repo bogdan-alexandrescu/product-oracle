@@ -572,7 +572,7 @@ function DecisionTray({
       </div>
       {/* #37: what the button's count is, on screen: this view's own, not the side menu's badges. */}
       <p className="mt-1 text-sm text-text2" data-testid="tray-scope">
-        {counts.total} on this roadmap view. The side menu&apos;s Decisions and Roadmap counts cover other things, so they can differ.
+        {counts.total} on this roadmap view. The side menu&apos;s Roadmap count counts the same across the whole roadmap; its Decisions count holds all that waits on you.
       </p>
       <ul className="mt-3 grid grid-cols-2 gap-2 min-[420px]:grid-cols-4" data-testid="tray-counters">
         {counters.map(([label, n]) => (
@@ -1203,13 +1203,12 @@ export function SimpleRoadmap() {
     <div className={`flex flex-wrap items-center gap-2 ${phone ? "" : "ml-auto justify-end"}`} data-testid="roadmap-actions">
       {phone && canChange && addable.length > 0 && <QuickAdd phone options={addOptions} verb={addVerb} onAdd={onAdd} target={target?.title ?? null} roadmaps={askRoadmap ? addable.map((r) => r.roadmap) : []} />}
       {decides && !blank && (
-        // #37: this counts broken links, suggestions and proposals on THIS roadmap view,
-        // not the same things the side menu's Decisions (product decisions waiting on you,
-        // everywhere) or Roadmap (proposals and drafts in your inbox) badges count; the
-        // label and title say so rather than let the three numbers look like one metric.
+        // #37: this counts items with broken links, dates to confirm and proposals on THIS
+        // roadmap view; the side menu's Roadmap count counts the same for the whole roadmap
+        // (home-waiting-one-list), its Decisions count all that waits on you.
         <Button
           data-testid="needs-decision"
-          title="Broken dates, date suggestions and proposals on this roadmap view (not the same count as Decisions or Roadmap in the side menu)"
+          title="Items with broken links, dates to confirm and proposals on this roadmap view (the side menu's Roadmap count, for the whole roadmap)"
           onClick={() => setTray(true)}
           data-zero={waiting ? undefined : "true"}
           // fix4 qa-simple-roadmap-38: at 0 the button is muted (nothing waits), still opens the tray.

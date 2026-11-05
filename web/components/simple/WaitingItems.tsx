@@ -76,6 +76,13 @@ function actionsOf(i: WaitingItem): Act[] {
       { label: "Not this", done: "Set aside", run: () => unwrap(api.POST("/v1/simple/goal-suggestions/{suggestion_id}/reject", { ...suggestion, body: { reason: null } })) },
     ];
   }
+  if (i.kind === "goal") {
+    const entity = { params: { path: { entity_id: i.ref_id } } };
+    return [
+      { label: "Confirm", primary: true, done: `${i.title} confirmed`, run: () => unwrap(api.POST("/v1/baseline/entities/{entity_id}/confirm", entity)) },
+      { label: "Not this", done: `${i.title} set aside`, run: () => unwrap(api.POST("/v1/baseline/entities/{entity_id}/reject", entity)) },
+    ];
+  }
   if (i.kind === "draft") {
     return [{ label: "Approve", primary: true, done: "Approved", run: () => unwrap(api.POST("/v1/simple/drafts/{draft_id}/approve", { params: { path: { draft_id: i.ref_id } } })) }];
   }
@@ -92,6 +99,7 @@ const KIND: Record<WaitingItem["kind"], string> = {
   draft: "Roadmap draft",
   proposal: "Proposal on your item",
   goal_suggestion: "Goal suggestion",
+  goal: "Proposed goal",
 };
 
 /**

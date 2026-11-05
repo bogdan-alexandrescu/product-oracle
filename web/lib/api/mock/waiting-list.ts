@@ -29,17 +29,20 @@ function day(d: string): string {
  * from the mock's own answers to the routes each kind lives on (so it can never disagree with
  * them): the run stops they may decide, the PRD questions they own, the decision-log calls
  * proposed to them (the Inbox's decisions they decide, as the waiting count's `others`), broken links and dates on
- * items they decide, drafts waiting for their approval, proposals on their items and the goal
- * suggestions they decide.
+ * items they decide, drafts waiting for their approval, proposals on their items, the goal
+ * suggestions they decide and the proposed goals they may confirm (an approver or the owner, as
+ * POST /v1/baseline/entities/{id}/confirm takes).
  */
-export async function waitingItems(get: (path: string) => Promise<unknown>, meId: string, questions: Schemas["SimpleQuestion"][]): Promise<Item[]> {
+export async function waitingItems(get: (path: string) => Promise<unknown>, meId: string, questions: Schemas["SimpleQuestion"][], role = ""): Promise<Item[]> {
   const read = async <T,>(path: string): Promise<T | undefined> => (await get(path).catch(() => undefined)) as T | undefined;
-  const [inbox, roadmap, drafts, changes, goals] = await Promise.all([
+  const confirmsGoals = role === "approver" || role === "owner";
+  const [inbox, roadmap, drafts, changes, goals, entities] = await Promise.all([
     read<Schemas["InboxOut"]>("/v1/inbox"),
     read<Schemas["SimpleRoadmapOut"]>("/v1/simple/roadmap"),
     read<Schemas["SimpleDraftOut"][]>("/v1/simple/drafts"),
     read<Schemas["SimpleChangeOut"][]>("/v1/simple/changes?status=proposed"),
     read<Schemas["SimpleGoalSuggestionsOut"]>("/v1/simple/goal-suggestions?status=open"),
+    confirmsGoals ? read<Schemas["EntityOut"][]>("/v1/baseline/entities?type=goal&status=proposed") : undefined,
   ]);
   const out: Item[] = [];
   for (const c of [...(inbox?.checkpoints ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
@@ -101,6 +104,10 @@ export async function waitingItems(get: (path: string) => Promise<unknown>, meId
   for (const s of goals?.suggestions ?? []) {
     if (s.status !== "open" || !s.can_accept) continue;
     out.push({ kind: "goal_suggestion", key: `goal_suggestion:${s.id}`, ref_id: s.id, title: s.title, detail: `Suggested for ${s.goal.title}`, action: "Confirm", href: "/simple/goals", at: s.created_at, op: null });
+  }
+  const proposed = (entities ?? []).filter((g) => g.type === "goal" && g.status === "proposed").sort((a, b) => a.created_at.localeCompare(b.created_at));
+  for (const g of proposed) {
+    out.push({ kind: "goal", key: `goal:${g.id}`, ref_id: g.id, title: g.title, detail: "A proposed goal", action: "Confirm", href: "/simple", at: g.created_at, op: null });
   }
   return out;
 }

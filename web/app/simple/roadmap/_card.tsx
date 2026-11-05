@@ -12,6 +12,7 @@ import { ItemTalk } from "@/components/simple/chat/ItemTalk";
 import { askThread, itemTalkPage, type ChatCard } from "@/lib/api/simple-chat";
 import { DecidedWho } from "@/components/simple/DecidedWho";
 import { formatDay } from "@/lib/format";
+import { useMe } from "@/lib/me";
 import { useScreenSubject } from "@/lib/screen-subject";
 
 import { HORIZONS, type Horizon } from "./_board";
@@ -652,6 +653,8 @@ export function FloatingCard({
   /** The board's horizon control (a phone cannot always drag a card to a column off the screen). */
   onHorizon?: (h: Horizon) => void;
 }) {
+  // home-waiting-one-list: Oracle's dates are acted on by the one gate the Roadmap's popover uses.
+  const { can } = useMe();
   // The widened card's visual: a draft's own flow ("item", S7) or a proposal's visual (S10).
   const [wide, setWide] = useState<FlowSubject | "item" | null>(null);
   // roadmap-talk: the item's talk with Oracle, open beside the details (a phone: its tab).
@@ -953,7 +956,7 @@ export function FloatingCard({
             <section className="mt-3 rounded-lg border border-line p-2" data-testid="card-suggestion" data-waits>
               <SuggestionBody
                 item={item}
-                canAct={canChange}
+                canAct={can("accept_date_suggestion")}
                 onAccept={() => onSuggestion("accept")}
                 onEdit={(start_date, end_date) => onSuggestion("edit", { start_date, end_date })}
                 onDismiss={() => onSuggestion("dismiss")}

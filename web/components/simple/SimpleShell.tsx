@@ -64,10 +64,12 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
       .then((waiting) => {
         if (!alive) return;
         const items = waiting.items;
+        // The Roadmap's count is its "Needs a decision" count: the items with broken links (one
+        // per item, however many links), the dates to confirm and the proposals on my items.
         const broken = new Set(items.filter((i) => i.kind === "broken_link").map((i) => i.ref_id));
         setCounts({
           Decisions: items.length,
-          Roadmap: broken.size + items.filter((i) => i.kind === "date" || i.kind === "proposal" || i.kind === "draft").length,
+          Roadmap: broken.size + items.filter((i) => i.kind === "date" || i.kind === "proposal").length,
         });
       })
       .catch(() => undefined);
@@ -93,7 +95,7 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
 /** What a rail count counts, said in words (its accessible name and tooltip). */
 function countWords(label: string, n: number): string {
   if (label === "Meetings") return `${n} ${n === 1 ? "meeting" : "meetings"} live now`;
-  if (label === "Roadmap") return `${n} on the roadmap waiting on you: broken links, dates, proposals and drafts`;
+  if (label === "Roadmap") return `${n} on the roadmap waiting on you: items with broken links, dates to confirm and proposals`;
   return `${n} waiting on you`;
 }
 
