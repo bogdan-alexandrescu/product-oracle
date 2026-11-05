@@ -27,6 +27,8 @@ import { login } from "./helpers";
 const RUN = "7a11c0de-0000-4000-8000-0000000000f5";
 const LINE = "Feature set: 6 features, 14 requirements, 2 left out · 1 problem";
 const PROBLEM = "bulk-address-edit depends on shared-address-book-export, which is excluded";
+// The approve gate names features by their titles, never their keys.
+const GATE_PROBLEM = "Bulk address edit depends on Shared address book export, which is excluded";
 const REASON = "1 blocking problem left: fix or waive them, or send back to the agents.";
 
 async function seeded(page: Page) {
@@ -81,10 +83,10 @@ test("the feature set's blocking problem is waived under the decision, and Appro
   await expect(approve).toBeDisabled();
   const gate = cp.getByTestId("approve-gate");
   await expect(gate.getByTestId("gate-reason")).toHaveCount(1);
-  const row = gate.getByTestId("gate-reason").filter({ hasText: "bulk-address-edit" });
-  await expect(row).toContainText(PROBLEM);
+  const row = gate.getByTestId("gate-reason").filter({ hasText: "Bulk address edit" });
+  await expect(row).toContainText(GATE_PROBLEM);
   await row.getByRole("button", { name: "Waive…" }).click();
-  await row.getByLabel(`Reason to waive: ${PROBLEM}`).fill("The export ships in the same release");
+  await row.getByLabel(`Reason to waive: ${GATE_PROBLEM}`).fill("The export ships in the same release");
   await row.getByRole("button", { name: "Waive", exact: true }).click();
   await expect(cp.getByTestId("approve-gate")).toHaveCount(0);
   await expect(approve).toBeEnabled();

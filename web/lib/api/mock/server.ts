@@ -536,6 +536,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * Now to Next, keep Success metrics and add Spend limits (Now) (E3b);
  * "feature-set" as the default company plus a run waiting at a feature set with a blocking
  * problem (C6, saved-addresses);
+ * "feature-set-two" as "feature-set" with a second blocking problem of the same code on the same
+ * feature (each waived on its own, with its own reason);
  * "scope-review" as the default company plus three runs at their feature set (C7: attempt 1
  * with three rows that need a person, attempt 2, and a held console approval);
  * "scope-review-kept" as "scope-review" with the held run's Bulk edit also new and a likely
@@ -1862,9 +1864,9 @@ function seedRunReviewDecider(): Db {
 }
 
 /** The default seed plus a run waiting at its feature set with a blocking problem (C6, ./runs.ts). */
-function seedFeatureSet(): Db {
+function seedFeatureSet(twoOfOne = false): Db {
   const db = seed();
-  seeded("feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db)));
+  seeded(twoOfOne ? "feature-set-two" : "feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db), twoOfOne));
   return db;
 }
 
@@ -3255,7 +3257,9 @@ function load(): Db {
         : scenario === "big-prd"
           ? seedBigPrd
           : scenario === "feature-set" || scenario === "run-discussions" || scenario === "discussion-change-kinds"
-            ? seedFeatureSet
+            ? () => seedFeatureSet()
+          : scenario === "feature-set-two"
+            ? () => seedFeatureSet(true)
           : scenario === "baseline-review" || scenario === "baseline-review-console"
             ? () => seedBaselineReview(scenario === "baseline-review-console")
           : scenario === "simple-waits"
@@ -6509,7 +6513,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       deletedForGood: (kind) =>
         !db.documents.some((d) => d.kind === kind) &&
         !(db.trash?.entries ?? []).some((e) => (e.documents as { kind?: string }[]).some((d) => d.kind === kind)) &&
-        (db.trash?.purged ?? []).includes(kind),
+        (db.trash?.purged ?? []).includes(kind)
+          ? (db.trash?.purged_at?.[kind] ?? null)
+          : null,
       chatLines: (id) =>
         Object.values(db.simple_chat?.threads ?? {})
           .filter((t) => t.meeting_id === id)

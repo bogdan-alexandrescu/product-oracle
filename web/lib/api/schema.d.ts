@@ -23660,6 +23660,13 @@ export interface components {
             flags: {
                 [key: string]: string[];
             };
+            /**
+             * Titles
+             * @default {}
+             */
+            titles: {
+                [key: string]: string;
+            };
         };
         /**
          * FeatureSetProblem
@@ -24461,6 +24468,11 @@ export interface components {
             item_title?: string | null;
             /** Code */
             code: string;
+            /**
+             * Ref
+             * @default
+             */
+            ref: string;
             /** Label */
             label: string;
             /** Waivable */
@@ -36878,6 +36890,11 @@ export interface components {
             /** Code */
             code: string;
             /**
+             * Ref
+             * @default
+             */
+            ref: string;
+            /**
              * Severity
              * @enum {string}
              */
@@ -41301,6 +41318,8 @@ export interface components {
             reviews_in_trash?: "roadmap" | null;
             /** Reviews Deleted */
             reviews_deleted?: "roadmap" | null;
+            /** Reviews Deleted At */
+            reviews_deleted_at?: string | null;
         };
         /** SimpleVisualCommentIn */
         SimpleVisualCommentIn: {

@@ -75297,6 +75297,14 @@
             "type": "object",
             "title": "Flags",
             "default": {}
+          },
+          "titles": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Titles",
+            "default": {}
           }
         },
         "type": "object",
@@ -77422,6 +77430,11 @@
           "code": {
             "type": "string",
             "title": "Code"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref",
+            "default": ""
           },
           "label": {
             "type": "string",
@@ -111632,6 +111645,11 @@
             "type": "string",
             "title": "Code"
           },
+          "ref": {
+            "type": "string",
+            "title": "Ref",
+            "default": ""
+          },
           "severity": {
             "type": "string",
             "enum": [
@@ -122877,6 +122895,18 @@
               }
             ],
             "title": "Reviews Deleted"
+          },
+          "reviews_deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviews Deleted At"
           }
         },
         "type": "object",

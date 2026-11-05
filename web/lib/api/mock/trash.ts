@@ -49,6 +49,8 @@ export interface TrashDb {
   estimates: Record<string, { slug: string; flow: string; note: string | null }>;
   /** home-deleted-roadmap: the document kinds purged from Trash (the API reads its audit log). */
   purged?: string[];
+  /** home-deleted-roadmap: when each kind was last purged (the audit event's time). */
+  purged_at?: Record<string, string>;
 }
 
 export interface TrashContext<D extends TrashDocument, V extends TrashVersion> {
@@ -73,9 +75,11 @@ export interface TrashContext<D extends TrashDocument, V extends TrashVersion> {
 export const emptyTrash = (): TrashDb => ({ entries: [], estimates: {} });
 
 /** Deletes an entry for good, noting the kinds of documents it held (as trash.purge's audit event). */
-function purge(db: TrashDb, entry: TrashEntryRow) {
+function purge(db: TrashDb, entry: TrashEntryRow, now: string) {
   db.entries = db.entries.filter((e) => e !== entry);
-  db.purged = [...new Set([...(db.purged ?? []), ...(entry.documents as { kind?: string }[]).flatMap((d) => (d.kind ? [d.kind] : []))])];
+  const kinds = (entry.documents as { kind?: string }[]).flatMap((d) => (d.kind ? [d.kind] : []));
+  db.purged = [...new Set([...(db.purged ?? []), ...kinds])];
+  db.purged_at = { ...db.purged_at, ...Object.fromEntries(kinds.map((k) => [k, now])) };
 }
 
 const RETENTION_DAYS = 30;
@@ -152,7 +156,7 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
   const now = ctx.now();
   // The purge the ticker does, on every request routed here (Home's included), not only Trash's:
   // entries past their 30 days are gone.
-  for (const e of ctx.db.entries) if (daysLeft(e, now) <= 0) purge(ctx.db, e);
+  for (const e of ctx.db.entries) if (daysLeft(e, now) <= 0) purge(ctx.db, e, now);
 
   if (p[1] === "trash") {
     if (!owner) return ownerOnly;
@@ -161,7 +165,7 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
     if (!entry) return json(404, { detail: "Not in Trash" });
     if (m === "POST" && p[3] === "restore") return json(200, restore(ctx, entry, now));
     if (m === "DELETE" && !p[3]) {
-      purge(ctx.db, entry);
+      purge(ctx.db, entry, now);
       return json(204, undefined);
     }
     return null;
