@@ -233,20 +233,23 @@ def test_day_reads_this_year_in_the_company_zone(monkeypatch):
     assert waiting_list._day(date(2027, 1, 8), today) == "Jan 8, 2027"
 
 
-async def test_only_dependency_links_wait_as_broken_links(monkeypatch):
-    """protects=merge of roadmap-decide into train AN: a "Broken link" on the one waiting list
-    is a red dependency out of order or a cut item others depend on (service.LINK_KINDS), the
-    same links Home, the roadmap's strip and the side menu count; another red flag with a fix
-    (an end past its milestone) is not one; fails_when=it is listed as a broken link."""
+async def test_every_red_flag_with_a_fix_waits_as_a_broken_link(monkeypatch):
+    """protects=qa-simple-home-3 after the merge of roadmap-decide into train AN: a "Broken
+    link" on the one waiting list is every red flag with a one-click fix, as Home's tile and the
+    walk count them (a feature ending after its milestone is one a person must see); a red flag
+    with no fix (a draft with no owner) is not; fails_when=the end past its milestone is left out.
+    """
     from types import SimpleNamespace as NS
 
     from oracle.simple import service
 
-    def flag(kind: str) -> NS:
-        return NS(state="red", fixes=["shift_dependents"], kind=kind, subject=None, reason="Late")
+    def flag(kind: str, fixes: list[str]) -> NS:
+        return NS(state="red", fixes=fixes, kind=kind, subject=None, reason="Late")
 
     item = NS(id=uuid.uuid4(), title="Example item", can_decide=True, suggestion=None,
-              flags=[flag("dependency_order"), flag("end_past_milestone")])  # fmt: skip
+              flags=[flag("dependency_order", ["shift_dependents"]),
+                     flag("outside_milestone", ["accept_risk"]),
+                     flag("draft_without_owner", [])])  # fmt: skip
 
     async def build(db, principal):
         return NS(items=[item])
@@ -257,4 +260,4 @@ async def test_only_dependency_links_wait_as_broken_links(monkeypatch):
     monkeypatch.setattr(service, "build", build)
     monkeypatch.setattr(company_time, "company_today", today)
     out = await waiting_list._roadmap(None, None)  # type: ignore[arg-type]
-    assert [i.key.split(":")[2] for i in out] == ["dependency_order"]
+    assert [i.key.split(":")[2] for i in out] == ["dependency_order", "outside_milestone"]
