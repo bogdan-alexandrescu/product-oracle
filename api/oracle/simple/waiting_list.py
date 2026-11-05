@@ -214,4 +214,4 @@ def _uuid(v: str | None) -> Any:
 
 def _day(d: Any, today: Any) -> str:
     """ "Nov 4" (the year too when it is not ``today``'s, the company's day)."""
-    return d.strftime("%b %-d") if d.year == today.year else d.strftime("%b %-d, %Y")
+    return company_time.calendar_day(d, today)
