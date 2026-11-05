@@ -173,7 +173,7 @@
       },
       {
        "file": "frames/pm1-d-propose.html",
-       "caption": "An approver who is not the decider: the row's links read Propose"
+       "caption": "An approver who is not the decider: the row's links read Propose, and 'Avery Stone decides' beside them"
       },
       {
        "file": "frames/pm1-d-viewer.html",
@@ -197,7 +197,7 @@
      "letter": "A",
      "name": "One line, counts behind (i)",
      "recommended": false,
-     "what": "The confirm asks 'Move Alert rules engine to Trash?' with one short line of counts ('2 links, 3 decisions and a goal go with it.'); the (i) beside it lists them by name. One more line says where Restore lives.",
+     "what": "The confirm asks 'Move Alert rules engine to Trash?' with one short line of counts ('2 links, 3 decisions and a goal go with it.'); the (i) beside it lists them by name, floating beside the dialog. An (i) by Cancel says where Restore lives.",
      "plus": "Shortest confirm; nothing to read for a feature with no links.",
      "cost": "Who loses a link is hidden behind the (i), so the owner may trash a feature others depend on without seeing their names.",
      "frames": [
@@ -207,7 +207,7 @@
       },
       {
        "file": "frames/pm2-a-mid.html",
-       "caption": "The (i) opened: what goes with it, by name"
+       "caption": "The (i) opened beside the confirm: what goes with it, by name (Needed by, Depends on, Decisions, Milestone, Goal)"
       },
       {
        "file": "frames/pm2-a-result.html",
@@ -219,7 +219,7 @@
       },
       {
        "file": "frames/pm2-a-propose.html",
-       "caption": "An approver who is not the decider: the same confirm proposes it"
+       "caption": "An approver who is not the decider: the same confirm proposes it and says Avery Stone decides"
       },
       {
        "file": "frames/pm2-a-confirm-390.html",
@@ -231,7 +231,7 @@
      "letter": "B",
      "name": "List what points at it",
      "recommended": true,
-     "what": "The confirm lists, one row each: Needed by (the features that lose the link, by name), Depends on, Decisions that name it (they stay), Milestone and Goal. Under it one line: 'Restore it from Settings › Trash for 30 days.' A quiet hint at the foot says 'Not now? Cut keeps it on the roadmap.' A goal's confirm lists the features that stay under No goal and its measure.",
+     "what": "The confirm lists, one row each: Needed by (the features that lose the link, by name), Depends on, Decisions that name it (they stay), Milestone and Goal. An (i) by Cancel says 'Restore it from Settings › Trash for 30 days.' and 'Not now? Cut keeps it on the roadmap.' A goal's confirm lists the features that stay under No goal and its measure.",
      "plus": "Everything at stake in one look; the Cut hint steers 'not now' away from Delete.",
      "cost": "A taller dialog (five rows) even for a feature with nothing linked; a goal with many features shortens its list to four names and a count.",
      "frames": [
@@ -249,14 +249,14 @@
       },
       {
        "file": "frames/pm2-b-propose.html",
-       "caption": "An approver who is not the decider: the same confirm proposes it"
+       "caption": "An approver who is not the decider: the same confirm proposes it and says Avery Stone decides"
       },
       {
        "file": "frames/pm2-b-confirm-390.html",
        "caption": "Phone 390: the confirm"
       }
      ],
-     "why": "The owner sees by name what the delete touches before pressing it, with no extra step; the same five rows read alike for every feature, and the one line about Trash says it can come back."
+     "why": "The owner sees by name what the delete touches before pressing it, with no extra step; the same five rows read alike for every feature, and the (i) by Cancel says it can come back."
     },
     {
      "letter": "C",
@@ -272,7 +272,7 @@
       },
       {
        "file": "frames/pm2-c-mid.html",
-       "caption": "Halfway through typing the name: Move to Trash is still off"
+       "caption": "Halfway through typing the name ('Alert ru'): Move to Trash is still off"
       },
       {
        "file": "frames/pm2-c-result.html",
@@ -284,7 +284,7 @@
       },
       {
        "file": "frames/pm2-c-propose.html",
-       "caption": "An approver who is not the decider: the same confirm proposes it"
+       "caption": "An approver who is not the decider: the same confirm proposes it and says Avery Stone decides"
       },
       {
        "file": "frames/pm2-c-confirm-390.html",
@@ -298,7 +298,7 @@
      "recommended": false,
      "what": "Move to Trash acts at once: the panel closes, the feature leaves the roadmap and a toast says 'Moved Alert rules engine to Trash' with Undo.",
      "plus": "Fastest; nothing to dismiss; Restore and Undo make it safe.",
-     "cost": "One slip removes a feature others depend on; after the toast is gone it is back only from Settings › Trash, which approvers and viewers cannot open.",
+     "cost": "One slip removes a feature others depend on; after the toast is gone it is back only from Settings › Trash, where only an owner restores; an approver proposes it.",
      "frames": [
       {
        "file": "frames/pm2-d-result.html",
@@ -320,7 +320,7 @@
    "code": "pm3",
    "name": "Settings › Trash",
    "question": "How does Settings › Trash list features and goals beside documents?",
-   "common": "Each row says who deleted it and when, days left, and Restore; an (i) says what Restore puts back: a feature's dates, links, milestone and goal, a goal's measure and its features' links. Owners restore; approvers propose a restore of a feature or goal; viewers read; documents stay owners only.",
+   "common": "Each row says who deleted it and when, days left, and Restore; an (i) says what Restore puts back: a feature's dates, links, milestone and goal ('Milestone: None' when it had none), a goal's measure and its features' links. Owners restore; approvers propose a restore of a feature or goal; viewers read; documents stay owners only.",
    "proposals": [
     {
      "letter": "A",
@@ -336,7 +336,7 @@
       },
       {
        "file": "frames/pm3-a-open.html",
-       "caption": "The (i) opened: what Restore puts back (dates, links, milestone, goal)"
+       "caption": "The (i) opened: what Restore puts back (dates, links, milestone, goal; 'None' when it had none)"
       },
       {
        "file": "frames/pm3-a-result.html",
@@ -348,7 +348,7 @@
       },
       {
        "file": "frames/pm3-a-hard-1512.html",
-       "caption": "The full list at 1512"
+       "caption": "The full list at 1512, scrolled to its end"
       },
       {
        "file": "frames/pm3-a-propose.html",
@@ -379,7 +379,7 @@
       },
       {
        "file": "frames/pm3-b-open.html",
-       "caption": "The (i) opened: what Restore puts back (dates, links, milestone, goal)"
+       "caption": "The (i) opened: what Restore puts back (dates, links, milestone, goal; 'None' when it had none)"
       },
       {
        "file": "frames/pm3-b-result.html",
@@ -387,7 +387,7 @@
       },
       {
        "file": "frames/pm3-b-hard-1512.html",
-       "caption": "The full list at 1512"
+       "caption": "The full list at 1512, scrolled to its end"
       },
       {
        "file": "frames/pm3-b-propose.html",
@@ -417,7 +417,7 @@
       },
       {
        "file": "frames/pm3-c-open.html",
-       "caption": "The (i) opened: what Restore puts back (dates, links, milestone, goal)"
+       "caption": "The (i) opened: what Restore puts back (dates, links, milestone, goal; 'None' when it had none)"
       },
       {
        "file": "frames/pm3-c-result.html",
@@ -425,7 +425,11 @@
       },
       {
        "file": "frames/pm3-c-hard-1512.html",
-       "caption": "The full list at 1512 with the Features tab picked"
+       "caption": "The full list at 1512 with the Features tab picked, scrolled to its end"
+      },
+      {
+       "file": "frames/pm3-c-goals.html",
+       "caption": "The Goals tab picked: only the two goals show, and the feature just deleted is hidden"
       },
       {
        "file": "frames/pm3-c-propose.html",
