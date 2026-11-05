@@ -1383,9 +1383,14 @@ function seedReportDraftItemScenario(): Db {
  * plan-open-from-simple "plan-same-key" (./roadmap.ts): the default company plus the Checkout
  * redesign roadmap, built from Checkout redesign (v1 approved, draft 2 from PRD v2), on Simple
  * with Free shipping threshold alert, whose key Usage alerts' roadmap holds for another item.
+ * Usage alerts' roadmap v1 is approved, so its item stays on the Plan with Approved only while
+ * the Checkout one, only in draft 2, does not.
  */
 function seedPlanSameKeyScenario(): Db {
   const db = seed();
+  const alerts = db.documents.find((d) => d.slug === "usage-alerts-roadmap")!;
+  db.versions.find((v) => v.document_id === alerts.id && v.number === 1)!.approved_at ??= "2026-10-05T09:00:00Z";
+  alerts.status = "approved";
   const prd = db.documents.find((d) => d.slug === "checkout-redesign")!;
   const at = "2026-10-20T09:00:00Z";
   const roadmap: DocumentRow = { id: uuid(), slug: "checkout-redesign-roadmap", title: "Checkout redesign roadmap", status: "in_review", kind: "roadmap", template: null, template_version: null, theme: null, created_at: at, updated_at: at };

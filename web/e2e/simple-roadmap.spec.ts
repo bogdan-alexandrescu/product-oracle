@@ -149,7 +149,7 @@ for (const [where, use] of [
         await expect(card.getByTestId("card-reasons")).toContainText("Serves the goal Grow retention.");
         await expect(card.getByTestId("card-decisions")).toContainText("Send the digest weekly or daily?");
         await expect(card.getByTestId("fp-clash")).toContainText("before Alert rules engine ends");
-        await expect(card.getByRole("link", { name: "Open the detailed view" })).toHaveAttribute("href", /^\/plan\?item=alert-digest&prd=[0-9a-f-]{36}&roadmap=alerts-roadmap$/);
+        await expect(card.getByRole("link", { name: "Open the detailed view" })).toHaveAttribute("href", /^\/plan\?item=alert-digest&prd=[0-9a-f-]{36}&roadmap=usage-alerts-roadmap$/);
         // build-feature-panel (FP1 B): the talk beside the details on a desktop; a phone's sheet has it as a tab.
         if (where === "phone") await expect(card.getByRole("tab", { name: "Talk to Oracle" })).toBeVisible();
         else await expect(card.getByTestId("item-talk")).toBeVisible();
