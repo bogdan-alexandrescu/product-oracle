@@ -465,9 +465,9 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
   // milestone ends, the tracks' milestones and the key dates).
   const marks = useMemo(() => {
     const many = planPrds(data).size > 1;
-    // A phone draws Today as its line only (D3); qa4-simple-roadmap-34: a phone's Gantt has its
-    // Today pill too, so its red line is named as on a desktop.
-    const list: Omit<Mark, "row" | "w" | "box">[] = compact && !weeks ? [] : [{ key: "today", kind: "today", x: sc.x(data.today), words: "Today", side: "after" }];
+    // qa4-simple-roadmap-34: a phone's chart has its Today pill too (D3 drew the line only), so
+    // its red line is named as on a desktop.
+    const list: Omit<Mark, "row" | "w" | "box">[] = [{ key: "today", kind: "today", x: sc.x(data.today), words: "Today", side: "after" }];
     for (const m of planMilestones(data)) {
       const prd = many ? milestonePrd(data, m) : null;
       const code = `${codeOf(m.name)}${prd ? ` ${prd.title}` : ""}`;
@@ -479,7 +479,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     // row an earlier one needed (the list above is built milestone-ends, then tracks, then key
     // dates, not by date).
     return placeMarks([...list].sort((a, b) => a.x - b.x), chartW, flags);
-  }, [data, sc, chartW, compact, weeks, flags]);
+  }, [data, sc, chartW, compact, flags]);
   const top = headerHeight(Math.max(0, ...marks.map((m) => m.row + 1)));
   // qa4-simple-roadmap-16: a phone's waterfall wraps its goals' names and gives each warning a band under its bar.
   const wrapRows = compact && format === "waterfall";
@@ -876,7 +876,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               </marker>
             </defs>
             <rect x={0} y={0} width={chartW} height={l.height} fill="var(--surface)" />
-            <Axis ticks={ticks} sc={sc} height={l.height} format={axisFormat} drop={!!dropTargets && axisFormat !== "gantt"} compact={compact} monthly={weeks} />
+            <Axis ticks={ticks} sc={sc} height={l.height} format={axisFormat} drop={!!dropTargets && axisFormat !== "gantt"} compact={compact} monthly={weeks} view={view} />
             {/* D: holidays are grey columns under the rows. */}
             {noWork.map((h) => (
               <rect
@@ -982,7 +982,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               ) : null,
             )}
             <PreviewGhost l={l} sc={sc} items={items} preview={preview} data={data} />
-            {/* D: Today is a red line with a red "Today" pill under the ticks (D3: the line only on a phone, but for its Gantt, qa4-simple-roadmap-34). */}
+            {/* D: Today is a red line with a red "Today" pill under the ticks (a phone too, qa4-simple-roadmap-34). */}
             <g data-testid="today-mark" pointerEvents="none">
               {/* finding 18: the line starts below the axis's own tick labels (never above
                   TICK_H), so it never draws through them on its way down to the Today pill. */}
@@ -1051,7 +1051,7 @@ function drawPhases(g: SVGGElement, phases: Item["phases"], sc: Scale, x: number
   }
 }
 
-function Axis({ ticks, sc, height, format, drop, compact, monthly = false }: { ticks: { day: string; label: string; major: boolean }[]; sc: Scale; height: number; format: Format; drop: boolean; compact: boolean; monthly?: boolean }) {
+function Axis({ ticks, sc, height, format, drop, compact, monthly = false, view = null }: { ticks: { day: string; label: string; major: boolean }[]; sc: Scale; height: number; format: Format; drop: boolean; compact: boolean; monthly?: boolean; view?: [number, number] | null }) {
   // D: a week's date over each week (D3: every other week on a phone, or where a week is too
   // narrow for its date); the day scale numbers its days. fix4 qa-simple-roadmap-6: a phone's
   // months each name themselves.
@@ -1065,26 +1065,42 @@ function Axis({ ticks, sc, height, format, drop, compact, monthly = false }: { t
         const labelled = format !== "gantt" || monthly || (weekly ? !everyOther || n % 2 === 0 : t.major || sc.px >= 20);
         // finding 28: a narrow quarter header still names its year ("Q4 '26"), not just "Q4".
         const [qWord, qYear] = t.label.split(" ");
-        const text = format !== "gantt" && next - x < 64 ? `${qWord}${qYear ? ` '${qYear.slice(-2)}` : ""}` : t.label;
+        const short = `${qWord}${qYear ? ` '${qYear.slice(-2)}` : ""}`;
+        let text = format !== "gantt" && next - x < 64 ? short : t.label;
         const size = format !== "gantt" ? 13 : 11;
         const weight = format !== "gantt" ? 600 : 400;
         // finding 19: the right-most ticks keep their whole label inside the chart instead of
         // running past its edge (where the svg clips them): they anchor from their end once
         // they would otherwise overflow.
         const clipped = x + 3 + textWidth(text, size, weight) > sc.width;
+        // A quarter's label in a chart that scrolls sideways (a phone) is never cut by the edge
+        // of the part in view: it sits in its quarter's part in view, shortened ("Q2 '27") only
+        // where the whole label cannot fit there, and is left out where not even that fits (a
+        // quarter wholly out of view keeps its label where it is).
+        let at = x + 3;
+        if (view && format !== "gantt") {
+          const lo = Math.max(x, view[0]);
+          const hi = Math.min(next, view[1], sc.width);
+          const fits = (s: string) => lo + 3 + textWidth(s, size, weight) <= hi - 2;
+          if (lo < hi && (x + 3 < view[0] || x + 3 + textWidth(text, size, weight) > Math.min(view[1], sc.width))) {
+            text = fits(text) ? text : fits(short) ? short : "";
+            at = lo + 3;
+          }
+        }
+        const anchorEnd = !view || format === "gantt" ? clipped : false;
         return (
           <g key={t.day}>
             {format !== "gantt" && n % 2 === 1 && <rect x={x} y={0} width={next - x} height={height} fill="var(--bg)" opacity={0.5} />}
             {drop && <rect data-testid="quarter-drop" data-add-where={whereAttr("quarter", quarterValue(t.day))} data-add-label={t.label} x={x} y={0} width={next - x} height={height} fill="transparent" />}
             <line x1={x} x2={x} y1={0} y2={height} stroke="var(--line)" strokeWidth={t.major ? 1 : 0.5} />
-            {labelled && (
+            {labelled && text && (
               <text
-                x={clipped ? Math.max(0, sc.width - 2) : x + 3}
+                x={anchorEnd ? Math.max(0, sc.width - 2) : at}
                 y={format !== "gantt" ? 24 : 22}
                 fontSize={size}
                 fontWeight={weight}
                 fill="var(--text2)"
-                textAnchor={clipped ? "end" : "start"}
+                textAnchor={anchorEnd ? "end" : "start"}
                 data-testid="axis-tick"
               >
                 {text}
