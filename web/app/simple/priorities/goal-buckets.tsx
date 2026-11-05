@@ -167,10 +167,23 @@ export function GoalForm({ start, order, title, year, onSave, onCancel }: { star
   );
 }
 
-/** The note above the buckets after a change, with Undo. */
+/**
+ * The note above the buckets after a change, with Undo. It takes its own place in the page
+ * (sticky at the top on a wider screen), never floating over the list: on a phone a note fixed
+ * above the bottom bar covered a goal's title whenever the page sat with one there, which a few
+ * percent wider or narrower text (another system's font) brought about. A new note out of
+ * view is scrolled into view, so the change and its Undo are seen.
+ */
 export function UndoNote({ children, onUndo }: { children: ReactNode; onUndo?: () => void }) {
+  const el = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const n = el.current;
+    if (!n) return;
+    const r = n.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > window.innerHeight) n.scrollIntoView({ block: "nearest" });
+  }, [children]);
   return (
-    <div role="status" data-testid="bucket-note" className="z-30 mt-4 flex shadow-md sm:sticky sm:top-2 max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[calc(76px+env(safe-area-inset-bottom))] items-center gap-3 rounded-lg border border-accent bg-accent-soft px-4 py-2.5 text-[15px] text-text">
+    <div ref={el} role="status" data-testid="bucket-note" className="z-30 mt-4 flex scroll-my-4 shadow-md sm:sticky sm:top-2 items-center gap-3 rounded-lg border border-accent bg-accent-soft px-4 py-2.5 text-[15px] text-text">
       <span className="min-w-0 flex-1">{children}</span>
       {onUndo && (
         <button type="button" className="flex-none font-[650] text-accent-ink underline" onClick={onUndo}>

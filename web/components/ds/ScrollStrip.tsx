@@ -249,7 +249,9 @@ function ScrollingStrip({
         // The 1 px spacer after the last item: items have fractional widths while the scroll
         // range is whole pixels, so without it the last item ends up to a pixel past the
         // strip's edge at the end of the scroll, clipped there.
-        className={`relative flex min-w-0 flex-1 snap-x snap-mandatory overflow-x-auto scroll-fade after:-ms-[var(--strip-gap)] after:w-px after:flex-none after:content-[''] [&>*]:snap-start ${stripClassName}`}
+        // One row whatever the text width (wider type on another system wrapped none, but the
+        // row is spelled out): it never wraps and never scrolls up and down, only sideways.
+        className={`relative flex min-w-0 flex-1 flex-nowrap snap-x snap-mandatory overflow-x-auto overflow-y-hidden scroll-fade after:-ms-[var(--strip-gap)] after:w-px after:flex-none after:content-[''] [&>*]:snap-start ${stripClassName}`}
       >
         {children}
       </div>

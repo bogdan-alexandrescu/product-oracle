@@ -1977,7 +1977,7 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
   const phone = usePhone();
   const [opened, setOpened] = useState<{ code: string; name: string } | null>(null);
   return (
-    <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
+    <section aria-label="Goal buckets">
       <PlanBucketsHead plan={plan} codeOf={codeOf} />
       <div ref={noteSlot} className="scroll-mt-4" />
       {note && <UndoNote onUndo={note.undo ? () => void writes.undo(note.undo!) : undefined}>{note.text}</UndoNote>}
