@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "./test";
 
-import { login, seedRoadmapCrossPrd } from "./helpers";
+import { ROADMAP_CROSS_PRD_RUN_ID } from "../lib/api/mock/runs";
+import { login, seedRoadmapCrossPrd, signOut } from "./helpers";
 
 const COMMENTER = "commenter@example.com";
 
@@ -18,9 +19,13 @@ const row = (page: Page, key: string) => page.locator(`[data-testid="roadmap-ite
 const inspector = (page: Page) => page.getByTestId("roadmap-item-inspector");
 const card = (page: Page, text: string) => inspector(page).getByTestId("reason-card").filter({ hasText: text });
 
-async function openReview(page: Page) {
-  await login(page);
+async function openReview(page: Page, email?: string) {
+  await login(page, email);
   await seedRoadmapCrossPrd(page);
+  await goToReview(page);
+}
+
+async function goToReview(page: Page) {
   await page.goto("/runs");
   await page.locator('[data-testid="run-row"][data-document="usage-alerts-roadmap-6"]').getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
@@ -144,4 +149,133 @@ test("a commenter's two Remove dependency suggestions both stay, each card with 
   await expect(cross).toContainText("Suggested: Dependency removed");
   await expect(depends.getByRole("button", { name: "Remove dependency Anomaly detection" })).toBeVisible();
   await expect(depends.getByRole("button", { name: "Remove dependency Account health ledger (Safety PRD)" })).toHaveCount(0);
+});
+
+/** Another commenter (an invented person) and one action on Budget caps in the run's shared draft. */
+const OTHER = { id: "7a11c0de-0000-4000-8000-0000000005a1", email: "sam.okafor@example.com" };
+
+async function seedAction(page: Page, action: Record<string, unknown>) {
+  await page.evaluate(
+    ({ runId, other, action }) => {
+      type Db = {
+        user_id: string;
+        members: { id: string; email: string; role: string }[];
+        runs: { runs: { id: string; checkpoints: { id: string; status: string }[] }[]; drafts?: Record<string, unknown> };
+      };
+      const write = (globalThis as { __poMockWrite?: (change: (db: Db) => void) => Promise<void> }).__poMockWrite!;
+      return write((db) => {
+        const commenter = db.members.find((m) => m.role === "commenter")!;
+        db.members = [...db.members.filter((m) => m.id !== other.id), { ...commenter, id: other.id, email: other.email }];
+        const cp = db.runs.runs.find((r) => r.id === runId)!.checkpoints.find((c) => c.status === "pending")!;
+        const by = action.created_by === "other" ? other.id : db.user_id;
+        const now = new Date().toISOString();
+        db.runs.drafts ??= {};
+        db.runs.drafts[cp.id] = {
+          revision: 1,
+          note: null,
+          log: [],
+          actions: [{ id: "7a11c0de-0000-4000-8000-0000000005b1", item_key: "budget-caps", kind: "edit", field: "depends_on", answers: [], note: null, ...action, created_by: by, updated_by: by, updated_at: now }],
+        };
+      });
+    },
+    { runId: ROADMAP_CROSS_PRD_RUN_ID, other: OTHER, action },
+  );
+}
+
+// Review follow-up (PR 1264, minor 1): protects = a commenter's Remove dependency never meets
+// another person's dependency change in silence: it says whose it is and offers theirs as a
+// separate suggestion (Ask a teammate, filled in); fails_when = the button stays and its post is
+// refused with nothing said; no_claim = what an approver does with either suggestion.
+test("a commenter's Remove dependency where another person's suggestion holds the item says whose and offers theirs separately", async ({ page }) => {
+  await login(page, COMMENTER);
+  await seedRoadmapCrossPrd(page);
+  await seedAction(page, { value: { add: [], remove: ["anomaly-detection"] }, answers: ["horizon_breaks_dependency"], state: "suggested", created_by: "other" });
+  await goToReview(page);
+  await row(page, "budget-caps").locator('[data-phone="title"]').click();
+  const cross = card(page, CROSS);
+  await expect(cross.getByTestId("their-removal")).toContainText("Sam Okafor suggested this item's dependency change");
+  await expect(cross.getByRole("button", { name: "Remove dependency", exact: true })).toHaveCount(0);
+  await expect(cross.getByRole("button", { name: "Move to Next", exact: true })).toBeVisible();
+
+  await cross.getByRole("button", { name: "Suggest yours separately…" }).click();
+  const form = inspector(page).getByTestId("form-ask");
+  await expect(form.getByRole("textbox", { name: "Question" })).toHaveValue("Please also remove the dependency on Account health ledger (Safety PRD).");
+  await form.getByRole("combobox", { name: "Ask" }).selectOption({ label: "Priya Raman" });
+  await form.getByRole("button", { name: "Ask", exact: true }).click();
+  await expect(row(page, "budget-caps").getByTestId("asked-chip")).toHaveText("Asked Priya Raman");
+  // The other person's suggestion is still theirs, unchanged.
+  await expect(row(page, "budget-caps").getByTestId("suggested-by")).toContainText("Suggested by Sam Okafor");
+});
+
+// Review follow-up (PR 1264, minor 2): protects = an approver's Remove dependency joins a
+// commenter's suggested removal on the item (both removed, both reasons answered); fails_when =
+// it replaces the suggestion, so the commenter's dependency comes back; no_claim = Stage.
+test("an approver's Remove dependency joins a commenter's suggested removal on the item", async ({ page }) => {
+  await openReview(page, COMMENTER);
+  await row(page, "budget-caps").locator('[data-phone="title"]').click();
+  await card(page, CROSS).getByRole("button", { name: "Remove dependency", exact: true }).click();
+  await expect(card(page, CROSS)).toContainText("Suggested: Dependency removed");
+  await signOut(page);
+
+  await login(page);
+  await goToReview(page);
+  await row(page, "budget-caps").locator('[data-phone="title"]').click();
+  const cross = card(page, CROSS);
+  const local = card(page, LOCAL);
+  await local.getByRole("button", { name: "Remove dependency", exact: true }).click();
+  await expect(local).toContainText("✓ Dependency removed");
+  await expect(cross).toContainText("✓ Dependency removed");
+  await expect(cross.getByRole("button", { name: "Move to Next", exact: true })).toHaveCount(0);
+  await expect(inspector(page).getByTestId("item-depends").getByRole("button", { name: /^Remove dependency / })).toHaveCount(0);
+  await expect(page.getByTestId("review-summary")).toHaveText("2 blocking · 7 to confirm");
+});
+
+// Review follow-up (PR 1264, minor 3): protects = the row's own Undo on a joined removal says
+// it takes back both (each reason card's Undo takes back one); fails_when = it reads as a plain
+// Undo yet removes both; no_claim = the reason cards' Undo (tested above).
+test("the row's Undo on two joined removals says it undoes both, and does", async ({ page }) => {
+  await openReview(page);
+  await row(page, "budget-caps").locator('[data-phone="title"]').click();
+  await card(page, CROSS).getByRole("button", { name: "Remove dependency", exact: true }).click();
+  await expect(card(page, CROSS)).toContainText("✓ Dependency removed");
+  await card(page, LOCAL).getByRole("button", { name: "Remove dependency", exact: true }).click();
+  await expect(card(page, LOCAL)).toContainText("✓ Dependency removed");
+
+  const done = row(page, "budget-caps").getByTestId("row-done");
+  await expect(done).toContainText("✓ 2 dependencies removed");
+  await expect(done.getByRole("button", { name: "Undo", exact: true })).toHaveCount(0);
+  await done.getByRole("button", { name: "Undo both" }).click();
+  await expect(card(page, CROSS).getByRole("button", { name: "Move to Next", exact: true })).toBeVisible();
+  await expect(card(page, LOCAL).getByRole("button", { name: "Move to Later", exact: true })).toBeVisible();
+  await expect(page.getByTestId("review-summary")).toHaveText("3 blocking · 7 to confirm");
+});
+
+// Review follow-up (PR 1264, minor 4): protects = Undo on one dependency of a joined removal
+// staged from a discussion keeps it the discussion's (its chip keeps the discussion mark);
+// fails_when = the narrowed edit reads as a row action; no_claim = the discussion's own status
+// (tests/test_discussion_changes.py).
+test("Undo on one dependency of a removal staged from a discussion keeps it the discussion's", async ({ page }) => {
+  await login(page);
+  await seedRoadmapCrossPrd(page);
+  await seedAction(page, {
+    value: { add: [], remove: ["account-health-ledger", "anomaly-detection"] },
+    state: "staged",
+    origin: "discussion",
+    discussion_id: "7a11c0de-0000-4000-8000-0000000005d1",
+    discussion_change_id: "7a11c0de-0000-4000-8000-0000000005c1",
+    from_private: false,
+  });
+  await goToReview(page);
+  await row(page, "budget-caps").locator('[data-phone="title"]').click();
+  const cross = card(page, CROSS);
+  await expect(cross).toContainText("✓ Dependency removed");
+  await cross.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(cross.getByRole("button", { name: "Move to Next", exact: true })).toBeVisible();
+  await expect(card(page, LOCAL)).toContainText("✓ Dependency removed");
+
+  await page.goto("/runs");
+  await page.locator('[data-testid="run-row"][data-document="usage-alerts-roadmap-6"]').getByRole("link").first().click();
+  const chip = page.getByTestId("staging-bar").filter({ visible: true }).getByTestId("staged-chip");
+  await expect(chip).toHaveCount(1);
+  await expect(chip.getByTestId("chip-discussion")).toHaveCount(1);
 });
