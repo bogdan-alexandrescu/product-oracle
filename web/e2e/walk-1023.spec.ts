@@ -63,7 +63,9 @@ test("a commenter opens a milestone and sees it read only", async ({ page }) => 
   await expect(e.getByTestId("milestone-state")).toHaveText("Planned");
   await expect(e.getByRole("textbox")).toHaveCount(0);
   await expect(e.getByRole("checkbox")).toHaveCount(0);
-  await expect(e.getByRole("button")).toHaveCount(0);
+  // Its one button is the panel's × (build-panel-close: every Split panel closes): nothing to edit or save.
+  await expect(e.getByRole("button")).toHaveCount(1);
+  await expect(e.getByRole("button", { name: "Close the details" })).toBeVisible();
   await expect(e).not.toContainText("needs the approver role");
 });
 
