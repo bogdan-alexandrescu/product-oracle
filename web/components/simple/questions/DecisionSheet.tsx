@@ -444,7 +444,7 @@ function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
                   </button>
                 )}
                 {can?.delete && (
-                  <button type="button" className="simple-button text-crit" disabled={busy} onClick={() => void remove()}>
+                  <button type="button" className="simple-button !text-crit" disabled={busy} onClick={() => void remove()}>
                     Delete
                   </button>
                 )}
@@ -559,7 +559,7 @@ function EditFields({ draft, set, question, target }: { draft: Draft; set: (p: P
       {!question && (
         <label className="flex flex-col gap-1">
           <span className="simple-meta font-[650]">Review on</span>
-          <input type="date" className={`${FIELD} h-10 w-[220px] max-w-full`} value={draft.review_at} onChange={(e) => set({ review_at: e.target.value })} />
+          <input type="date" className={`${FIELD.replace("w-full ", "")} h-10 w-[220px] max-w-full`} value={draft.review_at} onChange={(e) => set({ review_at: e.target.value })} />
         </label>
       )}
     </div>
