@@ -23,6 +23,16 @@ Test cards (protects / fails_when / no_claim):
   track owner who is an approver edits their own; a deleted track leaves every read, is in
   Settings > Trash as a Track, its features go to no track, and restoring it from Trash
   puts it and its features back; fails_when=any of those does not hold; no_claim=the web.
+- test_a_tracks_feature_count_is_the_whole_roadmaps: protects=each row of ``GET
+  /v1/simple/tracks`` counts its track's live features over the whole roadmap (cut and
+  merged ones left out), whatever the roadmap's filters show (PR 1272 review);
+  fails_when=the count is missing, counts a cut feature or another track's;
+  no_claim=the web's filters (web/e2e/roadmap-tracks-sheet.spec.ts).
+- test_undo_of_an_add_never_hard_deletes_a_track_that_holds_something: protects=Undo of
+  ``add_track`` removes the track while it holds nothing added since; once it holds a
+  milestone or a feature, Undo moves it to Settings > Trash (restorable, what it holds
+  kept) and the undo says so (``after.in_trash``); fails_when=a track holding anything is
+  hard-deleted, or an untouched one lands in Trash; no_claim=the web's toast.
 """
 
 import uuid
@@ -291,3 +301,78 @@ async def test_tracks_add_edit_delete_and_restore_from_trash(client):
         row = await s.scalar(select(ProductTrack).where(ProductTrack.id == uuid.UUID(new_id))
                              .execution_options(**{INCLUDE_TRASHED: True}))  # fmt: skip
         assert row is not None and row.deleted_at is None
+
+
+async def test_a_tracks_feature_count_is_the_whole_roadmaps(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        first = await s.get(RoadmapItem, uuid.UUID(ids["item_id"]))
+        for n, cut in ((2, False), (3, True)):
+            s.add(RoadmapItem(roadmap_document_id=first.roadmap_document_id,
+                              roadmap_version_id=first.roadmap_version_id, item_key=f"f-0{n}",
+                              title=f"Feature {n}", horizon="later", position=n,
+                              prd_document_id=first.prd_document_id,
+                              prd_version_id=first.prd_version_id, track_id=first.track_id,
+                              cut=cut))  # fmt: skip
+        await s.commit()
+    out = await read_tracks(client, ctx)
+    assert [(t["title"], t["feature_count"]) for t in out["tracks"]] == [("Guided setup", 2)]
+    added = (await change(client, ctx, "owner", "add_track", {},
+                          {"title": "Gift boxes", "prd_id": ids["prd_id"]}))["change"]  # fmt: skip
+    assert added["status"] == "applied"
+    counts = {t["title"]: t["feature_count"] for t in (await read_tracks(client, ctx))["tracks"]}
+    assert counts == {"Guided setup": 2, "Gift boxes": 0}
+
+
+async def test_undo_of_an_add_never_hard_deletes_a_track_that_holds_something(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+
+    async def track_row(track_id: str) -> ProductTrack | None:
+        async with tenant_session(ctx.tenant_id) as s:
+            return await s.scalar(select(ProductTrack)
+                                  .where(ProductTrack.id == uuid.UUID(track_id))
+                                  .execution_options(**{INCLUDE_TRASHED: True}))  # fmt: skip
+
+    async def add() -> dict:
+        after = {"title": "Gift boxes", "prd_id": ids["prd_id"]}
+        return (await change(client, ctx, "owner", "add_track", {}, after))["change"]
+
+    # Untouched since the add: Undo removes it, and the PRD takes a track again.
+    first = await add()
+    r = await client.post(f"{CHANGES}/{first['id']}/undo", headers=ctx.as_("owner"))
+    assert r.status_code == 201, r.text
+    assert not r.json()["change"]["after"].get("in_trash")
+    assert await track_row(first["after"]["track_id"]) is None
+    assert ids["prd_id"] in [p["id"] for p in (await read_tracks(client, ctx))["prds"]]
+
+    # A milestone and a feature put on it since: Undo moves it to Trash, all kept.
+    second = await add()
+    new_id = second["after"]["track_id"]
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(TrackMilestone(track_id=uuid.UUID(new_id), name="Beta", horizon="now",
+                             item_keys=["f-01"]))  # fmt: skip
+        item = await s.get(RoadmapItem, uuid.UUID(ids["item_id"]))
+        item.track_id = uuid.UUID(new_id)
+        await s.commit()
+    r = await client.post(f"{CHANGES}/{second['id']}/undo", headers=ctx.as_("owner"))
+    assert r.status_code == 201, r.text
+    assert r.json()["change"]["after"].get("in_trash") is True
+    row = await track_row(new_id)
+    assert row is not None and row.deleted_at is not None
+    assert "Gift boxes" not in [t["title"] for t in (await read_tracks(client, ctx))["tracks"]]
+    async with tenant_session(ctx.tenant_id) as s:
+        kept = await s.scalar(select(TrackMilestone).where(TrackMilestone.name == "Beta")
+                              .execution_options(**{INCLUDE_TRASHED: True}))  # fmt: skip
+        assert kept is not None and str(kept.track_id) == new_id
+    trash = (await client.get("/v1/trash", headers=ctx.as_("owner"))).json()
+    entry = next(e for e in trash if e["root"]["type"] == "track")
+    assert entry["root"]["title"] == "Gift boxes"
+    r = await client.post(f"/v1/trash/{entry['id']}/restore", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    row = await track_row(new_id)
+    assert row is not None and row.deleted_at is None
+    async with tenant_session(ctx.tenant_id) as s:
+        item = await s.get(RoadmapItem, uuid.UUID(ids["item_id"]))
+        assert str(item.track_id) == new_id
