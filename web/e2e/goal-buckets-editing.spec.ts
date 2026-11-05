@@ -218,3 +218,113 @@ for (const size of SIZES) {
     });
   });
 }
+
+/*
+ * Card gb-phone-note: protects = on a phone the note sits fixed above the bottom bar (GB1 a, GB3
+ * a); a change leaves the page where it was, and only a goal title the note would cover is
+ * scrolled clear of it, by a little; a later re-render does not move the page; at normal, wider
+ * (+0.4px) and narrower (-0.3px) text; fails_when = the page jumps to the note at the top, a
+ * title sits under the note, or the page moves with no new change.
+ */
+const titlesUnder = async (page: Page) => {
+  const n = (await note(page).boundingBox())!;
+  const under: string[] = [];
+  for (const title of await page.locator('[data-testid="plan-goal"] h3').all()) {
+    const t = await title.boundingBox();
+    if (t && t.y < n.y + n.height && t.y + t.height > n.y) under.push((await title.textContent()) ?? "");
+  }
+  return under;
+};
+const scrollY = (page: Page) => page.evaluate(() => Math.round(window.scrollY));
+/** Wheels the page (as a person) until `target`'s top is at about `y` on screen. */
+async function wheelTo(page: Page, target: ReturnType<Page["locator"]>, y: number) {
+  await page.mouse.move(200, 300);
+  for (let i = 0; i < 4; i++) {
+    const d = (await target.boundingBox())!.y - y;
+    if (Math.abs(d) < 2) return;
+    const before = await scrollY(page);
+    await page.mouse.wheel(0, d);
+    await expect.poll(() => scrollY(page)).not.toBe(before);
+  }
+}
+
+test.describe("phone note", () => {
+  const PHONE = SIZES[1].viewport;
+  for (const spacing of ["normal", "0.4px", "-0.3px"]) {
+    test.describe(`letter-spacing ${spacing}`, () => {
+      async function openSpaced(page: Page) {
+        await open(page, PHONE);
+        if (spacing !== "normal") await page.addStyleTag({ content: `*, *::before, *::after { letter-spacing: ${spacing} !important; }` });
+      }
+
+      test("editing a goal low on the page leaves it where it is, the note fixed above the bottom bar", async ({ page }) => {
+        await openSpaced(page);
+        const card = bucket(page, "Revenue");
+        await wheelTo(page, card, 120);
+        await card.getByRole("button", { name: "Edit Revenue" }).click();
+        const form = card.getByTestId("goal-form");
+        await form.getByLabel("Target").fill("Over 300");
+        const save = form.getByRole("button", { name: "Save goal" });
+        await save.scrollIntoViewIfNeeded();
+        const [y, top] = [await scrollY(page), (await card.boundingBox())!.y];
+        await save.click();
+        await expect(note(page)).toContainText("Saved Revenue: over 300 by");
+        // GB1 a: the note is fixed over the page, just above the bottom bar.
+        expect(await note(page).evaluate((e) => getComputedStyle(e).position)).toBe("fixed");
+        const n = (await note(page).boundingBox())!;
+        expect(n.y + n.height).toBeGreaterThan(PHONE.height - 200);
+        // The page stays put: the edited goal's title where its form was, on screen.
+        await page.waitForTimeout(300);
+        expect(await scrollY(page)).toBe(y);
+        const title = card.locator("h3");
+        await expect(title).toBeInViewport();
+        expect(Math.abs((await card.boundingBox())!.y - top)).toBeLessThanOrEqual(1);
+        expect(await titlesUnder(page)).toEqual([]);
+      });
+
+      test("a move whose goal title would sit under the note scrolls it clear by a little", async ({ page }) => {
+        await openSpaced(page);
+        // Pick up one of Revenue's features, then bring Activation's title down to where the note shows.
+        const grip = bucket(page, "Revenue").getByTestId("feature-grip").first();
+        await grip.focus();
+        await page.keyboard.press("Enter");
+        await expect(page.getByTestId("bucket-live")).toContainText("Picked up");
+        const title = bucket(page, "Activation").locator("h3");
+        await wheelTo(page, title, PHONE.height - 110);
+        await page.keyboard.press("ArrowUp");
+        await expect(bucket(page, "Activation")).toHaveAttribute("data-drop", "");
+        await wheelTo(page, title, PHONE.height - 110);
+        const y = await scrollY(page);
+        await page.keyboard.press("Enter");
+        await expect(note(page)).toContainText("to Activation");
+        await expect.poll(() => titlesUnder(page)).toEqual([]);
+        // A nudge, not a jump: the title is still on screen above the note.
+        await expect(title).toBeInViewport();
+        const moved = (await scrollY(page)) - y;
+        expect(moved).toBeGreaterThanOrEqual(0);
+        expect(moved).toBeLessThan(200);
+      });
+
+      test("after a change, the page stays where the person scrolls it, whatever re-renders", async ({ page }) => {
+        await openSpaced(page);
+        const card = bucket(page, "Growth");
+        await wheelTo(page, card, 120);
+        await card.getByRole("button", { name: "Edit Growth" }).click();
+        await card.getByTestId("goal-form").getByRole("button", { name: "Save goal" }).click();
+        await expect(note(page)).toContainText("Saved Growth");
+        // The person scrolls on, a title under the note, then picks a feature up and puts it back.
+        await wheelTo(page, bucket(page, "Revenue").locator("h3"), PHONE.height - 110);
+        const y = await scrollY(page);
+        const grip = bucket(page, "Activation").getByTestId("feature-grip").first();
+        await expect(grip).toBeInViewport();
+        await grip.focus();
+        await page.keyboard.press("Enter");
+        await expect(page.getByTestId("bucket-live")).toContainText("Picked up");
+        await page.keyboard.press("Escape");
+        await expect(page.getByTestId("bucket-live")).toContainText("Move cancelled.");
+        await page.waitForTimeout(300);
+        expect(await scrollY(page)).toBe(y);
+      });
+    });
+  }
+});
