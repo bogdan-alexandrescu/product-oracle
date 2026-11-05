@@ -168,7 +168,7 @@ function Updates() {
             action={
               mayCreate ? (
                 <Button icon="plus" onClick={() => setCreating(true)}>
-                  Write an update
+                  New update
                 </Button>
               ) : undefined
             }

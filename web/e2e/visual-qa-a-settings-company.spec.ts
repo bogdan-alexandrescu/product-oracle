@@ -143,20 +143,27 @@ test("CO-1: in a large company every decision number shows whole", async ({ page
   await page.getByRole("group", { name: "State" }).getByRole("button", { name: /^Any state/ }).click();
   const refs = page.getByTestId("decision-ref");
   await expect(refs).toHaveCount(200);
-  await expect(refs.first()).toHaveText(/^D-\d{3}$/);
+  // The widest number the 84px column is sized for, whole on its line.
+  const widest = refs.filter({ hasText: /^D-9999$/ });
+  await expect(widest).toHaveCount(1);
+  const box = await widest.boundingBox();
+  const cell = await widest.locator("xpath=..").boundingBox();
+  expect(box && cell && box.width <= cell.width && box.height < 24).toBe(true);
   const cut = await refs.evaluateAll((els) =>
     els.filter((el) => el.scrollWidth > el.clientWidth + 1 || (el.parentElement?.scrollWidth ?? 0) > (el.parentElement?.clientWidth ?? 0) + 1).length,
   );
   expect(cut).toBe(0);
 });
 
-test("CO-2: an empty Updates list says so in one line, with Write an update for an owner", async ({ page }) => {
+test("CO-2: an empty Updates list says so in one line, with the header's New update for an owner", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "empty"));
   await login(page);
   await page.goto("/company/updates");
   const empty = page.getByTestId("updates-empty");
   await expect(empty).toContainText("No updates yet");
-  await empty.getByRole("button", { name: "Write an update" }).click();
+  // One action, one name: the empty state's button reads as the header's.
+  await expect(page.getByRole("button", { name: "Write an update" })).toHaveCount(0);
+  await empty.getByRole("button", { name: "New update" }).click();
   await expect(page.getByRole("dialog", { name: "New update" })).toBeVisible();
 });
 
