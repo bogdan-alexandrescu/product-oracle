@@ -602,9 +602,10 @@ def test_only_an_owner_or_due_tail_is_stripped_not_a_due_in_the_question():
 # ------------------------------------------------------------------ review round 3
 
 
-def test_a_short_question_one_word_apart_is_the_answered_one_but_not_reordered():
-    # protects=a short answered question listed again with one word swapped is refused, a
-    # question with its words in another order or one word longer imports; fails_when=
+def test_a_question_one_word_apart_is_the_answered_one_but_not_reordered():
+    # protects=an answered question (five words or more; short ones match only word for word)
+    # listed again with one word spelt another way is refused, a question with its words in
+    # another order or one word longer imports; fails_when=
     # "Which datastore should hold the audit trail?" or "... seven yrs?" imports after
     # "Which database ..." / "... seven years?" were answered, or "... seven months?" (another
     # span) or "Should B replace A in checkout flow?" is refused after "... seven years?" /
@@ -803,6 +804,82 @@ def test_british_and_american_spellings_and_listed_abbreviations_are_one_word():
         ("Should we keep logs for two mths?", "Should we keep logs for two months?"),
         ("Should the reset email include the pw?", "Should the reset email include the password?"),
         ("Who reads the management report weekly?", "Who reads the mgmt report weekly?"),
+    )
+    for asked, listed in refused:
+        assert len(listed_open([_answered(asked)], _prd(f"- {listed}"))) == 1, listed
+        assert len(listed_open([_answered(listed)], _prd(f"- {asked}"))) == 1, asked
+
+
+# ------------------------------------------------------------------ review round 7
+
+
+def test_a_real_word_is_never_read_as_an_abbreviation_of_a_longer_one():
+    # protects=only listed abbreviations stand for a longer word, a plural takes -es only
+    # after s, x, z, ch, sh or o, and the British -our and -re endings are read only at a
+    # word's end; fails_when="Should the trial end next week?" is refused because "Should the
+    # trial extend next week?" was answered, or dry/delivery, try/territory, fly/family,
+    # cry/country, and/android, its/items, opt/output, arm/alarm, stat/states, plan/planes,
+    # car/cares, rat/rates, fourth/forth, mourning/morning, pouring/poring, timbre/timber;
+    # no_claim=paraphrases.
+    pairs = (
+        ("Should the trial end next week?", "Should the trial extend next week?"),
+        ("Should we run a dry release first?", "Should we run a delivery release first?"),
+        ("Should we try the new region?", "Should we try the new territory?"),
+        ("Should the fly page show prices?", "Should the family page show prices?"),
+        ("Should the cry report go out?", "Should the country report go out?"),
+        ("Should we support iOS and tablets?", "Should we support iOS android tablets?"),
+        ("Should the list show its labels?", "Should the list show items labels?"),
+        ("Should members opt in by default?", "Should members output in by default?"),
+        ("Should the arm sound at night?", "Should the alarm sound at night?"),
+        ("Should the page show each stat?", "Should the page show each states?"),
+        ("Who approves the travel plan today?", "Who approves the travel planes today?"),
+        ("Who books the car for staff?", "Who books the cares for staff?"),
+        ("Should the shop sell rat traps?", "Should the shop sell rates traps?"),
+        ("Who ships the fourth release next?", "Who ships the forth release next?"),
+        ("Should mourning notices pause the ads?", "Should morning notices pause the ads?"),
+        ("Should the pouring view list drafts?", "Should the poring view list drafts?"),
+        ("Should the app play the timbre sample?", "Should the app play the timber sample?"),
+    )
+    for asked, listed in pairs:
+        assert listed_open([_answered(asked)], _prd(f"- {listed}")) == [], listed
+        assert listed_open([_answered(listed)], _prd(f"- {asked}")) == [], asked
+
+
+def test_listed_abbreviations_plurals_and_british_endings_still_read_as_one_word():
+    # protects=the listed abbreviations, a plain -s or -es plural and the British -our and -re
+    # endings are the answered question; fails_when="Who reads the rpt each week?" imports
+    # after "Who reads the report each week?" was answered, or colour/color, honour/honor,
+    # behaviour/behavior, labour/labor, metre/meter, theatre/theater, fibre/fiber,
+    # litre/liter, calibre/caliber, rate/rates, box/boxes, dbs/databases and the other
+    # listed abbreviations; no_claim=paraphrases.
+    refused = (
+        ("Who reads the report each week?", "Who reads the rpt each week?"),
+        ("Who owns the dbs for billing?", "Who owns the databases for billing?"),
+        ("What is the order qty limit?", "What is the order quantity limit?"),
+        ("Should the page show the avg time?", "Should the page show the average time?"),
+        ("Who leads eng for the launch?", "Who leads engineering for the launch?"),
+        ("Who runs ops for the launch?", "Who runs operations for the launch?"),
+        ("Who owns auth for the app?", "Who owns authentication for the app?"),
+        ("Who owns perf for the app?", "Who owns performance for the app?"),
+        ("Should every txn get a receipt?", "Should every transaction get a receipt?"),
+        ("Should every msg get a receipt?", "Should every message get a receipt?"),
+        ("Should the stg site use real data?", "Should the staging site use real data?"),
+        ("Which std plan should we offer?", "Which standard plan should we offer?"),
+        ("Which pmt methods should checkout take?", "Which payment methods should checkout take?"),
+        ("Who approves new reqs each week?", "Who approves new requests each week?"),
+        ("Who approves the mkt budget each year?", "Who approves the marketing budget each year?"),
+        ("Who can see the admin page today?", "Who can see the administrator page today?"),
+        ("Which honour should the award carry?", "Which honor should the award carry?"),
+        ("Should we log the behaviour of bots?", "Should we log the behavior of bots?"),
+        ("Who tracks the labour costs each month?", "Who tracks the labor costs each month?"),
+        ("Should the banner use coloured borders?", "Should the banner use colored borders?"),
+        ("Should the form take each metre value?", "Should the form take each meter value?"),
+        ("Which theatre should host the launch?", "Which theater should host the launch?"),
+        ("Should the office get fibre broadband?", "Should the office get fiber broadband?"),
+        ("Should the shop sell the litre bottle?", "Should the shop sell the liter bottle?"),
+        ("Which calibre of staff should we hire?", "Which caliber of staff should we hire?"),
+        ("Who sets the rate for new staff?", "Who sets the rates for new staff?"),
+        ("Who packs the box for each order?", "Who packs the boxes for each order?"),
     )
     for asked, listed in refused:
         assert len(listed_open([_answered(asked)], _prd(f"- {listed}"))) == 1, listed
