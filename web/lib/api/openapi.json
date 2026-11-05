@@ -943,7 +943,7 @@
           "trash"
         ],
         "summary": "List Trash",
-        "description": "What is in Trash, newest first: who deleted it, when, why, what went with it and\nthe days left before the ticker purges it.",
+        "description": "What is in Trash, newest first: who deleted it, when, why, what went with it and\nthe days left before the ticker purges it. Owners see everything; others the features\nand goals they deleted, which they restore themselves (``can_restore``).",
         "operationId": "list_trash",
         "responses": {
           "200": {
@@ -969,7 +969,7 @@
             "APIKeyCookie": []
           }
         ],
-        "x-min-role": "owner"
+        "x-min-role": "commenter"
       }
     },
     "/v1/trash/{entry_id}/restore": {
@@ -978,7 +978,7 @@
           "trash"
         ],
         "summary": "Restore Trash Entry",
-        "description": "Restore everything the delete took, together; ``not_restored`` says what could not\ncome back with it (what it was built from, purged or still in Trash, and what was\ntrashed separately).",
+        "description": "Restore everything the delete took, together (owners; whoever deleted a feature or\na goal, too); ``not_restored`` says what could not\ncome back with it (what it was built from, purged or still in Trash, and what was\ntrashed separately).",
         "operationId": "restore_trash_entry",
         "security": [
           {
@@ -1022,7 +1022,8 @@
             }
           }
         },
-        "x-min-role": "owner"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/trash/{entry_id}": {
@@ -43638,7 +43639,7 @@
           "simple"
         ],
         "summary": "Restore Simple Item",
-        "description": "Put the feature back from Trash with its links, goal and milestone.",
+        "description": "Put the feature back from Trash with its links, goal and milestone: an owner, or\nwhoever deleted it.",
         "operationId": "restore_simple_item",
         "security": [
           {
@@ -43682,7 +43683,8 @@
             }
           }
         },
-        "x-min-role": "owner"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/goal-buckets/goals/{goal_id}/restore": {
@@ -43691,7 +43693,7 @@
           "simple"
         ],
         "summary": "Restore Bucket Goal",
-        "description": "Put the goal back from Trash with its order, measure, target and due.",
+        "description": "Put the goal back from Trash with its order, measure, target and due: an owner, or\nwhoever deleted it.",
         "operationId": "restore_bucket_goal",
         "security": [
           {
@@ -43735,7 +43737,8 @@
             }
           }
         },
-        "x-min-role": "owner"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/sessions": {
@@ -134971,6 +134974,11 @@
             "type": "array",
             "title": "Not Restored",
             "default": []
+          },
+          "can_restore": {
+            "type": "boolean",
+            "title": "Can Restore",
+            "default": false
           }
         },
         "type": "object",
@@ -135098,7 +135106,7 @@
         },
         "type": "object",
         "title": "TrashedOut",
-        "description": "A delete's answer: the Trash entry when it went to Trash, or the proposal made when\nthe caller may not delete it (``change``, routed to its decider). ``can_restore``:\nwhether the caller may restore it from Trash (owners); others ask an owner."
+        "description": "A delete's answer: the Trash entry when it went to Trash, or the proposal made when\nthe caller may not delete it (``change``, routed to its decider). ``can_restore``:\nwhether the caller may restore it from Trash (an owner, or who deleted it)."
       },
       "TriageDailyIn": {
         "properties": {

@@ -286,7 +286,12 @@ PER_ITEM: dict[str, Role | None] = {
     "request_simple_visual": "owner",
     "research_discussion_message": "approver",
     "resolve_discussion_change": "approver",
+    # trash-features-goals (owner's answer, Nov 5): an owner, or whoever deleted the feature
+    # or goal (oracle.trash.service.may_restore; the entry's can_restore).
+    "restore_bucket_goal": "owner",
     "restore_goal_milestone": "owner",
+    "restore_simple_item": "owner",
+    "restore_trash_entry": "owner",
     "resume_simple_draft": None,
     "retry_discussion_reply": "approver",
     "retry_draft_import": "owner",

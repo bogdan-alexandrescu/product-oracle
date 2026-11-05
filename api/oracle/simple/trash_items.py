@@ -14,8 +14,10 @@ for "not now"; Delete is for "this should not be here".
 - ``DELETE /v1/simple/goal-buckets/goals/{goal_id}``: who may edit the goal (approver and
   up) deletes it; its features first move to ``to_goal_id`` or to no goal, as Archive
   moves them. Restore puts the goal back with its order, measure, target and due.
-- ``POST .../restore`` (owners, as Trash): restore one; ``/v1/trash`` lists and restores
-  them beside documents, and the ticker purges them after 30 days.
+- ``POST .../restore``: an owner, or whoever deleted it (owner's answer, Nov 5;
+  oracle.trash.service.may_restore), restores one; ``/v1/trash`` lists and restores them
+  beside documents (to those below owner, only what they deleted), and the ticker purges
+  them after 30 days.
 """
 
 import uuid
@@ -34,7 +36,7 @@ from oracle.baseline.models import Entity
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import drafts, service
 from oracle.simple.models import SimpleChange
-from oracle.simple.router import Approver, Commenter, Owner
+from oracle.simple.router import Approver, Commenter
 from oracle.simple.schemas import SimpleChangeOut
 from oracle.trash import service as trash
 from oracle.trash.filter import INCLUDE_TRASHED
@@ -52,7 +54,7 @@ Reason = Annotated[str | None, Query(max_length=2000)]
 class TrashedOut(BaseModel):
     """A delete's answer: the Trash entry when it went to Trash, or the proposal made when
     the caller may not delete it (``change``, routed to its decider). ``can_restore``:
-    whether the caller may restore it from Trash (owners); others ask an owner."""
+    whether the caller may restore it from Trash (an owner, or who deleted it)."""
 
     entry: TrashEntryOut | None = None
     change: SimpleChangeOut | None = None
@@ -197,7 +199,7 @@ async def delete_feature(
     from oracle.simple import changes
 
     c, row = await _delete(db, principal, item_id, reason)
-    out = TrashedOut(entry=_entry_out(row) if row else None, can_restore=_restores(principal))
+    out = TrashedOut(entry=_entry_out(row) if row else None, can_restore=_restores(principal, row))
     await db.commit()
     if row is None:
         out.change = await changes.one_out(db, principal, c)
@@ -269,14 +271,16 @@ async def trash_goal(
                             {"to_goal_id": to, "moved_items": moved}, reason)  # fmt: skip
 
 
-def _restores(principal: Any) -> bool:
-    return has_role(principal.role, "owner")
+def _restores(principal: Any, entry: TrashEntry | None) -> bool:
+    if entry is None:
+        return has_role(principal.role, "owner")
+    return trash.may_restore(principal, entry)
 
 
 def _entry_out(entry: TrashEntry) -> TrashEntryOut:
     from oracle.trash.router import _entry_out as out
 
-    return out(entry)
+    return out(entry, can_restore=True)
 
 
 async def deleted_names(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
@@ -317,8 +321,9 @@ async def delete_item(
 @router.post(
     "/roadmap/items/{item_id}/restore", response_model=TrashEntryOut, name="restore_simple_item"
 )
-async def restore_item(item_id: uuid.UUID, db: TenantDB, principal: Owner) -> TrashEntryOut:
-    """Put the feature back from Trash with its links, goal and milestone."""
+async def restore_item(item_id: uuid.UUID, db: TenantDB, principal: Commenter) -> TrashEntryOut:
+    """Put the feature back from Trash with its links, goal and milestone: an owner, or
+    whoever deleted it."""
     return await _restore(db, principal, "feature", item_id)
 
 
@@ -342,7 +347,7 @@ async def delete_goal(
         if to.id == g.id or to.status == "rejected":
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Pick another goal")
     entry = await trash_goal(db, principal, g, to_goal_id, reason)
-    out = TrashedOut(entry=_entry_out(entry), can_restore=_restores(principal))
+    out = TrashedOut(entry=_entry_out(entry), can_restore=_restores(principal, entry))
     await db.commit()
     return out
 
@@ -352,8 +357,9 @@ async def delete_goal(
     response_model=TrashEntryOut,
     name="restore_bucket_goal",
 )
-async def restore_goal(goal_id: uuid.UUID, db: TenantDB, principal: Owner) -> TrashEntryOut:
-    """Put the goal back from Trash with its order, measure, target and due."""
+async def restore_goal(goal_id: uuid.UUID, db: TenantDB, principal: Commenter) -> TrashEntryOut:
+    """Put the goal back from Trash with its order, measure, target and due: an owner, or
+    whoever deleted it."""
     return await _restore(db, principal, "goal", goal_id)
 
 

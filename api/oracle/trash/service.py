@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.auth.deps import Principal
+from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion
 from oracle.runs.models import Run
 from oracle.runs.service import creator_only_visible
@@ -440,12 +441,27 @@ async def _not_restored(db: AsyncSession, entry: TrashEntry) -> list[dict[str, A
     return out
 
 
+# trash-features-goals (owner's answer, Nov 5): whoever deleted a feature or a goal restores
+# it too; everything else in Trash is the owners' alone.
+OWN_RESTORE = frozenset({"feature", "goal"})
+
+
+def may_restore(principal: Any, entry: TrashEntry) -> bool:
+    """An owner restores anything; whoever deleted a feature or a goal restores it too."""
+    if has_role(principal.role, "owner"):
+        return True
+    mine = entry.deleted_by is not None and entry.deleted_by == getattr(principal, "id", None)
+    return mine and entry.root_type in OWN_RESTORE
+
+
 async def restore_entry(
     db: AsyncSession, principal: Principal, entry_id: uuid.UUID
 ) -> tuple[TrashEntry, list[dict[str, Any]]]:
     """Bring the entry's root and everything that went with it back; with what could not
-    come back with it (:func:`_not_restored`)."""
+    come back with it (:func:`_not_restored`). Refused unless :func:`may_restore`."""
     entry = await get_entry(db, entry_id)
+    if not may_restore(principal, entry):
+        raise Forbidden("Only an owner, or whoever deleted it, restores this")
     for model in _models():
         await db.execute(
             update(model)
@@ -541,8 +557,14 @@ def days_left(entry: TrashEntry) -> int:
     return max(0, math.ceil(seconds / 86400))
 
 
-async def list_entries(db: AsyncSession) -> list[TrashEntry]:
+async def list_entries(db: AsyncSession, principal: Any = None) -> list[TrashEntry]:
+    """Everything in Trash, newest first; for ``principal`` below owner, only the features
+    and goals they deleted (:func:`may_restore`)."""
     stmt = select(TrashEntry).order_by(TrashEntry.created_at.desc(), TrashEntry.id)
+    if principal is not None and not has_role(principal.role, "owner"):
+        stmt = stmt.where(
+            TrashEntry.deleted_by == principal.id, TrashEntry.root_type.in_(OWN_RESTORE)
+        )
     entries = list(await db.scalars(stmt))
     hidden = await _hidden_runs(db, entries)
     return [e for e in entries if e.root_id not in hidden]

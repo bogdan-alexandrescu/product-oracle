@@ -328,7 +328,8 @@ export interface paths {
         /**
          * List Trash
          * @description What is in Trash, newest first: who deleted it, when, why, what went with it and
-         *     the days left before the ticker purges it.
+         *     the days left before the ticker purges it. Owners see everything; others the features
+         *     and goals they deleted, which they restore themselves (``can_restore``).
          */
         get: operations["list_trash"];
         put?: never;
@@ -350,7 +351,8 @@ export interface paths {
         put?: never;
         /**
          * Restore Trash Entry
-         * @description Restore everything the delete took, together; ``not_restored`` says what could not
+         * @description Restore everything the delete took, together (owners; whoever deleted a feature or
+         *     a goal, too); ``not_restored`` says what could not
          *     come back with it (what it was built from, purged or still in Trash, and what was
          *     trashed separately).
          */
@@ -12703,7 +12705,8 @@ export interface paths {
         put?: never;
         /**
          * Restore Simple Item
-         * @description Put the feature back from Trash with its links, goal and milestone.
+         * @description Put the feature back from Trash with its links, goal and milestone: an owner, or
+         *     whoever deleted it.
          */
         post: operations["restore_simple_item"];
         delete?: never;
@@ -12723,7 +12726,8 @@ export interface paths {
         put?: never;
         /**
          * Restore Bucket Goal
-         * @description Put the goal back from Trash with its order, measure, target and due.
+         * @description Put the goal back from Trash with its order, measure, target and due: an owner, or
+         *     whoever deleted it.
          */
         post: operations["restore_bucket_goal"];
         delete?: never;
@@ -45471,6 +45475,11 @@ export interface components {
              * @default []
              */
             not_restored: components["schemas"]["NotRestored"][];
+            /**
+             * Can Restore
+             * @default false
+             */
+            can_restore: boolean;
         };
         /**
          * TrashItem
@@ -45504,7 +45513,7 @@ export interface components {
          * TrashedOut
          * @description A delete's answer: the Trash entry when it went to Trash, or the proposal made when
          *     the caller may not delete it (``change``, routed to its decider). ``can_restore``:
-         *     whether the caller may restore it from Trash (owners); others ask an owner.
+         *     whether the caller may restore it from Trash (an owner, or who deleted it).
          */
         TrashedOut: {
             entry?: components["schemas"]["TrashEntryOut"] | null;

@@ -58,6 +58,9 @@ class TrashEntryOut(BaseModel):
     days_left: int
     # A restore's answer: what could not come back with it (empty in Trash's list).
     not_restored: list[NotRestored] = []
+    # Whether the caller may restore it: owners anything, whoever deleted a feature or a
+    # goal that one too (oracle.trash.service.may_restore).
+    can_restore: bool = False
 
 
 class RegenerateEstimateIn(BaseModel):
