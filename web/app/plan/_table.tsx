@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { MarkFor, WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { Button, Chip, CodeChip, DataTable, type Column } from "@/components/ds";
 import { namedText } from "@/lib/codes";
 
@@ -175,16 +176,20 @@ export function PlanTable({
       header: "Item",
       phone: "title",
       wrap: true,
-      // Two lines before an ellipsis; the whole title on hover (qa-plan-5).
+      // Two lines before an ellipsis; the whole title on hover (qa-plan-5). The feature's
+      // Current-state pill follows the name (cs2-b, the owner's later pick), on its line or under it.
       cell: (i) => (
-        <span
-          data-testid="plan-title"
-          title={i.title}
-          className={`line-clamp-2 font-semibold break-words max-[600px]:line-clamp-none ${
-            i.change?.kind === "dropped" ? "text-text2 line-through decoration-1" : ""
-          }`}
-        >
-          {i.title}
+        <span data-testid="plan-name" className="flex max-w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <span
+            data-testid="plan-title"
+            title={i.title}
+            className={`line-clamp-2 min-w-0 font-semibold break-words max-[600px]:line-clamp-none ${
+              i.change?.kind === "dropped" ? "text-text2 line-through decoration-1" : ""
+            }`}
+          >
+            {i.title}
+          </span>
+          {i.feature ? <MarkFor featureId={i.feature.id} /> : <MarkFor itemId={i.id} />}
         </span>
       ),
     },
@@ -256,27 +261,29 @@ export function PlanTable({
     { key: "next", header: "Next", width: "144px", wrap: true, className: EMPTY_ON_PHONE, cell: (i) => <NextCell item={i} me={me} onLink={onLink} /> },
   ];
   return (
-    <DataTable<PlanItem>
-      label="Roadmap items"
-      testId="plan-table"
-      columns={columns}
-      rows={loading && !items ? undefined : rows}
-      loading={loading && !items}
-      rowKey={(i) => i.id}
-      selected={selected}
-      onSelect={(k) => onSelect(k)}
-      group={group}
-      // qa-plan-31 (fix4): "Now · 7" in one span, so a flex row on a phone cannot drop the space.
-      groupLabel={(g) => (
-        <span>
-          {g}
-          <span className="text-text2"> · </span>
-          <span className="tnum text-accent-ink">{counts.get(g)}</span>
-        </span>
-      )}
-      groupProps={() => ({ "data-testid": "plan-group" })}
-      rowProps={(i) => ({ "data-testid": "plan-row", "data-origin": i.origin, "data-item": i.key })}
-      empty="No roadmap items yet"
-    />
+    <WithFeatureMarks>
+      <DataTable<PlanItem>
+        label="Roadmap items"
+        testId="plan-table"
+        columns={columns}
+        rows={loading && !items ? undefined : rows}
+        loading={loading && !items}
+        rowKey={(i) => i.id}
+        selected={selected}
+        onSelect={(k) => onSelect(k)}
+        group={group}
+        // qa-plan-31 (fix4): "Now · 7" in one span, so a flex row on a phone cannot drop the space.
+        groupLabel={(g) => (
+          <span>
+            {g}
+            <span className="text-text2"> · </span>
+            <span className="tnum text-accent-ink">{counts.get(g)}</span>
+          </span>
+        )}
+        groupProps={() => ({ "data-testid": "plan-group" })}
+        rowProps={(i) => ({ "data-testid": "plan-row", "data-origin": i.origin, "data-item": i.key })}
+        empty="No roadmap items yet"
+      />
+    </WithFeatureMarks>
   );
 }

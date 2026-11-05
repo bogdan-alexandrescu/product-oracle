@@ -16,7 +16,14 @@ import { ADMIN } from "./helpers";
  * beside each roadmap item listed under a one-pager's plan-strip row (by the item's id), and
  * its card opening on a click with its meaning and proof; fails_when=no pill shows there, the
  * row lists no items, or clicking it opens no card; no_claim=the one-pager's lines (bets,
- * risks: they carry no feature or item id in the API) and the plan-led page (PrdPlan).
+ * risks: they carry no feature or item id in the API).
+ *
+ * Card (cs2-b, the owner's later pick: the pill always follows the name): protects=the pill right
+ * after every feature an Ask answer names in its words (not only its title, and not only after a
+ * marker), after each "What we build" line's name on the plan-led one-pager (its feature found
+ * through the PRD's roadmap item for the slice), and after a Detailed › Plan item's name (its
+ * traced feature); fails_when=a named feature has no pill, the pill is not the next thing after
+ * the name, or a line with a feature shows none; no_claim=which words a model writes.
  */
 
 const PHONE = { width: 390, height: 844 };
@@ -27,6 +34,13 @@ async function pillAfter(name: Locator, pill: Locator) {
   const p = (await pill.boundingBox())!;
   const sameLine = p.y < n.y + n.height && n.y < p.y + p.height;
   expect(sameLine ? p.x >= n.x + n.width - 1 : p.y >= n.y + n.height - 1, "the pill comes after the name").toBe(true);
+}
+
+/** Per pill in `box`: the words just before it and its own word (the pill is the next thing after a name). */
+async function pillsAfterWords(box: Locator): Promise<{ before: string; word: string }[]> {
+  return box.getByTestId("answer-mark").evaluateAll((els) =>
+    els.map((el) => ({ before: (el.previousSibling?.textContent ?? "").trim(), word: el.querySelector('[data-testid="cs-mark"]')?.textContent ?? "" })),
+  );
 }
 
 async function tap(l: Locator) {
@@ -73,6 +87,89 @@ for (const size of ["desktop", "phone"] as const) {
       await expect(card).toBeVisible();
       await expect(card).toContainText("Weekly alert digest");
       await expect(card).toContainText("Runs today");
+    });
+
+    test(`every feature an Ask answer names in its words carries its pill right after the name (${size})`, async ({ context, page }) => {
+      await context.addInitScript((key) => localStorage.setItem(key, "simple-chat"), MOCK_SCENARIO_KEY);
+      await signIn(page, "/simple");
+      await tap(page.getByTestId(size === "phone" ? "phone-ask" : "simple-ask").filter({ visible: true }).first());
+      const panel = page.getByTestId("hop-panel").filter({ visible: true });
+      await expect(panel.getByTestId("ask-chat")).toBeVisible();
+      await say(panel, "what is left on the Alerts roadmap?");
+
+      const reply = panel.getByTestId("ask-chat-thread").getByTestId("ask-answer").last();
+      await expect(reply).toHaveAttribute("data-status", "complete");
+      await expect(reply.getByTestId("answer-title")).toHaveText("What is left on the Alerts roadmap");
+      const line = reply.getByTestId("chat-message-body").locator("p").filter({ hasText: "not done yet" });
+      await expect(line).toContainText("Weekly alert digest");
+      await expect(line).toContainText("Alert routing by team");
+      // Each name in the line is followed by its own pill, not only the title's or the marker's.
+      await expect(line.getByTestId("cs-mark").first()).toBeVisible();
+      await expect.poll(async () => (await pillsAfterWords(line)).find((p) => p.before.endsWith("Weekly alert digest"))?.word).toBe("Exists");
+      const pills = await pillsAfterWords(line);
+      expect(pills.find((p) => p.before.endsWith("Alert routing by team"))?.word).toBe("Exists · proof old");
+      expect(pills.length, "a pill after each item named").toBeGreaterThanOrEqual(4);
+      // A feature named in words carries one pill, after its name: none again after the line's marker.
+      await expect(line.getByTestId("cs-mark")).toHaveCount(pills.length);
+      expect(pills.every((p) => !/\d$/.test(p.before)), "no pill after a source number").toBe(true);
+      // No raw marker or token is shown.
+      await expect(line).not.toContainText("[c:");
+      // The pill after a name opens that feature's card.
+      const digest = line.getByTestId("answer-mark").nth(pills.findIndex((p) => p.before.endsWith("Weekly alert digest")));
+      await tap(digest.getByRole("button", { name: "What Exists means" }));
+      const card = digest.getByTestId("cs-mark-card");
+      await expect(card).toBeVisible();
+      await expect(card).toContainText("Weekly alert digest");
+      await expect(card).toContainText("Runs today");
+    });
+
+    test(`each "What we build" line of the plan-led one-pager carries its feature's pill after its name (${size})`, async ({ context, page }) => {
+      await context.addInitScript((key) => localStorage.setItem(key, "simple-plan"), MOCK_SCENARIO_KEY);
+      await signIn(page, "/simple/one-pagers/guided-setup");
+      const builds = page.getByTestId("milestone-part").getByTestId("part-builds");
+      await expect(builds).toContainText("What we build");
+      const lines = builds.getByRole("listitem");
+      await expect(lines.first().getByTestId("cs-mark")).toBeVisible();
+      const n = await lines.count();
+      expect(n).toBeGreaterThan(2);
+      for (let i = 0; i < n; i += 1) {
+        const l = lines.nth(i);
+        await expect(l.getByTestId("cs-mark"), "every line's feature is on the roadmap").toHaveCount(1);
+        await expect(l.getByTestId("cs-mark")).toHaveText(/^(New|In progress|Exists|Exists · proof old)$/);
+        await pillAfter(l.getByTestId("part-build-name"), l.getByTestId("cs-mark"));
+      }
+      // The pill is that feature's: its card names the line's feature.
+      const whole = lines.filter({ hasNotText: /part \d of \d/ }).first();
+      const name = (await whole.getByTestId("part-build-name").textContent())!.trim();
+      const word = (await whole.getByTestId("cs-mark").textContent())!.trim();
+      await tap(whole.getByRole("button", { name: `What ${word} means` }));
+      const card = whole.getByTestId("cs-mark-card");
+      await expect(card).toBeVisible();
+      await expect(card).toContainText(name);
+      await page.keyboard.press("Escape");
+      await expect(card).toHaveCount(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(size === "phone" ? PHONE.width : 1440);
+    });
+
+    test(`a Detailed Plan item carries its feature's pill right after its name (${size})`, async ({ page }) => {
+      await signIn(page, "/plan");
+      await expect(page.getByRole("heading", { level: 1, name: "Plan" })).toBeVisible();
+      const rows = page.getByTestId("plan-row").filter({ visible: true });
+      const traced = rows.filter({ hasText: "Threshold alerts on spend" });
+      const pill = traced.getByTestId("plan-name").getByTestId("cs-mark");
+      await expect(pill).toHaveText("New");
+      await pillAfter(traced.getByTestId("plan-title"), pill);
+      // Beside the name, not across the cell: on its line, a small gap after the words.
+      const t = (await traced.getByTestId("plan-title").boundingBox())!;
+      const p = (await pill.boundingBox())!;
+      if (p.y < t.y + t.height && t.y < p.y + p.height) expect(p.x - (t.x + t.width)).toBeLessThanOrEqual(16);
+      // An item with no feature behind it shows none.
+      await expect(rows.filter({ hasText: "Daily alert digest email" }).getByTestId("cs-mark")).toHaveCount(0);
+      await tap(traced.getByRole("button", { name: "What New means" }));
+      const card = traced.getByTestId("cs-mark-card");
+      await expect(card).toBeVisible();
+      await expect(card).toContainText("Threshold alerts");
+      await expect(card).toContainText("Nothing built yet");
     });
 
     test(`a one-pager lists each plan-strip row's items with their pills (${size})`, async ({ page }) => {

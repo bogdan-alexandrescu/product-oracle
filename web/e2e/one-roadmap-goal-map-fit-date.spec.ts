@@ -42,6 +42,8 @@ test.describe("desktop", () => {
     await ed.getByLabel("Name").fill("40 sign-ups per rep");
     await ed.getByLabel("Met when the reading is at least").fill("40");
     await ed.locator("label", { hasText: "Scale per rep" }).click();
+    // A new milestone starts with nothing before it (gm1-a-open); its place is picked.
+    await expect(ed.getByLabel("Comes after").locator("option:checked")).toHaveText("Nothing: it can start now");
     await ed.getByLabel("Comes after").selectOption({ label: "25 sign-ups per rep" });
     await ed.getByTestId("gm-save").click();
     await expect(page.getByTestId("gm-flash")).toContainText("Proposed: 40 sign-ups per rep.");

@@ -177,17 +177,18 @@ test.describe("desktop", () => {
     expect(cy).toBeLessThan(top.y + top.height);
   });
 
-  test("Comes after: defaults to the goal's previous milestone, a different pick orders the steps", async ({ page }) => {
-    // protects=the propose form's Comes after picker starts on the goal's last milestone and follows
-    // the goal; a different pick is saved; the gate edit changes it and the steps follow;
-    // fails_when=the picker is missing, read-only, starts empty or the order ignores it; no_claim=the API.
+  test("Comes after: starts at Nothing, a pick orders the steps", async ({ page }) => {
+    // protects=the propose form's Comes after picker starts at "Nothing: it can start now" (gm1-a-open)
+    // and keeps it when the goal changes; a pick is saved; the gate edit changes it and the steps
+    // follow; fails_when=the picker is missing, read-only, starts on a milestone or the order ignores
+    // it; no_claim=the API.
     await open(page);
     await page.getByTestId("gm-propose").click();
     let ed = page.getByTestId("gm-editor");
     const after = ed.getByLabel("Comes after");
-    await expect(after.locator("option:checked")).toHaveText("50 sign-ups per rep");
+    await expect(after.locator("option:checked")).toHaveText("Nothing: it can start now");
     await ed.getByLabel("Goal it moves").selectOption({ index: 2 });
-    await expect(after.locator("option:checked")).toHaveText("$20k revenue per day");
+    await expect(after.locator("option:checked")).toHaveText("Nothing: it can start now");
     await ed.getByLabel("Goal it moves").selectOption({ index: 0 });
     await ed.getByLabel("Name").fill("40 sign-ups per rep");
     await ed.getByLabel("Met when the reading is at least").fill("40");
@@ -363,7 +364,7 @@ test.describe("phone", () => {
     const ed = page.getByTestId("gm-editor");
     await ed.getByLabel("Name").fill("40 sign-ups per rep");
     await ed.getByLabel("Met when the reading is at least").fill("40");
-    await expect(ed.getByLabel("Comes after").locator("option:checked")).toHaveText("50 sign-ups per rep");
+    await expect(ed.getByLabel("Comes after").locator("option:checked")).toHaveText("Nothing: it can start now");
     await ed.getByLabel("Comes after").selectOption({ label: "25 sign-ups per rep" });
     await ed.getByTestId("gm-save").click();
     await expect(page.getByTestId("gm-flash")).toContainText("Proposed: 40 sign-ups per rep.");

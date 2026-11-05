@@ -7,6 +7,7 @@
  * Ready to move band whose moves the owner confirms.
  */
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { Button, PageHeader } from "@/components/ds";
@@ -214,11 +215,11 @@ export function ProofTable({ data, phone, onChanged }: { data: FeatureStates; ph
   const [open, setOpen] = useState<string | null>(null);
   const [checked, setChecked] = useState<FeatureState | null>(null);
   const [checking, setChecking] = useState(false);
-  const [done, setDone] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const running = data.features.filter((f) => f.mark === "exists" || f.mark === "exists_old");
-  // Old proof first, then what moved today, then the rest by when it shipped.
-  const rank = (f: FeatureState) => (f.mark === "exists_old" ? 0 : f.moved_at && f.proof_days === 0 ? 1 : 2);
+  // What the owner acted on today (moved in, or said Yes, still runs) first, then old proof,
+  // then the rest by when it shipped: a row just confirmed stays where the owner was looking.
+  const rank = (f: FeatureState) => ((movedNow(f) || youConfirmed(f)) && f.proof_days === 0 ? 0 : f.mark === "exists_old" ? 1 : 2);
   const rows = [...running].sort((a, b) => rank(a) - rank(b) || (a.shipped_at ?? "").localeCompare(b.shipped_at ?? ""));
   const check = async (f: FeatureState) => {
     setOpen(f.feature_id);
@@ -237,7 +238,6 @@ export function ProofTable({ data, phone, onChanged }: { data: FeatureStates; ph
     setError(null);
     try {
       const out = await unwrap(api.POST("/v1/feature-states/{feature_id}/answer", { params: { path: { feature_id: f.feature_id } }, body: { answer: k } }));
-      setDone((d) => ({ ...d, [f.feature_id]: k }));
       setOpen(null);
       onChanged(out);
     } catch (e) {
@@ -259,7 +259,7 @@ export function ProofTable({ data, phone, onChanged }: { data: FeatureStates; ph
       {rows.map((f) => {
         const old = f.mark === "exists_old";
         const isOpen = open === f.feature_id;
-        const said = done[f.feature_id];
+        const confirmed = youConfirmed(f);
         const proofs = checked && isOpen ? checked.proofs : f.proofs;
         const files = proofs.find((p) => p.kind === "code_map");
         const prs = proofs.find((p) => p.kind === "pull_requests");
@@ -267,7 +267,7 @@ export function ProofTable({ data, phone, onChanged }: { data: FeatureStates; ph
         const measured = proofs.find((p) => p.kind === "measured");
         const ok = (p: Schemas["FeatureProofOut"] | undefined) => (checked && isOpen && !checking ? (p?.still_true ?? p?.ok ?? false) : null);
         return (
-          <div key={f.feature_id} className={`border-b border-line last:border-b-0 ${old || isOpen ? "bg-warn-bg/40" : f.moved_at && f.proof_days === 0 ? "bg-pass-bg/60" : ""}`} data-testid="cs1-row">
+          <div key={f.feature_id} className={`border-b border-line last:border-b-0 ${old || isOpen ? "bg-warn-bg/40" : movedNow(f) && !confirmed ? "bg-pass-bg/60" : ""}`} data-testid="cs1-row">
             <div className={phone ? "space-y-1 px-3 py-2.5" : `${grid} items-center px-4 py-2.5`}>
               <span className="flex items-center gap-2 font-medium">
                 <Glyph old={old} />
@@ -276,12 +276,12 @@ export function ProofTable({ data, phone, onChanged }: { data: FeatureStates; ph
               <span className="text-[13px] text-text2">{f.shipped_at ? day(f.shipped_at, true) : "—"}</span>
               <ProofWords f={f} wide={!phone} />
               <span className="flex flex-wrap items-center gap-2">
-                {f.moved_at && f.proof_days === 0 && !said ? (
+                {movedNow(f) && !confirmed ? (
                   <span className="text-[13px] font-semibold text-pass" data-testid="cs-moved-note">{movedNote(f, (iso) => day(iso))}</span>
                 ) : isOpen && checking ? (
                   <span className="text-[13px] text-accent-ink">Checking now…</span>
-                ) : said === "still_runs" && f.checked_at ? (
-                  <span className="text-[13px] font-semibold text-pass">Checked {day(f.checked_at)} · you confirmed</span>
+                ) : confirmed && f.checked_at ? (
+                  <span className="text-[13px] font-semibold text-pass" data-testid="cs-confirmed-note">Checked {day(f.checked_at)} · you confirmed</span>
                 ) : old ? (
                   <span className="whitespace-nowrap rounded-full bg-warn-bg px-2 py-0.5 text-[13px] font-semibold text-warn">Proof is {f.proof_days} days old</span>
                 ) : f.no_proof_yet ? (
@@ -329,6 +329,93 @@ export function ProofTable({ data, phone, onChanged }: { data: FeatureStates; ph
 }
 
 
+/** Moved into Current state today: its note says when and how. */
+const movedNow = (f: FeatureState) => !!f.moved_at && f.proof_days === 0;
+
+/** The owner's Yes, still runs is the latest check (a later read by Oracle replaces it). */
+const youConfirmed = (f: FeatureState) => f.answer === "still_runs" && !!f.answered_at && f.answered_at === f.checked_at;
+
+/** A feature's mark as a small glyph: In progress half filled, New a dashed ring. */
+function MarkGlyph({ mark, size = 14 }: { mark: Mark; size?: number }) {
+  const c = size / 2;
+  const r = size >= 14 ? 5.5 : 4;
+  const tone = mark === "new" ? "var(--accent-ink)" : mark === "in_progress" || mark === "exists_old" ? "var(--warn)" : "var(--pass)";
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden className="flex-none">
+      <circle cx={c} cy={c} r={r} fill={mark === "exists" ? tone : "none"} stroke={tone} strokeWidth={1.8} strokeDasharray={mark === "new" ? "2.4 2" : undefined} />
+      {mark === "in_progress" && <path d={`M${c} ${c - r} A${r} ${r} 0 0 1 ${c} ${c + r} Z`} fill={tone} />}
+    </svg>
+  );
+}
+
+/** What is still to build, in the order Desired state lists it: ready first, then in progress, then new. */
+function stillDesired(data: FeatureStates): FeatureState[] {
+  const order = (f: FeatureState) => (f.ready ? 0 : f.mark === "in_progress" ? 1 : 2);
+  return data.features.filter((f) => f.mark === "in_progress" || f.mark === "new").sort((a, b) => order(a) - order(b));
+}
+
+/** Desired state's list: every planned feature with its mark, area, release and how its proof stands. */
+export function DesiredList({ data }: { data: FeatureStates }) {
+  const phone = usePhoneWidth();
+  const [all, setAll] = useState(false);
+  const rows = stillDesired(data);
+  const limit = phone ? 9 : 14;
+  const shown = all ? rows : rows.slice(0, limit);
+  if (rows.length === 0) return null;
+  return (
+    <div className="overflow-hidden rounded-xl border border-line bg-surface" data-testid="cs-desired">
+      {shown.map((f) => {
+        const tasks = proof(f, "tasks");
+        return (
+          <div key={f.feature_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-2 last:border-b-0" data-testid="cs-desired-row">
+            <span data-testid="cs-mark" data-mark={f.mark} title={MARK_WORD[f.mark]} className={`inline-flex flex-none items-center gap-1 whitespace-nowrap text-[12px] font-semibold ${f.mark === "new" ? "text-accent-ink" : "text-warn"}`}>
+              <MarkGlyph mark={f.mark} />
+              <span className={phone ? "sr-only" : ""}>{MARK_WORD[f.mark]}</span>
+            </span>
+            <span className="min-w-[10rem] flex-1 font-medium">{f.title}</span>
+            {!phone && <span className="w-[200px] text-[13px] text-text2">{f.area ?? ""}</span>}
+            {!phone && <span className="w-[140px] text-[13px] text-text2">{f.milestone ?? ""}</span>}
+            {f.ready ? (
+              <span className="text-[13px] font-semibold text-pass">Proof is in</span>
+            ) : f.mark === "in_progress" && tasks?.total ? (
+              <span className="text-[13px] text-text2">
+                {tasks.count ?? 0} of {tasks.total} tasks done
+              </span>
+            ) : null}
+          </div>
+        );
+      })}
+      {rows.length > shown.length && (
+        <button type="button" onClick={() => setAll(true)} className="block w-full px-4 py-2 text-left text-[13px] text-text2 hover:text-text">
+          and {rows.length - shown.length} more
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Under Current state's table: what is still in Desired state, each feature a chip with its mark. */
+export function StillDesired({ data }: { data: FeatureStates }) {
+  const rows = stillDesired(data);
+  if (rows.length === 0) return null;
+  return (
+    <div className="mt-4 rounded-xl border border-line bg-surface p-3" data-testid="cs-still-desired">
+      <p className="mb-2 text-[13px] font-semibold text-text2">
+        Still in Desired state: {data.in_progress} in progress, {data.new} new
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {rows.map((f) => (
+          <span key={f.feature_id} data-mark={f.mark} title={MARK_WORD[f.mark]} className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 text-[12px]" data-testid="cs-still-chip">
+            <MarkGlyph mark={f.mark} size={11} />
+            <span className="sr-only">{MARK_WORD[f.mark]}: </span>
+            {f.title}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** The top of Current state: how many run, how many have old proof, how many are being built. */
 export function CurrentSummary({ data }: { data: FeatureStates }) {
   return (
@@ -353,6 +440,7 @@ export function CurrentSummary({ data }: { data: FeatureStates }) {
 
 /** Desired state's Ready to move band: features whose proof is in, each waiting for the owner's yes. */
 export function ReadyBand({ data, onChanged }: { data: FeatureStates; onChanged: (f: FeatureState) => void }) {
+  const router = useRouter();
   const [open, setOpen] = useState<FeatureState | null>(null);
   const [moving, setMoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -365,6 +453,8 @@ export function ReadyBand({ data, onChanged }: { data: FeatureStates; onChanged:
       const out = await unwrap(api.POST("/v1/feature-states/{feature_id}/move", { params: { path: { feature_id: f.feature_id } }, body: { decision } }));
       setOpen(null);
       onChanged(out);
+      // A move ends on Current state, the moved feature on top with when and how it moved.
+      if (decision === "move") router.push("/baseline?view=current");
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -437,6 +527,7 @@ export function CurrentStateView({ q, onChanged }: { q: ReturnType<typeof useFea
         <>
           <CurrentSummary data={q.data} />
           <ProofTable data={q.data} phone={phone} onChanged={onChanged} />
+          <StillDesired data={q.data} />
         </>
       )}
     </>
