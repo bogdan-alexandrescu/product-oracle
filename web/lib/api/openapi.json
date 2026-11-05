@@ -43305,7 +43305,7 @@
           "simple"
         ],
         "summary": "Delete Bucket Goal",
-        "description": "Move the goal to Trash, after its features move to ``to_goal_id`` (absent: to no\ngoal), as Archive moves them.",
+        "description": "Move the goal to Trash; its features move to ``to_goal_id`` when one is picked, as\nArchive moves them. A commenter proposes it instead (``change``); viewers are refused.",
         "operationId": "delete_bucket_goal",
         "security": [
           {
@@ -43383,7 +43383,7 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "commenter"
       }
     },
     "/v1/simple/goal-buckets/goals/{goal_id}/archive": {
@@ -60887,7 +60887,8 @@
                   "restore_goal",
                   "edit_goal_milestone",
                   "set_depends_on",
-                  "delete_item"
+                  "delete_item",
+                  "delete_goal"
                 ]
               },
               {
@@ -61290,7 +61291,8 @@
               "restore_goal",
               "edit_goal_milestone",
               "set_depends_on",
-              "delete_item"
+              "delete_item",
+              "delete_goal"
             ],
             "title": "Op"
           },
@@ -82786,7 +82788,8 @@
               "restore_goal",
               "edit_goal_milestone",
               "set_depends_on",
-              "delete_item"
+              "delete_item",
+              "delete_goal"
             ],
             "title": "Op"
           },
@@ -116865,7 +116868,8 @@
               "restore_goal",
               "edit_goal_milestone",
               "set_depends_on",
-              "delete_item"
+              "delete_item",
+              "delete_goal"
             ],
             "title": "Op"
           },
@@ -117014,7 +117018,8 @@
               "restore_goal",
               "edit_goal_milestone",
               "set_depends_on",
-              "delete_item"
+              "delete_item",
+              "delete_goal"
             ],
             "title": "Op"
           },
