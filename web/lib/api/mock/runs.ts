@@ -1057,14 +1057,14 @@ interface FeatureSetSpec {
   excluded: { key: string; reason: string }[];
 }
 
-/** The local runtime's feature set: clean, as the API's FakeRuntime leaves it. */
+/** The local runtime's feature set: clean, as the API's FakeRuntime leaves it; its goal one the baseline has (the order check counts only those). */
 const LOCAL_FEATURE_SET: FeatureSetSpec = {
   features: [
     {
       key: "price-early",
       title: "Show the price early",
       summary: "Buyers see the full price before checkout",
-      goals: [{ key: "g1", contribution: 2 }],
+      goals: [{ key: "g.activation", contribution: 2 }],
       depends_on: [],
       confidence: 0.8,
       requirements: [{ key: "price-early-total", text: "The cart shows the total with delivery before checkout", acceptance: ["Delivery cost is included"] }],
@@ -1073,7 +1073,7 @@ const LOCAL_FEATURE_SET: FeatureSetSpec = {
       key: "guest-checkout",
       title: "Guest checkout",
       summary: "First-time buyers pay without an account",
-      goals: [{ key: "g1", contribution: 3 }],
+      goals: [{ key: "g.activation", contribution: 3 }],
       depends_on: ["price-early"],
       confidence: 0.7,
       requirements: [{ key: "guest-checkout-email", text: "A guest gives an email address only", acceptance: ["No password is asked for"] }],
@@ -1082,7 +1082,7 @@ const LOCAL_FEATURE_SET: FeatureSetSpec = {
       key: "order-tracking",
       title: "Order tracking",
       summary: "Buyers follow their order after paying",
-      goals: [{ key: "g1", contribution: 1 }],
+      goals: [{ key: "g.activation", contribution: 1 }],
       depends_on: [],
       confidence: 0.6,
       requirements: [{ key: "order-tracking-link", text: "The confirmation email links to the order's status", acceptance: ["The link works without signing in"] }],
