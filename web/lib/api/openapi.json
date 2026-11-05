@@ -42354,8 +42354,34 @@
           "simple"
         ],
         "summary": "Get Simple Roadmap Waiting",
-        "description": "roadmap-decide review: the side menu's light count: the broken links of the whole\nroadmap as the caller sees it (the working draft's to who sees it), no filter; the same\nones the roadmap's strip, its Needs a decision and Home count; and the dates the caller may\nconfirm, so the side menu's count equals Needs a decision.",
+        "description": "roadmap-decide review: the side menu's light count: the broken links of the whole\nroadmap as the caller sees it (the working draft's to who sees it), no filter; the same\nones the roadmap's strip, its Needs a decision and Home count; and the dates the caller may\nconfirm, so the side menu's count equals Needs a decision. ``roadmap`` (id or slug): one\nroadmap's alone, as the read's own filter (Needs a decision's \"in all\" of a chosen roadmap);\n404 when the caller cannot read it.",
         "operationId": "get_simple_roadmap_waiting",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roadmap",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Roadmap"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -42366,16 +42392,18 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
         "x-min-role": "viewer"
       }
     },

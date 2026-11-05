@@ -200,15 +200,30 @@ def flags_out(e: Entry, may: Any = None) -> list[SimpleFlag]:
 LINK_KINDS = ("dependency_order", "cut_with_dependents")
 
 
-async def waiting(db: AsyncSession, principal: Any) -> tuple[int, int]:
+async def waiting(db: AsyncSession, principal: Any, roadmap: str | None = None) -> tuple[int, int]:
     """The broken links and the dates to confirm of the whole roadmap as ``principal`` reads
     it: a red dependency out of order or a cut item others depend on, with a fix; an open date
     suggestion the reader may decide; done items left out (the read without the rest of
-    :func:`build`)."""
+    :func:`build`). ``roadmap`` (id or slug): that roadmap's alone, as :func:`build` narrows
+    it; 404 when the reader cannot read it."""
     from oracle.simple import drafts
 
     read = await load(db, (await drafts.reader(db, principal)).overlays)
-    live = [e for e in read.entries if e.status != "done"]
+    chosen: uuid.UUID | None = None
+    if roadmap:
+        rows = await db.scalars(select(Document).where(Document.kind == "roadmap"))
+        readable = {d.id: d for d in rows}
+        feeding = set(await company.feeding_ids(db, list(readable)))
+        doc = next(
+            (d for i, d in readable.items() if i in feeding and roadmap in (str(d.id), d.slug)),
+            None,
+        )
+        if doc is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No such roadmap")
+        chosen = doc.id
+    live = [
+        e for e in read.entries if e.status != "done" and (chosen is None or e.roadmap.id == chosen)
+    ]
     links = sum(
         1 for e in live for f in e.flags if f.state == "red" and f.fixes and f.kind in LINK_KINDS
     )

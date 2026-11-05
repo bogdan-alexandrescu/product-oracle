@@ -474,6 +474,10 @@ async def _names(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
 def _touched(c: SimpleChange) -> set[str]:
     if c.op in KEYED:
         return set(c.after) | set(c.before)
+    # Review: a removed dependency touches the item it depended on too (its flags, the
+    # "changed since you saw it" check's last writer, the locks).
+    if c.op == "remove_dependency" and c.target.get("subject"):
+        return {str(c.target.get("item_id")), str(c.target["subject"])}
     return {str(c.target.get("item_id"))}
 
 

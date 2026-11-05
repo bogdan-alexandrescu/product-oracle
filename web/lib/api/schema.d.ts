@@ -12232,7 +12232,9 @@ export interface paths {
          * @description roadmap-decide review: the side menu's light count: the broken links of the whole
          *     roadmap as the caller sees it (the working draft's to who sees it), no filter; the same
          *     ones the roadmap's strip, its Needs a decision and Home count; and the dates the caller may
-         *     confirm, so the side menu's count equals Needs a decision.
+         *     confirm, so the side menu's count equals Needs a decision. ``roadmap`` (id or slug): one
+         *     roadmap's alone, as the read's own filter (Needs a decision's "in all" of a chosen roadmap);
+         *     404 when the caller cannot read it.
          */
         get: operations["get_simple_roadmap_waiting"];
         put?: never;
@@ -70680,7 +70682,9 @@ export interface operations {
     };
     get_simple_roadmap_waiting: {
         parameters: {
-            query?: never;
+            query?: {
+                roadmap?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -70694,6 +70698,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimpleRoadmapWaiting"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
