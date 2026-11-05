@@ -14,7 +14,7 @@ import { expect, test, type Locator, type Page } from "./test";
  * Card plan-dates-to-confirm: protects = the tray's row for a two-milestone item shows ONE
  * suggestion spanning its open slices (the first slice's start to the last slice's end,
  * "Nov 9 – Dec 11"), and Accept saves exactly the dates the row showed: the item's card then
- * reads those dates as accepted, its bar draws dated, and no row is left for its other
+ * (the bar's name; the one feature panel since PR 1204) reads those dates as accepted, its bar draws dated, and no row is left for its other
  * slice; fails_when = the row shows only the first slice's dates ("Nov 9 – Nov 27") while
  * Accept saves the whole span, Accept saves other dates than the row showed, or the second
  * slice's suggestion stays open in the tray after the Accept; no_claim = how the API builds
@@ -81,10 +81,15 @@ for (const [where, use] of [
         await expect(bar(page, ITEM)).toHaveAttribute("data-kind", "dated");
         await expect(bar(page, ITEM)).toHaveAttribute("data-start", SPAN.start);
         await expect(bar(page, ITEM)).toHaveAttribute("data-end", SPAN.end);
+        // The bar says where its dates came from (the floating card that said it gave way to the panel).
+        await expect(bar(page, ITEM)).toHaveAttribute("aria-label", new RegExp(`^${TITLE}: ${shown.replace(" – ", " to ")}, Dates accepted from Oracle,`));
+        // build-feature-panel (PR 1204): a bar opens the one feature panel, which reads the saved dates.
         await bar(page, ITEM).click();
-        const card = page.getByTestId("floating-card");
-        await expect(card.getByRole("heading", { name: TITLE })).toBeVisible();
-        await expect(card.getByTestId("card-dates")).toHaveText(`${shown} · Dates accepted from Oracle`);
+        const panel = page.getByRole("dialog", { name: TITLE });
+        await expect(panel).toBeVisible();
+        const [from, to] = shown.split(" – ");
+        await expect(panel.getByTestId("fp-start")).toContainText(from);
+        await expect(panel.getByTestId("fp-delivery")).toContainText(to);
 
         if (where === "phone") expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
       });

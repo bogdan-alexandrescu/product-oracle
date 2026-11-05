@@ -687,8 +687,6 @@ export default function SimpleHome() {
           </div>
         )}
       </header>
-      {/* The rebuild sign: what shared with me is being rebuilt. */}
-      <RebuildHome />
 
       {walking && (
         <Walk
@@ -1318,6 +1316,10 @@ export default function SimpleHome() {
       )}
       </>
       )}
+      {/* The rebuild sign: what shared with me is being rebuilt. Under the cards, never between
+          the greeting and the goal band (the picked frame), and it shows once read, so nothing
+          the frame drew moves when it lands (walk-prio-home-first-paint, qa-simple-home-36). */}
+      <RebuildHome />
     </SimplePage>
   );
 }

@@ -198,7 +198,7 @@ test("qa-simple-home-25 and -36: a viewer with no name is greeted plainly, with 
 });
 
 test("qa-simple-home-26: Decided lately is newest first and each row opens its decision; milestone rows open their item", async ({ page }) => {
-  // fails_when: the rows are in no date order, or a row is plain text
+  // fails_when: the rows are in no date order, a row is plain text, or a milestone row opens nothing
   await signIn(page, EMAILS.viewer);
   const rows = page.getByTestId("home-decided").getByTestId("home-decided-row");
   await expect(rows.first()).toBeVisible();
@@ -211,7 +211,15 @@ test("qa-simple-home-26: Decided lately is newest first and each row opens its d
   expect(stamps.every((t) => !Number.isNaN(t))).toBe(true);
   expect([...stamps].sort((a, b) => b - a)).toEqual(stamps);
   const milestone = page.getByTestId("home-next-milestone").getByTestId("home-milestone-row");
-  await expect(milestone.first().getByRole("link")).toHaveAttribute("href", /^\/simple\/roadmap\?(prd|roadmap)=/);
+  // build-feature-panel (PR 1204): a milestone row's name opens the one feature panel, in place.
+  const feature = milestone.first().getByRole("button");
+  const title = (await feature.innerText()).trim();
+  await feature.click();
+  const panel = page.getByRole("dialog", { name: title });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByTestId("fp-details")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
   await links.first().click();
   await expect(page).toHaveURL(/\/simple\/decisions#d-\d+$/);
 });

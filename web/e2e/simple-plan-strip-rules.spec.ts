@@ -23,3 +23,28 @@ for (const c of CASES) {
     expect(planByMonth(c.items, c.today)).toEqual(c.expected);
   });
 }
+
+/*
+ * Card plan-dated-rows (moved from simple-plan-dated-milestones.spec.ts when Home's plan became
+ * the company roadmap's, PR 1235): protects = a dated plan milestone's row spans its start to
+ * its end date whatever its slices' own dates, and is not drawn as an estimate (M3 Open to all,
+ * 28 Dec - 12 Feb, with a year-end break: its slices start 4 Jan); fails_when = a row starts at
+ * its earliest slice, or a sliced feature falls into no milestone. No page: pure rules.
+ */
+test("a dated plan milestone's row spans its start to its end", () => {
+  const slice = (start: string, end: string, milestone: string, milestoneStart: string, milestoneDate: string): PlanInput => ({ start, end, estimated: false, milestone, milestoneStart, milestoneDate });
+  const strip = planByMonth(
+    [
+      slice("2026-11-09", "2026-11-20", "M1 · Prove it", "2026-11-02", "2026-11-27"),
+      slice("2026-12-07", "2026-12-18", "M2 · Scale volume", "2026-11-30", "2026-12-25"),
+      slice("2027-01-04", "2027-02-05", "M3 · Open to all", "2026-12-28", "2027-02-12"),
+    ],
+    "2026-11-05",
+  )!;
+  expect(strip.rows.map((r) => [r.name, r.start, r.end, r.estimated, r.items])).toEqual([
+    ["M1 · Prove it", "2026-11-02", "2026-11-27", false, 1],
+    ["M2 · Scale volume", "2026-11-30", "2026-12-25", false, 1],
+    ["M3 · Open to all", "2026-12-28", "2027-02-12", false, 1],
+  ]);
+  expect(strip.months).toEqual(["2026-11-01", "2026-12-01", "2027-01-01", "2027-02-01"]);
+});
