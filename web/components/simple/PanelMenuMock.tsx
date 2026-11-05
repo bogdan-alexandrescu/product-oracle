@@ -58,7 +58,7 @@ function useAway(open: boolean, close: () => void) {
 function Modal({ label, children, onClose }: { label: string; children: ReactNode; onClose: () => void }) {
   return (
     <div data-backdrop="" className="fixed inset-0 z-[90] flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-label={label} data-testid="mk-confirm" className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-y-auto rounded-t-[var(--simple-card-radius)] border border-line bg-surface p-4 text-[15px] leading-[22px] shadow-lg sm:rounded-[var(--simple-card-radius)]" onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" aria-label={label} data-testid="mk-confirm" className="relative flex w-full max-w-lg flex-col rounded-t-[var(--simple-card-radius)] border border-line bg-surface p-4 text-[15px] leading-[22px] shadow-lg sm:rounded-[var(--simple-card-radius)]" onClick={(e) => e.stopPropagation()}>
         {children}
       </div>
     </div>
@@ -81,6 +81,9 @@ function Points({ rows }: { rows: [string, ReactNode][] }) {
   );
 }
 
+/** The one time the mock's deletes happen, so every frame of a story reads alike. */
+const MK_NOW = "2026-11-05T09:14:00Z";
+
 const TRASH_LINE = "Restore it from Settings › Trash for 30 days.";
 
 /** The Delete confirm, as each pm2 proposal draws it; `kind` a feature or a goal. */
@@ -94,7 +97,7 @@ export function DeleteConfirm({ kind, title, rows, counts, dependents, decides, 
     <Modal label={`Delete ${title}`} onClose={onClose}>
       <H>{decides ? `Move ${title} to Trash?` : `Propose moving ${title} to Trash?`}</H>
       {v === "a" && (
-        <p className="mt-2 flex items-center gap-1.5 text-text2">
+        <p className="mt-2 flex items-center gap-1.5 text-text2 sm:[&>span]:static! sm:[&_[role=tooltip]]:top-0! sm:[&_[role=tooltip]]:bottom-auto! sm:[&_[role=tooltip]]:left-[calc(100%+12px)]!">
           {counts}
           <InfoTip label="What goes with it" align="start" side="bottom">
             <span className="block">{rows.map(([k, val]) => <span key={k} className="block">{k}: {typeof val === "string" ? val : val}</span>)}</span>
@@ -108,16 +111,21 @@ export function DeleteConfirm({ kind, title, rows, counts, dependents, decides, 
           <input aria-label="Its name" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={title} className="h-9 rounded-md border-2 border-accent bg-surface px-2" />
         </label>
       )}
-      <p className="mt-2 text-text2">{decides ? TRASH_LINE : `It waits for ${decider} to accept.`}</p>
       <div className="mt-3 flex items-center gap-2">
-        <Button variant={decides ? "danger" : "solid"} disabled={!ok} onClick={onDelete}>
+        <Button variant={decides ? "danger" : "solid"} disabled={!ok} onClick={onDelete} className="h-9! min-h-9! px-3.5! text-[15px]!">
           {go}
         </Button>
         <Button variant="ghost" onClick={onClose}>
           Cancel
         </Button>
-        {kind === "feature" && decides && <span className="ml-auto text-[13px] text-text2">Not now? Cut keeps it on the roadmap.</span>}
-        {kind === "goal" && decides && <span className="ml-auto text-[13px] text-text2">Not now? Archive keeps it.</span>}
+        {decides ? (
+          <InfoTip label="Trash">
+            <span className="block">{TRASH_LINE}</span>
+            <span className="block">{kind === "feature" ? "Not now? Cut keeps it on the roadmap." : "Not now? Archive keeps it."}</span>
+          </InfoTip>
+        ) : (
+          <span className="ml-auto text-[13px] text-text2">{decider} decides</span>
+        )}
       </div>
     </Modal>
   );
@@ -132,9 +140,9 @@ function trashFeature(item: Item, by: string, onGone: () => void) {
     where: item.roadmap.title.replace(/ roadmap$/i, ""),
     key: item.key,
     by,
-    at: new Date().toISOString(),
+    at: MK_NOW,
     days_left: 30,
-    back: [`Dates ${calendarDay(item.start.date)} – ${calendarDay(item.end.date)}`, plural(item.depends_on.length + item.needed_by.length, "link"), ...(item.milestone?.name ? [`Milestone ${item.milestone.name}`] : []), ...(item.goal ? [`Goal ${item.goal.title}`] : [])],
+    back: [`Dates ${calendarDay(item.start.date)} – ${calendarDay(item.end.date)}`, plural(item.depends_on.length + item.needed_by.length, "link"), `Milestone: ${item.milestone?.name ?? "None"}`, `Goal: ${item.goal?.title ?? "None"}`],
   };
   mkSaveTrash([row, ...mkTrash().filter((t) => t.id !== row.id)]);
   onGone();
@@ -157,7 +165,6 @@ function CutConfirm({ item, items, decides, decider, onClose, onCut }: { item: I
     <Modal label={`Cut ${item.title}`} onClose={onClose}>
       <H>{decides ? `Cut ${item.title} from the roadmap?` : `Propose cutting ${item.title}?`}</H>
       <p className={`mt-2 ${deps.length ? "text-warn" : "text-text2"}`}>{deps.length ? `⚠ ${andList(deps)} ${deps.length === 1 ? "depends" : "depend"} on it.` : "Nothing depends on it."}</p>
-      <p className="mt-1 text-text2">{decides ? "It stays on the roadmap as cut; Restore brings it back." : `It waits for ${decider} to accept.`}</p>
       <div className="mt-3 flex items-center gap-2">
         <Button variant="solid" onClick={onCut}>
           {decides ? "Cut from the roadmap" : "Propose the cut"}
@@ -165,6 +172,7 @@ function CutConfirm({ item, items, decides, decider, onClose, onCut }: { item: I
         <Button variant="ghost" onClick={onClose}>
           Cancel
         </Button>
+        {decides ? <InfoTip label="Cut">It stays on the roadmap as cut; Restore brings it back.</InfoTip> : <span className="ml-auto text-[13px] text-text2">{decider} decides</span>}
       </div>
     </Modal>
   );
@@ -186,7 +194,7 @@ export function useMkPanel({ item, items, act, canChange, onClose }: { item: Ite
   const cutWords = `Cut ${calendarDay(cutBy.at)} by ${cutBy.by}`;
   const doCut = async () => {
     setAsk(null);
-    if (decides) mkSetCutBy(item.key, myName, new Date().toISOString().slice(0, 10));
+    if (decides) mkSetCutBy(item.key, myName, MK_NOW.slice(0, 10));
     await act(`Cut ${item.title}`, { op: "cut", target: { item_id: item.id }, before: { cut: false }, after: { cut: true } }, { words: () => `Cut ${item.title} from the roadmap` });
   };
   const doRestore = async () => {
@@ -276,6 +284,7 @@ export function useMkPanel({ item, items, act, canChange, onClose }: { item: Ite
             <button type="button" className="font-medium text-crit underline" onClick={() => setAsk("delete")}>
               {say("Move to Trash", "Propose moving to Trash")}
             </button>
+            {!decides && <span className="text-sm text-text2">{decider} decides</span>}
           </>
         )}
       </span>
@@ -308,14 +317,13 @@ export function useMkPanel({ item, items, act, canChange, onClose }: { item: Ite
 }
 
 /** A goal's Delete (Priorities' goal menu), as each pm2 proposal asks it. */
-export function GoalDelete({ title, features, measure, onClose }: { title: string; features: string[]; measure: string; onClose: () => void }) {
-  const { me, can } = useMe();
-  const decides = can("list_trash"); // MOCK-HOOK: owners delete and restore
+export function GoalDelete({ decides, title, features, measure, onClose }: { decides: boolean; title: string; features: string[]; measure: string; onClose: () => void }) {
+  const { me } = useMe();
   const by = (me as { name?: string | null } | null)?.name ?? "you";
   const done = () => {
     onClose();
     if (!decides) return toast({ message: `Proposed: move ${title} to Trash · waiting for the company's owners` });
-    const row: MkTrash = { id: `t-goal-${title}`, kind: "Goal", title, where: "Goals", by, at: new Date().toISOString(), days_left: 30, back: [`Its measure: ${measure}`, `${plural(features.length, "feature")} linked to it again`] };
+    const row: MkTrash = { id: `t-goal-${title}`, kind: "Goal", title, where: "Goals", by, at: MK_NOW, days_left: 30, back: [`Its measure: ${measure}`, `${plural(features.length, "feature")} linked to it again`] };
     mkSaveTrash([row, ...mkTrash().filter((t) => t.id !== row.id)]);
     toast({ message: `Moved ${title} to Trash`, action: { label: "Undo", onClick: () => mkSaveTrash(mkTrash().filter((t) => t.id !== row.id)) } });
   };
@@ -334,7 +342,7 @@ export function GoalDelete({ title, features, measure, onClose }: { title: strin
 export function MkTrashList({ docs, owner, proposes }: { docs: { kind: string; title: string; by: string; at: string; days_left: number; node: ReactNode }[]; owner: boolean; proposes: boolean }) {
   const v = mkParam("pm3", "a");
   const [rows, setRows] = useState<MkTrash[]>([]);
-  const [tab, setTab] = useState<"All" | "Feature" | "Goal" | "Document">("All");
+  const [tab, setTab] = useState<"All" | "Feature" | "Goal" | "Document">(() => mkParam("tab", "All") as "All" | "Feature" | "Goal" | "Document");
   // eslint-disable-next-line react-hooks/set-state-in-effect -- the mock's store is read once mounted
   useEffect(() => setRows(mkTrash()), []);
   const approver = proposes;
@@ -343,7 +351,7 @@ export function MkTrashList({ docs, owner, proposes }: { docs: { kind: string; t
     mkSaveTrash(mkTrash().filter((x) => x.id !== t.id));
     setRows(mkTrash());
     sendCardChanged();
-    toast({ message: `Restored ${t.title}${t.kind === "Feature" ? ` to ${t.where}` : ""}, with ${andList(t.back.map((b) => b.charAt(0).toLowerCase() + b.slice(1)))}` });
+    toast({ message: `Restored ${t.title}${t.kind === "Feature" ? ` to ${t.where}` : ""}, with ${andList(t.back.filter((b) => !b.endsWith(": None")).map((b) => (b.charAt(0).toLowerCase() + b.slice(1)).replace(": ", " ")))}` });
   };
   const fmt = formatDateTime;
   const line = (t: MkTrash, chip: boolean) => (

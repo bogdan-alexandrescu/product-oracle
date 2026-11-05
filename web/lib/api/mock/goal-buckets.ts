@@ -93,12 +93,12 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-function out(db: GoalBucketsDb, edits: boolean): Schemas["GoalBucketsOut"] {
+function out(db: GoalBucketsDb, edits: boolean, owner = false): Schemas["GoalBucketsOut"] {
   const live = db.goals.filter((g) => !g.archived);
   const ids = new Set(live.map((g) => g.id));
   return {
     can_edit: edits,
-    goals: live.map((g) => ({ id: g.id, title: g.title, order: g.order, measure: g.measure, target: g.target, due: g.due, can_edit: edits })),
+    goals: live.map((g) => ({ id: g.id, title: g.title, order: g.order, measure: g.measure, target: g.target, due: g.due, can_edit: edits, ...({ can_delete: owner } as object) /* MOCK-HOOK: the goal's own right to Delete (owners) */ })),
     features: db.features.map((f) => ({ id: f.id, key: f.key, title: f.title, goal_ids: f.goal_ids.filter((g) => ids.has(g)) })),
   };
 }
@@ -127,7 +127,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
   const db = (simple.goal_buckets ??= seedGoalBuckets());
   const edits = role === "owner" || role === "approver";
   const m = req.method;
-  if (!p[3] && m === "GET") return json(200, out(db, edits));
+  if (!p[3] && m === "GET") return json(200, out(db, edits, role === "owner" /* MOCK-HOOK */));
   if (!edits) return json(403, { detail: "Requires the approver role" });
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   if (p[3] === "goals" && !p[4] && m === "POST") {
@@ -187,7 +187,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
       const g = db.goals.find((x) => x.id === u.added_goal_id);
       if (g) g.archived = true;
     }
-    return json(200, out(db, edits));
+    return json(200, out(db, edits, role === "owner" /* MOCK-HOOK */));
   }
   return null;
 }

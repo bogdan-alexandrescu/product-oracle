@@ -18,15 +18,15 @@ export type MkTrash = {
 const KEY = "mk-trash"; // MOCK-HOOK
 
 const SEED: MkTrash[] = [ // MOCK-HOOK
-  { id: "t-f1", kind: "Feature", title: "Saved filters for alerts", where: "Usage alerts", by: "Priya Shah", at: "2026-11-04T16:20:00Z", days_left: 29, back: ["Dates Nov 16 – Dec 18", "2 links", "Milestone Beta", "Goal Grow retention"] },
+  { id: "t-f1", kind: "Feature", title: "Saved filters for alerts", where: "Usage alerts", by: "Priya Shah", at: "2026-11-04T16:20:00Z", days_left: 29, back: ["Dates Nov 16 – Dec 18", "2 links", "Milestone: Beta", "Goal: Grow retention"] },
   { id: "t-g1", kind: "Goal", title: "Cut support tickets by a fifth", where: "Goals", by: "Ana Ortiz", at: "2026-11-03T10:05:00Z", days_left: 28, back: ["Its measure: tickets a week", "3 features linked to it again"] },
-  { id: "t-f2", kind: "Feature", title: "Quiet hours for alert push", where: "Usage alerts", by: "Ana Ortiz", at: "2026-11-02T14:40:00Z", days_left: 27, back: ["Dates Dec 1 – Jan 9, 2027", "1 link", "Goal Grow retention"] },
-  { id: "t-f3", kind: "Feature", title: "Import from spreadsheets with column matching and saved maps", where: "Guided setup", by: "Liam Brooks", at: "2026-10-30T09:12:00Z", days_left: 24, back: ["Dates Nov 9 – Dec 4", "3 links", "Milestone Launch", "Goal Faster activation"] },
-  { id: "t-f4", kind: "Feature", title: "Team leaderboard", where: "Guided setup", by: "Priya Shah", at: "2026-10-27T11:30:00Z", days_left: 21, back: ["Dates Jan 5 – Feb 12, 2027", "No links"] },
+  { id: "t-f2", kind: "Feature", title: "Quiet hours for alert push", where: "Usage alerts", by: "Ana Ortiz", at: "2026-11-02T14:40:00Z", days_left: 27, back: ["Dates Dec 1 – Jan 9, 2027", "1 link", "Milestone: None", "Goal: Grow retention"] },
+  { id: "t-f3", kind: "Feature", title: "Import from spreadsheets with column matching and saved maps", where: "Guided setup", by: "Liam Brooks", at: "2026-10-30T09:12:00Z", days_left: 24, back: ["Dates Nov 9 – Dec 4", "3 links", "Milestone: Launch", "Goal: Faster activation"] },
+  { id: "t-f4", kind: "Feature", title: "Team leaderboard", where: "Guided setup", by: "Priya Shah", at: "2026-10-27T11:30:00Z", days_left: 21, back: ["Dates Jan 5 – Feb 12, 2027", "No links", "Milestone: None", "Goal: None"] },
   { id: "t-g2", kind: "Goal", title: "Win back paused accounts", where: "Goals", by: "Priya Shah", at: "2026-10-22T08:45:00Z", days_left: 16, back: ["Its measure: accounts back a month", "1 feature linked to it again"] },
-  { id: "t-f5", kind: "Feature", title: "Alert sound picker", where: "Usage alerts", by: "Liam Brooks", at: "2026-10-18T15:02:00Z", days_left: 12, back: ["Dates Nov 30 – Dec 11", "No links", "Goal Grow retention"] },
-  { id: "t-f6", kind: "Feature", title: "Plan compare page", where: "Pricing", by: "Ana Ortiz", at: "2026-10-12T13:00:00Z", days_left: 6, back: ["Dates Dec 7 – Jan 22, 2027", "1 link", "Milestone Pricing launch"] },
-  { id: "t-f7", kind: "Feature", title: "Holiday theme for the welcome email", where: "Welcome media", by: "Priya Shah", at: "2026-10-08T10:10:00Z", days_left: 2, back: ["Dates Dec 1 – Dec 12", "No links"] },
+  { id: "t-f5", kind: "Feature", title: "Alert sound picker", where: "Usage alerts", by: "Liam Brooks", at: "2026-10-18T15:02:00Z", days_left: 12, back: ["Dates Nov 30 – Dec 11", "No links", "Milestone: None", "Goal: Grow retention"] },
+  { id: "t-f6", kind: "Feature", title: "Plan compare page", where: "Pricing", by: "Ana Ortiz", at: "2026-10-12T13:00:00Z", days_left: 6, back: ["Dates Dec 7 – Jan 22, 2027", "1 link", "Milestone: Pricing launch", "Goal: None"] },
+  { id: "t-f7", kind: "Feature", title: "Holiday theme for the welcome email", where: "Welcome media", by: "Priya Shah", at: "2026-10-08T10:10:00Z", days_left: 2, back: ["Dates Dec 1 – Dec 12", "No links", "Milestone: None", "Goal: None"] },
 ];
 
 const ls = () => (typeof localStorage === "undefined" ? null : localStorage); // MOCK-HOOK

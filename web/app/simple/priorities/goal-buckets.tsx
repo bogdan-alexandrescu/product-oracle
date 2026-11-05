@@ -425,7 +425,7 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive }
 }
 
 /** The ⋯ menu on a goal: Edit goal, Archive goal. */
-export function GoalMenu({ title, onEdit, onArchive, archive, features = [], measure = "" }: { title: string; onEdit: () => void; onArchive: () => void; archive: boolean; features?: string[] /* MOCK-HOOK */; measure?: string /* MOCK-HOOK */ }) {
+export function GoalMenu({ title, onEdit, onArchive, archive, features = [], measure = "", decides = false /* MOCK-HOOK */ }: { title: string; onEdit: () => void; onArchive: () => void; archive: boolean; features?: string[] /* MOCK-HOOK */; measure?: string /* MOCK-HOOK */; decides?: boolean /* MOCK-HOOK */ }) {
   const [open, setOpen] = useState(false);
   const [mkDel, setMkDel] = useState(() => mkParam("open", "") === "goal" && title === mkParam("goal", title)); // MOCK-HOOK
   const ref = useRef<HTMLSpanElement>(null);
@@ -477,7 +477,7 @@ export function GoalMenu({ title, onEdit, onArchive, archive, features = [], mea
           </button>
         </div>
       )}
-      {mkDel && <GoalDelete title={title} features={features} measure={measure} onClose={() => setMkDel(false)} /> /* MOCK-HOOK */}
+      {mkDel && <GoalDelete decides={decides} title={title} features={features} measure={measure} onClose={() => setMkDel(false)} /> /* MOCK-HOOK */}
     </span>
   );
 }

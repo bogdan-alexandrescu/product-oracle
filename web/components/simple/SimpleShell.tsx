@@ -67,10 +67,14 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
         // The Roadmap's count is its "Needs a decision" count: the items with broken links (one
         // per item, however many links), the dates to confirm and the proposals on my items.
         const broken = new Set(items.filter((i) => i.kind === "broken_link").map((i) => i.ref_id));
-        setCounts({
+        const fresh = {
           Decisions: items.length,
           Roadmap: broken.size + items.filter((i) => i.kind === "date" || i.kind === "proposal").length,
-        });
+        };
+        // MOCK-HOOK (mk-panel-menu): a mock-up story keeps the counts it opened with, so its frames read alike.
+        const mk = /[?&]pm[123]=/.test(location.search) ? sessionStorage.getItem("mk-counts") : null;
+        if (/[?&]pm[123]=/.test(location.search) && !mk) sessionStorage.setItem("mk-counts", JSON.stringify(fresh));
+        setCounts(mk ? (JSON.parse(mk) as typeof fresh) : fresh);
       })
       .catch(() => undefined);
     return () => {

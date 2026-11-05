@@ -2115,7 +2115,7 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
                   )}
                   {rights.edit(rec) && rights.archive && (
                     <span className="self-center">
-                      <GoalMenu title={b.title} archive onEdit={() => setEditingGoal(rec!.id)} onArchive={() => setArchiving(rec!.id)} features={b.codes.map((c) => rowOf.get(c)?.title ?? c)} /* MOCK-HOOK */ measure={rec?.measure ?? "Not set"} /* MOCK-HOOK */ />
+                      <GoalMenu title={b.title} archive onEdit={() => setEditingGoal(rec!.id)} onArchive={() => setArchiving(rec!.id)} features={b.codes.map((c) => rowOf.get(c)?.title ?? c)} /* MOCK-HOOK */ measure={rec?.measure ?? "Not set"} /* MOCK-HOOK */ decides={!!(rec as { can_delete?: boolean } | undefined)?.can_delete} /* MOCK-HOOK */ />
                     </span>
                   )}
                 </div>
@@ -2407,7 +2407,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
                         ✎
                       </button>
                     )}
-                    {rights.edit(rec) && rights.archive && <GoalMenu title={g} archive onEdit={() => setEditing(rec!.id)} onArchive={() => setArchiving(rec!.id)} features={planFeatures(plan, g).map((f) => f.name)} /* MOCK-HOOK */ measure={rec?.measure ?? "Not set"} /* MOCK-HOOK */ />}
+                    {rights.edit(rec) && rights.archive && <GoalMenu title={g} archive onEdit={() => setEditing(rec!.id)} onArchive={() => setArchiving(rec!.id)} features={planFeatures(plan, g).map((f) => f.name)} /* MOCK-HOOK */ measure={rec?.measure ?? "Not set"} /* MOCK-HOOK */ decides={!!(rec as { can_delete?: boolean } | undefined)?.can_delete} /* MOCK-HOOK */ />}
                   </div>
                   {rec && (
                     <p data-testid="goal-measure" className={`mt-0.5 text-[15px] leading-5 text-text2 ${rec ? "pl-8" : ""}`}>

@@ -547,7 +547,7 @@ function DepList({ c, title, deps, add, onRemove, onRestore, onAdd, adding }: { 
   return (
     <div className="py-1" data-testid={`fp-list-${title === "Depends on" ? "depends" : "needed"}`}>
       <h4 className="text-sm text-text2">
-        {title} <span className="tnum">({deps.filter((d) => !d.removed).length})</span>
+        {title} <span className="tnum">({deps.filter((d) => !d.removed).length}{deps.some((d) => d.removed) ? ` · ${deps.filter((d) => d.removed).length} removed` : ""})</span> {/* MOCK-HOOK: no bare (0) above a listed removed link */}
       </h4>
       <ul>
         {/* build-feature-panel review 3: as the frames list them, the live links first, then Oracle's removed ones. */}
