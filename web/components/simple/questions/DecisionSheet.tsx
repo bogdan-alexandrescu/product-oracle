@@ -6,7 +6,7 @@ import { Icon } from "@/components/ds/Icon";
 import { InfoTip } from "@/components/ds/InfoTip";
 import { Sheet } from "@/components/ds/Sheet";
 import { toast } from "@/components/ds/Toast";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay, dayIn } from "@/lib/dates";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
@@ -16,7 +16,7 @@ type Question = Schemas["SimpleQuestion"];
 type Person = { id: string; name: string };
 
 /** What the sheet shows: an open decision (or one known by id only, its row read from Decisions), a PRD's question, or a new one of either. */
-export type SheetTarget = { kind: "decision"; row: Row } | { kind: "decision-id"; id: string; title: string } | { kind: "question"; q: Question } | { kind: "new-decision" } | { kind: "new-question"; prds: { id: string; title: string }[] };
+export type SheetTarget = { kind: "decision"; row: Row; notice?: string } | { kind: "decision-id"; id: string; title: string; notice?: string } | { kind: "question"; q: Question } | { kind: "new-decision" } | { kind: "new-question"; prds: { id: string; title: string }[] };
 
 /** A decision or question withdrawn here this visit: struck through in its list, with Undo. */
 type Withdrawn = { changeId: string; undoing?: boolean };
@@ -32,6 +32,15 @@ const SheetContext = createContext<SheetApi | null>(null);
 /** The sheet's opener on this page (null where no sheet is mounted: the row keeps its plain title). */
 export function useDecisionSheet(): SheetApi | null {
   return useContext(SheetContext);
+}
+
+/** The host's sheet, for the page that renders the host itself (Home's Accept opens it on an out-of-date suggestion). */
+export function SheetHandle({ sheetRef }: { sheetRef: { current: SheetApi | null } }) {
+  const sheet = useDecisionSheet();
+  useEffect(() => {
+    sheetRef.current = sheet;
+  }, [sheet, sheetRef]);
+  return null;
 }
 
 /** At most this many options or other answers (decision_sheet.MAX_OPTIONS). */
@@ -107,7 +116,7 @@ export function DecisionSheetHost({ onChanged, children }: { onChanged: () => un
       {children}
       <Sheet open={!!target} side title={title} onClose={close} testId="decision-sheet">
         {target?.kind === "decision-id" ? (
-          <RowLoader key={target.id} id={target.id} onRow={(row) => setTarget({ kind: "decision", row })} />
+          <RowLoader key={target.id} id={target.id} onRow={(row) => setTarget({ kind: "decision", row, notice: target.notice })} />
         ) : target && (
           <SheetBody
             key={target.kind === "decision" ? target.row.id : target.kind === "question" ? target.q.id : target.kind}
@@ -201,7 +210,8 @@ function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => draftOf(target));
   const [decider, setDecider] = useState<Person | null>(draftOf(target).decider);
-  const [error, setError] = useState<string | null>(null);
+  // An Accept refused as out of date elsewhere (Home, Waiting for you) says so here, over the decision as it is now.
+  const [error, setError] = useState<string | null>(target.kind === "decision" ? (target.notice ?? null) : null);
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const id = target.kind === "decision" ? target.row.id : target.kind === "question" ? target.q.id : null;
   const name = target.kind === "decision" ? `${target.row.code ?? `D-${target.row.number}`}` : target.kind === "question" ? target.q.code : "";
@@ -477,6 +487,25 @@ function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
       )}
     </div>
   );
+}
+
+/** A suggestion's Accept refused because its decision changed (or closed) since it was suggested (decision_sheet.decide's 409 "outdated"). */
+export const isOutdated = (e: unknown) => e instanceof ApiError && e.status === 409 && /outdated/i.test(e.message);
+
+/** The sheet's words for an Accept refused as out of date. */
+export const OUTDATED_NOTICE = "Not accepted: this decision changed since the suggestion was made. Here it is as it is now.";
+
+/**
+ * Accept on a decision sheet's suggestion (Home, Waiting for you): refused as out of date, the
+ * decision's sheet opens on it as it is now and says why, instead of a toast. false: not that.
+ */
+export async function showOutdated(sheet: SheetApi | null, e: unknown, changeId: string, title: string): Promise<boolean> {
+  if (!sheet || !isOutdated(e)) return false;
+  const proposed = await unwrap(api.GET("/v1/simple/changes", { params: { query: { status: "proposed" } } })).catch(() => []);
+  const id = proposed.find((c) => c.id === changeId)?.target.decision_id;
+  if (typeof id !== "string") return false;
+  sheet.open({ kind: "decision-id", id, title, notice: OUTDATED_NOTICE });
+  return true;
 }
 
 /** A toast with Undo for a change applied from the sheet. */

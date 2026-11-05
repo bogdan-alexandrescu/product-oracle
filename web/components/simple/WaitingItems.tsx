@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "@/components/ds/Toast";
-import { useDecisionSheet } from "@/components/simple/questions/DecisionSheet";
+import { showOutdated, useDecisionSheet } from "@/components/simple/questions/DecisionSheet";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { fixChange, OP_WORDS, type BrokenLink, type FixOp } from "@/lib/simple-home";
 import { errorMessage } from "@/lib/use-query";
@@ -139,7 +139,8 @@ export function WaitingRow({ item }: { item: WaitingItem }) {
       waitingChanged();
       toast({ message: done });
     } catch (e) {
-      toast({ message: errorMessage(e) });
+      // A decision sheet's suggestion out of date: its sheet says so over the decision as it is now.
+      if (!(item.kind === "proposal" && (await showOutdated(sheet, e, item.ref_id, item.title)))) toast({ message: errorMessage(e) });
       setBusy(false);
     }
   };

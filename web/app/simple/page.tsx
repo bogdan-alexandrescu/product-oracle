@@ -18,7 +18,7 @@ import { GoalNum, GoalOrderEdit } from "@/components/simple/GoalOrder";
 import { meetingMoment } from "@/components/simple/FlowVisual";
 import { NewPrdButton, NewPrdSheet, StartedCard, useCanStartPrd, useStartedPrds } from "@/components/simple/NewPrd";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
-import { DecisionSheetHost, useDecisionSheet } from "@/components/simple/questions/DecisionSheet";
+import { DecisionSheetHost, SheetHandle, showOutdated, useDecisionSheet } from "@/components/simple/questions/DecisionSheet";
 import { QuestionRow, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
 import { SimplePage } from "@/components/simple/SimplePage";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -380,6 +380,9 @@ export default function SimpleHome() {
   // A decider's own proposals on items others decide wait too: their own card.
   const mineApart = proposalRows === toDecide ? mine : [];
   const itemTitle = (id: unknown) => roadmap.data?.items.find((i) => i.id === id)?.title ?? "An item";
+  // A decision sheet's suggestion names its decision ("D-5 Ship usage caps…"), not an item.
+  const targetTitle = (c: Change) => (c.target.item_id || typeof c.target.name !== "string" ? itemTitle(c.target.item_id) : c.target.name);
+  const sheetRef = useRef<ReturnType<typeof useDecisionSheet>>(null);
 
   const now = new Date();
   /** A moment's day in the company zone, comparable ("2026-10-30"). */
@@ -499,13 +502,16 @@ export default function SimpleHome() {
     const m = moves(c);
     return m.length ? `Accepted: ${m.map((x) => `${x.title} now ${x.after}`).join("; ")}` : "Accepted";
   };
-  const accept = (c: Change) => void act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/accept", { params: { path: { change_id: c.id } } })), accepted(c));
+  const accept = (c: Change) =>
+    void act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/accept", { params: { path: { change_id: c.id } } })), accepted(c), (e) =>
+      showOutdated(sheetRef.current, e, c.id, String(c.target.name ?? "")),
+    );
   const proposalRow = (c: Change) => (
     <HomeRow
       key={c.id}
       testId="home-proposal"
       lead={<Avatar name={c.by_name} />}
-      title={`${opWords(c.op)}: ${itemTitle(c.target.item_id)}${typeof c.after.title === "string" && NEW_FLOW_OPS.has(c.op) ? ` · ${c.after.title}` : ""}`}
+      title={`${opWords(c.op)}: ${targetTitle(c)}${typeof c.after.title === "string" && NEW_FLOW_OPS.has(c.op) ? ` · ${c.after.title}` : ""}`}
       meta={`${c.by === myId ? "You" : c.by_name} · ${formatInZone(c.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${c.reason ? ` · ${c.reason}` : ""}`}
       change={NEW_FLOW_OPS.has(c.op) ? null : beforeAfter(c)}
       thumb={NEW_FLOW_OPS.has(c.op)}
@@ -535,12 +541,13 @@ export default function SimpleHome() {
     />
   );
 
-  async function act(run: () => Promise<unknown>, done: string) {
+  /** `refused`: shows a refusal elsewhere (true), instead of the toast. */
+  async function act(run: () => Promise<unknown>, done: string, refused?: (e: unknown) => Promise<boolean>) {
     try {
       await run();
       toast({ message: done });
     } catch (e) {
-      toast({ message: errorMessage(e) });
+      if (!(await refused?.(e))) toast({ message: errorMessage(e) });
     }
     reloadAll();
   }
@@ -623,6 +630,7 @@ export default function SimpleHome() {
     <SimplePage title="Home">
       {/* eq2 b: the question titles on Home open the same decision sheet as on Decisions. */}
       <DecisionSheetHost onChanged={reloadAll}>
+      <SheetHandle sheetRef={sheetRef} />
       {newPrd && <NewPrdSheet onClose={closeNewPrd} onStarted={() => void started.reload()} />}
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
       {confirming && (
