@@ -174,12 +174,17 @@ test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
   await expect(buckets.getByText("Nothing planned this quarter.")).toBeVisible();
   await expect(buckets.getByText(/0 wk in all/)).toHaveCount(0);
   await expect(buckets.getByText("Share of engineer-weeks by goal")).toHaveCount(0);
+  // Round 7: "this quarter" is the calendar quarter, never the replaced plan's span
+  // (service.build's span is over the shown PRDs' plans only; priorities.plan_quarter).
+  await expect(page.getByTestId("prio-subtitle")).toContainText("Q4 2026.");
+  await expect(page.getByTestId("prio-subtitle")).not.toContainText("Feb 12");
 
   // Round 5: Priorities' Ranked list leaves them out too.
   await page.goto("/simple/priorities?tab=ranked");
   const ranked = page.getByRole("list", { name: "Ranked list" }).first();
   await expect(ranked.getByText("New plan tiers").first()).toBeVisible();
   for (const title of GONE) await expect(ranked.getByText(title)).toHaveCount(0);
+  await expect(page.getByTestId("prio-subtitle")).toContainText("Q4 2026.");
 
   // Round 5: Needs a decision names none of them: no suggested feature "Looks like" one
   // (additions.reconcile reads service.load), and a proposal on one (Team invite nudges, of
@@ -236,7 +241,8 @@ test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
  * Re-review round 6 (simple-plan): a feature added in Simple after the replace is filed under a
  * current PRD (the one that replaced its roadmap's), so it stays in Simple. protects = an
  * accepted suggested feature shows on the Roadmap and on Priorities' Ranked tab (Not ranked yet); fails_when =
- * it is filed under a replaced PRD and left out of both; no_claim = where on the Roadmap it sits.
+ * it is filed under a replaced PRD and left out of both, or its name there opens no feature panel;
+ * no_claim = where on the Roadmap it sits.
  */
 test("a feature added after a replace stays on the Roadmap and the Ranked tab", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -260,6 +266,11 @@ test("a feature added after a replace stays on the Roadmap and the Ranked tab", 
   await expect(ranked.getByText("New plan tiers").first()).toBeVisible();
   // A draft is not ranked yet (priorities.py _items): it sits under the Ranked list, by its name.
   await expect(page.getByRole("region", { name: "Not ranked yet" }).getByText("Quiet hours for alerts").first()).toBeVisible();
+  // Round 7: its name opens the one feature panel, as every other row's does.
+  await page.getByRole("region", { name: "Not ranked yet" }).getByRole("button", { name: "Quiet hours for alerts", exact: true }).click();
+  const panel = page.getByTestId("item-panel");
+  await expect(panel).toHaveAttribute("aria-label", "Quiet hours for alerts");
+  await expect(panel.getByText("This feature is not on a roadmap you can see yet.")).toHaveCount(0);
 });
 
 /**
