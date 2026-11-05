@@ -134,6 +134,7 @@ const PROBLEMS: Record<string, string> = {
   before_prerequisite: "Above its prerequisite",
   differs_from_live: "Differs from live",
   no_goal: "No confirmed goal",
+  new_feature_no_goal: "Names no goal",
 };
 
 function ProblemChip({ p }: { p: PriorityProblem }) {

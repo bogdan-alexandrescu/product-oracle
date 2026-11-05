@@ -2039,7 +2039,7 @@ export function addLiveFeature(db: Db, rows: NewOrderRow[]): void {
       if (l.type !== "supports" || goal?.type !== "goal" || goal.status !== "confirmed") return [];
       // The weight the order scored it on, as the fixed set carries its own (the live ranking's scale).
       const weight = Number(row.explanation.goals.find((g) => g.goal === goal.key)?.weight ?? goal.attrs.weight);
-      return [{ goal: goal.key, title: goal.title, weight: Number.isFinite(weight) ? weight : null, contribution: Number(l.attrs.contribution ?? 1), link_status: l.status === "confirmed" ? "confirmed" : "proposed" }];
+      return [{ goal: goal.key, title: goal.title, weight: Number.isFinite(weight) ? weight : null, contribution: l.attrs.contribution_assumed ? null : Number(l.attrs.contribution ?? 1), link_status: l.status === "confirmed" ? "confirmed" : "proposed" }];
     });
     const attrs: Record<string, number | string> = {};
     for (const k of ["effort", "confidence"] as const) {

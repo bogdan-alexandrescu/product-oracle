@@ -3022,8 +3022,8 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role, name: x.name })),
     scopeApproved: (scope, by) => scopeToBaseline(db, scope, by),
     // C8 RP1: an approved order's new features join the baseline as proposed, and the live ranking.
-    acceptNewFeatures: (snap, by) => {
-      acceptNewFeatures(db.baseline, snap.run_id, snap.ranking, by);
+    acceptNewFeatures: (snap, by, scope) => {
+      acceptNewFeatures(db.baseline, snap.run_id, snap.ranking, by, scope);
       addLiveFeature(db, snap.ranking);
     },
     ask: (q) => {

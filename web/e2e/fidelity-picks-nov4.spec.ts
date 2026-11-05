@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { PRIORITY_RUN } from "../lib/api/mock/runs";
+import { PRIORITY_NO_GOAL_RUN, PRIORITY_RUN } from "../lib/api/mock/runs";
 import { login } from "./helpers";
 
 /**
@@ -17,6 +17,11 @@ import { login } from "./helpers";
  *   puts the new features on the Ground Truth as proposed and on live Priorities; fails_when=three
  *   tiles on a line, "11 in the run's order", "Outside this PRD's scope", or the new features
  *   missing after approval.
+ * - RP1 a, no feature without its goal (review of PR 1244, round 2): protects=a new feature
+ *   whose goal is named with no contribution joins with its supports link, the contribution
+ *   marked assumed until a person sets it; a new feature naming no goal blocks Approve order,
+ *   named plainly; fails_when=the link is dropped ("Serves no goal"), the assumed mark is missing
+ *   or stays after the person sets it, or Approve order is enabled for a feature with no goal.
  * - RP2 c (mk-runplan): protects=Approve these 6 dates brings its ask into view; the decision
  *   stamp keeps its zone ("Avery Stone · Wed Nov 4, 4:41 PM PST"); fails_when=the ask opens out of
  *   view, or the stamp drops the zone.
@@ -168,6 +173,32 @@ test.describe("RP1 a: the run's priority order", () => {
     await expect(needs.getByRole("listitem")).toHaveCount(1);
     await expect(needs.getByRole("listitem")).toContainText("Address book per account");
     await expect(needs.getByRole("listitem")).toContainText("Proposed");
+
+    // A goal named with no contribution: the link still comes, the contribution marked assumed
+    // until a person sets it.
+    await page.keyboard.press("Escape");
+    const shared = page.locator("main").getByRole("row", { name: /^Shared team addresses Locked Proposed/ }).filter({ visible: true });
+    await expect(shared).not.toContainText("Serves no goal");
+    await shared.getByRole("button", { name: "Shared team addresses" }).first().click();
+    const link = page.getByRole("list", { name: "Supports" }).getByRole("listitem");
+    await expect(link).toHaveCount(1);
+    await expect(link).toContainText("Grow paid conversion");
+    await expect(link).toContainText("Contribution assumed");
+    await link.getByLabel("Contribution to Grow paid conversion").selectOption("2");
+    await expect(link).not.toContainText("Contribution assumed");
+  });
+
+  test("a new feature that names no goal blocks Approve order, named plainly", async ({ page }) => {
+    await withScenario(page, "priority-order");
+    await login(page, "approver@example.com");
+    await page.goto(`/runs/${PRIORITY_NO_GOAL_RUN}`);
+    await page.getByTestId("checkpoint-priority_order").getByRole("link", { name: "Review the order" }).click();
+    const band = page.getByTestId("snapshot-band");
+    await expect(band.getByRole("button", { name: "Approve order" })).toBeDisabled();
+    await expect(band.getByTestId("cannot-approve")).toContainText("1 blocking problem");
+    const chip = page.getByTestId("priority-row-N-7").getByTestId("problem-new_feature_no_goal");
+    await expect(chip).toHaveText(/^Names no goal/);
+    await expect(chip).toHaveAttribute("title", "Gift notes at checkout is new and names no goal it serves: the run must name one");
   });
 });
 

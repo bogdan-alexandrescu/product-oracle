@@ -878,7 +878,7 @@ export type NewOrderRow = {
   explanation: {
     inputs: Record<string, unknown>;
     confidence: { value: number; source?: string };
-    goals: { goal: string; weight: number; contribution: number }[];
+    goals: { goal: string; weight: number; contribution: number; contribution_assumed?: boolean }[];
   };
 };
 
@@ -893,6 +893,9 @@ export const ADDED_BY_ORDER_NOTE = "Added by the approved order";
 /** A supports link's contribution as the API takes it (run_order._contribution): an integer 0-3, else none. */
 const contributionOf = (c: unknown): number | null => (typeof c === "number" && Number.isInteger(c) && c >= 0 && c <= 3 ? c : null);
 
+/** A supports link proposed for a goal named with no contribution (api run_order.ASSUMED_LINK): the default, marked assumed for a person to set. */
+export const ASSUMED_LINK: Attrs = { contribution: 1, contribution_assumed: true };
+
 /**
  * C8 RP1 (api run_order.accept_new): an approved order adds the features new in its PRD
  * (`new: true` ranking rows) to the baseline as proposed. The run's open create proposals
@@ -900,10 +903,18 @@ const contributionOf = (c: unknown): number | null => (typeof c === "number" && 
  * or of a key that is already a feature, is rejected (SAME_FEATURE_NOTE). A key with no
  * open create is made from its ranking row, never skipped. Each carries the row's effort
  * and confidence (attrs), and, as proposed links Oracle made for a person to confirm, the
- * goals it serves (supports, the row's contribution) and what it depends on. Returns how
- * many features were added.
+ * goals it serves (supports: the row's, then the approved feature set's `scope` entry's)
+ * and what it depends on. A goal named with no contribution still gets its link, the
+ * contribution assumed (ASSUMED_LINK) unless the other names one; one of 0 (does not serve)
+ * gets none. Returns how many features were added.
  */
-export function acceptNewFeatures(s: BaselineState, runId: string | null | undefined, rows: NewOrderRow[], by: string | null): number {
+export function acceptNewFeatures(
+  s: BaselineState,
+  runId: string | null | undefined,
+  rows: NewOrderRow[],
+  by: string | null,
+  scope: { key: string; goals: { key: string; contribution?: number | null }[] }[] = [],
+): number {
   const keys = new Set(rows.filter((r) => r.new).map((r) => r.key));
   if (!keys.size || !runId) return 0;
   const at = now();
@@ -952,13 +963,17 @@ export function acceptNewFeatures(s: BaselineState, runId: string | null | undef
   }
   for (const entity of added) {
     const row = rows.find((r) => r.key === entity.key)!;
-    const goals = new Map<string, number>();
-    for (const g of row.explanation.goals) {
+    const goals = new Map<string, Attrs>();
+    const entry = scope.find((f) => f.key === entity.key);
+    for (const g of [...row.explanation.goals, ...(entry?.goals ?? []).map((x) => ({ ...x, goal: x.key }))]) {
       const c = contributionOf(g.contribution);
-      if (g.goal && c != null && !goals.has(g.goal)) goals.set(g.goal, c);
+      if (!g.goal || c === 0) continue;
+      if (c == null || ("contribution_assumed" in g && g.contribution_assumed)) {
+        if (!goals.has(g.goal)) goals.set(g.goal, ASSUMED_LINK);
+      } else if ((goals.get(g.goal) ?? ASSUMED_LINK) === ASSUMED_LINK) goals.set(g.goal, { contribution: c });
     }
     const links = [
-      ...[...goals].map(([goal, contribution]) => ({ target: s.entities.find((e) => e.type === "goal" && e.key === goal), type: "supports" as const, attrs: { contribution } })),
+      ...[...goals].map(([goal, attrs]) => ({ target: s.entities.find((e) => e.type === "goal" && e.key === goal), type: "supports" as const, attrs: { ...attrs } })),
       ...[...new Set(row.depends_on)].filter((d) => d !== entity.key).sort().map((dep) => ({ target: s.entities.find((e) => e.type === "feature" && e.key === dep), type: "depends_on" as const, attrs: {} })),
     ];
     for (const { target, type, attrs } of links) {

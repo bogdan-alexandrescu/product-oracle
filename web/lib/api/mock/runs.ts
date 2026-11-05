@@ -206,7 +206,7 @@ export interface RunsContext {
    * rows) join the baseline as proposed, and the live ranking; `by` null when Oracle saved the
    * order itself. Absent: nothing is added (older mock data).
    */
-  acceptNewFeatures?: (snap: SnapshotRow, by: string | null) => void;
+  acceptNewFeatures?: (snap: SnapshotRow, by: string | null, scope: PrdScopeOut["features"]) => void;
   uuid: () => string;
   now: () => string;
 }
@@ -1243,14 +1243,16 @@ function priorityYaml(spec: OrderSpec, segment: string, attempt: number): string
 
 /** The approved PRD scope a run's order must rank (C6), else null. */
 function scopeOf(ctx: Pick<RunsContext, "db">, r: RunOut): PrdScopeOut["features"] | null {
-  const scope = (ctx.db.scopes?.[r.id] ?? []).filter((x) => x.status === "approved").pop();
+  const scope = approvedScope(ctx, r);
   return scope ? scope.features.filter((f) => f.decision === "include") : null;
 }
 
+const approvedScope = (ctx: Pick<RunsContext, "db">, r: RunOut) => (ctx.db.scopes?.[r.id] ?? []).filter((x) => x.status === "approved").pop();
+
 /**
  * As the API's check (oracle.priorities.run_order.check_order), for the codes the mock's
- * orders can show: unknown_feature, not_in_scope, missing_feature, before_prerequisite
- * (blocking); differs_from_live, no_goal (advisory). The live ranking is the mock's
+ * orders can show: unknown_feature, not_in_scope, missing_feature, before_prerequisite,
+ * new_feature_no_goal (blocking); differs_from_live, no_goal (advisory). The live ranking is the mock's
  * (./lane-f.ts), restricted to the ranked features.
  */
 function checkOrder(spec: OrderSpec, scope: PrdScopeOut["features"] | null): PriorityCheck {
@@ -1271,6 +1273,13 @@ function checkOrder(spec: OrderSpec, scope: PrdScopeOut["features"] | null): Pri
     else if (scope && !inScope.has(k)) add("not_in_scope", k, `${k} is not included in the approved PRD scope`);
   }
   for (const f of scope ?? []) if (!(f.key in rank)) add("missing_feature", f.key, `${f.key} is in the approved PRD scope and not ranked`);
+  // A feature new in this PRD names a goal it serves, in its row or its feature-set entry (0: does not serve).
+  for (const o of spec.order) {
+    const entry = (scope ?? []).find((f) => f.key === o.key);
+    if (live.some((f) => f.key === o.key) || (!o.title && !entry)) continue;
+    const named = [{ key: o.goal, contribution: o.contribution }, ...(entry?.goals ?? [])];
+    if (!named.some((g) => g.key && g.contribution !== 0)) add("new_feature_no_goal", o.key, `${o.title ?? entry?.title ?? o.key} is new and names no goal it serves: the run must name one`);
+  }
   for (const k of keys) {
     for (const d of [...new Set(deps[k] ?? [])].sort()) {
       if (d in rank && rank[d] > rank[k]) add("before_prerequisite", k, `${k} is ranked ${rank[k]}, above ${d} (rank ${rank[d]}), which it depends on`);
@@ -1336,7 +1345,7 @@ function proposeOrder(ctx: Pick<RunsContext, "db" | "uuid" | "now" | "documents"
     params: { segment_seq: seq, attempt },
     ranking: rows,
     checkpoint_id: null,
-    scope_id: null,
+    scope_id: approvedScope(ctx, r)?.id ?? null,
     check_result: check,
   };
   if (same) Object.assign(same, snap);
@@ -1359,11 +1368,15 @@ function newFeature(o: OrderEntry, rank: number, method: Method, live: SnapshotR
   const missing: string[] = [];
   let score: number | null = o.score;
   let value: number | null = null;
-  if (o.goal != null && o.weight != null && o.contribution != null) {
-    value = o.weight * o.contribution;
-    goals.push({ goal: o.goal, title: goalTitle, weight: o.weight, weight_assumed: false, contribution: o.contribution, contribution_assumed: false, link_status: "proposed", term: value });
+  if (o.goal != null) {
+    // A goal named with no weight takes the goal's live weight, with no contribution the scorer's default: either then assumed.
+    const liveWeight = live.flatMap((f) => f.explanation.goals).find((g) => g.goal === o.goal && !g.weight_assumed)?.weight ?? null;
+    const weight = o.weight ?? liveWeight ?? 1;
+    const contribution = o.contribution ?? 1;
+    value = weight * contribution;
+    goals.push({ goal: o.goal, title: goalTitle, weight, weight_assumed: o.weight == null && liveWeight == null, contribution, contribution_assumed: o.contribution == null, link_status: "proposed", term: value });
     // In the scorer's words, so the page shows them as every row's (confidence as a percent, two decimals).
-    steps.push(`goal value = ${num(o.weight)}×${num(o.contribution)} (${goalTitle}) = ${num(value)}`);
+    steps.push(`goal value = ${num(weight)}×${num(contribution)} (${goalTitle}) = ${num(value)}`);
     if (o.confidence != null && o.effort) {
       score = Math.round((value * o.confidence * 10000) / o.effort) / 10000;
       steps.push(`score = ${num(value)} × ${num(o.confidence)} ÷ ${num(o.effort)} = ${num(score)}`);
@@ -1410,7 +1423,9 @@ function decideOrder(ctx: Pick<RunsContext, "db" | "now" | "documents" | "accept
   Object.assign(snap, { status: decision === "approved" ? "saved" : "discarded", decided_by: by, decided_at: ctx.now() });
   if (decision === "approved") {
     snap.document = orderDocument(ctx, r) ?? snap.document;
-    ctx.acceptNewFeatures?.(snap, by);
+    // The approved feature set the order was checked against (api: snapshot.scope_id).
+    const scope = Object.values(ctx.db.scopes ?? {}).flat().find((x) => x.id === snap.scope_id);
+    ctx.acceptNewFeatures?.(snap, by, (scope?.features ?? []).filter((f) => f.decision === "include"));
   }
 }
 
@@ -3051,6 +3066,7 @@ export function fromRunCheckpoint(ctx: RunsContext, runId: string): { run: Schem
 /** The runs the "priority-order" scenario seeds (C8). */
 export const PRIORITY_RUN = "7a11c0de-0000-4000-8000-0000000000c8";
 export const PRIORITY_BLOCKED_RUN = "7a11c0de-0000-4000-8000-0000000000c9";
+export const PRIORITY_NO_GOAL_RUN = "7a11c0de-0000-4000-8000-0000000000ca";
 
 /**
  * Saved addresses: one feature ranked well above the live ranking (differs_from_live,
@@ -3068,7 +3084,8 @@ const SAVED_ADDRESSES_ORDER: OrderSpec = {
     { key: "N-3", title: "Address check at checkout", depends_on: ["N-1"], goal: "g.paid-conversion", weight: 2, contribution: 2, confidence: 0.6, effort: 1, score: 2.4, explanation: "New in this PRD. Wrong addresses are the top reason a paid order fails." },
     { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
     { key: "N-4", title: "Import addresses from a spreadsheet, with a preview before saving", depends_on: ["N-1"], goal: "g.activation", weight: 3, contribution: 2, confidence: 0.6, effort: 2, score: 1.8, explanation: "New in this PRD. Large customers keep addresses in sheets." },
-    { key: "N-5", title: "Shared team addresses", goal: "g.paid-conversion", weight: 2, contribution: 1, confidence: 0.6, effort: 1, score: 1.2, explanation: "New in this PRD. Teams re-type the same office address." },
+    // Its goal named with no contribution: Approve order proposes the link, the contribution assumed.
+    { key: "N-5", title: "Shared team addresses", goal: "g.paid-conversion", weight: 2, confidence: 0.6, effort: 1, score: 1.2, explanation: "New in this PRD. Teams re-type the same office address." },
     { key: "F-7", score: 1, explanation: "G2 weight 2 x contribution 2 x 0.5 / 2" },
     { key: "N-6", title: "Address labels and notes", goal: "g.paid-conversion", weight: 2, contribution: 3, confidence: 0.3, effort: 4, score: 0.45, explanation: "New in this PRD. A guess: no evidence yet." },
   ],
@@ -3081,6 +3098,15 @@ const USAGE_ALERTS_ORDER: OrderSpec = {
     { key: "F-2", score: 8.1, explanation: "G1 weight 3 x contribution 3 x 0.9 / 1" },
     { key: "F-5", score: 1.8, explanation: "G1 weight 3 x contribution 1 x 0.6 / 3" },
     { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
+  ],
+};
+
+/** Gift notes: a new feature whose row names no goal (new_feature_no_goal, blocking). */
+const GIFT_NOTES_ORDER: OrderSpec = {
+  method: "goal_weighted",
+  order: [
+    { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
+    { key: "N-7", title: "Gift notes at checkout", confidence: 0.5, effort: 1, score: 0.5, explanation: "New in this PRD. Buyers ask to add a note to a gift." },
   ],
 };
 
@@ -3128,6 +3154,7 @@ export function seedPriorityRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
   seedAtPriority(db, ctx, PRIORITY_RUN, "saved-addresses", "2026-10-18T09:00:00Z", SAVED_ADDRESSES_ORDER);
   // Its PRD is not imported yet (no document has the slug): the order names it by the brief's title.
   seedAtPriority(db, ctx, PRIORITY_BLOCKED_RUN, "usage-alerts-pilot", "2026-10-18T10:00:00Z", USAGE_ALERTS_ORDER, "Example Co · Usage alerts");
+  seedAtPriority(db, ctx, PRIORITY_NO_GOAL_RUN, "gift-notes", "2026-10-18T08:00:00Z", GIFT_NOTES_ORDER, "Gift notes");
   const checkout = ctx.documents.find((d) => d.slug === "checkout-redesign");
   const earlier = db.runs.find((r) => r.document_slug === "checkout-redesign") ?? db.runs[0];
   const spec: OrderSpec = { method: "goal_weighted", order: ranking("goal_weighted").features.slice(0, 4).map((f) => ({ key: f.key, score: f.score ?? 0, explanation: "As the live ranking" })) };
