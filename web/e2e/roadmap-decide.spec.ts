@@ -399,7 +399,7 @@ test("under a filter, Needs a decision says N here, M in all on one basis, and 1
   await page.getByTestId("needs-decision").click();
   const scope = tray(page).getByTestId("tray-scope");
   // The whole count is every roadmap the reader sees, and says so.
-  const m = /^(\d+) here, (\d+) in all your roadmaps to decide/.exec(await scope.innerText());
+  const m = /^(\d+) here, (\d+) in all to decide in your roadmaps' working drafts/.exec(await scope.innerText());
   expect(m).not.toBeNull();
   // No roadmap is chosen: the sentence counts every roadmap's draft, never "this roadmap's" too.
   await expect(scope).toContainText("in your roadmaps' working drafts");
@@ -445,20 +445,23 @@ test("Needs a decision names this roadmap's draft only when one roadmap is chose
   await expect(scope).toContainText("in your roadmaps' working drafts");
   await expect(scope).not.toContainText("this roadmap's working draft");
   await tray(page).getByRole("button", { name: "Close" }).click();
-  await page.getByRole("combobox", { name: "Roadmap", exact: true }).selectOption({ label: "Alerts roadmap" });
+  await page.getByTestId("filter-roadmap").selectOption({ label: "Alerts roadmap" });
   await page.getByTestId("needs-decision").click();
   await expect(scope).toContainText("in this roadmap's working draft");
   await expect(scope).not.toContainText("your roadmaps");
 });
 
 test("at 390 px the Propose toast covers neither the cut flag's buttons nor the proposed line", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "roadmap-talk-own-decider"] as const);
   await login(page, "approver@example.com");
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await cutKeepingDependents(page, "alert-rules");
   const cut = strip(page).locator('[data-testid="conflict"][data-item="alert-rules"]');
+  await expect(cut).toContainText("Cut, but");
+  await page.setViewportSize({ width: 390, height: 844 });
+  // Read down to the flag: it sits at the foot of the screen, where the message would show.
+  await cut.evaluate((el) => el.scrollIntoView({ block: "end" }));
   await cut.getByRole("button", { name: /^Propose: remove the dependency/ }).first().click();
   const toast = page.getByRole("status").filter({ hasText: /^Proposed: remove the dependency/ });
   await expect(toast).toBeVisible();

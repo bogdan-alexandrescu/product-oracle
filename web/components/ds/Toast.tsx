@@ -65,27 +65,30 @@ export function ToastHost() {
   const left = useRef(LIFETIME_MS);
   // Up: at the top of the screen, as its `avoid` would be covered at the bottom (checked again as the page scrolls or redraws).
   const host = useRef<HTMLDivElement>(null);
-  const [up, setUp] = useState(false);
+  const [upOf, setUpOf] = useState<number | null>(null);
+  const up = shown != null && upOf === shown.id;
   const avoid = shown?.avoid;
+  const id = shown?.id;
   useLayoutEffect(() => {
-    setUp(false);
-    if (!avoid) return;
+    if (!avoid || id == null) return;
     const check = () => {
       const box = host.current?.querySelector('[role="status"]')?.getBoundingClientRect();
       if (!box) return;
       const bottom = window.innerHeight - (window.innerWidth <= 600 ? 80 : 16) - box.height;
-      setUp(covers(avoid, box.left, box.width, bottom, box.height) > covers(avoid, box.left, box.width, 16, box.height));
+      const over = covers(avoid, box.left, box.width, bottom, box.height) > covers(avoid, box.left, box.width, 16, box.height);
+      setUpOf((u) => (over ? id : u === id ? null : u));
     };
-    check();
+    const first = window.requestAnimationFrame(check);
     const t = window.setInterval(check, 200);
     window.addEventListener("resize", check);
     document.addEventListener("scroll", check, true);
     return () => {
+      window.cancelAnimationFrame(first);
       window.clearInterval(t);
       window.removeEventListener("resize", check);
       document.removeEventListener("scroll", check, true);
     };
-  }, [shown?.id, avoid]);
+  }, [id, avoid]);
   useEffect(() => {
     show = (ask) => setShown({ place: pagePlace, ...ask, id: ++next.current });
     hide = (message) => setShown((s) => (s?.message === message ? null : s));
