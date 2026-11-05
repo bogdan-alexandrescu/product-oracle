@@ -81,7 +81,8 @@ for (const phone of [false, true]) {
         // Each upcoming row leads to its pre-read and agenda, or says it is not ready.
         for (const row of await page.getByTestId("meetings-upcoming-row").all()) await expect(row).toContainText(/Pre-read and agenda|Pre-read not ready yet/);
         await expect(page.getByRole("region", { name: "Upcoming" })).not.toContainText(/ P[SD]T\b/);
-        if (!phone) await expect(page.getByTestId("simple-nav-meetings-count")).toHaveClass(/simple-count-quiet/);
+        // home-waiting-one-list: an upcoming review waits on nobody, so the rail has no Meetings count.
+        if (!phone) await expect(page.getByTestId("simple-nav-meetings-count")).toHaveCount(0);
 
         await tap(page.getByRole("button", { name: "Start review" }).first());
         const s = sheet(page);

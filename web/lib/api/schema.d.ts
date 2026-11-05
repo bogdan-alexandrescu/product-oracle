@@ -6070,6 +6070,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/rebuilds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Rebuilds
+         * @description The rebuild sign: the runs that will make a new version of a document the caller
+         *     may read (scheduled, running, waiting, stopped, or landed and not approved yet).
+         */
+        get: operations["list_rebuilds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{run_id}/decisions": {
         parameters: {
             query?: never;
@@ -12358,9 +12379,77 @@ export interface paths {
          * @description Add a milestone to a goal on a roadmap: coded the next "M<n>" in that goal on that
          *     roadmap. Who may change the roadmap directly (an owner, its decider, with none its
          *     owner while an approver, same as a key date); a commenter is refused (403: milestones
-         *     are not proposed here, unlike key dates).
+         *     are not proposed here, unlike key dates). A roadmap that is history (the company
+         *     roadmap exists) is 409.
          */
         post: operations["create_goal_milestone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/milestones/carry-over": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Carry Over Old Milestones
+         * @description Bring old milestones over: copy every goal milestone of the older per-PRD roadmaps
+         *     (history while the company roadmap exists) onto the company roadmap, same name, date
+         *     and goal, its items re-pointed to the company roadmap's (same feature, else same item
+         *     key), each old one linked to its copy. One none of whose items are left is not copied:
+         *     it stays in ``old_milestones.needs_call`` for Keep or Drop. Run once by an owner (a
+         *     second run copies nothing), never on a read or a deploy.
+         */
+        post: operations["carry_over_old_milestones"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/milestones/{milestone_id}/keep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep Old Milestone
+         * @description Keep an old milestone with no items left: copied onto the company roadmap with no
+         *     items, linked. One not waiting on a call is 409.
+         */
+        post: operations["keep_old_milestone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/milestones/{milestone_id}/drop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Drop Old Milestone
+         * @description Drop an old milestone with no items left: it stays behind on its old roadmap and
+         *     leaves the list. One not waiting on a call is 409.
+         */
+        post: operations["drop_old_milestone"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12391,7 +12480,8 @@ export interface paths {
          *     own milestone is read-only here: a date or counts-when edit instead proposes a change
          *     to the PRD's owner (``pending`` filled, the milestone unchanged) through the change
          *     engine (``POST /v1/simple/changes/{id}/accept|decline``); its name, goal and items are
-         *     the PRD's own and are 422 here.
+         *     the PRD's own and are 422 here, even beside a date. A milestone of a roadmap that is
+         *     history (the company roadmap exists) is 409.
          */
         patch: operations["patch_goal_milestone"];
         trace?: never;
@@ -12871,6 +12961,28 @@ export interface paths {
          * @description Open a session on a working draft whose session closed: its author or the decider.
          */
         post: operations["resume_simple_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/one-pagers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Simple One Pagers
+         * @description The PRDs Simple lists (One-pagers, Home), newest first, as GET /v1/documents?kind=prd
+         *     has them but without a PRD marked replaced (simple-replaced-prds): Simple shows the PRDs
+         *     that replaced it; Detailed keeps it as history.
+         */
+        get: operations["list_simple_one_pagers"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -18294,7 +18406,7 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             /** Op */
-            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped");
+            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal" | "edit_goal_milestone" | "set_depends_on") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped" | "api_action");
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -18410,7 +18522,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal" | "edit_goal_milestone" | "set_depends_on";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -19341,6 +19453,18 @@ export interface components {
             slug: string;
             /** Title */
             title: string;
+        };
+        /**
+         * CompanyRoadmapRebuilds
+         * @description The company roadmap every PRD feeds: a PRD's rebuild changes it too.
+         */
+        CompanyRoadmapRebuilds: {
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Prds */
+            prds: number;
         };
         /** CompareCheckpoint */
         CompareCheckpoint: {
@@ -23658,6 +23782,13 @@ export interface components {
             flags: {
                 [key: string]: string[];
             };
+            /**
+             * Titles
+             * @default {}
+             */
+            titles: {
+                [key: string]: string;
+            };
         };
         /**
          * FeatureSetProblem
@@ -24459,6 +24590,11 @@ export interface components {
             item_title?: string | null;
             /** Code */
             code: string;
+            /**
+             * Ref
+             * @default
+             */
+            ref: string;
             /** Label */
             label: string;
             /** Waivable */
@@ -24537,6 +24673,8 @@ export interface components {
             title: string;
             /** Goal Ids */
             goal_ids?: string[];
+            /** Assumed Goal Ids */
+            assumed_goal_ids?: string[];
         };
         /** GoalBucketGoal */
         GoalBucketGoal: {
@@ -26406,7 +26544,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal" | "edit_goal_milestone" | "set_depends_on";
             /**
              * Status
              * @enum {string}
@@ -30823,6 +30961,8 @@ export interface components {
             /** Flow Subject */
             flow_subject?: string | null;
             flow?: components["schemas"]["OnePagerFlow"] | null;
+            /** Item Id */
+            item_id?: string | null;
             /**
              * Decisions
              * @default []
@@ -33709,6 +33849,79 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /**
+         * Rebuild
+         * @description The rebuild sign (owner's pick A): a run that will make a new version of a document,
+         *     as the chip beside its version pill says it (``oracle.runs.rebuilds``).
+         */
+        Rebuild: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Flow
+             * @enum {string}
+             */
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest" | "discussion_research" | "intake_analysis";
+            /** Flow Title */
+            flow_title: string;
+            /** Document Slug */
+            document_slug: string;
+            /** Document Title */
+            document_title?: string | null;
+            /** Document Kind */
+            document_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing") | null;
+            /**
+             * New Document
+             * @default false
+             */
+            new_document: boolean;
+            /** Source Slug */
+            source_slug?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "scheduled" | "running" | "waiting" | "failed" | "done";
+            /** Steps */
+            steps: string[];
+            /** Step */
+            step: number;
+            /** From Version */
+            from_version?: number | null;
+            /** To Version */
+            to_version: number;
+            /** Started By */
+            started_by?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Scheduled For */
+            scheduled_for?: string | null;
+            /** Minutes Left */
+            minutes_left?: number | null;
+            /** Next Stop */
+            next_stop?: string | null;
+            /** Next Stop Who */
+            next_stop_who?: string | null;
+            /** Next Stop Action */
+            next_stop_action?: string | null;
+            /** Waits On */
+            waits_on?: string | null;
+            /** Waits On Action */
+            waits_on_action?: string | null;
+            /** Review Link */
+            review_link?: string | null;
+            /** Error */
+            error?: string | null;
+        };
+        /** RebuildsOut */
+        RebuildsOut: {
+            /** Rebuilds */
+            rebuilds: components["schemas"]["Rebuild"][];
+            company_roadmap?: components["schemas"]["CompanyRoadmapRebuilds"] | null;
+        };
         /** RecommendIn */
         RecommendIn: {
             /**
@@ -36099,6 +36312,31 @@ export interface components {
             delivered: boolean;
             /** Summary */
             summary: string;
+            /**
+             * Answers
+             * @default []
+             */
+            answers: components["schemas"]["RunDecisionAnswer"][];
+        };
+        /**
+         * RunDecisionAnswer
+         * @description A question answered at a decided stop: the architect's at an approved Engineering
+         *     check, or the agents' on the Questions from the agents cards of a stop approved or sent
+         *     back (``oracle.runs.stop_answers``).
+         */
+        RunDecisionAnswer: {
+            /** Question */
+            question: string;
+            /** Answer */
+            answer: string;
+            /** Feature Key */
+            feature_key?: string | null;
+            /** Feature Title */
+            feature_title?: string | null;
+            /** Answered By Name */
+            answered_by_name?: string | null;
+            /** Answered At */
+            answered_at?: string | null;
         };
         /**
          * RunDiscussion
@@ -36985,6 +37223,11 @@ export interface components {
         ScopeReason: {
             /** Code */
             code: string;
+            /**
+             * Ref
+             * @default
+             */
+            ref: string;
             /**
              * Severity
              * @enum {string}
@@ -38584,7 +38827,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal" | "edit_goal_milestone" | "set_depends_on";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -38633,7 +38876,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal" | "edit_goal_milestone" | "set_depends_on";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -38882,6 +39125,11 @@ export interface components {
              * @default []
              */
             tasks: components["schemas"]["SimpleTaskWaiting"][];
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["SimpleWaitingItem"][];
         };
         /** SimpleDelivery */
         SimpleDelivery: {
@@ -39409,6 +39657,12 @@ export interface components {
              * @default false
              */
             can_change: boolean;
+            /**
+             * Can Propose
+             * @default false
+             */
+            can_propose: boolean;
+            carried_from?: components["schemas"]["SimpleDocRef"] | null;
         };
         /** SimpleGoalMilestoneIn */
         SimpleGoalMilestoneIn: {
@@ -39450,6 +39704,16 @@ export interface components {
             /** Counts When */
             counts_when?: string | null;
         };
+        /** SimpleGoalPick */
+        SimpleGoalPick: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
         /** SimpleGoalRef */
         SimpleGoalRef: {
             /**
@@ -39465,6 +39729,28 @@ export interface components {
             metric?: string | null;
             /** Position */
             position?: number | null;
+            /** Current */
+            current?: number | null;
+            /** Target */
+            target?: number | null;
+            /** Unit */
+            unit?: string | null;
+            /** Due */
+            due?: string | null;
+        };
+        /**
+         * SimpleGoalSet
+         * @description build-feature-panel review 2: the goal (and measure) a person set on the item over
+         *     Oracle's: Oracle's goal as the item showed it (null: none), who set it and when.
+         */
+        SimpleGoalSet: {
+            oracle?: components["schemas"]["SimpleGoalPick"] | null;
+            /** By */
+            by?: string | null;
+            /** At */
+            at?: string | null;
+            /** Measure */
+            measure?: string | null;
         };
         /** SimpleGoalSuggestion */
         SimpleGoalSuggestion: {
@@ -39723,6 +40009,27 @@ export interface components {
             /** Date */
             date?: string | null;
             prd?: components["schemas"]["SimpleDocRef"] | null;
+        };
+        /**
+         * SimpleLink
+         * @description build-feature-panel: one item the item depends on; ``by`` null: Oracle found it.
+         *     ``removed``: Oracle's link a person removed (``removed_by``), shown with Restore.
+         */
+        SimpleLink: {
+            /**
+             * Item Id
+             * Format: uuid
+             */
+            item_id: string;
+            /** By */
+            by?: string | null;
+            /**
+             * Removed
+             * @default false
+             */
+            removed: boolean;
+            /** Removed By */
+            removed_by?: string | null;
         };
         /** SimpleMatch */
         SimpleMatch: {
@@ -40198,6 +40505,70 @@ export interface components {
             reason: string;
         };
         /**
+         * SimpleOldMilestone
+         * @description old-milestones (owner, Nov 4): a goal milestone still on an older per-PRD roadmap
+         *     (history) that is not on the company roadmap yet. ``items``: the titles of the items
+         *     it gates that are on the company roadmap (it would gate those there); none left: it
+         *     waits on an owner's Keep or Drop.
+         */
+        SimpleOldMilestone: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Date */
+            date?: string | null;
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Goal Title */
+            goal_title?: string | null;
+            from_roadmap: components["schemas"]["SimpleDocRef"];
+            /**
+             * Items
+             * @default []
+             */
+            items: string[];
+        };
+        /**
+         * SimpleOldMilestones
+         * @description What "Bring old milestones over" would do: ``moves`` are copied (items re-pointed),
+         *     ``needs_call`` have no items left and wait on Keep or Drop. An owner's alone: anyone
+         *     else reads both empty and ``can_act`` false.
+         */
+        SimpleOldMilestones: {
+            /**
+             * Can Act
+             * @default false
+             */
+            can_act: boolean;
+            /**
+             * Moves
+             * @default []
+             */
+            moves: components["schemas"]["SimpleOldMilestone"][];
+            /**
+             * Needs Call
+             * @default []
+             */
+            needs_call: components["schemas"]["SimpleOldMilestone"][];
+        };
+        /**
+         * SimpleOldMilestonesResult
+         * @description After a carry-over, Keep or Drop: the ids of the company roadmap's new milestones
+         *     and what is left.
+         */
+        SimpleOldMilestonesResult: {
+            /**
+             * Carried
+             * @default []
+             */
+            carried: string[];
+            old_milestones: components["schemas"]["SimpleOldMilestones"];
+        };
+        /**
          * SimpleOpenDecision
          * @description S4: a proposed decision naming the item as a subject (the floating card's).
          */
@@ -40212,6 +40583,24 @@ export interface components {
             /** Title */
             title: string;
         };
+        /**
+         * SimpleOverride
+         * @description build-feature-panel: Oracle's dates a person's replaced, and who set the new ones.
+         */
+        SimpleOverride: {
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Source */
+            source?: string | null;
+            /** Start Source */
+            start_source?: string | null;
+            /** By */
+            by?: string | null;
+            /** At */
+            at?: string | null;
+        };
         /** SimpleOwnerRef */
         SimpleOwnerRef: {
             /**
@@ -40221,6 +40610,8 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /** Source */
+            source?: ("item" | "track") | null;
         };
         /** SimplePersonRef */
         SimplePersonRef: {
@@ -40524,6 +40915,7 @@ export interface components {
              * @default []
              */
             lines: components["schemas"]["SimpleLine"][];
+            company_roadmap?: components["schemas"]["SimpleDocRef"] | null;
             plan?: components["schemas"]["SimplePlanOut"] | null;
         };
         /**
@@ -40660,6 +41052,8 @@ export interface components {
              * @default
              */
             short_code: string;
+            /** Own Key */
+            own_key?: string | null;
             /** Title */
             title: string;
             goal?: components["schemas"]["SimplePriorityGoal"] | null;
@@ -40714,6 +41108,11 @@ export interface components {
              * @default false
              */
             can_reorder: boolean;
+            /**
+             * On Roadmap
+             * @default false
+             */
+            on_roadmap: boolean;
             /**
              * Applies
              * @default false
@@ -40943,6 +41342,8 @@ export interface components {
             estimated: boolean;
             /** Date Basis */
             date_basis?: string | null;
+            /** Note */
+            note?: string | null;
             suggestion?: components["schemas"]["DateSuggestionOut"] | null;
             milestone?: components["schemas"]["SimpleItemMilestone"] | null;
             /** Phases */
@@ -40994,6 +41395,13 @@ export interface components {
              * @default []
              */
             goal_ids: string[];
+            override?: components["schemas"]["SimpleOverride"] | null;
+            /**
+             * Links
+             * @default []
+             */
+            links: components["schemas"]["SimpleLink"][];
+            goal_set?: components["schemas"]["SimpleGoalSet"] | null;
             /**
              * Decided In
              * @default []
@@ -41039,6 +41447,14 @@ export interface components {
              * @default []
              */
             goal_milestones: components["schemas"]["SimpleGoalMilestone"][];
+            /**
+             * @default {
+             *       "can_act": false,
+             *       "moves": [],
+             *       "needs_call": []
+             *     }
+             */
+            old_milestones: components["schemas"]["SimpleOldMilestones"];
             /**
              * Changes In Review
              * @default 0
@@ -41409,6 +41825,8 @@ export interface components {
             reviews_in_trash?: "roadmap" | null;
             /** Reviews Deleted */
             reviews_deleted?: "roadmap" | null;
+            /** Reviews Deleted At */
+            reviews_deleted_at?: string | null;
         };
         /** SimpleVisualCommentIn */
         SimpleVisualCommentIn: {
@@ -41525,6 +41943,37 @@ export interface components {
              * @default []
              */
             on: components["schemas"]["SimplePersonRef"][];
+        };
+        /**
+         * SimpleWaitingItem
+         * @description home-decisions-one-list: one thing waiting on the signed-in person
+         *     (oracle.simple.waiting_list): what it is, its action in words and where it is done.
+         */
+        SimpleWaitingItem: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "run_stop" | "question" | "decision" | "broken_link" | "date" | "draft" | "proposal" | "goal_suggestion" | "goal";
+            /** Key */
+            key: string;
+            /** Ref Id */
+            ref_id: string;
+            /** Title */
+            title: string;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+            /** Action */
+            action: string;
+            /** Href */
+            href: string;
+            /** At */
+            at?: string | null;
+            /** Op */
+            op?: string | null;
         };
         /** SimpleWindow */
         SimpleWindow: {
@@ -59654,6 +60103,26 @@ export interface operations {
             };
         };
     };
+    list_rebuilds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RebuildsOut"];
+                };
+            };
+        };
+    };
     list_run_decisions: {
         parameters: {
             query?: never;
@@ -70927,6 +71396,88 @@ export interface operations {
             };
         };
     };
+    carry_over_old_milestones: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleOldMilestonesResult"];
+                };
+            };
+        };
+    };
+    keep_old_milestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                milestone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleOldMilestonesResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    drop_old_milestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                milestone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleOldMilestonesResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     delete_goal_milestone: {
         parameters: {
             query?: never;
@@ -71788,6 +72339,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_simple_one_pagers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSummary"][];
                 };
             };
         };

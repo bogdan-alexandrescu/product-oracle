@@ -223,6 +223,11 @@ class TrackMilestone(TenantScoped, Base):
     plan_date: Mapped[date | None] = mapped_column(Date)
     item_ids: Mapped[list[uuid.UUID]] = _uuids()
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # old-milestones (owner, Nov 4): an older per-PRD roadmap's goal milestone carried onto
+    # the company roadmap links to its copy there (oracle.simple.old_milestones); one none
+    # of whose items were left and that an owner dropped is not carried.
+    carried_to_id: Mapped[uuid.UUID | None] = _fk("track_milestones", "SET NULL")
+    carry_dropped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class TrackerRecord(TenantScoped, Base):

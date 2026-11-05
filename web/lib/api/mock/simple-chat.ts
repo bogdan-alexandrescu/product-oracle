@@ -273,6 +273,25 @@ export function seedStrayReply(chat: ChatDb, owner: { id: string; name: string }
   };
 }
 
+/**
+ * build-feature-panel review 2: the "feature-panel-frames" scenario's talk about Weekly alert
+ * digest, as the picked mk-featurepanel frames draw it: Oracle, its owner, Oracle.
+ */
+export function seedFramesTalk(chat: ChatDb, reader: string, itemId: string, owner: { id: string; name: string }): void {
+  const at = new Date(mockNowMs() - 60_000).toISOString();
+  const base = { card_ids: [], choices: [], picked: null, retry: false, reply_to: null };
+  const page = `/simple/roadmap/items/${itemId}`;
+  const oracle = (body: string) => ({ ...base, id: crypto.randomUUID(), author_kind: "oracle" as const, author_id: null, author_name: "Oracle", body, at, kind: "answer" });
+  chat.threads[`ask:${reader}:${page}`] = {
+    id: crypto.randomUUID(), meeting_id: null, owner_id: reader, page,
+    messages: [
+      oracle("Engineering estimates the digest ends Dec 10. It starts Oct 31, but Alert rules engine, which it needs, ends Nov 10."),
+      { ...base, id: crypto.randomUUID(), author_kind: "person", author_id: owner.id, author_name: owner.name, body: "Can we have it before the Beta on Nov 30?", at, kind: "request" },
+      oracle("Only if the email template is cut to one layout. That saves about two weeks, so it could end Nov 27."),
+    ],
+  };
+}
+
 const DAY = 86_400_000;
 const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
@@ -575,9 +594,11 @@ const actionDraft = (summary: string, op: string, item: Item | null, target: Val
 /** chat-actions' cards, for its phrases and Oracle's reader alike: a new owner or decider. */
 function whoDraft(db: SimpleDb, ctx: ChatCtx, who: Person, i: Item, word: "owner" | "decider"): Draft {
   if (word === "owner") {
-    const before = itemOwnerId(db, i.key);
+    // The item's own owner, as chat_actions names it (null: its track's, named by before_name).
+    const shown = itemOwnerId(db, i.key);
+    const before = (db.targets?.[i.id]?.owner_id as string | null | undefined) ?? null;
     return actionDraft(`Make ${who.name} the owner of ${i.title}`, "set_owner", i, { item_id: i.id }, { owner_id: before }, { owner_id: who.id }, {
-      kind: "owner", item_id: i.id, person_id: who.id, person_name: who.name, before_name: before ? (ctx.names[before] ?? i.owner?.name ?? null) : null,
+      kind: "owner", item_id: i.id, person_id: who.id, person_name: who.name, before_name: shown ? (ctx.names[shown] ?? i.owner?.name ?? null) : null,
     });
   }
   const before = itemDeciderId(db, i.key, ctx.roles);
@@ -773,6 +794,81 @@ function rebaseShift(c: StoredCard, current: Record<string, unknown>) {
   if (c.correct) c.correct = { ...c.correct, values: { start_date: a, end_date: b } };
 }
 
+/**
+ * ask-oracle-actions: the API's action catalogue (ask_actions), as cards: "add the assumption X"
+ * is create_entity, a new record its Undo deletes; "add the gap X" is create_knowledge_gap, which
+ * has no DELETE, so its card says before Apply that it cannot be undone. Apply all leaves them
+ * (each is applied on its own).
+ */
+const API_OP = "api_action";
+const API_CANNOT_UNDO = "This cannot be undone.";
+const API_ADD = /^(?:please\s+)?add\s+(?:the\s+|an?\s+)?(?:new\s+)?(assumption|gap)\s+(.+?)\.?$/i;
+/** ask_actions.SECRET_VALUE: a pasted key or token is never kept in a card (the API refuses it). */
+const API_SECRET =
+  /(sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|xox[abposr]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|bearer\s+\S{16,}|-----BEGIN [A-Z ]*PRIVATE KEY|(?<![A-Za-z0-9_+/=-])(?=[A-Za-z0-9_+/=]*\d)(?=[A-Za-z0-9_+/=]*[A-Za-z])[A-Za-z0-9_+/=]{32,})/i;
+export const API_SECRET_REFUSAL = "I can't do that from the chat: a value that looks like a secret is never kept in the chat.";
+
+function apiDraft(kind: string, text: string): Draft {
+  const title = words(text);
+  if (kind.toLowerCase() === "assumption") {
+    const key = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const body = { type: "assumption", key, title };
+    return actionDraft(`Add a product record: type “assumption”, key “${key}”, title “${title}”.`, API_OP, null, { action: "create_entity", args: { body }, names: [] }, {}, { undo: "delete" }, null);
+  }
+  return actionDraft(`Add a gap: title “${title}”. ${API_CANNOT_UNDO}`, API_OP, null, { action: "create_knowledge_gap", args: { body: { title } }, names: [] }, {}, { undo: null }, null);
+}
+
+/**
+ * ask-oracle-actions: "ask <person> to decide <title>" is create_decision (POST /v1/decisions,
+ * "Request a decision"): its card names, by name, the person the route pings by Slack, and has
+ * no Undo. A person the company does not have: no card (ask_actions' unknown record).
+ */
+const API_DECIDE = /^(?:please\s+)?ask\s+(.+?)\s+to\s+decide\s+(?:on\s+)?(.+?)\.?$/i;
+export const API_NO_RECORD = "I can't tell which record that changes, so I made no card.";
+
+function decisionRequest(ctx: ChatCtx, who: string, text: string): ReaderOut {
+  const title = words(text);
+  if (API_SECRET.test(title)) return { refusal: API_SECRET_REFUSAL };
+  const p = personNamed(ctx, who);
+  if (!p || !title) return { refusal: API_NO_RECORD };
+  const body = { title, approver_id: p.id };
+  return {
+    card: actionDraft(
+      `Request a decision: title “${title}”, approver “${p.name}”. Sends a Slack message to ${p.name} asking for a decision. ${API_CANNOT_UNDO}`,
+      API_OP, null, { action: "create_decision", args: { body }, names: [], ids: { [p.id]: p.name }, pinged: [p.id] }, {}, { undo: null }, null,
+    ),
+  };
+}
+
+/** ask-oracle-actions: "it should not depend on X (. remove that dependency relationship)", "X depends on Y" (chat_actions' remove_dependency / add_dependency). */
+const DEP_REMOVE = /^(.+?)\s+(?:should\s*n[o']t|must\s*n[o']t|does\s*n[o']t\s+need\s+to|no\s+longer(?:\s+needs\s+to)?)\s+depends?\s+on\s+(.+?)(?:[.,;]?\s+(?:so\s+|please\s+)?remove\s+(?:that|the|this)\s+dependency(?:\s+relationship)?)?$/i;
+const DEP_REMOVE_OF = /^remove\s+(?:the\s+)?dependency\s+(?:of|from)\s+(.+?)\s+on\s+(.+)$/i;
+const DEP_ADD = /^(?:make\s+)?(.+?)\s+(?:should\s+|must\s+)?depends?\s+on\s+(.+)$/i;
+const label = (i: Item) => (i.code ? `${i.code} ${i.title}` : i.title);
+
+/** The dependency in words: which of the patterns the line is, its two items' words. Null: none. */
+function dependencyWords(t: string): { remove: boolean; x: string; on: string } | null {
+  const m = DEP_REMOVE.exec(t) ?? DEP_REMOVE_OF.exec(t);
+  if (m) return { remove: true, x: m[1], on: m[2] };
+  const a = DEP_ADD.exec(t);
+  return a ? { remove: false, x: a[1], on: a[2] } : null;
+}
+
+/** set_depends_on's card (chat_actions._depends_build): the item's depends_on keys without, or with, the other item's. */
+function dependencyDraft(db: SimpleDb, i: Item, dep: Item, remove: boolean): ReaderOut {
+  const own = db.items.find((x) => db.ids[x.key] === i.id);
+  const other = db.items.find((x) => db.ids[x.key] === dep.id);
+  if (!own || !other) return { refusal: "Which item?" };
+  if (own.key === other.key) return { refusal: `${i.title} cannot depend on itself.` };
+  const now_ = [...(own.depends ?? [])];
+  if (remove && !now_.includes(other.key)) return { refusal: `${i.title} does not depend on ${label(dep)}.` };
+  if (!remove && now_.includes(other.key)) return { refusal: `${i.title} depends on ${label(dep)} already.` };
+  if (!remove && own.roadmap !== other.roadmap) return { refusal: `${label(dep)} is on another roadmap: a dependency joins items of one roadmap.` };
+  const after = remove ? now_.filter((k) => k !== other.key) : [...now_, other.key];
+  const summary = remove ? `Remove dependency: ${i.title} no longer depends on ${label(dep)}` : `Add dependency: ${i.title} depends on ${label(dep)}`;
+  return { card: actionDraft(summary, "set_depends_on", i, { item_id: i.id, dependency_id: dep.id, dependency: label(dep) }, { depends_on: now_ }, { depends_on: after }, null) };
+}
+
 /** A builder's args: `item` is null for an op about no item (a decision, a minutes note). */
 export type ReaderArgs = { db: SimpleDb; ctx: ChatCtx; item: Item | null; months?: number; period?: [string, string]; rest?: string; meeting: Meeting | null; documentId: string | null };
 export type ReaderOut = { card: Draft } | { refusal: string };
@@ -809,6 +905,16 @@ export const mockReaderOps: Record<string, (a: ReaderArgs) => ReaderOut> = {
   // chat-join: chat-actions' ops, built by the same drafts as its phrases.
   set_owner: (a) => who(a, "owner"),
   set_decider: (a) => who(a, "decider"),
+  api_add: ({ rest }) => {
+    const [kind, text] = (rest ?? "").split("|");
+    return API_SECRET.test(text) ? { refusal: API_SECRET_REFUSAL } : { card: apiDraft(kind, text) };
+  },
+  api_decide: ({ ctx, rest }) => {
+    const [who, text] = (rest ?? "").split("|");
+    return decisionRequest(ctx, who, text ?? "");
+  },
+  remove_dependency: (a) => dependsOn(a, true),
+  add_dependency: (a) => dependsOn(a, false),
   record_decision: ({ ctx, meeting, documentId, rest }) => {
     if (!rest) return { refusal: "What was decided?" };
     return { card: decisionDraft(meeting, documentId, { id: ctx.id, name: ctx.names[ctx.id] ?? "someone" }, rest, askProposal(ctx, meeting, documentId)) };
@@ -819,6 +925,13 @@ export const mockReaderOps: Record<string, (a: ReaderArgs) => ReaderOut> = {
   agenda_skip: ({ meeting, item }) => (!meeting ? { refusal: MEETING_ONLY } : !item ? { refusal: "Which item?" } : { card: agendaDraft(meeting, item, "skip") }),
 };
 
+/** remove_dependency / add_dependency: the item `rest` names, on the same roadmap's items. */
+function dependsOn({ db, ctx, item, rest }: ReaderArgs, remove: boolean): ReaderOut {
+  if (!item) return { refusal: "Which item?" };
+  const [dep] = named(itemsFor(db, ctx), rest ?? "");
+  return dep ? dependencyDraft(db, item, dep, remove) : { refusal: `I could not find “${unquote(rest ?? "")}” on the roadmap.` };
+}
+
 /** set_owner / set_decider: the person `rest` names (a person the company does not have: a refusal). */
 function who({ db, ctx, item, rest }: ReaderArgs, word: "owner" | "decider"): ReaderOut {
   if (!item) return { refusal: "Which item?" };
@@ -827,7 +940,7 @@ function who({ db, ctx, item, rest }: ReaderArgs, word: "owner" | "decider"): Re
 }
 
 /** The ops about no item: their clause carries only its words (`rest`). */
-const ITEMLESS = new Set(["record_decision", "minutes_note", "open_question", "add_item"]);
+const ITEMLESS = new Set(["record_decision", "minutes_note", "open_question", "add_item", "api_add", "api_decide"]);
 
 type Clause = { op: string; x: string; months?: number; period?: [string, string]; rest?: string };
 
@@ -848,6 +961,22 @@ function clauses(text: string, skipped: string[] = []): Clause[] {
     }
     if ((m = /^add\s+(?:an?\s+)?(.+?)\s+item\s+to\s+(M\d)\b(?:\s+under\s+(.+))?$/i.exec(part))) {
       out.push({ op: "add_item", x: "", rest: [m[1], m[2], m[3] ?? ""].join("|") });
+      continue;
+    }
+    // ask-oracle-actions: an action of the API ("add the assumption X").
+    if ((m = API_ADD.exec(part))) {
+      out.push({ op: "api_add", x: "", rest: `${m[1]}|${m[2]}` });
+      continue;
+    }
+    // ask-oracle-actions: a decision requested of a person ("ask Priya to decide X").
+    if ((m = API_DECIDE.exec(part))) {
+      out.push({ op: "api_decide", x: "", rest: `${m[1]}|${m[2]}` });
+      continue;
+    }
+    // ask-oracle-actions: a dependency removed or added ("X should not depend on Y").
+    const dw = dependencyWords(part);
+    if (dw) {
+      out.push({ op: dw.remove ? "remove_dependency" : "add_dependency", x: dw.x, rest: dw.on });
       continue;
     }
     // chat-join: chat-actions' ops in free words.
@@ -978,6 +1107,7 @@ function readLine(db: SimpleDb, ctx: ChatCtx, r: NonNullable<StoredMessage["read
   const links: { label: string; href: string }[] = [];
   const said = unread(skipped, links);
   if (cs.length > 5) said.push(unused(db, ctx, cs.slice(5), items, last, meeting, documentId));
+  if (!drafts.length && refusals.length === 1 && refusals[0] === API_NO_RECORD && !said.length) return { kind: "note", body: API_NO_RECORD, cards: [], links };
   if (!drafts.length) return { kind: "note", body: [refusals.length ? `I can't do that here: ${refusals.join(" ")}` : SAY_AGAIN, ...said].join(" "), cards: [], links };
   const n = drafts.length;
   // The valid cards stay; the line says which ones it cannot do and what it did not read.
@@ -1256,6 +1386,21 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
     }
     return { kind: "cards", body: `I understood: split ${about(i)} into ${n} slices.`, cards };
   }
+  const api = API_ADD.exec(t);
+  if (api && API_SECRET.test(api[2])) return { kind: "note", body: API_SECRET_REFUSAL, cards: [] };
+  if (api) return { kind: "cards", body: ONE_CHANGE, cards: [apiDraft(api[1], api[2])] };
+  const decide = API_DECIDE.exec(t);
+  if (decide) {
+    const o = decisionRequest(ctx, decide[1], decide[2]);
+    return "card" in o ? { kind: "cards", body: ONE_CHANGE, cards: [o.card] } : { kind: "note", body: o.refusal, cards: [] };
+  }
+  const dw = dependencyWords(t);
+  if (dw && new RegExp(`^${it}$`, "i").test(dw.x.trim())) {
+    const [dep] = named(items, dw.on);
+    if (!dep) return { kind: "note", body: `I could not find “${unquote(dw.on)}” on the roadmap. Say it another way.`, cards: [] };
+    const o = dependencyDraft(db, i, dep, dw.remove);
+    return "card" in o ? { kind: "cards", body: ONE_CHANGE, cards: [o.card] } : { kind: "note", body: o.refusal, cards: [] };
+  }
   const add = /^add (?:an? )?(.+?) item(?: to (M\d))?(?: under (.+))?$/i.exec(t);
   if (add) {
     const o = addItemDraft(db, ctx, add[1], add[2] ?? i.milestone?.name ?? "M1", add[3] ?? (i.goal ? i.goal.title : ""));
@@ -1463,7 +1608,8 @@ function mayOf(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): { may: 
 function undoBar(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): string | null {
   const m = meetingOf(chat, c);
   const bar = m ? meetingBar(m, ctx) : ctx.role === "viewer" ? "Viewers read the plan; they don't change it" : null;
-  if (bar || LOCAL_OPS.has(c.op) || c.op === "add_feature_ask" || c.op === "suggest_feature" || c.decided_by === ctx.id) return bar;
+  if (!bar && c.op === API_OP && !c.after.undo) return API_CANNOT_UNDO;
+  if (bar || c.op === API_OP || LOCAL_OPS.has(c.op) || c.op === "add_feature_ask" || c.op === "suggest_feature" || c.decided_by === ctx.id) return bar;
   const item = c.item_id ? itemsFor(db, ctx).find((i) => i.id === c.item_id) : undefined;
   const decides = c.item_id ? !!item?.can_decide : ctx.role === "owner";
   return decides ? null : "Only someone who may change this item undoes it";
@@ -1629,6 +1775,18 @@ function findMessage(chat: ChatDb, ctx: ChatCtx, id: string): { key: string; mee
 async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx, n: number | null, s8?: ChatMeetings, withDependents: boolean | string[] = false): Promise<Response | { card: unknown; result: Schemas["SimpleChangeResult"] }> {
   // fix5-cut-dependents: a cut card applies as cut_with_dependents (one change), and then names every item it cut.
   const use = withDependents ? { op: CUT_ALL, target: c.target, before: withDependents === true ? c.before : { ...c.before, dependents: withDependents }, after: {} } : n == null ? c : c.fixes[n];
+  if (c.op === API_OP) {
+    // ask-oracle-actions: the action's route ran as the person (ask_actions.apply); no change of the engine.
+    if (c.target.action === "create_decision") {
+      // POST /v1/decisions as the person: a proposed decision, its approver the named person, made by them.
+      const body = ((c.target.args as { body?: Schemas["DecisionCreate"] } | undefined)?.body ?? null);
+      const id = body && ctx.proposeDecision ? await ctx.proposeDecision(body) : null;
+      if (!id) return json(422, { detail: "The approver must be an active member with the approver role or above" });
+      c.target = { ...c.target, decision_id: id };
+    }
+    Object.assign(c, { status: "applied", decided_by_name: ctx.names[ctx.id] ?? "someone", decided_by: ctx.id, decided_at: now() });
+    return { card: cardOut(db, chat, c, ctx), result: null as unknown as Schemas["SimpleChangeResult"] };
+  }
   if (c.op === "suggest_feature") {
     // Filed as the person's own suggestion (origin "person"): it lands under People.
     const goal = Object.keys(GOALS).find((k) => goalId(k) === c.target.goal_id) ?? "";
@@ -1962,7 +2120,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     if (p[5] === "apply-all") {
       const applied: string[] = [];
       let stopped: { card_id: string; summary: string; reason: string } | null = null;
-      for (const c of msg.card_ids.map((id) => chat.cards[id]).filter((c) => c.status === "open")) {
+      for (const c of msg.card_ids.map((id) => chat.cards[id]).filter((c) => c.status === "open" && c.op !== API_OP)) {
         const { may, why_not } = mayOf(db, chat, c, ctx);
         if (!may) {
           stopped = { card_id: c.id, summary: c.summary, reason: why_not ?? "You may not apply this change" };
@@ -2058,6 +2216,13 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
       const { may, why_not } = mayOf(db, chat, c, ctx);
       if (!may) return json(403, { detail: why_not ?? "You may not discard this card" });
       c.status = "discarded";
+      return json(200, cardOut(db, chat, c, ctx));
+    }
+    if (p[5] === "undo" && c.op === API_OP) {
+      if (c.status !== "applied") return json(409, { detail: `Only an applied card undoes; this one is ${c.status}` });
+      const bar = undoBar(db, chat, c, ctx);
+      if (bar) return json(409, { detail: bar });
+      c.status = "undone";
       return json(200, cardOut(db, chat, c, ctx));
     }
     if (p[5] === "undo") {

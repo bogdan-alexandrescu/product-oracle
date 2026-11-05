@@ -40,13 +40,13 @@ from oracle.authz import has_role
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document
 from oracle.members.names import display_name
-from oracle.simple import changes, chat, shipped
+from oracle.simple import ask_actions, changes, chat, shipped
 from oracle.simple.models import SimpleChatCard
 from oracle.simple.schemas import SimpleChangeIn
 
-ENGINE_OPS = ("set_owner", "set_decider")
+ENGINE_OPS = ("set_owner", "set_decider", "set_depends_on")
 DIRECT_OPS = ("record_decision", "minutes_note", "open_question", "agenda_next", "agenda_skip",
-              "suggest_feature", shipped.OP)  # fmt: skip
+              "suggest_feature", shipped.OP, ask_actions.OP)  # fmt: skip
 MEETING_ONLY = ("minutes_note", "open_question", "agenda_next", "agenda_skip")
 UNDERSTOOD = "I understood one change:"
 MEETING_NOTE = "Minutes notes, open questions and agenda changes belong to a meeting."
@@ -92,6 +92,46 @@ def _who_build(field: str, word: str):
     return build
 
 
+def _depends_build(remove: bool):
+    """ask-oracle-actions: "it should not depend on X" / "it depends on X": the item's
+    depends_on in its roadmap's working draft (the engine's ``set_depends_on``)."""
+
+    def build(c: chat.Ctx, args: dict[str, Any]) -> dict | chat.Reply:
+        e = c.find(str(args.get("item") or ""))
+        if isinstance(e, chat.Reply):
+            return e
+        dep = c.find(str(args.get("on") or ""))
+        if isinstance(dep, chat.Reply):
+            return dep
+        from oracle.simple.roadmap_talk import label
+
+        now = list(e.row.depends_on or [])
+        key = dep.row.item_key
+        if dep.row.id == e.row.id:
+            return chat.Reply("note", f"{e.row.title} cannot depend on itself.")
+        if remove and key not in now:
+            return chat.Reply("note", f"{e.row.title} does not depend on {label(dep)}.")
+        if not remove and key in now:
+            return chat.Reply("note", f"{e.row.title} depends on {label(dep)} already.")
+        if not remove and dep.row.roadmap_version_id != e.row.roadmap_version_id:
+            return chat.Reply("note", f"{label(dep)} is on another roadmap: a dependency "
+                                      "joins items of one roadmap.")  # fmt: skip
+        after = [k for k in now if k != key] if remove else [*now, key]
+        summary = (
+            f"Remove dependency: {e.row.title} no longer depends on {label(dep)}"
+            if remove
+            else f"Add dependency: {e.row.title} depends on {label(dep)}"
+        )
+        return {"summary": summary, "op": "set_depends_on", "item_id": e.row.id,
+                "target": {"item_id": str(e.row.id), "dependency_id": str(dep.row.id),
+                           "dependency": label(dep)},
+                "before": {"depends_on": now}, "after": {"depends_on": after}}  # fmt: skip
+
+    return build
+
+
+build_remove_dependency = _depends_build(True)
+build_add_dependency = _depends_build(False)
 build_set_owner = _who_build("owner_id", "owner")
 build_set_decider = _who_build("decider_id", "decider")
 
@@ -294,11 +334,15 @@ def phrase(t: str) -> tuple[str, dict[str, Any]] | None:
 def bar(principal: Any, card: SimpleChatCard, rules: Any) -> str | None:
     """Why the caller may not apply this direct card (None: they may)."""
     if rules is not None:
+        if card.op == ask_actions.OP and ask_actions.bar(principal, card):
+            return ask_actions.bar(principal, card)
         return chat.meeting_bar(principal, rules)
     if card.op in MEETING_ONLY:
         return MEETING_NOTE
     if card.owner_id is not None and card.owner_id != chat._me(principal):
         return "This card is someone else's"
+    if card.op == ask_actions.OP:
+        return ask_actions.bar(principal, card)
     if not has_role(principal.role, "commenter"):
         if card.op == "suggest_feature":
             return "Viewers read; commenters and up suggest"
@@ -529,6 +573,8 @@ async def undo(db: AsyncSession, principal: Any, card: SimpleChatCard, rules: An
             await _unsuggest(db, card)
         elif card.op == shipped.OP:
             await shipped.undo(db, principal, card)
+        elif card.op == ask_actions.OP:
+            await ask_actions.undo(db, principal, card)
         elif card.op in ("minutes_note", "open_question"):
             await meetings.remove_note(db, uuid.UUID(card.target["meeting_id"]),
                                        str(card.target.get("note_id")))  # fmt: skip
@@ -567,6 +613,13 @@ ACTIONS: list[dict[str, Any]] = [
     {"op": "set_decider", "describe": "Make a person the decider of a roadmap item",
      "args": {"item": "the roadmap item", "person": "the new decider"},
      "build": build_set_decider, "apply": apply_engine},
+    {"op": "remove_dependency",
+     "describe": "Remove a dependency: the item no longer depends on another item",
+     "args": {"item": "the roadmap item that depends", "on": "the item it depends on now"},
+     "build": build_remove_dependency, "apply": apply_engine},
+    {"op": "add_dependency", "describe": "Add a dependency: the item depends on another item",
+     "args": {"item": "the roadmap item that will depend", "on": "the item it will depend on"},
+     "build": build_add_dependency, "apply": apply_engine},
     {"op": "record_decision", "describe": "Record a decision (in a meeting: the meeting's)",
      "args": {"text": "what was decided", "decider": "who decided (optional)"},
      "build": build_record_decision, "apply": apply_record_decision},
@@ -588,3 +641,6 @@ ACTIONS: list[dict[str, Any]] = [
 
 # chat-join: the reader offers these ops and chat.apply applies their cards.
 chat.join(ACTIONS)
+# ask-oracle-actions: an API action's card (built from the reader's ``calls``, never a
+# ChatOp) applies through its own route.
+chat.APPLIERS[ask_actions.OP] = ask_actions.apply

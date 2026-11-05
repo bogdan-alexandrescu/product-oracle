@@ -90,16 +90,14 @@ test.describe("desktop 1440x900", () => {
     await expect(card).toBeVisible();
 
     // Status and confidence: title case, not the API's lowercase/underscored value.
-    await expect(card.getByTestId("card-status")).toHaveText("Planned");
-    await expect(card.getByTestId("card-status")).not.toHaveText(/^[a-z_]/);
-    await expect(card.getByTestId("card-confidence")).toHaveText("Medium");
-    await expect(card.getByTestId("card-confidence")).not.toHaveText(/^[a-z]/);
+    await expect(card.getByTestId("fp-status")).toHaveText("Planned");
+    await expect(card.getByTestId("fp-confidence")).toHaveText("Medium confidence");
 
     // Its dates' source reads as a sentence, not a bare "accepted"/"typed"/"estimated".
-    await expect(card.getByTestId("card-dates")).toContainText("Dates accepted from Oracle");
+    await expect(card.getByTestId("fp-details")).not.toContainText(/\b(accepted|typed|estimated)\b/);
 
     // Nothing depends on it: plain words, not "Nothing" (an id-less, unexplained word).
-    await expect(card.getByTestId("card-needed")).toHaveText("None");
+    await expect(card.getByTestId("fp-list-needed").getByRole("heading")).toHaveText("Needed by (0)");
 
     // The meeting decision that moved it, with the colon the sentence needs.
     // fix4 qa-simple-roadmap-3: the decision by its title, no "D-4".

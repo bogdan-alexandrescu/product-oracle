@@ -73,8 +73,8 @@ test.describe("QA pass 2: simple-plan, the Ranked list", () => {
     await expect(toast(page, "Moved Sample data import (F-12) to rank 2")).toBeVisible();
     await expect(row(page, "setup-import").getByTestId("prio-rank")).toHaveText("2");
 
-    await dragRow(page, "Alert routing by team (ARB)", 5);
-    const refused = page.getByRole("dialog", { name: "Why move Alert routing by team (ARB)" });
+    await dragRow(page, "Alert routing by team", 5);
+    const refused = page.getByRole("dialog", { name: "Why move Alert routing by team" });
     await expect(refused).toContainText("Can't go above Alert history export, which it needs.");
     await expect(refused.getByRole("button", { name: "Move", exact: true })).toHaveCount(0);
     await refused.getByRole("button", { name: "Close" }).click();
@@ -101,11 +101,8 @@ test.describe("QA pass 2: simple-plan, the Ranked list", () => {
       expect(await numbers.locator(":scope > span > span").evaluateAll((els) => els.every((e) => getComputedStyle(e).whiteSpace === "nowrap"))).toBe(true);
       const box = (await numbers.boundingBox())!;
       expect(box.height).toBeLessThan(30);
-      // One chip style: a below-the-line row's chip keeps its edge.
-      const below = page.locator('[data-testid="prio-row"][data-above="false"]').first();
-      const chip = below.getByTestId("prio-code");
-      expect(await chip.evaluate((e) => parseFloat(getComputedStyle(e).borderTopWidth))).toBeGreaterThan(0);
-      expect(await chip.evaluate((e) => getComputedStyle(e).fontFamily)).not.toMatch(/mono/i);
+      // prio-company (the owner, Nov 4): no made-up code chip on a row, above or below the line.
+      await expect(page.getByTestId("prio-code")).toHaveCount(0);
       // build-plan QP1: no row carries a Misses pill.
       await expect(page.getByLabel("Ranked list").getByTestId("prio-misses")).toHaveCount(0);
       await expect(page.getByTestId("prio-subtitle")).toContainText("depends on");
@@ -181,7 +178,7 @@ test.describe("QA pass 2: simple-plan, Value / effort", () => {
     await setUp(page);
     await open(page, "?tab=value-effort");
     const am = page.locator('[data-testid="vxe-point"][data-code="alert-mobile"]');
-    await expect(am).toHaveAttribute("aria-label", /^#\d+ Mobile alert push \(MAP\): goal value/);
+    await expect(am).toHaveAttribute("aria-label", /^#\d+ Mobile alert push: goal value/);
     await expect(page.getByRole("list", { name: "Legend" })).not.toContainText("PRD");
     // QA pass 3 (qa-simple-plan-13): marks sit at their real effort, even on a median line; the legend says how they count.
     await expect(page.getByRole("list", { name: "Legend" })).toContainText("A mark on a middle line counts on the side its rank puts it.");
@@ -190,7 +187,7 @@ test.describe("QA pass 2: simple-plan, Value / effort", () => {
     await page.mouse.down();
     await page.mouse.move(box.x + box.width / 2 + 120, box.y + box.height / 2, { steps: 8 });
     await page.mouse.up();
-    await expect(toast(page, /^Re-estimated Mobile alert push \(MAP\): effort/)).toBeVisible();
+    await expect(toast(page, /^Re-estimated Mobile alert push: effort/)).toBeVisible();
     const side = page.locator('[data-testid="side-row"][data-code="alert-mobile"]');
     await expect(side.getByTestId("moved")).toHaveText(/^now #\d+ \(effort [\d.]+ wk\)$/);
     await expect(side.getByTestId("prio-title")).toHaveText("Mobile alert push");
@@ -289,7 +286,8 @@ test.describe("QA pass 2: simple-plan, Goal buckets", () => {
     await expect(page.getByTestId("buckets-summary")).toContainText(/^This plan, Nov 2 – Feb 12: \d+ engineer-weeks over three milestones/);
     await expect(head).not.toContainText(/\d\.0\b/);
     await expect(page.getByTestId("buckets-footnote")).not.toContainText("PRD");
-    await expect(page.getByTestId("prio-subtitle")).toContainText("Nov 2 – Feb 12");
+    // mk-goalbuckets (train AL): Goal buckets' subtitle names the plan's quarter; its card gives the dates.
+    await expect(page.getByTestId("prio-subtitle")).toContainText("Q4 2026");
     await expect(page.getByTestId("plan-goal-count").first()).toContainText("in the plan");
     for (const card of await page.locator('[data-testid="plan-goal"][data-goal]:not([data-goal=""])').all()) {
       await expect(card.getByTestId("goal-suggest-feature")).toHaveCount(1);

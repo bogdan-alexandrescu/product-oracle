@@ -49,10 +49,9 @@ async function openTalk(page: Page, key: string, phone: boolean): Promise<{ card
     await tap(card.getByRole("tab", { name: "Talk to Oracle" }));
     await expect(card.getByRole("tab", { name: "Talk to Oracle" })).toHaveAttribute("aria-selected", "true");
   } else {
-    await tap(card.getByRole("button", { name: "Talk to Oracle" }));
-    await expect(card).toHaveAttribute("data-talk", "true");
-    // Widened: the details stay on the left, the talk on the right.
-    await expect(card.getByTestId("card-dates")).toBeVisible();
+    // build-feature-panel: the talk is always open beside the details (FP1 B).
+    await expect(card.getByTestId("fp-details")).toBeVisible();
+    await expect(card.getByTestId("item-talk")).toBeVisible();
     expect((await card.boundingBox())!.width).toBeGreaterThan(800);
   }
   const talk = card.getByTestId("item-talk");
@@ -62,11 +61,12 @@ async function openTalk(page: Page, key: string, phone: boolean): Promise<{ card
     // A phone's tab is the talk itself: no heading over it, Details goes back.
     await expect(card.getByRole("tab", { name: "Details" })).toBeVisible();
   } else {
-    await expect(talk.getByRole("heading", { name: "Talk about Adaptive pacing", exact: true })).toBeVisible();
-    await expect(card.getByRole("button", { name: "Hide the talk" })).toBeVisible();
+    await expect(talk.getByRole("heading", { name: "Talk about this feature", exact: true })).toBeVisible();
+    // build-feature-panel: the talk stays open beside the details; × closes the panel.
+    await expect(card.getByRole("button", { name: "Close" })).toBeVisible();
   }
-  // A viewer asks questions only: "Ask about Adaptive pacing…".
-  await expect(talk.getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", /^Ask about Adaptive pacing(, or ask for a change)?…$/);
+  // A viewer asks questions only: "Ask about this feature…" (the region names it).
+  await expect(talk.getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", /^Ask about this feature(, or ask for a change)?…$/);
   await expect(talk.getByTestId("chat-note")).toHaveText("Just you and Oracle · kept with this item");
   // The message box sits at the foot of the talk, under the lines.
   const box = (await talk.getByRole("textbox", { name: "Message Oracle" }).boundingBox())!;
@@ -148,8 +148,10 @@ for (const [phone, dark] of [
       await bar(page, "adaptive-pacing").click();
       const floating = page.getByTestId("floating-card");
       await expect(floating.getByRole("heading", { level: 2 })).toHaveText("Adaptive pacing");
-      await expect(floating.getByRole("heading", { level: 3 })).toHaveText(["Why", "Open decisions", "Flow", "Proposals on it"]);
-      await tap(floating.getByRole(phone ? "tab" : "button", { name: "Talk to Oracle" }));
+      // build-feature-panel: the panel's details first (FP1 B), the card's own parts under Details.
+      const parts = await floating.getByRole("heading", { level: 3 }).allInnerTexts();
+      expect(parts.map((t) => t.trim().toLowerCase()).slice(0, 5)).toEqual(["dates", "goal", "links", "milestone", "details"]);
+      if (phone) await tap(floating.getByRole("tab", { name: "Talk to Oracle" }));
       const c = floating;
       const talk = c.getByTestId("item-talk");
       const box = (await talk.getByRole("textbox", { name: "Message Oracle" }).boundingBox())!;
@@ -160,7 +162,6 @@ for (const [phone, dark] of [
         await expect(c.getByTestId("card-flow").getByTestId("flow-row")).toContainText("No flow yet");
         await expect(c.getByTestId("card-flow").getByRole("button", { name: "Ask Oracle to draw it" })).toBeVisible();
         await expect(c.getByRole("link", { name: "Open the detailed view" })).toBeVisible();
-        await expect(c.getByRole("button", { name: "Talk to Oracle" })).toHaveCount(0);
       }
     });
 
@@ -191,7 +192,7 @@ for (const [phone, dark] of [
       await expect(bar(page, "adaptive-pacing")).toHaveAttribute("data-start", "2026-11-30");
       await expect(bar(page, "adaptive-pacing")).not.toHaveAttribute("data-flash", "true", { timeout: 6000 });
       if (phone) await tap(floating.getByRole("tab", { name: "Details" }));
-      await expect(floating.getByTestId("card-dates")).toContainText("Nov 30");
+      await expect(floating.getByTestId("fp-start")).toHaveText("Nov 30");
     });
 
     /**
@@ -213,7 +214,7 @@ for (const [phone, dark] of [
       await tap(c.getByRole("button", { name: "Apply" }));
       await expect(c).toHaveAttribute("data-status", "applied");
       if (phone) await tap(floating.getByRole("tab", { name: "Details" }));
-      await expect(floating.getByTestId("card-dates")).toContainText("Jan 16");
+      await expect(floating.locator('[data-testid="fp-start"], [data-testid="fp-delivery"]').filter({ hasText: "Jan 16" })).toHaveCount(1);
     });
 
     /**
@@ -336,22 +337,18 @@ for (const [phone, dark] of [
       const rights = await bars.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().right));
       await bars.nth(rights.indexOf(Math.max(...rights))).click();
       const floating = page.getByTestId("floating-card");
-      await tap(floating.getByRole("button", { name: "Talk to Oracle" }));
-      await expect(floating).toHaveAttribute("data-talk", "true");
+      // build-feature-panel: the one feature panel (FP1 B), 880 px, 16 px from the top and foot, on the right.
       await expect(floating.getByTestId("item-talk")).toBeVisible();
       const fit = await floating.evaluate((el) => {
         const r = el.getBoundingClientRect();
-        const main = document.querySelector("main")!.getBoundingClientRect();
-        return { left: r.left - main.left, right: main.right - r.right, top: r.top, foot: window.innerHeight - r.bottom, width: r.width };
+        return { left: r.left, right: document.documentElement.clientWidth - r.right, top: r.top, foot: window.innerHeight - r.bottom, width: r.width };
       });
       expect(fit.left).toBeGreaterThanOrEqual(0);
-      expect(Math.round(fit.right)).toBe(22);
+      expect(fit.right).toBeGreaterThanOrEqual(0);
+      expect(fit.right).toBeLessThan(40);
       expect(Math.round(fit.top)).toBe(16);
       expect(Math.round(fit.foot)).toBe(16);
-      expect(Math.round(fit.width)).toBe(840);
-      await tap(floating.getByRole("button", { name: "Hide the talk" }));
-      await expect(floating).toHaveAttribute("data-talk", "false");
-      expect(Math.round((await floating.boundingBox())!.width)).toBe(380);
+      expect(Math.round(fit.width)).toBe(880);
     });
 
     /**

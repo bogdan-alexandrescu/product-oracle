@@ -41,7 +41,9 @@ import {
 } from "./_lib";
 import { DRAG_PX, grabAt, LONG_PRESS_MS, planned } from "./_timeline";
 
-type Zoom = "6m" | "1y" | "all";
+type Zoom = "3m" | "6m" | "1y" | "all";
+/** Days in sight at each zoom (All fits the whole plan). */
+const ZOOM_DAYS: Record<Exclude<Zoom, "all">, number> = { "3m": 91, "6m": 182, "1y": 365 };
 
 const MONTHS = [
   "Jan",
@@ -391,7 +393,7 @@ function DayChart(props: TimelineProps) {
   const t1 = addDays(days[days.length - 1], 20);
   const span = daysBetween(t0, t1);
   const visible = Math.max(200, w - labelW - 2);
-  const ppd = fit ? visible / span : visible / (zoom === "1y" ? 365 : 182);
+  const ppd = fit ? visible / span : visible / ZOOM_DAYS[zoom];
   const trackW = Math.round(span * ppd);
   const x = (d: string) => daysBetween(t0, d) * ppd;
   const xt = x(data.today);
@@ -420,6 +422,11 @@ function DayChart(props: TimelineProps) {
     (cutAt + 1 >= months.length || x(months[cutAt + 1].day) - sl > 80)
       ? months[cutAt].day
       : undefined;
+  // Owner (Nov 4): 3 months marks each week, a line and its Monday's day under the month.
+  const weeks: string[] = [];
+  if (zoom === "3m")
+    for (let d = addDays(t0, (8 - new Date(ms(t0)).getUTCDay()) % 7); d <= t1; d = addDays(d, 7))
+      weeks.push(d);
   // The first month in sight carries its year.
   const firstSeen = fit
     ? months[0]?.day
@@ -588,6 +595,7 @@ function DayChart(props: TimelineProps) {
     [],
   );
   const zooms: [Zoom, string][] = [
+    ["3m", "3 months"],
     ["6m", "6 months"],
     ["1y", "1 year"],
     ["all", "All 3 years"],
@@ -666,6 +674,24 @@ function DayChart(props: TimelineProps) {
                     {m.day === firstSeen ? monthWord(m.day) : m.label}
                   </span>
                 ))}
+              {weeks
+                // A week's day gives way to a month's name where they would touch.
+                .filter((d) => x(d) >= sl + 2 && !months.some((m) => {
+                  const at = m.day === pinned ? sl : x(m.day);
+                  const words = m.day === firstSeen ? monthWord(m.day) : m.label;
+                  return x(d) > at - 22 && x(d) < at + 12 + words.length * 7;
+                }))
+                .map((d) => (
+                  <span
+                    key={d}
+                    data-testid="timeline-week"
+                    title={`Week of ${shortDay(d)}`}
+                    className="absolute top-1 text-xs whitespace-nowrap text-text2/80"
+                    style={{ left: x(d) + 4 }}
+                  >
+                    {Number(d.slice(8, 10))}
+                  </span>
+                ))}
             </div>
           </div>
           <div
@@ -730,6 +756,14 @@ function DayChart(props: TimelineProps) {
               aria-hidden
               className="absolute top-11 bottom-0 border-l border-line/60"
               style={{ left: labelW + x(m.day) }}
+            />
+          ))}
+          {weeks.map((d) => (
+            <div
+              key={`w-${d}`}
+              aria-hidden
+              className="absolute top-11 bottom-0 border-l border-dashed border-line/40"
+              style={{ left: labelW + x(d) }}
             />
           ))}
           {rows.map((r) => {
@@ -1040,7 +1074,7 @@ function QuarterList(props: TimelineProps) {
             <h3 className="flex items-center gap-2 border-b border-line px-3 py-2 text-sm font-semibold">
               {q.label}{" "}
               <span className="font-normal text-text2">
-                {quarterWords(q)} · {items.length} items
+                {quarterWords(q)} · {items.length} {items.length === 1 ? "item" : "items"}
               </span>
               {q === tq && (
                 <span

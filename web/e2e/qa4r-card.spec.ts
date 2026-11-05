@@ -40,8 +40,8 @@ async function openCard(page: Page, key: string): Promise<Locator> {
 }
 
 async function openTalk(page: Page, card: Locator): Promise<Locator> {
+  // The feature panel: a desktop shows the talk beside the details, a phone behind its tab.
   if (isPhone(page)) await card.getByRole("tab", { name: "Talk to Oracle" }).click();
-  else await card.getByRole("button", { name: "Talk to Oracle" }).click();
   const talk = card.getByTestId("item-talk");
   await expect(talk).toBeVisible();
   return talk;
@@ -66,10 +66,12 @@ for (const [where, size] of [
     test(`qa4-13: after a cut from the card's talk, the card shows it cut and drops the old flags (${where})`, async ({ page }) => {
       await open(page, { scenario: "roadmap-talk" });
       const card = await openCard(page, "alert-digest");
-      // Before: a broken link and a missed milestone, with their fixes.
-      await expect(card.getByTestId("card-flags")).toContainText("which it depends on");
-      await expect(card.getByTestId("card-flags")).toContainText("after its milestone");
-      await expect(card.getByTestId("card-flags").getByTestId("fixes").first()).toBeVisible();
+      // Before: a broken link and a missed milestone, with their fixes (the panel's dates clash).
+      const clash = card.getByTestId("fp-clash");
+      await expect(clash).toContainText("before Alert rules engine ends");
+      await expect(clash).toContainText("after its milestone");
+      await expect(clash.getByRole("button", { name: /^Move the dependents/ })).toBeVisible();
+      await expect(card.getByTestId("fp-clash-flag")).toHaveText("Dates clash");
       const talk = await openTalk(page, card);
       await say(talk, "cut it");
       const cut = talk.getByTestId("chat-card").filter({ hasText: "Cut Weekly alert digest" });
@@ -78,8 +80,10 @@ for (const [where, size] of [
       await expect(cut).toHaveAttribute("data-status", "applied");
       await details(page, card);
       // The open card reads again: cut, below the line, with no stale flags or fixes.
-      await expect(card.getByTestId("card-status")).toHaveText("Cut");
+      await expect(card.getByTestId("fp-status")).toHaveText("Cut");
       await expect(card.getByTestId("item-cut")).toHaveText("Cut: it sits below the line, out of the plan");
+      await expect(card.getByTestId("fp-clash")).toHaveCount(0);
+      await expect(card.getByTestId("fp-clash-flag")).toHaveCount(0);
       await expect(card.getByTestId("card-flags")).toHaveCount(0);
       await expect(card.getByTestId("fixes")).toHaveCount(0);
     });
@@ -89,7 +93,7 @@ for (const [where, size] of [
       const card = await openCard(page, "adaptive-pacing");
       const talk = await openTalk(page, card);
       const box = talk.getByRole("textbox", { name: "Message Oracle" });
-      await expect(box).toHaveAttribute("placeholder", "Ask about Adaptive pacing, or ask for a change…");
+      await expect(box).toHaveAttribute("placeholder", "Ask about this feature, or ask for a change…");
       // The placeholder, laid out at the box's own width and font, fits inside the box.
       const fits = await box.evaluate((el) => {
         const t = el as HTMLTextAreaElement;
@@ -127,7 +131,7 @@ for (const [where, size] of [
       await open(page, { scenario: "roadmap-talk" });
       const card = await openCard(page, "alert-digest");
       // The item already ends after its milestone; moving it later does not change that.
-      await expect(card.getByTestId("card-flags")).toContainText("after its milestone");
+      await expect(card.getByTestId("fp-clash")).toContainText("after its milestone");
       const talk = await openTalk(page, card);
       await say(talk, "move it two weeks later");
       const move = talk.getByTestId("chat-card").filter({ hasText: "Move Weekly alert digest" });

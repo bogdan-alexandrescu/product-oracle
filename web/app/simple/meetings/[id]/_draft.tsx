@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { Button, confirmInPage } from "@/components/ds";
 import { ErrorNote } from "@/components/ui";
@@ -130,6 +130,11 @@ export function DraftDates({
   const [picked, setPicked] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
+  // RP2 c: the ask opens below the list; bring it into view so the person sees what to confirm.
+  const askRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (asking) askRef.current?.scrollIntoView({ block: "nearest" });
+  }, [asking]);
   const act = async (run: () => Promise<unknown>) => {
     setBusy(true);
     setError(null);
@@ -223,7 +228,7 @@ export function DraftDates({
           <Button variant="primary" icon="check" className={PHONE_TAP} disabled={busy} onClick={() => setAsking(true)}>{`Approve these ${n} dates`}</Button>
         )}
         {asking && (
-          <div role="dialog" aria-label="Approve dates" className="rounded-md border border-accent bg-accent-soft p-3">
+          <div ref={askRef} role="dialog" aria-label="Approve dates" className="rounded-md border border-accent bg-accent-soft p-3">
             <p className="font-semibold">{`Put ${n} item${n === 1 ? "" : "s"} on the roadmap with these dates?`}</p>
             <p className="simple-small">Everyone sees them on the roadmap at once. The PRD itself still needs its own approval.</p>
             <div className="mt-2 flex flex-wrap gap-2">

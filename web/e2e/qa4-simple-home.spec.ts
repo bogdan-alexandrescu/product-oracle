@@ -147,10 +147,9 @@ test("qa4-simple-home-7: the plan's row label keeps one line with Ask Oracle ope
   }
 });
 
-test("qa4-simple-home-7: under a plan of one PRD, each broken link names the roadmap it is on", async ({ page }) => {
+test("qa4-simple-home-7: each broken link names the roadmap it is on", async ({ page }) => {
   // fails_when: the plan draws Guided setup only and its broken links on the Alerts and Onboarding roadmaps say nothing of where they are
   await signIn(page, ADMIN.email);
-  await expect(home(page).getByTestId("home-strip-label").first()).toContainText("Guided setup");
   await expect(home(page).getByTestId("home-broken-links").locator("h3")).toHaveText("Broken links · Alerts roadmap, Onboarding roadmap");
   await expect(brokenItem(page, "Weekly alert digest").getByTestId("home-broken-roadmap")).toHaveText("· Alerts roadmap");
   await expect(brokenItem(page, "In-app tour").getByTestId("home-broken-roadmap")).toHaveText("· Onboarding roadmap");
@@ -219,29 +218,13 @@ test.describe("a viewer", () => {
   });
 });
 
-test("qa4-simple-home-22: on a phone the More badge for meetings coming up is grey, as the rail's count", async ({ page }) => {
-  // fails_when: More's count is yellow (the "needs you" colour) while the rail draws the same count grey
+test("qa4-simple-home-22: an upcoming meeting waits on nobody, so neither the rail nor More counts it", async ({ page }) => {
+  // home-waiting-one-list fails_when: Meetings shows a count of upcoming meetings on the rail or in More's sheet
   await signIn(page, ADMIN.email);
-  const railCount = page.getByTestId("simple-nav-meetings-count");
-  await expect(railCount).toBeVisible();
-  const quiet = ((await railCount.getAttribute("class")) ?? "").includes("simple-count-quiet");
-  // inbox-meeting-proposals fix: More also counts what waits in the Inbox beyond Roadmap's count; then it needs you.
-  const num = async (id: string) => {
-    const c = page.getByTestId("simple-nav").getByTestId(id);
-    return (await c.count()) ? Number((await c.textContent())!.trim()) : 0;
-  };
-  const inboxRest = Math.max(0, (await num("simple-nav-inbox-count")) - (await num("simple-nav-roadmap-count")));
+  await expect(page.getByTestId("simple-nav-decisions-count")).toBeVisible();
+  await expect(page.getByTestId("simple-nav-meetings-count")).toHaveCount(0);
   await page.setViewportSize(PHONE);
-  const more = page.getByTestId("simple-tab-more-count");
-  await expect(more).toBeVisible();
-  if (inboxRest > 0) {
-    await expect(more).not.toHaveClass(/simple-count-quiet/);
-    return;
-  }
-  if (quiet) await expect(more).toHaveClass(/simple-count-quiet/);
-  const bg = (l: Locator) => l.evaluate((el) => getComputedStyle(el).backgroundColor);
-  await page.setViewportSize(DESKTOP);
-  const railBg = await bg(railCount);
-  await page.setViewportSize(PHONE);
-  expect(await bg(more)).toBe(railBg);
+  await page.getByTestId("simple-tab-more").click();
+  await expect(page.getByRole("dialog", { name: "More" })).toBeVisible();
+  await expect(page.getByTestId("simple-more-meetings-count")).toHaveCount(0);
 });

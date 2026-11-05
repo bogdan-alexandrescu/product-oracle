@@ -116,8 +116,18 @@ test.describe("desktop", () => {
     await format(page, "timeline");
     await expect(page.getByTestId("conflicts").locator('[data-testid="conflict"][data-item="alert-digest"]')).toContainText(warnings[1]);
     await openRoadmapItem(page, "alert-digest");
-    const flags = page.getByTestId("item-panel").getByTestId("card-flags");
-    for (const w of warnings) await expect(flags).toContainText(w);
+    // build-feature-panel: the panel shows both in its Dates clash box, the same facts (days, the
+    // other item, the milestone) in the panel's own sentence for each.
+    const panel = page.getByTestId("floating-card");
+    await expect(panel.getByTestId("fp-clash-flag")).toHaveText("Dates clash");
+    const late = /^‘(.+?)’ ends (.+?), after its milestone ‘(.+?)’ \((.+?)\)$/.exec(warnings[0])!;
+    const broken = /^‘(.+?)’ starts (.+?), but ‘(.+?)’, which it depends on, ends (.+)$/.exec(warnings[1])!;
+    expect(late, warnings[0]).not.toBeNull();
+    expect(broken, warnings[1]).not.toBeNull();
+    const clash = panel.getByTestId("fp-clash");
+    await expect(clash).toContainText(`Starts ${broken[2]}, before ${broken[3]} ends ${broken[4]}.`);
+    await expect(clash).toContainText(`Ends ${late[2]}, after its milestone ${late[3]} (${late[4]}).`);
+    await page.keyboard.press("Escape");
     await format(page, "gantt");
     for (const w of warnings) await expect(bar(page, "alert-digest")).toHaveAttribute("aria-label", escaped(w));
   });

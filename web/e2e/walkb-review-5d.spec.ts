@@ -23,7 +23,8 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       await expect(flow).not.toContainText("No flow yet");
 
       await card.getByRole("button", { name: "Open the item's flow" }).click();
-      await expect(card).toHaveAttribute("data-flow-open", "true");
+      // build-feature-panel: the card is the one feature panel; its own parts (and the flow) sit in fp-more.
+      await expect(card.getByTestId("fp-more")).toHaveAttribute("data-flow-open", "true");
       await expect(page.getByTestId("flow-detail").getByTestId("flow-regions")).toContainText("Setup checklist: 4 steps");
     });
   });
