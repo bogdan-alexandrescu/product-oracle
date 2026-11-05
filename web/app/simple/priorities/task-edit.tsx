@@ -371,6 +371,7 @@ export function TaskRow({
   grip,
   lifted,
   onOpen,
+  feature,
   actions,
 }: {
   code: string;
@@ -382,6 +383,8 @@ export function TaskRow({
   grip?: { onPointerDown: (e: React.PointerEvent) => void; onKeyDown: (e: React.KeyboardEvent) => void };
   lifted?: boolean;
   onOpen?: () => void;
+  /** build-feature-panel: the feature its name opens in the one feature panel (its item id, else its key). */
+  feature?: string;
   actions?: ReactNode;
 }) {
   return (
@@ -416,8 +419,8 @@ export function TaskRow({
         </span>
       )}{" "}
       <span data-testid="plan-feature-name" className="min-w-0 flex-1">
-        {onOpen ? (
-          <button type="button" data-testid="plan-feature-open" title={`Open ${name}`} className="text-left hover:underline" onClick={onOpen}>
+        {onOpen || feature ? (
+          <button type="button" data-testid="plan-feature-open" data-feature={feature} title={`Open ${name}`} className="text-left hover:underline" onClick={feature ? undefined : onOpen}>
             {name}
           </button>
         ) : (

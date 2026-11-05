@@ -570,9 +570,11 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
                 {/* build-feature-panel: a feature's name opens the one feature panel, by its
                  * roadmap item id (the stable feature key, r.code, when the role cannot see
                  * the item): two features sharing a title would else open the wrong one. */}
-                <button type="button" data-testid="prio-title" data-feature={r.item_id ?? r.code} className="text-left hover:underline">
-                  {r.title}
-                </button>
+                <span data-testid="prio-title">
+                  <button type="button" data-feature={r.item_id ?? r.code} className="text-left hover:underline">
+                    {r.title}
+                  </button>
+                </span>
                 <OwnKey r={r} />
               </span>
               {/* walkb-priorities: no ml-auto, so details that wrap under the title start at the left on every row. */}
@@ -1763,9 +1765,6 @@ function lineSplit(rows: Row[]): number {
 function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }) {
   const misses = data.rows.filter((r) => !r.above_line);
   const [open, setOpen] = useState(false);
-  const [opened, setOpened] = useState<{ code: string; name: string } | null>(null);
-  const phone = usePhone();
-  const { can } = useMe();
   return (
     <div data-testid="line-caption" className={`mb-2 text-[length:var(--simple-small)] text-text2 ${compact ? "leading-[21px]" : ""}`}>
       <p className="flex flex-wrap items-center gap-x-2">
@@ -1782,14 +1781,14 @@ function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }
         <ul id="line-misses" data-testid="line-misses" className="mt-1 flex flex-col">
           {misses.map((r) => (
             <li key={r.feature_id}>
-              <button type="button" data-testid="line-miss" className="py-0.5 text-left text-text underline decoration-line-strong underline-offset-2 hover:decoration-accent" onClick={() => setOpened({ code: r.code, name: r.title })}>
+              {/* build-feature-panel review 6: each name opens the one feature panel. */}
+              <button type="button" data-testid="line-miss" data-feature={r.item_id ?? r.code} className="py-0.5 text-left text-text underline decoration-line-strong underline-offset-2 hover:decoration-accent">
                 {nameOf(r)}
               </button>
             </li>
           ))}
         </ul>
       )}
-      {opened && <FeaturePanel key={opened.code} feature={opened} phone={phone} canChange={can("create_simple_change")} onClose={() => setOpened(null)} />}
     </div>
   );
 }
@@ -2141,7 +2140,7 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
                         weeks={r ? weeksOf(r) : ""}
                         grip={movable ? { onPointerDown: (e) => featureGrip(f, e), onKeyDown: (e) => featureGrip(f, e) } : undefined}
                         lifted={drag.lifted === c}
-                        onOpen={() => setOpened({ code: c, name })}
+                        feature={r?.item_id ?? r?.code ?? c}
                         actions={tasks.actions(t)}
                       />
                     );
@@ -2163,7 +2162,7 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
                         draft
                         grip={draftGrip(t, rec?.id ?? null)}
                         lifted={drag.lifted === d.code}
-                        onOpen={() => setOpened({ code: d.code, name: d.title })}
+                        feature={d.item_id}
                         actions={tasks.actions(t)}
                       />
                     );
