@@ -219,6 +219,10 @@ export interface MsLayerProps {
   phone: boolean;
   /** Left inset of the track (the Timeline's names column). */
   left?: number;
+  /** Spans of the axis (layer pixels) the "+ Milestone" hint keeps off: the Timeline's roadmap milestone names. */
+  keepOff?: [number, number][];
+  /** The axis' part in sight (layer pixels): the Timeline's track between the names column and the chart's right edge. */
+  span?: [number, number];
 }
 
 /** The day under a point of the track: x is monotonic, so a halving search over days finds it. */
@@ -448,9 +452,22 @@ export function MsLayer(props: MsLayerProps) {
   // Adding: the time axis takes a click; pointing at it shows where the milestone lands.
   const d = ms.draft;
   if (ms.canAdd) {
-    if (!ms.hover && !d && !phone)
+    // The hint steps right past any name it would cover.
+    let hintL: number | null = X(addDays(ms.today, 97));
+    for (const [a, b] of [...(props.keepOff ?? [])].sort((p, q) => p[0] - q[0])) if (hintL < b + 6 && hintL + 92 > a - 6) hintL = b + 8;
+    // On the Timeline it stays in sight, right of the names column: the free place nearest its
+    // day, past a name or before it; with none, no hint.
+    if (props.span) {
+      const [lo, hi] = props.span;
+      const want = X(addDays(ms.today, 97));
+      const spans = props.keepOff ?? [];
+      const free = (l: number) => l >= lo + 6 && l + 92 <= hi - 6 && spans.every(([a, b]) => l >= b + 6 || l + 92 <= a - 6);
+      const near = [Math.min(Math.max(want, lo + 6), hi - 98), ...spans.flatMap(([a, b]) => [b + 8, a - 100])].filter(free);
+      hintL = near.length ? near.reduce((p, q) => (Math.abs(q - want) < Math.abs(p - want) ? q : p)) : null;
+    }
+    if (hintL != null && !ms.hover && !d && !phone)
       out.push(
-        <Chip key="hint" testid="ms-add-hint" className="z-[26] border border-dashed border-line-strong bg-surface text-text2" style={{ left: X(addDays(ms.today, 97)), top: axisY - 10 }}>
+        <Chip key="hint" testid="ms-add-hint" className="z-[26] border border-dashed border-line-strong bg-surface text-text2" style={{ left: hintL, top: axisY - 10 }}>
           + Milestone
         </Chip>,
       );

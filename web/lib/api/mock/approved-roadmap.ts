@@ -15,6 +15,9 @@ import { stableUuid } from "./ids";
 import { companyToday, simpleWindows, type SeedItem, type SimpleDb } from "./simple-roadmap";
 
 export const APPROVED_ROADMAP_SCENARIO = "approved-roadmap";
+/** The "crowded-milestones" scenario: Example trails with version 3 already approved and five
+ * milestones in two weeks (two on Jan 15, then Jan 25, 27 and 29), for the Timeline's labels. */
+export const CROWDED_MILESTONES_SCENARIO = "crowded-milestones";
 export const TRAILS_SLUG = "example-trails";
 export const TRAILS_TITLE = "Example trails";
 export const TRAILS_PRD_SLUG = "trail-maps";
@@ -213,12 +216,21 @@ const V3_MILESTONES = `| Milestone | Date | Gates | Counts when |
 | Trail beta | Jan 15, 2027 | route-search | 50 hikers use it each week |
 | Trail launch | Jan 29, 2027 | route-search, trip-reports | every gated item has shipped |`;
 
-/** The roadmap's sections for version 2 (approved) or 3 (in review). */
-export function trailSections(n: 2 | 3): SectionSeed[] {
+const CROWDED_MILESTONES = `| Milestone | Date | Gates | Counts when |
+|---|---|---|---|
+| Trail beta | Jan 15, 2027 | route-search | 50 hikers use it each week |
+| Route preview for group hikes | Jan 15, 2027 | route-search | 20 groups plan a hike with it |
+| Photo pins on the map | Jan 25, 2027 | photo-pins | 100 pins a week |
+| Trip reports open | Jan 27, 2027 | trip-reports | 30 reports a week |
+| Trail launch | Jan 29, 2027 | route-search, trip-reports | every gated item has shipped |`;
+
+/** The roadmap's sections for version 2 (approved) or 3 (in review); crowded: version 3 with
+ * the crowded-milestones scenario's five milestones. */
+export function trailSections(n: 2 | 3, crowded = false): SectionSeed[] {
   return [
     { key: "summary", level: 2, heading: "Summary", body: n === 2 ? "Trail maps for hikers, planned from the engineering estimates." : "Trail maps for hikers, re-planned: offline sync shipped, trail chat moves to the next PRD." },
     { key: "plan", level: 2, heading: "Plan", body: n === 2 ? V2_PLAN : V3_PLAN },
-    ...(n === 3 ? [{ key: "milestones", level: 2, heading: "Milestones", body: V3_MILESTONES }] : []),
+    ...(n === 3 ? [{ key: "milestones", level: 2, heading: "Milestones", body: crowded ? CROWDED_MILESTONES : V3_MILESTONES }] : []),
   ];
 }
 
