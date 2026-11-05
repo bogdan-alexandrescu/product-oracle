@@ -32,3 +32,13 @@ test("a feature that needs another PRD's feature reads so in plain words, to con
   await expect(lookup.getByTestId("row-done")).toContainText("✓");
   await expect(page.getByTestId("decision-bar").getByTestId("approve-blocked")).toHaveText("1 blocking problem left");
 });
+
+test("the panel names another PRD's feature it depends on, with its PRD", async ({ page }) => {
+  await openReview(page);
+  await row(page, "Address lookup").getByTestId("feature-title").click();
+  const depends = page.getByTestId("scope-inspector").getByTestId("scope-depends");
+  await expect(depends.getByRole("listitem")).toHaveText("Address verificationTrust PRD");
+  await expect(depends).not.toContainText("address-verification");
+  await expect(depends).not.toContainText("Unknown");
+  await expect(depends.getByRole("button", { name: "Remove dependency on Address verification" })).toBeVisible();
+});

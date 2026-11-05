@@ -766,3 +766,57 @@ def test_a_fix_answers_only_its_own_reason_of_two_with_one_code():
     assert actions._answers(waiver, cross) and actions._answers(waiver, local)
     bare = staged(cross["fixes"][1], [])
     assert actions._answers(bare, cross) and actions._answers(bare, local)
+
+
+def _two_dependencies() -> tuple[dict, dict]:
+    """Observability (Now) waits on the ledger, another PRD's in Next, and on its own Local
+    base in Later: two reasons of one code."""
+    ledger = Elsewhere("account-health-ledger", "Account health ledger (Safety PRD)", "next", ())
+    body = """\
+  - {id: base, title: Local base, outcome: o, horizon: later, prd_section: s-1}
+  - {id: obs, title: Observability, outcome: o, horizon: now, prd_section: s-1,
+     depends_on: [account-health-ledger, base]}
+"""
+    items, problems = check(FILE.format(items=body), elsewhere=[ledger])
+    cross, local = reasons_for(items, problems, None, elsewhere=[ledger])
+    assert cross["data"]["dependency_horizon"] == "next"
+    assert local["data"]["dependency_horizon"] == "later"
+    return cross, local
+
+
+def _staged(field_: str, value: object, answers: list[str]):
+    from datetime import UTC, datetime
+
+    from oracle.runs.schemas import ReviewAction
+
+    return ReviewAction(id=uuid.uuid4(), item_key="obs", kind="edit", field=field_, value=value,
+                        answers=answers, state="staged", updated_at=datetime.now(UTC))  # fmt: skip
+
+
+def test_a_move_to_the_later_dependency_horizon_answers_both_horizon_reasons():
+    # protects=Move to Later on the reason of the dependency in Later also clears the one in
+    # Next (the item then ships after both); Move to Next clears only the Next one;
+    # fails_when=a horizon edit answers only the reason whose fix has its exact value.
+    from oracle.runs import actions, review_file
+
+    cross, local = _two_dependencies()
+    later = _staged("horizon", "later", ["horizon_breaks_dependency"])
+    nxt = _staged("horizon", "next", ["horizon_breaks_dependency"])
+    for answers in (actions._answers, review_file._answers):
+        assert answers(later, local) and answers(later, cross)
+        assert answers(nxt, cross) and not answers(nxt, local)
+
+
+def test_one_dependency_edit_removing_both_answers_both_reasons():
+    # protects=Remove dependency pressed on both reasons is one depends_on edit removing
+    # both, and it answers both; fails_when=only an edit equal to one fix's value answers.
+    from oracle.runs import actions, review_file
+
+    cross, local = _two_dependencies()
+    both = _staged(
+        "depends_on", {"remove": ["account-health-ledger", "base"]}, ["horizon_breaks_dependency"]
+    )
+    one = _staged("depends_on", {"add": [], "remove": ["base"]}, ["horizon_breaks_dependency"])
+    for answers in (actions._answers, review_file._answers):
+        assert answers(both, cross) and answers(both, local)
+        assert answers(one, local) and not answers(one, cross)

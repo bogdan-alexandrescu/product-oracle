@@ -57,3 +57,30 @@ test("an item waiting on another PRD's feature and on its own item shows both re
   await expect(cross).toContainText("✓ Dependency removed");
   await expect(page.getByTestId("review-summary")).toHaveText("2 blocking · 7 to confirm");
 });
+
+test("Move to Later on its own item's reason also clears the other PRD's reason in Next", async ({ page }) => {
+  await openReview(page);
+  await row(page, "budget-caps").locator('[data-phone="title"]').click();
+  const cross = card(page, CROSS);
+  const local = card(page, LOCAL);
+  // In Later, Budget caps ships after both: the ledger (Next) and Anomaly detection (Later).
+  await local.getByRole("button", { name: "Move to Later", exact: true }).click();
+  await expect(local).toContainText("✓ Moved to Later");
+  await expect(cross).toContainText("✓ Moved to Later");
+  await expect(cross.getByRole("button", { name: "Move to Next", exact: true })).toHaveCount(0);
+  await expect(page.getByTestId("review-summary")).toHaveText("2 blocking · 7 to confirm");
+});
+
+test("Remove dependency pressed on both reasons removes both and clears both", async ({ page }) => {
+  await openReview(page);
+  await row(page, "budget-caps").locator('[data-phone="title"]').click();
+  const cross = card(page, CROSS);
+  const local = card(page, LOCAL);
+  await cross.getByRole("button", { name: "Remove dependency", exact: true }).click();
+  await expect(cross).toContainText("✓ Dependency removed");
+  await local.getByRole("button", { name: "Remove dependency", exact: true }).click();
+  await expect(local).toContainText("✓ Dependency removed");
+  // The first removal stays: its dependency does not come back and its reason stays answered.
+  await expect(cross).toContainText("✓ Dependency removed");
+  await expect(page.getByTestId("review-summary")).toHaveText("2 blocking · 7 to confirm");
+});

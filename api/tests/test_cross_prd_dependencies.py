@@ -273,6 +273,24 @@ def test_the_scope_review_row_reads_needs_x_from_its_prd_and_does_not_block():
     assert reason.waivable is False
 
 
+async def test_the_scope_read_names_another_prd_s_dependency_with_its_prd():
+    # protects=the feature set's panel shows another PRD's feature by its name and PRD, not
+    # its key marked Unknown; fails_when=the scope read carries only the dependency's key.
+    from oracle.auth.deps import Principal
+    from oracle.runs import scope_review
+
+    w = await world()
+    async with tenant_session(w["tenant"]) as s:
+        scope = await s.scalar(select(PrdScope).where(PrdScope.run_id == w["run"]))
+        who = Principal(tenant_id=w["tenant"], kind="user", role="owner")
+        out = await scope_review.read(s, who, scope.id)
+    (obs,) = out.features
+    assert obs.depends_on == ["account-health-ledger"]
+    assert [d.model_dump() for d in obs.other_prd_dependencies] == [
+        {"key": "account-health-ledger", "title": "Account health ledger", "prd": "Safety PRD"}
+    ]
+
+
 # --------------------------------------------------------------------------- review round 1
 
 
