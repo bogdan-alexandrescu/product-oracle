@@ -11,6 +11,10 @@ Test cards (protects / fails_when / no_claim):
   approver and a commenter, requeues the job for the decider (drafting again) and is 409
   when nothing failed; fails_when=a failed job reads as drafting forever, anyone else
   requeues it, or a requeue twice is allowed; no_claim=the job runner's retry budget.
+- test_redraft_refused_by_the_job_switch: protects=Draft again after a failed minutes job
+  whose kind is turned off for the PRD is 409 with the jobs' plain message (simple-replaced-prds
+  re-review); fails_when=the handler reads a missing ``detail`` off the job error and answers
+  500; no_claim=the switch's own settings page.
 - test_slow_minutes_job: protects=a job queued or running past 2 minutes reads "slow";
   fails_when=it reads "drafting" forever; no_claim=the runner's own timeouts.
 - test_send_without_a_job_answer: protects=the person's edited summary, open questions
@@ -112,6 +116,21 @@ async def test_failed_minutes_job_and_draft_again(client):
         jobs = list(await s.scalars(select(LlmJob).where(LlmJob.kind == "meeting_minutes")))
         assert [(j.status, j.attempts, j.error) for j in jobs] == [("queued", 0, None)]
     assert (await client.post(redraft, headers=w.ctx.as_("decider"))).status_code == 409
+
+
+async def test_redraft_refused_by_the_job_switch(client):
+    from oracle.docs.models import Document
+
+    w = await world()
+    m = await ended(client, w)
+    await set_job(w, status="failed", error="the model said no", attempts=3)
+    async with tenant_session(w.ctx.tenant_id) as s:
+        await s.execute(update(Document).where(Document.slug == PRD)
+                        .values(disabled_llm_jobs=["meeting_minutes"]))  # fmt: skip
+        await s.commit()
+    r = await client.post(f"{MEETINGS}/{m['id']}/minutes/redraft", headers=w.ctx.as_("decider"))
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == '"Meeting minutes" is turned off for this document'
 
 
 async def test_slow_minutes_job(client):

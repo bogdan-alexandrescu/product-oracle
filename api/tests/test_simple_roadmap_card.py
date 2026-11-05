@@ -6,7 +6,8 @@ counters). Against Postgres, with the S2 test's seeds.
 Test cards (protects / fails_when / no_claim):
 
 - test_card_fields_owner_reasons_and_decisions: protects=an item carries its track
-  owner's name, up to 3 one-line reasons (the priority's rationale, the goal it serves,
+  owner's name (source "track"; its own owner, source "item", when it has one), up to
+  3 one-line reasons (the priority's rationale, the goal it serves,
   the PRD section it came from), the open (proposed) decisions naming it as a subject,
   and its goal's metric; a decided decision is not listed; fails_when=a field is missing,
   a decided decision shows, or more than 3 reasons come back; no_claim=the reasons'
@@ -80,12 +81,25 @@ async def test_card_fields_owner_reasons_and_decisions(client):
             priority={"rank": 1, "rationale": "Most asked for by admins."},
         )
         bare = await seed.item(rv, None, "bare", position=1)
+        commenter = await s.get(User, ctx.users["commenter"].id)
+        commenter.name = "Casey Moss"
+        await seed.item(rv, pv, "own", position=2, owner_id=commenter.id)
         s.add(decision(1, "Ship the digest weekly or daily?", item.id, approver.id))
         s.add(decision(2, "Name of the digest", item.id, approver.id, status="decided"))
         await s.commit()
     body = await get(client, ctx, "viewer")
     i = by_key(body)["digest"]
-    assert i["owner"] == {"id": str(ctx.users["approver"].id), "name": "Avery Lane"}
+    assert i["owner"] == {
+        "id": str(ctx.users["approver"].id),
+        "name": "Avery Lane",
+        "source": "track",
+    }
+    # Its own owner (set_owner) wins over its track's, and says so.
+    assert by_key(body)["own"]["owner"] == {
+        "id": str(ctx.users["commenter"].id),
+        "name": "Casey Moss",
+        "source": "item",
+    }
     assert i["reasons"] == [
         "Most asked for by admins.",
         "Serves the goal Activation.",

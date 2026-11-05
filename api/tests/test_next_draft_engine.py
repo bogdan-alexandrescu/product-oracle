@@ -760,3 +760,61 @@ async def test_a_later_step_is_sent_only_the_section_changes_still_meant_for_it(
         r.applied_in_version = 7  # as if another build had applied it
         await s.commit()
         assert await runs_service._loop_section_changes(s, run) == []
+
+
+# --- a roadmap's next draft ----------------------------------------------------------------
+
+ROADMAP_SLUG = "saved-addresses-roadmap"
+ROADMAP_MD = f"""---
+document: {ROADMAP_SLUG}
+title: Saved addresses roadmap
+kind: roadmap
+---
+
+# Saved addresses roadmap {{#title}}
+
+## Now {{#now}}
+
+### Saved address book {{#item-saved-addresses}}
+
+Launch the address book to 10% of returning buyers.
+"""
+
+
+async def test_a_roadmap_section_staged_for_the_agents_builds_its_next_draft(client, runtime):  # noqa: F811
+    """Nov 4 gap: a change requested on a roadmap section and staged for the agents is
+    staged for the roadmap's next draft, and Build next draft starts its feedback loop."""
+    tenant_id, auth = await seed_auth()
+    resp = await import_draft(client, auth, ROADMAP_MD, doc=ROADMAP_SLUG)
+    assert resp.status_code == 201, resp.text
+    async with tenant_session(tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == ROADMAP_SLUG))
+        f = FeedbackItem(
+            document_id=doc.id,
+            raised_on_version=1,
+            kind="comment",
+            section_key="now",
+            summary="Move the address book to Next.",
+            status="open",
+            created_at=datetime.now(UTC),
+        )
+        s.add(f)
+        await s.commit()
+        fid = str(f.id)
+    rdoc = f"/v1/documents/{ROADMAP_SLUG}"
+
+    assert (await stage(client, auth, fid)).status_code == 200
+    staged = (await client.get(f"{rdoc}/staged-changes", headers=auth)).json()
+    [row] = staged["agent_items"]
+    assert (row["feedback_id"], row["section_key"], staged["next_version"]) == (fid, "now", 2)
+
+    resp = await client.post(f"{rdoc}/next-draft/plan", json={}, headers=auth)
+    assert resp.status_code == 200, resp.text
+    p = resp.json()
+    assert (p["engine"], p["agent_items"], p["refused"]) == ("agents", 1, None)
+
+    resp = await client.post(f"{rdoc}/next-draft/run", json={}, headers=auth)
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["flow"] == "feedback_loop"
+    prompt = runtime.submitted[0].steps[-1].prompt
+    assert f"- {fid} [now]: Move the address book to Next." in prompt

@@ -8,6 +8,7 @@ import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { ArtifactMenu } from "@/components/ArtifactMenu";
 import { Icon, useDocumentDestination } from "@/components/ds";
 import type { DocumentOut } from "@/lib/api/client";
+import { REPLACED_PRD_HOME } from "@/lib/experience-paths";
 
 /** The list a document belongs to: Plan for roadmaps (c7), Company › Strategy for a vision or strategy (H4), Company › Updates for updates (H8), Company › Market › Pricing for pricing memos (H9), PRDs for the rest. */
 function home(doc?: DocumentOut) {
@@ -25,8 +26,10 @@ function home(doc?: DocumentOut) {
  */
 export function DocCrumb({ doc, withTitle = true }: { doc?: DocumentOut; withTitle?: boolean }) {
   const h = home(doc);
+  // simple-replaced-prds: a replaced PRD says so, so the mode switch opens One-pagers, not its one-pager.
+  const destination = doc?.kind === "prd" && doc.replaced_by?.length ? REPLACED_PRD_HOME : h.href;
   // The rail highlights the same list (Plan for a roadmap, Company for a strategy) once the kind is known.
-  useDocumentDestination(doc?.slug, doc ? h.href : undefined);
+  useDocumentDestination(doc?.slug, doc ? destination : undefined);
   return (
     <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm">
       <Link href={h.href} className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text">

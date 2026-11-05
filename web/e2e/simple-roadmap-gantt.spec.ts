@@ -255,7 +255,8 @@ for (const phone of [false, true]) {
         await tray.getByRole("button", { name: "Close" }).click();
         await openRoadmapItem(page, "plan-f-11");
         // build-roadmap (8ba0ac46): the card's dates carry the year when it is not this one.
-        await expect(page.getByTestId("card-dates")).toContainText("Dec 14, 2026 – Jan 22, 2027");
+        await expect(page.getByTestId("fp-start")).toHaveText("Dec 14");
+        await expect(page.getByTestId("fp-delivery")).toHaveText("Jan 22, 2027");
       });
 
       if (phone) {

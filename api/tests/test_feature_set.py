@@ -110,7 +110,10 @@ def test_a_clean_file_has_no_problems():
         "excluded": 1,
         "problems": [],
         "flags": {},
+        # The gate names a problem's feature by its title.
+        "titles": out.titles,
     }
+    assert set(out.titles) >= {"saved-addresses", "address-lookup"}
     # The parsed set, in file order, is what the scope writer stores.
     assert [f["key"] for f in out.features] == ["saved-addresses", "address-lookup"]
     assert out.features[0]["requirements"][0]["acceptance"] == [

@@ -14,7 +14,7 @@ import { setPanelOpen, usePanelOpen } from "@/components/hop/open-state";
 import { SIMPLE_HOME, switchTarget } from "@/lib/experience";
 import { useMe } from "@/lib/me";
 import { api, unwrap } from "@/lib/api/client";
-import { loadInbox, onWaitingChanged } from "@/lib/waiting";
+import { loadWaiting, onWaitingChanged } from "@/lib/waiting";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string };
 
@@ -43,37 +43,37 @@ function isActive(pathname: string, d: Dest): boolean {
 }
 
 /**
- * The rail's yellow counts (S1 restyle, the owner's pick): only where something waits on the
- * signed-in person: Decisions (the product decisions waiting for them, GET
- * /v1/simple/decisions/waiting, run approvals never), from the Inbox Roadmap (proposals they
- * decide and drafts waiting for their approval); Meetings counts what its page lists (the
- * production walk): the live meetings and the upcoming reviews not started yet, read when the
- * rail mounts, when something waiting changes and on the Meetings pages, not on every other
- * route change (review).
+ * The rail's yellow counts (S1 restyle, the owner's pick): only what waits on the signed-in
+ * person, from the one list Home and Decisions read (home-waiting-one-list, GET
+ * /v1/simple/decisions/waiting `items`), so a count always matches its page: Decisions counts
+ * everything in it (its "Waiting for you"); Roadmap the roadmap's part (items with a broken
+ * link, dates to confirm, proposals on my items, drafts for my approval); Meetings only a
+ * meeting live now (an upcoming one waits on nobody). Read when the rail mounts, on a route
+ * change and whenever something waiting changes.
  */
 function useSimpleCounts(enabled: boolean): Record<string, number> | null {
   const pathname = usePathname();
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
-  const [meetings, setMeetings] = useState<number | null>(null);
   const [live, setLive] = useState(0);
   const [changes, setChanges] = useState(0);
   useEffect(() => onWaitingChanged(() => setChanges((c) => c + 1)), []);
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
-    // prd-questions: Decisions counts the product decisions waiting for me (Oracle's run approvals never).
-    // roadmap-decide: Roadmap adds the broken links of the whole working draft as I see it, the
-    // same ones the roadmap's strip ("N here, M in all"), its Needs a decision and Home count;
-    // review: a light count (GET /v1/simple/roadmap/waiting), not the whole roadmap read.
-    Promise.all([loadInbox(), unwrap(api.GET("/v1/simple/decisions/waiting")), unwrap(api.GET("/v1/simple/roadmap/waiting")).catch(() => undefined)])
-      .then(([inbox, waiting, roadmap]) => {
+    // home-waiting-one-list: Decisions counts the one list of what waits on me. The Roadmap's
+    // count is its "Needs a decision" count; roadmap-decide: its broken links are those of the
+    // whole working draft as I see it (GET /v1/simple/roadmap/waiting, a light count), the same
+    // ones the roadmap's strip, its Needs a decision and Home count, with the dates I may confirm
+    // and the proposals and drafts waiting on me.
+    Promise.all([loadWaiting(), unwrap(api.GET("/v1/simple/roadmap/waiting")).catch(() => undefined)])
+      .then(([waiting, roadmap]) => {
         if (!alive) return;
-        const links = roadmap?.broken_links ?? 0;
-        // Review: the dates to confirm too, so the count equals the roadmap's Needs a decision.
-        const dates = roadmap?.dates_to_confirm ?? 0;
-        const asks = inbox.simple_proposals.length + inbox.simple_approvals.length;
+        const items = waiting.items;
+        const links = roadmap?.broken_links ?? new Set(items.filter((i) => i.kind === "broken_link").map((i) => i.ref_id)).size;
+        const dates = roadmap?.dates_to_confirm ?? items.filter((i) => i.kind === "date" && !i.key.startsWith("proposal:")).length;
+        const asks = items.filter((i) => i.kind === "proposal" || i.kind === "draft" || (i.kind === "date" && i.key.startsWith("proposal:"))).length;
         setCounts({
-          Decisions: waiting.count,
+          Decisions: items.length,
           Roadmap: links + dates + asks,
           "Roadmap links": links,
           "Roadmap dates": dates,
@@ -90,30 +90,26 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
     if (!enabled) return;
     let alive = true;
     unwrap(api.GET("/v1/simple/meetings"))
-      .then((m) => {
-        if (!alive) return;
-        setMeetings(m.live.length + m.upcoming.filter((o) => !o.meeting_id).length);
-        setLive(m.live.length);
-      })
+      .then((m) => alive && setLive(m.live.length))
       .catch(() => undefined);
     return () => {
       alive = false;
     };
   }, [enabled, changes, meetingsPath]);
-  // qa-simple-decide-51: "Meetings live": the yellow count only when one is on now (else the count is neutral).
-  return counts && { ...counts, Meetings: meetings ?? 0, "Meetings live": live };
+  // qa-simple-decide-51: "Meetings live": the yellow count only when one is on now.
+  return counts && { ...counts, Meetings: live, "Meetings live": live };
 }
 
-/** What a rail count counts, said in words (its label and tooltip). */
+/** What a rail count counts, said in words (its accessible name and tooltip). */
 function countWords(label: string, n: number, counts?: Record<string, number> | null): string {
-  if (label === "Meetings") return `${n} ${n === 1 ? "review" : "reviews"} live or coming up`;
-  // roadmap-decide: Roadmap counts the broken links (as the roadmap and Home count them) and the
-  // changes and drafts sent to you, and says so.
+  if (label === "Meetings") return `${n} ${n === 1 ? "meeting" : "meetings"} live now`;
+  // roadmap-decide: Roadmap counts the broken links (as the roadmap and Home count them), the
+  // dates to confirm and the changes and drafts sent to you, and says each.
   if (label === "Roadmap") {
     const links = counts?.["Roadmap links"] ?? 0;
     const dates = counts?.["Roadmap dates"] ?? 0;
     const asks = counts?.["Roadmap asks"] ?? n - links - dates;
-    return `${links} broken ${links === 1 ? "link" : "links"}, ${dates} ${dates === 1 ? "date" : "dates"} to confirm, ${asks} ${asks === 1 ? "change or draft" : "changes or drafts"} waiting on you`;
+    return `${n} on the roadmap waiting on you: ${links} broken ${links === 1 ? "link" : "links"}, ${dates} ${dates === 1 ? "date" : "dates"} to confirm, ${asks} ${asks === 1 ? "change or draft" : "changes or drafts"}`;
   }
   return `${n} waiting on you`;
 }

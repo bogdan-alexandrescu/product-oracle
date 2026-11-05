@@ -275,7 +275,7 @@ export function PlanTable({
         </span>
       )}
       groupProps={() => ({ "data-testid": "plan-group" })}
-      rowProps={(i) => ({ "data-testid": "plan-row", "data-origin": i.origin, "data-item": i.key })}
+      rowProps={(i) => ({ "data-testid": "plan-row", "data-origin": i.origin, "data-item": i.key, "data-id": i.id })}
       empty="No roadmap items yet"
     />
   );

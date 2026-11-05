@@ -130,10 +130,12 @@ for (const phone of [false, true]) {
       await expect(flags.filter({ hasText: "Trail beta · Jan 15" })).toHaveCount(1);
       await expect(flags.filter({ hasText: "Trail launch · Jan 29" })).toHaveCount(1);
 
-      // The card says where the dates come from.
+      // The card says where the dates come from (build-feature-panel: the panel's Dates section).
       await view(page, "gantt");
       await bar(page, "route-search").click();
-      await expect(page.getByTestId("card-dates").filter({ visible: true })).toContainText("Founder commitment");
+      const dates = page.getByTestId("floating-card").locator('[data-fp-section="dates"]');
+      await expect(dates.getByTestId("fp-delivery")).toContainText("Jan 8, 2027");
+      await expect(dates).toContainText("Founder commitment");
 
       // The line's link opens the version.
       await page.keyboard.press("Escape");

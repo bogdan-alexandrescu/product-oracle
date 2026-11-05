@@ -6,21 +6,19 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { Button, SegmentedControl } from "@/components/ds";
 import { FlowDetail, FlowThumb as FlowPicture } from "@/components/simple/Flow";
 import { FlowPanel, type FlowSubject } from "@/components/simple/FlowVisual";
-import { Icon, ICONS, Tabs } from "@/components/simple/FlowViews";
 import { flagKey } from "@/components/simple/chat/ChatCard";
 import { ItemTalk } from "@/components/simple/chat/ItemTalk";
+import { FeaturePanel } from "@/components/simple/FeaturePanel";
 import { askThread, itemTalkPage, type ChatCard } from "@/lib/api/simple-chat";
 import { DecidedWho } from "@/components/simple/DecidedWho";
 import { formatDay } from "@/lib/format";
+import { useMe } from "@/lib/me";
 import { useScreenSubject } from "@/lib/screen-subject";
 
 import { HORIZONS, type Horizon } from "./_board";
 import {
-  confidenceWord,
   milestoneInk,
   shortDay,
-  datesFrom,
-  statusWord,
   storedDates,
   type Change,
   type Flag,
@@ -32,6 +30,8 @@ import {
 export type Act = (
   what: import("./_lib").ChangeWords,
   body: Parameters<typeof import("./_lib").propose>[0],
+  /** build-feature-panel review 3: the toast's words once the change applied, as the panel's frames say them (else "<what> in your working draft"). */
+  opts?: { words?: (r: import("./_lib").ChangeResult) => string | Promise<string> },
 ) => Promise<void>;
 
 const FIX_WORDS: Record<Flag["fixes"][number], string> = {
@@ -326,52 +326,33 @@ export function Callout({
   );
 }
 
-/** Oracle's date suggestion: Accept · Edit dates · Dismiss (through the change engine). */
-export function SuggestionPopover({
+/** Oracle's dates and their actions (Accept · Edit dates · Dismiss): the popover's body, and
+ * the item panel's own section (home-waiting-one-list: a "Confirm the dates" link opens it). */
+export function SuggestionBody({
   item,
   canAct,
   onAccept,
   onEdit,
   onDismiss,
-  onClose,
-  style,
-  above,
+  onEditing,
 }: {
   item: Item;
   canAct: boolean;
   onAccept: () => void;
   onEdit: (start: string, end: string) => void;
   onDismiss: () => void;
-  onClose: () => void;
-  style: React.CSSProperties;
-  /** qa-simple-roadmap-29: the bar's top in the chart (px): with no room below the bar
-   * inside the chart, the popover opens above it, clear of the chart's foot and legend. */
-  above?: number;
+  onEditing?: (editing: boolean) => void;
 }) {
   const s = item.suggestion!;
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditingState] = useState(false);
+  const setEditing = (v: boolean) => {
+    setEditingState(v);
+    onEditing?.(v);
+  };
   const [start, setStart] = useState(s.start_date);
   const [end, setEnd] = useState(s.end_date);
-  const box = useRef<HTMLDivElement>(null);
-  const [flip, setFlip] = useState<number | null>(null);
-  useLayoutEffect(() => {
-    const el = box.current;
-    const parent = el?.offsetParent as HTMLElement | null;
-    if (!el || !parent || above == null) return setFlip(null);
-    const top = Number(style.top ?? 0);
-    const h = el.offsetHeight;
-    setFlip(top + h > parent.clientHeight && above - h >= 0 ? above - h : null);
-  }, [above, style.top, editing]);
   return (
-    <div
-      ref={box}
-      role="dialog"
-      aria-label="Oracle's date suggestion"
-      data-testid="suggestion-popover"
-      data-side={flip != null ? "above" : "below"}
-      style={flip != null ? { ...style, top: flip } : style}
-      className="absolute z-30 w-[340px] max-w-[92vw] rounded-xl border border-line bg-surface p-3 shadow-tip"
-    >
+    <>
       <p className="text-sm font-semibold">
         Oracle suggests {yearSpan(s.start_date, s.end_date)}
       </p>
@@ -422,6 +403,54 @@ export function SuggestionPopover({
           </div>
         )
       )}
+    </>
+  );
+}
+
+/** Oracle's date suggestion: Accept · Edit dates · Dismiss (through the change engine). */
+export function SuggestionPopover({
+  item,
+  canAct,
+  onAccept,
+  onEdit,
+  onDismiss,
+  onClose,
+  style,
+  above,
+}: {
+  item: Item;
+  canAct: boolean;
+  onAccept: () => void;
+  onEdit: (start: string, end: string) => void;
+  onDismiss: () => void;
+  onClose: () => void;
+  style: React.CSSProperties;
+  /** qa-simple-roadmap-29: the bar's top in the chart (px): with no room below the bar
+   * inside the chart, the popover opens above it, clear of the chart's foot and legend. */
+  above?: number;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const [flip, setFlip] = useState<number | null>(null);
+  const [editing, setEditing] = useState(false);
+  useLayoutEffect(() => {
+    const el = box.current;
+    const parent = el?.offsetParent as HTMLElement | null;
+    if (!el || !parent || above == null) return setFlip(null);
+    const top = Number(style.top ?? 0);
+    const h = el.offsetHeight;
+    setFlip(top + h > parent.clientHeight && above - h >= 0 ? above - h : null);
+  }, [above, style.top, editing]);
+  return (
+    <div
+      ref={box}
+      role="dialog"
+      aria-label="Oracle's date suggestion"
+      data-testid="suggestion-popover"
+      data-side={flip != null ? "above" : "below"}
+      style={flip != null ? { ...style, top: flip } : style}
+      className="absolute z-30 w-[340px] max-w-[92vw] rounded-xl border border-line bg-surface p-3 shadow-tip"
+    >
+      <SuggestionBody item={item} canAct={canAct} onAccept={onAccept} onEdit={onEdit} onDismiss={onDismiss} onEditing={setEditing} />
       <button
         type="button"
         aria-label="Close"
@@ -432,13 +461,6 @@ export function SuggestionPopover({
       </button>
     </div>
   );
-}
-
-function names(ids: string[], items: Map<string, Item>, empty = "Nothing"): string {
-  const t = ids.map((id) => items.get(id)?.title).filter(Boolean);
-  // fix4 qa-simple-roadmap-42: empty values read like "No owner yet", capitalised.
-  // qa4-simple-roadmap-42: "Nothing" / "None", not "No other items".
-  return t.length ? t.join(", ") : empty;
 }
 
 const OP_WORDS: Record<string, string> = {
@@ -462,7 +484,29 @@ const OP_WORDS: Record<string, string> = {
   cut_with_dependents: "Cut it and its dependents",
   remove_dependency: "Remove the dependency",
   edit_goal_milestone: "Move it to the date asked",
+  set_goals: "Move it to another goal",
+  // build-feature-panel review 7: the panel's own changes, in plain words.
+  edit_note: "Change the notes",
+  set_owner: "Change the owner",
+  set_milestone: "Set the milestone",
+  set_goal: "Set the goal",
+  restore_goal: "Put Oracle's goal back",
+  restore_dates: "Put Oracle's dates back",
+  add_link: "Add a link",
+  remove_link: "Remove a link",
+  restore_link: "Put a link back",
+  estimate_feature: "Change the effort",
 };
+
+/** build-feature-panel review 7: what a proposal asks, naming its item ("change the outcome of Weekly alert digest"). */
+export function proposalWords(op: string, title: string): string {
+  if (op === "edit_title") return `rename ${title}`;
+  if (op === "add_link") return `add a link to ${title}`;
+  if (op === "remove_link") return `remove a link from ${title}`;
+  if (op.startsWith("restore_")) return `${opWords(op).toLowerCase().replace("oracle's", "Oracle's")} on ${title}`;
+  const w = opWords(op);
+  return `${w.charAt(0).toLowerCase()}${w.slice(1).replace(/ it$/, "")} of ${title}`;
+}
 
 /** S7: a draft's likely duplicates, "Looks like <code> <title>", with Merge and Keep both
  * (merge_item, keep_both through the change engine: editors apply, others propose). */
@@ -621,23 +665,6 @@ function Part({ title, children, testId }: { title: string; children: React.Reac
   );
 }
 
-/** Where the widened card sits beside its talk (pick C): 16 px from the page's top and foot, its
- * right edge 22 px inside the page (the rail and the Ask dock stay clear). */
-function useTalkPlace(on: boolean): number {
-  const [right, setRight] = useState(66);
-  useLayoutEffect(() => {
-    if (!on) return;
-    const read = () => {
-      const r = document.querySelector("main")?.getBoundingClientRect();
-      setRight(r ? Math.max(8, Math.round(window.innerWidth - r.right) + 22) : 22);
-    };
-    read();
-    window.addEventListener("resize", read);
-    return () => window.removeEventListener("resize", read);
-  }, [on]);
-  return right;
-}
-
 /**
  * D8 as amended, drawn to the owner's pick C ("Wider card, talk beside the details",
  * simple-v3/talk/card-ask.html): a floating card by the bar (phones: a bottom sheet with a grab
@@ -653,16 +680,22 @@ export function FloatingCard({
   items,
   proposals,
   phone,
-  style,
   act,
   canChange,
   onDecide,
   onClose,
   onHorizon,
   near,
+  onSuggestion,
+  focus,
 }: {
   /** Roadmap-plus: the key dates the item ends within 2 weeks of, in words (none: no line). */
   near?: string | null;
+  /** home-waiting-one-list: Oracle's open dates for the item, acted on in the panel. */
+  onSuggestion?: (how: "accept" | "edit" | "dismiss", dates?: { start_date: string; end_date: string }) => void;
+  /** home-waiting-one-list: opened from a "waiting for you" row: what waits (a broken link's
+   * fixes, Oracle's dates, a proposal) is scrolled into view. */
+  focus?: boolean;
   item: Item;
   items: Map<string, Item>;
   proposals: Change[];
@@ -675,6 +708,8 @@ export function FloatingCard({
   /** The board's horizon control (a phone cannot always drag a card to a column off the screen). */
   onHorizon?: (h: Horizon) => void;
 }) {
+  // home-waiting-one-list: Oracle's dates are acted on by the one gate the Roadmap's popover uses.
+  const { can } = useMe();
   // The widened card's visual: a draft's own flow ("item", S7) or a proposal's visual (S10).
   const [wide, setWide] = useState<FlowSubject | "item" | null>(null);
   // roadmap-talk: the item's talk with Oracle, open beside the details (a phone: its tab).
@@ -687,7 +722,11 @@ export function FloatingCard({
   };
   // fix4 qa-simple-roadmap-3: the card, its talk and the chat name the item by its title, no code.
   const about = item.title;
-  const ref = useRef<HTMLDivElement>(null);
+  // The card opened from a waiting row (?item=): scroll its fix into view.
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (focus) ref.current?.querySelector("[data-waits]")?.scrollIntoView({ block: "center" });
+  }, [focus]);
   // fix4 qa-simple-roadmap-16: the changes waiting in the item's talk (cards not yet applied,
   // proposed or discarded) are proposals on it too: one source, the talk's own thread, read
   // when the card opens and kept as the talk changes.
@@ -712,84 +751,13 @@ export function FloatingCard({
   // (and their fixes) no longer apply. Only "others still depend on it" stays.
   const cut = item.status === "cut";
   const flags = cut ? item.flags.filter((f) => f.kind === "cut_with_dependents") : item.flags;
+  // build-feature-panel: the panel's clash box shows the date clashes (late links, a late
+  // milestone) with their fixes; the other flags stay listed here.
+  const others = flags.filter((f) => f.kind !== "dependency_order" && f.kind !== "outside_milestone");
   useScreenSubject(
     { kind: "roadmap_item", subject: { item_id: item.id, key: item.key } },
     item.title,
   );
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    // Opening an item never scrolls the page: the clicked row stays where it was.
-    ref.current?.focus({ preventScroll: true });
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  // The card's dates carry the year when it is not this one, as the Timeline's bar does.
-  const span = yearSpan(item.start.date, item.end.date);
-  const dates = item.estimated
-    ? `${span} · Estimated by Oracle (the ${item.horizon} window)`
-    : `${span} · ${datesFrom(item)}`;
-  const beside = talk && !phone;
-  const talkRight = useTalkPlace(beside);
-  // A widened card (a proposal's flow) keeps inside the roadmap, not the 380 px card's left.
-  const [left, setLeft] = useState<number | null>(null);
-  const baseLeft = typeof style.left === "number" ? style.left : null;
-  useLayoutEffect(() => {
-    const el = ref.current;
-    const parent = el?.offsetParent as HTMLElement | null;
-    if (phone || beside || !el || !parent || baseLeft == null) return setLeft(null);
-    const room = parent.clientWidth - el.offsetWidth - 8;
-    setLeft(baseLeft > room ? Math.max(0, room) : null);
-  }, [wide, phone, beside, baseLeft]);
-
-  const place = phone
-    ? wide
-      ? "fixed inset-0 z-50 flex h-dvh flex-col"
-      : `fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t h-[85dvh]`
-    : beside
-      ? "fixed z-40 flex w-[840px] flex-col rounded-xl border"
-      : `absolute z-40 rounded-xl border p-4 ${wide ? "w-[760px]" : "w-[380px]"}`;
-  const placeStyle: React.CSSProperties | undefined = phone
-    ? // A part-height sheet (the Timeline's) keeps the marked row in sight above it.
-      !wide && style.height ? { height: style.height } : undefined
-    : beside
-      ? { top: 16, bottom: 16, right: talkRight }
-      : left == null
-        ? style
-        : { ...style, left };
-
-  const head = (
-    <div className="flex items-start gap-2">
-      <h2 className="min-w-0 flex-1 text-[18px] leading-6 font-semibold break-words">
-        {item.title}
-        {item.draft && item.status !== "merged" && (
-          <span
-            className="ml-2 inline-block rounded-full bg-na-bg px-2 align-middle text-xs font-normal text-na"
-            data-testid="draft-tag"
-          >
-            Draft
-          </span>
-        )}
-      </h2>
-      {beside && (
-        <button
-          type="button"
-          onClick={() => setTalk(false)}
-          className="inline-flex h-8 flex-none items-center rounded-lg px-3 text-[14px] leading-none font-semibold whitespace-nowrap text-accent-ink hover:bg-surface2"
-        >
-          Hide the talk
-        </button>
-      )}
-      <button
-        type="button"
-        aria-label="Close"
-        onClick={onClose}
-        className="grid h-7 w-7 flex-none place-items-center rounded-md text-text2 hover:bg-surface2"
-      >
-        <Icon d={ICONS.close} size={18} width={1.7} />
-      </button>
-    </div>
-  );
-
   const flowPart = item.draft ? (
     item.status !== "merged" && (
       <Part title="Flow">
@@ -876,20 +844,6 @@ export function FloatingCard({
       <LooksLike item={item} act={act} canChange={canChange} />
       <div className={wide && !phone ? "grid grid-cols-2 gap-4" : ""}>
         <dl className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
-          <dt className="text-text2">Outcome</dt>
-          <dd data-testid="card-outcome">
-            {item.outcome ?? (
-              <span className="text-text2">Not written yet</span>
-            )}
-          </dd>
-          <dt className="text-text2">Owner</dt>
-          <dd data-testid="card-owner">
-            {item.owner?.name ?? (
-              <span className="text-text2">No owner yet</span>
-            )}
-          </dd>
-          <dt className="text-text2">Dates</dt>
-          <dd data-testid="card-dates">{dates}</dd>
           {item.slices.length > 0 && (
             <>
               <dt className="text-text2">Milestone</dt>
@@ -959,19 +913,22 @@ export function FloatingCard({
               </dd>
             </>
           )}
-          <dt className="text-text2">Status</dt>
-          <dd data-testid="card-status">{statusWord(item.status)}</dd>
-          <dt className="text-text2">Confidence</dt>
-          <dd data-testid="card-confidence">{item.confidence ? confidenceWord(item.confidence) : "Not rated"}</dd>
-          <dt className="text-text2">Depends on</dt>
-          <dd data-testid="card-depends">{names(item.depends_on, items)}</dd>
-          <dt className="text-text2">Needed by</dt>
-          <dd data-testid="card-needed">{names(item.needed_by, items, "None")}</dd>
         </dl>
         <div>
-          {flags.length > 0 && (
-            <section className="mt-3 space-y-1" data-testid="card-flags">
-              {flags.map((f) => (
+          {item.suggestion?.status === "open" && onSuggestion && (
+            <section className="mt-3 rounded-lg border border-line p-2" data-testid="card-suggestion" data-waits>
+              <SuggestionBody
+                item={item}
+                canAct={can("accept_date_suggestion")}
+                onAccept={() => onSuggestion("accept")}
+                onEdit={(start_date, end_date) => onSuggestion("edit", { start_date, end_date })}
+                onDismiss={() => onSuggestion("dismiss")}
+              />
+            </section>
+          )}
+          {others.length > 0 && (
+            <section className="mt-3 space-y-1" data-testid="card-flags" data-waits>
+              {others.map((f) => (
                 <div key={`${f.kind}-${f.subject}`}>
                   <FlagLine flag={f} />
                   {f.state === "red" && (
@@ -1074,7 +1031,7 @@ export function FloatingCard({
               </ul>
             )}
             {proposals.length ? (
-              <ul className="mt-1 space-y-2" data-testid="card-proposals">
+              <ul className="mt-1 space-y-2" data-testid="card-proposals" data-waits>
                 {proposals.map((c) => (
                   <li key={c.id} className="flex items-center gap-2">
                     {featureProposal(c, items) && (
@@ -1090,7 +1047,7 @@ export function FloatingCard({
                     )}
                     <span className="min-w-0 flex-1">
                       {opWords(c.op)} ·{" "}
-                      <span className="text-text2">{c.by_name}</span>
+                      <span className="text-text2">proposed by {c.by_name}</span>
                       {c.from_meeting && <span className="block text-sm text-text2" data-testid="proposal-from-meeting">Asked for by the meeting {c.from_meeting.title}</span>}
                     </span>
                     {c.can_decide && (
@@ -1160,16 +1117,6 @@ export function FloatingCard({
         >
           Open the detailed view
         </Link>
-        {!talk && !phone && (
-          <button
-            type="button"
-            onClick={() => setTalk(true)}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-accent bg-accent px-3 text-[14px] leading-none font-semibold whitespace-nowrap text-on-accent hover:bg-accent-ink"
-          >
-            <Icon d={ICONS.ask} size={16} />
-            Talk to Oracle
-          </button>
-        )}
       </div>
     </>
   );
@@ -1178,104 +1125,19 @@ export function FloatingCard({
     <ItemTalk itemId={item.id} about={about} phone={phone} onCards={onTalkCards} known={known} />
   );
 
+  // build-feature-panel: the card is Simple's one feature panel (its own parts below the
+  // panel's Details), the talk always beside it (a phone: its tab).
   return (
-    <>
-      {/* #47: the card floats over the chart with nothing to say it has the page's
-       * attention; a dimmed backdrop on desktop (a phone's sheet already reads as modal),
-       * clicking it closes the card like the close button. */}
-      {/* The Timeline's side panel sits in the page's flow and dims nothing. */}
-      {!phone && style.position !== "relative" && (
-        <div
-          aria-hidden
-          data-testid="floating-card-backdrop"
-          data-backdrop=""
-          className="fixed inset-0 z-[35] bg-black/30"
-          onClick={(e) => {
-            // fix4 review: the rail is dimmed under the backdrop, yet a click on one of its
-            // links still goes there (not only closes the card).
-            const link = document
-              .elementsFromPoint(e.clientX, e.clientY)
-              .map((el) => el.closest<HTMLElement>('[data-testid="simple-nav"] a, [data-testid="simple-nav"] button'))
-              .find(Boolean);
-            onClose();
-            link?.click();
-          }}
-        />
-      )}
-      <div
-        ref={ref}
-        tabIndex={-1}
-        role="dialog"
-        aria-label={item.title}
-        data-testid="floating-card"
-        data-sheet={phone ? "bottom" : "float"}
-        data-wide={wide ? "true" : "false"}
-        data-talk={talk ? "true" : "false"}
-        data-flow-open={flowOpen ? "true" : "false"}
-        style={placeStyle}
-        data-backdrop={phone && wide ? "" : undefined}
-        className={`${place} ${phone ? "max-w-none overflow-hidden" : "max-w-[calc(100vw-16px)]"} border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip outline-none ${!phone && !beside ? "overflow-y-auto" : ""} ${flowOpen && !phone ? "pointer-events-none opacity-0" : ""}`}
-      >
-      {phone ? (
-        <>
-          {!wide && (
-            <span
-              aria-hidden
-              className="mx-auto mt-2 mb-1 block h-1 w-10 flex-none rounded-sm bg-line-strong opacity-60"
-            />
-          )}
-          <div
-            className={`flex-none border-b border-line px-4 pb-2.5 ${wide ? "pt-3.5" : "pt-1.5"}`}
-          >
-            {head}
-            <Tabs
-              label="The item"
-              className="mt-2.5"
-              value={talk ? "talk" : "details"}
-              onChange={(t) => setTalk(t === "talk")}
-              items={[
-                { value: "details", label: "Details" },
-                { value: "talk", label: "Talk to Oracle" },
-              ]}
-            />
-          </div>
-          {talk ? (
-            <div
-              role="tabpanel"
-              aria-label="Talk to Oracle"
-              className="flex min-h-0 flex-1 flex-col"
-            >
-              {talkPanel}
-            </div>
-          ) : (
-            <div
-              role="tabpanel"
-              aria-label="Details"
-              className="min-h-0 flex-1 overflow-y-auto px-4 pb-4"
-            >
-              {details}
-            </div>
-          )}
-        </>
-      ) : beside ? (
-        <>
-          <div className="flex-none border-b border-line px-4 pt-3.5 pb-2.5">
-            {head}
-          </div>
-          <div className="grid min-h-0 flex-1 grid-cols-[390px_minmax(0,1fr)]">
-            <div className="min-h-0 overflow-y-auto border-r border-line px-4 pt-1 pb-3">
-              {details}
-            </div>
-            <div className="flex min-h-0 min-w-0 flex-col">{talkPanel}</div>
-          </div>
-        </>
-      ) : (
-        <>
-          {head}
-          {details}
-        </>
-      )}
-    </div>
-    </>
+    <FeaturePanel
+      item={item}
+      items={items}
+      act={act}
+      canChange={canChange}
+      phone={phone}
+      onClose={onClose}
+      talk={talkPanel}
+      testId="floating-card"
+      more={<section ref={ref} className="py-3" data-testid="fp-more" data-wide={wide ? "true" : "false"} data-flow-open={flowOpen ? "true" : "false"}>{details}</section>}
+    />
   );
 }

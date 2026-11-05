@@ -116,6 +116,9 @@ class Entry:
     # The item's code as every reader reads it (its feature's code, F-12 or the PRD's
     # F-06; else its own PRD section's): Home, the card's "Looks like" and "Merged into".
     code: str | None = None
+    # build-feature-panel review 2: the goal a person set on the item (oracle.simple.panel's
+    # goal_sets), which wins over its feature's; None: Oracle's goal.
+    goal_set: dict[str, Any] | None = None
 
 
 @dataclass
@@ -411,6 +414,9 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
             )
         )
     }
+    from oracle.simple import panel
+
+    goal_sets = await panel.goal_sets(db, {r.roadmap_document_id for r in rows})
     blockers = await _blockers(db, {b for r in rows for b in r.blocker_ids or []})
     cut = await _cut(db, roadmap_ids)
     # The item's first open suggestion (plan-model: its first slice's, shown with the span
@@ -459,8 +465,11 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 roadmap=roadmap,
                 prd=prd,
                 track=track,
-                goal=(goals.get(row.feature_id) if row.feature_id else None)
+                goal=(linked.get(row.goal_ids[0]) if row.goal_ids else None)
+                if str(row.id) in goal_sets
+                else (goals.get(row.feature_id) if row.feature_id else None)
                 or next((linked[g] for g in row.goal_ids or [] if g in linked), None),
+                goal_set=goal_sets.get(str(row.id)),
                 window=window,
                 resolved=dates.resolve(cands, window),
                 status=_status(row, recs, cut.get(roadmap.id, set())),
@@ -804,23 +813,36 @@ async def _bet_flows(db: AsyncSession, principal: Any, shown: list[Any], items: 
         if (e.prd.id in drawn or None in drawn) and e.prd.id not in bets:
             bets[e.prd.id] = await one_pager.bet_flows(db, e.prd)
 
-    def words(text: str) -> str:
-        return " " + " ".join(re.sub(r"[^\w]+", " ", text.casefold()).split()) + " "
-
-    def one(found: list[Any]) -> list[Any]:
-        return found if len(found) == 1 else []
-
     for e in wanting:
         of = bets.get(e.prd.id)
         if not of:
             continue
         code = e.code or _prd_code(e.row.prd_section_key)
-        coded = one([f for t, _, f in of if code and code.strip() and words(code) in words(t)])
-        sourced = one([f for _, keys, f in of if e.row.prd_section_key in keys])
-        title = e.row.title.strip()
-        titled = one([f for t, _, f in of if title and words(title) in words(t)])
-        found = coded or sourced or titled
-        by_id[e.row.id].flow = found[0] if found else None
+        at = own_bet(code, e.row.prd_section_key, e.row.title, [(t, keys) for t, keys, _ in of])
+        by_id[e.row.id].flow = of[at][2] if at is not None else None
+
+
+def own_bet(
+    code: str | None, section_key: str | None, title: str, bets: list[tuple[str, list[str]]]
+) -> int | None:
+    """Which of a PRD's bets (their words and source keys) an item was built from: the one
+    naming the item's code, else the one drawn from the item's section alone, else the one
+    its title names (roadmap-keydates: a short title two bets mention names neither)."""
+
+    def words(text: str) -> str:
+        return " " + " ".join(re.sub(r"[^\w]+", " ", text.casefold()).split()) + " "
+
+    def one(found: list[int]) -> list[int]:
+        return found if len(found) == 1 else []
+
+    named = (title or "").strip()
+    coded = one(
+        [i for i, (t, _) in enumerate(bets) if code and code.strip() and words(code) in words(t)]
+    )
+    sourced = one([i for i, (_, keys) in enumerate(bets) if section_key and section_key in keys])
+    titled = one([i for i, (t, _) in enumerate(bets) if named and words(named) in words(t)])
+    found = coded or sourced or titled
+    return found[0] if found else None
 
 
 def prd_section_label(section_key: str, heading: str | None, name: str = "") -> str:
@@ -924,6 +946,7 @@ def item_out(
             title=e.goal.title,
             metric=_metric(e.goal),
             position=goal_position(e.goal.attrs),
+            **_reading(e.goal),
         )
         if e.goal
         else None,
@@ -936,6 +959,7 @@ def item_out(
         source=r.source,
         estimated=r.estimated,
         date_basis=approved_roadmap.date_basis(row),
+        note=row.note,
         suggestion=suggestion_out(e.suggestion, row, may, e.suggestion_span)
         if e.suggestion is not None
         else None,
@@ -947,7 +971,9 @@ def item_out(
         depends_on=e.depends_on,
         needed_by=e.needed_by,
         flags=flags_out(e, lambda d: can_decide(principal, d, deciders)),
-        owner=SimpleOwnerRef(id=e.track.owner_id, name=e.owner_name)  # type: ignore[arg-type]
+        owner=SimpleOwnerRef(id=row.owner_id, name=e.owner_name, source="item")
+        if row.owner_id is not None and e.owner_name
+        else SimpleOwnerRef(id=e.track.owner_id, name=e.owner_name, source="track")  # type: ignore[arg-type]
         if e.track is not None and e.track.owner_id is not None and e.owner_name
         else None,
         can_decide=may,
@@ -1070,6 +1096,24 @@ def _milestone_out(m: TrackMilestone, keyed: dict, ids: set, view: Any) -> Simpl
     return out
 
 
+def _reading(goal: Entity) -> dict[str, Any]:
+    """build-feature-panel review 3: the goal's latest reading, target, unit and due day
+    (its attrs), for the panel's Reading row; what is not a number or a day is left out."""
+    attrs = goal.attrs or {}
+    out: dict[str, Any] = {}
+    for key in ("current", "target"):
+        v = attrs.get(key)
+        if isinstance(v, int | float) and not isinstance(v, bool):
+            out[key] = v
+    if isinstance(attrs.get("unit"), str) and attrs["unit"]:
+        out["unit"] = attrs["unit"]
+    try:
+        out["due"] = date.fromisoformat(str(attrs["due"])) if attrs.get("due") else None
+    except ValueError:
+        pass
+    return out
+
+
 def _metric(goal: Entity) -> str | None:
     metric = (goal.attrs or {}).get("metric")
     if isinstance(metric, dict):
@@ -1161,6 +1205,10 @@ async def build(
 
     await item_codes(db, read.entries)
     extra = await additions.item_extras(db, read, shown)
+    from oracle.simple import panel
+
+    for item_id, x in (await panel.item_panel(db, read, shown)).items():
+        extra.setdefault(item_id, {}).update(x)
     from oracle.simple import meetings
 
     left_out: list = []
@@ -1198,7 +1246,7 @@ async def build(
         | {p.id for of in kd_prds.values() for p in of},
     )
     kds, kd_roadmaps = await key_dates.read_key_dates(db, principal, kd_docs, read.entries, views)
-    from oracle.simple import goal_milestones
+    from oracle.simple import goal_milestones, old_milestones
 
     shown_goal_milestones = await goal_milestones.list_for_roadmaps(
         db, principal, kd_docs, read.entries, views, kd_prds
@@ -1233,6 +1281,7 @@ async def build(
             for m in read.milestones
         ],
         goal_milestones=shown_goal_milestones,
+        old_milestones=await old_milestones.preview(db, principal),
         span=span,
         changes_in_review=seen.of(chosen.id if chosen else None)[1],
         drafts=seen.of(chosen.id if chosen else None)[0],

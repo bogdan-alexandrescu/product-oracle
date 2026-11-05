@@ -1318,16 +1318,23 @@ async def import_draft(
     if draft.note_resolutions:
         # A send-back's note answered point by point: recorded against the note (the
         # version keeps the entries in its front matter); no feedback item is closed.
+        # Every point addressed reads as done, not as a warning: ``declined`` (empty then)
+        # is what the web reads.
         answers = draft.note_resolutions
-        declined = sum(1 for a in answers if a.status == "declined")
+        declined = [a.id for a in answers if a.status == "declined"]
         n = len(answers)
+        points = f"{n} {'point' if n == 1 else 'points'}"
         warnings.append(
             VersionWarning(
                 code="note_answered",
-                message=f"the draft answers the send-back note: {n} "
-                f"{'point' if n == 1 else 'points'} ({n - declined} addressed, "
-                f"{declined} declined)",
-                refs={"note_points": [a.id for a in answers]},
+                message=(
+                    f"the draft answers the send-back note: {points} ({n - len(declined)} "
+                    f"addressed, {len(declined)} declined)"
+                    if declined
+                    else f"the draft answers every point of the send-back note: {points}, "
+                    "all addressed"
+                ),
+                refs={"note_points": [a.id for a in answers], "declined": declined},
             )
         )
     resolutions = await _known_resolutions(db, document, draft, warnings)

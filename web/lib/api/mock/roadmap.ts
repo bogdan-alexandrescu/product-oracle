@@ -2186,6 +2186,22 @@ export function inboxTracks(ctx: RoadmapContext, db: RoadmapDb, seen: string | n
  * worded as api/oracle/roadmap/doc_dates.py problem_message and api/oracle/wording.py
  * unknown_source_item and feedback_left_open write them; the ids in refs.
  */
+/** A send-back note with a declined point, worded as api/oracle/docs/service.py does: a warning, amber. */
+export const DECLINED_NOTE: Schemas["VersionWarning"] = {
+  code: "note_answered",
+  message: "the draft answers the send-back note: 2 points (1 addressed, 1 declined)",
+  section_keys: [],
+  refs: { note_points: ["note-1", "note-2"], declined: ["note-2"] },
+};
+
+/** A note answered in full as an older version stored it: no ``declined`` in its refs, "0 declined" in its words. Done. */
+export const OLDER_ANSWERED_NOTE: Schemas["VersionWarning"] = {
+  code: "note_answered",
+  message: "the draft answers the send-back note: 2 points (2 addressed, 0 declined)",
+  section_keys: [],
+  refs: { note_points: ["note-1", "note-2"] },
+};
+
 export function versionWarnings(prdTitle: string, prdSlug: string): Schemas["VersionWarning"][] {
   return [
     {
@@ -2206,6 +2222,13 @@ export function versionWarnings(prdTitle: string, prdSlug: string): Schemas["Ver
         'an agent\'s draft closes feedback only as addressed, and only on a section whose text or evidence it changed in this version; 2 feedback items stay open: on "Summary" and "Behaviour"',
       section_keys: ["item-behaviour", "summary"],
       refs: { feedback_items: ["00000000-0000-4000-8000-000000000397", "00000000-0000-4000-8000-000000000398"] },
+    },
+    // A send-back note the draft answered in full (as api/oracle/docs/service.py words it): done, not a warning.
+    {
+      code: "note_answered",
+      message: "the draft answers every point of the send-back note: 2 points, all addressed",
+      section_keys: [],
+      refs: { note_points: ["note-1", "note-2"], declined: [] },
     },
   ];
 }

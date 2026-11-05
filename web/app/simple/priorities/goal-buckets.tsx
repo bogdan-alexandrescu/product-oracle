@@ -61,9 +61,9 @@ export function placedPlan(plan: Plan, gb: Buckets | undefined): Plan {
   };
 }
 
-function featureOf(gb: Buckets | undefined, code: string, name: string): { id: string; goal_ids: string[] } | undefined {
+function featureOf(gb: Buckets | undefined, code: string, name: string): { id: string; goal_ids: string[]; assumed_goal_ids: string[] } | undefined {
   const f = gb?.features.find((x) => x.key.toLowerCase() === code.toLowerCase() || x.title === name);
-  return f ? { id: f.id, goal_ids: f.goal_ids ?? [] } : undefined;
+  return f ? { id: f.id, goal_ids: f.goal_ids ?? [], assumed_goal_ids: f.assumed_goal_ids ?? [] } : undefined;
 }
 
 /** "Dec 31" this year, "Feb 12, 2027" past it. */
@@ -182,11 +182,11 @@ export function UndoNote({ children, onUndo }: { children: ReactNode; onUndo?: (
 }
 
 /** The dragged feature's card. */
-export function DragGhost({ code, name, weeks, style, className = "" }: { code: string; name: string; weeks: string; style?: React.CSSProperties; className?: string }) {
+export function DragGhost({ code, name, weeks, style, className = "" }: { code: string | null; name: string; weeks: string; style?: React.CSSProperties; className?: string }) {
   return (
     <div aria-hidden data-testid="drag-ghost" className={`pointer-events-none fixed z-40 flex w-[420px] max-w-[80vw] rotate-[-1.5deg] items-center gap-2 rounded-md border-2 border-accent bg-surface px-2 py-[5px] text-[16px] shadow-2xl ${className}`} style={style}>
       <span className="text-[15px]">⠿</span>
-      <CodeTag code={code} />
+      {code && <CodeTag code={code} />}
       <span className="flex-1">{name}</span>
       <span className="text-[15px] text-text2">{weeks}</span>
     </div>
@@ -204,6 +204,8 @@ export function FeatureRows({
   lifted,
   onGrip,
   onOpen,
+  task,
+  tail,
 }: {
   plan: Plan;
   goal: string | null;
@@ -213,18 +215,38 @@ export function FeatureRows({
   onGrip: (f: Feature, e: React.PointerEvent | React.KeyboardEvent) => void;
   /** The feature's name opens its item panel (the grip only moves it). */
   onOpen?: (f: Feature) => void;
+  /** Tasks in place: a feature's shown name (renamed on the roadmap), whether it is cut, its pencil and ⋯, and its form while edited. */
+  task?: { name: (f: Feature) => string; cut: (f: Feature) => boolean; actions: (f: Feature) => ReactNode; form: (f: Feature) => ReactNode | null; milestone: (f: Feature) => string | null };
+  /** Rows after the plan's: tasks added since, and "+ Add a task". */
+  tail?: ReactNode;
 }) {
-  const features = planFeatures(plan, goal);
-  if (!features.length) return <p className="mt-2 text-[15px] text-text2">Nothing in the plan yet</p>;
+  const features = planFeatures(plan, goal)
+    .filter((f) => !task?.cut(f))
+    .map((f) => (task ? { ...f, name: task.name(f) } : f));
+  if (!features.length && !tail) return <p className="mt-2 text-[15px] text-text2">Nothing in the plan yet</p>;
   const titleOf = (id: string) => gb?.goals.find((g) => g.id === id)?.title;
   return (
     <ul className="mt-2">
+      {!features.length && <li className="py-[5px] text-[15px] text-text2">Nothing in the plan yet</li>}
       {features.map((f) => {
+        const form = task?.form(f);
+        if (form)
+          return (
+            <li key={f.code} data-testid="plan-feature" data-code={f.code} className="border-b border-line">
+              {form}
+            </li>
+          );
         const links = featureOf(gb, f.code, f.name)?.goal_ids ?? [];
+        // Its link to this bucket's goal has an assumed contribution: marked as the Ground Truth marks it.
+        const here = goal ? gb?.goals.find((g) => same(g.title, goal))?.id : undefined;
+        const assumed = !!here && !!featureOf(gb, f.code, f.name)?.assumed_goal_ids.includes(here);
         const others = links.slice(1).map(titleOf).filter((x): x is string => !!x);
         const milestones = [...new Set(f.slices.map((s) => s.milestone))];
         const movable = grips && !!featureOf(gb, f.code, f.name);
         const up = lifted === f.code;
+        // Its own milestone, unless a plan chip already names it.
+        const mine = task?.milestone(f) ?? null;
+        const own = mine && !milestones.some((code) => plan.milestones.find((m) => m.code === code)?.name === mine) ? mine : null;
         return (
           <li
             key={f.code}
@@ -266,6 +288,15 @@ export function FeatureRows({
                   +{others.length} {others.length === 1 ? "goal" : "goals"}
                 </span>
               )}
+              {assumed && (
+                <span
+                  data-testid="contribution-assumed"
+                  title={`How much it moves ${goal} is assumed until someone sets it`}
+                  className="ml-1.5 inline-flex h-5 items-center whitespace-nowrap rounded-full bg-warn-bg px-1.5 align-[1px] text-[12px] font-[650] text-warn"
+                >
+                  Contribution assumed
+                </span>
+              )}
             </span>
             <span className="flex flex-none gap-1 max-sm:order-last max-sm:basis-full max-sm:pl-[60px]">
               {milestones.map((code) => {
@@ -279,33 +310,44 @@ export function FeatureRows({
                   </span>
                 );
               })}
+              {own && (
+                <span data-testid="task-milestone" title={`Its own milestone: ${own}`} className="inline-flex h-5 items-center whitespace-nowrap rounded-full bg-surface2 px-2 text-[12px] font-[650] text-text2">
+                  {own}
+                </span>
+              )}
             </span>
             <span data-testid="plan-feature-total" className="min-w-[56px] flex-none text-right text-[15px] tabular-nums text-text2">
               {f.weeks == null ? "PM-owned" : `${wk(f.weeks)} wk`}
             </span>
+            {task?.actions(f)}
           </li>
         );
       })}
+      {tail}
     </ul>
   );
 }
 
 /** GB2 a: Archive goal asks first, and says where the goal's features go. */
-export function ArchiveDialog({ goal, plan, gb, onClose, onArchive }: { goal: Goal; plan: Plan; gb: Buckets; onClose: () => void; onArchive: (to: string | null) => Promise<void> }) {
+/** A goal's features as ArchiveDialog counts them: the plan's, or with no dated plan the bucket's. */
+export type GoalFeatures = (goal: string) => { code: string; name: string; slices: Plan["slices"] }[];
+
+export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive }: { goal: Goal; plan: Plan | null; featuresOf?: GoalFeatures; gb: Buckets; onClose: () => void; onArchive: (to: string | null) => Promise<void> }) {
   const [mode, setMode] = useState<"move" | "none">("move");
   const [to, setTo] = useState("");
   const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const list = planFeatures(plan, goal.title);
+  const listOf: GoalFeatures = (title) => (plan ? planFeatures(plan, title) : (featuresOf?.(title) ?? []));
+  const list = listOf(goal.title);
   const others = gb.goals.filter((g) => g.id !== goal.id);
   const titleOf = (id: string) => gb.goals.find((g) => g.id === id)?.title ?? "";
   const multi = list.filter((f) => (featureOf(gb, f.code, f.name)?.goal_ids ?? []).some((g) => g !== goal.id));
   const rest = list.length - multi.length;
   const ms = [...new Set(list.flatMap((f) => f.slices.map((s) => s.milestone)))].sort();
-  const msLabel = (code: string) => `${code} ${plan.milestones.find((m) => m.code === code)?.name ?? ""}`.trim();
+  const msLabel = (code: string) => `${code} ${plan?.milestones.find((m) => m.code === code)?.name ?? ""}`.trim();
   const feats = `${list.length} ${list.length === 1 ? "feature" : "features"}`;
   const picked = mode === "none" || !!to || rest === 0;
-  const holds = to ? planFeatures(plan, titleOf(to)).length + rest : 0;
+  const holds = to ? listOf(titleOf(to)).length + rest : 0;
   useEffect(() => {
     ref.current?.querySelector<HTMLElement>("select, button")?.focus();
     const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -317,7 +359,13 @@ export function ArchiveDialog({ goal, plan, gb, onClose, onArchive }: { goal: Go
       <div ref={ref} role="dialog" aria-modal="true" aria-label={`Archive ${goal.title}`} className="flex max-h-[88vh] w-full max-w-lg flex-col rounded-t-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg sm:rounded-[var(--simple-card-radius)]" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Archive {goal.title}?</h2>
         <p className="mt-1 text-[15px] text-text2">
-          {list.length ? `It holds ${feats} with work in ${andList(ms.map(msLabel))}. The milestones stay as planned; their work moves with the features.` : "It holds no features in the plan. The milestones stay as planned."}
+          {!plan
+            ? list.length
+              ? `It holds ${feats}.`
+              : "It holds no features."
+            : list.length
+              ? `It holds ${feats} with work in ${andList(ms.map(msLabel))}. The milestones stay as planned; their work moves with the features.`
+              : "It holds no features in the plan. The milestones stay as planned."}
         </p>
         {list.length > 0 && (
           <div className="mt-3 grid gap-2 text-[15px]">
@@ -439,7 +487,8 @@ export function GoalMenu({ title, onEdit, onArchive, archive }: { title: string;
   );
 }
 
-export type Note = { text: ReactNode; undo?: Undo };
+/** A task change (./task-edit) names the changes Undo takes back, in the order they were made. */
+export type Note = { text: ReactNode; undo?: Undo; changes?: string[] };
 
 /** The writes, each answering with the note to show and what Undo puts back. */
 export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note | null) => void, setError: (e: string | null) => void) {
@@ -490,5 +539,7 @@ export function useBucketRights(gb: Buckets | undefined) {
     edit: (g: Goal | undefined) => !!g && g.can_edit && can("update_bucket_goal"),
     archive: !!gb && can("archive_bucket_goal"),
     move: !!gb && can("move_bucket_feature"),
+    // Tasks: the change engine applies or proposes, by the roadmap's own rule.
+    task: can("create_simple_change"),
   };
 }

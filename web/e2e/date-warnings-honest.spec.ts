@@ -36,7 +36,7 @@ for (const [label, viewport] of [
       // no_claim=the API's matching rules (api/tests/test_date_warnings_honest.py).
       await openRoadmap(page);
       await expect(dateWarnings(page)).toHaveCount(1);
-      await expect(dateWarnings(page)).toContainText("the date Dec 15, 2026");
+      await expect(dateWarnings(page)).toContainText("The date Dec 15, 2026");
       await expect(dateWarnings(page)).not.toContainText("Nov 30");
       await expect(lacking(page)).toHaveText("1 date lacks a basis");
 
@@ -122,6 +122,6 @@ test("the version's own day, a quoted source's date and a quarter's range do not
   await page.goto("/documents/usage-alerts-roadmap/v/1");
   await expect(page.getByText("The courier said").filter({ visible: true }).first()).toBeVisible();
   await expect(dateWarnings(page)).toHaveCount(1);
-  await expect(dateWarnings(page)).toContainText("the date Dec 15, 2026");
+  await expect(dateWarnings(page)).toContainText("The date Dec 15, 2026");
   await expect(lacking(page)).toHaveText("1 date lacks a basis");
 });

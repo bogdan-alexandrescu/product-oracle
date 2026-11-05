@@ -11,8 +11,10 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { PLAN_PRD_SLUG, planOut, planSlices } from "./simple-plan";
-import { closed, companyToday, goalRank, roadmapOut, type SimpleDb } from "./simple-roadmap";
+import { closed, companyToday, goalRank, roadmapOut, type SeedItem, type SimpleDb } from "./simple-roadmap";
 import { flowFor } from "./simple-visuals";
+import { stableUuid } from "./ids";
+import { COMPANY_TITLE } from "./one-roadmap";
 
 type Row = Schemas["SimplePriorityRow"];
 type Item = Schemas["SimpleRoadmapItem"];
@@ -52,6 +54,15 @@ function planCode(db: SimpleDb, key: string): string | null {
   return m ? `F-${m[1]}` : (PLAN_EXISTING[key] ?? null);
 }
 
+/**
+ * The baseline feature key of an item: its plan code, else its own code, else its key (as Priorities
+ * reads it); an item added for a feature (SeedItem.feature) reads that feature's.
+ */
+export function featureKeyOf(db: SimpleDb, key: string): string {
+  const k = featureOf(db, key);
+  return planCode(db, k) ?? FEATURES[k]?.code ?? k;
+}
+
 /** The plan's engineer-weeks of a feature across its slices; null when it is all PM-owned (no engineer-weeks, as plan.py). */
 function planWeeks(code: string): number | null {
   const of = planSlices().filter((x) => x.feature_code === code);
@@ -72,6 +83,56 @@ const CONFIDENCE: Record<string, number> = { high: 0.8, medium: 0.5, low: 0.3 };
 
 const round = (n: number): number => Math.round(n * 1000) / 1000;
 const featureId = (itemId: string): string => `feature-${itemId}`;
+/** The key of the item standing for `key`'s feature: its own, or the one it was added for (SeedItem.feature). */
+const featureOf = (db: SimpleDb, key: string): string => db.items.find((s) => s.key === key)?.feature ?? key;
+/** An item's feature id: one per feature, whichever roadmap's item stands for it. */
+const featureOfItem = (db: SimpleDb, i: { key: string; id: string }): string => featureId(db.ids[featureOf(db, i.key)] ?? i.id);
+
+/** The key of the item standing for the feature `fid`, undefined for no such feature. */
+export function featureItem(db: SimpleDb, fid: string): string | undefined {
+  return Object.keys(db.ids).find((k) => featureId(db.ids[k]) === fid && !db.items.find((s) => s.key === k)?.feature);
+}
+
+/**
+ * targets.add_to_company: the company roadmap's item of the feature `fid`, added under Later (its
+ * draft there confirmed rather than a second item added); the feature's own item while there is no
+ * company roadmap (a move then ranks the feature alone); undefined for no such feature.
+ */
+export function addToCompany(db: SimpleDb, fid: string): string | undefined {
+  const base = featureItem(db, fid);
+  const src = base ? db.items.find((s) => s.key === base) : undefined;
+  if (!base || !src) return undefined;
+  const slug = db.company_roadmap;
+  if (!slug) return base;
+  const there = db.items.filter((s) => s.roadmap === slug && featureOf(db, s.key) === base && !closed(s) && s.status !== "cut");
+  const kept = there.find((s) => !s.draft) ?? there[0];
+  if (kept) {
+    kept.draft = false;
+    return kept.key;
+  }
+  let key = base;
+  for (let n = 2; db.ids[key]; n++) key = `${base}-${n}`;
+  const row: SeedItem = { key, title: src.title, horizon: "later", roadmap: slug, feature: base, confidence: src.confidence, source: "engineering", goal: src.goal };
+  db.items.push(row);
+  db.ids[key] = stableUuid(`simple-item/${key}`);
+  return key;
+}
+
+/**
+ * prio-company (priorities._items): every feature ranks, so a feature with no item on the company
+ * roadmap is a row with no item; the item another roadmap holds for it stands for it here.
+ */
+function offCompany(db: SimpleDb, on: Item[]): Item[] {
+  const slug = db.company_roadmap;
+  if (!slug) return [];
+  const held = new Set(on.filter((i) => !i.draft).map((i) => featureOf(db, i.key)));
+  db.company_roadmap = undefined;
+  try {
+    return roadmapOut(db, "owner", new URLSearchParams())!.items.filter((i) => db.items.find((s) => s.key === i.key)?.roadmap !== slug && !i.draft && !held.has(featureOf(db, i.key)));
+  } finally {
+    db.company_roadmap = slug;
+  }
+}
 
 const FEATURE_CODE = /^[A-Z]{1,3}-\d+$/;
 
@@ -127,6 +188,14 @@ function stored(db: SimpleDb, itemId: string): Values {
 
 /** A person's estimates, else the feature's: [goal value, effort, whether the value is a person's]. */
 export function estimates(db: SimpleDb, key: string, itemId: string): { value: number; effort: number | null; valueEstimated: boolean } {
+  // An item added for another's feature (SeedItem.feature) reads that feature's estimates, its own over them.
+  const base = featureOf(db, key);
+  if (base !== key) {
+    const was = estimates(db, base, db.ids[base]);
+    const s = stored(db, itemId);
+    const value = typeof s.goal_value === "number" ? s.goal_value : null;
+    return { value: value ?? was.value, effort: typeof s.effort === "number" ? s.effort : was.effort, valueEstimated: value !== null || was.valueEstimated };
+  }
   const own = FEATURES[key] ?? planFeature(key) ?? { value: 0, effort: 1 };
   // With a plan, an existing item the plan names takes the plan's engineer-weeks (one effort on every tab).
   const code = db.plan ? PLAN_EXISTING[key] : undefined;
@@ -142,8 +211,8 @@ export function estimates(db: SimpleDb, key: string, itemId: string): { value: n
 /** targets.py's `before` of estimate_feature and override_priority, as stored now. */
 export function priorityBefore(db: SimpleDb, key: string, op: string, itemId: string): Values {
   if (op === "estimate_feature") {
-    const s = stored(db, itemId);
-    return { goal_value: typeof s.goal_value === "number" ? s.goal_value : null, effort: estimates(db, key, itemId).effort };
+    const e = estimates(db, key, itemId);
+    return { goal_value: e.valueEstimated ? e.value : null, effort: e.effort };
   }
   return { override: (stored(db, itemId).override as Values | undefined) ?? null };
 }
@@ -231,19 +300,45 @@ const sameAs = (name: string, day: string): string[] => {
  * with a PRD key date's name on its day is left out (listed once, "From the PRD"); `same` is
  * the key date's line by the left-out milestone's key, so a saved pick of it draws that line.
  */
+/** priorities.readable: a template's lone "N" placeholder ("Milestone N agents") is no name; "Beta [internal]" is one. */
+const readable = (name: string | null | undefined): string | null => {
+  const n = (name ?? "").trim();
+  return n && !/(^|\s)N(\s|$)/.test(n) ? n : null;
+};
+
+/** priorities._code_of: a milestone's code ("M1" of "M1 · Measured"), null for a name with none. */
+const codeOf = (name: string): string | null => (/^[A-Z][A-Z0-9]*-?[0-9]+[a-z]?/.test(name) ? name.split(/[\s·:.–—]/)[0] : null);
+
 function linesOf(read: Schemas["SimpleRoadmapOut"]): { lines: Line[]; same: Map<string, Line> } {
   const tracks = new Set(read.items.map((i) => i.track?.id).filter(Boolean));
-  const keyDates = (read.key_dates ?? []).map((k): Line => ({ key: `key_date:${k.id}`, kind: "key_date", label: `${k.name} · ${lineDay(k.date)}`, date: k.date, prd: k.prd ?? null }));
+  // prio-company: each line names its PRD (a milestone its track's); a PRD's code on any day, or a line already listed, once.
+  const prdOf = new Map(read.items.filter((i) => i.track && i.prd).map((i) => [i.track!.id, i.prd!]));
+  const keyDates = (read.key_dates ?? []).filter((k) => readable(k.name)).map((k): Line => ({ key: `key_date:${k.id}`, kind: "key_date", label: `${k.name} · ${lineDay(k.date)}`, date: k.date, prd: k.prd ?? null }));
   const fromPrd = new Map<string, Line>();
-  (read.key_dates ?? []).forEach((k, i) => k.prd && sameAs(k.name, k.date).forEach((x) => fromPrd.has(x) || fromPrd.set(x, keyDates[i])));
+  const byCode = new Map<string, Line>();
+  (read.key_dates ?? []).filter((k) => readable(k.name)).forEach((k, i) => {
+    if (!k.prd) return;
+    sameAs(k.name, k.date).forEach((x) => fromPrd.has(x) || fromPrd.set(x, keyDates[i]));
+    const code = codeOf(k.name);
+    if (code && !byCode.has(`${k.prd.id}|${code}`)) byCode.set(`${k.prd.id}|${code}`, keyDates[i]);
+  });
   const same = new Map<string, Line>();
   const milestones: Line[] = [];
+  const seen = new Map(keyDates.map((l) => [`${l.label}|${l.prd?.id ?? ""}`, l]));
   for (const m of read.milestones) {
-    if (!m.date || !tracks.has(m.track_id) || m.status === "dropped") continue;
+    if (!m.date || !tracks.has(m.track_id) || m.status === "dropped" || !readable(m.name)) continue;
     const key = `milestone:${m.id}`;
-    const kd = sameAs(m.name, m.date).map((x) => fromPrd.get(x)).find(Boolean);
+    const prd = prdOf.get(m.track_id);
+    const ref = prd ? { id: prd.id, slug: prd.slug, title: prd.title } : null;
+    const label = `${m.name} · ${lineDay(m.date)}`;
+    const code = codeOf(m.name);
+    const kd = sameAs(m.name, m.date).map((x) => fromPrd.get(x)).find(Boolean) ?? (code && ref ? byCode.get(`${ref.id}|${code}`) : undefined) ?? seen.get(`${label}|${ref?.id ?? ""}`);
     if (kd) same.set(key, kd);
-    else milestones.push({ key, kind: "milestone", label: `${m.name} · ${lineDay(m.date)}`, date: m.date });
+    else {
+      const ln: Line = { key, kind: "milestone", label, date: m.date, prd: ref };
+      seen.set(`${label}|${ref?.id ?? ""}`, ln);
+      milestones.push(ln);
+    }
   }
   // Key dates and milestones in date order, one list (Now first).
   return { lines: [NOW_LINE, ...[...keyDates, ...milestones].sort((a, b) => (a.date! < b.date! ? -1 : a.date! > b.date! ? 1 : 0))], same };
@@ -278,7 +373,8 @@ export function prioritiesOut(
   // Every feature ranks (the baseline is company-wide); one whose item the reader may not see
   // is a row with no item, never reorderable (priorities.py).
   const seen = new Set(read.items.map((i) => i.id));
-  const all = roadmapOut(db, "owner", new URLSearchParams())!.items.filter((i) => i.status !== "cut" && !cut.has(i.key));
+  const on = roadmapOut(db, "owner", new URLSearchParams())!.items.filter((i) => i.status !== "cut" && !cut.has(i.key));
+  const all = [...on, ...offCompany(db, on).filter((i) => i.status !== "cut" && !cut.has(i.key))];
   // A draft item is never ranked (priorities.py `_items`): it sits under "Not ranked yet", with no
   // row and no bucket weeks. Here each item stands for its own feature, so a draft has no row at all.
   const ranked = all.filter((i) => !i.draft);
@@ -321,13 +417,14 @@ export function prioritiesOut(
     return {
       rank: n + 1,
       oracle_rank: oracleRank.get(i.id) ?? null,
-      feature_id: featureId(i.id),
+      feature_id: featureOfItem(db, i),
       item_id: mine ? i.id : null,
       code: i.key,
       short_code: "",
+      own_key: null,
       title: i.title,
       goal: i.goal ? { key: i.goal.key, title: i.goal.title, position: i.goal.position ?? null } : null,
-      milestone: mine ? (i.milestone?.name ?? null) : null,
+      milestone: mine ? readable(i.milestone?.name) : null,
       horizon: mine ? i.horizon : null,
       goal_value: e.value,
       effort: e.effort,
@@ -342,15 +439,17 @@ export function prioritiesOut(
       end_estimated: mine && readItems.get(i.id)!.end.estimated,
       no_goal: !i.goal,
       in_plan: false,
-      can_reorder: can && mine,
-      applies: mine && decides(i.id),
+      // prio-company: an owner moves every row (a move adds a feature to the company roadmap).
+      can_reorder: can && (mine || ctx.role === "owner"),
+      on_roadmap: mine,
+      applies: mine ? decides(i.id) : ctx.role === "owner",
       before_override: (stored(db, i.id).override as Record<string, unknown> | undefined) ?? null,
     };
   });
   // In the mock each item's key is its feature's key (its own code when it has one); FEATURES
   // is in creation order, a feature outside it after them by key.
   // With a plan, a feature the plan names is keyed by the plan's code (F-06), so one feature reads one code on every tab.
-  const featureKey = (k: string): string => planCode(db, k) ?? FEATURES[k]?.code ?? k;
+  const featureKey = (k: string): string => featureKeyOf(db, k);
   const created = [...Object.keys(FEATURES), ...yours.map((i) => i.key).filter((k) => !FEATURES[k]).sort()].map(featureKey);
   const prdCodes = Object.fromEntries(yours.filter((i) => i.code).map((i) => [featureKey(i.key), i.code!]));
   // Each feature's shown name (priorities.py `_shown_names`): its item's title as every reader
@@ -359,6 +458,8 @@ export function prioritiesOut(
   const shorts = shortCodes(created, prdCodes, names);
   const short = new Map(created.map((k, n) => [k, shorts[n]]));
   yours.forEach((i, n) => (rows[n].short_code = short.get(featureKey(i.key))!));
+  // prio-company: the feature's own code beside its name (priorities.FEATURE_CODE), never letters made up.
+  rows.forEach((r) => (r.own_key = /^[A-Z]{1,3}-\d+$/.test(r.short_code) ? r.short_code : null));
   const codes = new Map(read.items.map((i) => [i.id, i]));
   const proposals: Schemas["SimplePriorityProposal"][] = (db.changes ?? [])
     // Ranking proposals, and a draft's Confirm or Merge (S7: a merge_item), as priorities.py.
@@ -368,7 +469,7 @@ export function prioritiesOut(
     .map((c) => {
       const i = codes.get(String(c.target.item_id))!;
       return {
-        change_id: c.id, op: c.op as Schemas["SimplePriorityProposal"]["op"], item_id: i.id, feature_id: featureId(i.id), code: i.key, title: i.title, by_name: c.by_name, at: c.at, reason: c.reason,
+        change_id: c.id, op: c.op as Schemas["SimplePriorityProposal"]["op"], item_id: i.id, feature_id: featureOfItem(db, i), code: i.key, title: i.title, by_name: c.by_name, at: c.at, reason: c.reason,
         after: c.after, waiting_for: route(c).map((p) => ctx.names[p] ?? "someone"), can_decide: decides(i.id), can_withdraw: c.by === ctx.id, flow: flowFor(db.visuals, "change", c.id) ?? flowFor(db.visuals, "feature", i.id),
       };
     });
@@ -408,6 +509,7 @@ export function prioritiesOut(
     today, quarter: read.span ?? quarter(today), method: "goal_weighted",
     formula: "score = Σ(goal weight × contribution) × confidence × track record ÷ effort",
     rows, proposals, drafts, buckets, weeks_total: total, can_change: can, line, lines,
+    company_roadmap: db.company_roadmap ? { id: stableUuid(`simple-doc/${db.company_roadmap}`), slug: db.company_roadmap, title: COMPANY_TITLE } : null,
     // plan-charts: the plan this quarter is, when the reader sees its PRD's items.
     plan,
   };
@@ -416,6 +518,6 @@ export function prioritiesOut(
 /** priorities.plan_in_play: the plan PRD's plan as the API's priorities carry it (no version, no re-read). */
 function planOf(db: SimpleDb, read: Schemas["SimpleRoadmapOut"], role: Role): Schemas["SimplePlanOut"] | null {
   const prd = read.items.find((i) => i.prd?.slug === PLAN_PRD_SLUG)?.prd;
-  if (!db.plan || !prd) return null;
+  if (!db.plan || !prd || db.plan_undated) return null;
   return { ...planOut(db.plan, { id: prd.id, slug: prd.slug, title: prd.title }, role), version: null, can_read_again: false, read_at: null };
 }

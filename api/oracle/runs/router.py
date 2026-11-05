@@ -25,7 +25,7 @@ from oracle.connections.router import ProviderHttp
 from oracle.discussions import replies as discussion_replies
 from oracle.discussions import research as discussion_research
 from oracle.jobs.worker import run_pending as run_llm_jobs
-from oracle.runs import actions, agent_questions, service
+from oracle.runs import actions, agent_questions, rebuilds, service
 from oracle.runs.schemas import (
     ActionIn,
     AgentAnswerIn,
@@ -39,6 +39,7 @@ from oracle.runs.schemas import (
     InboxOut,
     McpServerRegistration,
     PrdScopeOut,
+    RebuildsOut,
     RunCreate,
     RunDecision,
     RunOut,
@@ -140,6 +141,15 @@ async def list_runs(
 ) -> list[RunSummary]:
     hidden = await discussion_research.hidden_runs(db, principal)
     return [r for r in await service.list_runs(db, status_) if r.id not in hidden]
+
+
+@router.get("/rebuilds", response_model=RebuildsOut)
+async def list_rebuilds(principal: CurrentPrincipal, db: TenantDB) -> RebuildsOut:
+    """The rebuild sign: the runs that will make a new version of a document the caller
+    may read (scheduled, running, waiting, stopped, or landed and not approved yet)."""
+    hidden = await discussion_research.hidden_runs(db, principal)
+    visible = [r for r in await service.list_runs(db) if r.id not in hidden]
+    return await rebuilds.list_rebuilds(db, visible)
 
 
 @router.post("/runs", response_model=RunOut, status_code=status.HTTP_201_CREATED)
