@@ -183,8 +183,10 @@ for (const size of ["desktop", "phone"] as const) {
       for (const row of (await rows.all()).slice(0, 3)) await pillAfter(row.getByTestId("prio-title"), row.getByTestId("cs-mark"));
       // cs2-b: right next to the name, not pushed to the far right of the row: on the name's last
       // line, a small gap after its last word (or, where the row is narrow, on the line under it).
+      // A feature's own key (train AN) reads right after its title, outside it: the pill follows the key.
       for (const row of (await rows.all()).slice(0, 5)) {
-        const end = await row.getByTestId("prio-title").evaluate((el) => {
+        const ownKey = row.getByTestId("prio-own-key");
+        const end = await ((await ownKey.count()) ? ownKey : row.getByTestId("prio-title")).evaluate((el) => {
           const r = document.createRange();
           r.selectNodeContents(el);
           const last = [...r.getClientRects()].at(-1)!;
