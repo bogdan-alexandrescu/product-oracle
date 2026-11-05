@@ -1,6 +1,6 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
-import { ADMIN, login } from "./helpers";
+import { ADMIN, login, signOut } from "./helpers";
 import { expect, test, type Page } from "./test";
 
 /*
@@ -204,15 +204,20 @@ test.describe("fix round 2", () => {
       await fold(page).getByTestId("archived-goal").filter({ hasText: "Cut support tickets in half" }).getByRole("button", { name: "Ask to restore" }).click();
       await expect(note(page)).toContainText("Sent to Avery Stone: restore Cut support tickets in half.");
 
+      await signOut(page);
       await login(page, ADMIN.email);
       await page.goto("/simple/decisions");
-      const ask = page.getByTestId("questions-mine").getByTestId("waiting-item").filter({ hasText: 'proposed: restore the goal "Cut support tickets in half"' });
+      const ask = page.getByTestId("questions-mine").getByTestId("waiting-item").filter({ hasText: "proposed: restore the goal “Cut support tickets in half”" });
       await ask.getByRole("button", { name: "Accept" }).click();
       await expect(ask).toHaveCount(0);
 
       await page.goto("/simple/priorities?tab=buckets");
-      await expect(bucket(page, view, "Cut support tickets in half")).toHaveCount(1);
       await expect(fold(page)).toContainText("Archived goals · 2");
+      await fold(page).locator("summary").click();
+      await expect(fold(page).getByTestId("archived-goal").filter({ hasText: "Faster first report" })).toHaveCount(1);
+      await expect(fold(page).getByTestId("archived-goal").filter({ hasText: "Cut support tickets in half" })).toHaveCount(0);
+      // With a dated plan every live goal has its card, features or not.
+      if (view.card === "plan-goal") await expect(bucket(page, view, "Cut support tickets in half")).toHaveCount(1);
     });
   }
 });
