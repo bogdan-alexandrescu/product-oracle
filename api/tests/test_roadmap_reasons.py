@@ -768,7 +768,6 @@ def test_a_fix_answers_only_its_own_reason_of_two_with_one_code():
     assert actions._answers(bare, cross) and actions._answers(bare, local)
 
 
-
 def test_a_waive_by_its_ref_answers_its_reason_in_the_review_counts():
     # protects=a waiver naming one problem by its own ref (gate.problem_ref) counts that
     # problem answered in the review's counts, as the file sent back counts it (train AN's
@@ -786,6 +785,7 @@ def test_a_waive_by_its_ref_answers_its_reason_in_the_review_counts():
                           updated_at=datetime.now(UTC))  # fmt: skip
     for answers in (actions._answers, review_file._answers):
         assert answers(waiver, reason) and not answers(waiver, other)
+
 
 def _two_dependencies() -> tuple[dict, dict]:
     """Observability (Now) waits on the ledger, another PRD's in Next, and on its own Local

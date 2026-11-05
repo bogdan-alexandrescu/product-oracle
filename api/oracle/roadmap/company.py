@@ -26,6 +26,7 @@ Many PRDs (one per area of focus) feed it; links between features stay within it
 """
 
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -540,19 +541,54 @@ async def feature_keys_of(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uui
     return {r.id: keys[r.feature_id] for r in rows if r.feature_id in keys}
 
 
+def _resolve[T](
+    rows: list[T], key: Callable[[T], str], feature_key: Callable[[T], str | None]
+) -> dict[str, list[T]]:
+    at: dict[str, list[T]] = {}
+    for r in rows:
+        at.setdefault(key(r), [r])
+    by_feature: dict[str, list[T]] = {}
+    for r in rows:
+        if (k := feature_key(r)) is not None and k not in at:
+            by_feature.setdefault(k, []).append(r)
+    return {**by_feature, **at}
+
+
 def resolve_dependencies(
     rows: list[RoadmapItem], feature_keys: dict[uuid.UUID, str]
 ) -> dict[str, list[RoadmapItem]]:
     """What each dependency key names: the item with that key, else the items of the feature
     with that key (:func:`feature_keys_of`), in ``rows``' order."""
-    at: dict[str, list[RoadmapItem]] = {}
-    for r in rows:
-        at.setdefault(r.item_key, [r])
-    by_feature: dict[str, list[RoadmapItem]] = {}
-    for r in rows:
-        if (key := feature_keys.get(r.id)) is not None and key not in at:
-            by_feature.setdefault(key, []).append(r)
-    return {**by_feature, **at}
+    return _resolve(rows, lambda r: r.item_key, lambda r: feature_keys.get(r.id))
+
+
+def _dependency_order[T](
+    ordered: list[T],
+    key: Callable[[T], str],
+    depends_on: Callable[[T], list[str]],
+    feature_key: Callable[[T], str | None],
+) -> list[T]:
+    """``ordered`` with each entry after the entries it depends on (by key, or by its
+    feature's key); else as ordered. A cycle keeps the order it has."""
+    at = _resolve(ordered, key, feature_key)
+    out: list[T] = []
+    placed: set[int] = set()
+    visiting: set[int] = set()
+
+    def place(r: T) -> None:
+        if id(r) in placed or id(r) in visiting:
+            return
+        visiting.add(id(r))
+        for dep in depends_on(r):
+            for d in at.get(dep, ()):
+                place(d)
+        visiting.discard(id(r))
+        placed.add(id(r))
+        out.append(r)
+
+    for r in ordered:
+        place(r)
+    return out
 
 
 def _after_dependencies(
@@ -562,25 +598,9 @@ def _after_dependencies(
     feature's key), whichever PRD they are in (the owner, Nov 4: a link between PRDs is
     real); else as ordered. A cycle keeps the order it has: the items check reports it
     (oracle.runs.roadmap, ``dependency_cycle``)."""
-    at = resolve_dependencies(ordered, feature_keys or {})
-    out: list[RoadmapItem] = []
-    placed: set[uuid.UUID] = set()
-    visiting: set[uuid.UUID] = set()
-
-    def place(r: RoadmapItem) -> None:
-        if r.id in placed or r.id in visiting:
-            return
-        visiting.add(r.id)
-        for dep in r.depends_on or []:
-            for d in at.get(dep, ()):
-                place(d)
-        visiting.discard(r.id)
-        placed.add(r.id)
-        out.append(r)
-
-    for r in ordered:
-        place(r)
-    return out
+    keys = feature_keys or {}
+    return _dependency_order(ordered, lambda r: r.item_key, lambda r: r.depends_on or [],
+                             lambda r: keys.get(r.id))  # fmt: skip
 
 
 def _per_week(cap: dict[str, Any]) -> float:
@@ -707,6 +727,12 @@ async def frozen_queue(
     cap, queued = await queue(db, as_of)
     today = (await run_day(db, as_of)).isoformat()
     features, goal_of = await _feature_goals(db)
+    ids = {q.item.feature_id for q in queued if q.item.feature_id}
+    key_of = (
+        dict((await db.execute(select(Entity.id, Entity.key).where(Entity.id.in_(ids)))).all())
+        if ids
+        else {}
+    )
     rows = [
         {
             "key": q.item.item_key,
@@ -721,6 +747,9 @@ async def frozen_queue(
             "position": q.item.position,
             "goal": goal_of.get(q.item.feature_id) if q.item.feature_id else None,
             "priority": _priority(q.item),
+            # What it waits on, and its feature's key (another PRD's item may name either).
+            "depends_on": list(q.item.depends_on or []),
+            "feature_key": key_of.get(q.item.feature_id),
             "effort_weeks": q.effort_weeks,
             "per_week": _per_week(cap),
             "today": today,
@@ -753,17 +782,32 @@ def _run_entries(items: list[dict[str, Any]] | None) -> list[dict[str, Any]] | N
     return out
 
 
-def _run_goal(raw: dict[str, Any], features: dict[str, Any], sections: dict[str, str]) -> Any:
-    """The goal rank of the feature landing traces a file's item to (derive_traces): the
-    one it declares, else the one its PRD section links, else the one keyed as the item."""
+def _run_feature(
+    raw: dict[str, Any], features: dict[str, Any], sections: dict[str, str]
+) -> str | None:
+    """The key of the feature landing traces a file's item to (derive_traces): the one it
+    declares, else the one its PRD section links, else the one keyed as the item."""
     from oracle.runs.roadmap import _text
 
     declared = raw.get("feature") if isinstance(raw.get("feature"), str) else None
     section = _text(raw.get("prd_section"))
     for key in (declared, sections.get(section) if section else None, _text(raw.get("id"))):
         if key and key in features:
-            return features[key]
+            return key
     return None
+
+
+def _run_goal(raw: dict[str, Any], features: dict[str, Any], sections: dict[str, str]) -> Any:
+    """The goal rank of the feature landing traces a file's item to (:func:`_run_feature`)."""
+    key = _run_feature(raw, features, sections)
+    return features[key] if key is not None else None
+
+
+def _keys(raw: Any) -> list[str]:
+    """A file item's ``depends_on`` as keys (the check reports anything else)."""
+    from oracle.runs.roadmap import _text
+
+    return [k for k in (_text(d) for d in raw) if k] if isinstance(raw, list) else []
 
 
 def with_run_items(
@@ -779,9 +823,11 @@ def with_run_items(
     the file lands: the run's PRD's rows are replaced by the file's items, which take
     positions 0..n-1 in file order (import_items), and every other PRD's item comes after
     them in its current order (carry_other_prds); each milestone's place and the order are
-    :func:`_orders`'. ``per_week`` and ``today`` (the run's frozen capacity and day, else the
-    rows'): the run's own items are dated though the shared queue is empty. ``features`` and
-    ``sections`` (:func:`frozen_queue`'s): the goal each item's feature serves. ``items``:
+    :func:`_orders`', then each item after what it depends on (:func:`queue`'s step, across
+    PRDs, by item key or feature key). ``per_week`` and ``today`` (the run's frozen capacity
+    and day, else the rows'): the run's own items are dated though the shared queue is empty.
+    ``features`` and ``sections`` (:func:`frozen_queue`'s): the goal each item's feature
+    serves and its key. ``items``:
     the file's items as its check read them (:func:`_run_entries`)."""
     per_week = per_week or (rows[0]["per_week"] if rows and "per_week" in rows[0] else None)
     today = today or (rows[0]["today"] if rows and "today" in rows[0] else None)
@@ -802,11 +848,16 @@ def with_run_items(
                            if isinstance(raw.get("economics"), dict) else {})  # fmt: skip
         merged.append({"key": raw["id"], "title": str(raw.get("title")).strip(), "prd": prd,
                        "ours": True, "effort_weeks": _effort(item),
+                       "depends_on": _keys(raw.get("depends_on")),
+                       "feature_key": _run_feature(raw, features or {}, sections or {}),
                        **_place(item, _run_goal(raw, features or {}, sections or {}))})  # fmt: skip
     for r in sorted((r for r in rows if not r["ours"]), key=lambda r: r["position"]):
         merged.append({**r, "position": len(merged)})
     orders = _orders(merged)
-    ordered = [r for _, r in sorted(zip(orders, merged, strict=True), key=lambda p: p[0])]
+    ordered = _dependency_order(
+        [r for _, r in sorted(zip(orders, merged, strict=True), key=lambda p: p[0])],
+        lambda r: r["key"], lambda r: r.get("depends_on") or [], lambda r: r.get("feature_key"),
+    )  # fmt: skip
     planned = _dates([r["effort_weeks"] for r in ordered], per_week, date.fromisoformat(today))
     return [
         {**r, "start": start.isoformat(), "end": end.isoformat(), "per_week": per_week,

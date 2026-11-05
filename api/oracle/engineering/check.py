@@ -230,7 +230,7 @@ async def elsewhere(db: AsyncSession, run: Run) -> dict[str, str]:
     the excluded features it depends on). A Ground Truth feature in no PRD is not among
     them (:func:`in_no_prd`)."""
     from oracle.roadmap import company
-    from oracle.runs import feature_set
+    from oracle.runs import feature_set, gate
     from oracle.runs.models import CheckpointAction
 
     out = {k: f.label for k, f in (await company.features_on_roadmap(db)).items()}
@@ -246,7 +246,7 @@ async def elsewhere(db: AsyncSession, run: Run) -> dict[str, str]:
                 CheckpointAction.state == "staged",
             )
         )
-        if not a.answers or "depends_on_excluded" in a.answers
+        if not a.answers or any(gate.answer_code(c) == "depends_on_excluded" for c in a.answers)
     }
     if not waived:
         return out
