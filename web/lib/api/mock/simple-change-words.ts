@@ -112,9 +112,12 @@ export function changeSentence(
   const before = c.before ?? {};
   const after = c.after ?? {};
   if (c.status === "undone") return `${who} undid: ${changePhrase(c.op, target, after, before, item)}`;
-  let words = `${who} ${changePhrase(c.op, target, before, after, item)}`;
-  if (c.status === "proposed") words = `${who} proposed: ${changePhrase(c.op, target, before, after, item)}`;
-  else if (c.status === "declined") words = `${who} proposed: ${changePhrase(c.op, target, before, after, item)} · declined`;
+  const what = changePhrase(c.op, target, before, after, item);
+  let words = `${who} ${what}`;
+  // What was asked, not done: "proposed: move F-26 Alert rules engine to Trash" (change_words.describe).
+  const asked = c.op === "delete_item" ? `move${what.slice("moved".length)}` : what;
+  if (c.status === "proposed") words = `${who} proposed: ${asked}`;
+  else if (c.status === "declined") words = `${who} proposed: ${asked} · declined`;
   if (undone) words += " · undone";
   return words;
 }
