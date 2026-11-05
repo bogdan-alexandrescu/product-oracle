@@ -770,9 +770,10 @@ function Ledger({
           </tr>
           {goals.some((g) => goalTarget(g)) && (
             <tr data-testid="ledger-targets">
-              <th scope="row" colSpan={3} className={`${th} h-7 pl-4 text-left align-middle font-medium max-[600px]:hidden`}>
+              <th scope="row" className={`${th} ${pin} h-7 pl-4 text-left align-middle font-medium max-[600px]:hidden`}>
                 Targets
               </th>
+              <td colSpan={2} className={`${th} max-[600px]:hidden`} />
               {goals.map((g) => (
                 <td key={g.id} className={`${th} h-7 border-l border-line text-left align-middle font-medium last:pr-4 max-[600px]:hidden`}>
                   <b className="tnum font-semibold text-text" data-testid="ledger-target">
