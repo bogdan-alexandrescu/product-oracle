@@ -3,11 +3,13 @@
 import { useState } from "react";
 
 import { entryText, itemKind } from "@/components/ArtifactMenu";
-import { Button, Chip, Empty, InfoTip, Notice, PageHeader, Panel, toast } from "@/components/ds";
+import { Button, Chip, InfoTip, Notice, PageHeader, toast } from "@/components/ds"; // MOCK-HOOK
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { artifactsChanged } from "@/lib/artifacts";
 import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
+import { mkParam, MkTrashList } from "@/components/simple/PanelMenuMock"; // MOCK-HOOK
+import { MK_DOCS } from "@/lib/api/mock/panel-trash"; // MOCK-HOOK
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 type Entry = Schemas["TrashEntryOut"];
@@ -32,7 +34,7 @@ function Row({ e, onRestored }: { e: Entry; onRestored: () => void }) {
     <li data-testid="trash-entry" className="flex flex-wrap items-start gap-x-4 gap-y-2 px-4 py-3 max-[600px]:px-3">
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-baseline gap-x-2">
-          <span className="text-[13px] font-semibold text-text2">{itemKind(e.root)}</span>
+          {mkParam("pm3", "a") === "a" ? <Chip kind="line">{itemKind(e.root)}</Chip> /* MOCK-HOOK */ : <span className="text-[13px] font-semibold text-text2">{itemKind(e.root)}</span>}
           <span className="min-w-0 font-semibold break-words">{e.root.title}</span>
           {e.published && <Chip kind="warn">Was published</Chip>}
         </p>
@@ -66,7 +68,7 @@ function Row({ e, onRestored }: { e: Entry; onRestored: () => void }) {
 
 /** Settings › Trash (#482, owners): each delete with what went with it, Restore and days left. */
 export default function TrashPage() {
-  const { can, loading } = useMe();
+  const { can, loading, role } = useMe(); // MOCK-HOOK
   const owner = can("list_trash");
   const q = useQuery(owner ? "trash" : "trash|none", () => (owner ? unwrap(api.GET("/v1/trash")) : Promise.resolve([] as Entry[])));
   return (
@@ -75,31 +77,20 @@ export default function TrashPage() {
         title="Trash"
         info={
           <InfoTip label="Trash" align="start" side="bottom">
-            Deleted artifacts wait here for 30 days, with everything that went with them. Restore brings them back
-            together; after 30 days they are gone for good.
+            Deleted features, goals and documents wait here for 30 days, with everything that went with them. Restore brings them back
+            together; after 30 days they are gone for good. {/* MOCK-HOOK */}
           </InfoTip>
         }
       />
-      {!loading && !owner ? (
-        <Notice>Only owners delete and restore artifacts.</Notice>
-      ) : (
-        <Panel title="Deleted" count={q.data?.length}>
-          {q.error && <Notice tone="error">{q.error}</Notice>}
-          {q.data && q.data.length === 0 && (
-            <Empty testId="trash-empty">
-              Trash is empty. Deleted documents, requests and runs wait here for 30 days, with everything that went with
-              them. Until then an owner can restore them; after that they are gone for good.
-            </Empty>
-          )}
-          {q.data && q.data.length > 0 && (
-            <ul className="divide-y divide-line">
-              {q.data.map((e) => (
-                <Row key={e.id} e={e} onRestored={() => q.setData((rows) => rows?.filter((r) => r.id !== e.id))} />
-              ))}
-            </ul>
-          )}
-        </Panel>
+      {/* MOCK-HOOK: features and goals beside documents (pm3); approvers and viewers read features and goals. */}
+      {!loading && (
+        <MkTrashList
+          owner={owner}
+          role={role}
+          docs={(q.data?.length ? q.data : owner ? (MK_DOCS as Entry[]) : []).map((e) => ({ kind: itemKind(e.root), title: e.root.title, by: e.deleted_by_name ?? "someone", at: e.deleted_at, days_left: e.days_left, node: <Row e={e} onRestored={() => q.setData((rows) => rows?.filter((r) => r.id !== e.id))} /> }))} /* MOCK-HOOK */
+        />
       )}
+      {/* MOCK-HOOK: the Deleted panel and its owners-only notice are drawn by MkTrashList above. */}
     </>
   );
 }

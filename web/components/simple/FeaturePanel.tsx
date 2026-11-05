@@ -19,6 +19,7 @@ import { api, unwrap } from "@/lib/api/client";
 import { calendarDay, displayZone, todayIn } from "@/lib/dates";
 import { useQuery } from "@/lib/use-query";
 
+import { useMkPanel } from "@/components/simple/PanelMenuMock"; // MOCK-HOOK
 import type { Act } from "@/app/simple/roadmap/_card";
 import { confidenceWord, statusWord, storedDates, yearSpan, type Item } from "@/app/simple/roadmap/_lib";
 
@@ -711,24 +712,29 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
   const lateMilestone = item.flags.some((f) => f.kind === "outside_milestone" && f.state === "red");
   const addedItem = added && late.some((d) => d.id === added) ? (items.get(added) ?? null) : null;
   const clash = late.length > 0 || lateMilestone;
+  const mk = useMkPanel({ item, items, act, canChange, onClose }); // MOCK-HOOK
   const head = (
-    <div>
+    <div className={mk.muted ? "-mx-4 -mt-3.5 -mb-2.5 bg-surface2 px-4 pt-3.5 pb-2.5 [&_h2]:text-text2" : ""} /* MOCK-HOOK */>
       <div className="flex items-start gap-2">
         {/* review 7: the name is changed in place, as every other field. */}
         <h2 className="min-w-0 flex-1 text-lg leading-6 font-semibold break-words" title={item.title} aria-label={item.title}>
           <Title c={c} />
         </h2>
+        {mk.headerButton /* MOCK-HOOK */}
         <button type="button" aria-label="Close" onClick={onClose} className="h-8 w-8 flex-none rounded text-text2 hover:bg-surface2">
           ×
         </button>
       </div>
       <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text2">
-        <span className="rounded-full bg-accent-soft px-2 py-px font-medium text-accent-ink" data-testid="fp-status">{statusWord(item.status)}</span>
+        {mk.chip ?? /* MOCK-HOOK */ <span className={`rounded-full px-2 py-px font-medium ${item.status === "cut" ? "bg-surface2 text-text2 ring-1 ring-line-strong" /* MOCK-HOOK */ : "bg-accent-soft text-accent-ink"}`} data-testid="fp-status">{statusWord(item.status)}</span>}
+        {mk.metaWords /* MOCK-HOOK */}
         {item.owner && <span>Owner {item.owner.name}</span>}
         {item.owner && item.confidence && <span aria-hidden>·</span>}
         {item.confidence && <span data-testid="fp-confidence">{confidenceWord(item.confidence)} confidence</span>}
         {clash && <span className="rounded-full bg-crit-bg px-2 py-px font-medium text-crit" data-testid="fp-clash-flag">Dates clash</span>}
       </p>
+      {mk.strip /* MOCK-HOOK */}
+      {mk.dialog /* MOCK-HOOK */}
       {!canChange && (
         <p className="mt-2 rounded-lg bg-surface2 px-3 py-2 text-sm text-text2" data-testid="fp-read-only">
           You can read this feature. Its owner and approvers can change it.{" "}
@@ -762,7 +768,7 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
           <Row label="Outcome">
             <Field label="Outcome" value={item.outcome ?? ""} shown={item.outcome ?? <span className="text-text2">Not written yet</span>} edit={canChange} multiline onSave={async (v) => (await act(`Changed the outcome of '${item.title}'`, { op: "edit_outcome", target: { item_id: item.id }, before: { outcome: item.outcome ?? null }, after: { outcome: v.trim() || null } }), null)} testId="fp-outcome" />
           </Row>
-          <Row label="Status">{statusWord(item.status)}</Row>
+          <Row label="Status">{mk.statusRow ?? /* MOCK-HOOK */ statusWord(item.status)}</Row>
           <Row label="Owner">
             <Owner c={c} />
           </Row>

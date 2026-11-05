@@ -655,6 +655,9 @@ const ROLES: readonly Schemas["Me"]["role"][] = ["viewer", "commenter", "approve
 
 /** The signed-in member, with the role overridden when a test set MOCK_ROLE_KEY. */
 function withMockRole<T extends { role: Schemas["Me"]["role"] }>(member: T): T {
+  const as = typeof location === "undefined" ? null : new URLSearchParams(location.search).get("as"); // MOCK-HOOK
+  if (as === "owner") localStorage.removeItem(MOCK_ROLE_KEY); // MOCK-HOOK
+  else if (as) localStorage.setItem(MOCK_ROLE_KEY, as); // MOCK-HOOK
   const role = localStorage.getItem(MOCK_ROLE_KEY) as Schemas["Me"]["role"] | null;
   return role && ROLES.includes(role) ? { ...member, role } : member;
 }

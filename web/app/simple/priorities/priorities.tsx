@@ -2115,7 +2115,7 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
                   )}
                   {rights.edit(rec) && rights.archive && (
                     <span className="self-center">
-                      <GoalMenu title={b.title} archive onEdit={() => setEditingGoal(rec!.id)} onArchive={() => setArchiving(rec!.id)} />
+                      <GoalMenu title={b.title} archive onEdit={() => setEditingGoal(rec!.id)} onArchive={() => setArchiving(rec!.id)} features={b.codes.map((c) => rowOf.get(c)?.title ?? c)} /* MOCK-HOOK */ measure={rec?.measure ?? "Not set"} /* MOCK-HOOK */ />
                     </span>
                   )}
                 </div>

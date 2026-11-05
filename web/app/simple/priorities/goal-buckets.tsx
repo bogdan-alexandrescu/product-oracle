@@ -1,5 +1,6 @@
 "use client";
 
+import { GoalDelete, mkParam } from "@/components/simple/PanelMenuMock"; // MOCK-HOOK
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -424,8 +425,9 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive }
 }
 
 /** The ⋯ menu on a goal: Edit goal, Archive goal. */
-export function GoalMenu({ title, onEdit, onArchive, archive }: { title: string; onEdit: () => void; onArchive: () => void; archive: boolean }) {
+export function GoalMenu({ title, onEdit, onArchive, archive, features = [], measure = "" }: { title: string; onEdit: () => void; onArchive: () => void; archive: boolean; features?: string[] /* MOCK-HOOK */; measure?: string /* MOCK-HOOK */ }) {
   const [open, setOpen] = useState(false);
+  const [mkDel, setMkDel] = useState(() => mkParam("open", "") === "goal" && title === mkParam("goal", title)); // MOCK-HOOK
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -469,8 +471,13 @@ export function GoalMenu({ title, onEdit, onArchive, archive }: { title: string;
               Archive goal
             </button>
           )}
+          {/* MOCK-HOOK */}
+          <button type="button" role="menuitem" className={`${ITEM} text-crit`} onClick={() => (setOpen(false), setMkDel(true))} /* MOCK-HOOK */>
+            Move to Trash… {/* MOCK-HOOK */}
+          </button>
         </div>
       )}
+      {mkDel && <GoalDelete title={title} features={features} measure={measure} onClose={() => setMkDel(false)} /> /* MOCK-HOOK */}
     </span>
   );
 }

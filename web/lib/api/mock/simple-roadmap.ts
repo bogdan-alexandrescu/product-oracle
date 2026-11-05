@@ -8,6 +8,7 @@
  * constraints), simplified: the company's day is the mock clock's UTC day and the planning
  * horizons are the defaults (short 1 quarter, medium 2, long 12-24 months).
  */
+import { mkDeletedKeys } from "./panel-trash"; // MOCK-HOOK
 import type { Schemas } from "@/lib/api/client";
 import { goalPosition, sortGoals, type OrderedGoal } from "@/lib/goal-order";
 import { plainFlow } from "./simple-visuals";
@@ -1066,7 +1067,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const w = simpleWindows(today);
   const group = (q.get("group") ?? "goal") as Schemas["SimpleRoadmapOut"]["group"];
   if (!["goal", "track", "prd"].includes(group)) return null;
-  const seeds = visibleItems(db, role);
+  const seeds = visibleItems(db, role).filter((s) => !mkDeletedKeys().includes(s.key)); // MOCK-HOOK
   const all = new Map(seeds.map((s) => [s.key, { s, r: resolve(db, s, w[s.horizon]) }]));
   afterDependencies(all);
   // The plan-model lane: the plan PRD's items whose code is a plan feature carry its slices.
