@@ -174,7 +174,8 @@ export function EngReview({
   const waitsFor = cp.lead_stop ? "Waits for the engineering lead" : `Waits for an ${cp.approver_role}`;
 
   // Every briefs problem is file-level (oracle.engineering.check): nothing to decide, only Send back.
-  const unreadable = check.problems.length > 0;
+  // The gate counts the same problems (oracle.runs.service.recheck_briefs); either says so.
+  const unreadable = check.problems.length > 0 || (review.gate?.file_problems ?? 0) > 0;
   const tally = unreadable
     ? "The briefs could not be read"
     : `${decided} of ${check.features.length} decided${blockingQuestions ? ` · ${plural(blockingQuestions, "blocking question")}` : ""}`;
@@ -201,14 +202,16 @@ export function EngReview({
           </>
         }
       />
-      {check.problems.length > 0 && (
+      {unreadable && (
         <div role="alert" data-testid="briefs-problem" className="mb-4 rounded-panel border border-crit bg-crit-soft px-4 py-3 text-[15px]">
           <p className="font-semibold">The briefs could not be read: send them back to the architect.</p>
-          <ul className="mt-1 list-disc pl-5">
-            {check.problems.map((p, i) => (
-              <li key={i}>{p.message}</li>
-            ))}
-          </ul>
+          {check.problems.length > 0 && (
+            <ul className="mt-1 list-disc pl-5">
+              {check.problems.map((p, i) => (
+                <li key={i}>{p.message}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
       {!!check.unmapped_repos?.length && (
