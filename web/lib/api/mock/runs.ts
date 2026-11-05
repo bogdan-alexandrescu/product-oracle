@@ -3779,7 +3779,7 @@ function engInvalid(cp: CheckpointOut, a: Schemas["ActionIn"]): string | null {
 }
 
 /** An answer to an architect's question as the approved check records it (who answered and when). */
-type EngAnswer = { question_id: string; question: string; answer: string; by: string | null; at: string };
+type EngAnswer = { question_id: string; question: string; answer: unknown; by: string | null; at: string };
 
 /**
  * As oracle.runs.stop_answers: the questions answered at a decided stop, the architect's at the
@@ -3795,8 +3795,11 @@ function stopAnswers(ctx: RunsContext, c: CheckpointOut, people: Map<string, str
   for (const [key, listed] of Object.entries(check ? recorded : {})) {
     const title = check?.features.find((f) => f.key === key)?.title;
     for (const a of listed) {
+      // As the API: a non-text answer is dropped, a text one stripped.
+      const answer = typeof a.answer === "string" ? a.answer.trim() : "";
+      if (!a.question || !answer) continue;
       const by = a.by ?? c.decided_by ?? null;
-      out.push({ question: a.question, answer: a.answer, feature_key: key, feature_title: title && title !== key ? title : null, answered_by_name: (by && people.get(by)) || null, answered_at: a.at ?? c.decided_at ?? null });
+      out.push({ question: a.question, answer, feature_key: key, feature_title: title && title !== key ? title : null, answered_by_name: (by && people.get(by)) || null, answered_at: a.at ?? c.decided_at ?? null });
     }
   }
   // A card names its feature by key: its name is the run's feature set's (the latest scope listing it).
@@ -3824,7 +3827,7 @@ function approveEngCheck(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged:
     ctx.setEffort?.(f.key, sizes[f.key], r.id);
     for (const q of f.questions) {
       const a = stagedEdit(staged, f.key, `answer:${q.id}`);
-      if (a) (answers[f.key] ??= []).push({ question_id: q.id, question: q.question, answer: String(a.value), by: a.updated_by ?? a.created_by, at: a.updated_at ?? ctx.now() });
+      if (a) (answers[f.key] ??= []).push({ question_id: q.id, question: q.question, answer: a.value, by: a.updated_by ?? a.created_by, at: a.updated_at ?? ctx.now() });
     }
   }
   cp.payload = { ...cp.payload, briefs: { verdicts, sizes, answers } };

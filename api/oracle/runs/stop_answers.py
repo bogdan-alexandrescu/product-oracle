@@ -455,10 +455,12 @@ _MARKER = re.compile(
 # The owner and due day an open question is listed with, only in their listed forms:
 # "… Owner: Rae", "…, needed by Nov 30", "… - owned by Rae", "…? Decide by Nov 30" or
 # "… (due Nov 30)"; "owned by", "needed by" and "decide by" only as a tail after a comma,
-# a dash, a parenthesis or the question's end, so a "due", "owner" or "needed by" inside
-# the question itself ("Is the report needed by finance each week?") stays.
+# a dash, a parenthesis or the question's end, and "Owner:" only as the line's last part
+# (no question mark after it), so a "due", "owner" or "needed by" inside the question
+# itself ("Is the report needed by finance each week?", "Who is the owner: finance or
+# ops?") stays.
 _TAIL = re.compile(
-    r"(?:[?.!,;:]\s*|\s[-–—]\s*|\s+)owners?\s*:.*$"
+    r"(?:[?.!,;:]\s*|\s[-–—]\s*|\s+)owners?\s*:[^?]*$"
     r"|(?:[?.!,;]\s*|\s[-–—]\s*|[–—]\s*)(?:owned|needed|decide)\s+by\b.*$"
     r"|\s*[(\[]\s*(?:due|owners?|(?:owned|needed|decide)\s+by)\b.*$",
     re.IGNORECASE,
@@ -547,11 +549,20 @@ def listed_items(title: str, text: str) -> list[str]:
     return out
 
 
+def _bare(item: str) -> str:
+    """The item as the draft lists it, without its bullet, number or label."""
+    return _MARKER.sub("", item.strip(), count=1)
+
+
 def _forms(item: str) -> set[str]:
     """The item as words, with and without its owner and due tail."""
-    bare = _MARKER.sub("", item.strip(), count=1)
+    bare = _bare(item)
     return {w for w in (_words(bare), _words(_TAIL.sub("", bare))) if w}
 
+
+# Below this many words one word is most of the question ("Which database?" and "Which
+# region?" are two questions): a short question is the answered one only word for word.
+_LONG = 5
 
 # Words that turn a question around ("t" is the n't of "don't" as words): a question with
 # one and its copy without are two.
@@ -561,15 +572,16 @@ _NEGATIONS = frozenset({"not", "no", "never", "nor", "without", "dont", "doesnt"
 
 def same_question(asked: str, listed: str) -> bool:
     """``listed`` is the answered question ``asked`` (both as words), compared word by word
-    in order: the same words, or the same number of words with at most one position
-    holding a different word ("database" for "datastore"), and the same negations
+    in order: the same words, or, for questions of at least five words, the same number of
+    words with at most one position holding a different word ("database" for "datastore"),
+    and the same negations
     ("should" and "should not" are two questions). A question one word longer or shorter,
     a longer one that contains it, or the same words in another order ("A replace B" and
     "B replace A") is a new question."""
     if asked == listed:
         return True
     a, b = asked.split(), listed.split()
-    if len(a) != len(b):
+    if len(a) != len(b) or len(a) < _LONG:
         return False
     if [w for w in a if w in _NEGATIONS] != [w for w in b if w in _NEGATIONS]:
         return False
@@ -579,7 +591,7 @@ def same_question(asked: str, listed: str) -> bool:
 def listed_open(answers: list[Answered], markdown: str) -> list[ImportProblem]:
     """An answered question the draft still lists as undecided, once per question."""
     sections = [
-        (sid, title, [f for item in listed_items(title, text) for f in _forms(item)])
+        (sid, title, [(_bare(item), _forms(item)) for item in listed_items(title, text)])
         for sid, title, text in open_sections(markdown)
     ]
     out: list[ImportProblem] = []
@@ -588,16 +600,21 @@ def listed_open(answers: list[Answered], markdown: str) -> list[ImportProblem]:
         asked = _words(a.question)
         if not asked or asked in seen:
             continue
-        for sid, title, forms in sections:
-            if any(same_question(asked, f) for f in forms):
+        for sid, title, items in sections:
+            line = next(
+                (bare for bare, forms in items if any(same_question(asked, f) for f in forms)),
+                None,
+            )
+            if line is not None:
                 seen.add(asked)
+                line = line.replace("**", "").replace("__", "").strip()
                 by = f" by {a.by_name}" if a.by_name else ""
                 out.append(
                     ImportProblem(
                         code=ANSWERED_OPEN,
                         message=f'"{a.question}" was answered at {a.stop}{by} '
-                        f'("{a.answer}"), but the draft lists it under {title} as undecided: '
-                        "state the answer as decided in the body and take it out of "
+                        f'("{a.answer}"), but the draft lists it under {title} as "{line}", '
+                        "undecided: state the answer as decided in the body and take it out of "
                         f"{title}",
                         section_key=sid or None,
                     )
