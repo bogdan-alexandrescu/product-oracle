@@ -891,6 +891,15 @@ function RunDecisions({ run }: { run: RunOut }) {
           {q.data.map((d) => (
             <li key={d.checkpoint_id} data-testid="run-decision" className="break-words">
               {said(d)}
+              {d.answers?.length ? (
+                <ul aria-label={`Answered at ${CHECKPOINT_LABEL[d.kind as keyof typeof CHECKPOINT_LABEL] ?? "this checkpoint"}`} className="mt-1 ml-4 list-disc space-y-0.5 text-text2">
+                  {d.answers.map((a, i) => (
+                    <li key={i} data-testid="run-decision-answer">
+                      {[`${a.question} → ${a.answer}`, a.answered_by_name, a.answered_at ? formatDateTime(a.answered_at) : null].filter(Boolean).join(" · ")}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </li>
           ))}
         </ol>
