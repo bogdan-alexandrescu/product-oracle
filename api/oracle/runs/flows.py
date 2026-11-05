@@ -1631,6 +1631,9 @@ class PromptContext:
     depth: str = "standard"
     # Earlier segments' outputs, re-sent because a workflow cannot wait for a person.
     prior_outputs: dict[str, str] = field(default_factory=dict)
+    # roadmap-plan-tables: the items of the earlier roadmap_items.yaml as its check read
+    # them (oracle.runs.roadmap.check_items_async, kept per text): the prompt never parses it.
+    run_items: list[dict[str, Any]] | None = None
     # Notes from checkpoint approvals and requested changes.
     reviewer_notes: list[str] = field(default_factory=list)
     # Feedback for the feedback loop: id, section, summary (and, for a staged text
@@ -1662,11 +1665,14 @@ class PromptContext:
     # prd_to_roadmap: the approved PRD version the roadmap is built from.
     source: SourceContext | None = None
     # roadmap-plan-tables for any other roadmap draft (the feedback loop): what its plan
-    # tables are built from, (items file text, verified bases, the company queue, the items
+    # tables are built from, (the items file's items, verified bases, the company queue, the items
     # an approved version took off the plan)
     # (oracle.runs.service._loop_plan_inputs).
     loop_plan: (
-        tuple[str, list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]] | None
+        tuple[
+            list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]
+        ]
+        | None
     ) = None
     # The target document's template, theme and starting skeleton (prd_to_roadmap's
     # roadmap; baseline_to_prd's PRD when the run has a template, C4).
@@ -1908,11 +1914,10 @@ def step_prompt(
         from oracle.roadmap import company
         from oracle.runs import plan_tables
 
-        items = ctx.prior_outputs.get(plan_tables.ITEMS_FILE)
-        queued = company.with_run_items(ctx.source.company_queue, items,
+        queued = company.with_run_items(ctx.source.company_queue, ctx.run_items,
                                          **ctx.source.company_plan)  # fmt: skip
         plan = plan_tables.engineering_plan(
-            items,
+            ctx.run_items,
             ctx.source.schedule_bases,
             others=queued,
         )

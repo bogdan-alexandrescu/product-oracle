@@ -2895,6 +2895,15 @@ async def _prompt_context(
             if files:
                 prior_files.append((s.seq, _flow(run).segment(s.name).title, sorted(files)))
     prior_files += list(planned or [])
+    run_items = None
+    if (
+        run.flow == "prd_to_roadmap"
+        and segment.name == "roadmap_draft"
+        and (items_text := prior.get(ITEMS_FILE))
+    ):
+        # roadmap-plan-tables: the checkpoint's check of the file (kept by
+        # oracle.runs.roadmap), not a second parse in the prompt.
+        run_items = (await _items_check(db, run, items_text)).items
     # A person sent the segment back (D5): it starts from its previous files and the
     # problems Oracle's check found in them. A runtime retry has no change request.
     previous = (segment.artifacts or {}).get("previous") if change_request else None
@@ -2964,6 +2973,7 @@ async def _prompt_context(
         low_confidence=await _low_threshold(db),
         depth=knobs.depth,
         prior_outputs=prior,
+        run_items=run_items,
         reviewer_notes=notes,
         feedback=feedback,
         staged=chosen,
@@ -4729,22 +4739,23 @@ def _creator(principal_tenant: uuid.UUID, user: User | None, token: ApiToken | N
 
 async def _loop_plan_inputs(
     db: AsyncSession, run: Run
-) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     """What a roadmap draft without an items file of its own (the feedback loop's next
     draft, the owner Nov 4) builds its plan tables from, as the roadmap was when the run
     started (so the brief and the check read the same): (its latest items of the PRD its
-    latest version came from, as an items file; that PRD's verified bases; on the company
-    roadmap, the shared queue with the other PRDs' items, as prd_to_roadmap reads it; the
-    items an approved version took off the plan, shipped or moved to the next PRD, whose
-    plan_state carry_forward keeps: {key, title, state}, so the tables show them with their
-    status and a draft that keeps their rows is not refused). A roadmap with no items (or
-    no document) gives an empty plan: its loop draft still needs both tables, empty."""
+    latest version came from, as an items file's items, parsed once (roadmap.parsed_items);
+    that PRD's verified bases; on the company roadmap, the shared queue with the other
+    PRDs' items, as prd_to_roadmap reads it; the items an approved version took off the
+    plan, shipped or moved to the next PRD, whose plan_state carry_forward keeps: {key,
+    title, state}, so the tables show them with their status and a draft that keeps their
+    rows is not refused). A roadmap with no items (or no document) gives an empty plan: its
+    loop draft still needs both tables, empty."""
     from oracle.roadmap import draft_items
     from oracle.roadmap.models import RoadmapItem
 
     doc = await db.get(Document, run.document_id) if run.document_id else None
     if doc is None:
-        return "", [], [], []
+        return [], [], [], []
     latest = await db.scalar(
         select(DocumentVersion)
         .where(
@@ -4779,7 +4790,13 @@ async def _loop_plan_inputs(
     if doc.company_roadmap:
         # The other PRDs' items are in the tables as the queue has them.
         rows = [r for r in rows if r.prd_document_id == prd_id]
-    items = draft_items.items_yaml(doc.slug, version.number if version else 0, rows)
+    text = draft_items.items_yaml(doc.slug, version.number if version else 0, rows)
+    try:
+        data = roadmap.parsed_items(text)
+    except roadmap.ItemsYamlError:
+        data = None
+    entries = data.get("items") if isinstance(data, dict) else None
+    items = [i for i in entries if isinstance(i, dict)] if isinstance(entries, list) else []
     bases = [b.as_json() for b in await schedule.verified_bases(db, prd_id)]
     queued = (
         roadmap_company.with_run_items(
@@ -4800,16 +4817,18 @@ async def _plan_table_problems(
     from oracle.runs import plan_tables
 
     if run.flow != "prd_to_roadmap":
-        items_text, loop_bases, queued, kept = await _loop_plan_inputs(db, run)
-        loop_plan = plan_tables.engineering_plan(items_text, loop_bases, others=queued, kept=kept)
+        loop_items, loop_bases, queued, kept = await _loop_plan_inputs(db, run)
+        loop_plan = plan_tables.engineering_plan(loop_items, loop_bases, others=queued, kept=kept)
         today = await company_time.company_today(db)
         return plan_tables.check(markdown, loop_plan, today, loop=True)
-    items = None
+    text = None
     for seg in await db.scalars(
         select(RunSegment).where(RunSegment.run_id == run.id).order_by(RunSegment.seq)
     ):
         files = (seg.artifacts or {}).get("files") or {}
-        items = files.get(plan_tables.ITEMS_FILE, items)
+        text = files.get(plan_tables.ITEMS_FILE, text)
+    # The checkpoint's check of the file (kept by oracle.runs.roadmap): never parsed again.
+    items = (await _items_check(db, run, text)).items if text else None
     source = await db.get(DocumentVersion, source_id) if source_id else None
     bases = await schedule.verified_bases(db, source.document_id if source else None)
     # one-roadmap-many-prds: the other PRDs' items on the company roadmap are in the tables
@@ -6026,6 +6045,13 @@ async def _checked(
         text, prd_slug=slug, prd_version=version, prd_sections=keys, date_bases=bases
     )
     return check, slug, version, keys
+
+
+async def _items_check(db: AsyncSession, run: Run, text: str) -> roadmap.ItemsCheck:
+    """The run's check of ``text`` with its checkpoint's inputs: read once per tick, and
+    kept by oracle.runs.roadmap (_Checks), so a step never parses the file again."""
+    check, *_ = await once(("items_check", _source_id(run), text), lambda: _checked(db, run, text))
+    return check
 
 
 async def checked_items(

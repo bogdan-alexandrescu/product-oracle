@@ -207,7 +207,8 @@ async def create_goal_milestone(
     """Add a milestone to a goal on a roadmap: coded the next "M<n>" in that goal on that
     roadmap. Who may change the roadmap directly (an owner, its decider, with none its
     owner while an approver, same as a key date); a commenter is refused (403: milestones
-    are not proposed here, unlike key dates)."""
+    are not proposed here, unlike key dates). A roadmap that is history (the company
+    roadmap exists) is 409."""
     return await goal_milestones.create(db, principal, body)
 
 
@@ -219,7 +220,8 @@ async def patch_goal_milestone(
     own milestone is read-only here: a date or counts-when edit instead proposes a change
     to the PRD's owner (``pending`` filled, the milestone unchanged) through the change
     engine (``POST /v1/simple/changes/{id}/accept|decline``); its name, goal and items are
-    the PRD's own and are 422 here."""
+    the PRD's own and are 422 here, even beside a date. A milestone of a roadmap that is
+    history (the company roadmap exists) is 409."""
     return await goal_milestones.patch(db, principal, milestone_id, body)
 
 

@@ -21,6 +21,7 @@ from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document, DocumentVersion
 from oracle.roadmap import items as roadmap_items
 from oracle.roadmap.models import RoadmapItem, ScheduleBasis
+from oracle.runs.roadmap import check_items
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
 
@@ -330,7 +331,7 @@ def test_plan_tables_cover_every_item_on_the_company_roadmap():
     from oracle.runs import plan_tables
 
     others = [{"key": "read-replicas", "title": "Read replicas", "end": "2026-12-18"}]
-    plan = plan_tables.engineering_plan(SAFETY_ITEMS, [], others=others)
+    plan = plan_tables.engineering_plan(check_items(SAFETY_ITEMS).items, [], others=others)
     assert [r.key for r in plan.items] == ["report-button", "block-list", "read-replicas"]
     rr = plan.items[-1]
     assert (rr.end, rr.basis) == (date(2026, 12, 18), "team queue")
@@ -338,7 +339,9 @@ def test_plan_tables_cover_every_item_on_the_company_roadmap():
         plan_tables.table_lines(plan)
     )
     # A draft that leaves the other PRD's item out of its Plan table is refused.
-    only_ours = plan_tables.markdown(plan_tables.engineering_plan(SAFETY_ITEMS, []))
+    only_ours = plan_tables.markdown(
+        plan_tables.engineering_plan(check_items(SAFETY_ITEMS).items, [])
+    )
     codes = {p.code for p in plan_tables.check(only_ours, plan, TODAY)}
     assert "missing_plan_item" in codes
     assert not plan_tables.check(plan_tables.markdown(plan), plan, TODAY)
@@ -394,8 +397,8 @@ async def test_a_prd_runs_own_items_take_their_place_in_the_shared_queue(client)
     ctx, ids = await world(client)
     async with tenant_session(ctx.tenant_id) as s:
         rows = await company.run_queue(s, ids["safety"])
-    queued = company.with_run_items(rows, SAFETY_ITEMS)
-    plan = plan_tables.engineering_plan(SAFETY_ITEMS, [], others=queued)
+    queued = company.with_run_items(rows, check_items(SAFETY_ITEMS).items)
+    plan = plan_tables.engineering_plan(check_items(SAFETY_ITEMS).items, [], others=queued)
     by = {r.key: r for r in plan.items}
     assert [r.key for r in plan.items] == ["report-button", "block-list", "read-replicas"]
     # One team, one week each: report button, then read replicas, then the new block list.
@@ -488,7 +491,7 @@ async def test_a_run_item_that_names_a_milestone_takes_that_milestones_place(cli
         s.add(_item(rm, v1, scale, cv, "sharding", "Sharding", 2, horizon="later"))
         await s.commit()
         rows = await company.run_queue(s, ids["safety"])
-    queued = company.with_run_items(rows, MILESTONE_ITEMS)
+    queued = company.with_run_items(rows, check_items(MILESTONE_ITEMS).items)
     # Block list is in Later, but it names Beta: it goes where Beta is in the queue (before
     # every item without a milestone), not after Later's items. Landing puts the run's items
     # first (block list at 1, read replicas after it at 2), so Beta's place is block list's.
@@ -543,7 +546,7 @@ async def test_a_run_items_place_in_its_horizon_is_the_one_landing_gives_it(clie
     ctx, ids = await world(client)
     async with tenant_session(ctx.tenant_id) as s:
         rows = await company.run_queue(s, ids["safety"])
-    queued = company.with_run_items(rows, FIRST_ITEMS)
+    queued = company.with_run_items(rows, check_items(FIRST_ITEMS).items)
     # The run's file lands first, in file order (the item without a title left out), then
     # the other PRDs' items: the new block list comes before read replicas in Now.
     assert [r["key"] for r in queued] == ["block-list", "report-button", "read-replicas"]
@@ -582,13 +585,13 @@ async def test_a_runs_prompt_and_check_date_the_queue_from_the_runs_own_day(clie
         await s.commit()
         prompt_rows = await company.run_queue(s, ids["safety"], as_of=started)
     assert prompt_rows[0]["start"] == run_day.isoformat()
-    queued = company.with_run_items(prompt_rows, QUICK_REPORT_ITEMS)
-    plan = plan_tables.engineering_plan(QUICK_REPORT_ITEMS, [], others=queued)
+    queued = company.with_run_items(prompt_rows, check_items(QUICK_REPORT_ITEMS).items)
+    plan = plan_tables.engineering_plan(check_items(QUICK_REPORT_ITEMS).items, [], others=queued)
     written = plan_tables.markdown(plan)
     # The writer words the run's day without its year, as people do.
     day = company_time.calendar_day(run_day)
-    assert f"| {plan_tables.day(run_day)} | team queue |" in written
-    written = written.replace(f"| {plan_tables.day(run_day)} |", f"| {day} |")
+    assert f"| {company_time.calendar_day_with_year(run_day)} | team queue |" in written
+    written = written.replace(f"| {company_time.calendar_day_with_year(run_day)} |", f"| {day} |")
     assert f"| report-button | Report button |  | {day} | team queue |" in written
     # The check runs after the company's midnight: it still dates the queue from the run's day.
     monkeypatch.setattr(company_time, "now", lambda: started + timedelta(days=1))
@@ -629,7 +632,7 @@ async def test_an_item_moved_to_a_new_milestone_takes_the_place_it_will_have(cli
                     milestone={"name": "Beta"}))  # fmt: skip
         await s.commit()
         rows = await company.run_queue(s, ids["safety"])
-    queued = company.with_run_items(rows, GAMMA_ITEMS)
+    queued = company.with_run_items(rows, check_items(GAMMA_ITEMS).items)
     # The report button leaves Alpha (Now) for Gamma, which only it names, in Later: Gamma's
     # place is the report button's own in Later, after Beta (Next), not Alpha's.
     assert [r["key"] for r in queued] == ["sharding", "report-button", "read-replicas"]
@@ -667,7 +670,7 @@ async def test_a_milestone_keeps_no_place_only_a_dropped_item_gave_it(client):
         await s.commit()
         rows = await company.run_queue(s, ids["safety"])
     assert [r["key"] for r in rows] == ["report-button", "sharding", "read-replicas"]
-    queued = company.with_run_items(rows, DROP_ITEMS)
+    queued = company.with_run_items(rows, check_items(DROP_ITEMS).items)
     # The run drops the report button, which put Beta in Now: Beta is where sharding puts it
     # (Later), after Alpha (Next).
     assert [r["key"] for r in queued] == ["read-replicas", "sharding", "block-list"]
@@ -698,8 +701,10 @@ async def test_a_runs_queue_is_frozen_when_its_prompt_is_first_built(client):
         source = await service._source_context(s, run)
         await s.commit()
     # The roadmap is still empty: the run's own item is dated from the team's capacity.
-    queued = company.with_run_items(source.company_queue, REPORT_ITEMS, **source.company_plan)
-    plan = plan_tables.engineering_plan(REPORT_ITEMS, [], others=queued)
+    queued = company.with_run_items(
+        source.company_queue, check_items(REPORT_ITEMS).items, **source.company_plan
+    )
+    plan = plan_tables.engineering_plan(check_items(REPORT_ITEMS).items, [], others=queued)
     assert [(r.key, r.end, r.basis) for r in plan.items] == [
         ("report-button", day + timedelta(days=7), "team queue")
     ]
@@ -774,7 +779,7 @@ async def test_a_run_items_effort_priority_and_goal_are_the_ones_landing_stores(
         await s.commit()
         frozen = await company.frozen_queue(s, ids["safety"])
     plan = {k: v for k, v in frozen.items() if k != "rows"}
-    queued = company.with_run_items(frozen["rows"], REESTIMATE_ITEMS, **plan)
+    queued = company.with_run_items(frozen["rows"], check_items(REESTIMATE_ITEMS).items, **plan)
     # In Beta: the block list serves a goal, so it goes first; then priority (the mute words'
     # 5, the report button has none now), then the report button's 3 weeks.
     assert [r["key"] for r in queued] == ["block-list", "mute-words", "report-button",
@@ -825,7 +830,7 @@ async def test_a_run_items_goal_comes_from_the_feature_its_prd_section_links(cli
         frozen = await company.frozen_queue(s, ids["safety"], prd_version=await s.get(
             DocumentVersion, ids["sv"]))  # fmt: skip
     plan = {k: v for k, v in frozen.items() if k != "rows"}
-    queued = company.with_run_items(frozen["rows"], SECTION_ITEMS, **plan)
+    queued = company.with_run_items(frozen["rows"], check_items(SECTION_ITEMS).items, **plan)
     # Its section links a feature that serves a company goal: it goes first in Beta.
     assert [r["key"] for r in queued] == ["safety-reports", "report-button", "read-replicas"]
     assert await _landed(ctx, ids, SECTION_ITEMS) == _planned(queued)

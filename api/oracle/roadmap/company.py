@@ -329,10 +329,6 @@ def _dates(efforts: list[float], per_week: float, today: date) -> list[tuple[dat
     return out
 
 
-def _day(d: date) -> str:
-    return f"{company_time.calendar_day(d)}, {d.year}"
-
-
 def _place(item: RoadmapItem, goal: int | None) -> dict[str, Any]:
     """What an item's place in the queue is made of: its milestone, horizon and position,
     its rank in the company goal order (None: no goal) and its priority."""
@@ -467,25 +463,20 @@ async def frozen_queue(
             "sections": await _section_features(db, prd_version)}  # fmt: skip
 
 
-def _run_entries(items_text: str | None) -> list[dict[str, Any]] | None:
+def _run_entries(items: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
     """The items of a run's file that landing stores, in file order (as import_items
-    keeps them: a mapping with a horizon, a title and an id not used before); None: the
-    file cannot be read."""
+    keeps them: a mapping with a horizon, a title and an id not used before); None: no
+    items (a missing or unreadable file). ``items``: the file's items as its check read
+    them (``ItemsCheck.items``, from oracle.runs.roadmap.check_items_async): the file is
+    never parsed here."""
     from oracle.roadmap.models import HORIZONS
-    from oracle.runs.roadmap import ItemsYamlError, _text, parsed_items
+    from oracle.runs.roadmap import _text
 
-    if not items_text:
-        return None
-    try:
-        data = parsed_items(items_text)
-    except ItemsYamlError:
-        return None
-    entries = data.get("items") if isinstance(data, dict) else None
-    if not isinstance(entries, list):
+    if not items:
         return None
     out, seen = [], set()
-    for n, raw in enumerate((e for e in entries if isinstance(e, dict)), start=1):
-        key = _text(raw.get("id")) or f"#{n}"
+    for raw in (e for e in items if isinstance(e, dict)):
+        key = _text(raw.get("id")) or "#"
         if (_text(raw.get("horizon")) not in HORIZONS or not _text(raw.get("title"))
                 or key in seen or key.startswith("#")):  # fmt: skip
             continue
@@ -509,7 +500,7 @@ def _run_goal(raw: dict[str, Any], features: dict[str, Any], sections: dict[str,
 
 def with_run_items(
     rows: list[dict[str, Any]],
-    items_text: str | None,
+    items: list[dict[str, Any]] | None,
     *,
     per_week: float | None = None,
     today: str | None = None,
@@ -522,10 +513,11 @@ def with_run_items(
     them in its current order (carry_other_prds); each milestone's place and the order are
     :func:`_orders`'. ``per_week`` and ``today`` (the run's frozen capacity and day, else the
     rows'): the run's own items are dated though the shared queue is empty. ``features`` and
-    ``sections`` (:func:`frozen_queue`'s): the goal each item's feature serves."""
+    ``sections`` (:func:`frozen_queue`'s): the goal each item's feature serves. ``items``:
+    the file's items as its check read them (:func:`_run_entries`)."""
     per_week = per_week or (rows[0]["per_week"] if rows and "per_week" in rows[0] else None)
     today = today or (rows[0]["today"] if rows and "today" in rows[0] else None)
-    entries = _run_entries(items_text)
+    entries = _run_entries(items)
     if entries is None or not per_week or not today:
         return rows
     prd = next((r["prd"] for r in rows if r["ours"]), "")
@@ -567,10 +559,10 @@ def queue_lines(rows: list[dict[str, Any]]) -> list[str]:
     ]
     for r in rows:
         mark = "*" if r["ours"] else "-"
-        out.append(
-            f"{mark} {r['title']} ({r['prd']}): "
-            f"{_day(date.fromisoformat(r['start']))} to {_day(date.fromisoformat(r['end']))}"
+        start, end = (
+            company_time.calendar_day_with_year(date.fromisoformat(r[k])) for k in ("start", "end")
         )
+        out.append(f"{mark} {r['title']} ({r['prd']}): {start} to {end}")
     out.append(
         "Add or change only this PRD's items; every other PRD's item stays as it is, and "
         "the plan tables list it as below."
