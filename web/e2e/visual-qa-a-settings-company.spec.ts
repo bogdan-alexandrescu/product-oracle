@@ -89,6 +89,14 @@ test("ST-7: a source over the channel cap says what to do in plain words", async
   await expect(row.getByTestId("last-error")).toHaveText("Pick 100 channels or fewer, then it syncs again");
 });
 
+test("ST-7: a viewer reads who can fix a source over the channel cap, with no Edit", async ({ page }) => {
+  await login(page, VIEWER);
+  await openSources(page);
+  const row = page.getByRole("listitem", { name: "Legacy all-hands chat" });
+  await expect(row.getByTestId("last-error")).toHaveText("An owner or the source's owner can pick 100 channels or fewer, then it syncs again");
+  await expect(row.getByRole("button", { name: "Edit Legacy all-hands chat" })).toHaveCount(0);
+});
+
 test("ST-7: a source refused for any other cause names the edit to make", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "source-refused-order"));
   await login(page);

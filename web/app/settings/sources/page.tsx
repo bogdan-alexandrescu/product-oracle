@@ -25,7 +25,7 @@ import {
 import { api, ApiError, type Schemas, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
-import { needingAttention, shownStatus } from "@/lib/source-attention";
+import { attentionMessage, needingAttention, shownStatus } from "@/lib/source-attention";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { Field, INPUT, SELECT_FIELD } from "../_components/fields";
@@ -864,7 +864,7 @@ function SourceRow({
               <span className="flex min-w-0 flex-1 basis-60 items-start gap-2">
                 <Icon name="alert" size={16} className="mt-0.5 flex-none" />
                 <span className="min-w-0 break-words" data-testid="last-error">
-                  {source.last_error}
+                  {attentionMessage(source.last_error, mayEdit)}
                 </span>
               </span>
               {allowlist && !editing && mayEdit && (
