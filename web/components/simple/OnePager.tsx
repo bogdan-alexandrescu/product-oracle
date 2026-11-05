@@ -8,6 +8,8 @@ import { Button, LinkButton } from "@/components/ds";
 import { clock, FlowPanel, meetingMoment } from "@/components/simple/FlowVisual";
 import { WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
+import { OpenFeatureContext, type OpenFeature } from "@/components/simple/OpenFeature";
+import { FeaturePanel } from "@/app/simple/roadmap/_panel";
 import { dmy, ew, PrdPlan, TAP44, usePhone } from "@/components/simple/PrdTimeline";
 import { PrdStatus } from "@/components/simple/PrdStatus";
 import { RunReviewStep } from "@/components/simple/RunReviewStep";
@@ -266,7 +268,13 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   }, []);
   useLayoutEffect(() => placeNotes(margin.current));
   const phone = usePhone();
-  const meId = useMe().me?.user_id ?? null;
+  const { me, can } = useMe();
+  const meId = me?.user_id ?? null;
+  // one-feature-panel: a feature named on the page (its plan rows, a milestone's parts) opens
+  // the roadmap's feature panel; the roadmap gives the plan rows their codes.
+  const [feature, setFeature] = useState<Parameters<OpenFeature>[0] | null>(null);
+  const codesQ = useQuery("simple-roadmap-codes", () => unwrap(api.GET("/v1/simple/roadmap", {})).catch(() => null));
+  const codes = new Map((codesQ.data?.items ?? []).map((i) => [i.id, i.code ?? null]));
 
   if (q.loading && !q.data) return <div className="px-6 py-8"><Loading /></div>;
   if (q.error || !q.data) {
@@ -455,6 +463,20 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   const toast = <DownloadNote note={saved} className="simple-noprint max-w-[min(420px,calc(100vw-2rem))]" />;
 
   return (
+    <OpenFeatureContext.Provider value={setFeature}>
+    {feature && (
+      <FeaturePanel
+        key={`${feature.id ?? ""}|${feature.code}|${feature.name}`}
+        feature={feature}
+        phone={phone}
+        canChange={can("create_simple_change")}
+        onClose={() => {
+          setFeature(null);
+          void reloadPage();
+          void reloadPlan();
+        }}
+      />
+    )}
     <div
       ref={root}
       data-backdrop={presenting ? "" : undefined}
@@ -588,7 +610,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
               <h2 className="text-sm font-semibold uppercase tracking-wide text-text-faint">{b.title}</h2>
               {b.kind === "timeline" ? (
                 <div className="mt-2" aria-label="Timeline strip">
-                  {v.plan ? <WithFeatureMarks><PlanByMonth plan={v.plan} prd={v.document} legend items={v.timeline} /></WithFeatureMarks> : <p className="text-base text-text-faint">No roadmap items yet</p>}
+                  {v.plan ? <WithFeatureMarks><PlanByMonth plan={v.plan} prd={v.document} legend items={v.timeline.map((t) => ({ ...t, code: codes.get(t.id) }))} /></WithFeatureMarks> : <p className="text-base text-text-faint">No roadmap items yet</p>}
                 </div>
               ) : (
                 <ul className="mt-1 space-y-1">
@@ -808,6 +830,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       </div>
       )}
     </div>
+    </OpenFeatureContext.Provider>
   );
 }
 
