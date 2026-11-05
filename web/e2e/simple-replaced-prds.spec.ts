@@ -191,11 +191,12 @@ test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
   await expect(ranked.getByText("New plan tiers").first()).toBeVisible();
   for (const title of GONE) await expect(ranked.getByText(title)).toHaveCount(0);
   await expect(page.getByTestId("prio-subtitle")).toContainText("Q4 2026.");
-  // Round 8: the Line picker offers no replaced PRD's milestone "From the PRD"; the track's M1-M3 stay.
+  // Round 8: the Line picker offers no replaced PRD's milestone "From the PRD" (it reads the
+  // roadmap's key dates; the track milestones of a track with no shown item are not lines either:
+  // priorities.lines).
   const line = page.getByTestId("line-picker").getByLabel("Line", { exact: true });
   await expect(line).toBeVisible();
   await expect(line.locator("option", { hasText: "This quarter (Now)" })).toHaveCount(1);
-  await expect(line.locator("option", { hasText: "Milestone: M1 · Prove it" })).toHaveCount(1);
   await expect(line.locator("option", { hasText: "From the PRD" })).toHaveCount(0);
   await expect(line.locator('option[title*="Guided setup"], option[title*="Usage alerts"]')).toHaveCount(0);
 
