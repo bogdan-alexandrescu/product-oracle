@@ -1,7 +1,7 @@
 "use client"; // MOCK-HOOK
 
 // MOCK-HOOK: mk-edit-meetings-tracks. URL switches for the owner's mock-up frames:
-// ?ea=a|b|c (agenda), ?et=a|b|c (tracks), ?em=a|b|c (move a feature); &st=rest|open|mid|result; &many=1 (the hard case).
+// ?ea=a|b|c (agenda), ?et=a|b|c (tracks), ?em=a|b|c (move a feature); &st=rest|open|mid|result; &many=1 (the hard case). // MOCK-HOOK
 import { useMe } from "@/lib/me"; // MOCK-HOOK
 
 export function mk(key: string): string | null { // MOCK-HOOK
