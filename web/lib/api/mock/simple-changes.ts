@@ -402,6 +402,12 @@ function changeLog(db: SimpleDb, id: string): Schemas["SimpleDraftChange"][] {
     });
 }
 
+/** drafts._approver_of: the draft's final approval is the roadmap's decider's; with none, an editor's (an owner's, its track owner's). */
+function approverOf(db: SimpleDb, roadmap: string, me: { id: string; role: Role }): boolean {
+  const decider = db.deciders?.[roadmap];
+  return decider ? decider === me.id : canEditRoadmap(db, roadmap, me);
+}
+
 function draftOut(db: SimpleDb, ctx: SimpleChangesCtx, d: MockDraft): Schemas["SimpleDraftOut"] {
   const edits = canEditRoadmap(db, d.roadmap, ctx);
   const decider = db.deciders?.[d.roadmap];
@@ -409,7 +415,7 @@ function draftOut(db: SimpleDb, ctx: SimpleChangesCtx, d: MockDraft): Schemas["S
     ...d.out, changes: draftChanges(db, d.out.id), change_log: changeLog(db, d.out.id), from_prds: draftPrds(d),
     can_submit: d.out.status === "working" && edits,
     can_resume: d.out.status === "working" && (d.out.created_by === ctx.id || decider === ctx.id),
-    can_approve: d.out.status === "submitted" && (edits || d.out.waiting_on.includes(ctx.id)),
+    can_approve: d.out.status === "submitted" && (approverOf(db, d.roadmap, ctx) || d.out.waiting_on.includes(ctx.id)),
     can_withdraw: d.out.status === "submitted" && (d.out.created_by === ctx.id || edits),
     published: !(db.unapproved ?? []).includes(d.roadmap),
     // decisions-reversed-or-trashed: notes on decisions it cited that were reversed since.
@@ -442,12 +448,13 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
   if (p[4] === "approve") {
     if (d.out.status !== "submitted") return json(409, { detail: `This draft is ${d.out.status}: only a submitted draft is approved` });
     const reviewer = d.out.waiting_on.includes(ctx.id);
-    if (!reviewer && !canEditRoadmap(db, d.roadmap, ctx)) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
+    if (!reviewer && !approverOf(db, d.roadmap, ctx)) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
     // A required reviewer's approval takes them off waiting_on; the decider's (or an owner's) is
-    // the decider's. The mock publishes once no required reviewer is left to approve.
+    // the decider's. As drafts._settle: published once the decider approved and no one is left.
     const waiting = d.out.waiting_on.filter((r) => r !== ctx.id);
-    Object.assign(d.out, { decider_approved: d.out.decider_approved || !reviewer, waiting_on: waiting });
-    if (!waiting.length) Object.assign(d.out, { status: "approved", approved_at: now });
+    const deciderApproved = d.out.decider_approved || approverOf(db, d.roadmap, ctx);
+    Object.assign(d.out, { decider_approved: deciderApproved, waiting_on: waiting });
+    if (deciderApproved && !waiting.length) Object.assign(d.out, { status: "approved", approved_at: now });
     return json(200, draftOut(db, ctx, d));
   }
   if (p[4] === "withdraw") {
@@ -992,9 +999,10 @@ export function simpleInboxRows(
     simple_decisions: changes
       .filter((c) => c.by === me && (c.status === "accepted" || c.status === "declined"))
       .map((c) => row(c, c.decided_at, !seen || (c.decided_at ?? "") > seen ? undefined : "done")),
-    // S3b (drafts.inbox_rows): drafts submitted with me among the required reviewers they wait on.
+    // S3b (drafts.inbox_rows): drafts submitted with me among the required reviewers they wait
+    // on, or with me their decider (drafts._approver_of) whose approval is not in yet.
     simple_approvals: (db?.drafts ?? [])
-      .filter((d) => d.out.status === "submitted" && d.out.waiting_on.includes(me))
+      .filter((d) => d.out.status === "submitted" && (d.out.waiting_on.includes(me) || (!d.out.decider_approved && !!who.role && approverOf(db!, d.roadmap, { id: me, role: who.role }))))
       .sort((a, b) => ((a.out.submitted_at ?? "") < (b.out.submitted_at ?? "") ? -1 : 1))
       .map((d) => ({
         draft_id: d.out.id, document: d.out.document, version: d.out.version ?? null, submitted_by: d.out.submitted_by ?? null,

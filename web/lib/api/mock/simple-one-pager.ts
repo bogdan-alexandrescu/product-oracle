@@ -788,7 +788,8 @@ export function onePagerInboxRows(
       id: c.id, op: c.op, status: c.status, item_id: null, item_title: null, document_id: c.document_id, by: c.by, by_name: c.by_name, at: c.at,
       decided_by: c.decided_by, decided_at: c.decided_at, reason: c.reason, decision_reason: c.decision_reason,
       state: state ?? (!seen || (at && at > seen) ? "new" : "open"), from_meeting: null,
-      asked: next ? `edited a one-pager line to “${next}”` : "edited a one-pager line",
+      // Still to decide, it reads as proposed (changes.inbox_rows asked_of); once decided, as done.
+      asked: c.status === "proposed" ? `proposed new wording for a one-pager line${next ? `: “${next}”` : ""}` : next ? `edited a one-pager line to “${next}”` : "edited a one-pager line",
       can_decide: c.status === "proposed" && (me.role === "owner" || c.routed_to.includes(me.id)), from_ask: false,
       subject: line || null, question_id: null, line_id: String(c.target.line_id ?? "") || null,
     };

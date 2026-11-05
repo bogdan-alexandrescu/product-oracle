@@ -1530,6 +1530,9 @@ async def inbox_rows(
         if c.status == "proposed" and c.op in ("decide_question", "name_decider"):
             how = "deciding" if c.op == "decide_question" else "who decides"
             return f"proposed {how} {named or 'a question'}"
+        if c.status == "proposed" and c.op == "edit_line":
+            line = change_words._quoted((c.after or {}).get("line"))
+            return f"proposed new wording for a one-pager line{f': {line}' if line else ''}"
         return change_words.phrase(c.op, c.target, c.before, c.after, named)
 
     def row(c: SimpleChange, at: datetime | None, state: str | None = None) -> InboxSimpleChange:

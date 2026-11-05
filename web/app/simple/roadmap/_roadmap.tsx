@@ -11,7 +11,7 @@ import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { Loading } from "@/components/ui";
 import { getBranding, logoDataUrl } from "@/lib/api/branding";
-import { invalidateWaiting } from "@/lib/waiting";
+import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { CARD_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { displayZone, plainClock } from "@/lib/dates";
@@ -1397,8 +1397,11 @@ export function SimpleRoadmap() {
       onApprove={async (d) => {
         const r = await api.POST("/v1/simple/drafts/{draft_id}/approve", { params: { path: { draft_id: d.id } } });
         toast({ message: !r.data ? `${d.document.title} could not be approved` : r.data.status === "approved" ? `Approved: ${d.document.title} is published` : "Approved: it waits for the other approvals" });
+        // The rail's and More's counts read again at once (the approval leaves the Inbox).
         invalidateWaiting();
-        await reload();
+        const reloaded = reload();
+        waitingChanged();
+        await reloaded;
       }}
     />
   );

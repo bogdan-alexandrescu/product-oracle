@@ -1554,17 +1554,25 @@ async def resume(db: AsyncSession, principal: Principal, draft_id: uuid.UUID):
 
 
 async def inbox_rows(db: AsyncSession, principal: Any, seen: Any) -> list[InboxSimpleApproval]:
-    """Versions from Simple drafts waiting for my approval as a required reviewer."""
+    """Versions from Simple drafts waiting for my approval: as a required reviewer, or as
+    the decider (_approver_of) whose approval is not in yet."""
     me = _me(principal)
     if me is None or getattr(principal, "run_token_id", None) is not None:
         return []
-    ds = list(
+    submitted = list(
         await db.scalars(
             select(SimpleDraft)
-            .where(SimpleDraft.status == "submitted", SimpleDraft.waiting_on.contains([me]))
+            .where(SimpleDraft.status == "submitted")
             .order_by(SimpleDraft.submitted_at)
         )
     )
+    w = await who(db, {d.document_id for d in submitted})
+    ds = [
+        d
+        for d in submitted
+        if me in (d.waiting_on or [])
+        or (d.decider_approval is None and _approver_of(principal, d, w))
+    ]
     if not ds:
         return []
     docs, numbers = await _refs(db, ds)
