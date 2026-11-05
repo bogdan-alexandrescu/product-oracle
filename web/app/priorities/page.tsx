@@ -34,6 +34,7 @@ import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { named, namedText, useNames, type Names } from "@/lib/codes";
 import { byGoalOrder } from "@/lib/goal-order";
+import { unknownGoalParts, unknownGoalWords } from "@/lib/order-problems";
 import { formatDateTime, isHttpUrl, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { displayName } from "@/lib/names";
@@ -150,26 +151,20 @@ function UnknownGoal({ goal }: { goal: string }) {
   );
 }
 
-/** "names the goal g.no-such-goal, which is not a goal": the API's unknown_goal sentence (run_order._check_new_goals). */
-const UNKNOWN_GOAL_TEXT = /^(.*? names )the goal (\S+), (which is not a goal in the Ground Truth.*)$/;
-
 /** A problem's sentence in words: a goal key with no name reads "an unknown goal". */
-function problemWords(p: PriorityProblem): string {
-  const m = p.code === "unknown_goal" ? p.message.match(UNKNOWN_GOAL_TEXT) : null;
-  return m ? `${m[1]}an unknown goal, ${m[3]}` : p.message;
-}
+const problemWords = (p: PriorityProblem) => (p.code === "unknown_goal" ? unknownGoalWords(p.message) : p.message);
 
 /** A problem's sentence as shown: as problemWords, the unknown goal's key in its tooltip. */
 function ProblemSentence({ p }: { p: PriorityProblem }) {
-  const m = p.code === "unknown_goal" ? p.message.match(UNKNOWN_GOAL_TEXT) : null;
+  const m = p.code === "unknown_goal" ? unknownGoalParts(p.message) : null;
   if (!m) return <>{p.message}</>;
   return (
     <>
-      {m[1]}
-      <span title={m[2]} className="underline decoration-dotted underline-offset-2">
+      {m.before}
+      <span title={m.key} className="underline decoration-dotted underline-offset-2">
         an unknown goal
       </span>
-      , {m[3]}
+      , {m.after}
     </>
   );
 }
