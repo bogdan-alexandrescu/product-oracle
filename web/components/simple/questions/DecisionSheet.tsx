@@ -1,12 +1,13 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { Icon } from "@/components/ds/Icon";
+import { InfoTip } from "@/components/ds/InfoTip";
 import { Sheet } from "@/components/ds/Sheet";
 import { toast } from "@/components/ds/Toast";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { calendarDay } from "@/lib/dates";
+import { calendarDay, dayIn } from "@/lib/dates";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
@@ -14,8 +15,8 @@ type Row = Schemas["SimpleDecisionRow"];
 type Question = Schemas["SimpleQuestion"];
 type Person = { id: string; name: string };
 
-/** What the sheet shows: an open decision, a PRD's question, or a new one of either. */
-export type SheetTarget = { kind: "decision"; row: Row } | { kind: "question"; q: Question } | { kind: "new-decision" } | { kind: "new-question"; prds: { id: string; title: string }[] };
+/** What the sheet shows: an open decision (or one known by id only, its row read from Decisions), a PRD's question, or a new one of either. */
+export type SheetTarget = { kind: "decision"; row: Row } | { kind: "decision-id"; id: string; title: string } | { kind: "question"; q: Question } | { kind: "new-decision" } | { kind: "new-question"; prds: { id: string; title: string }[] };
 
 /** A decision or question withdrawn here this visit: struck through in its list, with Undo. */
 type Withdrawn = { changeId: string; undoing?: boolean };
@@ -41,12 +42,12 @@ const REASSIGNED = "Reassigned in Simple";
 /** "Dec 7, 2026". */
 export const reviewDay = (day: string) => calendarDay(day, { month: "short", day: "numeric", year: "numeric" });
 
-/** "edited by you just now", "edited by Avery Stone Nov 3" (the row's last sheet edit). */
-export function editedWords(at: string | null | undefined, by: Person | null | undefined, me: string | undefined): string | null {
+/** "edited by you just now", "edited by Avery Stone Nov 3" (the row's last sheet edit, its day in the company's zone). */
+export function editedWords(at: string | null | undefined, by: Person | null | undefined, me: string | undefined, zone: string): string | null {
   if (!at) return null;
   const who = by ? (by.id === me ? " by you" : ` by ${by.name}`) : "";
   const fresh = Date.now() - Date.parse(at) < 10 * 60_000;
-  return `edited${who} ${fresh ? "just now" : calendarDay(at.slice(0, 10))}`;
+  return `edited${who} ${fresh ? "just now" : calendarDay(dayIn(at, zone))}`;
 }
 
 /**
@@ -92,7 +93,9 @@ export function DecisionSheetHost({ onChanged, children }: { onChanged: () => un
   const title =
     target?.kind === "decision"
       ? `${target.row.code ?? `D-${target.row.number}`} ${target.row.title}`
-      : target?.kind === "question"
+      : target?.kind === "decision-id"
+        ? target.title
+        : target?.kind === "question"
         ? `${target.q.code} ${target.q.title}`
         : target?.kind === "new-decision"
           ? "New decision"
@@ -101,7 +104,9 @@ export function DecisionSheetHost({ onChanged, children }: { onChanged: () => un
     <SheetContext.Provider value={value}>
       {children}
       <Sheet open={!!target} side title={title} onClose={close} testId="decision-sheet">
-        {target && (
+        {target?.kind === "decision-id" ? (
+          <RowLoader key={target.id} id={target.id} onRow={(row) => setTarget({ kind: "decision", row })} />
+        ) : target && (
           <SheetBody
             key={target.kind === "decision" ? target.row.id : target.kind === "question" ? target.q.id : target.kind}
             target={target}
@@ -112,6 +117,22 @@ export function DecisionSheetHost({ onChanged, children }: { onChanged: () => un
         )}
       </Sheet>
     </SheetContext.Provider>
+  );
+}
+
+/** Home's and Waiting for you's decision-log calls: the sheet reads the decision's row (every field and `can`) from Decisions. */
+function RowLoader({ id, onRow }: { id: string; onRow: (row: Row) => void }) {
+  const page = useQuery(`decision-sheet-row-${id}`, () => unwrap(api.GET("/v1/simple/decisions", {})));
+  const row = page.data ? [...page.data.meetings.flatMap((g) => g.decisions), ...page.data.other].find((r) => r.id === id) : undefined;
+  useEffect(() => {
+    if (row) onRow(row);
+  }, [row, onRow]);
+  return (
+    <div className="flex flex-col gap-3 p-1" data-testid="decision-sheet-body">
+      <p className="simple-meta" role="status">
+        {page.error ?? (page.data && !row ? "This decision is no longer open" : "Loading…")}
+      </p>
+    </div>
   );
 }
 
@@ -369,7 +390,7 @@ function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
   );
 
   return (
-    <div className="flex flex-col gap-3 p-4" data-testid="decision-sheet-body">
+    <div className="flex flex-col gap-3 p-1" data-testid="decision-sheet-body">
       {editing ? (
         <EditFields draft={draft} set={set} question={question} target={target} />
       ) : target.kind === "decision" ? (
@@ -557,10 +578,20 @@ function EditFields({ draft, set, question, target }: { draft: Draft; set: (p: P
         )}
       </fieldset>
       {!question && (
-        <label className="flex flex-col gap-1">
-          <span className="simple-meta font-[650]">Review on</span>
-          <input type="date" className={`${FIELD.replace("w-full ", "")} h-10 w-[220px] max-w-full`} value={draft.review_at} onChange={(e) => set({ review_at: e.target.value })} />
-        </label>
+        <div className="flex flex-col gap-1">
+          <span className="simple-meta flex items-center gap-1 font-[650]">
+            Review on
+            <InfoTip label="Review on" align="start">
+              The day the decider looks at this call again.
+            </InfoTip>
+          </span>
+          {/* The repo's day field (as the roadmap's milestone card): the day month first, the date picker under it. */}
+          <span className={`${FIELD.replace("w-full ", "")} relative flex h-10 w-[220px] max-w-full items-center justify-between`} data-testid="decision-sheet-review">
+            <span className={draft.review_at ? "" : "text-text2"}>{draft.review_at ? reviewDay(draft.review_at) : "Pick a day"}</span>
+            <Icon name="clock" size={18} stroke={1.7} />
+            <input aria-label="Review on" type="date" className="absolute inset-0 cursor-pointer opacity-0" value={draft.review_at} onChange={(e) => set({ review_at: e.target.value })} />
+          </span>
+        </div>
       )}
     </div>
   );

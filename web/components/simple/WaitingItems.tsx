@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "@/components/ds/Toast";
+import { useDecisionSheet } from "@/components/simple/questions/DecisionSheet";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { fixChange, OP_WORDS, type BrokenLink, type FixOp } from "@/lib/simple-home";
 import { errorMessage } from "@/lib/use-query";
@@ -126,6 +127,8 @@ export function WaitingRow({ item }: { item: WaitingItem }) {
   // A broken link fixes in place too, as Home's broken-links card does: "Fix the link" opens its
   // fixes (the item and its dependency read from the roadmap, as the change engine needs them).
   const [fixing, setFixing] = useState(false);
+  // ec1 b: a decision-log call's title opens the decision sheet, as Decisions' own rows do.
+  const sheet = useDecisionSheet();
   const acts = item.kind === "decision" ? (call ? decideActs(call) : []) : actionsOf(item);
   const act = async (run: () => Promise<unknown>, done: string) => {
     setBusy(true);
@@ -148,7 +151,13 @@ export function WaitingRow({ item }: { item: WaitingItem }) {
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="break-words">
           <span className="text-text2">{WAITING_KIND[item.kind]} · </span>
-          {item.title}
+          {sheet && call ? (
+            <button type="button" data-testid="waiting-decision-open" className="text-left underline decoration-1 underline-offset-4 hover:text-accent-ink" onClick={() => sheet.open({ kind: "decision-id", id: call.id, title: `${call.ref} ${call.title}` })}>
+              {item.title}
+            </button>
+          ) : (
+            item.title
+          )}
         </span>
         {item.detail && <span className="simple-small break-words">{item.detail}</span>}
       </div>

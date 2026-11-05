@@ -515,7 +515,7 @@ export function QuestionRow({
         )}
         {!done && q.edited_at && (
           <span className="simple-meta" data-testid="question-edited">
-            {editedWords(q.edited_at, q.edited_by, me?.user_id ?? undefined)?.replace(/^e/, "E")}
+            {editedWords(q.edited_at, q.edited_by, me?.user_id ?? undefined, zone)?.replace(/^e/, "E")}
           </span>
         )}
         </>

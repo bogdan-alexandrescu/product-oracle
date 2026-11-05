@@ -18,7 +18,7 @@ import { GoalNum, GoalOrderEdit } from "@/components/simple/GoalOrder";
 import { meetingMoment } from "@/components/simple/FlowVisual";
 import { NewPrdButton, NewPrdSheet, StartedCard, useCanStartPrd, useStartedPrds } from "@/components/simple/NewPrd";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
-import { DecisionSheetHost } from "@/components/simple/questions/DecisionSheet";
+import { DecisionSheetHost, useDecisionSheet } from "@/components/simple/questions/DecisionSheet";
 import { QuestionRow, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
 import { SimplePage } from "@/components/simple/SimplePage";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -1434,13 +1434,23 @@ function homeDecisionRows(questions: Question[], others: Decision[]): (Question 
 /** A decision waiting for me: Decide with the proposed option, or choose another. */
 function DecisionRow({ d, onDecide }: { d: Decision; onDecide: (d: Decision, key: string) => void }) {
   const [other, setOther] = useState(false);
+  // ec1 b: its title opens the decision sheet (every field, Edit, Withdraw, Delete), as on Decisions.
+  const sheet = useDecisionSheet();
   const proposed = d.options.find((o) => o.recommended) ?? d.options[0];
   return (
     <HomeRow
       testId="home-decision"
       inlineActions
       lead={<RowIcon name="flag" />}
-      title={<span title={d.ref ? `${d.ref} · ${d.title}` : undefined}>{d.title}</span>}
+      title={
+        sheet ? (
+          <button type="button" data-testid="home-decision-open" title={d.ref ? `${d.ref} · ${d.title}` : undefined} className="text-left font-[650] underline decoration-1 underline-offset-4 hover:text-accent-ink" onClick={() => sheet.open({ kind: "decision-id", id: d.id, title: `${d.ref} ${d.title}` })}>
+            {d.title}
+          </button>
+        ) : (
+          <span title={d.ref ? `${d.ref} · ${d.title}` : undefined}>{d.title}</span>
+        )
+      }
       meta={
         <>
           {/* qa-simple-home-13: no code ("D-12") in Simple; the question and the proposal say it. */}

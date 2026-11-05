@@ -181,11 +181,10 @@ function NewDecision() {
   );
 }
 
-/** eq2 b: + Ask a question, at the top of Waiting for you: the sheet, with its PRD to pick. */
-function AskQuestion({ questions }: { questions: Question[] }) {
+/** eq2 b: + Ask a question, at the top of Waiting for you: the sheet, with its PRD to pick (every PRD the person reads, as the PRD filter lists them). */
+function AskQuestion({ prds }: { prds: { id: string; title: string }[] }) {
   const { can } = useMe();
   const sheet = useDecisionSheet();
-  const prds = [...new Map(questions.map((x) => [x.prd.id, { id: x.prd.id, title: x.prd.title }])).values()];
   if (!sheet || !prds.length || !can("create_simple_change")) return null;
   return (
     <div>
@@ -272,7 +271,7 @@ function QuestionList({ d, actions, filtered, onClear }: { d: Schemas["SimpleDec
   return (
     <>
       <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={count} source>
-        <AskQuestion questions={d.questions} />
+        <AskQuestion prds={d.prds} />
         {mine.length === 0 && extra.length === 0 ? (
           !filtered && !waiting.data && !waiting.error ? (
             <p className="simple-meta" role="status">
@@ -466,6 +465,12 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
   );
 }
 
+/** ec1 b: an open row names who decides ("Avery Stone decides · <when>"), as its sheet does; "waiting for a decider" only when no one is named. */
+function rowMeta(r: Row, when: string, edited: string | null): string {
+  if (r.status === "proposed") return [r.approver ? `${r.approver.name} decides` : "No approver", when, r.approver ? null : STATUS_WORDS.proposed, edited].filter(Boolean).join(" · ");
+  return [r.chosen, r.approver?.name ?? "No approver", when, r.status === "decided" ? null : STATUS_WORDS[r.status] ?? "open", edited].filter(Boolean).join(" · ");
+}
+
 /** qa-simple-decide-19: a decision's state in plain words. */
 const STATUS_WORDS: Record<string, string> = { proposed: "waiting for a decider", superseded: "replaced", rejected: "declined", withdrawn: "withdrawn" };
 
@@ -564,14 +569,14 @@ function Rows({ rows }: { rows: Row[] }) {
         // qa-simple-decide-19: a question decided in a meeting shows as one decided outside it:
         // its code, its title, then the answer, as the API sends them (never read out of the title).
         const code = r.code ?? `D-${r.number}`;
-        const { title, chosen } = r;
+        const { title } = r;
         // build-feature-panel review 7: a decision about one roadmap item ("Moved Weekly alert digest
         // to Next") opens that item's one feature panel.
         const item = r.subjects.find((x) => x.kind === "roadmap_item" && typeof x.id === "string");
         // ec1 b: an open decision's title opens its sheet; one withdrawn here just now stays, struck through, with Undo.
         const opens = !!sheet && r.status === "proposed" && !!r.can;
         const gone = r.status === "withdrawn" ? sheet?.withdrawn[r.id] : undefined;
-        const edited = editedWords(r.edited_at, r.edited_by, me?.user_id ?? undefined);
+        const edited = editedWords(r.edited_at, r.edited_by, me?.user_id ?? undefined, zone);
         return (
           <DecidedItem
             key={r.id}
@@ -605,7 +610,7 @@ function Rows({ rows }: { rows: Row[] }) {
               <span className="simple-meta">
                 {gone
                   ? "Withdrawn by you just now · kept in the history"
-                  : [chosen, r.approver?.name ?? "No approver", momentWords(r.decided_at ?? r.created_at, zone), done ? null : STATUS_WORDS[r.status] ?? "open", edited].filter(Boolean).join(" · ")}
+                  : rowMeta(r, momentWords(r.decided_at ?? r.created_at, zone), edited)}
               </span>
             </span>
             {gone && (
