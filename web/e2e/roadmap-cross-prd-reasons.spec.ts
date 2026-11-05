@@ -307,7 +307,7 @@ test("an approver's × on a dependency joins a commenter's suggested removal on 
 test("a commenter's × on a dependency where an approver's change holds the item says whose and offers theirs separately", async ({ page }) => {
   await openReview(page);
   await row(page, "budget-caps").locator('[data-phone="title"]').click();
-  await inspector(page).getByTestId("item-depends").getByRole("button", { name: "Remove dependency Anomaly detection" }).click();
+  await card(page, LOCAL).getByRole("button", { name: "Remove dependency", exact: true }).click();
   await expect(card(page, LOCAL)).toContainText("✓ Dependency removed");
   await signOut(page);
 
@@ -329,4 +329,23 @@ test("a commenter's × on a dependency where an approver's change holds the item
   // The approver's change is still theirs: Account health ledger is not removed.
   await expect(card(page, CROSS).getByRole("button", { name: "Move to Next", exact: true })).toBeVisible();
   await expect(card(page, LOCAL)).toContainText("✓ Dependency removed");
+});
+
+// Review follow-up (PR 1275, minor 1): protects = the row's own Remove dependency, met by an
+// approver's staged change, says whose and offers theirs separately in the row's form; fails_when =
+// the row's button stays and its post is refused; no_claim = the panel (tested above).
+test("a commenter's row where an approver's change holds the item says whose and offers theirs separately", async ({ page }) => {
+  await openReview(page);
+  await row(page, "budget-caps").locator('[data-phone="title"]').click();
+  await card(page, LOCAL).getByRole("button", { name: "Remove dependency", exact: true }).click();
+  await expect(card(page, LOCAL)).toContainText("✓ Dependency removed");
+  await signOut(page);
+
+  await login(page, COMMENTER);
+  await goToReview(page);
+  const held = row(page, "budget-caps").getByTestId("their-removal");
+  await expect(held).toContainText("Avery Stone staged this item's dependency change");
+  await held.getByRole("button", { name: "Suggest yours separately…" }).click();
+  const form = page.getByTestId("form-ask").filter({ visible: true });
+  await expect(form.getByRole("textbox", { name: "Question" })).toHaveValue("Please also remove the dependency on Account health ledger (Safety PRD).");
 });
