@@ -79,6 +79,7 @@ from tests.test_simple_chat_api import (
 )
 from tests.test_simple_chat_reader import _meeting, last, post, read
 from tests.test_simple_chat_reader import clock as clock  # noqa: F401
+from tests.test_slack_pings import bridge_slack, slack  # noqa: F401 -- the fixtures
 
 WRITES = ("post", "put", "patch", "delete")
 # Each reaches people or systems outside Oracle, or carries a secret: never offered.
@@ -480,23 +481,60 @@ def _reaches(fn, seen: set, path: tuple = ()) -> tuple | None:
     return None
 
 
-def test_no_allowed_operation_pings_a_person_or_reaches_an_outbox():
-    """No ALLOWED route reaches a Slack ping, the Slack outbox or the mailer: a card never
-    notifies someone it does not name. (Company webhooks are Oracle's own events: allowed.)"""
+async def _person_name(client, ctx, who: str) -> str:
+    r = await client.get("/v1/people", params={"ids": str(ctx.users[who].id)},
+                         headers=ctx.as_("viewer"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    [p] = r.json()
+    assert p["name"] and not ask_actions._is_id(p["name"])
+    return p["name"]
+
+
+def _pinging(who: uuid.UUID, entity: str) -> dict[str, dict]:
+    """A call of each route that pings ``who`` (fix round 3: offered, its card names them)."""
+    subject = {"kind": "entity", "entity_id": entity}
+    return {
+        "create_decision": {"body": {"title": "Ship the weekly digest", "approver_id": str(who)}},
+        "create_question": {"body": {"prompt": "Who reads the digest?", "asked_to": str(who),
+                                     "subject": subject}},
+    }  # fmt: skip
+
+
+async def test_an_allowed_route_that_pings_names_each_person_on_its_card(client):
+    """A route that reaches a Slack ping, the Slack outbox or the mailer is allowed only
+    when its card names the recipients: each such route's card, made here, says "Sends a
+    Slack message to <name>". (Company webhooks are Oracle's own events: allowed.)
+
+    The walk's limit: it follows the names a function's body uses, resolved in its module
+    or its own imports (functions and module attributes); a method called on an object made
+    at run time (``obj.send()``, ``self.x()``) or a function passed in as a value is not
+    followed, so a ping reached only that way is missed."""
     from fastapi.routing import iter_route_contexts
 
+    ctx = await make_people()
+    await World(ctx).build()
+    entity = await _new_entity(client, ctx, "night-nurse", "Night shift nurse")
+    name = await _person_name(client, ctx, "decider")
+    calls = _pinging(ctx.users["decider"].id, entity)
     by_route = {(m, r.path_format): r.endpoint for r in iter_route_contexts(app.router.routes)
                 if hasattr(r, "endpoint") for m in getattr(r, "methods", None) or ()}  # fmt: skip
     reached = {}
     for a in ask_actions.catalogue(app).actions.values():
-        if a.reads:
-            continue
-        found = _reaches(by_route[(a.method, a.path)], set())
-        if found:
-            reached[a.name] = found
-    assert reached == {}, reached
+        if not a.reads and _reaches(by_route[(a.method, a.path)], set()):
+            reached[a.name] = a
+    # The three the owner restored (Nov 5) are offered and reach a ping.
+    assert {"create_decision", "create_question", "update_question"} <= set(reached), reached
     for op in ("create_question", "update_question", "create_decision"):
-        assert "Slack" in OUTWARD_OR_SECRET.get(op, ""), op
+        assert op not in OUTWARD_OR_SECRET and op in ask_actions.ALLOWED, op
+        assert op in ask_actions.PINGS, op
+    for n in reached:
+        assert n in ask_actions.PINGS, f"{n} pings someone its card does not name"
+        if n == "update_question":
+            continue  # its card: test_a_reassigned_question_names_the_new_person
+        m = await _called(client, ctx, "approver", {"action": n, "args": calls[n]})
+        [card] = m["cards"]
+        assert f"Sends a Slack message to {name} " in card["summary"], card["summary"]
+        assert str(ctx.users["decider"].id) not in card["summary"]
 
 
 def test_the_walk_sees_a_ping():
@@ -637,3 +675,108 @@ async def test_a_card_whose_commit_failed_cannot_apply_twice(client, monkeypatch
     r = await client.post(f"{CARDS}/{card['id']}/apply", headers=ctx.as_("approver"))
     # Refused as a card applied once, not by the route (its record exists already).
     assert r.status_code == 409 and "Oracle could not" not in r.text, r.text
+
+
+# --------------------------------------------------------------------------- fix round 3
+
+
+async def test_a_decision_request_names_the_approver_and_apply_pings_exactly_them(
+    client, slack
+):
+    from tests.test_slack_bridge import install
+    from tests.test_slack_pings import pings_of
+
+    ctx = await make_people()
+    await World(ctx).build()
+    await install(client, ctx)
+    name = await _person_name(client, ctx, "decider")
+    ask = {"action": "create_decision", "args": {"body": {
+        "title": "Ship the weekly digest", "approver_id": str(ctx.users["decider"].id)}}}  # fmt: skip
+    m = await _called(client, ctx, "owner", ask)
+    [card] = m["cards"]
+    assert card["summary"] == (
+        f"Request a decision: title “Ship the weekly digest”, approver “{name}”. "
+        f"Sends a Slack message to {name} asking for a decision. {ask_actions.CANNOT_UNDO}"
+    ), card["summary"]
+    assert await pings_of(ctx) == []
+    applied = await _apply(client, ctx, "owner", card)
+    assert applied["can_undo"] is False
+    [ping] = await pings_of(ctx)
+    assert ping.recipient_id == ctx.users["decider"].id
+    r = await client.get("/v1/decisions", headers=ctx.as_("owner"))
+    assert "Ship the weekly digest" in r.text
+    # A person no one can name: no card, no ping.
+    ask["args"]["body"]["approver_id"] = str(uuid.uuid4())
+    m = await _called(client, ctx, "owner", ask)
+    assert m["cards"] == [] and ask_actions.NO_NAME in m["body"], m
+
+
+async def test_a_question_names_whom_it_asks_and_a_reassigned_one_the_new_person(
+    client, slack
+):
+    from tests.test_slack_bridge import install
+    from tests.test_slack_pings import pings_of
+
+    ctx = await make_people()
+    await World(ctx).build()
+    await install(client, ctx)
+    entity = await _new_entity(client, ctx, "night-nurse", "Night shift nurse")
+    decider = await _person_name(client, ctx, "decider")
+    approver = await _person_name(client, ctx, "approver")
+    ask = {"action": "create_question",
+           "args": _pinging(ctx.users["decider"].id, entity)["create_question"]}  # fmt: skip
+    [card] = (await _called(client, ctx, "owner", ask))["cards"]
+    assert "subject “Night shift nurse”" in card["summary"], card["summary"]
+    assert f"Sends a Slack message to {decider} with the question." in card["summary"]
+    await _apply(client, ctx, "owner", card)
+    assert [p.recipient_id for p in await pings_of(ctx)] == [ctx.users["decider"].id]
+    async with tenant_session(ctx.tenant_id) as s:
+        from oracle.intake.models import StakeholderQuestion
+
+        q = await s.scalar(select(StakeholderQuestion).where(
+            StakeholderQuestion.prompt == "Who reads the digest?"))  # fmt: skip
+    move = {"action": "update_question",
+            "args": {"question_id": str(q.id), "body": {"asked_to": str(ctx.users["approver"].id)}}}  # fmt: skip
+    [card] = (await _called(client, ctx, "owner", move))["cards"]
+    assert f"Sends a Slack message to {approver} with the question." in card["summary"]
+    assert card["summary"].endswith(ask_actions.CANNOT_UNDO)
+    await _apply(client, ctx, "owner", card)
+    assert [p.recipient_id for p in await pings_of(ctx)][-1] == ctx.users["approver"].id
+    # A withdrawal pings no one, and its card says no message.
+    stop = {"action": "update_question",
+            "args": {"question_id": str(q.id), "body": {"status": "withdrawn"}}}  # fmt: skip
+    [card] = (await _called(client, ctx, "owner", stop))["cards"]
+    assert "Slack" not in card["summary"], card["summary"]
+
+
+async def test_a_card_names_an_intake_a_prd_version_and_a_document(client):
+    from oracle.docs.models import Document, DocumentVersion
+    from tests.fixtures import draft, import_draft
+    from tests.intake_helpers import create_intake
+
+    ctx = await make_people()
+    await World(ctx).build()
+    intake = await create_intake(client, ctx, "approver", title="Saved addresses")
+    gap = {"action": "create_knowledge_gap", "args": {"body": {
+        "intake_id": intake["id"], "category": "customer_user", "statement": "Who saves addresses?",
+        "importance": "high"}}}  # fmt: skip
+    [card] = (await _called(client, ctx, "approver", gap))["cards"]
+    assert "intake “Saved addresses”" in card["summary"], card["summary"]
+    await _apply(client, ctx, "owner", card)
+
+    r = await import_draft(client, ctx.as_("approver"), draft("prd_v1.md"), "saved-addresses")
+    assert r.status_code in (200, 201), r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == "saved-addresses"))
+        version = await s.scalar(select(DocumentVersion).where(
+            DocumentVersion.document_id == doc.id))  # fmt: skip
+    blocker = {"action": "create_blocker", "args": {"body": {
+        "type": "dependency", "title": "Address API", "document_ids": [str(doc.id)]}}}  # fmt: skip
+    [card] = (await _called(client, ctx, "approver", blocker))["cards"]
+    assert f"document “{doc.title}”" in card["summary"], card["summary"]
+    outcome = {"action": "create_outcome", "args": {"body": {
+        "title": "More saved addresses", "prd_version_id": str(version.id)}}}  # fmt: skip
+    [card] = (await _called(client, ctx, "approver", outcome))["cards"]
+    assert f"prd version “{doc.title} version {version.number}”" in card["summary"], card[
+        "summary"
+    ]
