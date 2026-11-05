@@ -38,8 +38,18 @@ test("an owner brings old milestones over from Key dates, then keeps or drops th
   let editor = await keyDates(page);
   const preview = editor.getByTestId("old-milestones-preview");
   await expect(preview).toContainText(
-    "2 milestones from older roadmaps will move to the company roadmap",
+    "2 milestones will move to the company roadmap",
   );
+  // The why sits behind the (i): one short line and the button show.
+  const why = preview.getByRole("button", { name: "About Old milestones" });
+  await why.hover();
+  await expect(page.getByRole("tooltip")).toContainText(
+    "They come from older roadmaps",
+  );
+  await expect(page.getByRole("tooltip")).toContainText(
+    "1 needs your call: none of their items are left.",
+  );
+  await page.mouse.move(0, 0);
   const safety = preview
     .getByTestId("old-milestone-move")
     .filter({ hasText: "Safety tools in beta" });
@@ -54,9 +64,6 @@ test("an owner brings old milestones over from Key dates, then keeps or drops th
       .getByTestId("old-milestone-move")
       .filter({ hasText: "Ready for twice the load" }),
   ).toContainText("Waits on Read replicas in two regions");
-  await expect(preview).toContainText(
-    "1 needs your call: none of their items are left.",
-  );
   const ask = editor.getByTestId("old-milestone-ask");
   await expect(ask).toHaveCount(1);
   await expect(ask).toContainText("Seller badge pilot");
@@ -126,6 +133,47 @@ test("an owner brings old milestones over from Key dates, then keeps or drops th
       .getByTestId("key-date-milestone")
       .filter({ hasText: "Seller badge pilot" }),
   ).toContainText("Nov 20");
+  // Its Key dates row opens the milestone's own panel, its goal named though no item is left.
+  await editor
+    .getByRole("button", { name: "Open M1 Seller badge pilot" })
+    .click();
+  await expect(editor).toHaveCount(0);
+  const card = page.getByRole("dialog", { name: "Edit M1" });
+  await expect(card).toContainText("Faster activation · Nov 20");
+  await expect(card.getByLabel("Goal")).toHaveValue(/.+/);
+  await expect(card.getByLabel("Goal").locator("option:checked")).toHaveText(
+    "Faster activation",
+  );
+  await expect(card.getByTestId("ms-carried-from")).toHaveText(
+    "Brought over from Trust plan roadmap",
+  );
+});
+
+test("on a phone the message after bringing them over leaves Old milestones in sight", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page);
+  const editor = await keyDates(page);
+  await editor
+    .getByRole("button", { name: "Bring old milestones over" })
+    .click();
+  const said = page.getByText("Brought 2 old milestones over");
+  await expect(said).toBeVisible();
+  const heading = editor.getByRole("heading", { name: "Old milestones" });
+  await heading.scrollIntoViewIfNeeded();
+  const ask = editor.getByTestId("old-milestone-ask");
+  await ask.scrollIntoViewIfNeeded();
+  const t = (await said.boundingBox())!;
+  for (const box of [await heading.boundingBox(), await ask.boundingBox()]) {
+    const b = box!;
+    const apart =
+      t.y + t.height <= b.y ||
+      b.y + b.height <= t.y ||
+      t.x + t.width <= b.x ||
+      b.x + b.width <= t.x;
+    expect(apart, JSON.stringify({ toast: t, under: b })).toBe(true);
+  }
 });
 
 test("Drop leaves an old milestone with no items left behind", async ({
