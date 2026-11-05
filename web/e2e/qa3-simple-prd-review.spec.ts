@@ -54,10 +54,11 @@ test.describe("desktop", () => {
     await page.goto("/simple/one-pagers");
     await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Team workspaces PRD" }).click();
     await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
-    await page.locator('[data-line="not_doing-2"]').hover();
-    await page.getByRole("button", { name: "Edit “A mobile setup flow" }).click();
+    // vqa B-13: Team workspaces' own line (a Scope bullet), never the seed's invented page.
+    await page.locator('[data-line="bets-3"]').hover();
+    await page.getByRole("button", { name: "Edit “One invoice per workspace" }).click();
     const box = page.getByLabel("New wording for");
-    await box.fill("A phone setup flow");
+    await box.fill("One invoice per team");
     await page.evaluate(() => {
       document.documentElement.requestFullscreen = () => Promise.reject(new Error("refused"));
     });
@@ -69,7 +70,7 @@ test.describe("desktop", () => {
     await ask.getByRole("button", { name: "Keep editing" }).focus();
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
-    await expect(box).toHaveValue("A phone setup flow");
+    await expect(box).toHaveValue("One invoice per team");
   });
 
   test("the status chip reads the PRD's own summary, as the list does, without loading every PRD", async ({ page }) => {

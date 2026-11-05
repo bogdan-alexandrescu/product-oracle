@@ -171,7 +171,7 @@ import { goalSuggestionInboxRows, seedGoalSuggestions, seedHeldGoalSuggestion, s
 import { runGroupsOut } from "./simple-runs";
 import { questionInboxRows } from "./simple-questions";
 import { rebuildsOut } from "./rebuilds";
-import { onePagerInboxRows, planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { onePagerInboxRows, planSlice, prdOnePager, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
@@ -296,7 +296,7 @@ export interface Db {
   simple_roadmap?: SimpleDb;
   /** Simple S5 (#723): one PRD's one-pager, its working draft and line changes (./simple-one-pager.ts). */
   simple_one_pager?: OnePagerDb;
-  /** Every other mock PRD's own one-pager (the same invented page), by document id. */
+  /** Every other mock PRD's own one-pager (built from its own sections), by document id. */
   simple_one_pagers?: Record<string, OnePagerDb>;
   /** Simple S10 (#723): proposals' visuals, their versions and comments (./simple-visuals.ts). */
   simple_visuals?: VisualsDb;
@@ -5733,7 +5733,8 @@ function startPricing(db: Db, me: MemberRow, input: Schemas["StartDraftIn"]): Re
 
 /**
  * Simple S5: the one-pager a request is about. The seeded PRD has the seeded one; every other
- * mock PRD (matched by slug or document id) gets its own copy of the invented page, so a line
+ * mock PRD (matched by slug or document id) gets its own page, built from its own sections
+ * (vqa B-13: never the seed's invented words under its title), so a line
  * edit, a draft or Remind on one PRD never lands on another's. Drafts and changes are found by
  * their id, a new line edit by its target's document id.
  */
@@ -5750,7 +5751,10 @@ async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb
     // one, else its latest, dated by its approval (none: never published).
     const vs = docVersions(db, d);
     const read = [...vs].reverse().find((x) => x.approved_at) ?? vs.at(-1);
-    return (others[d.id] = { ...seedOnePager(), doc: { id: d.id, slug: d.slug, title: d.title }, visuals: db.simple_visuals, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}) });
+    // vqa B-13: built from that version's own sections (as the API's quick read), never the seed's words.
+    const doc = { id: d.id, slug: d.slug, title: d.title };
+    const own = read ? prdOnePager(doc, read.sections ?? [], Object.fromEntries((read.citations ?? []).map((c) => [c.cite_key, { title: c.title ?? null, excerpt: c.excerpt ?? null }]))) : { ...seedOnePager(), doc };
+    return (others[d.id] = { ...own, visuals: db.simple_visuals, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}) });
   };
   if (p[1] !== "simple") return seeded;
   if (p[2] === "one-pagers") return forDoc(p[3]) ?? seeded;
@@ -6688,7 +6692,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     // build-goal-order-control: the "goal-order" scenarios' added goals name their roadmap work on every load.
     knowGoalOrderGoals(db.baseline.entities);
     // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
-    // served the same invented page under its own slug and title, with its own draft and changes.
+    // served a page built from its own sections (vqa B-13), with its own draft and changes.
     const onePagerDb = await onePagerOf(db, r, p);
     const onePagerRes = await routeOnePager(
       onePagerDb,
@@ -7399,8 +7403,9 @@ function boardItems(db: Db, v: VersionRow): BoardItem[] {
 /** A version's deck and export (O5: `v` already rendered for its audience, if any). */
 function exportRoute(db: Db, doc: DocumentRow, v: VersionRow, sub: string | undefined, q: URLSearchParams, audience: string | null): Response {
   const badge = isAudience(audience) ? audienceLabel(audience) : null;
-  if (sub === "deck" || (sub === "export" && (q.get("layer") ?? "full") !== "full")) {
-    if (!v.sections.some((s) => s.layer === "brief")) {
+  const noBrief = !v.sections.some((s) => s.layer === "brief");
+  if (sub === "export" && (q.get("layer") ?? "full") !== "full") {
+    if (noBrief) {
       return json(422, { detail: `version ${v.number} of '${doc.slug}' has no brief sections; export the full document instead` });
     }
   }
@@ -7416,7 +7421,13 @@ function exportRoute(db: Db, doc: DocumentRow, v: VersionRow, sub: string | unde
         status: v.approved_at ? "approved" : doc.status,
         created_at: v.created_at,
         source: v.source ?? null,
-        sections: v.sections,
+        // B-04, as the API: a version with no brief shows its full document's sections, one per
+        // slide (not its empty title section, not the sources appendix).
+        sections: noBrief
+          ? v.sections.map((s) =>
+              s.section_key !== "sources" && (s.level > 1 || (s.body_md ?? "").trim()) ? { ...s, layer: "brief" } : s,
+            )
+          : v.sections,
         citations: v.citations,
         // H8: a board update groups its brief sections into slides (front matter `slides`).
         slides: Array.isArray(v.front_matter.slides) ? (v.front_matter.slides as string[][]) : undefined,

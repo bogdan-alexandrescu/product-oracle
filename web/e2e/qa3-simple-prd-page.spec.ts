@@ -139,21 +139,22 @@ test.describe("desktop, no plan", () => {
 
   test("the editor takes the cursor; Escape and Ctrl+Enter; an empty line says why (p3-2, 27)", async ({ page }) => {
     await paper(page);
-    await line(page, "not_doing-2").hover();
-    await page.getByRole("button", { name: "Edit “A mobile setup flow" }).click();
+    // vqa B-13: Team workspaces' own lines (its Scope bullets), never the seed's invented page.
+    await line(page, "bets-3").hover();
+    await page.getByRole("button", { name: "Edit “One invoice per workspace" }).click();
     const box = page.getByLabel("New wording for");
     await expect(box).toBeFocused();
-    expect(await box.evaluate((el: HTMLTextAreaElement) => el.selectionEnd - el.selectionStart)).toBe("A mobile setup flow".length);
+    expect(await box.evaluate((el: HTMLTextAreaElement) => el.selectionEnd - el.selectionStart)).toBe("One invoice per workspace, with seats billed monthly.".length);
     await page.keyboard.press("Escape");
     await expect(box).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Edit “A mobile setup flow" })).toBeFocused();
+    await expect(page.getByRole("button", { name: "Edit “One invoice per workspace" })).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(box).toBeFocused();
     await box.fill("");
     await expect(page.getByTestId("line-edit-empty")).toContainText("A line needs words");
-    await box.fill("A phone setup flow");
+    await box.fill("One invoice per team");
     await page.keyboard.press("Control+Enter");
-    await expect(line(page, "not_doing-2")).toHaveAttribute("data-state", "edited");
+    await expect(line(page, "bets-3")).toHaveAttribute("data-state", "edited");
   });
 
   test("pointing at a line moves no words; its sources mark the line (p3-25, 26)", async ({ page }) => {
@@ -161,11 +162,11 @@ test.describe("desktop, no plan", () => {
     const text = line(page, "problem-1").getByTestId("one-pager-line-text");
     const before = (await text.boundingBox())!.width;
     await text.hover();
-    await expect(page.getByRole("button", { name: /^Edit “New workspace admins/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Edit “People share work/ })).toBeVisible();
     expect((await text.boundingBox())!.width).toBe(before);
-    await page.getByRole("button", { name: /Calendar access may scare admins away/ }).click();
-    const sources = page.getByRole("region", { name: /Sources of “Calendar access/ });
-    await expect(sources.getByTestId("source-line")).toHaveText("Calendar access may scare admins away");
+    await line(page, "bets-2").getByTestId("one-pager-line-text").click();
+    const sources = page.getByRole("region", { name: /Sources of “Move existing projects/ });
+    await expect(sources.getByTestId("source-line")).toHaveText("Move existing projects into a workspace.");
   });
 
   test("the same header as a plan's, its status as the list's; the strip's legend (p3-16, 15)", async ({ page }) => {
@@ -200,15 +201,15 @@ test.describe("desktop, no plan", () => {
 
   test("a commenter's own proposal is theirs, and withdrawn (p3-17)", async ({ page }) => {
     await paper(page, "commenter@example.com");
-    await line(page, "not_doing-1").hover();
-    await page.getByRole("button", { name: "Propose wording for “Single sign-on setup" }).click();
-    await page.getByLabel("New wording for").fill("Single sign-on, later");
+    await line(page, "bets-2").hover();
+    await page.getByRole("button", { name: "Propose wording for “Move existing projects" }).click();
+    await page.getByLabel("New wording for").fill("Move existing projects later");
     await page.getByRole("button", { name: "Propose", exact: true }).click();
-    const note = page.getByRole("note").filter({ hasText: "You proposed new wording for “Single sign-on setup" }).filter({ visible: true });
+    const note = page.getByRole("note").filter({ hasText: "You proposed new wording for “Move existing projects" }).filter({ visible: true });
     await expect(note).toBeVisible();
     await expect(note).not.toContainText("Theo Brandt proposes");
     await note.getByRole("button", { name: "Withdraw" }).click();
-    await expect(page.getByRole("note").filter({ hasText: "Single sign-on setup" })).toHaveCount(0);
+    await expect(page.getByRole("note").filter({ hasText: "Move existing projects" })).toHaveCount(0);
   });
 
   test("presenting keeps focus on the page, and Escape stops it (p3-18, 19)", async ({ page }) => {

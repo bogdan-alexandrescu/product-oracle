@@ -487,7 +487,7 @@ export function roadmapFromPrd(prd: {
   const title = `${prd.title.replace(/\s*PRD$/, "")} roadmap`;
   const sections: SectionSeed[] = [
     // walkb-roadmap: as the real template, the line under the title says which day it is as of.
-    { key: "title", level: 1, heading: title, body: `As of 2026-10-02. Built from [${prd.title} v${prd.version}](${link()}).` },
+    { key: "title", level: 1, heading: title, body: `As of Oct 2, 2026. Built from [${prd.title} v${prd.version}](${link()}).` },
     {
       key: "summary",
       level: 2,

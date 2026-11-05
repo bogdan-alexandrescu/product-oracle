@@ -171,12 +171,20 @@ function AudienceView({ doc, n, audience }: { doc: string; n: number; audience: 
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
       {!q.data && !q.error && <Loading />}
       {q.data && (
-        <iframe
-          title={`Roadmap for ${audienceLabel(audience)}`}
-          sandbox="allow-popups allow-popups-to-escape-sandbox"
-          srcDoc={q.data}
-          className="h-[560px] w-full rounded-lg border border-line bg-white max-[600px]:h-[420px]"
-        />
+        // B-10: the preview stays white (it is the exported page), framed by a strong line so it
+        // reads as a page on the dark theme too, under a caption that says what it is.
+        <figure className="m-0">
+          <figcaption data-testid="audience-preview-caption" className="mb-1.5 text-[13px] font-semibold text-text2">
+            How the exported page looks
+          </figcaption>
+          <iframe
+            title={`Roadmap for ${audienceLabel(audience)}`}
+            sandbox="allow-popups allow-popups-to-escape-sandbox"
+            srcDoc={q.data}
+            data-testid="audience-preview"
+            className="block h-[560px] w-full rounded-lg border-2 border-line-strong bg-white max-[600px]:h-[420px]"
+          />
+        </figure>
       )}
     </Panel>
   );

@@ -18,6 +18,7 @@ import {
   DataTable,
   Inspector,
   Icon,
+  InfoTip,
   InspectorRow,
   InspectorSection,
   LinkButton,
@@ -116,9 +117,20 @@ function versionColumns(
           )}
           {v.number === latest && <Chip kind="now">Latest</Chip>}
           {realWarnings(v.warnings).length > 0 && (
-            <Chip kind="warn" title={realWarnings(v.warnings).map((w) => warningText(w, headings)).join("\n")}>
-              {plural(realWarnings(v.warnings).length, "warning")}
-            </Chip>
+            // B-20: a button that opens its warnings on hover, a tap or the keyboard (a title opens nothing on a phone).
+            <InfoTip
+              label="warnings"
+              align="start"
+              side="bottom"
+              testId="overview-warnings-chip"
+              trigger={<Chip kind="warn">{plural(realWarnings(v.warnings).length, "warning")}</Chip>}
+            >
+              <span className="flex flex-col gap-1.5">
+                {realWarnings(v.warnings).map((w, i) => (
+                  <span key={i}>{warningText(w, headings)}</span>
+                ))}
+              </span>
+            </InfoTip>
           )}
         </span>
       ),

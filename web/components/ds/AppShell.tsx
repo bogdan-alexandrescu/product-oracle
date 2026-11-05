@@ -692,7 +692,8 @@ function usePageTitle(pathname: string): { title: string; plain: string; drawn?:
       // Next keeps recently visited routes mounted but hidden: the shown page's H1.
       const h1s = Array.from(main.querySelectorAll("h1"));
       const h1 = h1s.find((h) => h.checkVisibility()) ?? h1s[0];
-      const title = h1Text(h1, false);
+      // B-23: a page can keep its H1's suffix off the phone header (PageHeader phoneSuffix).
+      const title = h1Text(h1, !!h1?.hasAttribute("data-phone-plain"));
       // qa-shell-3: a section's tab (Plan, Company, Settings) is headed by the section's name;
       // the browser tab names the open tab too ("Dates · Plan"), so no two pages share one.
       const plain = inSection(withTab(h1, h1Text(h1, true), pathname), pathname);

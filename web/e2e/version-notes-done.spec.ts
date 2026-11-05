@@ -87,11 +87,15 @@ test("the overview's version inspector lists the warnings it counts, the done no
 
 test("a note with a declined point stays a warning", async ({ page }) => {
   await openVersion(page, "/documents/usage-alerts/v/1");
-  const note = page.locator('[data-warning="note_answered"]').filter({ visible: true });
-  await expect(note).toHaveText("The draft answers the send-back note: 2 points (1 addressed, 1 declined)");
-  await expect(note).not.toHaveAttribute("data-state", "done");
-  await expect(note).toHaveClass(/bg-warn-bg/);
-  await expect(page.getByTestId("version-warnings-chip").filter({ visible: true })).toHaveText("1 warning");
+  // B-09: no done notice for it in the body; the warning is in the header chip's tip.
+  await expect(page.locator('[data-warning="note_answered"]').filter({ visible: true })).toHaveCount(0);
+  await expect(page.locator('[data-warning]:not([data-state="done"])').filter({ visible: true })).toHaveCount(0);
+  const chip = page.getByTestId("version-warnings-chip").filter({ visible: true });
+  await expect(chip).toHaveText("1 warning");
+  await chip.click();
+  await expect(page.getByRole("tooltip").filter({ visible: true })).toContainText(
+    "The draft answers the send-back note: 2 points (1 addressed, 1 declined)",
+  );
 });
 
 test("an older note answered in full, stored without its declined list, reads as done", async ({ page }) => {
@@ -104,7 +108,13 @@ test("an older note answered in full, stored without its declined list, reads as
 
 test("a version's warnings start with a capital letter", async ({ page }) => {
   await openVersion(page);
-  const cards = page.locator("[data-warning]").filter({ visible: true });
-  await expect(cards).toHaveCount(4);
-  for (const text of await cards.allTextContents()) expect(text.trim()).toMatch(/^[A-Z]/);
+  // B-09: the body keeps only the done notice; the warnings are in the header chip's tip.
+  await expect(page.locator('[data-warning]:not([data-state="done"])').filter({ visible: true })).toHaveCount(0);
+  const done = page.locator('[data-warning="note_answered"][data-state="done"]').filter({ visible: true });
+  await expect(done).toHaveCount(1);
+  expect((await done.textContent())?.trim()).toMatch(/^[A-Z]/);
+  await page.getByTestId("version-warnings-chip").filter({ visible: true }).click();
+  const lines = page.getByRole("tooltip").filter({ visible: true }).locator(":scope > span > span");
+  await expect(lines).toHaveCount(2);
+  for (const text of await lines.allTextContents()) expect(text.trim()).toMatch(/^[A-Z]/);
 });
