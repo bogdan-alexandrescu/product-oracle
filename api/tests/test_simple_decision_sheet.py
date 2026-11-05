@@ -39,6 +39,10 @@ Test cards (protects / fails_when / no_claim):
 - test_add_question_takes_the_prd_by_its_slug: protects=``add_question`` names its PRD by
   id or by the slug Decisions' PRD list gives (so + Ask a question offers every PRD the
   person reads); fails_when=the slug is refused.
+- test_one_decision_reads_as_its_row: protects=``GET /v1/simple/decisions/{id}`` gives one
+  open decision as the Decisions page's row (fields, ``can``) for the sheet Home and Waiting
+  for you open on a decision-log call; Waiting still answers; a deleted one is 404;
+  fails_when=the row or its ``can`` is missing, or Waiting is shadowed.
 """
 
 import uuid
@@ -391,3 +395,23 @@ async def test_add_question_takes_the_prd_by_its_slug(client):
                       {"title": "Who can export a team's alert history?"})  # fmt: skip
     assert r.status_code == 201, r.text
     assert _q(await _page(client, ctx), "Q17") is not None
+
+
+async def test_one_decision_reads_as_its_row(client):
+    ctx = await make_ctx()
+    d = await _decision(client, ctx, approver="approver")
+    r = await client.get(f"/v1/simple/decisions/{d['id']}", headers=ctx.as_("approver"))
+    assert r.status_code == 200, r.text
+    row = r.json()
+    assert row == _row(await _page(client, ctx, "approver"), d["id"])
+    assert row["question"] == "Keep the free plan's five-seat limit?"
+    assert row["can"]["edit"] is True and row["approver"]["id"] == str(ctx.users["approver"].id)
+    viewer = await client.get(f"/v1/simple/decisions/{d['id']}", headers=ctx.as_("viewer"))
+    assert viewer.status_code == 200 and viewer.json()["can"]["propose"] is False
+    w = await client.get("/v1/simple/decisions/waiting", headers=ctx.as_("approver"))
+    assert w.status_code == 200, w.text
+    gone = await client.request("DELETE", f"/v1/simple/decisions/{d['id']}",
+                                headers=ctx.as_("owner"))  # fmt: skip
+    assert gone.status_code == 200, gone.text
+    r = await client.get(f"/v1/simple/decisions/{d['id']}", headers=ctx.as_("owner"))
+    assert r.status_code == 404, r.text
