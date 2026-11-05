@@ -5,8 +5,8 @@ from an older per-PRD roadmap (its history link); ``carry_dropped_at``: when an 
 dropped an old milestone none of whose items were left, so it is not carried. The
 downgrade drops both.
 
-Revision ID: 0108_goal_milestone_carried
-Revises: 0107_simple_change_seq
+Revision ID: 0113_goal_milestone_carried
+Revises: 0112_simple_change_seq
 """
 
 from collections.abc import Sequence
@@ -14,8 +14,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0108_goal_milestone_carried"
-down_revision: str | None = "0107_simple_change_seq"
+revision: str = "0113_goal_milestone_carried"
+down_revision: str | None = "0112_simple_change_seq"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

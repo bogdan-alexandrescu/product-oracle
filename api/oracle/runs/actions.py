@@ -1020,7 +1020,7 @@ def _answers(action: ReviewAction, reason: dict[str, Any]) -> bool:
     if action.state != "staged" or action.kind == "question":
         return False
     if action.answers:
-        return reason["code"] in action.answers
+        return reason["code"] in action.answers and reasons.is_its_fix(action, reason)
     return action.kind != "waive" or reason["code"] not in OWNER_WAIVES
 
 

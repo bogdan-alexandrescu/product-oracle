@@ -57,7 +57,7 @@ test.describe("at 1440", () => {
     await expect(build).toHaveText("Review");
     await build.click();
     await expect(page).toHaveURL(/\/baseline\?from=setup$/);
-    await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
     const back = page.getByTestId("baseline-back-home");
     await expect(back).toHaveText("Back to Home");
     await back.click();

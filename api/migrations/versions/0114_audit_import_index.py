@@ -9,8 +9,8 @@ Live-safe: built concurrently, outside the migration's transaction, so audited w
 while it builds (a plain CREATE INDEX there holds a ShareLock on audit_events until commit).
 The downgrade drops it, in its own transaction.
 
-Revision ID: 0109_audit_import_index
-Revises: 0108_goal_milestone_carried
+Revision ID: 0114_audit_import_index
+Revises: 0113_goal_milestone_carried
 """
 
 from collections.abc import Sequence
@@ -18,8 +18,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0109_audit_import_index"
-down_revision: str | None = "0108_goal_milestone_carried"
+revision: str = "0114_audit_import_index"
+down_revision: str | None = "0113_goal_milestone_carried"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

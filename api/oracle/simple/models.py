@@ -685,3 +685,46 @@ class SimpleMeetingDecision(TenantScoped, Base):
         ARRAY(Uuid), nullable=False, server_default="{}"
     )
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+LIFTS = ("helping", "not_helping", "not_measured")
+CONFIDENCES = ("high", "medium", "low")
+
+
+class FocusArea(TenantScoped, Base):
+    """Goal map (build-goal-map): an area of focus, in the owner's order (``position``),
+    the order every view keeps."""
+
+    __tablename__ = "focus_areas"
+
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    lever: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    position: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+
+
+class MilestoneFeature(TenantScoped, Base):
+    """Goal map: a feature (roadmap item) serving a track milestone, in an area, with its
+    expected lift and confidence and, once out, its measured lift."""
+
+    __tablename__ = "milestone_features"
+    __table_args__ = (
+        UniqueConstraint("milestone_id", "item_id"),
+        CheckConstraint(_in("lift", LIFTS), name="lift"),
+        CheckConstraint(_in("confidence", CONFIDENCES), name="confidence"),
+        Index("ix_milestone_features_item_id", "item_id"),
+    )
+
+    milestone_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("track_milestones.id", ondelete="CASCADE"), nullable=False
+    )
+    item_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("roadmap_items.id", ondelete="CASCADE"), nullable=False
+    )
+    area_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("focus_areas.id", ondelete="SET NULL")
+    )
+    expected: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    confidence: Mapped[str] = mapped_column(Text, nullable=False, server_default="medium")
+    released: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    measured: Mapped[str | None] = mapped_column(Text)
+    lift: Mapped[str] = mapped_column(Text, nullable=False, server_default="not_measured")

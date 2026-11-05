@@ -1412,6 +1412,10 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     run = await _get_run(db, run_id)
     segments = await _segments(db, run.id)
     checkpoints = await _checkpoints(db, [run.id])
+    # A run already waiting at the Engineering check reads as the rules now are: its
+    # briefs checked again (kept in its segment), no rerun. In memory only: a read (a
+    # read-only token's too) writes nothing; deciding the stop stores it.
+    await eng_check.refresh(db, run, segments, checkpoints, persist=False)
     names = await _decider_names(db, checkpoints)
     leads = await engineering_leads(db)
     staged = await _staged_actions(db, checkpoints)
@@ -3027,6 +3031,7 @@ async def _prompt_context(
             ),
             *await eng_dates.prompt_lines(db, run, segment.name),
             *_regenerate_note(run, hidden),
+            *await _carried_lines(db, run, segment.name),
         ],
         intake_id=run.knobs.get("intake_id"),
         intake_gap_ids=list(run.knobs.get("intake_gap_ids") or []),
@@ -3040,6 +3045,16 @@ async def _prompt_context(
         if (reused := run.knobs.get("reuse_baseline")) and segment.name != "baseline"
         else None,
     )
+
+
+async def _carried_lines(db: AsyncSession, run: Run, segment: str) -> list[str]:
+    """The PRD writer's carried inputs, when the run's brief replaces a PRD."""
+    if segment != "prd_draft":
+        return []
+    from oracle.intake import carried
+
+    got = await carried.of_run(db, run)
+    return carried.prompt_lines(got) if got is not None else []
 
 
 # #562 review: what a member-view run's prompt says instead of a person's note that names
@@ -4902,6 +4917,24 @@ async def _prd_links(db: AsyncSession, markdown: str, source: VersionSource) -> 
     return {"resolved": resolved, "unresolved": unresolved}
 
 
+async def _work_problems(db: AsyncSession, run: Run, markdown: str) -> list[ImportProblem]:
+    """A PRD draft's problems with the work its brief's answers made (an answer saying
+    finding out is part of this work: a requirement cited to it, never a blocker)."""
+    from oracle.intake import discovery, drafting
+
+    intake_id = drafting._intake_id(run)
+    pinned = (run.knobs or {}).get(drafting.ANSWER_IDS)
+    if intake_id is None or not isinstance(pinned, list) or (run.knobs or {}).get("intake_gap_ids"):
+        return []
+    keep = set()
+    for i in pinned:
+        try:
+            keep.add(uuid.UUID(str(i)))
+        except ValueError:
+            continue  # a malformed knob pins nothing
+    return discovery.draft_problems(markdown, await discovery.run_work(db, intake_id, keep))
+
+
 async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) -> dict[str, Any]:
     """Import the draft as the next version of the run's document (of ``kind``, with
     the run's provenance), in its own transaction."""
@@ -4936,6 +4969,9 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
         problems = await stop_answers.open_problems(db, run, markdown)
         if problems:
             return rejection.refused(name, problems)
+    if kind == "prd" and (problems := await _work_problems(db, run, markdown)):
+        # Walk 2 problem 19: what the brief's answers made work is never a blocker.
+        return rejection.refused(name, problems)
     async with tenant_session(tenant_id) as s:
         try:
             result = await docs_service.import_draft(
@@ -6030,14 +6066,24 @@ class CheckedItems:
 
 async def _version_source(db: AsyncSession, source_id: uuid.UUID) -> Any:
     """A PRD version's slug, number and title (once per Inbox call, oracle.runs.batch)."""
-    return await once(
-        ("version_source", source_id),
-        lambda: _source_of(db, source_id),
-    )
+    found = await _prd_source(db, source_id)
+    return found[0] if found is not None else None
 
 
-async def _source_of(db: AsyncSession, source_id: uuid.UUID) -> Any:
-    return (await docs_service.version_sources(db, [source_id])).get(source_id)
+async def _prd_source(db: AsyncSession, source_id: uuid.UUID) -> tuple[VersionSource, str] | None:
+    """A PRD version's source and its markdown, in one read (once per Inbox call)."""
+    return await once(("version_source", source_id), lambda: _source_of(db, source_id))
+
+
+async def _source_of(db: AsyncSession, source_id: uuid.UUID) -> tuple[VersionSource, str] | None:
+    row = (
+        await db.execute(
+            select(DocumentVersion, Document)
+            .join(Document, Document.id == DocumentVersion.document_id)
+            .where(DocumentVersion.id == source_id)
+        )
+    ).first()
+    return (docs_service.version_source(*row), row[0].markdown) if row is not None else None
 
 
 async def _section_keys(db: AsyncSession, version_id: uuid.UUID) -> list[str]:
@@ -6054,24 +6100,56 @@ async def items_check(db: AsyncSession, run: Run, text: str) -> roadmap.ItemsChe
 
 async def _checked(
     db: AsyncSession, run: Run, text: str
-) -> tuple[roadmap.ItemsCheck, str | None, int | None, set[str] | None]:
-    slug = version = prd_id = None
+) -> tuple[roadmap.ItemsCheck, str | None, int | None, set[str] | None, tuple[Any, ...]]:
+    slug = version = prd_id = markdown = title = None
     keys: set[str] | None = None
     source_id = _source_id(run)
     if source_id is not None:
-        source = await _version_source(db, source_id)
-        if source is not None:
+        found = await _prd_source(db, source_id)
+        if found is not None:
+            source, markdown = found
             slug, version, prd_id = source.slug, source.version, source.document_id
+            title = source.title
             keys = set(
                 await once(("section_keys", source_id), lambda: _section_keys(db, source_id))
             )
     # CR-11: a date only with a verified estimate, capacity or commitment behind it.
     bases = await once(("date_bases", prd_id), lambda: schedule.verified_bases(db, prd_id))
     # In a worker thread with a time cap: agent output never holds the event loop.
+    # The owner, Nov 4: an item may depend on another PRD's feature on the company roadmap.
+    # Checked for the horizon and for a cycle through them.
+    on_roadmap = await once(("on_roadmap",), lambda: roadmap_company.features_on_roadmap(db))
+    elsewhere = roadmap_company.others_of(on_roadmap, prd_id, run.id)
     check = await roadmap.check_items_async(
-        text, prd_slug=slug, prd_version=version, prd_sections=keys, date_bases=bases
+        text,
+        prd_slug=slug,
+        prd_version=version,
+        prd_sections=keys,
+        date_bases=bases,
+        elsewhere=elsewhere,
+        prd_name=roadmap_company.OnRoadmap("", title).prd_name if title else None,
     )
-    return check, slug, version, keys
+    if source_id is not None and markdown is not None and check.items:
+        check = await _with_work_problems(db, source_id, markdown, check)
+    return check, slug, version, keys, elsewhere
+
+
+async def _with_work_problems(
+    db: AsyncSession, source_id: uuid.UUID, markdown: str, check: roadmap.ItemsCheck
+) -> roadmap.ItemsCheck:
+    """``check`` with the items' problems with the work the PRD version (``markdown``)
+    planned from its brief's answers (walk 2 problem 19: a finding-out is never a blocker).
+    A new check: ``check`` may be the parse cache's."""
+    from oracle.intake import discovery
+
+    work = await once(("version_work", source_id), lambda: discovery.version_work(db, markdown))
+    found = discovery.items_problems(check.items, work)
+    if not found:
+        return check
+    out = roadmap.ItemsCheck(list(check.items), list(check.problems), list(check.resolutions))
+    for code, message, item in found:
+        out.add(code, message, item)
+    return out
 
 
 async def _items_check(db: AsyncSession, run: Run, text: str) -> roadmap.ItemsCheck:
@@ -6084,7 +6162,7 @@ async def _items_check(db: AsyncSession, run: Run, text: str) -> roadmap.ItemsCh
 async def checked_items(
     db: AsyncSession, run: Run, text: str, prior: PriorReview | None = None
 ) -> CheckedItems:
-    check, slug, version, keys = await once(
+    check, slug, version, keys, elsewhere = await once(
         ("items_check", _source_id(run), text), lambda: _checked(db, run, text)
     )
     if not check.items:
@@ -6099,7 +6177,8 @@ async def checked_items(
         log.exception("the reasons of %s of run %s could not be loaded", ITEMS_FILE, run.id)
         context = reasons.ReasonContext(prd_title=slug, prd_version=version, advisory=False)
         partial = True
-    found = reasons.reasons_for(check.items, check.problems, context)
+    # The check's own list of other PRDs' items: each dependency problem finds its item.
+    found = reasons.reasons_for(check.items, check.problems, context, elsewhere)
     if prior is None:
         return CheckedItems(check, found, context.base, partial, keys)
     before = await roadmap.check_items_async(prior.text)
@@ -8468,6 +8547,8 @@ async def decide_checkpoint(
         from oracle.runs import actions
 
         raise await actions.review_changed(db, cp, expected_revision)
+    # A run already waiting at the Engineering check is decided as the rules now are.
+    await eng_check.refresh(db, run, await _segments(db, run.id), [cp])
     # The note defaults to the shared draft's (D8).
     note = (note if note is not None else cp.draft_note or "").strip() or None
     # D4: an Inbox send-back delivers a structured review of the shared draft (a console

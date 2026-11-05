@@ -284,7 +284,7 @@ export function EngReview({
             onList={() => setReading(false)}
             reading={reading}
             codeMap={check.code_map_used}
-            titleOf={(key) => check.features.find((x) => x.key === key)?.title ?? key.replace(/^f\./, "").replace(/[-_]+/g, " ")}
+            titleOf={(key) => check.features.find((x) => x.key === key)?.title ?? check.elsewhere?.[key] ?? key.replace(/^f\./, "").replace(/[-_]+/g, " ")}
             acts={actionsOf(review, feature.key)}
             stages={stages}
             suggests={suggests}

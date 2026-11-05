@@ -5,8 +5,8 @@ person asked to change it ("make it April instead", "no, ..."), as the card's bu
 decided; it takes that draft's topic and so replaces it. Null: the card is its own topic
 (a new record) or its record's. The downgrade drops it.
 
-Revision ID: 0110_chat_card_redo_of
-Revises: 0109_audit_import_index
+Revision ID: 0115_chat_card_redo_of
+Revises: 0114_audit_import_index
 """
 
 from collections.abc import Sequence
@@ -14,8 +14,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0110_chat_card_redo_of"
-down_revision: str | None = "0109_audit_import_index"
+revision: str = "0115_chat_card_redo_of"
+down_revision: str | None = "0114_audit_import_index"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

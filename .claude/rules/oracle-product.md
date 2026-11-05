@@ -16,3 +16,7 @@
   and every other page) opens the same feature panel: its details, what it depends on, what depends on it, its start
   and delivery estimate, the goal it serves and how that is measured. Each of these is editable there, including
   overriding Oracle's suggestion or an existing dependency. No page shows a feature that cannot be read or changed.
+- A person always sees what is happening to a PRD or roadmap shared with them, and every change it needs can be made
+  in the UI: each count or badge leads to the items it counts, each with the action that resolves it; acting removes or
+  updates the item and every count at once, on every page; a running or scheduled run that will change a PRD or
+  roadmap shows on its pages live; no needed change requires the API, CLD or a hidden page.

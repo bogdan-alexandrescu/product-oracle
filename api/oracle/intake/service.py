@@ -186,6 +186,20 @@ async def create(db: AsyncSession, principal: Principal, body: IntakeCreate) -> 
         )
         if me is None or owned != set(source_ids):
             raise not_found("Source")
+    replaces = None
+    if body.replaces is not None:
+        from oracle.intake import carried
+
+        try:
+            got = await carried.inputs(db, body.replaces.document_id, body.replaces.item_keys)
+        except carried.CarriedError as e:
+            raise IntakeError(e.status, str(e)) from e
+        replaces = {
+            "document_id": str(body.replaces.document_id),
+            "area_name": body.replaces.area_name.strip(),
+            "area_scope": body.replaces.area_scope.strip(),
+            "item_keys": got.area_keys,
+        }
     intake = ProductIntake(
         title=body.title,
         brief=body.brief,
@@ -202,6 +216,7 @@ async def create(db: AsyncSession, principal: Principal, body: IntakeCreate) -> 
         draft_template=body.template,
         draft_theme=body.theme,
         prd_answers=body.prd_answers.model_dump() if body.prd_answers else {},
+        replaces=replaces,
     )
     db.add(intake)
     await db.flush()

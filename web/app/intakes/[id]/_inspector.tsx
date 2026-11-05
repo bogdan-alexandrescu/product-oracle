@@ -339,6 +339,24 @@ export function IntakeInspector({
             </ul>
           </div>
         )}
+        {/* Walk 2 problem 19: an answer saying it is unknown and finding out is part of this
+            work becomes a requirement and early discovery work, never a blocker. */}
+        {!archived && (s.work ?? []).length > 0 && (
+          <div data-testid="unknown-work" className="mt-3 flex flex-col gap-1.5">
+            <p className="text-[13px] text-text2">
+              Not known yet. Finding out is part of this work, so the PRD makes{" "}
+              {s.work!.length === 1 ? "it a requirement" : "them requirements"}, not {s.work!.length === 1 ? "a blocker" : "blockers"}:
+            </p>
+            <ul className="flex flex-col gap-2">
+              {s.work!.map((w) => (
+                <li key={w.answer_id} className="flex min-w-0 flex-col gap-0.5" data-testid="work-item">
+                  <span className="text-sm break-words text-text">{w.requirement}</span>
+                  <span className="text-[13px] break-words text-text2">From the answer: “{w.answer}”</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {!archived && gate.private_blocking_gap_ids.length > 0 && (
           <p className="mt-2 text-[13px] text-text2">
             {criticalCount(gate.private_blocking_gap_ids.length)} from your own sources hold nothing until you share them.

@@ -40,6 +40,8 @@ export type StoredScope = Omit<PrdScopeOut, "features"> & {
   /** The previous attempt's decisions (feature key -> decision) and kept requirement keys. */
   previous?: Record<string, string> | null;
   previous_requirements?: Record<string, string[]> | null;
+  /** Other PRDs' features on the company roadmap (key -> its title and PRD, "Safety PRD"), as feature_set.known_for_run reads them. */
+  elsewhere?: Record<string, { title: string; prd: string }>;
 };
 
 export const DECIDED = "This feature set is already decided";
@@ -55,7 +57,7 @@ const FLAG_LABELS: Record<string, string> = {
 };
 const FIELDS = ["decision", "decision_reason", "text", "acceptance", "goals", "depends_on", "blocker_keys"] as const;
 /** The problems the rows decide (re-checked on every write); the file's others are carried. */
-const ROW_CODES = ["depends_on_excluded", "unknown_dependency"];
+const ROW_CODES = ["depends_on_excluded", "unknown_dependency", "needs_other_prd"];
 const FILE_PROBLEMS = ["unreadable_yaml", "missing_file", "wrong_version", "wrong_document", "no_features"];
 /** Below this confidence a feature is flagged (the company's low threshold, as C6). */
 const LOW = 0.5;
@@ -148,11 +150,14 @@ function reasonsOf(scope: StoredScope, actions: Action[]): Record<string, Schema
     const blocking = p.blocking !== false;
     const canWaive = blocking && waivable(p.code);
     const answered = mine(p.feature).some((a) => answers(a, p.code, blocking ? "waive" : "accept", problemRef(p)));
+    // As scope_review._label: the row names the feature already ("Needs Account health ledger from Safety PRD").
+    const message = p.message || p.code;
+    const label = p.code === "needs_other_prd" && message.startsWith(`${p.feature} needs `) ? `Needs ${message.slice(`${p.feature} needs `.length)}` : message;
     (out[p.feature] ??= []).push({
       code: p.code,
       ref: problemRef(p),
       severity: blocking ? "blocking" : "to_confirm",
-      label: p.message || p.code,
+      label,
       requirement: p.requirement ?? null,
       waivable: canWaive,
       answered: answered && (canWaive || !blocking),
@@ -204,7 +209,10 @@ export function recheck(db: RunsDb, scope: StoredScope) {
     if (f.decision !== "include") continue;
     for (const d of f.depends_on) {
       const dep = byKey.get(d);
-      if (!dep) problems.push({ code: "unknown_dependency", blocking: true, feature: f.key, requirement: null, message: `${f.key} depends on ${d}, which is not a feature` });
+      const other = scope.elsewhere?.[d];
+      // Another PRD on the company roadmap holds it: a real link, not a problem (to confirm).
+      if (other && dep?.decision !== "include") problems.push({ code: "needs_other_prd", blocking: false, feature: f.key, requirement: null, message: `${f.key} needs ${other.title} from ${other.prd}` });
+      else if (!dep) problems.push({ code: "unknown_dependency", blocking: true, feature: f.key, requirement: null, message: `${f.key} depends on ${d}, which is not a feature` });
       else if (dep.decision !== "include") problems.push({ code: "depends_on_excluded", blocking: true, feature: f.key, requirement: null, message: `${f.key} depends on ${d}, which is excluded` });
     }
     const mine = (f.flags ?? []).filter((x) => x !== "serves_no_goal" && x !== "low_confidence");
@@ -270,7 +278,11 @@ function reviewOf(ctx: Ctx, scope: StoredScope): Schemas["PrdScopeReview"] {
   const actions = cp ? (ctx.db.drafts?.[cp.id]?.actions ?? []) : [];
   const { summary, reasons } = summaryOf(scope, actions);
   const open = scope.status === "proposed" && cp?.status === "pending";
-  const { previous, previous_requirements, ...rest } = scope;
+  const { previous, previous_requirements, ...withElsewhere } = scope;
+  // The roadmap's other features are the mock's own: never a field of the scope read.
+  const rest: Omit<typeof withElsewhere, "elsewhere"> & { elsewhere?: unknown } = { ...withElsewhere };
+  delete rest.elsewhere;
+  const included = new Set(scope.features.filter((f) => f.decision === "include").map((f) => f.key));
   return {
     ...rest,
     checkpoint_id: cp?.id ?? null,
@@ -291,6 +303,11 @@ function reviewOf(ctx: Ctx, scope: StoredScope): Schemas["PrdScopeReview"] {
           reasons: mine,
           needs_you: mine.some((r) => !r.answered),
           history: history(ctx, f),
+          // As the API: the dependencies another PRD on the company roadmap holds, named.
+          other_prd_dependencies: f.depends_on.flatMap((d) => {
+            const other = withElsewhere.elsewhere?.[d];
+            return other && !included.has(d) ? [{ key: d, title: other.title, prd: other.prd }] : [];
+          }),
           requirements: f.requirements.map((q) => ({
             ...q,
             parent_id: f.id,

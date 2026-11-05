@@ -47,6 +47,8 @@ class CompanyTick:
     meetings_ended: int = 0
     # Simple S7: goals Oracle queued suggestions for (once each, when they had no items).
     goal_suggestions: int = 0
+    # Current state: features whose proof was read again (once a night each).
+    proofs_reread: int = 0
     # What raised, step by step (logged); the other steps still ran.
     errors: list[BaseException] = field(default_factory=list)
 
@@ -55,7 +57,8 @@ async def tick_company(
     db: AsyncSession, tenant_id: uuid.UUID, principal: "Principal | None" = None
 ) -> CompanyTick:
     """The company's runs, its code map refreshes, the Trash purge, Simple's daily date
-    suggestions and idle sessions, then its account sweep when due."""
+    suggestions and idle sessions, the nightly re-read of features' proof, then its account
+    sweep when due."""
     from oracle.runs import service as runs_service
 
     out = CompanyTick()
@@ -140,6 +143,17 @@ async def tick_company(
         await db.commit()
     except Exception as exc:
         log.exception("tick: ending idle Simple meetings failed for company %s", tenant_id)
+        await db.rollback()
+        out.errors.append(exc)
+    try:
+        # Current state: each feature's proof read again once a night.
+        from oracle import company_time
+        from oracle.currentstate import service as current_state
+
+        out.proofs_reread = await current_state.nightly(db, company_time.now())
+        await db.commit()
+    except Exception as exc:
+        log.exception("tick: re-reading feature proof failed for company %s", tenant_id)
         await db.rollback()
         out.errors.append(exc)
     try:

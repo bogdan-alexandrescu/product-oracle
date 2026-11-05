@@ -410,6 +410,10 @@ def _own_fact(text: str, sources: list[Section]) -> str | None:
     return next((f for sec in sources for f in _facts(sec) if f.startswith(head)), None)
 
 
+def _id(item: Any) -> str | None:
+    return str(item.id) if getattr(item, "id", None) else None
+
+
 def plan_items(items: list[Any]) -> list[plan_strip.PlanItem]:
     """The plan strip's reading of a PRD's roadmap items (uncut), each with the milestone
     record that links it, when any."""
@@ -427,6 +431,7 @@ def plan_items(items: list[Any]) -> list[plan_strip.PlanItem]:
                     f"{sl.milestone} · {sl.milestone_name}",
                     sl.milestone_end,
                     milestone_start=sl.milestone_start,
+                    id=_id(i),
                 )
             )
         if getattr(i, "slices", None):
@@ -441,6 +446,7 @@ def plan_items(items: list[Any]) -> list[plan_strip.PlanItem]:
                 str(i.milestone.record_id) if i.milestone and i.milestone.record_id else None,
                 i.milestone.record_name if i.milestone else None,
                 i.milestone.start_date if i.milestone else None,
+                _id(i),
             )
         )
     return out

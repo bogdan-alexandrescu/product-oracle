@@ -11,6 +11,7 @@ import { Chip } from "@/components/ds";
 import { Icon } from "@/components/ds/Icon";
 import { findPeople, peopleByIds, type Person } from "@/components/PersonPicker";
 import { useConfirmedGoals } from "@/components/NewDraft";
+import { CarriedList, NO_REPLACES, ReplacesField, replacesBody, replacesReady, type Replaces } from "@/components/simple/NewPrdReplaces";
 import { dmy } from "@/components/simple/PrdTimeline";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { dayIn, useCompanyZone } from "@/lib/dates";
@@ -118,16 +119,20 @@ function Answered({ q, given }: { q: Question; given: Given }) {
 
 /** The guided New PRD sheet: four fields, then Oracle's questions one at a time. */
 /** Mounted while open: each opening starts afresh. */
-export function NewPrdSheet({ onClose, onStarted }: { onClose: () => void; onStarted: () => void }) {
+/** `prefill`: what a page starting the PRD already knows (Goal map: the milestone's name, its
+ * goal, threshold and areas in the problem). */
+export function NewPrdSheet({ onClose, onStarted, prefill }: { onClose: () => void; onStarted: () => void; prefill?: { name?: string; problem?: string } }) {
   const { me, can } = useMe();
   const goals = useConfirmedGoals();
-  const [name, setName] = useState("");
-  const [problem, setProblem] = useState("");
+  const [name, setName] = useState(prefill?.name ?? "");
+  const [problem, setProblem] = useState(prefill?.problem ?? "");
   const [who, setWho] = useState("");
   // The goals ticked, any number; null once "Not sure yet" is picked (it clears them, a goal
   // clears it). The sheet opens with nothing picked, "Not sure yet" included.
   const [picks, setPicks] = useState<string[] | null>([]);
-  const [intake, setIntake] = useState<Intake | null>(null);
+  // The approved PRD this one replaces, and its area (optional).
+  const [replaces, setReplaces] = useState<Replaces>(NO_REPLACES);
+  const [intake, setIntake] = useState<Schemas["IntakeOut"] | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [given, setGiven] = useState<Given[]>([]);
   const [answer, setAnswer] = useState("");
@@ -172,7 +177,7 @@ export function NewPrdSheet({ onClose, onStarted }: { onClose: () => void; onSta
 
   const at = given.length; // the question on screen, from 0
   const current = intake ? questions[at] : undefined;
-  const ready = name.trim().length > 0 && briefOf(problem, who).length >= PROBLEM_MIN;
+  const ready = name.trim().length > 0 && briefOf(problem, who).length >= PROBLEM_MIN && replacesReady(replaces);
 
   async function start() {
     if (!ready || busy) return;
@@ -191,6 +196,7 @@ export function NewPrdSheet({ onClose, onStarted }: { onClose: () => void; onSta
             out_of_scope: [],
             prd_answers: null,
             request_ids: [],
+            replaces: replacesBody(replaces),
           },
         }),
       );
@@ -344,6 +350,7 @@ export function NewPrdSheet({ onClose, onStarted }: { onClose: () => void; onSta
             })}
           </div>
         </fieldset>
+        <ReplacesField value={replaces} onChange={setReplaces} field={FIELD} label={LABEL} />
       </form>
     );
     foot = (
@@ -358,6 +365,7 @@ export function NewPrdSheet({ onClose, onStarted }: { onClose: () => void; onSta
     body = (
       <div className="flex flex-col gap-4">
         <p className="simple-small">Oracle asks these before it drafts. Answer what you know; the rest can wait.</p>
+        {intake.carried && <CarriedList carried={intake.carried} />}
         {questions.length > 0 && <Steps at={Math.min(at + 1, questions.length)} of={questions.length} />}
         {given.length > 0 && (
           <ul className="flex flex-col">

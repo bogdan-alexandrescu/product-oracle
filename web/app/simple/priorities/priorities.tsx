@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 import { Button, Sheet, toast } from "@/components/ds";
 import { FlowThumb } from "@/components/simple/Flow";
@@ -13,6 +13,7 @@ import { usePanelOpen } from "@/components/hop/open-state";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
+import { FeatureMarks, MarkFor, ShowFilter, showsAs, useFeatureMarks, type ShowKind } from "@/components/current-state/CurrentState";
 import { useSetParams } from "@/lib/use-set-params";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -158,6 +159,18 @@ export function Priorities() {
     void api.PATCH("/v1/me/preferences", { body: { priorities_line: key } });
   };
   const data = q.data;
+  // Current state: each feature's word pill, and the Show filter that counts each kind.
+  const marks = useFeatureMarks();
+  const [show, setShow] = useState<ShowKind | null>(null);
+  const showCounts = useMemo(() => {
+    const c = { new: 0, in_progress: 0, exists: 0 };
+    for (const r of data?.rows ?? []) {
+      const f = marks?.get(r.feature_id);
+      if (f) c[showsAs(f.mark)] += 1;
+    }
+    return c;
+  }, [data, marks]);
+  const shownData = data && show && marks ? { ...data, rows: data.rows.filter((r) => { const f = marks.get(r.feature_id); return !!f && showsAs(f.mark) === show; }) } : null;
   // Roles through can() and the rows' own fields: the API says who applies and who proposes.
   const mayChange = capsReady && can("create_simple_change") && !!data?.can_change;
   // S7: Oracle's suggested features under each goal bucket (an accept adds a draft here).
@@ -290,8 +303,20 @@ export function Priorities() {
           )}
         </p>
       )}
+      {data && !blank && tab === "ranked" && marks && (
+        <div className="mb-3" data-testid="cs-prio-bar">
+          <ShowFilter counts={showCounts} pick={show} onPick={setShow} />
+          {show && (
+            <p className="mt-2 text-[length:var(--simple-small)] text-text2">
+              {SHOW_NOTE[show](showCounts[show])} Ranks stay as in the full list.
+            </p>
+          )}
+        </div>
+      )}
       {data && !blank && tab === "ranked" && (
-        <Ranked data={data} phone={phone} compare={compare} mayChange={mayChange} changed={changed} moved={moved} />
+        <FeatureMarks.Provider value={marks}>
+          <Ranked data={shownData ?? data} phone={phone} compare={compare} mayChange={mayChange} changed={changed} moved={moved} />
+        </FeatureMarks.Provider>
       )}
       {data && !blank && tab === "value-effort" && <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} moved={moved} />}
       {data && !blank && tab === "buckets" && <Buckets data={data} suggestions={suggestions} reload={() => q.reload()} />}
@@ -354,6 +379,12 @@ function landsUnder(rows: Row[], row: Row, position: number): string {
 }
 
 // --------------------------------------------------------------------------- ranked list
+
+const SHOW_NOTE: Record<ShowKind, (n: number) => string> = {
+  new: (n) => `${n} new features: nothing built for these yet.`,
+  in_progress: (n) => `${n} features being built.`,
+  exists: (n) => `${n} features that run today.`,
+};
 
 function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out; phone: boolean; compare: boolean; mayChange: boolean; changed: Changed; moved: Moved | null }) {
   const [side, setSide] = useState<"yours" | "oracle">("yours");
@@ -566,16 +597,19 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
                 className={`inline-block h-3 w-3 flex-none rounded-full border-2 border-accent ${r.above_line ? "bg-accent" : "bg-transparent"}`}
                 data-testid="prio-line-mark"
               />
-              <span className="min-w-[12rem] flex-1 font-medium">
+              {/* The Current-state pill sits right after the title (cs2-b, the owner's later pick), never pushed
+                  to the far right; the title and its pill wrap as one group, so every title starts at one x. */}
+              <span className="flex min-w-[12rem] flex-1 flex-wrap items-center gap-x-2 gap-y-1" data-testid="prio-name">
                 {/* build-feature-panel: a feature's name opens the one feature panel, by its
                  * roadmap item id (the stable feature key, r.code, when the role cannot see
                  * the item): two features sharing a title would else open the wrong one. */}
-                <span data-testid="prio-title">
+                <span className="min-w-0 font-medium" data-testid="prio-title">
                   <button type="button" data-feature={r.item_id ?? r.code} className="text-left hover:underline">
                     {r.title}
                   </button>
+                  <OwnKey r={r} />
                 </span>
-                <OwnKey r={r} />
+                <MarkFor featureId={r.feature_id} />
               </span>
               {/* walkb-priorities: no ml-auto, so details that wrap under the title start at the left on every row. */}
               <span data-testid="prio-details" className={`${half ? "basis-full sm:pl-12" : ""} flex min-w-0 max-w-full flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--simple-small)] text-text2`}>
@@ -590,6 +624,12 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
                   )}
                 </span>
                 {/* walkb-priorities: a long milestone name wraps inside the card (a phone scrolled sideways). */}
+                {/* Bring a date in: a sliced or split feature's new date waits for its estimate. */}
+                {r.estimate_pending && r.end_date && (
+                  <span data-testid="prio-estimate-pending" className="whitespace-nowrap rounded-full bg-warn-bg px-2 text-warn">
+                    Ends {calendarDay(r.end_date)} · Estimate pending
+                  </span>
+                )}
                 {r.milestone && <span data-testid="prio-milestone" className="min-w-0 max-w-full [overflow-wrap:anywhere]">Milestone {r.milestone}</span>}
                 {/* qa-simple-plan-3: value · confidence · weeks · score, in the order of the score's formula; no bar. */}
                 <Numbers r={r} mayChange={mayChange} changed={changed} />
@@ -2352,7 +2392,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
     <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
       <PlanBucketsHead plan={plan} codeOf={codeOf} />
       <div ref={noteSlot} className="scroll-mt-4" />
-      {note && <UndoNote onUndo={note.undo ? () => void writes.undo(note.undo!) : note.changes?.length ? () => void tasks.undo(note.changes!) : undefined}>{note.text}</UndoNote>}
+      {note && <UndoNote id={note.id} clear='[data-testid="plan-goal"] h3' onUndo={note.undo ? () => void writes.undo(note.undo!) : note.changes?.length ? () => void tasks.undo(note.changes!) : undefined}>{note.text}</UndoNote>}
       {error && (
         <p role="alert" className="mt-3 text-[15px] text-warn">
           {error}
@@ -2531,9 +2571,10 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
           onArchive={async (to) => {
             if (!(await writes.archive(archivedGoal, to, archiveWords((t) => planFeatures(plan, t), gb, archivedGoal, to)))) return;
             setArchiving(null);
-            // gb2-a-result: the archived bucket is gone, so the page scrolls back to the note's own
-            // place above the buckets, where it covers no goal's title.
-            if ((noteSlot.current?.getBoundingClientRect().top ?? 0) < 0) noteSlot.current?.scrollIntoView({ block: "start" });
+            // gb2-a-result: the archived bucket is gone, so on a wider screen the page scrolls back
+            // to the note's own place above the buckets, where it covers no goal's title. A phone's
+            // note is fixed above the bottom bar: the page stays, any title it covers lifted clear.
+            if (!phone && (noteSlot.current?.getBoundingClientRect().top ?? 0) < 0) noteSlot.current?.scrollIntoView({ block: "start" });
           }}
         />
       )}

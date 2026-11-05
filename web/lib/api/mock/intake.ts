@@ -27,6 +27,7 @@ import { applyNudge, nudgeReason, type Nudge, type Nudges } from "./learned";
 import { mockName as displayName } from "./people";
 import { baselineReviewStatus } from "./baseline";
 import { companyDayIso, mockSettingValue } from "./connections";
+import { isDiscovery, requirementFor } from "./discovery";
 import { DEFAULT_THEME, templateNameOf } from "./lane-f";
 import type { V2Db } from "./v2";
 
@@ -34,7 +35,7 @@ type Role = "viewer" | "commenter" | "approver" | "owner";
 type Gap = Schemas["KnowledgeGapOut"];
 type Question = Schemas["StakeholderQuestionOut"];
 /** C4: an intake row with the brief's fields (goals, out of scope, PRD template and theme, O1d answers). */
-type Intake = Schemas["ProductIntakeOut"] & Partial<BriefFields>;
+type Intake = Schemas["ProductIntakeOut"] & Partial<BriefFields> & { carried?: Schemas["Carried"] | null };
 interface BriefFields {
   goal_ids: string[];
   out_of_scope: string[];
@@ -78,6 +79,8 @@ export interface SubjectLookup {
 
 export interface IntakeContext {
   userId: string;
+  /** new-prd-from-replaced-prd: what a new PRD replacing an approved PRD carries (./replaced-prd.ts). */
+  carried?: (documentId: string, itemKeys: string[], area?: { name: string; scope: string }) => Schemas["Carried"] | { status: number; detail: string };
   role: Role;
   /** C4: the confirmed goals' titles by id (the brief's goals must be confirmed goals). */
   confirmedGoals?: () => Map<string, string>;
@@ -222,6 +225,7 @@ function intakeOut(i: Intake, db?: V2Db): Schemas["IntakeOut"] {
     theme: i.theme ?? null,
     prd_answers: i.prd_answers ?? null,
     run_ids: run ? [run.run_id] : [],
+    carried: i.carried ?? null,
   } as Schemas["IntakeOut"];
 }
 
@@ -388,10 +392,29 @@ function summary(db: V2Db, intake: Intake, userId: string, ctx?: IntakeContext):
     proposals: (db.intake_proposals ?? []).filter((p) => p.intake_id === intake.id),
     shared_counts: [],
     is_author: intake.author_id === userId,
+    work: work(db, out, questions),
     ...drafting(db, intake),
     // INT2: Oracle's read, the author's only (others get null: the read is private).
     ai_read: intake.author_id === userId ? aiRead(db, intake) : null,
   };
+}
+
+/** As summary._work: the answers that became work (the latest answer of each question, on a
+ * gap the reader sees, says finding out is part of this work), in gap order. */
+function work(db: V2Db, gaps: { id: string; category: string; statement: string }[], questions: Question[]): Schemas["DiscoveryWork"][] {
+  return gaps.flatMap((g) =>
+    questions
+      .filter((q) => q.gap_id === g.id)
+      .flatMap((q) => {
+        const last = db.answers.filter((a) => a.question_id === q.id).at(-1);
+        if (!last || !(last.kind === "answer" || last.kind === "dont_know") || !isDiscovery(last.body)) return [];
+        return [{
+          gap_id: g.id, question_id: q.id, answer_id: last.id,
+          requirement: requirementFor(g.category, LABEL[g.category as Category], g.statement),
+          answer: last.body ?? "", cite_ref: `urn:oracle:answer:${last.id}`,
+        }];
+      }),
+  );
 }
 
 /** INT2: reads the author may start per intake per Company day (oracle.intake.read.READS_PER_DAY). */
@@ -689,8 +712,17 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     const requestIds = [...new Set(raw)];
     const refused = requestIds.length ? ctx.requests?.refusal(requestIds) : null;
     if (refused) return json(refused.status, { detail: refused.detail });
+    // new-prd-from-replaced-prd: the approved PRD it replaces (422 if not an approved PRD).
+    let carried: Schemas["Carried"] | null = null;
+    if (input.replaces) {
+      const r = input.replaces;
+      const got = ctx.carried?.(r.document_id, r.item_keys ?? [], { name: r.area_name.trim(), scope: r.area_scope.trim() });
+      if (!got) return fail(422, "A new PRD can only replace an approved PRD");
+      if ("status" in got) return fail(got.status, got.detail);
+      carried = got;
+    }
     const intake = addIntake(db, ctx.userId, input.title, input.brief, input.source_ids ?? []);
-    Object.assign(intake, fields);
+    Object.assign(intake, fields, { carried });
     if (requestIds.length) ctx.requests?.link(intake.id, requestIds);
     applyBriefFields(db, ctx, intake);
     if (db.blocker_briefs) {
@@ -706,6 +738,15 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     // At Observe and Draft a new brief asks no one; a person sends (H11 questions).
     if (questionsLevel(ctx) === "recommend" || questionsLevel(ctx) === "act") askBatch(db, ctx, intake, input.batch_size ?? 5);
     return json(201, summary(db, intake, ctx.userId, ctx));
+  }
+
+  // new-prd-from-replaced-prd: what a new PRD replacing this approved PRD carries.
+  if (p[1] === "intakes" && p[2] === "replaces" && p.length === 5 && p[4] === "carried" && m === "GET") {
+    if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");
+    const got = ctx.carried?.(p[3], q.getAll("item_keys"));
+    if (!got) return fail(404, "That PRD was not found");
+    if ("status" in got) return fail(got.status, got.detail);
+    return json(200, got);
   }
 
   if (p[1] === "intakes" && p[2] && p.length >= 3 && !(p.length === 3 && m === "GET")) {
@@ -1103,21 +1144,25 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       answer: ["answered", "answered"], dont_know: ["asked", "unknown"], defer: ["deferred", "deferred"],
       delegate: ["delegated", null], research: ["researching", "under_investigation"],
     };
-    const [qs, effect] = effects[input.kind];
+    let [qs, effect] = effects[input.kind];
+    // As the API (walk 2 problem 19): "unknown; finding out is part of this work" plans work,
+    // so the question is answered and the gap settled, with no review wait.
+    const planned = !!question.gap_id && (input.kind === "answer" || input.kind === "dont_know") && isDiscovery(input.body);
+    if (planned) [qs, effect] = ["answered", "answered"];
     // As the API: "I don't know" leaves the question open (a delegated one stays delegated).
-    if (!(input.kind === "dont_know" && question.status === "delegated")) question.status = qs;
+    if (planned || !(input.kind === "dont_know" && question.status === "delegated")) question.status = qs;
     if (input.kind === "delegate") question.asked_to = input.delegated_to ?? null;
     const gap = db.gaps.find((g) => g.id === question.gap_id) ?? null;
     const proposals: Proposal[] = [];
-    const gs = gap && effect === "answered" && gap.importance === "critical" && !atLeast(ctx.role, "owner") ? "answered_pending_review" : effect;
+    const gs = gap && effect === "answered" && !planned && gap.importance === "critical" && !atLeast(ctx.role, "owner") ? "answered_pending_review" : effect;
     if (gap && !FROZEN.has(gap.status)) {
       if (gs) gap.status = gs;
-      if (input.kind === "answer") gap.knowledge_state = answer.knowledge_state;
+      if (input.kind === "answer") gap.knowledge_state = planned ? "unknown" : answer.knowledge_state;
       if (input.kind === "dont_know") gap.knowledge_state = "unknown";
       if (input.kind === "delegate") gap.owner_id = input.delegated_to ?? null;
       gap.lock_version += 1;
       const intake = gap.intake_id ? findIntake(gap.intake_id) : undefined;
-      if (intake && (input.kind === "research" || (input.kind === "dont_know" && gap.importance === "critical"))) {
+      if (intake && (input.kind === "research" || (input.kind === "dont_know" && gap.importance === "critical" && !planned))) {
         proposals.push(proposeResearch(db, intake, gap, ctx.userId, question.id, input.kind === "research"));
       }
       if (intake) syncQuestions(db, intake);

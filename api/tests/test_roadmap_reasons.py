@@ -27,7 +27,7 @@ from oracle.runs.reasons import (
     reasons_for,
     summarize,
 )
-from oracle.runs.roadmap import check_items
+from oracle.runs.roadmap import Elsewhere, check_items
 from oracle.swarm import Outcome
 from oracle.tenancy import tenant_session
 from tests.conftest import make_tenant
@@ -672,3 +672,151 @@ def test_date_fixes_name_a_date_source_not_a_basis():
         assert "basis" not in fixes.lower()
         assert "Add a date source" in fixes
     assert "basis" not in gate.DATE_NOT_WAIVED
+
+
+LEDGER = Elsewhere("account-health-ledger", "Account health ledger (Safety PRD)", "later", ())
+
+
+def test_a_cross_prd_and_a_local_dependency_each_get_their_own_reason_and_fixes():
+    # protects=an item waiting on another PRD's feature (Later) and on its own item (Next)
+    # gets one reason per dependency, each in its own words with its own fixes;
+    # fails_when=the other PRD's problem is paired with the local item's words and fixes
+    # and the local one shows the check's raw line with no fix.
+    body = """\
+  - {id: base, title: Local base, outcome: o, horizon: next, prd_section: s-1}
+  - {id: obs, title: Observability, outcome: o, horizon: now, prd_section: s-1,
+     depends_on: [account-health-ledger, base]}
+"""
+    items, problems = check(FILE.format(items=body), elsewhere=[LEDGER])
+    assert [p["code"] for p in problems] == ["horizon_breaks_dependency"] * 2
+    out = reasons_for(items, problems, None, elsewhere=[LEDGER])
+    assert codes(out, "obs") == ["horizon_breaks_dependency"] * 2
+    cross, local = [r for r in out if r["item"] == "obs"]
+    assert cross["text"] == (
+        "Needs Account health ledger (Safety PRD), which is in Later. An item cannot ship "
+        "before what it depends on."
+    )
+    assert cross["data"]["dependency"] == "account-health-ledger"
+    assert cross["data"]["dependency_title"] == "Account health ledger (Safety PRD)"
+    assert [(f["label"], f["action"]) for f in cross["fixes"]] == [
+        ("Move to Later", {"kind": "edit", "item": "obs", "field": "horizon", "value": "later"}),
+        ("Remove dependency", {"kind": "edit", "item": "obs", "field": "depends_on",
+                               "value": {"remove": ["account-health-ledger"]}}),
+    ]  # fmt: skip
+    assert local["text"] == (
+        "Needs Local base, which is in Next. An item cannot ship before what it depends on."
+    )
+    assert [f["label"] for f in local["fixes"]] == [
+        "Move to Next", "Pull dependency to Now", "Remove dependency",
+    ]  # fmt: skip
+    assert local["fixes"][2]["action"]["value"] == {"remove": ["base"]}
+    for r in (cross, local):
+        assert "account-health-ledger" not in r["text"] and "base" not in r["text"].split()
+
+
+def test_only_a_cross_prd_dependency_reads_in_plain_words_with_its_fixes():
+    # protects=a lone dependency on another PRD's feature in a later horizon reads with
+    # its name, its PRD and its fixes; fails_when=the reason is the check's line, no fix.
+    body = """\
+  - {id: obs, title: Observability, outcome: o, horizon: next, prd_section: s-1,
+     depends_on: [account-health-ledger]}
+"""
+    items, problems = check(FILE.format(items=body), elsewhere=[LEDGER])
+    out = reasons_for(items, problems, ctx(), elsewhere=[LEDGER])
+    hbd = only(out, "horizon_breaks_dependency")
+    assert hbd["text"] == (
+        "Needs Account health ledger (Safety PRD), which is in Later. An item cannot ship "
+        "before what it depends on."
+    )
+    assert [f["label"] for f in hbd["fixes"]] == ["Move to Later", "Remove dependency"]
+    assert "unknown_dependency" not in codes(out)
+
+
+def test_a_fix_answers_only_its_own_reason_of_two_with_one_code():
+    # protects=of an item's two dependency reasons (another PRD's and its own), staging one's
+    # fix clears that one only, in the review's counts and in the file sent back;
+    # fails_when=an action naming the code answers both reasons.
+    from datetime import UTC, datetime
+
+    from oracle.runs import actions, review_file
+    from oracle.runs.schemas import ReviewAction
+
+    body = """\
+  - {id: base, title: Local base, outcome: o, horizon: next, prd_section: s-1}
+  - {id: obs, title: Observability, outcome: o, horizon: now, prd_section: s-1,
+     depends_on: [account-health-ledger, base]}
+"""
+    items, problems = check(FILE.format(items=body), elsewhere=[LEDGER])
+    cross, local = reasons_for(items, problems, None, elsewhere=[LEDGER])
+
+    def staged(fix: dict, answers: list[str]) -> ReviewAction:
+        a = fix["action"]
+        return ReviewAction(id=uuid.uuid4(), item_key=a["item"], kind=a["kind"], field=a["field"],
+                            value=a["value"], answers=answers, state="staged",
+                            updated_at=datetime.now(UTC))  # fmt: skip
+
+    remove_ledger = staged(cross["fixes"][1], [cross["code"]])
+    move_local = staged(local["fixes"][0], [local["code"]])
+    for answers in (actions._answers, review_file._answers):
+        assert answers(remove_ledger, cross) and not answers(remove_ledger, local)
+        assert answers(move_local, local) and not answers(move_local, cross)
+    # A waiver naming the code still answers both; an edit naming none, every reason.
+    waiver = staged({"action": {"item": "obs", "kind": "waive", "field": None, "value": None}},
+                    [cross["code"]])  # fmt: skip
+    assert actions._answers(waiver, cross) and actions._answers(waiver, local)
+    bare = staged(cross["fixes"][1], [])
+    assert actions._answers(bare, cross) and actions._answers(bare, local)
+
+
+def _two_dependencies() -> tuple[dict, dict]:
+    """Observability (Now) waits on the ledger, another PRD's in Next, and on its own Local
+    base in Later: two reasons of one code."""
+    ledger = Elsewhere("account-health-ledger", "Account health ledger (Safety PRD)", "next", ())
+    body = """\
+  - {id: base, title: Local base, outcome: o, horizon: later, prd_section: s-1}
+  - {id: obs, title: Observability, outcome: o, horizon: now, prd_section: s-1,
+     depends_on: [account-health-ledger, base]}
+"""
+    items, problems = check(FILE.format(items=body), elsewhere=[ledger])
+    cross, local = reasons_for(items, problems, None, elsewhere=[ledger])
+    assert cross["data"]["dependency_horizon"] == "next"
+    assert local["data"]["dependency_horizon"] == "later"
+    return cross, local
+
+
+def _staged(field_: str, value: object, answers: list[str]):
+    from datetime import UTC, datetime
+
+    from oracle.runs.schemas import ReviewAction
+
+    return ReviewAction(id=uuid.uuid4(), item_key="obs", kind="edit", field=field_, value=value,
+                        answers=answers, state="staged", updated_at=datetime.now(UTC))  # fmt: skip
+
+
+def test_a_move_to_the_later_dependency_horizon_answers_both_horizon_reasons():
+    # protects=Move to Later on the reason of the dependency in Later also clears the one in
+    # Next (the item then ships after both); Move to Next clears only the Next one;
+    # fails_when=a horizon edit answers only the reason whose fix has its exact value.
+    from oracle.runs import actions, review_file
+
+    cross, local = _two_dependencies()
+    later = _staged("horizon", "later", ["horizon_breaks_dependency"])
+    nxt = _staged("horizon", "next", ["horizon_breaks_dependency"])
+    for answers in (actions._answers, review_file._answers):
+        assert answers(later, local) and answers(later, cross)
+        assert answers(nxt, cross) and not answers(nxt, local)
+
+
+def test_one_dependency_edit_removing_both_answers_both_reasons():
+    # protects=Remove dependency pressed on both reasons is one depends_on edit removing
+    # both, and it answers both; fails_when=only an edit equal to one fix's value answers.
+    from oracle.runs import actions, review_file
+
+    cross, local = _two_dependencies()
+    both = _staged(
+        "depends_on", {"remove": ["account-health-ledger", "base"]}, ["horizon_breaks_dependency"]
+    )
+    one = _staged("depends_on", {"add": [], "remove": ["base"]}, ["horizon_breaks_dependency"])
+    for answers in (actions._answers, review_file._answers):
+        assert answers(both, cross) and answers(both, local)
+        assert answers(one, local) and not answers(one, cross)

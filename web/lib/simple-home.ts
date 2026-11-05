@@ -160,6 +160,8 @@ export type PlanInput = {
   milestoneStart?: string | null;
   /** The milestone record the item links (a track milestone), when any: its row. */
   record?: { id: string; name: string | null } | null;
+  /** The roadmap item it reads (the one-pager lists a row's items by it). */
+  id?: string | null;
 };
 
 /** The plan strip shows this many rows; the rest are "+N more on the roadmap". */
@@ -256,6 +258,7 @@ export function planByMonth(items: PlanInput[], today: string, through: string |
     estimated: begins && date ? false : of.every((i) => i.estimated),
     milestone,
     past_edge: !!date && date > end,
+    item_ids: [...new Set(of.flatMap((i) => (i.id ? [i.id] : [])))],
   });
   const rows = [...groups.values()]
     .sort((a, b) => (a.date === null) !== (b.date === null) ? (a.date === null ? 1 : -1) : byCodePoint(a.date ?? "", b.date ?? "") || byCodePoint(a.name, b.name))
@@ -282,6 +285,7 @@ export const planInputs = (i: Item): PlanInput[] =>
         milestone: `${s.milestone} · ${s.milestone_name}`,
         milestoneDate: s.milestone_end ?? null,
         milestoneStart: s.milestone_start ?? null,
+        id: i.id,
       }))
     : [planInput(i)];
 
@@ -293,6 +297,7 @@ export const planInput = (i: Item): PlanInput => ({
   milestone: i.milestone ? i.milestone.name || "Milestone" : null,
   milestoneDate: i.milestone?.date ?? null,
   record: i.milestone?.record_id ? { id: i.milestone.record_id, name: i.milestone.record_name ?? null } : null,
+  id: i.id,
 });
 
 /**

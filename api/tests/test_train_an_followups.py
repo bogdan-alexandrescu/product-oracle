@@ -149,7 +149,7 @@ def test_the_import_index_is_built_concurrently_outside_the_migration_transactio
     out = io.StringIO()
     cfg = Config(str(API_DIR / "alembic.ini"), output_buffer=out)
     cfg.attributes["database_url"] = "postgresql+asyncpg://example@localhost/example"
-    command.upgrade(cfg, "0108_goal_milestone_carried:0109_audit_import_index", sql=True)
+    command.upgrade(cfg, "0113_goal_milestone_carried:0114_audit_import_index", sql=True)
     sql = re.sub(r"\s+", " ", out.getvalue())
     drop = sql.index("DROP INDEX CONCURRENTLY IF EXISTS ix_audit_events_version_imported")
     create = sql.index("CREATE INDEX CONCURRENTLY ix_audit_events_version_imported")
@@ -162,7 +162,7 @@ def test_the_import_index_is_built_concurrently_outside_the_migration_transactio
     out = io.StringIO()
     cfg = Config(str(API_DIR / "alembic.ini"), output_buffer=out)
     cfg.attributes["database_url"] = "postgresql+asyncpg://example@localhost/example"
-    command.downgrade(cfg, "0109_audit_import_index:0108_goal_milestone_carried", sql=True)
+    command.downgrade(cfg, "0114_audit_import_index:0113_goal_milestone_carried", sql=True)
     assert "DROP INDEX ix_audit_events_version_imported" in out.getvalue()
 
 

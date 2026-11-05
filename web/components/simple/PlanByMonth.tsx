@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { MarkFor } from "@/components/current-state/CurrentState";
 import { calendarDay } from "@/lib/dates";
 import { PLAN_ROWS, type PlanStrip } from "@/lib/simple-home";
 
@@ -34,6 +35,7 @@ export function PlanByMonth({
   testId = "plan-strip",
   named = false,
   legend = false,
+  items,
 }: {
   plan: PlanStrip;
   /** The PRD the strip draws; none: the company roadmap, every PRD's items (Home). */
@@ -43,6 +45,9 @@ export function PlanByMonth({
   named?: boolean;
   /** The one-pager (qa-simple-prd-p3-15): the counts say what the items are ("4 roadmap items"). */
   legend?: boolean;
+  /** The one-pager (build-current-state review 2): its roadmap items (OnePagerOut.timeline),
+   * listed under their row, one per line, each with its word pill (inside WithFeatureMarks). */
+  items?: { id: string; title: string }[];
 }) {
   const from = ms(plan.start);
   const span = ms(plan.end) + DAY - from;
@@ -51,6 +56,7 @@ export function PlanByMonth({
   const today = plan.today ? pct(plan.today) : null;
   const shown = plan.rows.slice(0, PLAN_ROWS);
   const more = plan.rows.length - shown.length;
+  const titles = new Map((items ?? []).map((i) => [i.id, i.title]));
   // qa-simple-home-12: each month's line runs down through the rows, so a bar reads against the axis above it.
   const grid = plan.months.map((m) => (
     <span key={m} aria-hidden data-testid={`${testId}-gridline`} className="pointer-events-none absolute inset-y-0 w-0 border-l border-line" style={{ left: `${pct(m)}%` }} />
@@ -128,6 +134,20 @@ export function PlanByMonth({
                   {line}
                 </span>
               </Link>
+              {items && (r.item_ids ?? []).some((id) => titles.has(id)) && (
+                // The row's items, one per line: the name wraps whole, its pill says what it is.
+                <ul data-testid={`${testId}-items`} aria-label={`${rowName(r)}: its roadmap items`} className="simple-small flex flex-col gap-1 pb-2 pl-3 pt-0.5">
+                  {(r.item_ids ?? []).flatMap((id) => {
+                    const title = titles.get(id);
+                    return title ? [(
+                      <li key={id} data-testid={`${testId}-item`} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <span className="min-w-0 break-words text-text">{title}</span>
+                        <MarkFor itemId={id} />
+                      </li>
+                    )] : [];
+                  })}
+                </ul>
+              )}
             </li>
           );
         })}

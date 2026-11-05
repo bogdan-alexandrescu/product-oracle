@@ -3,6 +3,7 @@
 import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
 import { memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
+import { FeatureMarks, MarkForItem, pillWord } from "@/components/current-state/CurrentState";
 import { APPLIED_EVENT, lastPreview, PREVIEW_EVENT, type AppliedDetail, type ChatPreview, type PreviewDetail } from "@/lib/api/simple-chat";
 
 import {
@@ -54,6 +55,8 @@ export interface Layout {
   y: Map<string, number>;
   /** The goal lanes (desktop): a broken item's callout line, under its pill's row (qa-simple-roadmap-4). */
   under?: Map<string, number>;
+  /** An item row taller than rowH: its name wraps whole, its pill under it if need be. */
+  nameH?: Map<string, number>;
 }
 
 /** The header above the rows (roadmap-milestones D): the ticks' line, then a line per row of marks
@@ -80,7 +83,14 @@ const MIN_BAR_W = 24;
  * `wrap` (a phone's waterfall, qa4-simple-roadmap-16): a goal's name wraps in a row as tall as
  * its lines, and a broken item's warning gets a band of its own under its bar, as tall as its
  * words wrapped in a callout `callW` px wide at most (the chart's width). */
-export function layout(data: Roadmap, compact: boolean, lane: Lane = data.group, top = AXIS_H, wrap: { callW: number } | null = null): Layout & { hs: number[]; ys: number[] } {
+export function layout(
+  data: Roadmap,
+  compact: boolean,
+  lane: Lane = data.group,
+  top = AXIS_H,
+  wrap: { callW: number } | null = null,
+  tails: Map<string, number> | null = null,
+): Layout & { hs: number[]; ys: number[] } {
   const byId = new Map(data.items.map((i) => [i.id, i]));
   const rows: Row[] = [];
   const below: Item[] = [];
@@ -104,8 +114,25 @@ export function layout(data: Roadmap, compact: boolean, lane: Lane = data.group,
   // qa4-simple-roadmap-16: each row's height (one rowH, unless `wrap` makes it taller) and top.
   const room = labelW - 24;
   const lines = (s: string, size: number, weight: number, w: number) => Math.max(1, Math.ceil((textWidth(s, size, weight) * 1.08) / w));
+  // An item's name wraps whole (a phone: 14 px a line; else 18), with its Current-state pill
+  // (`tails`: its width by item id) beside it when both fit on one line, else on a line of its
+  // own under it; a row that needs more than its rowH grows, so no name or pill is ever cut.
+  const nameH = new Map<string, number>();
+  const [size, lineH, padX, padY, gapY] = compact ? [12.5, 14, 16, 2, 2] : [15, 18, 24, 6, 4];
+  for (const r of rows) {
+    if (r.kind !== "item") continue;
+    const it = r.item;
+    // The name's group: the row less its padding, or its 60% when other chips share the row.
+    const w = (labelW - padX) * (r.place != null || it.draft || it.estimate_pending ? 0.6 : 1);
+    const tail = tails?.get(it.id) ?? 0;
+    const n = wordLines(it.title, size, 400, w);
+    const beside = !tail || (n === 1 && textWidth(it.title, size, 400) + tail <= w);
+    const h = padY + n * lineH + (beside ? 0 : 18 + gapY);
+    if (h > rowH) nameH.set(it.id, h);
+  }
   const hs = rows.map((r) => {
-    if (!wrap) return rowH;
+    const base = r.kind === "item" ? (nameH.get(r.item.id) ?? rowH) : rowH;
+    if (!wrap) return base;
     if (r.kind === "group") {
       const count = r.count != null && !r.below ? `${r.count} ${r.count === 1 ? "item" : "items"}` : "";
       // (Its count wraps with it: measured in the name's type, a little wider than its own.)
@@ -113,10 +140,10 @@ export function layout(data: Roadmap, compact: boolean, lane: Lane = data.group,
       return Math.max(rowH, 8 + name * 16 + (r.metric ? lines(r.metric, 11, 400, room) * 13 : 0));
     }
     const flag = closedItem(r.item) ? undefined : broken(r.item).find((f) => f.kind === "dependency_order");
-    if (!flag) return rowH;
+    if (!flag) return base;
     // The callout: its words wrap at 220 px (or the chart's width, less its padding), 18 px a line.
     const words = Math.min(220, Math.max(160, wrap.callW - 8) - 18);
-    return rowH + lines(`⚠ ${flag.reason}`, 14, 400, words) * 18 + 16;
+    return base + lines(`⚠ ${flag.reason}`, 14, 400, words) * 18 + 16;
   });
   const ys: number[] = [];
   hs.reduce((at, h) => (ys.push(at), at + h), 0);
@@ -124,12 +151,34 @@ export function layout(data: Roadmap, compact: boolean, lane: Lane = data.group,
   const under = new Map<string, number>();
   rows.forEach((r, n) => {
     if (r.kind !== "item") return;
-    y.set(r.item.id, top + ys[n]);
+    // (A taller name row keeps its bar in the middle.)
+    const base = nameH.get(r.item.id) ?? rowH;
+    y.set(r.item.id, top + ys[n] + (base - rowH) / 2);
     // The callout (drawn 3 px into its box) just under its bar's row.
-    if (hs[n] > rowH) under.set(r.item.id, top + ys[n] + rowH - 2);
+    if (hs[n] > base) under.set(r.item.id, top + ys[n] + base - 2);
   });
   const total = hs.reduce((a, b) => a + b, 0);
-  return { rows, rowH, labelW, top, height: top + total + 8, y, under: wrap ? under : undefined, hs, ys };
+  return { rows, rowH, labelW, top, height: top + total + 8, y, under: wrap ? under : undefined, nameH, hs, ys };
+}
+
+/** How many lines `s` takes at width `w`, broken between words as the browser breaks it. */
+function wordLines(s: string, size: number, weight: number, w: number): number {
+  const space = textWidth(" ", size, weight);
+  let n = 1;
+  let at = 0;
+  for (const word of s.split(/\s+/).filter(Boolean)) {
+    const ww = textWidth(word, size, weight);
+    if (at > 0 && at + space + ww > w) {
+      n += 1;
+      at = 0;
+    }
+    // A word wider than the line breaks inside itself (break-words).
+    if (ww > w) {
+      n += Math.ceil(ww / w) - 1;
+      at = ww % w;
+    } else at += (at > 0 ? space : 0) + ww;
+  }
+  return n;
 }
 
 /** A label's width in the chart's type (a canvas measures it; an estimate before there is one). */
@@ -434,7 +483,19 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
   const top = headerHeight(Math.max(0, ...marks.map((m) => m.row + 1)));
   // qa4-simple-roadmap-16: a phone's waterfall wraps its goals' names and gives each warning a band under its bar.
   const wrapRows = compact && format === "waterfall";
-  const l = useMemo(() => layout(data, compact, lane, top, wrapRows ? { callW: chartW } : null), [data, compact, lane, top, wrapRows, chartW]);
+  // The names wrap beside the Current-state pill after them: the pill's width, by item.
+  const states = useContext(FeatureMarks);
+  const tails = useMemo(() => {
+    if (!states) return null;
+    const m = new Map<string, number>();
+    for (const i of data.items) {
+      const f = states.get(`item:${i.id}`);
+      // The pill's word in its 12 px capitals, its padding and the gap before it.
+      if (f) m.set(i.id, Math.ceil(textWidth(pillWord(f.mark, compact).toUpperCase(), 12, 600) * 1.05) + 16 + (compact ? 4 : 8));
+    }
+    return m;
+  }, [compact, states, data.items]);
+  const l = useMemo(() => layout(data, compact, lane, top, wrapRows ? { callW: chartW } : null, tails), [data, compact, lane, top, wrapRows, chartW, tails]);
   // fix4 qa-simple-roadmap-5: the part of the chart in view (it scrolls sideways), so a row whose
   // bar is out of view says where it lies, with a button that scrolls to it.
   const [view, setView] = useState<[number, number] | null>(null);
@@ -714,7 +775,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               type="button"
               data-testid="chart-label"
               data-open={open === r.item.id ? "true" : undefined}
-              style={{ height: l.rowH }}
+              style={{ height: l.nameH?.get(r.item.id) ?? l.rowH }}
               onClick={() => onOpen(r.item, { x: sc.x((moved[r.item.id] ?? barSpan(r.item))[0]), y: (l.y.get(r.item.id) ?? 0) + l.rowH })}
               className={`flex w-full min-w-0 items-center text-left hover:bg-surface2 ${compact ? "gap-1 px-2 text-[13px]" : "gap-2 px-3 text-[15px]"} ${open === r.item.id ? "bg-accent-soft" : ""}`}
             >
@@ -727,18 +788,32 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                   {ordinal(r.place)} to return
                 </span>
               )}
-              <span
-                data-testid="label-title"
-                title={r.item.title}
-                // fix4 qa-simple-roadmap-6: a phone's name wraps onto two lines instead of being cut mid-word.
-                // (on a phone the name takes 60% of the row at least, room for two words a line beside its chips)
-                className={`flex-1 ${compact ? "line-clamp-2 min-w-[60%] text-[12.5px] leading-[14px] break-words" : "min-w-[45%] truncate"} ${closedItem(r.item) ? "text-text2 line-through" : ""}`}
-              >
-                {r.item.title}
+              {/* The Current-state pill follows the name, as chips do, so every name starts at one x.
+                  The two wrap as a group (the name takes 60% of the row at least): the pill beside a
+                  short name, under a long one, so neither is cut (layout's nameH). */}
+              <span className={`flex min-w-[60%] flex-1 flex-wrap items-center ${compact ? "gap-x-1 gap-y-0.5" : "gap-x-2 gap-y-1"}`}>
+                <span
+                  data-testid="label-title"
+                  title={r.item.title}
+                  // fix4 qa-simple-roadmap-6: a name wraps whole instead of being cut mid-word.
+                  className={`min-w-0 max-w-full break-words ${compact ? "text-[12.5px] leading-[14px]" : "leading-[18px]"} ${closedItem(r.item) ? "text-text2 line-through" : ""}`}
+                >
+                  {r.item.title}
+                </span>
+                <MarkForItem itemId={r.item.id} compact={compact} />
               </span>
               {r.item.draft && !closedItem(r.item) && (
                 <span className="max-w-[48px] min-w-0 shrink truncate rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag" title="Draft">
                   Draft
+                </span>
+              )}
+              {r.item.estimate_pending && (
+                <span
+                  className="flex h-5 max-w-[120px] min-w-0 shrink items-center truncate rounded-full bg-warn-bg px-2 text-xs font-semibold text-warn"
+                  data-testid="estimate-pending"
+                  title="Estimate pending"
+                >
+                  Estimate pending
                 </span>
               )}
               {gantt && pulled?.has(r.item.id) && (
@@ -1118,7 +1193,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
   const sliced = !phased && planned(item);
   const fixed = closedItem(item) || planned(item);
   // qa4-simple-roadmap-30: each red flag in its own words ("ends Jun 8, after its milestone 'Beta'"), as Now / Next / Later says it.
-  const label = `${item.title}: ${yearSpan(start, end, " to ")}, ${item.estimated ? "Estimated by Oracle" : datesFrom(item)}${phaseWords}${red ? `, ${broken(item).map((f) => f.reason).join("; ")}` : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && planned(item) && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? (phased ? ". Arrows move the whole item" : ". Arrows move it, Shift+arrows its end") + ", sent when you pause; Escape cancels" : ""}`;
+  const label = `${item.title}: ${yearSpan(start, end, " to ")}, ${item.estimated ? "Estimated by Oracle" : datesFrom(item)}${item.estimate_pending ? ", estimate pending" : ""}${phaseWords}${red ? `, ${broken(item).map((f) => f.reason).join("; ")}` : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && planned(item) && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? (phased ? ". Arrows move the whole item" : ". Arrows move it, Shift+arrows its end") + ", sent when you pause; Escape cancels" : ""}`;
   // finding 49: the suggestion's dashed outline is clamped to the chart's own width (its dates
   // can run past the chart's span); a small arrow says it continues past the edge.
   const sx = sc.x(s?.start_date ?? start);

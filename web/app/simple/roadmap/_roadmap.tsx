@@ -25,6 +25,7 @@ import { QuickAdd } from "./_add";
 import { MsCard, MsKey, MsLayer, MsProvider, MsToast, useMilestones, type MsLane, type MsRow } from "./_milestones";
 import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, MARK_WORDS, PM_LANE, type Horizon, type LegendEntry } from "./_board";
 import { useKeyBurst } from "./_burst";
+import { FitRoadmap, useFitGoals } from "@/components/simple/FitDate";
 import { changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
 import { boardPicture, chartPicture, exportView, type Brand } from "./_export";
 import { KeyDatesEditor } from "./_keydates";
@@ -1162,9 +1163,15 @@ export function SimpleRoadmap() {
     }
   };
 
+  // The goal Bring a date in leads the page with (FD1 a): its PRD names the page when no roadmap is picked.
+  const fitGoals = useFitGoals();
+
   if (roadmap.error && !data) return <Notice tone="error">{roadmap.error}</Notice>;
   if (!data) return <Loading />;
 
+  // With no one roadmap or PRD picked, the page leads with a PRD's goal (Bring a date in, FD1 a): the
+  // chip beside Roadmap names that PRD (fd1-a-rest), not "All roadmaps".
+  const scopePrd = data.roadmap || f.prd ? null : ((fitGoals.data ?? [])[0]?.prd.title ?? null);
   const cardItem = card ? byId.get(card.id) : undefined;
   const popItem = pop ? byId.get(pop.id) : undefined;
   // A feature ask on no roadmap is decided in its Inbox row only (it is filed in Requests, on no
@@ -1453,11 +1460,11 @@ export function SimpleRoadmap() {
       <header className={`relative flex flex-wrap items-center ${phone ? "gap-2" : "gap-3"}`}>
         {/* A phone's header bar names the page (D3): the H1 is for screen readers there. */}
         <h1 className={phone ? "sr-only" : "text-2xl font-semibold"}>Roadmap</h1>
-        {data.roadmap ? (
+        {data.roadmap || scopePrd ? (
           // walkb-roadmap review 5f: a long name (a PRD's) wraps inside the page, never cut off; a
           // one-line chip stays a pill (its radius is over half its height).
           <span data-testid="roadmap-scope" className="max-w-full rounded-2xl bg-accent-soft px-3 py-0.5 text-[15px] font-semibold break-words text-accent-ink">
-            {data.roadmap.title}
+            {data.roadmap?.title ?? scopePrd}
           </span>
         ) : (
           readable.length > 1 && (
@@ -1490,6 +1497,17 @@ export function SimpleRoadmap() {
         {!phone && actions}
         {keyDates && <KeyDatesEditor key={data.roadmap?.id ?? "all"} data={data} act={act} mayChange={canChange} phone={phone} onClose={() => setKeyDates(false)} onOld={reload} />}
       </header>
+      {/* Bring a date in (FD1 a): the goal's target and its date on today's plan, its milestones; each item opens its card. */}
+      <FitRoadmap
+        roadmapId={data.roadmap?.id ?? null}
+        itemOf={(title) => data.items.find((x) => x.title === title.replace(/ \((first slice|no longer holds [^)]*|to [^)]*)\)$/, ""))?.id ?? null}
+        onItem={(id) => {
+          const it = byId.get(id);
+          if (!it) return;
+          setPop(null);
+          setCard({ id: it.id, ...anchorOf(it.id) });
+        }}
+      />
       <p role="status" aria-live="polite" className="sr-only" data-testid="key-pending">
         {said}
       </p>

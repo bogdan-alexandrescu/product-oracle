@@ -1,0 +1,241 @@
+{
+  "about": "Bring a date in's mock plan (invented: Larkspur Help Desk), read by the mock (web/lib/api/mock/fit-date.ts runs the API's capacity queue on it) and by api/tests/test_simple_fit_date_mock_plan.py (oracle.simple.fit_date on the same plan). 'own' marks the goal's own unlocked work a smaller goal shrinks (the API's build_plan). 'expect' pins the real engine's answer at each goal target; both sides check against it.",
+  "start": "2026-11-30",
+  "engineers": 4,
+  "focus": 0.7,
+  "focus_raise": 0.8,
+  "focus_cost": "Support shifts move to two people outside the team for 10 weeks.",
+  "milestone": "M2",
+  "target": "2027-01-29",
+  "hard_target": "2027-01-08",
+  "goal": {
+    "start": 20,
+    "plan_target": 40
+  },
+  "milestones": [
+    {
+      "code": "M1",
+      "name": "M1 Inbox basics"
+    },
+    {
+      "code": "M2",
+      "name": "M2 Agent reply flow",
+      "wait_days": 7,
+      "wait_name": "M1 7-day hold",
+      "wait_cost": "A bug found in M1's hold pulls Rina Vale back for up to a week."
+    },
+    {
+      "code": "M3",
+      "name": "M3 Team inbox"
+    }
+  ],
+  "items": [
+    {
+      "id": "views",
+      "title": "Shared inbox views",
+      "pw": 3,
+      "milestone": "M1",
+      "owner": "Rina Vale"
+    },
+    {
+      "id": "assign",
+      "title": "Assign a thread",
+      "pw": 2,
+      "milestone": "M1",
+      "owner": "Owen Pike"
+    },
+    {
+      "id": "drafts",
+      "title": "Reply drafts in the inbox",
+      "pw": 6,
+      "milestone": "M2",
+      "must": true,
+      "cost": "The goal cannot move without drafts, so Oracle will not tick it."
+    },
+    {
+      "id": "guard",
+      "title": "Send check before a draft goes out",
+      "pw": 3,
+      "milestone": "M2",
+      "guard": "Guardrail: no draft is sent without an agent reading it."
+    },
+    {
+      "id": "summary",
+      "title": "Thread summary card",
+      "pw": 8,
+      "milestone": "M2",
+      "lever": "slice",
+      "own": true,
+      "owner": "Tomas Brook",
+      "cost": "Agents cannot fix a wrong summary until the rest ships in M3."
+    },
+    {
+      "id": "bulk",
+      "title": "Reply to similar threads at once",
+      "pw": 5,
+      "milestone": "M2",
+      "lever": "move",
+      "own": true,
+      "cost": "The goal starts lower: about 34 of 40 replied threads at launch, 40 after M3."
+    },
+    {
+      "id": "analytics",
+      "title": "Reply time chart",
+      "pw": 4,
+      "milestone": "M2",
+      "lever": "ungate",
+      "cost": "For three weeks after launch nobody sees reply times on a chart; the weekly export still has them."
+    },
+    {
+      "id": "tone",
+      "title": "Tone presets",
+      "pw": 3,
+      "milestone": "M2",
+      "lever": "next_prd",
+      "cost": "Asked for in 6 requests; those people hear it moved."
+    },
+    {
+      "id": "snippets",
+      "title": "Import saved snippets",
+      "pw": 2,
+      "milestone": "M2",
+      "lever": "split",
+      "owner": "Rina Vale",
+      "cost": "Snippets with pictures wait for slice 2."
+    },
+    {
+      "id": "redact",
+      "title": "Hide card numbers in drafts",
+      "pw": 2,
+      "milestone": "M2",
+      "guard": "Safety: card numbers never reach a draft or a log."
+    },
+    {
+      "id": "edit",
+      "title": "Edit a thread summary",
+      "pw": 2,
+      "milestone": "M3"
+    }
+  ],
+  "expect": {
+    "fit-date@40": {
+      "today": "2027-03-12",
+      "changes": [
+        ["drafts", 15, 6],
+        ["bulk", 13, 5],
+        ["focus", 12, 0],
+        ["summary", 10, 4.0],
+        ["analytics", 10, 4],
+        ["tone", 7, 3],
+        ["wait:M2", 7, 0],
+        ["snippets", 3, 1.0]
+      ],
+      "pick": ["bulk", "focus", "summary", "analytics", "tone"],
+      "pick_date": "2027-01-24",
+      "best_date": "2027-01-15",
+      "reachable": true
+    },
+    "fit-date@37": {
+      "today": "2027-03-07",
+      "changes": [
+        ["drafts", 15, 6.0],
+        ["focus", 11, 0.0],
+        ["analytics", 10, 4.0],
+        ["bulk", 10, 4.2],
+        ["summary", 8, 3.3],
+        ["tone", 8, 3.0],
+        ["wait:M2", 7, 0.0],
+        ["snippets", 2, 1.0]
+      ],
+      "pick": ["focus", "analytics", "bulk", "summary", "tone"],
+      "pick_date": "2027-01-23",
+      "best_date": "2027-01-14",
+      "reachable": true
+    },
+    "fit-date@25": {
+      "today": "2027-02-15",
+      "changes": [
+        ["drafts", 14, 6.0],
+        ["analytics", 10, 4.0],
+        ["focus", 8, 0.0],
+        ["tone", 7, 3.0],
+        ["wait:M2", 7, 0.0],
+        ["snippets", 2, 1.0],
+        ["summary", 2, 1.0],
+        ["bulk", 2, 1.2]
+      ],
+      "pick": ["analytics", "focus"],
+      "pick_date": "2027-01-29",
+      "best_date": "2027-01-08",
+      "reachable": true
+    },
+    "fit-date-hard@40": {
+      "today": "2027-03-12",
+      "changes": [
+        ["drafts", 15, 6],
+        ["bulk", 13, 5],
+        ["focus", 12, 0],
+        ["summary", 10, 4.0],
+        ["analytics", 10, 4],
+        ["tone", 7, 3],
+        ["wait:M2", 7, 0],
+        ["snippets", 3, 1.0]
+      ],
+      "pick": ["bulk", "focus", "summary", "analytics", "tone", "wait:M2", "snippets"],
+      "pick_date": "2027-01-15",
+      "best_date": "2027-01-15",
+      "reachable": false
+    },
+    "fit-date-hard@30": {
+      "today": "2027-02-24",
+      "changes": [
+        ["drafts", 15, 6.0],
+        ["focus", 10, 0.0],
+        ["analytics", 10, 4.0],
+        ["tone", 8, 3.0],
+        ["wait:M2", 7, 0.0],
+        ["bulk", 7, 2.5],
+        ["summary", 5, 2.0],
+        ["snippets", 3, 1.0]
+      ],
+      "pick": ["focus", "analytics", "tone", "wait:M2", "bulk", "summary", "snippets"],
+      "pick_date": "2027-01-11",
+      "best_date": "2027-01-11",
+      "reachable": false
+    },
+    "fit-date-hard@25": {
+      "today": "2027-02-15",
+      "changes": [
+        ["drafts", 14, 6.0],
+        ["analytics", 10, 4.0],
+        ["focus", 8, 0.0],
+        ["tone", 7, 3.0],
+        ["wait:M2", 7, 0.0],
+        ["snippets", 2, 1.0],
+        ["summary", 2, 1.0],
+        ["bulk", 2, 1.2]
+      ],
+      "pick": ["analytics", "focus", "tone", "wait:M2", "snippets", "summary", "bulk"],
+      "pick_date": "2027-01-08",
+      "best_date": "2027-01-08",
+      "reachable": true
+    },
+    "fit-date-hard@21": {
+      "today": "2027-02-11",
+      "changes": [
+        ["drafts", 15, 6.0],
+        ["analytics", 10, 4.0],
+        ["tone", 8, 3.0],
+        ["focus", 8, 0.0],
+        ["wait:M2", 7, 0.0],
+        ["snippets", 3, 1.0],
+        ["bulk", 2, 0.5],
+        ["summary", 1, 0.3]
+      ],
+      "pick": ["analytics", "tone", "focus", "wait:M2", "snippets", "bulk"],
+      "pick_date": "2027-01-08",
+      "best_date": "2027-01-07",
+      "reachable": true
+    }
+  }
+}

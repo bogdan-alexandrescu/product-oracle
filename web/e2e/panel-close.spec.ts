@@ -213,15 +213,29 @@ test.describe("phone", () => {
     const sheet = page.getByTestId("priority-sheet");
     await expect(sheet.getByRole("dialog")).toBeVisible();
     await expect(close(page)).toBeHidden();
-    // pc1-a-phone-390: the sheet's title wraps onto two lines in bold, never cut with an ellipsis.
+    // pc1-a-phone-390: the sheet's title is bold and whole: it wraps (on as many lines as its
+    // words take at this text width, which differs by system) and is never cut with an
+    // ellipsis, clipped, or run under the header's buttons.
     const title = sheet.getByRole("heading", { level: 2, name: "Guided first project with sample tasks", exact: true }).first();
     const look = await title.evaluate((e) => {
       const s = getComputedStyle(e);
-      return { weight: Number(s.fontWeight), cut: e.scrollWidth > e.clientWidth + 1 || s.textOverflow === "ellipsis", lines: Math.round((e.clientHeight - parseFloat(s.paddingTop) - parseFloat(s.paddingBottom)) / parseFloat(s.lineHeight)) };
+      const box = e.getBoundingClientRect();
+      const sheetBox = e.closest('[role="dialog"]')!.getBoundingClientRect();
+      const over = [...e.parentElement!.children]
+        .filter((c) => c !== e && (c as HTMLElement).offsetWidth > 0)
+        .filter((c) => {
+          const b = c.getBoundingClientRect();
+          return b.left < box.right - 0.5 && b.right > box.left + 0.5 && b.top < box.bottom - 0.5 && b.bottom > box.top + 0.5;
+        }).length;
+      return {
+        weight: Number(s.fontWeight),
+        cut: e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1 || s.textOverflow === "ellipsis" || s.webkitLineClamp !== "none",
+        inside: box.left >= sheetBox.left - 0.5 && box.right <= sheetBox.right + 0.5,
+        over,
+      };
     });
     expect(look.weight).toBeGreaterThanOrEqual(700);
-    expect(look.cut).toBe(false);
-    expect(look.lines).toBe(2);
+    expect(look).toMatchObject({ cut: false, inside: true, over: 0 });
     await page.keyboard.press("Escape");
     await expect(sheet).toHaveCount(0);
     await expect(page.getByTestId("priority-table")).toBeVisible();

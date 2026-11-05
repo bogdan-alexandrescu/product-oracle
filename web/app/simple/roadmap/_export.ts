@@ -102,7 +102,12 @@ export function chartPicture(svg: SVGSVGElement, labels: HTMLElement | null): Pi
     const top = labels.getBoundingClientRect().top;
     for (const el of labels.children) {
       const r = (el as HTMLElement).getBoundingClientRect();
-      const t = (el as HTMLElement).innerText.split("\n")[0]?.trim();
+      // The row's first line as the column shows it; a Current-state word pill before the name is not the name.
+      const pills = [...el.querySelectorAll<HTMLElement>('[data-testid="cs-mark"]')].map((p) => p.innerText.trim());
+      const t = (el as HTMLElement).innerText
+        .split("\n")
+        .map((s) => s.trim())
+        .find((s) => s && !pills.includes(s));
       if (t) rows.push(`<text x="10" y="${r.top - top + r.height / 2 + 5}" font-size="13" fill="var(--text)">${esc(cut(t, 34))}</text>`);
     }
   }

@@ -5,8 +5,8 @@
 written, not by their random ids. Rows from before get theirs in table order. The
 downgrade drops it.
 
-Revision ID: 0107_simple_change_seq
-Revises: 0106_company_roadmap
+Revision ID: 0112_simple_change_seq
+Revises: 0111_audit_action_entity
 """
 
 from collections.abc import Sequence
@@ -14,8 +14,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0107_simple_change_seq"
-down_revision: str | None = "0106_company_roadmap"
+revision: str = "0112_simple_change_seq"
+down_revision: str | None = "0111_audit_action_entity"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

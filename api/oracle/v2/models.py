@@ -372,6 +372,9 @@ class ProductIntake(Trashable, TenantScoped, Base):
     draft_template: Mapped[str | None] = mapped_column(Text)
     draft_theme: Mapped[str | None] = mapped_column(Text)
     prd_answers: Mapped[dict[str, Any]] = _json()
+    # The approved PRD this brief replaces, and the area of it the new PRD covers:
+    # {"document_id", "area_name", "area_scope", "item_keys"} (oracle.intake.carried).
+    replaces: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     lock_version: Mapped[int] = _lock_version()
     __mapper_args__ = {"version_id_col": lock_version}
     updated_at: Mapped[datetime] = _updated_at()

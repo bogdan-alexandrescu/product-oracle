@@ -153,16 +153,20 @@ limits, configurability and scaling (`categories.CATEGORIES`).
   with `untrusted: true`, to the item's owner (never through a run token), or to anyone
   when the author shared a finding citing it in full (S6, below).
 - The `intake_analysis` job's system prompt is the fixed file
-  `api/oracle/jobs/prompts/intake_analysis.v2.md`. Outside `untrusted_data` the user
+  `api/oracle/jobs/prompts/intake_analysis.v3.md`. Outside `untrusted_data` the user
   message carries only Oracle's own fixed values: the intake id, fields, category keys and
   labels, existing gaps as `ref`, category and status, the closed categories and the
   limits. Everything people or sources wrote travels inside `untrusted_data`: the title,
-  the brief, every gap statement (any commenter can write one), the confirmed goals and
-  the excerpts. The answer is validated: known fields and categories, text cut to 500
+  the brief, every gap statement (any commenter can write one), the confirmed goals, the
+  pinned sources (every uploaded document whole up to 8,000 characters or by its sections
+  that speak to the brief; other items by a 1,500-character excerpt) and the baseline
+  features the brief names with their descriptions and evidence (walk 2, problem 17).
+  The answer is validated: known fields and categories, text cut to 500
   characters, at most 12 items and 8 gaps per run (40 and 24 per intake), evidence refs
   that resolve to items the job was given, no gap in a category already answered or
   covered by the baseline, no gap that says what an existing gap of its category says
-  (normalised content words). Results are AI inferences and open gaps only; the job can
+  (normalised content words), and no gap that calls not described or missing what a
+  feature or a source section it was given describes. Results are AI inferences and open gaps only; the job can
   neither answer nor close anything, and adds nothing to a converted or archived intake.
 - Runs get the intake id, not its text. Run tokens read intakes, gaps, questions and
   answers with `read:baseline`; the routes that can return source titles, links or

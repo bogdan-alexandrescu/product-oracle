@@ -40,7 +40,7 @@ from oracle.baseline import service as baseline_service
 from oracle.baseline.models import Proposal
 from oracle.docs.models import Document, DocumentVersion
 from oracle.intake import categories as cats
-from oracle.intake import engine, sharing
+from oracle.intake import discovery, engine, sharing
 from oracle.intake.models import IntakeProposal
 from oracle.intake.schemas import AnswerIn, DecisionIn, IntakeRunIn, NextAction
 from oracle.intake.service import (
@@ -252,7 +252,12 @@ async def answer(
     )
     db.add(row)
     question_status, gap_status = EFFECTS[body.kind]
-    if body.kind == "dont_know" and question.status == "delegated":
+    # "Unknown; finding out is part of this work" plans work: the question is answered
+    # and the gap settled, never left open as a blocker (walk 2 problem 19).
+    planned = gap is not None and body.kind in discovery.KINDS and discovery.is_discovery(body.body)
+    if planned:
+        question_status, gap_status = "answered", "answered"
+    elif body.kind == "dont_know" and question.status == "delegated":
         question_status = "delegated"
     question.status = question_status
     if body.kind == "delegate":
@@ -264,14 +269,18 @@ async def answer(
         gap is not None
         and gap_status == "answered"
         and importance == "critical"
+        and not planned
         and not has_role(principal.role, "owner")
     ):
-        # B4: an answer below the owner role never clears a critical gap on its own.
+        # B4: an answer below the owner role never clears a critical gap on its own (a
+        # plan to find out claims nothing, so it needs no review).
         gap_status = engine.PENDING
     if gap is not None and not frozen:
         if gap_status is not None:
             gap.status = gap_status
-        if body.kind == "answer":
+        if planned:
+            gap.knowledge_state = "unknown"
+        elif body.kind == "answer":
             gap.knowledge_state = state
             gap.evidence_ids = [
                 *gap.evidence_ids,
@@ -290,7 +299,7 @@ async def answer(
         # until its author shares it; at counts only its category's question (S6,
         # owner 2026-10-19; :func:`propose_shared`).
         mode = proposal_mode(intake, gap)
-        if body.kind == "answer" and mode is not None:
+        if body.kind == "answer" and mode is not None and not planned:
             proposal = await _propose_baseline(db, principal, intake, gap, question, row, mode)
             if proposal is not None:
                 baseline_ids.append(proposal)
@@ -300,7 +309,8 @@ async def answer(
                 if patch is not None:
                     proposals.append(patch)
         if not frozen and (
-            body.kind == "research" or (body.kind == "dont_know" and importance == "critical")
+            body.kind == "research"
+            or (body.kind == "dont_know" and importance == "critical" and not planned)
         ):
             proposals.append(
                 await propose_research(

@@ -52,8 +52,10 @@ from tests.test_roadmap_reasons import SECOND, roadmap_items_check
 # once for every checkpoint's drift reasons (H4 §5); Simple's proposals and decisions on
 # them one (#723 S3a); the versions from Simple drafts waiting for a required reviewer one
 # (#723 S3b), read with Oracle's open date suggestions and the goals' open suggestions
-# (inbox-meeting-proposals fix); the minutes of Simple's review meetings one (#723 S8).
-MAX_INBOX_READS = 75
+# (inbox-meeting-proposals fix); the minutes of Simple's review meetings one (#723 S8); the
+# company roadmap's features once for every checkpoint's items check (an item may depend on
+# another PRD's, the owner Nov 4).
+MAX_INBOX_READS = 76
 # The timing of that call: a warm-up, then enough samples that the p95 is not one outlier.
 WARM_UP = 3
 SAMPLES = 40

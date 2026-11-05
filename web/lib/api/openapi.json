@@ -27254,6 +27254,73 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/intakes/replaces/{document_id}/carried": {
+      "get": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Get Replaced Prd Carried",
+        "description": "What a new PRD replacing this approved PRD carries, as New PRD shows it before\nStart: the PRD's items, its standing decided decisions (and those left out) and its\nverified estimates and commitments for the items named in ``item_keys``.",
+        "operationId": "get_replaced_prd_carried",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Document Id"
+            }
+          },
+          {
+            "name": "item_keys",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 100,
+              "default": [],
+              "title": "Item Keys"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Carried"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
     "/v1/intakes/{intake_id}/summary": {
       "get": {
         "tags": [
@@ -43477,6 +43544,642 @@
         "x-min-role": "approver"
       }
     },
+    "/v1/simple/goal-map": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Goal Map",
+        "operationId": "get_goal_map",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalMapOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/goal-map/areas": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Add Area",
+        "operationId": "add_area",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AreaIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalMapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/goal-map/areas/order": {
+      "put": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Order Areas",
+        "operationId": "order_areas",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AreaOrderIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalMapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/goal-map/goals/{goal_id}": {
+      "patch": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Edit Goal",
+        "operationId": "edit_goal",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoalTargetIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalMapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/goal-map/milestones": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Propose Milestone",
+        "operationId": "propose_milestone",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalMapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/goal-map/milestones/{milestone_id}": {
+      "patch": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Set Gate",
+        "operationId": "set_gate",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "milestone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Milestone Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GateIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalMapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/goal-map/links": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Attach Feature",
+        "operationId": "attach_feature",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalMapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/fit-date": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "List Fit Dates",
+        "description": "Each readable PRD's dated goal milestones with their target and their date on today's\nplan, the latest first.",
+        "operationId": "list_fit_dates",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FitGoalOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Fit Dates"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/prds/{prd}/fit-date": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Fit Date",
+        "description": "Oracle's ranked changes to bring the milestone in to its target.",
+        "operationId": "get_fit_date",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prd"
+            }
+          },
+          {
+            "name": "milestone",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Milestone"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FitAnswerOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/prds/{prd}/fit-date/live": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Fit Date Live",
+        "description": "The milestone's date with these changes picked: the capacity queue, no model call.",
+        "operationId": "fit_date_live",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prd"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FitPicksIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FitLiveOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/prds/{prd}/fit-date/draft": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Fit Date Draft",
+        "description": "The re-plan the picks write into the PRD's next version: nothing changes until it is\napproved.",
+        "operationId": "fit_date_draft",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prd"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FitPicksIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FitDraftOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/prds/{prd}/fit-date/approve": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Fit Date Approve",
+        "description": "Make the re-plan live: the PRD's next version, approved the way any version is (its\nroadmap follows); sliced or split items need a new estimate.",
+        "operationId": "fit_date_approve",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prd"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FitPicksIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FitApprovedOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/simple/sessions": {
       "post": {
         "tags": [
@@ -47335,6 +48038,284 @@
         },
         "x-min-role": "commenter",
         "x-per-item": "owner"
+      }
+    },
+    "/v1/feature-states": {
+      "get": {
+        "tags": [
+          "currentstate"
+        ],
+        "summary": "List Feature States",
+        "description": "Every confirmed feature with its mark and proof, and the counts.",
+        "operationId": "list_feature_states",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureStatesOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/feature-states/{feature_id}/check": {
+      "post": {
+        "tags": [
+          "currentstate"
+        ],
+        "summary": "Check Feature State",
+        "description": "Check again: read the feature's proof now.",
+        "operationId": "check_feature_state",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "feature_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Feature Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureStateOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such confirmed feature"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/feature-states/{feature_id}/answer": {
+      "post": {
+        "tags": [
+          "currentstate"
+        ],
+        "summary": "Answer Feature State",
+        "description": "The owner's answer to \"does it still run?\": still_runs counts as fresh proof,\nchanged keeps it in Current state, no_longer_runs puts it back in Desired state.",
+        "operationId": "answer_feature_state",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "feature_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Feature Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeatureAnswerIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureStateOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such confirmed feature"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/feature-states/{feature_id}/move": {
+      "post": {
+        "tags": [
+          "currentstate"
+        ],
+        "summary": "Move Feature State",
+        "description": "Move a ready feature to Current state, or Not yet (off the ready band until its\nproof is read again).",
+        "operationId": "move_feature_state",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "feature_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Feature Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeatureMoveIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureStateOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such confirmed feature"
+          },
+          "409": {
+            "description": "Not ready to move: some proof is missing"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/feature-states/{feature_id}/shipped": {
+      "post": {
+        "tags": [
+          "currentstate"
+        ],
+        "summary": "Mark Feature Shipped",
+        "description": "Mark as already shipped: it exists, with no proof read yet.",
+        "operationId": "mark_feature_shipped",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "feature_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Feature Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureStateOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such confirmed feature"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/strategy/stack": {
@@ -53691,6 +54672,44 @@
         "type": "object",
         "title": "ArchiveIn"
       },
+      "AreaIn": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "lever": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Lever",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "AreaIn"
+      },
+      "AreaOrderIn": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ids"
+        ],
+        "title": "AreaOrderIn"
+      },
       "ArtifactDependencyOut": {
         "properties": {
           "id": {
@@ -54615,6 +55634,48 @@
           "reasons"
         ],
         "title": "AtRiskItem"
+      },
+      "AttachIn": {
+        "properties": {
+          "feature": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Feature"
+          },
+          "milestone": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Milestone"
+          },
+          "area": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Area"
+          },
+          "expected": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Expected",
+            "default": ""
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Confidence",
+            "default": "medium"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature",
+          "milestone",
+          "area"
+        ],
+        "title": "AttachIn"
       },
       "AudienceOut": {
         "properties": {
@@ -58669,6 +59730,193 @@
         ],
         "title": "Capabilities",
         "description": "#370: what the caller's role may do, per API operation (operationId)."
+      },
+      "Carried": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "area_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area Name"
+          },
+          "area_scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area Scope"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CarriedItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/CarriedDecision"
+            },
+            "type": "array",
+            "title": "Decisions",
+            "default": []
+          },
+          "left_out": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Left Out",
+            "default": []
+          },
+          "bases": {
+            "items": {
+              "$ref": "#/components/schemas/CarriedBasis"
+            },
+            "type": "array",
+            "title": "Bases",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "slug",
+          "title",
+          "version"
+        ],
+        "title": "Carried",
+        "description": "What a new PRD carries from the PRD it replaces, as the New PRD form shows it\nbefore Start and the brief shows it after."
+      },
+      "CarriedBasis": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "reference": {
+            "type": "string",
+            "title": "Reference"
+          },
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "supports_date": {
+            "type": "string",
+            "title": "Supports Date"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "reference",
+          "item_key",
+          "supports_date"
+        ],
+        "title": "CarriedBasis"
+      },
+      "CarriedDecision": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "chosen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chosen"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "title"
+        ],
+        "title": "CarriedDecision"
+      },
+      "CarriedItem": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "in_area": {
+            "type": "boolean",
+            "title": "In Area",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title"
+        ],
+        "title": "CarriedItem"
       },
       "CatalogModuleDetail": {
         "properties": {
@@ -69134,6 +70382,48 @@
         ],
         "title": "DiffOut"
       },
+      "DiscoveryWork": {
+        "properties": {
+          "gap_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Gap Id"
+          },
+          "question_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Question Id"
+          },
+          "answer_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Answer Id"
+          },
+          "requirement": {
+            "type": "string",
+            "title": "Requirement"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "cite_ref": {
+            "type": "string",
+            "title": "Cite Ref"
+          }
+        },
+        "type": "object",
+        "required": [
+          "gap_id",
+          "question_id",
+          "answer_id",
+          "requirement",
+          "answer",
+          "cite_ref"
+        ],
+        "title": "DiscoveryWork",
+        "description": "An answer that says the thing is unknown and finding it out is part of this work\n(walk 2 problem 19): a requirement in the PRD and an early discovery item on the\nplan, cited to the answer (``cite_ref``), never a blocker."
+      },
       "DiscussionChangeCounts": {
         "properties": {
           "proposed": {
@@ -75503,6 +76793,143 @@
         ],
         "title": "FeasibilityScopeIn"
       },
+      "FeatureAnswerIn": {
+        "properties": {
+          "answer": {
+            "type": "string",
+            "enum": [
+              "still_runs",
+              "changed",
+              "no_longer_runs"
+            ],
+            "title": "Answer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "answer"
+        ],
+        "title": "FeatureAnswerIn"
+      },
+      "FeatureMoveIn": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "move",
+              "not_yet"
+            ],
+            "title": "Decision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision"
+        ],
+        "title": "FeatureMoveIn"
+      },
+      "FeatureProofOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "code_map",
+              "pull_requests",
+              "tasks",
+              "measured"
+            ],
+            "title": "Kind"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "still_true": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Still True"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "ok"
+        ],
+        "title": "FeatureProofOut"
+      },
       "FeatureRef": {
         "properties": {
           "id": {
@@ -75645,6 +77072,252 @@
           "links"
         ],
         "title": "FeatureSnap"
+      },
+      "FeatureStateOut": {
+        "properties": {
+          "feature_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Feature Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "area": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal"
+          },
+          "milestone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone"
+          },
+          "mark": {
+            "type": "string",
+            "enum": [
+              "new",
+              "in_progress",
+              "exists",
+              "exists_old"
+            ],
+            "title": "Mark"
+          },
+          "shipped_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shipped At"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "proof_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proof Days"
+          },
+          "no_proof_yet": {
+            "type": "boolean",
+            "title": "No Proof Yet"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          },
+          "checking": {
+            "type": "boolean",
+            "title": "Checking"
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "still_runs",
+                  "changed",
+                  "no_longer_runs"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
+          },
+          "answered_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answered At"
+          },
+          "moved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moved At"
+          },
+          "move_how": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "owner_confirmed",
+                  "marked_shipped"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Move How"
+          },
+          "proofs": {
+            "items": {
+              "$ref": "#/components/schemas/FeatureProofOut"
+            },
+            "type": "array",
+            "title": "Proofs"
+          },
+          "item_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Item Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature_id",
+          "code",
+          "title",
+          "mark",
+          "no_proof_yet",
+          "ready",
+          "checking",
+          "proofs"
+        ],
+        "title": "FeatureStateOut"
+      },
+      "FeatureStatesOut": {
+        "properties": {
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/FeatureStateOut"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "running": {
+            "type": "integer",
+            "title": "Running"
+          },
+          "old_proof": {
+            "type": "integer",
+            "title": "Old Proof"
+          },
+          "in_progress": {
+            "type": "integer",
+            "title": "In Progress"
+          },
+          "new": {
+            "type": "integer",
+            "title": "New"
+          },
+          "desired": {
+            "type": "integer",
+            "title": "Desired"
+          },
+          "ready": {
+            "type": "integer",
+            "title": "Ready"
+          },
+          "can_move": {
+            "type": "boolean",
+            "title": "Can Move"
+          },
+          "can_answer": {
+            "type": "boolean",
+            "title": "Can Answer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "features",
+          "running",
+          "old_proof",
+          "in_progress",
+          "new",
+          "desired",
+          "ready",
+          "can_move",
+          "can_answer"
+        ],
+        "title": "FeatureStatesOut"
       },
       "FeatureTrace": {
         "properties": {
@@ -76613,6 +78286,1031 @@
           "same_title"
         ],
         "title": "FirefliesSeriesOut"
+      },
+      "FitAnswerOut": {
+        "properties": {
+          "prd": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "prd_version": {
+            "type": "integer",
+            "title": "Prd Version"
+          },
+          "roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "roadmap_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Version"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal"
+          },
+          "goal_now": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Now"
+          },
+          "milestone": {
+            "type": "string",
+            "title": "Milestone"
+          },
+          "milestone_name": {
+            "type": "string",
+            "title": "Milestone Name"
+          },
+          "target": {
+            "type": "string",
+            "format": "date",
+            "title": "Target"
+          },
+          "today": {
+            "type": "string",
+            "format": "date",
+            "title": "Today"
+          },
+          "late_days": {
+            "type": "integer",
+            "title": "Late Days"
+          },
+          "team": {
+            "$ref": "#/components/schemas/FitTeam"
+          },
+          "lanes": {
+            "items": {
+              "$ref": "#/components/schemas/FitLane"
+            },
+            "type": "array",
+            "title": "Lanes"
+          },
+          "approved": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FitApprovalOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/FitChangeOut"
+            },
+            "type": "array",
+            "title": "Changes"
+          },
+          "pick": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pick"
+          },
+          "pick_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Pick Date"
+          },
+          "best_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Best Date"
+          },
+          "reachable": {
+            "type": "boolean",
+            "title": "Reachable"
+          },
+          "locked": {
+            "items": {
+              "$ref": "#/components/schemas/FitLockedOut"
+            },
+            "type": "array",
+            "title": "Locked"
+          },
+          "hire": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FitHireOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "baseline_goal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FitBaselineGoalOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd",
+          "prd_version",
+          "milestone",
+          "milestone_name",
+          "target",
+          "today",
+          "late_days",
+          "team",
+          "lanes",
+          "changes",
+          "pick",
+          "pick_date",
+          "best_date",
+          "reachable",
+          "locked"
+        ],
+        "title": "FitAnswerOut"
+      },
+      "FitApprovalOut": {
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "by_me": {
+            "type": "boolean",
+            "title": "By Me"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "roadmap_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Version"
+          },
+          "roadmap_live": {
+            "type": "boolean",
+            "title": "Roadmap Live",
+            "default": false
+          },
+          "roadmap_decider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Decider"
+          },
+          "was": {
+            "type": "string",
+            "format": "date",
+            "title": "Was"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "target": {
+            "type": "string",
+            "format": "date",
+            "title": "Target"
+          },
+          "moves": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Moves",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "at",
+          "by_me",
+          "version",
+          "was",
+          "date",
+          "target"
+        ],
+        "title": "FitApprovalOut",
+        "description": "The last re-plan approved for this milestone: who, when, the versions it made live,\nthe milestone's date before and after, and what moved in words."
+      },
+      "FitApprovedOut": {
+        "properties": {
+          "prd": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "target": {
+            "type": "string",
+            "format": "date",
+            "title": "Target"
+          },
+          "approved_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Approved At"
+          },
+          "needs_estimate": {
+            "items": {
+              "$ref": "#/components/schemas/FitEstimate"
+            },
+            "type": "array",
+            "title": "Needs Estimate"
+          },
+          "roadmap_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Version"
+          },
+          "roadmap_live": {
+            "type": "boolean",
+            "title": "Roadmap Live",
+            "default": false
+          },
+          "roadmap_decider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Decider"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd",
+          "version",
+          "date",
+          "target",
+          "approved_at",
+          "needs_estimate"
+        ],
+        "title": "FitApprovedOut"
+      },
+      "FitBaselineGoalOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "comparison": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparison"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
+          },
+          "plan_target": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Target"
+          },
+          "smaller": {
+            "type": "boolean",
+            "title": "Smaller",
+            "default": false
+          },
+          "can_edit": {
+            "type": "boolean",
+            "title": "Can Edit",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "FitBaselineGoalOut",
+        "description": "The Baseline goal the milestone's gate counts toward (the milestone's first target's\ngoal, by name): what \"Keep the date with a smaller goal\" opens and saves through\n``PATCH /v1/baseline/entities/{id}``. ``plan_target``: the number the PRD's milestone\ntarget names; ``smaller``: the goal's target is below it, so the answer counts the\ngoal's own work in the milestone in proportion (:func:`_scale`)."
+      },
+      "FitChangeOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "lever": {
+            "type": "string",
+            "enum": [
+              "move",
+              "next_prd",
+              "slice",
+              "ungate",
+              "split",
+              "overlap",
+              "capacity"
+            ],
+            "title": "Lever"
+          },
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "days": {
+            "type": "integer",
+            "title": "Days"
+          },
+          "pw_saved": {
+            "type": "number",
+            "title": "Pw Saved"
+          },
+          "cost_kind": {
+            "type": "string",
+            "enum": [
+              "none",
+              "risk",
+              "gate",
+              "goal",
+              "must"
+            ],
+            "title": "Cost Kind"
+          },
+          "cost": {
+            "type": "string",
+            "title": "Cost"
+          },
+          "pickable": {
+            "type": "boolean",
+            "title": "Pickable"
+          },
+          "effect": {
+            "type": "string",
+            "title": "Effect"
+          },
+          "moves": {
+            "items": {
+              "$ref": "#/components/schemas/FitMove"
+            },
+            "type": "array",
+            "title": "Moves"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "lever",
+          "item",
+          "title",
+          "days",
+          "pw_saved",
+          "cost_kind",
+          "cost",
+          "pickable",
+          "effect",
+          "moves"
+        ],
+        "title": "FitChangeOut"
+      },
+      "FitDateMove": {
+        "properties": {
+          "what": {
+            "type": "string",
+            "title": "What"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "in",
+              "out"
+            ],
+            "title": "Kind"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "what",
+          "kind"
+        ],
+        "title": "FitDateMove"
+      },
+      "FitDraftOut": {
+        "properties": {
+          "prd": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "prd_version": {
+            "type": "integer",
+            "title": "Prd Version"
+          },
+          "next_version": {
+            "type": "integer",
+            "title": "Next Version"
+          },
+          "roadmap_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Version"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/FitPrdChange"
+            },
+            "type": "array",
+            "title": "Changes"
+          },
+          "dates": {
+            "items": {
+              "$ref": "#/components/schemas/FitDateMove"
+            },
+            "type": "array",
+            "title": "Dates"
+          },
+          "new_target": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Target"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "needs_estimate": {
+            "items": {
+              "$ref": "#/components/schemas/FitEstimate"
+            },
+            "type": "array",
+            "title": "Needs Estimate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd",
+          "prd_version",
+          "next_version",
+          "changes",
+          "dates",
+          "date",
+          "needs_estimate"
+        ],
+        "title": "FitDraftOut"
+      },
+      "FitEstimate": {
+        "properties": {
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item"
+        ],
+        "title": "FitEstimate"
+      },
+      "FitGoalOut": {
+        "properties": {
+          "prd": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "prd_version": {
+            "type": "integer",
+            "title": "Prd Version"
+          },
+          "roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "roadmap_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Version"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal"
+          },
+          "goal_now": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Now"
+          },
+          "milestone": {
+            "type": "string",
+            "title": "Milestone"
+          },
+          "milestone_name": {
+            "type": "string",
+            "title": "Milestone Name"
+          },
+          "target": {
+            "type": "string",
+            "format": "date",
+            "title": "Target"
+          },
+          "today": {
+            "type": "string",
+            "format": "date",
+            "title": "Today"
+          },
+          "late_days": {
+            "type": "integer",
+            "title": "Late Days"
+          },
+          "team": {
+            "$ref": "#/components/schemas/FitTeam"
+          },
+          "lanes": {
+            "items": {
+              "$ref": "#/components/schemas/FitLane"
+            },
+            "type": "array",
+            "title": "Lanes"
+          },
+          "approved": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FitApprovalOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd",
+          "prd_version",
+          "milestone",
+          "milestone_name",
+          "target",
+          "today",
+          "late_days",
+          "team",
+          "lanes"
+        ],
+        "title": "FitGoalOut"
+      },
+      "FitHireOut": {
+        "properties": {
+          "start_weeks": {
+            "type": "integer",
+            "title": "Start Weeks"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "reaches": {
+            "type": "boolean",
+            "title": "Reaches"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start_weeks",
+          "date",
+          "reaches"
+        ],
+        "title": "FitHireOut",
+        "description": "One more engineer when no set reaches the target: counted only after their start\nweeks, at the team's focus. ``date``: the best date with them; ``reaches``: whether it\nis by the target."
+      },
+      "FitLane": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FitLaneItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "items"
+        ],
+        "title": "FitLane"
+      },
+      "FitLaneItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "locked": {
+            "type": "boolean",
+            "title": "Locked",
+            "default": false
+          },
+          "needs_estimate": {
+            "type": "boolean",
+            "title": "Needs Estimate",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "FitLaneItem"
+      },
+      "FitLiveOut": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "target": {
+            "type": "string",
+            "format": "date",
+            "title": "Target"
+          },
+          "over_days": {
+            "type": "integer",
+            "title": "Over Days"
+          },
+          "pw_saved": {
+            "type": "number",
+            "title": "Pw Saved"
+          },
+          "picks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Picks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "target",
+          "over_days",
+          "pw_saved",
+          "picks"
+        ],
+        "title": "FitLiveOut"
+      },
+      "FitLockedOut": {
+        "properties": {
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "pw": {
+            "type": "number",
+            "title": "Pw"
+          },
+          "why": {
+            "type": "string",
+            "title": "Why"
+          },
+          "would_reach": {
+            "type": "boolean",
+            "title": "Would Reach"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item",
+          "pw",
+          "why",
+          "would_reach"
+        ],
+        "title": "FitLockedOut"
+      },
+      "FitMove": {
+        "properties": {
+          "what": {
+            "type": "string",
+            "title": "What"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          }
+        },
+        "type": "object",
+        "required": [
+          "what"
+        ],
+        "title": "FitMove"
+      },
+      "FitPicksIn": {
+        "properties": {
+          "milestone": {
+            "type": "string",
+            "title": "Milestone"
+          },
+          "picks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Picks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "milestone",
+          "picks"
+        ],
+        "title": "FitPicksIn"
+      },
+      "FitPrdChange": {
+        "properties": {
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "change": {
+            "type": "string",
+            "title": "Change"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item",
+          "change"
+        ],
+        "title": "FitPrdChange"
+      },
+      "FitTeam": {
+        "properties": {
+          "engineers": {
+            "type": "integer",
+            "title": "Engineers"
+          },
+          "focus": {
+            "type": "number",
+            "title": "Focus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "engineers",
+          "focus"
+        ],
+        "title": "FitTeam"
       },
       "FixAction": {
         "properties": {
@@ -77671,6 +80369,41 @@
         "title": "Gate",
         "description": "The approve gate (D3 Approve blocked by problems): Approve is refused while a\nblocking reason is open (not waived) or the file has a problem of its own."
       },
+      "GateIn": {
+        "properties": {
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          },
+          "confirm": {
+            "type": "boolean",
+            "title": "Confirm",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "GateIn"
+      },
       "GateLeft": {
         "properties": {
           "item": {
@@ -77896,6 +80629,483 @@
           "next_cursor"
         ],
         "title": "GithubRepoPage"
+      },
+      "GmArea": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "lever": {
+            "type": "string",
+            "title": "Lever"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "lever"
+        ],
+        "title": "GmArea"
+      },
+      "GmFeature": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "area": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area"
+          },
+          "milestones": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Milestones"
+          },
+          "lever": {
+            "type": "string",
+            "title": "Lever"
+          },
+          "expected": {
+            "type": "string",
+            "title": "Expected"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "High",
+              "Medium",
+              "Low"
+            ],
+            "title": "Confidence"
+          },
+          "released": {
+            "type": "boolean",
+            "title": "Released"
+          },
+          "measured": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured"
+          },
+          "lift": {
+            "type": "string",
+            "enum": [
+              "helping",
+              "not_helping",
+              "not_measured"
+            ],
+            "title": "Lift"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/GmLink"
+            },
+            "type": "array",
+            "title": "Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "area",
+          "milestones",
+          "lever",
+          "expected",
+          "confidence",
+          "released",
+          "measured",
+          "lift",
+          "links"
+        ],
+        "title": "GmFeature"
+      },
+      "GmGoal": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "measure": {
+            "type": "string",
+            "title": "Measure"
+          },
+          "target": {
+            "type": "number",
+            "title": "Target"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "met",
+              "on_track",
+              "at_risk",
+              "missed",
+              "not_measured",
+              "no_gate"
+            ],
+            "title": "Status"
+          },
+          "math": {
+            "type": "string",
+            "title": "Math"
+          },
+          "builds_on": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Builds On"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/GmHistory"
+            },
+            "type": "array",
+            "title": "History"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "measure",
+          "target",
+          "current",
+          "unit",
+          "status",
+          "math",
+          "builds_on",
+          "history"
+        ],
+        "title": "GmGoal"
+      },
+      "GmGuardrail": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "rule": {
+            "type": "string",
+            "title": "Rule"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "days": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Days"
+          },
+          "held": {
+            "type": "boolean",
+            "title": "Held"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "rule",
+          "current",
+          "days",
+          "held"
+        ],
+        "title": "GmGuardrail"
+      },
+      "GmHistory": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "by": {
+            "type": "string",
+            "title": "By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "text",
+          "by"
+        ],
+        "title": "GmHistory"
+      },
+      "GmLink": {
+        "properties": {
+          "milestone": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Milestone"
+          },
+          "expected": {
+            "type": "string",
+            "title": "Expected"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "High",
+              "Medium",
+              "Low"
+            ],
+            "title": "Confidence"
+          },
+          "measured": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured"
+          },
+          "lift": {
+            "type": "string",
+            "enum": [
+              "helping",
+              "not_helping",
+              "not_measured"
+            ],
+            "title": "Lift"
+          }
+        },
+        "type": "object",
+        "required": [
+          "milestone",
+          "expected",
+          "confidence",
+          "measured",
+          "lift"
+        ],
+        "title": "GmLink",
+        "description": "What a feature is expected to do for one milestone, and what it did."
+      },
+      "GmMilestone": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "goal": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Goal"
+          },
+          "measure": {
+            "type": "string",
+            "title": "Measure"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "met",
+              "on_track",
+              "at_risk",
+              "missed",
+              "not_measured",
+              "no_gate"
+            ],
+            "title": "Status"
+          },
+          "areas": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Areas"
+          },
+          "depends": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Depends"
+          },
+          "month": {
+            "type": "string",
+            "title": "Month"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
+          },
+          "days": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Days"
+          },
+          "confirmed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed"
+          },
+          "confirmed_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed On"
+          },
+          "proposed": {
+            "type": "boolean",
+            "title": "Proposed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "goal",
+          "measure",
+          "threshold",
+          "unit",
+          "current",
+          "status",
+          "areas",
+          "depends",
+          "month",
+          "due",
+          "days",
+          "confirmed",
+          "confirmed_on",
+          "proposed"
+        ],
+        "title": "GmMilestone"
       },
       "GoalBucketFeature": {
         "properties": {
@@ -78383,6 +81593,91 @@
         ],
         "title": "GoalLinkSnap"
       },
+      "GoalMapOut": {
+        "properties": {
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/GmGoal"
+            },
+            "type": "array",
+            "title": "Goals"
+          },
+          "areas": {
+            "items": {
+              "$ref": "#/components/schemas/GmArea"
+            },
+            "type": "array",
+            "title": "Areas"
+          },
+          "guardrail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GmGuardrail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "milestones": {
+            "items": {
+              "$ref": "#/components/schemas/GmMilestone"
+            },
+            "type": "array",
+            "title": "Milestones"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/GmFeature"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "today": {
+            "type": "string",
+            "title": "Today"
+          },
+          "reps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reps"
+          },
+          "approver": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approver"
+          },
+          "can_edit": {
+            "type": "boolean",
+            "title": "Can Edit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "goals",
+          "areas",
+          "guardrail",
+          "milestones",
+          "features",
+          "today",
+          "reps",
+          "approver",
+          "can_edit"
+        ],
+        "title": "GoalMapOut"
+      },
       "GoalMeasurePushback": {
         "properties": {
           "detail": {
@@ -78492,6 +81787,20 @@
           "attrs"
         ],
         "title": "GoalSnap"
+      },
+      "GoalTargetIn": {
+        "properties": {
+          "target": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Target"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target"
+        ],
+        "title": "GoalTargetIn"
       },
       "GoalTerm": {
         "properties": {
@@ -83953,6 +87262,16 @@
             "maxItems": 50,
             "title": "Request Ids",
             "default": []
+          },
+          "replaces": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReplacesIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -84104,6 +87423,16 @@
             "type": "array",
             "title": "Run Ids",
             "default": []
+          },
+          "carried": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Carried"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -84645,6 +87974,14 @@
                 "type": "null"
               }
             ]
+          },
+          "work": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryWork"
+            },
+            "type": "array",
+            "title": "Work",
+            "default": []
           }
         },
         "type": "object",
@@ -99686,6 +103023,54 @@
         "title": "ProposalRun",
         "description": "The run that made a proposal, enough to name it and link to it."
       },
+      "ProposeIn": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "goal": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Goal"
+          },
+          "threshold": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Threshold"
+          },
+          "areas": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Areas",
+            "default": []
+          },
+          "after": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "goal",
+          "threshold"
+        ],
+        "title": "ProposeIn"
+      },
       "ProposedAssessment": {
         "properties": {
           "verdict": {
@@ -103698,6 +107083,44 @@
           "prds"
         ],
         "title": "ReplacedByIn"
+      },
+      "ReplacesIn": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "area_name": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Area Name"
+          },
+          "area_scope": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Area Scope"
+          },
+          "item_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Item Keys",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "area_name",
+          "area_scope"
+        ],
+        "title": "ReplacesIn",
+        "description": "The approved PRD a new PRD replaces, and the area of it the new PRD covers\n(oracle.intake.carried): its decisions and verified estimates are the run's inputs."
       },
       "ReplyCounts": {
         "properties": {
@@ -112487,6 +115910,30 @@
         "title": "ScopeItemPatch",
         "description": "One person's change to one scope row (C7); every field optional. ``revert`` puts\nthe row back to the agent's values. ``decision_reason`` of a left-out feature:\nno_goal | not_now | out_of_scope | duplicate | other:<text>."
       },
+      "ScopeOtherDependency": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "prd": {
+            "type": "string",
+            "title": "Prd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "prd"
+        ],
+        "title": "ScopeOtherDependency",
+        "description": "A dependency on another PRD's feature on the company roadmap: its name and PRD."
+      },
       "ScopeOut": {
         "properties": {
           "name": {
@@ -112888,6 +116335,14 @@
             "default": {
               "original": {}
             }
+          },
+          "other_prd_dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeOtherDependency"
+            },
+            "type": "array",
+            "title": "Other Prd Dependencies",
+            "default": []
           }
         },
         "type": "object",
@@ -121775,6 +125230,15 @@
             "type": "boolean",
             "title": "Past Edge",
             "default": false
+          },
+          "item_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Item Ids",
+            "default": []
           }
         },
         "type": "object",
@@ -122434,6 +125898,11 @@
             "title": "End Estimated",
             "default": false
           },
+          "estimate_pending": {
+            "type": "boolean",
+            "title": "Estimate Pending",
+            "default": false
+          },
           "no_goal": {
             "type": "boolean",
             "title": "No Goal",
@@ -123041,6 +126510,11 @@
           "estimated": {
             "type": "boolean",
             "title": "Estimated"
+          },
+          "estimate_pending": {
+            "type": "boolean",
+            "title": "Estimate Pending",
+            "default": false
           },
           "date_basis": {
             "anyOf": [

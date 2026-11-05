@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+import { MarkFor, WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { Button, confirmInPage, toast } from "@/components/ds";
 import { setToastPlace } from "@/components/ds/Toast";
 import { MeetingChat } from "@/components/simple/chat/MeetingChat";
@@ -427,13 +428,19 @@ function AgendaStrip({ agenda }: { agenda?: MeetingAgenda }) {
   return (
     <div role="status" aria-label="Agenda" data-testid="agenda-strip" className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-line px-4 py-2 text-base [overflow-wrap:anywhere]">
       {agenda.next && (
-        <p data-testid="agenda-next">
-          {/* build-feature-panel review 5: each name opens the one feature panel. */}
-          <span className="font-semibold">Next:</span>{" "}
-          <button type="button" data-feature={agenda.next.id} className="text-left hover:underline">
-            {agenda.next.title}
-          </button>
-        </p>
+        // The item taken next, with its feature's Current-state pill (the agenda names roadmap items).
+        <div className="flex flex-wrap items-center gap-2">
+          <p data-testid="agenda-next">
+            {/* build-feature-panel review 5: each name opens the one feature panel. */}
+            <span className="font-semibold">Next:</span>{" "}
+            <button type="button" data-feature={agenda.next.id} className="text-left hover:underline">
+              {agenda.next.title}
+            </button>
+          </p>
+          <WithFeatureMarks>
+            <MarkFor itemId={agenda.next.id} />
+          </WithFeatureMarks>
+        </div>
       )}
       {agenda.skipped.length > 0 && (
         <p data-testid="agenda-skipped" className="text-text2">

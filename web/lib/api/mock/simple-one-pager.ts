@@ -184,6 +184,8 @@ type SliceItem = {
   record?: { id: string; name: string };
   /** The day its milestone starts when the PRD's plan dates it (the strip's row spans it). */
   milestoneStart?: string;
+  /** The mock roadmap's item it is (simple-roadmap.ts SEED key), so it carries that feature's mark. */
+  key?: string;
 };
 
 /** The plan-model lane ("simple-plan"): the slice as the PRD's dated plan has it, one item per slice. */
@@ -199,11 +201,17 @@ export function planSlice(): SliceItem[] {
   }));
 }
 const BETA_LAUNCH = { id: stableUuid("op-milestone/beta-launch"), name: "Beta launch" };
+// build-current-state review 2: a few are the mock roadmap's own items (their features' marks:
+// Setup checklist in progress, Sample data import new, Welcome video runs today, Alert routing
+// by team runs with old proof), as the API's slice is the PRD's roadmap items.
+/** A slice item's roadmap item id: the mock roadmap's own (simple-roadmap.ts ids) when it is one. */
+const sliceItemId = (x: SliceItem, i: number) => stableUuid(x.key ? `simple-item/${x.key}` : `op-item-${i + 1}`);
+const SEEDED: Record<number, [string, string]> = { 0: ["setup-checklist", "Setup checklist"], 1: ["setup-import", "Sample data import"], 12: ["setup-video", "Welcome video"] };
 const SLICE: SliceItem[] = [
-  ...Array.from({ length: 12 }, (_, i) => ({ title: `Setup step ${i + 1}`, horizon: "now" as const, start: "2026-10-05", end: "2026-11-20", estimated: false, milestone: ["M1", "2026-11-20"] as [string, string] })),
-  ...Array.from({ length: 5 }, (_, i) => ({ title: `Calendar invites ${i + 1}`, horizon: "next" as const, start: "2026-11-23", end: "2026-12-18", estimated: i > 2, milestone: ["M2", "2026-12-18"] as [string, string] })),
+  ...Array.from({ length: 12 }, (_, i) => ({ title: SEEDED[i]?.[1] ?? `Setup step ${i + 1}`, key: SEEDED[i]?.[0], horizon: "now" as const, start: "2026-10-05", end: "2026-11-20", estimated: false, milestone: ["M1", "2026-11-20"] as [string, string] })),
+  ...Array.from({ length: 5 }, (_, i) => ({ title: SEEDED[12 + i]?.[1] ?? `Calendar invites ${i + 1}`, key: SEEDED[12 + i]?.[0], horizon: "next" as const, start: "2026-11-23", end: "2026-12-18", estimated: i > 2, milestone: ["M2", "2026-12-18"] as [string, string] })),
   ...Array.from({ length: 3 }, (_, i) => ({ title: `Sample project ${i + 1}`, horizon: "later" as const, start: "2026-12-21", end: "2027-01-29", estimated: true, milestone: ["M3", "2027-01-29"] as [string, string] })),
-  { title: "Setup help center", horizon: "now", start: "2026-10-12", end: "2026-12-11", estimated: false, milestone: null },
+  { title: "Alert routing by team", key: "alert-sso", horizon: "now", start: "2026-10-12", end: "2026-12-11", estimated: false, milestone: null },
   { title: "Setup analytics", horizon: "later", start: "2026-11-02", end: "2027-03-12", estimated: false, milestone: null },
 ];
 
@@ -592,9 +600,9 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     writing: !!db.writing && !held,
     built_at: "2026-10-20T15:05:00Z",
     blocks,
-    timeline: (db.slice ?? SLICE).map((x, i) => ({ id: stableUuid(`op-item-${i + 1}`), title: x.title, horizon: x.horizon, start: x.start, end: x.end, estimated: x.estimated })),
+    timeline: (db.slice ?? SLICE).map((x, i) => ({ id: sliceItemId(x, i), title: x.title, horizon: x.horizon, start: x.start, end: x.end, estimated: x.estimated })),
     plan: planByMonth(
-      (db.slice ?? SLICE).map((x) => ({ start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null, milestoneStart: x.milestoneStart ?? null, record: x.record ?? null })),
+      (db.slice ?? SLICE).map((x, i) => ({ id: sliceItemId(x, i), start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null, milestoneStart: x.milestoneStart ?? null, record: x.record ?? null })),
       // qa4-simple-prd-10: the company's day, as the API's slice (and the notes' times) read it.
       companyDayIso(new Date(mockNowMs())),
     ),

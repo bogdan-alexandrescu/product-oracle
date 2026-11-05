@@ -30,7 +30,7 @@ CURRENT = {
     "review_comments": "review_comments.v2",
     "reporting": "reporting.v1",
     "refinement": "refinement.v2",
-    "intake_analysis": "intake_analysis.v2",
+    "intake_analysis": "intake_analysis.v3",
     "quality_review": "quality_review.v1",
     "refinement_batch": "refinement_batch.v3",
     "decision_options": "decision_options.v1",

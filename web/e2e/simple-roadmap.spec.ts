@@ -314,10 +314,10 @@ test("the Gantt: day and week, today's line, arrows, the same card", async ({ pa
  */
 test("filters and grouping", async ({ page }) => {
   await open(page);
-  await page.getByLabel("Goal").selectOption("faster-activation");
+  await page.getByLabel("Goal", { exact: true }).selectOption("faster-activation");
   await expect(bar(page, "alert-rules")).toHaveCount(0);
   await expect(bar(page, "setup-checklist")).toBeVisible();
-  await page.getByLabel("Goal").selectOption("");
+  await page.getByLabel("Goal", { exact: true }).selectOption("");
   await page.getByTestId("group-track").click();
   await expect(page.getByTestId("chart-group").first()).toContainText("track");
 });

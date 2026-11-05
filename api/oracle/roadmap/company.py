@@ -16,7 +16,8 @@ Many PRDs (one per area of focus) feed it; links between features stay within it
   one capacity queue: team size x focus (the ``team_capacity`` setting) person-weeks a week;
   items in milestone order (Now before Next before Later, then the milestone's first place
   on the roadmap), then the company goal order (goal positions), then priority (highest
-  first). An item's effort is its declared ``effort_weeks`` (else 1 week).
+  first); an item never before the items it depends on, in any PRD.
+  An item's effort is its declared ``effort_weeks`` (else 1 week).
 - **A replaced PRD** (:func:`replace`): ``replaced_by`` names the PRDs that replace it; it is
   read-only (oracle.docs.service refuses a new version), its items no longer feed the
   roadmap, and its verified schedule bases follow their item to the PRD the item now sits
@@ -29,7 +30,8 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select, true
+from sqlalchemy import DateTime, String, Uuid, and_, func, literal, or_, select, true, union_all
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -116,6 +118,200 @@ async def refs(db: AsyncSession, ids: list[uuid.UUID]) -> list[dict[str, Any]]:
         )
     }
     return [{"id": i, "slug": found[i].slug, "title": found[i].title} for i in ids if i in found]
+
+
+@dataclass(frozen=True)
+class OnRoadmap:
+    """A feature the company roadmap knows: its title and the PRD it lives in (a new PRD,
+    not imported yet: the run that writes it), and, for a roadmap item, its horizon and
+    what it depends on."""
+
+    title: str
+    prd: str | None
+    prd_id: uuid.UUID | None = None
+    run_id: uuid.UUID | None = None
+    horizon: str | None = None
+    depends_on: tuple[str, ...] = ()
+
+    @property
+    def prd_name(self) -> str:
+        """``Safety PRD``: the PRD's title, with PRD after it when it does not say so."""
+        if not self.prd:
+            return "another PRD"
+        return self.prd if self.prd.lower().endswith("prd") else f"{self.prd} PRD"
+
+    @property
+    def label(self) -> str:
+        """``Account health ledger (Safety PRD)``: the title with its PRD named."""
+        return f"{self.title} ({self.prd_name})" if self.prd else self.title
+
+    def other_than(self, prd_id: uuid.UUID | None, run_id: uuid.UUID | None = None) -> bool:
+        """Held by another PRD than ``prd_id`` (a new PRD: another run than ``run_id``)."""
+        if self.prd_id is not None:
+            return self.prd_id != prd_id
+        return self.run_id is not None and self.run_id != run_id
+
+
+def _slug_words(slug: Any) -> str | None:
+    return str(slug).replace("-", " ").replace("_", " ").capitalize() if slug else None
+
+
+async def features_on_roadmap(db: AsyncSession) -> dict[str, OnRoadmap]:
+    """The features the company roadmap knows, by key (the owner, Nov 4: a PRD's feature may
+    depend on one that lives in another area PRD): the included features of every PRD's
+    latest approved scope (a new PRD's too, before its import names its document, and
+    before the company roadmap exists; a replaced PRD feeds nothing) and the items of the
+    roadmap's latest version with items (an item's key and its feature's key, with its
+    horizon and dependencies). One read: a check calls this once."""
+    from oracle.runs.models import Run
+    from oracle.runs.scope_models import PrdScope, PrdScopeItem
+
+    company = (
+        select(Document.id)
+        .where(
+            Document.company_roadmap.is_(True),
+            Document.kind == "roadmap",
+            Document.deleted_at.is_(None),
+        )
+        .scalar_subquery()
+    )
+    latest = (
+        select(DocumentVersion.id)
+        .where(
+            DocumentVersion.document_id == company,
+            DocumentVersion.id.in_(
+                select(RoadmapItem.roadmap_version_id).where(
+                    RoadmapItem.roadmap_document_id == company
+                )
+            ),
+        )
+        .order_by(DocumentVersion.number.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    # Each PRD's latest approved scope (a new PRD's: its run's).
+    prd = func.coalesce(PrdScope.document_id, PrdScope.run_id)
+    latest_scopes = (
+        select(PrdScope.id)
+        .ext(distinct_on(prd))
+        .where(PrdScope.status == "approved")
+        .order_by(prd, PrdScope.approved_at.desc().nulls_last(), PrdScope.created_at.desc())
+    )
+    scopes = (
+        select(
+            literal(0).label("src"),
+            PrdScopeItem.key.label("key"),
+            literal(None, String).label("feature_key"),
+            PrdScopeItem.title.label("title"),
+            literal(None, String).label("feature_title"),
+            func.coalesce(Document.title, Run.knobs["document_slug"].astext).label("prd"),
+            Document.id.label("prd_id"),
+            PrdScope.run_id.label("run_id"),
+            literal(None, String).label("horizon"),
+            PrdScopeItem.depends_on.label("depends_on"),
+            literal(0).label("place"),
+            PrdScope.approved_at.label("at"),
+            (Document.id.is_(None)).label("new"),
+        )
+        .join(PrdScope, PrdScope.id == PrdScopeItem.scope_id)
+        .join(Run, Run.id == PrdScope.run_id)
+        .outerjoin(Document, Document.id == PrdScope.document_id)
+        .where(
+            PrdScope.id.in_(latest_scopes),
+            PrdScopeItem.kind == "feature",
+            PrdScopeItem.decision == "include",
+            or_(
+                PrdScope.document_id.is_(None),
+                and_(
+                    Document.kind == "prd",
+                    Document.deleted_at.is_(None),
+                    Document.replaced_by == [],
+                ),
+            ),
+        )
+    )
+    items = (
+        select(
+            literal(1).label("src"),
+            RoadmapItem.item_key,
+            Entity.key,
+            RoadmapItem.title,
+            Entity.title,
+            Document.title,
+            RoadmapItem.prd_document_id,
+            literal(None, Uuid),
+            RoadmapItem.horizon,
+            RoadmapItem.depends_on,
+            RoadmapItem.position,
+            literal(None, DateTime(timezone=True)),
+            literal(False),
+        )
+        .outerjoin(Entity, Entity.id == RoadmapItem.feature_id)
+        .outerjoin(Document, Document.id == RoadmapItem.prd_document_id)
+        .where(RoadmapItem.roadmap_version_id == latest)
+    )
+    both = union_all(scopes, items).subquery()
+    rows = await db.execute(
+        # An item first: it carries a horizon and the roadmap's own dependencies.
+        select(both).order_by(both.c.src.desc(), both.c.at.desc().nulls_last(), both.c.place)
+    )
+    out: dict[str, OnRoadmap] = {}
+    for (
+        _,
+        key,
+        feature_key,
+        title,
+        feature_title,
+        prd,
+        prd_id,
+        run_id,
+        horizon,
+        deps,
+        _,
+        _,
+        new,
+    ) in rows:
+        name = _slug_words(prd) if new else prd
+        deps = tuple(deps or ())
+        if feature_key:
+            out.setdefault(
+                feature_key, OnRoadmap(feature_title or title, name, prd_id, run_id, horizon, deps)
+            )
+        out.setdefault(key, OnRoadmap(title, name, prd_id, run_id, horizon, deps))
+    return out
+
+
+async def keys_of_other_prds(
+    db: AsyncSession, prd_id: uuid.UUID | None, run_id: uuid.UUID | None = None
+) -> frozenset[str]:
+    """The keys of the features and items other PRDs than ``prd_id`` hold on the company
+    roadmap (:func:`features_on_roadmap`): what a PRD's roadmap item may depend on beyond
+    its own items."""
+    return frozenset(
+        k for k, f in (await features_on_roadmap(db)).items() if f.other_than(prd_id, run_id)
+    )
+
+
+async def other_prds(
+    db: AsyncSession, prd_id: uuid.UUID | None, run_id: uuid.UUID | None = None
+) -> tuple[Any, ...]:
+    """What a PRD's roadmap items may depend on beyond their own (the owner, Nov 4): each
+    feature and item other PRDs than ``prd_id`` hold on the company roadmap, named with its
+    PRD, with its horizon and dependencies (oracle.runs.roadmap.Elsewhere), by key."""
+    return others_of(await features_on_roadmap(db), prd_id, run_id)
+
+
+def others_of(
+    features: dict[str, OnRoadmap], prd_id: uuid.UUID | None, run_id: uuid.UUID | None = None
+) -> tuple[Any, ...]:
+    """:func:`other_prds` of :func:`features_on_roadmap` read once."""
+    from oracle.runs.roadmap import Elsewhere
+
+    return tuple(
+        Elsewhere(k, f.label, f.horizon, f.depends_on)
+        for k, f in sorted(features.items())
+        if f.other_than(prd_id, run_id)
+    )
 
 
 async def _latest_version(db: AsyncSession, document_id: uuid.UUID) -> DocumentVersion | None:
@@ -290,7 +486,7 @@ async def queue(
     per_week = _per_week(cap)
     today = await run_day(db, as_of)
     out: list[Queued] = []
-    ordered = sorted(rows, key=order)
+    ordered = _after_dependencies(sorted(rows, key=order), await feature_keys_of(db, rows))
     for r, (start, end) in zip(ordered, _dates([_effort(r) for r in ordered], per_week, today),
                                strict=True):  # fmt: skip
         out.append(Queued(r, prds.get(r.prd_document_id), _effort(r), start, end, order(r)))
@@ -316,6 +512,62 @@ async def run_day(db: AsyncSession, as_of: datetime | None = None) -> date:
     if as_of is None:
         return await company_time.company_today(db)
     return company_time.day(as_of, await company_time.company_time_zone(db))
+
+
+async def feature_keys_of(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uuid.UUID, str]:
+    """The feature key of each item whose feature a dependency names instead of an item key
+    (the checks accept either: a feature of another PRD); read only when one does."""
+    item_keys = {r.item_key for r in rows}
+    if all(d in item_keys for r in rows for d in r.depends_on or []):
+        return {}
+    ids = {r.feature_id for r in rows if r.feature_id}
+    if not ids:
+        return {}
+    keys = dict((await db.execute(select(Entity.id, Entity.key).where(Entity.id.in_(ids)))).all())
+    return {r.id: keys[r.feature_id] for r in rows if r.feature_id in keys}
+
+
+def resolve_dependencies(
+    rows: list[RoadmapItem], feature_keys: dict[uuid.UUID, str]
+) -> dict[str, list[RoadmapItem]]:
+    """What each dependency key names: the item with that key, else the items of the feature
+    with that key (:func:`feature_keys_of`), in ``rows``' order."""
+    at: dict[str, list[RoadmapItem]] = {}
+    for r in rows:
+        at.setdefault(r.item_key, [r])
+    by_feature: dict[str, list[RoadmapItem]] = {}
+    for r in rows:
+        if (key := feature_keys.get(r.id)) is not None and key not in at:
+            by_feature.setdefault(key, []).append(r)
+    return {**by_feature, **at}
+
+
+def _after_dependencies(
+    ordered: list[RoadmapItem], feature_keys: dict[uuid.UUID, str] | None = None
+) -> list[RoadmapItem]:
+    """``ordered`` with each item after the items it depends on (by item key, or by its
+    feature's key), whichever PRD they are in (the owner, Nov 4: a link between PRDs is
+    real); else as ordered. A cycle keeps the order it has: the items check reports it
+    (oracle.runs.roadmap, ``dependency_cycle``)."""
+    at = resolve_dependencies(ordered, feature_keys or {})
+    out: list[RoadmapItem] = []
+    placed: set[uuid.UUID] = set()
+    visiting: set[uuid.UUID] = set()
+
+    def place(r: RoadmapItem) -> None:
+        if r.id in placed or r.id in visiting:
+            return
+        visiting.add(r.id)
+        for dep in r.depends_on or []:
+            for d in at.get(dep, ()):
+                place(d)
+        visiting.discard(r.id)
+        placed.add(r.id)
+        out.append(r)
+
+    for r in ordered:
+        place(r)
+    return out
 
 
 def _per_week(cap: dict[str, Any]) -> float:

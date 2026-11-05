@@ -7688,6 +7688,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/intakes/replaces/{document_id}/carried": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Replaced Prd Carried
+         * @description What a new PRD replacing this approved PRD carries, as New PRD shows it before
+         *     Start: the PRD's items, its standing decided decisions (and those left out) and its
+         *     verified estimates and commitments for the items named in ``item_keys``.
+         */
+        get: operations["get_replaced_prd_carried"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/intakes/{intake_id}/summary": {
         parameters: {
             query?: never;
@@ -12666,6 +12688,228 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/goal-map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Goal Map */
+        get: operations["get_goal_map"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-map/areas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Area */
+        post: operations["add_area"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-map/areas/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Order Areas */
+        put: operations["order_areas"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-map/goals/{goal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit Goal */
+        patch: operations["edit_goal"];
+        trace?: never;
+    };
+    "/v1/simple/goal-map/milestones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Propose Milestone */
+        post: operations["propose_milestone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-map/milestones/{milestone_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set Gate */
+        patch: operations["set_gate"];
+        trace?: never;
+    };
+    "/v1/simple/goal-map/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Attach Feature */
+        post: operations["attach_feature"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/fit-date": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Fit Dates
+         * @description Each readable PRD's dated goal milestones with their target and their date on today's
+         *     plan, the latest first.
+         */
+        get: operations["list_fit_dates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/prds/{prd}/fit-date": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Fit Date
+         * @description Oracle's ranked changes to bring the milestone in to its target.
+         */
+        get: operations["get_fit_date"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/prds/{prd}/fit-date/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fit Date Live
+         * @description The milestone's date with these changes picked: the capacity queue, no model call.
+         */
+        post: operations["fit_date_live"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/prds/{prd}/fit-date/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fit Date Draft
+         * @description The re-plan the picks write into the PRD's next version: nothing changes until it is
+         *     approved.
+         */
+        post: operations["fit_date_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/prds/{prd}/fit-date/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fit Date Approve
+         * @description Make the re-plan live: the PRD's next version, approved the way any version is (its
+         *     roadmap follows); sliced or split items need a new estimate.
+         */
+        post: operations["fit_date_approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/sessions": {
         parameters: {
             query?: never;
@@ -13935,6 +14179,108 @@ export interface paths {
          *     with its PRD's ``document_id``, that has none).
          */
         post: operations["request_simple_visual"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feature-states": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Feature States
+         * @description Every confirmed feature with its mark and proof, and the counts.
+         */
+        get: operations["list_feature_states"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feature-states/{feature_id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Feature State
+         * @description Check again: read the feature's proof now.
+         */
+        post: operations["check_feature_state"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feature-states/{feature_id}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer Feature State
+         * @description The owner's answer to "does it still run?": still_runs counts as fresh proof,
+         *     changed keeps it in Current state, no_longer_runs puts it back in Desired state.
+         */
+        post: operations["answer_feature_state"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feature-states/{feature_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move Feature State
+         * @description Move a ready feature to Current state, or Not yet (off the ready band until its
+         *     proof is read again).
+         */
+        post: operations["move_feature_state"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feature-states/{feature_id}/shipped": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Feature Shipped
+         * @description Mark as already shipped: it exists, with no proof read yet.
+         */
+        post: operations["mark_feature_shipped"];
         delete?: never;
         options?: never;
         head?: never;
@@ -16082,6 +16428,21 @@ export interface components {
             /** To Goal Id */
             to_goal_id?: string | null;
         };
+        /** AreaIn */
+        AreaIn: {
+            /** Name */
+            name: string;
+            /**
+             * Lever
+             * @default
+             */
+            lever: string;
+        };
+        /** AreaOrderIn */
+        AreaOrderIn: {
+            /** Ids */
+            ids: string[];
+        };
         /** ArtifactDependencyOut */
         ArtifactDependencyOut: {
             /**
@@ -16416,6 +16777,35 @@ export interface components {
             reasons: {
                 [key: string]: string;
             }[];
+        };
+        /** AttachIn */
+        AttachIn: {
+            /**
+             * Feature
+             * Format: uuid
+             */
+            feature: string;
+            /**
+             * Milestone
+             * Format: uuid
+             */
+            milestone: string;
+            /**
+             * Area
+             * Format: uuid
+             */
+            area: string;
+            /**
+             * Expected
+             * @default
+             */
+            expected: string;
+            /**
+             * Confidence
+             * @default medium
+             * @enum {string}
+             */
+            confidence: "high" | "medium" | "low";
         };
         /**
          * AudienceOut
@@ -17750,6 +18140,92 @@ export interface components {
              * @enum {string}
              */
             default_experience: "simple" | "detailed";
+        };
+        /**
+         * Carried
+         * @description What a new PRD carries from the PRD it replaces, as the New PRD form shows it
+         *     before Start and the brief shows it after.
+         */
+        Carried: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
+            /** Area Name */
+            area_name?: string | null;
+            /** Area Scope */
+            area_scope?: string | null;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["CarriedItem"][];
+            /**
+             * Decisions
+             * @default []
+             */
+            decisions: components["schemas"]["CarriedDecision"][];
+            /**
+             * Left Out
+             * @default []
+             */
+            left_out: string[];
+            /**
+             * Bases
+             * @default []
+             */
+            bases: components["schemas"]["CarriedBasis"][];
+        };
+        /** CarriedBasis */
+        CarriedBasis: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Reference */
+            reference: string;
+            /** Item Key */
+            item_key: string;
+            /** Supports Date */
+            supports_date: string;
+            /** Detail */
+            detail?: string | null;
+        };
+        /** CarriedDecision */
+        CarriedDecision: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
+            /** Chosen */
+            chosen?: string | null;
+        };
+        /** CarriedItem */
+        CarriedItem: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /**
+             * In Area
+             * @default false
+             */
+            in_area: boolean;
         };
         /** CatalogModuleDetail */
         CatalogModuleDetail: {
@@ -21487,6 +21963,35 @@ export interface components {
             /** Sections */
             sections: components["schemas"]["SectionDiff"][];
         };
+        /**
+         * DiscoveryWork
+         * @description An answer that says the thing is unknown and finding it out is part of this work
+         *     (walk 2 problem 19): a requirement in the PRD and an early discovery item on the
+         *     plan, cited to the answer (``cite_ref``), never a blocker.
+         */
+        DiscoveryWork: {
+            /**
+             * Gap Id
+             * Format: uuid
+             */
+            gap_id: string;
+            /**
+             * Question Id
+             * Format: uuid
+             */
+            question_id: string;
+            /**
+             * Answer Id
+             * Format: uuid
+             */
+            answer_id: string;
+            /** Requirement */
+            requirement: string;
+            /** Answer */
+            answer: string;
+            /** Cite Ref */
+            cite_ref: string;
+        };
         /** DiscussionChangeCounts */
         DiscussionChangeCounts: {
             /**
@@ -23750,6 +24255,46 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /** FeatureAnswerIn */
+        FeatureAnswerIn: {
+            /**
+             * Answer
+             * @enum {string}
+             */
+            answer: "still_runs" | "changed" | "no_longer_runs";
+        };
+        /** FeatureMoveIn */
+        FeatureMoveIn: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "move" | "not_yet";
+        };
+        /** FeatureProofOut */
+        FeatureProofOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "code_map" | "pull_requests" | "tasks" | "measured";
+            /** Count */
+            count?: number | null;
+            /** Total */
+            total?: number | null;
+            /** Value */
+            value?: string | null;
+            /** Period */
+            period?: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Still True */
+            still_true?: boolean | null;
+            /** Checked At */
+            checked_at?: string | null;
+            /** Note */
+            note?: string | null;
+        };
         /** FeatureRef */
         FeatureRef: {
             /**
@@ -23821,6 +24366,77 @@ export interface components {
             feature_id: string;
             /** Links */
             links: components["schemas"]["GoalLinkSnap"][];
+        };
+        /** FeatureStateOut */
+        FeatureStateOut: {
+            /**
+             * Feature Id
+             * Format: uuid
+             */
+            feature_id: string;
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+            /** Area */
+            area?: string | null;
+            /** Goal */
+            goal?: string | null;
+            /** Milestone */
+            milestone?: string | null;
+            /**
+             * Mark
+             * @enum {string}
+             */
+            mark: "new" | "in_progress" | "exists" | "exists_old";
+            /** Shipped At */
+            shipped_at?: string | null;
+            /** Checked At */
+            checked_at?: string | null;
+            /** Proof Days */
+            proof_days?: number | null;
+            /** No Proof Yet */
+            no_proof_yet: boolean;
+            /** Ready */
+            ready: boolean;
+            /** Checking */
+            checking: boolean;
+            /** Answer */
+            answer?: ("still_runs" | "changed" | "no_longer_runs") | null;
+            /** Answered At */
+            answered_at?: string | null;
+            /** Moved At */
+            moved_at?: string | null;
+            /** Move How */
+            move_how?: ("owner_confirmed" | "marked_shipped") | null;
+            /** Proofs */
+            proofs: components["schemas"]["FeatureProofOut"][];
+            /**
+             * Item Ids
+             * @default []
+             */
+            item_ids: string[];
+        };
+        /** FeatureStatesOut */
+        FeatureStatesOut: {
+            /** Features */
+            features: components["schemas"]["FeatureStateOut"][];
+            /** Running */
+            running: number;
+            /** Old Proof */
+            old_proof: number;
+            /** In Progress */
+            in_progress: number;
+            /** New */
+            new: number;
+            /** Desired */
+            desired: number;
+            /** Ready */
+            ready: number;
+            /** Can Move */
+            can_move: boolean;
+            /** Can Answer */
+            can_answer: boolean;
         };
         /**
          * FeatureTrace
@@ -24154,6 +24770,392 @@ export interface components {
             organizer: string | null;
             /** Same Title */
             same_title: components["schemas"]["FirefliesSameTitleOut"][];
+        };
+        /** FitAnswerOut */
+        FitAnswerOut: {
+            prd: components["schemas"]["SimpleDocRef"];
+            /** Prd Version */
+            prd_version: number;
+            roadmap?: components["schemas"]["SimpleDocRef"] | null;
+            /** Roadmap Version */
+            roadmap_version?: number | null;
+            /** Goal */
+            goal?: string | null;
+            /** Goal Now */
+            goal_now?: string | null;
+            /** Milestone */
+            milestone: string;
+            /** Milestone Name */
+            milestone_name: string;
+            /**
+             * Target
+             * Format: date
+             */
+            target: string;
+            /**
+             * Today
+             * Format: date
+             */
+            today: string;
+            /** Late Days */
+            late_days: number;
+            team: components["schemas"]["FitTeam"];
+            /** Lanes */
+            lanes: components["schemas"]["FitLane"][];
+            approved?: components["schemas"]["FitApprovalOut"] | null;
+            /** Changes */
+            changes: components["schemas"]["FitChangeOut"][];
+            /** Pick */
+            pick: string[];
+            /**
+             * Pick Date
+             * Format: date
+             */
+            pick_date: string;
+            /**
+             * Best Date
+             * Format: date
+             */
+            best_date: string;
+            /** Reachable */
+            reachable: boolean;
+            /** Locked */
+            locked: components["schemas"]["FitLockedOut"][];
+            hire?: components["schemas"]["FitHireOut"] | null;
+            baseline_goal?: components["schemas"]["FitBaselineGoalOut"] | null;
+        };
+        /**
+         * FitApprovalOut
+         * @description The last re-plan approved for this milestone: who, when, the versions it made live,
+         *     the milestone's date before and after, and what moved in words.
+         */
+        FitApprovalOut: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** By Me */
+            by_me: boolean;
+            /** Version */
+            version: number;
+            /** Roadmap Version */
+            roadmap_version?: number | null;
+            /**
+             * Roadmap Live
+             * @default false
+             */
+            roadmap_live: boolean;
+            /** Roadmap Decider */
+            roadmap_decider?: string | null;
+            /**
+             * Was
+             * Format: date
+             */
+            was: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Target
+             * Format: date
+             */
+            target: string;
+            /**
+             * Moves
+             * @default []
+             */
+            moves: string[];
+        };
+        /** FitApprovedOut */
+        FitApprovedOut: {
+            prd: components["schemas"]["SimpleDocRef"];
+            /** Version */
+            version: number;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Target
+             * Format: date
+             */
+            target: string;
+            /**
+             * Approved At
+             * Format: date-time
+             */
+            approved_at: string;
+            /** Needs Estimate */
+            needs_estimate: components["schemas"]["FitEstimate"][];
+            /** Roadmap Version */
+            roadmap_version?: number | null;
+            /**
+             * Roadmap Live
+             * @default false
+             */
+            roadmap_live: boolean;
+            /** Roadmap Decider */
+            roadmap_decider?: string | null;
+        };
+        /**
+         * FitBaselineGoalOut
+         * @description The Baseline goal the milestone's gate counts toward (the milestone's first target's
+         *     goal, by name): what "Keep the date with a smaller goal" opens and saves through
+         *     ``PATCH /v1/baseline/entities/{id}``. ``plan_target``: the number the PRD's milestone
+         *     target names; ``smaller``: the goal's target is below it, so the answer counts the
+         *     goal's own work in the milestone in proportion (:func:`_scale`).
+         */
+        FitBaselineGoalOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Target */
+            target?: number | null;
+            /** Unit */
+            unit?: string | null;
+            /** Comparison */
+            comparison?: string | null;
+            /** Start */
+            start?: number | null;
+            /** Due */
+            due?: string | null;
+            /** Plan Target */
+            plan_target?: number | null;
+            /**
+             * Smaller
+             * @default false
+             */
+            smaller: boolean;
+            /**
+             * Can Edit
+             * @default false
+             */
+            can_edit: boolean;
+        };
+        /** FitChangeOut */
+        FitChangeOut: {
+            /** Id */
+            id: string;
+            /**
+             * Lever
+             * @enum {string}
+             */
+            lever: "move" | "next_prd" | "slice" | "ungate" | "split" | "overlap" | "capacity";
+            /** Item */
+            item: string;
+            /** Title */
+            title: string;
+            /** Days */
+            days: number;
+            /** Pw Saved */
+            pw_saved: number;
+            /**
+             * Cost Kind
+             * @enum {string}
+             */
+            cost_kind: "none" | "risk" | "gate" | "goal" | "must";
+            /** Cost */
+            cost: string;
+            /** Pickable */
+            pickable: boolean;
+            /** Effect */
+            effect: string;
+            /** Moves */
+            moves: components["schemas"]["FitMove"][];
+        };
+        /** FitDateMove */
+        FitDateMove: {
+            /** What */
+            what: string;
+            /** Before */
+            before?: string | null;
+            /** After */
+            after?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "in" | "out";
+            /** Note */
+            note?: string | null;
+        };
+        /** FitDraftOut */
+        FitDraftOut: {
+            prd: components["schemas"]["SimpleDocRef"];
+            /** Prd Version */
+            prd_version: number;
+            /** Next Version */
+            next_version: number;
+            /** Roadmap Version */
+            roadmap_version?: number | null;
+            /** Changes */
+            changes: components["schemas"]["FitPrdChange"][];
+            /** Dates */
+            dates: components["schemas"]["FitDateMove"][];
+            /** New Target */
+            new_target?: string | null;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Needs Estimate */
+            needs_estimate: components["schemas"]["FitEstimate"][];
+        };
+        /** FitEstimate */
+        FitEstimate: {
+            /** Item */
+            item: string;
+            /** Owner */
+            owner?: string | null;
+        };
+        /** FitGoalOut */
+        FitGoalOut: {
+            prd: components["schemas"]["SimpleDocRef"];
+            /** Prd Version */
+            prd_version: number;
+            roadmap?: components["schemas"]["SimpleDocRef"] | null;
+            /** Roadmap Version */
+            roadmap_version?: number | null;
+            /** Goal */
+            goal?: string | null;
+            /** Goal Now */
+            goal_now?: string | null;
+            /** Milestone */
+            milestone: string;
+            /** Milestone Name */
+            milestone_name: string;
+            /**
+             * Target
+             * Format: date
+             */
+            target: string;
+            /**
+             * Today
+             * Format: date
+             */
+            today: string;
+            /** Late Days */
+            late_days: number;
+            team: components["schemas"]["FitTeam"];
+            /** Lanes */
+            lanes: components["schemas"]["FitLane"][];
+            approved?: components["schemas"]["FitApprovalOut"] | null;
+        };
+        /**
+         * FitHireOut
+         * @description One more engineer when no set reaches the target: counted only after their start
+         *     weeks, at the team's focus. ``date``: the best date with them; ``reaches``: whether it
+         *     is by the target.
+         */
+        FitHireOut: {
+            /** Start Weeks */
+            start_weeks: number;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Reaches */
+            reaches: boolean;
+        };
+        /** FitLane */
+        FitLane: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Date */
+            date?: string | null;
+            /** Items */
+            items: components["schemas"]["FitLaneItem"][];
+        };
+        /** FitLaneItem */
+        FitLaneItem: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Date */
+            date?: string | null;
+            /**
+             * Locked
+             * @default false
+             */
+            locked: boolean;
+            /**
+             * Needs Estimate
+             * @default false
+             */
+            needs_estimate: boolean;
+        };
+        /** FitLiveOut */
+        FitLiveOut: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Target
+             * Format: date
+             */
+            target: string;
+            /** Over Days */
+            over_days: number;
+            /** Pw Saved */
+            pw_saved: number;
+            /** Picks */
+            picks: string[];
+        };
+        /** FitLockedOut */
+        FitLockedOut: {
+            /** Item */
+            item: string;
+            /** Pw */
+            pw: number;
+            /** Why */
+            why: string;
+            /** Would Reach */
+            would_reach: boolean;
+        };
+        /** FitMove */
+        FitMove: {
+            /** What */
+            what: string;
+            /** Before */
+            before?: string | null;
+            /** After */
+            after?: string | null;
+        };
+        /** FitPicksIn */
+        FitPicksIn: {
+            /** Milestone */
+            milestone: string;
+            /** Picks */
+            picks: string[];
+        };
+        /** FitPrdChange */
+        FitPrdChange: {
+            /** Item */
+            item: string;
+            /** Change */
+            change: string;
+        };
+        /** FitTeam */
+        FitTeam: {
+            /** Engineers */
+            engineers: number;
+            /** Focus */
+            focus: number;
         };
         /**
          * FixAction
@@ -24580,6 +25582,18 @@ export interface components {
              */
             left: components["schemas"]["GateLeft"][];
         };
+        /** GateIn */
+        GateIn: {
+            /** Threshold */
+            threshold?: number | null;
+            /** After */
+            after?: string | null;
+            /**
+             * Confirm
+             * @default false
+             */
+            confirm: boolean;
+        };
         /**
          * GateLeft
          * @description One blocking reason still open (D3): its item, code and chip label, and whether an
@@ -24661,6 +25675,172 @@ export interface components {
             next_cursor: string | null;
             /** Sso Hint */
             sso_hint?: string | null;
+        };
+        /** GmArea */
+        GmArea: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Lever */
+            lever: string;
+        };
+        /** GmFeature */
+        GmFeature: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Area */
+            area: string | null;
+            /** Milestones */
+            milestones: string[];
+            /** Lever */
+            lever: string;
+            /** Expected */
+            expected: string;
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "High" | "Medium" | "Low";
+            /** Released */
+            released: boolean;
+            /** Measured */
+            measured: string | null;
+            /**
+             * Lift
+             * @enum {string}
+             */
+            lift: "helping" | "not_helping" | "not_measured";
+            /** Links */
+            links: components["schemas"]["GmLink"][];
+        };
+        /** GmGoal */
+        GmGoal: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Measure */
+            measure: string;
+            /** Target */
+            target: number;
+            /** Current */
+            current: number | null;
+            /** Unit */
+            unit: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "met" | "on_track" | "at_risk" | "missed" | "not_measured" | "no_gate";
+            /** Math */
+            math: string;
+            /** Builds On */
+            builds_on: string[];
+            /** History */
+            history: components["schemas"]["GmHistory"][];
+        };
+        /** GmGuardrail */
+        GmGuardrail: {
+            /** Name */
+            name: string;
+            /** Rule */
+            rule: string;
+            /** Current */
+            current: number | null;
+            /** Days */
+            days: (number | null)[];
+            /** Held */
+            held: boolean;
+        };
+        /** GmHistory */
+        GmHistory: {
+            /** Date */
+            date: string;
+            /** Text */
+            text: string;
+            /** By */
+            by: string;
+        };
+        /**
+         * GmLink
+         * @description What a feature is expected to do for one milestone, and what it did.
+         */
+        GmLink: {
+            /**
+             * Milestone
+             * Format: uuid
+             */
+            milestone: string;
+            /** Expected */
+            expected: string;
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "High" | "Medium" | "Low";
+            /** Measured */
+            measured: string | null;
+            /**
+             * Lift
+             * @enum {string}
+             */
+            lift: "helping" | "not_helping" | "not_measured";
+        };
+        /** GmMilestone */
+        GmMilestone: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Goal
+             * Format: uuid
+             */
+            goal: string;
+            /** Measure */
+            measure: string;
+            /** Threshold */
+            threshold: number | null;
+            /** Unit */
+            unit: string;
+            /** Current */
+            current: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "met" | "on_track" | "at_risk" | "missed" | "not_measured" | "no_gate";
+            /** Areas */
+            areas: string[];
+            /** Depends */
+            depends: string[];
+            /** Month */
+            month: string;
+            /** Due */
+            due: string | null;
+            /** Days */
+            days: (number | null)[];
+            /** Confirmed */
+            confirmed: string | null;
+            /** Confirmed On */
+            confirmed_on: string | null;
+            /** Proposed */
+            proposed: boolean;
         };
         /** GoalBucketFeature */
         GoalBucketFeature: {
@@ -24840,6 +26020,26 @@ export interface components {
             /** Created At */
             created_at?: string | null;
         };
+        /** GoalMapOut */
+        GoalMapOut: {
+            /** Goals */
+            goals: components["schemas"]["GmGoal"][];
+            /** Areas */
+            areas: components["schemas"]["GmArea"][];
+            guardrail: components["schemas"]["GmGuardrail"] | null;
+            /** Milestones */
+            milestones: components["schemas"]["GmMilestone"][];
+            /** Features */
+            features: components["schemas"]["GmFeature"][];
+            /** Today */
+            today: string;
+            /** Reps */
+            reps: number | null;
+            /** Approver */
+            approver: string | null;
+            /** Can Edit */
+            can_edit: boolean;
+        };
         /** GoalMeasurePushback */
         GoalMeasurePushback: {
             /** Detail */
@@ -24891,6 +26091,11 @@ export interface components {
             attrs: {
                 [key: string]: unknown;
             };
+        };
+        /** GoalTargetIn */
+        GoalTargetIn: {
+            /** Target */
+            target: number;
         };
         /** GoalTerm */
         GoalTerm: {
@@ -27167,6 +28372,7 @@ export interface components {
              * @default []
              */
             request_ids: string[];
+            replaces?: components["schemas"]["ReplacesIn"] | null;
         };
         /** IntakeOut */
         IntakeOut: {
@@ -27228,6 +28434,7 @@ export interface components {
              * @default []
              */
             run_ids: string[];
+            carried?: components["schemas"]["Carried"] | null;
         };
         /** IntakePatch */
         IntakePatch: {
@@ -27400,6 +28607,11 @@ export interface components {
             /** Draft Version */
             draft_version?: number | null;
             ai_read?: components["schemas"]["AiReadOut"] | null;
+            /**
+             * Work
+             * @default []
+             */
+            work: components["schemas"]["DiscoveryWork"][];
         };
         /** InterviewCreate */
         InterviewCreate: {
@@ -32806,6 +34018,25 @@ export interface components {
             /** Source Title */
             source_title?: string | null;
         };
+        /** ProposeIn */
+        ProposeIn: {
+            /** Name */
+            name: string;
+            /**
+             * Goal
+             * Format: uuid
+             */
+            goal: string;
+            /** Threshold */
+            threshold: number;
+            /**
+             * Areas
+             * @default []
+             */
+            areas: string[];
+            /** After */
+            after?: string | null;
+        };
         /**
          * ProposedAssessment
          * @description Oracle's reading on the due date; a person confirms, edits or marks it inconclusive.
@@ -34228,6 +35459,27 @@ export interface components {
         ReplacedByIn: {
             /** Prds */
             prds: string[];
+        };
+        /**
+         * ReplacesIn
+         * @description The approved PRD a new PRD replaces, and the area of it the new PRD covers
+         *     (oracle.intake.carried): its decisions and verified estimates are the run's inputs.
+         */
+        ReplacesIn: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Area Name */
+            area_name: string;
+            /** Area Scope */
+            area_scope: string;
+            /**
+             * Item Keys
+             * @default []
+             */
+            item_keys: string[];
         };
         /** ReplyCounts */
         ReplyCounts: {
@@ -37209,6 +38461,18 @@ export interface components {
              */
             revert: boolean;
         };
+        /**
+         * ScopeOtherDependency
+         * @description A dependency on another PRD's feature on the company roadmap: its name and PRD.
+         */
+        ScopeOtherDependency: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Prd */
+            prd: string;
+        };
         /** ScopeOut */
         ScopeOut: {
             /** Name */
@@ -37402,6 +38666,11 @@ export interface components {
              *     }
              */
             history: components["schemas"]["ScopeHistory"];
+            /**
+             * Other Prd Dependencies
+             * @default []
+             */
+            other_prd_dependencies: components["schemas"]["ScopeOtherDependency"][];
         };
         /** ScopeReviewRequirement */
         ScopeReviewRequirement: {
@@ -40840,6 +42109,11 @@ export interface components {
              * @default false
              */
             past_edge: boolean;
+            /**
+             * Item Ids
+             * @default []
+             */
+            item_ids: string[];
         };
         /**
          * SimplePlanSpan
@@ -41096,6 +42370,11 @@ export interface components {
              */
             end_estimated: boolean;
             /**
+             * Estimate Pending
+             * @default false
+             */
+            estimate_pending: boolean;
+            /**
              * No Goal
              * @default false
              */
@@ -41342,6 +42621,11 @@ export interface components {
             source: "typed" | "accepted" | "engineering" | "tracker" | "estimated";
             /** Estimated */
             estimated: boolean;
+            /**
+             * Estimate Pending
+             * @default false
+             */
+            estimate_pending: boolean;
             /** Date Basis */
             date_basis?: string | null;
             /** Note */
@@ -62873,6 +64157,39 @@ export interface operations {
             };
         };
     };
+    get_replaced_prd_carried: {
+        parameters: {
+            query?: {
+                item_keys?: string[];
+            };
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Carried"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_intake_summary: {
         parameters: {
             query?: never;
@@ -71828,6 +73145,386 @@ export interface operations {
             };
         };
     };
+    get_goal_map: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
+                };
+            };
+        };
+    };
+    add_area: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AreaIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    order_areas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AreaOrderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_goal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalTargetIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propose_milestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_gate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                milestone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_feature: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttachIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_fit_dates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FitGoalOut"][];
+                };
+            };
+        };
+    };
+    get_fit_date: {
+        parameters: {
+            query: {
+                milestone: string;
+            };
+            header?: never;
+            path: {
+                prd: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FitAnswerOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fit_date_live: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                prd: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FitPicksIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FitLiveOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fit_date_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                prd: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FitPicksIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FitDraftOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fit_date_approve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                prd: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FitPicksIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FitApprovedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_simple_session: {
         parameters: {
             query?: never;
@@ -73873,6 +75570,193 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SimpleVisualOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_feature_states: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureStatesOut"];
+                };
+            };
+        };
+    };
+    check_feature_state: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feature_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureStateOut"];
+                };
+            };
+            /** @description No such confirmed feature */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    answer_feature_state: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feature_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeatureAnswerIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureStateOut"];
+                };
+            };
+            /** @description No such confirmed feature */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_feature_state: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feature_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeatureMoveIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureStateOut"];
+                };
+            };
+            /** @description No such confirmed feature */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not ready to move: some proof is missing */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_feature_shipped: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feature_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureStateOut"];
+                };
+            };
+            /** @description No such confirmed feature */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { Schemas } from "@/lib/api/client";
 import { calendarDay } from "@/lib/dates";
@@ -103,13 +103,48 @@ export function CodeTag({ code, title }: { code: string; title?: string }) {
   );
 }
 
-/** A segment's label shows when the segment is wider than it (13 px type, padded); a narrower one is blank, its words in its title. */
-const fits = (label: string, px: number) => px >= label.length * 8 + 12;
+/**
+ * A segment's label shows when it fits the segment by the picked frames' own margin (13 px type
+ * taken at 8 px a letter, plus 12 px) and, measured as drawn, with 6 px to spare each side; a
+ * narrower segment is blank, its words in its title. The measure catches the same font drawn a
+ * few percent wider on another system, which would cut a label at the segment's edge; the
+ * frames' margin keeps the frames' look where text draws as wide or narrower.
+ */
+const LABEL_PAD = 12;
+
+/** The milestones whose label fits its segment in `track`, measured whenever the track or the fonts change. */
+function useFittingLabels(track: React.RefObject<HTMLDivElement | null>, width: number, key: string): Set<string> | null {
+  const [fitting, setFitting] = useState<Set<string> | null>(null);
+  const [fonts, setFonts] = useState(0);
+  useEffect(() => {
+    const f = document.fonts;
+    if (!f) return;
+    const on = () => setFonts((n) => n + 1);
+    void f.ready.then(on);
+    f.addEventListener("loadingdone", on);
+    return () => f.removeEventListener("loadingdone", on);
+  }, []);
+  useLayoutEffect(() => {
+    const t = track.current;
+    if (!t || !width) return;
+    const next = new Set<string>();
+    for (const seg of t.querySelectorAll<HTMLElement>("[data-milestone]")) {
+      const text = seg.querySelector<HTMLElement>("[data-label]");
+      const room = seg.getBoundingClientRect().width;
+      if (text && text.textContent!.length * 8 + LABEL_PAD <= room && text.offsetWidth + LABEL_PAD <= seg.clientWidth) next.add(seg.dataset.milestone!);
+    }
+    // A measurement of the drawn labels, set only when the set changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFitting((old) => (old && old.size === next.size && [...next].every((m) => old.has(m)) ? old : next));
+  }, [track, width, key, fonts]);
+  return fitting;
+}
 
 function GoalBar({ plan, goal, code, parts, total, max }: { plan: Plan; goal: string; code: string | null; parts: { milestone: string; weeks: number }[]; total: number; max: number }) {
   const [track, width] = useWidth<HTMLDivElement>();
   // mk-goalbuckets: a segment names its milestone ("M2 Fleet care · 4 wk"), never the code alone.
   const label = (p: { milestone: string; weeks: number }) => `${p.milestone} ${plan.milestones.find((x) => x.code === p.milestone)?.name ?? ""} · ${wk(p.weeks)} wk`.replace("  ", " ");
+  const fitting = useFittingLabels(track, width, parts.map(label).join("|"));
   return (
     <li data-testid="goal-bar" data-goal={goal} className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 py-1.5 sm:grid-cols-[170px_1fr_90px]">
       <div className="min-w-0 text-[17px] font-[650] leading-6">
@@ -119,23 +154,20 @@ function GoalBar({ plan, goal, code, parts, total, max }: { plan: Plan; goal: st
       <div ref={track} data-testid="goal-bar-track" className="col-span-2 row-start-2 flex min-w-0 sm:col-span-1 sm:row-start-auto">
         {parts.map((p) => {
           const m = plan.milestones.find((x) => x.code === p.milestone);
-          const shown = !!width && fits(label(p), (width * p.weeks) / max);
+          const shown = !!fitting?.has(p.milestone);
           return (
             <div
               key={p.milestone}
               data-testid="goal-bar-segment"
               data-milestone={p.milestone}
               title={`${p.milestone} ${m?.name ?? ""}: ${wk(p.weeks)} engineer-weeks`}
-              className="flex h-[30px] flex-none items-center justify-center overflow-hidden border-r-2 border-surface text-[13px] font-[650] text-on-accent tabular-nums"
+              className="relative flex h-[30px] flex-none items-center justify-center overflow-hidden border-r-2 border-surface text-[13px] font-[650] text-on-accent tabular-nums"
               style={{ width: `${(p.weeks / max) * 100}%`, background: milestoneColour(plan, p.milestone).bar }}
             >
-              {shown ? (
-                <span data-testid="goal-bar-label" className="whitespace-nowrap">
-                  {label(p)}
-                </span>
-              ) : (
-                <span className="sr-only">{label(p)}</span>
-              )}
+              {/* A label that does not fit stays in the page, unseen (measured, and read out as sr-only text is). */}
+              <span data-label data-testid={shown ? "goal-bar-label" : undefined} className={`whitespace-nowrap ${shown ? "" : "pointer-events-none absolute left-0 opacity-0"}`}>
+                {label(p)}
+              </span>
             </div>
           );
         })}

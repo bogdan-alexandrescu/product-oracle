@@ -25,7 +25,11 @@ class Tenant(IdMixin, Base):
 
 class AuditEvent(TenantScoped, Base):
     __tablename__ = "audit_events"
+    # An event looked up by what happened and to what (who imported a version, whether a
+    # run's draft was imported again) reads its own rows, never every event the company
+    # ever wrote (0111_audit_action_entity).
     __table_args__ = (
+        Index("ix_audit_events_tenant_id_action_entity_id", "tenant_id", "action", "entity_id"),
         # oracle.docs.service.run_imported_into: a run's import of a document, by index.
         Index(
             "ix_audit_events_version_imported",
@@ -67,6 +71,7 @@ from oracle.claude_accounts.models import (  # noqa: E402
     ClaudeSweepLease,
 )
 from oracle.connections.models import Connection  # noqa: E402
+from oracle.currentstate.models import FeatureProof, FeatureState  # noqa: E402
 from oracle.decisions.models import Decision, DecisionReview  # noqa: E402
 from oracle.discussions.models import (  # noqa: E402
     Discussion,
@@ -262,6 +267,8 @@ __all__ = [
     "Evidence",
     "EvidenceLinkSnapshot",
     "FeasibilityExperiment",
+    "FeatureProof",
+    "FeatureState",
     "FeedbackItem",
     "IntakeProposal",
     "Interview",

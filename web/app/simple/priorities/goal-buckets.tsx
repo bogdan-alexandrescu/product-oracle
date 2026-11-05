@@ -167,10 +167,34 @@ export function GoalForm({ start, order, title, year, onSave, onCancel }: { star
   );
 }
 
-/** The note above the buckets after a change, with Undo. */
-export function UndoNote({ children, onUndo }: { children: ReactNode; onUndo?: () => void }) {
+/**
+ * The note above the buckets after a change, with Undo: sticky at the top on a wider screen,
+ * fixed above the bottom bar on a phone (GB1 a, GB3 a). The page stays where it is after a
+ * change; only when the new note, fixed, covers one of `clear` (the goals' titles, which a few
+ * percent wider or narrower text can bring under it) is the page scrolled the little it takes to
+ * lift them clear of it. Each note (its `id`) is checked once, so a later re-render never moves
+ * the page the person has scrolled.
+ */
+export function UndoNote({ id, clear, children, onUndo }: { id: number; clear?: string; children: ReactNode; onUndo?: () => void }) {
+  const el = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const n = el.current;
+    if (!n || !clear || getComputedStyle(n).position !== "fixed") return;
+    // A title lifted clear can bring the next one up under the note: a few rounds at most.
+    for (let round = 0; round < 3; round++) {
+      const box = n.getBoundingClientRect();
+      let lift = 0;
+      for (const t of document.querySelectorAll(clear)) {
+        const r = t.getBoundingClientRect();
+        if (r.height && r.top < box.bottom && r.bottom > box.top - NOTE_GAP) lift = Math.max(lift, r.bottom - box.top + NOTE_GAP);
+      }
+      const before = window.scrollY;
+      if (lift) window.scrollBy({ top: Math.ceil(lift), behavior: "instant" });
+      if (!lift || window.scrollY === before) return;
+    }
+  }, [id, clear]);
   return (
-    <div role="status" data-testid="bucket-note" className="z-30 mt-4 flex shadow-md sm:sticky sm:top-2 max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[calc(76px+env(safe-area-inset-bottom))] items-center gap-3 rounded-lg border border-accent bg-accent-soft px-4 py-2.5 text-[15px] text-text">
+    <div ref={el} role="status" data-testid="bucket-note" className="z-30 mt-4 flex shadow-md sm:sticky sm:top-2 max-sm:fixed max-sm:inset-x-3 max-sm:bottom-[calc(76px+env(safe-area-inset-bottom))] items-center gap-3 rounded-lg border border-accent bg-accent-soft px-4 py-2.5 text-[15px] text-text">
       <span className="min-w-0 flex-1">{children}</span>
       {onUndo && (
         <button type="button" className="flex-none font-[650] text-accent-ink underline" onClick={onUndo}>
@@ -487,8 +511,14 @@ export function GoalMenu({ title, onEdit, onArchive, archive }: { title: string;
   );
 }
 
-/** A task change (./task-edit) names the changes Undo takes back, in the order they were made. */
-export type Note = { text: ReactNode; undo?: Undo; changes?: string[] };
+/** The room left between a goal's title and the phone's note above it. */
+const NOTE_GAP = 8;
+
+/** A note after a change; each has its own `id`, the same words or not. A task change
+ * (./task-edit) names the changes Undo takes back, in the order they were made. */
+export type Note = { id: number; text: ReactNode; undo?: Undo; changes?: string[] };
+
+let noteId = 0;
 
 /** The writes, each answering with the note to show and what Undo puts back. */
 export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note | null) => void, setError: (e: string | null) => void) {
@@ -496,8 +526,9 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
     try {
       const out = await go();
       setError(null);
-      setNote({ text, undo: out.undo });
+      // The note shows with the page as the change left it, so its place is checked against that.
       await reload();
+      setNote({ id: ++noteId, text, undo: out.undo });
       return true;
     } catch (e) {
       setError(errorMessage(e));
@@ -520,8 +551,8 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
     undo: async (u: Undo) => {
       try {
         await unwrap(api.POST("/v1/simple/goal-buckets/undo", { body: u }));
-        setNote({ text: <>Undone: every goal and link is back as it was.</> });
         await reload();
+        setNote({ id: ++noteId, text: <>Undone: every goal and link is back as it was.</> });
       } catch (e) {
         setError(errorMessage(e));
       }

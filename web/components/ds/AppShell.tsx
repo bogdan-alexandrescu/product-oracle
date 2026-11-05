@@ -15,7 +15,7 @@ import { leave } from "@/lib/leave-guard";
 import { useMe } from "@/lib/me";
 import { useSettingsTabs } from "@/lib/settings-tabs";
 import { loadInbox, loadMyQuestions, onWaitingChanged, waitingCount } from "@/lib/waiting";
-import { ScreenSubjectProvider } from "@/lib/screen-subject";
+import { ScreenSubjectProvider, useShownPageName } from "@/lib/screen-subject";
 import { useTheme, type ThemeChoice } from "@/lib/theme";
 
 import { Mark } from "./Brand";
@@ -41,7 +41,7 @@ type Dest = { label: string; href: string; icon: IconName; testId: string; match
 export const DESTINATIONS: Dest[] = [
   { label: "Home", href: "/home", icon: "home", testId: "nav-home" },
   { label: "Requests", href: "/requests", icon: "requests", testId: "nav-requests" },
-  { label: "Baseline", href: "/baseline", icon: "baseline", testId: "nav-baseline" },
+  { label: "Desired state", href: "/baseline", icon: "baseline", testId: "nav-baseline" },
   { label: "PRDs", href: "/documents", icon: "prds", testId: "nav-prds" },
   { label: "Priorities", href: "/priorities", icon: "priorities", testId: "nav-priorities" },
   { label: "Plan", href: "/plan", icon: "roadmap", testId: "nav-plan" },
@@ -736,6 +736,8 @@ function DocumentTitle() {
   const pathname = usePathname();
   const { plain } = usePageTitle(pathname);
   const text = !plain || plain === "Product Oracle" ? "Product Oracle" : `${plain} · Product Oracle`;
+  // ask-page-context: "This page" is titled as the page is.
+  useShownPageName(plain === "Product Oracle" ? null : plain);
   useEffect(() => {
     if (ownTitle(pathname) || !plain) return;
     document.title = text;

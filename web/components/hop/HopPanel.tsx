@@ -10,7 +10,7 @@ import { InlineError, TEXTAREA } from "@/components/review/parts";
 import { SimpleAskPanel } from "@/components/simple/chat/SimpleAsk";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
-import { GENERAL, subjectKey, useCurrentScreenSubject, type ScreenSubject } from "@/lib/screen-subject";
+import { GENERAL, subjectKey, subjectWithView, useCurrentScreenSubject, type ScreenSubject } from "@/lib/screen-subject";
 import { errorMessage } from "@/lib/use-query";
 
 type View = { kind: "list" } | { kind: "thread"; id: string } | { kind: "share"; id: string };
@@ -76,7 +76,7 @@ function ChatRow({ row, onOpen }: { row: DiscussionRow; onOpen: (id: string) => 
 async function startChat(subject: ScreenSubject, text: string): Promise<string> {
   const d = await unwrap(
     api.POST("/v1/discussions", {
-      body: { subject_kind: subject.kind, subject: subject.subject, origin: "panel", visibility: "private" },
+      body: { subject_kind: subject.kind, subject: subjectWithView(subject), origin: "panel", visibility: "private" },
     }),
   );
   await unwrap(api.POST("/v1/discussions/{discussion_id}/messages", { params: { path: { discussion_id: d.id } }, body: { body: text.trim(), mention_oracle: false } }));
