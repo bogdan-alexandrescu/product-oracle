@@ -354,7 +354,7 @@
             },
             {
               "file": "frames/eq2-c-withdrawn.html",
-              "caption": "Withdraw in edit mode: Q5 is struck through, kept in the PRD's history, with Undo."
+              "caption": "Withdrawn in edit mode, then Done editing: Q5 is struck through, kept in the PRD's history, with Undo."
             },
             {
               "file": "frames/eq2-c-new.html",
@@ -382,7 +382,7 @@
             },
             {
               "file": "frames/eq2-c-propose.html",
-              "caption": "A commenter in edit mode: their changes are suggestions to the decider."
+              "caption": "A commenter in edit mode: the questions waiting for others become fields too, with no Withdraw."
             },
             {
               "file": "frames/eq2-c-read.html",
