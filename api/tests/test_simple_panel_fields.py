@@ -259,7 +259,7 @@ async def test_panel_goal_measure_change(client):
     assert goal_now["metric"] == "Weekly payers" and goal_now["target"] == "500 payers"
     r = await client.post(f"{CHANGES}/{proposal['id']}/accept", json={},
                           headers=p.ctx.as_("owner"))  # fmt: skip
-    assert r.status_code == 201, r.text
+    assert r.status_code == 200, r.text
     assert (await p.read(client))["a"]["goal"]["metric"] == "Monthly payers"
 
     # A goal with no target or date still takes a measure; only the item's goal is changed.

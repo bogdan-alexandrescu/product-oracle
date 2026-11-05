@@ -27,6 +27,12 @@ company's owners. A proposal writes nothing, an add creates no row, until accept
   ``before`` {goal_value, effort} as the caller saw them (attrs ``goal_value``; ``effort``,
   else ``effort_weeks``, as the ranking reads it; null when absent). Its undo restores the
   attrs as they were (a key that was absent is removed).
+- ``set_goal_measure`` (one-feature-panel): how the goal the item serves
+  (``target.goal_id``, the goal its read shows) is measured: ``after`` {measure (required),
+  target, due (YYYY-MM-DD)}, target and due null to clear; ``before`` the same as the read
+  showed them (``SimpleGoalRef`` metric, target, due), else 409 "changed by". Written into
+  the goal's attrs (metric, target_text, due, as the goal bucket edit writes them); its undo
+  restores the attrs as they were.
 - ``add_item_task`` / ``edit_item_task`` / ``set_item_task_status``: title, owner_id,
   due_date, status (todo, doing, done, dropped). The new task's id is chosen when the
   change is made (``target.task_id``); its undo deletes the task.
@@ -81,6 +87,7 @@ from oracle.simple.schemas import SimpleChangeIn, SimpleChangeResult
 KIND = {
     "override_priority": "override",
     "estimate_feature": "estimate",
+    "set_goal_measure": "goal",
     "add_item_task": "task",
     "edit_item_task": "task",
     "set_item_task_status": "task",
@@ -97,9 +104,14 @@ ID_KEY = {
     "action": "action_item_id",
     "launch": "task_id",
     "estimate": "feature_id",
+    "goal": "goal_id",
     "ask": "request_id",
 }
 ESTIMATES = ("goal_value", "effort")
+GOAL_FIELDS = ("measure", "target", "due")
+# The goal attrs set_goal_measure writes (and its undo restores as they were).
+GOAL_ATTRS = ("metric", "target_text", "target", "unit", "due")
+MEASURE_MAX = 300
 MODEL: dict[str, Any] = {
     "task": RoadmapItemTask,
     "action": SimpleActionItem,
@@ -182,6 +194,8 @@ def _keys(c: SimpleChange) -> tuple[str, ...]:
     """The fields a change's ``before``/``after`` are compared on."""
     if KIND[c.op] == "override":
         return ("override",)
+    if KIND[c.op] == "goal":
+        return GOAL_FIELDS
     if c.op.startswith("set_"):
         return ("status",)
     return tuple(c.after)
@@ -193,6 +207,23 @@ def estimates(attrs: dict[str, Any] | None) -> dict[str, float | None]:
     goal = _number(attrs.get("goal_value"))
     effort = _number(attrs["effort"]) if "effort" in attrs else _number(attrs.get("effort_weeks"))
     return {"goal_value": goal if goal is not None and goal >= 0 else None, "effort": effort}
+
+
+def goal_measure(goal: Entity) -> dict[str, Any]:
+    """How a goal is measured, as the roadmap read shows it (SimpleGoalRef)."""
+    from oracle.simple.goal_buckets import _due, _target
+
+    attrs = goal.attrs or {}
+    return {"measure": service._metric(goal), "target": _target(attrs),
+            "due": changes._iso(_due(attrs))}  # fmt: skip
+
+
+def _line(value: Any, name: str, required: bool = False) -> str | None:
+    v = " ".join(str(value or "").split()) or None
+    if (v is None and required) or (v is not None and len(v) > MEASURE_MAX):
+        need = "required, " if required else ""
+        raise ChangeError(422, f"after.{name}: {need}at most {MEASURE_MAX} characters")
+    return v
 
 
 async def _feature(db: AsyncSession, feature_id: Any) -> Entity | None:
@@ -228,6 +259,9 @@ async def _current(db: AsyncSession, c: SimpleChange) -> dict[str, Any] | None:
             return None
         now_ = estimates(f.attrs)
         return {k: now_[k] for k in _keys(c)}
+    if KIND[c.op] == "goal":
+        g = await _feature(db, c.target["goal_id"])
+        return goal_measure(g) if g is not None and g.type == "goal" else None
     row = await _row(db, KIND[c.op], c.target)
     return _values(row, _keys(c)) if row is not None else None
 
@@ -328,6 +362,28 @@ async def _plan(
         return target, {}, after
     if entry is None and kind != "action":
         raise ChangeError(422, "target.item_id: the roadmap item")
+
+    if kind == "goal":
+        gid = _id_str(body.target.get("goal_id"), "target.goal_id")
+        if entry.goal is None or str(entry.goal.id) != gid:  # type: ignore[union-attr]
+            raise ChangeError(422, "target.goal_id: the goal the item serves")
+        target["goal_id"] = gid
+        after = {"measure": _line(a.get("measure"), "measure", required=True),
+                 "target": _line(a.get("target"), "target"),
+                 "due": changes._iso(changes._day(a.get("due"), "after.due"))}  # fmt: skip
+        missing = [k for k in GOAL_FIELDS if k not in given]
+        if missing:
+            raise ChangeError(422, f"before: {', '.join(missing)} as you saw them")
+        g = await _feature(db, gid)
+        if g is None:
+            raise ChangeError(404, "No such goal")
+        current = goal_measure(g)
+        seen = {"measure": given["measure"] or None, "target": given["target"] or None,
+                "due": changes._iso(changes._day(given["due"], "before.due"))}  # fmt: skip
+        if seen != current:
+            raise await _conflict(db, SimpleChange(op=op, target=target, after=after), current,
+                                  "Changed since you saw it")  # fmt: skip
+        return target, current, after
 
     if kind == "override":
         row = entry.row  # type: ignore[union-attr]
@@ -548,6 +604,33 @@ async def _apply(
             c.target = {**t, "raw": {k: attrs.get(k) for k in values}}
             attrs.update(values)
         f.attrs = attrs
+        await db.flush()
+        return
+    if kind == "goal":
+        g = await _feature(db, t["goal_id"])
+        if g is None:
+            raise ChangeError(409, "The goal is gone")
+        attrs = dict(g.attrs or {})
+        if undo:
+            # The attrs as they were (a key that was absent is removed).
+            for k, v in (t.get("raw") or {}).items():
+                if v is None:
+                    attrs.pop(k, None)
+                else:
+                    attrs[k] = v
+        else:
+            from oracle.simple.goal_buckets import _target
+
+            c.target = {**t, "raw": {k: attrs.get(k) for k in GOAL_ATTRS}}
+            if values["target"] != _target(attrs):
+                # A new target is kept as typed; one left as it was keeps its number and unit.
+                attrs.pop("target", None)
+                attrs.pop("unit", None)
+                attrs["target_text"] = values["target"]
+            attrs["metric"] = values["measure"]
+            attrs["due"] = values["due"]
+            attrs = {k: v for k, v in attrs.items() if not (k in GOAL_ATTRS and v is None)}
+        g.attrs = attrs
         await db.flush()
         return
     if kind == "override":

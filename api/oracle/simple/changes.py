@@ -46,9 +46,11 @@ Ops and the fields they write (``before`` must name the key fields):
 - ``set_goal``: the goal the item serves, ``{"goal_id"}`` (a goal; null: its feature's
   goal again), stored as goal_ids, which win over the feature's goal.
 - ``set_depends``: the keys the item depends on (``depends_on``: item keys of its roadmap,
-  or feature keys, as the dependency checks read them).
+  or feature keys, as the dependency checks read them; a new key that names no item or
+  feature is 422).
 - ``set_status``: planned, done or cut; ``before`` ``{"status"}`` as the read showed it;
-  writes cut and shipped (done: marked shipped; planned: neither, the tracker's again).
+  writes cut and shipped (done: marked shipped; planned: neither, the tracker's again; a
+  shipped mark not made in the panel stays).
 - ``accept_risk``: the risk accepted on one flag (``target.flag``, ``target.subject``),
   ``{"risk": {"note"}}``; ``before`` ``{"risk": null}`` when none is.
 - ``shift_dependents``: the flagged item (``target.item_id``) starts the day after its
@@ -81,7 +83,7 @@ from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 
-from sqlalchemy import select, text, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -137,6 +139,7 @@ FIELDS: dict[str, tuple[str, ...]] = {
 CONFIDENCES = ("low", "medium", "high")
 # set_status: the statuses a person sets (the others come from the tracker or a merge).
 STATUSES = ("planned", "done", "cut")
+PANEL_DONE = "Marked done in its panel"
 DEPENDS_MAX = 50
 # The ops whose ``before`` is what the read shows, and the row fields each writes.
 SHOWN = {
@@ -671,10 +674,12 @@ async def _plan(
         status = body.after.get("status")
         if status not in STATUSES:
             raise ChangeError(422, "after.status: planned, done or cut")
-        shipped = None
+        # Planned clears only the panel's own mark: a shipped mark from elsewhere (the
+        # tracker, the item's talk) stays, so planned never undoes what the panel did not do.
+        shipped = None if (row.shipped or {}).get("note") == PANEL_DONE else row.shipped
         if status == "done":
             shipped = row.shipped or {
-                "note": "Marked done in its panel",
+                "note": PANEL_DONE,
                 "by": str(_me(principal)),
                 "on": company_time.today().isoformat(),
             }
@@ -829,6 +834,10 @@ async def _plan(
         clean = list(dict.fromkeys(" ".join(str(k or "").split()) for k in keys))
         if any(not k or len(k) > TITLE_MAX for k in clean) or row.item_key in clean:
             raise ChangeError(422, "after.depends_on: item or feature keys, never the item's own")
+        added = [k for k in clean if k not in (row.depends_on or [])]
+        unknown = await _unknown_keys(db, added, read_)
+        if unknown:
+            raise ChangeError(422, f"after.depends_on: no item or feature has the key {unknown[0]}")
         after = {"depends_on": clean}
     else:  # accept_risk
         if target.get("flag") not in FLAG_KINDS:
@@ -847,6 +856,22 @@ async def _plan(
             }
         }
     return entry, target, read(row, stored, target), after
+
+
+async def _unknown_keys(db: AsyncSession, keys: list[str], read_: service.Read) -> list[str]:
+    """set_depends: the keys that name no roadmap item (its key or code) and no feature."""
+    from oracle.baseline.models import Entity
+
+    if not keys:
+        return []
+    known = {k.lower() for e in read_.by_id().values() for k in (e.row.item_key, e.code) if k}
+    left = [k for k in keys if k.lower() not in known]
+    if not left:
+        return []
+    low = [k.lower() for k in left]
+    q = select(Entity.key).where(Entity.type == "feature", func.lower(Entity.key).in_(low))
+    features = {k.lower() for k in await db.scalars(q) if k}
+    return [k for k in left if k.lower() not in features]
 
 
 async def _exists(db: AsyncSession, op: str, ref: uuid.UUID) -> bool:
