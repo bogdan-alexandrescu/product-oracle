@@ -258,7 +258,12 @@ export default function SimpleHome() {
   const reads = !proposes;
   const myId = me?.user_id ?? "";
 
-  const toDecide = useMemo(() => (changes.data ?? []).filter((c) => c.status === "proposed" && c.can_decide), [changes.data]);
+  // A goal's ask (Ask to archive, delete or restore) names no roadmap item, so the roadmap's
+  // proposals tray behind "more" cannot list it: it comes first here.
+  const toDecide = useMemo(() => {
+    const rows = (changes.data ?? []).filter((c) => c.status === "proposed" && c.can_decide);
+    return [...rows.filter((c) => typeof c.target.goal_id === "string"), ...rows.filter((c) => typeof c.target.goal_id !== "string")];
+  }, [changes.data]);
   const mine = useMemo(() => (changes.data ?? []).filter((c) => c.status === "proposed" && c.by === myId), [changes.data, myId]);
   const broken = useMemo(() => brokenLinks(roadmap.data), [roadmap.data]);
   const waitingItems = useMemo(() => {

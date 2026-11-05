@@ -28,7 +28,7 @@ import { expect, test, type Page } from "./test";
  * approvers (the API's tests).
  *
  * Card tfg-restore-after-version (review round 3): protects = a feature deleted before another
- * edit is submitted and approved (review round 4: by the required reviewer, on Home) shows on Simple's roadmap again after Restore in Settings › Trash;
+ * edit is submitted and approved (review round 4: by the required reviewer) shows on Simple's roadmap again after Restore in Settings › Trash;
  * fails_when = Restore empties the Trash row and the feature stays off the roadmap (review round 4:
  * the mock keeps each roadmap's published versions with the features in Trash when each was made,
  * so a Restore that leaves the newer version alone fails here); no_claim = the API's copy onto
@@ -142,19 +142,23 @@ test("whoever deleted a feature or a goal sees it in Trash and restores it, with
   expect((await items(page)).map((i) => i.id)).not.toContain(theirs.id);
 });
 
-/** The alerts roadmap's required reviewer ("trash-reviewer"), who approves its drafts on Home. */
+/** The alerts roadmap's required reviewer ("trash-reviewer"), who approves its drafts. */
 const REVIEWER = "avery.lane@example.com";
 
-/** Signs in as the alerts roadmap's required reviewer, presses Approve on the Alerts roadmap's
- * draft in Home's waiting list (the version is published), and stays signed in as them. */
+/** Signs in as the alerts roadmap's required reviewer and approves the Alerts roadmap's draft in
+ * review (the version is published), and stays signed in as them. This branch has no screen for a
+ * reviewer's approval of a roadmap draft yet (Home's waiting list for it is on the AN line): the
+ * mock API's route, as the draft rules' pytest does. */
 async function approveOnHome(page: Page) {
   await signOut(page);
   await login(page, REVIEWER);
   await page.goto("/simple");
-  const row = page.getByTestId("home-also-waiting-list").getByTestId("waiting-item").filter({ hasText: "Alerts roadmap" });
-  await expect(row).toContainText("A roadmap draft waits for your approval");
-  await row.getByRole("button", { name: "Approve" }).click();
-  await expect(row).toHaveCount(0);
+  const drafts = (await call(page, "GET", "/v1/simple/drafts")).body as { id: string; status: string; document: { title: string } }[];
+  const draft = drafts.find((d) => d.status === "submitted" && d.document.title === "Alerts roadmap")!;
+  expect(draft).toBeTruthy();
+  const approved = await call(page, "POST", `/v1/simple/drafts/${draft.id}/approve`);
+  expect(approved.status).toBe(200);
+  expect((approved.body as { status: string }).status).toBe("approved");
 }
 
 /** Moves `key`'s bar on the Timeline a step later: one change in the open draft. */

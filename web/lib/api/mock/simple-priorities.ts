@@ -47,12 +47,12 @@ const FEATURES: Record<string, { value: number; effort: number; code?: string }>
 /** The "simple-plan" scenario's existing items the plan names (server.ts seedSimplePlanScenario). */
 const PLAN_EXISTING: Record<string, string> = { "setup-checklist": "F-01", "setup-import": "F-02" };
 
-/** An item's code in the plan (plan-f-07: F-07; an existing item the plan names: its code), with a plan. */
 /** The baseline feature key of an item: its plan code, else its own code, else its key (as Priorities reads it). */
 export function featureKeyOf(db: SimpleDb, key: string): string {
   return planCode(db, key) ?? FEATURES[key]?.code ?? key;
 }
 
+/** An item's code in the plan (plan-f-07: F-07; an existing item the plan names: its code), with a plan. */
 function planCode(db: SimpleDb, key: string): string | null {
   if (!db.plan) return null;
   const m = /^plan-f-(\d+)$/.exec(key);
