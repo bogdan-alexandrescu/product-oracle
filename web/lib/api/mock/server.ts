@@ -160,7 +160,7 @@ import {
   type PricingContext,
   type PricingDb,
 } from "./pricing";
-import { routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith } from "./goal-buckets";
+import { bucketGoalsInOrder, placeBucketGoal, routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith } from "./goal-buckets";
 import { featureKeyOf } from "./simple-priorities";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
@@ -6049,6 +6049,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       return accepted;
     }
   }
+  // goal-order: a goal bucket's Move up or Move down stores its place as the baseline's goals do.
+  if (p[1] === "baseline" && db.simple_roadmap) {
+    const placed = await placeBucketGoal(db.simple_roadmap, me.role, req, p, db.baseline.entities);
+    if (placed) return placed;
+  }
   // The baseline mock checks roles itself (commenters propose, approvers decide).
   if (p[1] === "baseline") return routeBaselineFor(db, me, req, p, q);
   // Sources and connections belong to each user: every role manages their own.
@@ -6534,8 +6539,10 @@ async function route(db: Db, req: Request): Promise<Response> {
   const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
   const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
   const simpleRoute = async (r: Request): Promise<Response | null> => {
-    // goal-order: Simple's goals follow the baseline's one goal order.
-    knowCompanyGoals(db.baseline.entities.filter((e) => e.type === "goal"));
+    // goal-order: Simple's goals follow the baseline's one goal order (and the place Move up or Move
+    // down stored on a bucket goal the baseline does not hold).
+    const baselineGoals = db.baseline.entities.filter((e) => e.type === "goal");
+    knowCompanyGoals([...baselineGoals, ...(db.simple_roadmap ? bucketGoalsInOrder(db.simple_roadmap, new Set(baselineGoals.map((e) => e.key))) : [])]);
     // build-goal-order-control: the "goal-order" scenarios' added goals name their roadmap work on every load.
     knowGoalOrderGoals(db.baseline.entities);
     // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is

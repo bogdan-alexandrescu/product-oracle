@@ -122,7 +122,7 @@ for (const look of LOOKS) {
       await expect(bucket(page, view, "Growth").getByTestId("goal-owner")).toHaveText("Owner: Avery Stone");
       await shot(page, `no-plan-buckets-${slug(look.name)}`);
       await bucket(page, view, "Growth").getByRole("button", { name: "More for Growth" }).click();
-      await expect(page.getByRole("menuitem")).toHaveText(["Edit goal", "Archive goal", "Delete goal"]);
+      await expect(page.getByRole("menuitem")).toHaveText(["Edit goal", "Move up", "Move down", "Archive goal", "Delete goal"]);
       await shot(page, `no-plan-menu-${slug(look.name)}`);
       await page.keyboard.press("Escape");
       await expect(fold(page)).toContainText("Archived goals · 3");
@@ -182,7 +182,7 @@ test.describe("fix round 2", () => {
     test(`${view.name}: an approver's ⋯ reads Edit, Archive and Delete goal; the Archived goals fold has Restore and Delete`, async ({ page }) => {
       await open(page, look, view, APPROVER);
       await bucket(page, view, "Growth").getByRole("button", { name: "More for Growth" }).click();
-      await expect(page.getByRole("menuitem")).toHaveText(["Edit goal", "Archive goal", "Delete goal"]);
+      await expect(page.getByRole("menuitem")).toHaveText(["Edit goal", "Move up", "Move down", "Archive goal", "Delete goal"]);
       await shot(page, `approver-menu-${slug(view.name)}`);
       await page.keyboard.press("Escape");
       await fold(page).locator("summary").click();

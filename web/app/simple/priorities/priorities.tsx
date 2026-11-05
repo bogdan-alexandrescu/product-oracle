@@ -2545,6 +2545,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
 /** What the note's Undo does: a goal back from Trash with its links, a bucket write's Undo, or a task's. */
 function undoOf(note: Note, writes: ReturnType<typeof useBucketWrites>, tasks: { undo: (changes: string[]) => Promise<void> | void }): (() => void) | undefined {
   if (note.restore) return () => void writes.restore(note.restore!);
+  if (note.order) return () => void writes.unorder(note.order!);
   if (note.undo) return () => void writes.undo(note.undo!);
   if (note.changes?.length) return () => void tasks.undo(note.changes!);
   return undefined;
@@ -2565,7 +2566,13 @@ function useGoalActs({ gb, plan, featuresOf, writes, rights, onArchived }: { gb:
   const asksTo = gb?.asks_to ?? [];
   const trashed = (words: string) => `${words} It is in Settings > Trash for 30 days.`;
   return {
-    menu: (rec: Schemas["GoalBucketGoal"], title: string, onEdit?: () => void) => <GoalMenu title={title} archive={rights.archiveAct} del={rights.deleteAct} onEdit={onEdit} onArchive={() => setArchiving(rec.id)} onDelete={() => setDeleting(rec.id)} />,
+    menu: (rec: Schemas["GoalBucketGoal"], title: string, onEdit?: () => void) => {
+      // Move up and Move down, in the goal order the goal buckets list (none on the first or the last goal).
+      const live = gb?.goals ?? [];
+      const at = live.findIndex((g) => g.id === rec.id);
+      const by = (d: -1 | 1) => (rights.order(rec) && at >= 0 && live[at + d] ? () => void writes.reorder(live, rec.id, d) : undefined);
+      return <GoalMenu title={title} archive={rights.archiveAct} del={rights.deleteAct} onEdit={onEdit} onUp={by(-1)} onDown={by(1)} onArchive={() => setArchiving(rec.id)} onDelete={() => setDeleting(rec.id)} />;
+    },
     fold: (year: string) =>
       gb && (
         <ArchivedGoals

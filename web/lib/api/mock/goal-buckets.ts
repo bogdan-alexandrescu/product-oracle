@@ -9,11 +9,12 @@ import type { Schemas } from "@/lib/api/client";
 import { stableUuid } from "./ids";
 import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
 import { planGoalNames, planSlices } from "./simple-plan";
-import { GOALS, goalId, type SeedItem } from "./simple-roadmap";
+import { GOALS, goalId, goalPositionOf, goalRank, type SeedItem } from "./simple-roadmap";
 
 // trash-features-goals: `trashed` while in Settings › Trash (left out of every read, kept for Restore).
 // edit-goals-prds EG1: a goal's owner (a member's id; seeded by email, matched to the member on first read) and when it was archived.
-type Goal = { id: string; title: string; order: number; measure: string | null; target: string | null; due: string | null; archived: boolean; trashed?: boolean; owner_id?: string | null; owner_email?: string; archived_at?: string | null };
+// goal-order: `position`, the place Move up and Move down store on it (attrs.position, as the API's goals).
+type Goal = { id: string; title: string; order: number; measure: string | null; target: string | null; due: string | null; archived: boolean; trashed?: boolean; owner_id?: string | null; owner_email?: string; archived_at?: string | null; position?: number | null };
 type Feature = { id: string; key: string; title: string; goal_ids: string[] };
 export type GoalBucketsDb = { goals: Goal[]; features: Feature[] };
 type Undo = Schemas["GoalBucketsUndo"];
@@ -120,7 +121,8 @@ function json(status: number, body: unknown): Response {
 export type GoalPeople = { id: string; name: string; email: string; role: string; disabled?: boolean }[];
 
 function out(db: GoalBucketsDb, edits: boolean, people: GoalPeople = []): Schemas["GoalBucketsOut"] {
-  const live = db.goals.filter((g) => !g.archived && !g.trashed);
+  // goal-order: the goals in the one goal order, as the API lists them (the baseline's, then the rest as they were).
+  const live = db.goals.filter((g) => !g.archived && !g.trashed).sort((a, b) => goalRank(orderKey(a)) - goalRank(orderKey(b)));
   const ids = new Set(live.map((g) => g.id));
   const archived = db.goals.filter((g) => g.archived && !g.trashed).sort((a, b) => ((a.archived_at ?? "") < (b.archived_at ?? "") ? 1 : -1));
   return {
@@ -133,7 +135,7 @@ function out(db: GoalBucketsDb, edits: boolean, people: GoalPeople = []): Schema
 }
 
 const nameOf = (people: GoalPeople, id: string | null | undefined) => (id ? (people.find((x) => x.id === id)?.name ?? null) : null);
-const goalOut = (g: Goal, people: GoalPeople = []): Schemas["GoalBucketGoal"] => ({ id: g.id, title: g.title, order: g.order, measure: g.measure, target: g.target, due: g.due, can_edit: true, owner_id: g.owner_id ?? null, owner_name: nameOf(people, g.owner_id) });
+const goalOut = (g: Goal, people: GoalPeople = []): Schemas["GoalBucketGoal"] => ({ id: g.id, title: g.title, order: goalPositionOf(orderKey(g)) ?? g.order, measure: g.measure, target: g.target, due: g.due, can_edit: true, owner_id: g.owner_id ?? null, owner_name: nameOf(people, g.owner_id) });
 const goalSnap = (g: Goal) => ({ id: g.id, title: g.title, status: g.archived ? "rejected" : "confirmed", attrs: { metric: g.measure, target_text: g.target, due: g.due, position: g.order, owner: g.owner_id ?? null, archived_at: g.archived_at ?? null } });
 // The mock keeps links in order, and Undo puts that order back; each link is snapshotted whole, as the API does.
 const featureSnap = (f: Feature) => ({
@@ -174,6 +176,35 @@ export type GoalBucketsItems = { items: SeedItem[]; ids: Record<string, string> 
 type ItemSnap = Schemas["ItemGoalsSnap"];
 /** The item goal key of a bucket goal: the roadmap's goal of that name. */
 const itemGoalKey = (g: Goal | undefined) => (g ? Object.keys(GOALS).find((k) => GOALS[k].toLowerCase() === g.title.toLowerCase()) : undefined);
+/** goal-order: a bucket goal's key in the one goal order: the roadmap's goal of that name, else its name. */
+const orderKey = (g: Goal) => itemGoalKey(g) ?? g.title.toLowerCase();
+
+/**
+ * goal-order: the bucket goals the baseline does not hold, each with the place stored on it, so the
+ * one goal order (simple-roadmap knowCompanyGoals) ranks them as the API ranks every goal.
+ */
+export function bucketGoalsInOrder(simple: { goal_buckets?: GoalBucketsDb }, baselineKeys: Set<string>): { id: string; key: string; title: string; position: number }[] {
+  return (simple.goal_buckets?.goals ?? []).filter((g) => g.position != null && !baselineKeys.has(orderKey(g))).map((g) => ({ id: g.id, key: orderKey(g), title: g.title, position: g.position! }));
+}
+
+/**
+ * goal-order: PATCH /v1/baseline/entities/{id} naming a bucket goal (the API's buckets are the
+ * baseline's goals): its attrs.position is its place in the one goal order, and the baseline's goal
+ * of the same key takes it too, so every page follows. Approvers and owners, as the API.
+ */
+export async function placeBucketGoal(simple: { goal_buckets?: GoalBucketsDb }, role: string, req: Request, p: string[], baseline: { key: string; type: string; attrs?: Record<string, unknown> | null }[]): Promise<Response | null> {
+  if (p[1] !== "baseline" || p[2] !== "entities" || !p[3] || p[4] || req.method !== "PATCH") return null;
+  const g = simple.goal_buckets?.goals.find((x) => x.id === p[3]);
+  if (!g) return null;
+  if (role !== "owner" && role !== "approver") return json(403, { detail: "Requires the approver role" });
+  const body = (await req.json().catch(() => ({}))) as { attrs?: { position?: unknown } };
+  const at = body.attrs?.position;
+  if (at != null && !(typeof at === "number" && Number.isInteger(at) && at >= 1)) return json(422, { detail: "A goal's position is a whole number of 1 or more" });
+  g.position = (at as number | null | undefined) ?? null;
+  const e = baseline.find((x) => x.type === "goal" && x.key === orderKey(g));
+  if (e) e.attrs = { ...e.attrs, position: g.position };
+  return json(200, { applied: true, entity: { id: g.id, type: "goal", key: orderKey(g), title: g.title, status: g.archived ? "rejected" : "confirmed", attrs: { ...(e?.attrs ?? {}), position: g.position } }, proposal: null });
+}
 /** An item's own goals (keys), first first, as goalIdsOf reads them, and writing them back. */
 const keysOf = (s: SeedItem): string[] => (s.own_goal !== undefined ? (s.own_goal ? [s.own_goal] : []) : [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])]);
 function setKeys(s: SeedItem, keys: string[]): void {

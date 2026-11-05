@@ -87,6 +87,8 @@ for (const look of [...LOOKS, ...MORE_LOOKS]) {
       .click();
     await expect(page.getByRole("menuitem")).toHaveText([
       "Edit goal",
+      "Move up",
+      "Move down",
       "Archive goal",
       "Delete goal",
     ]);

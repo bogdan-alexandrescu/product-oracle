@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { storeGoalOrder } from "@/components/simple/GoalOrder";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
@@ -461,8 +462,11 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive, 
 /** "do": the person archives or deletes; "ask": they ask whoever may (Ask to archive, Ask to delete); null: neither. */
 export type Act = "do" | "ask" | null;
 
-/** The ⋯ menu on a goal (eg1-a-open): Edit goal, Archive goal, Delete goal; Ask to archive and Ask to delete for who may not. */
-export function GoalMenu({ title, onEdit, onArchive, onDelete, archive, del = null }: { title: string; onEdit?: () => void; onArchive: () => void; onDelete?: () => void; archive: Act | boolean; del?: Act }) {
+/**
+ * The ⋯ menu on a goal (eg1-a-open): Edit goal, Move up and Move down (none on the first or the
+ * last goal), Archive goal, Delete goal; Ask to archive and Ask to delete for who may not.
+ */
+export function GoalMenu({ title, onEdit, onUp, onDown, onArchive, onDelete, archive, del = null }: { title: string; onEdit?: () => void; onUp?: () => void; onDown?: () => void; onArchive: () => void; onDelete?: () => void; archive: Act | boolean; del?: Act }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
@@ -479,6 +483,8 @@ export function GoalMenu({ title, onEdit, onArchive, onDelete, archive, del = nu
   const arch: Act = archive === true ? "do" : archive || null;
   const items: [string, () => void][] = [];
   if (onEdit) items.push(["Edit goal", onEdit]);
+  if (onUp) items.push(["Move up", onUp]);
+  if (onDown) items.push(["Move down", onDown]);
   if (arch) items.push([arch === "do" ? "Archive goal" : "Ask to archive", onArchive]);
   if (del && onDelete) items.push([del === "do" ? "Delete goal" : "Ask to delete", onDelete]);
   if (!items.length) return null;
@@ -593,9 +599,10 @@ export function DeleteArchivedDialog({ goal, onClose, onDelete }: { goal: Archiv
 
 /**
  * A task change (./task-edit) names the changes Undo takes back, in the order they were made; a
- * goal's delete, its Trash entry and the Undo for its links (`restore`).
+ * goal's delete, its Trash entry and the Undo for its links (`restore`); a goal's move, the goal
+ * order before and after it (goal ids, first first).
  */
-export type Note = { text: ReactNode; undo?: Undo; changes?: string[]; restore?: Restore };
+export type Note = { text: ReactNode; undo?: Undo; changes?: string[]; restore?: Restore; order?: { before: string[]; after: string[] } };
 type Restore = { entry: string; title: string; undo?: Undo | null };
 
 /** The writes, each answering with the note to show and what Undo puts back. */
@@ -662,6 +669,33 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
       }
       await reload();
     },
+    // Move up and Move down: the goal swaps places with the one before or after it in the goal
+    // order, stored for every goal as the order's place (Home's Change order writes the same).
+    reorder: async (goals: Goal[], id: string, by: -1 | 1): Promise<void> => {
+      const before = goals.map((g) => g.id);
+      const i = before.indexOf(id);
+      if (i < 0 || !before[i + by]) return;
+      const order = [...before];
+      [order[i], order[i + by]] = [order[i + by], order[i]];
+      try {
+        await storeGoalOrder(order, new Map(goals.map((g) => [g.id, g.order])));
+        setError(null);
+        setNote({ text: <>Goal order saved. Every page shows the new order.</>, order: { before, after: order } });
+      } catch (e) {
+        setError(errorMessage(e));
+      }
+      await reload();
+    },
+    unorder: async ({ before, after }: { before: string[]; after: string[] }) => {
+      try {
+        await storeGoalOrder(before, new Map(after.map((id, i) => [id, i + 1])));
+        setError(null);
+        setNote(null);
+      } catch (e) {
+        setError(errorMessage(e));
+      }
+      await reload();
+    },
     undo: async (u: Undo) => {
       try {
         await unwrap(api.POST("/v1/simple/goal-buckets/undo", { body: u }));
@@ -682,6 +716,8 @@ export function useBucketRights(gb: Buckets | undefined) {
   return {
     add: !!gb && can("create_bucket_goal"),
     edit: (g: Goal | undefined) => !!g && g.can_edit && can("update_bucket_goal"),
+    // Whoever may edit a goal moves it in the goal order (each goal's place, stored on the goal).
+    order: (g: Goal | undefined) => !!g && g.can_edit && can("update_bucket_goal") && can("update_entity"),
     archive: !!gb && can("archive_bucket_goal"),
     // EG1 a: Archive and Delete for who may, an ask through the change engine for who may not.
     archiveAct: (!gb ? null : can("archive_bucket_goal") ? "do" : can("create_simple_change") ? "ask" : null) as Act,
