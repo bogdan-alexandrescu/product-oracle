@@ -31,6 +31,10 @@ Test cards (protects / fails_when / no_claim):
 - test_delete_goal_undo_gives_items_their_goal_back: protects=the same Undo gives each
   roadmap item that named the goal as its own goal that goal back, so the buckets with no
   dated plan show it again; fails_when=an item keeps the goal it was moved to.
+- test_delete_goal_undo_keeps_later_goal_changes: protects=that Undo puts back only the
+  deleted goal and takes off the goal it moved items to only where the delete added it,
+  so a goal given to an item between the delete and the Undo stays; fails_when=Undo
+  overwrites the item's goals with the list from before the delete.
 """
 
 import uuid
@@ -263,3 +267,41 @@ async def test_delete_goal_undo_gives_items_their_goal_back(client):
     assert r.status_code == 200, r.text
     async with tenant_session(w.ctx.tenant_id) as s:
         assert (await s.get(RoadmapItem, item)).goal_ids == [uuid.UUID(goal)]
+
+
+@pytest.mark.asyncio
+async def test_delete_goal_undo_keeps_later_goal_changes(client):
+    from oracle.roadmap.models import RoadmapItem
+    from tests.test_simple_roadmap_api import Seed
+    from tests.test_trash_features_goals import _world
+
+    w = await _world()
+    goal = uuid.UUID(w.goal_id)  # type: ignore[attr-defined]
+    a, b = uuid.UUID(w.ids["cut-a"]), uuid.UUID(w.ids["cut-b"])
+    async with tenant_session(w.ctx.tenant_id) as s:
+        seed = Seed(s)
+        other = (await seed.entity("goal", "happier-riders", position=2)).id
+        later = (await seed.entity("goal", "safer-roads", position=3)).id
+        (await s.get(RoadmapItem, b)).goal_ids = [other, goal]
+        await s.commit()
+    r = await client.delete(
+        f"{URL}/goals/{goal}", headers=w.ctx.as_("owner"), params={"to_goal_id": str(other)}
+    )
+    assert r.status_code == 200, r.text
+    out = r.json()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        assert (await s.get(RoadmapItem, a)).goal_ids == [other]
+        assert (await s.get(RoadmapItem, b)).goal_ids == [other]
+        # Someone gives Cut A another goal before the Undo.
+        (await s.get(RoadmapItem, a)).goal_ids = [other, later]
+        await s.commit()
+
+    r = await client.post(f"/v1/trash/{out['entry']['id']}/restore", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    r = await client.post(f"{URL}/undo", headers=w.ctx.as_("owner"), json=out["undo"])
+    assert r.status_code == 200, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        # The delete added "other" to Cut A: Undo takes it off and keeps the later goal.
+        assert (await s.get(RoadmapItem, a)).goal_ids == [goal, later]
+        # Cut B had "other" already: it stays, and the goal goes back where it was.
+        assert (await s.get(RoadmapItem, b)).goal_ids == [other, goal]
