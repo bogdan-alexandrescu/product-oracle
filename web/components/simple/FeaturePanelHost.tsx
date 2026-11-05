@@ -90,7 +90,7 @@ function Opened({ feature, phone, canChange, onClose }: { feature: string; phone
         const r = await propose(body);
         if (r.change.status === "applied")
           // build-feature-panel review 3: the panel's own words once applied, with Undo, as the frames show.
-          toast({ message: opts?.words ? await opts.words(r) : what, action: r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(changed, (e) => toast({ message: String(e.message) })) } : undefined });
+          toast({ message: opts?.words ? await opts.words(r) : typeof what === "string" ? what : what.applied, action: r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(changed, (e) => toast({ message: String(e.message) })) } : undefined });
         // review 7: a proposal says what it asks and who decides it.
         else toast({ message: `Proposed: ${proposalWords(body.op, of?.title ?? "it")} · waiting for ${deciderWords(of?.deciders)}` });
       } catch (e) {
