@@ -221,9 +221,10 @@ test.describe("phone only", () => {
     const list = page.getByTestId("timeline-list");
     await expect(list).toBeVisible();
     for (const q of await list.getByTestId("timeline-quarter").all()) {
-      // "Q1 2027 Jan – Mar 2027 · 4 items": a plain count, the months in words.
+      // "Q1 2027 Jan – Mar 2027 · 4 items" ("1 item"): a plain count, the months in words.
       const head = q.locator("h3");
-      await expect(head).toHaveText(/^Q\d \d{4} (Jan|Apr|Jul|Oct) – (Mar|Jun|Sep|Dec) \d{4} · \d+ items/);
+      await expect(head).toHaveText(/^Q\d \d{4} (Jan|Apr|Jul|Oct) – (Mar|Jun|Sep|Dec) \d{4} · \d+ items?\b/);
+      await expect(head).not.toContainText("· 1 items");
       await expect(head).not.toContainText("at once");
     }
     for (const t of await list.getByTestId("timeline-row").allTextContents()) expect(t).not.toMatch(/\b[FD]-\d/);

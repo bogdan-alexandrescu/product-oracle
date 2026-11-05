@@ -170,6 +170,10 @@ test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
   // Guided setup's plan goes with its items (priorities.plan_in_play): the buckets read without a plan.
   await expect(buckets.getByText(/^Grouped by goal for this quarter/)).toBeVisible();
   for (const title of GONE) await expect(buckets.getByText(title, { exact: true })).toHaveCount(0);
+  // Round 6: with no work this quarter the tab says so in words, never "0 wk in all" over an empty chart.
+  await expect(buckets.getByText("Nothing planned this quarter.")).toBeVisible();
+  await expect(buckets.getByText(/0 wk in all/)).toHaveCount(0);
+  await expect(buckets.getByText("Share of engineer-weeks by goal")).toHaveCount(0);
 
   // Round 5: Priorities' Ranked list leaves them out too.
   await page.goto("/simple/priorities?tab=ranked");
@@ -256,4 +260,18 @@ test("a feature added after a replace stays on the Roadmap and the Ranked tab", 
   await expect(ranked.getByText("New plan tiers").first()).toBeVisible();
   // A draft is not ranked yet (priorities.py _items): it sits under the Ranked list, by its name.
   await expect(page.getByRole("region", { name: "Not ranked yet" }).getByText("Quiet hours for alerts").first()).toBeVisible();
+});
+
+/**
+ * Re-review round 6: a phone's Roadmap counts a quarter's items in plain words (the default mock
+ * data: the onboarding roadmap has one item starting in Q1 2027). protects = "1 item", never
+ * "1 items"; fails_when = the count reads "1 items"; no_claim = which quarters show.
+ */
+test("a phone's Roadmap quarter with one item says 1 item", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page);
+  await page.goto("/simple/roadmap?roadmap=onboarding-roadmap");
+  const quarters = page.getByTestId("timeline-list").getByTestId("timeline-quarter");
+  await expect(quarters.filter({ hasText: "Q1 2027" }).locator("h3")).toHaveText(/· 1 item$/);
+  await expect(quarters.filter({ hasText: "Q3 2027" }).locator("h3")).toHaveText(/· 2 items$/);
 });
