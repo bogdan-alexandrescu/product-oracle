@@ -27,6 +27,7 @@ import { mockNowMs } from "./clock";
 import { draftDecisionNotes } from "./decision-notes";
 import { stableUuid } from "./ids";
 import { changeSentence } from "./simple-change-words";
+import { milestoneValue, writeMilestone } from "./simple-milestones";
 import { seedGoalBuckets } from "./goal-buckets";
 import { addToCompany, featureItem, featureKeyOf, priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
 import {
@@ -198,7 +199,7 @@ const slugOf = (id: unknown): string | undefined => ROADMAP_SLUGS().find((r) => 
 function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target"> & Partial<Pick<Change, "routed_to" | "after">>): boolean {
   // Review major (changes.decides_all): a cut with its dependents needs rights on every item it cuts.
   if (c.op === CUT_ALL && c.after) return Object.keys(c.after).every((id) => decides(db, ctx, id));
-  if (KEY_DATE_OPS.includes(c.op)) {
+  if (KEY_DATE_OPS.includes(c.op) || c.op === MILESTONE_OP) {
     const rm = roadmapOfDoc(db, c.target.document_id);
     return ctx.role === "owner" || (c.routed_to ?? []).includes(ctx.id) || (!!rm && canEditRoadmap(db, rm, ctx));
   }
@@ -246,7 +247,7 @@ export function meetingRoute(db: SimpleDb, attendees: string[], ctx: Pick<Simple
 
 /** changes.current_route: who decides an open proposal now; else its stored route. */
 function route(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, c: Change): string[] {
-  if (c.status !== "proposed" || KEY_DATE_OPS.includes(c.op)) return c.routed_to;
+  if (c.status !== "proposed" || KEY_DATE_OPS.includes(c.op) || c.op === MILESTONE_OP) return c.routed_to;
   // walkc-meeting: a proposal made in a meeting stays with the meeting's deciders.
   if (db.meeting_proposals?.includes(c.id) && c.routed_to.length) return c.routed_to;
   if (c.op === "add_item" && !keyOf(db, c.target.item_id)) {
@@ -716,6 +717,35 @@ function writeKeyDate(db: SimpleDb, c: Change, value: unknown): void {
   db.key_dates[rm] = v ? [...list.filter((k) => k.id !== id), { id, name: String(v.name), date: String(v.date), note: (v.note as string | null) ?? null }] : list.filter((k) => k.id !== id);
 }
 
+/** milestone-rights (goal_milestones.create_change): a roadmap's own goal milestone, proposed
+ * by who may not change it (an approver who is not its owner, a commenter); `after.milestone`
+ * null proposes removing it. Routed as a key date's proposal is. */
+const MILESTONE_OP = "edit_goal_milestone";
+
+function createMilestoneChange(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"]): Response {
+  const m = (db.goal_milestones ?? []).find((x) => x.id === body.target.milestone_id && !x.deleted);
+  if (!m) return json(404, { detail: "No such milestone" });
+  if (m.prd) return json(422, { detail: "A PRD's milestone: change it on its card (it asks the PRD's owner)" });
+  if (db.company_roadmap && m.roadmap !== db.company_roadmap) return json(409, { detail: "That roadmap is history" });
+  if (canEditRoadmap(db, m.roadmap, ctx)) return json(409, { detail: "You change this milestone directly" });
+  if (!("milestone" in body.before) || !("milestone" in (body.after ?? {}))) return json(422, { detail: "before.milestone and after.milestone (null: remove it)" });
+  const current = milestoneValue(m, db.ids);
+  if (!same(body.before.milestone, current)) return json(409, { detail: { message: "Changed since you saw it", current: { milestone: current }, changed_by: null, changed_at: null } });
+  const wanted = body.after?.milestone as Values | null;
+  const after = wanted ? { ...current, ...Object.fromEntries(Object.entries(wanted).filter(([k, v]) => k in current && (v !== null || k === "goal_id"))) } : null;
+  if (after && same(after, current)) return json(422, { detail: "after.milestone: nothing changes" });
+  const doc = stableUuid(`simple-doc/${m.roadmap}`);
+  const decider = db.deciders?.[m.roadmap];
+  const change: Change = {
+    id: crypto.randomUUID(), session_id: null, document_id: doc, draft_ids: [], op: body.op, target: { milestone_id: m.id, roadmap_id: doc, name: m.name },
+    before: { milestone: current }, after: { milestone: after }, status: "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
+    decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null,
+    routed_to: decider ? [decider] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
+  };
+  (db.changes ??= []).push(change);
+  return json(201, { change: view(db, ctx, change), flags: [] });
+}
+
 /** add_key_date / edit_key_date / remove_key_date (key_dates.create). */
 function createKeyDate(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"], session: Session | undefined, applies: boolean): Response {
   const now = iso(mockNowMs());
@@ -756,6 +786,7 @@ function createKeyDate(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simpl
 
 async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"]): Promise<Response> {
   if (S7_OPS.includes(body.op)) return createS7(db, ctx, body);
+  if (body.op === MILESTONE_OP) return createMilestoneChange(db, ctx, body);
   const now = iso(mockNowMs());
   if (KEY_DATE_OPS.includes(body.op)) {
     // The Roadmap filter names the roadmap as roadmap_id (as add_item does); either works.
@@ -1048,7 +1079,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   if (p[4] === "withdraw") {
     if (c.by !== ctx.id) return json(403, { detail: "Only the person who proposed it withdraws it" });
     if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
-    if (c.op === "add_item") return json(409, { detail: "This kind of proposal is not withdrawn here" });
+    if (c.op === "add_item" || c.op === MILESTONE_OP) return json(409, { detail: "This kind of proposal is not withdrawn here" });
     Object.assign(c, { status: "declined", decided_by: ctx.id, decided_at: now, decision_reason: "Withdrawn by the person who proposed it" });
     return json(200, { change: view(db, ctx, c), flags: [] });
   }
@@ -1087,6 +1118,12 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
   const body = (await req.json().catch(() => ({}))) as { reason?: string | null };
   if (p[4] === "accept" && TARGETS[c.op]) writeTarget(db, c, c.after);
+  else if (p[4] === "accept" && c.op === MILESTONE_OP) {
+    const ms = (db.goal_milestones ?? []).find((x) => x.id === c.target.milestone_id && !x.deleted);
+    if (!ms) return json(404, { detail: "The milestone is gone" });
+    if (!same(milestoneValue(ms, db.ids), c.before.milestone)) return json(409, { detail: { message: "outdated: the milestone changed since the proposal", current: { milestone: milestoneValue(ms, db.ids) }, changed_by: null, changed_at: null } });
+    writeMilestone(ms, db.ids, c.after.milestone as Values | null);
+  }
   else if (p[4] === "accept" && KEY_DATE_OPS.includes(c.op)) {
     const rm = roadmapOfDoc(db, c.target.document_id)!;
     if (!same(kdValue(keyDateNow(db, ctx, rm, String(c.target.key_date_id))), c.before.key_date ?? null)) return json(409, { detail: "outdated: the key date changed since the proposal" });

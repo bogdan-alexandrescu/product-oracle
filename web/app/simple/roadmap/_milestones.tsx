@@ -53,6 +53,8 @@ export interface MsCtl {
   pick: (itemId: string) => boolean;
   save: (again: boolean) => Promise<void>;
   remove: () => Promise<void>;
+  /** milestone-rights: who may not change it proposes the card's change (or removing it) to the roadmap's decider. */
+  propose: (remove: boolean) => Promise<void>;
   move: (m: GoalMilestone, date: string) => Promise<void>;
   undo: () => Promise<void>;
   closeToast: () => void;
@@ -117,6 +119,8 @@ export function useMilestones({ data, phone, canChange, reload, openItem, knownG
     },
     pick: (itemId) => {
       if (!draft || draft.prd) return false;
+      const m = draft.id ? list.find((x) => x.id === draft.id) : null;
+      if (m && !m.can_change && !m.can_propose) return false;
       setDraft({ ...draft, item_ids: draft.item_ids.includes(itemId) ? draft.item_ids.filter((x) => x !== itemId) : [...draft.item_ids, itemId] });
       return true;
     },
@@ -152,9 +156,23 @@ export function useMilestones({ data, phone, canChange, reload, openItem, knownG
       setDraft(null);
       await done({ words: `${words(m)} removed`, undo: () => unwrap(api.POST("/v1/simple/roadmap/milestones/{milestone_id}/restore", { params: { path: { milestone_id: m.id } } })) });
     },
+    propose: async (remove) => {
+      const m = draft?.id ? list.find((x) => x.id === draft.id) : null;
+      if (!draft || !m) return;
+      const before = { name: m.name, date: m.date ?? null, goal_id: m.goal_id ?? null, item_ids: m.item_ids, counts_when: m.counts_when };
+      const after = remove ? null : { name: draft.name.trim() || m.name, date: draft.date, goal_id: draft.goal_id, item_ids: draft.item_ids, counts_when: draft.counts_when };
+      await unwrap(api.POST("/v1/simple/changes", { body: { op: "edit_goal_milestone", target: { milestone_id: m.id }, before: { milestone: before }, after: { milestone: after } } }));
+      setDraft(null);
+      await done({ words: `${remove ? `Proposed removing ${words(m)}` : `Proposed a change to ${words(m)}`} · it waits in Needs a decision`, undo: null });
+    },
     move: async (m, date) => {
       if (!m.date || date === m.date) return;
-      await patch(m.id, { date });
+      try {
+        await patch(m.id, { date });
+      } catch (e) {
+        setToast({ words: e instanceof Error ? e.message : "Oracle could not move it", undo: null });
+        return;
+      }
       if (m.prd) await done({ words: `Asked ${m.prd_owner ?? "the PRD's owner"} to move ${words(m)} to ${day(date)} in the PRD`, undo: () => patch(m.id, { date: m.date }) });
       else await done({ words: `${words(m)} moved to ${day(date)}`, undo: () => patch(m.id, { date: m.date }) });
     },
@@ -554,8 +572,12 @@ function RuleField({ value, onChange }: { value: string; onChange: (v: string) =
   );
 }
 
-const Btn = ({ children, onClick, primary = false, className = "", testid }: { children: ReactNode; onClick: () => void; primary?: boolean; className?: string; testid?: string }) => (
-  <button type="button" data-testid={testid} onClick={onClick} className={`rounded-lg px-3 text-sm leading-8 font-semibold ${primary ? "bg-accent text-on-accent" : "border border-line-strong"} ${className}`}>
+/** milestone-rights: the reasons, as tooltips (the card adds no sentences). */
+const WHO_CHANGES = "Only an owner or the roadmap's decider (with none, its owner) changes its milestones";
+const PROPOSE_WHY = "Goes to the roadmap's decider, who accepts or declines it in Needs a decision";
+
+const Btn = ({ children, onClick, primary = false, className = "", testid, title }: { children: ReactNode; onClick: () => void; primary?: boolean; className?: string; testid?: string; title?: string }) => (
+  <button type="button" data-testid={testid} title={title} onClick={onClick} className={`rounded-lg px-3 text-sm leading-8 font-semibold ${primary ? "bg-accent text-on-accent" : "border border-line-strong"} ${className}`}>
     {children}
   </button>
 );
@@ -564,14 +586,28 @@ const Btn = ({ children, onClick, primary = false, className = "", testid }: { c
 export function MsCard() {
   const ms = useMsCtl();
   const [busy, setBusy] = useState(false);
+  // milestone-rights: the API's refusal, on the card it came from (the person's input stays).
+  const [failed, setFailed] = useState<{ on: string; words: string } | null>(null);
   if (!ms?.draft) return null;
   const d = ms.draft;
-  const set = (p: Partial<typeof d>) => ms.setDraft({ ...d, ...p });
+  const on = d.id ?? "new";
+  const set = (p: Partial<typeof d>) => {
+    setFailed(null);
+    ms.setDraft({ ...d, ...p });
+  };
   const run = (f: () => Promise<void>) => {
     if (busy) return;
     setBusy(true);
-    void f().finally(() => setBusy(false));
+    setFailed(null);
+    void f()
+      .catch((e: unknown) => setFailed({ on, words: e instanceof Error && e.message ? e.message : "Oracle could not save it" }))
+      .finally(() => setBusy(false));
   };
+  const error = failed?.on === on && (
+    <p role="alert" data-testid="ms-error" className="text-sm text-crit">
+      {failed.words}
+    </p>
+  );
   const phone = ms.phone;
   const cls = phone ? "fixed right-0 bottom-0 left-0 z-[60] max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-line" : "fixed top-4 right-6 z-[60] w-[360px] rounded-xl border border-line";
   const goalTitle = ms.goals.find((g) => g.id === d.goal_id)?.title ?? "No goal";
@@ -596,6 +632,7 @@ export function MsCard() {
         <DateField value={d.date} onChange={(date) => set({ date })} />
         <RuleField value={d.counts_when} onChange={(counts_when) => set({ counts_when })} />
         <p className="text-xs text-text2">A change here goes to {m.prd_owner ?? "the PRD's owner"} as a change to the PRD. It shows dashed until they say yes.</p>
+        {error}
         <div className="flex gap-2">
           <Btn primary onClick={() => run(ms.save.bind(null, false))}>
             Ask to change it
@@ -607,11 +644,15 @@ export function MsCard() {
       </div>
     );
   }
-  const head = d.id ? `Edit ${d.code}` : d.second ? "Next milestone" : "New milestone";
+  const own = d.id ? ms.list.find((x) => x.id === d.id) : undefined;
+  // milestone-rights: who changes it saves; who may only propose proposes; anyone else reads.
+  const rights = !own || own.can_change ? "change" : own.can_propose ? "propose" : "read";
+  const reads = rights === "read";
+  const head = !d.id ? (d.second ? "Next milestone" : "New milestone") : reads ? `${d.code} ${d.name}` : `Edit ${d.code}`;
   const late = (id: string) => (ms.items.get(id)?.end.date ?? "") > d.date;
   const carriedFrom = d.id ? ms.list.find((x) => x.id === d.id)?.carried_from : null;
   return (
-    <div data-testid="ms-card" role="dialog" aria-label={head} className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}>
+    <div data-testid="ms-card" data-rights={rights} role="dialog" aria-label={head} className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}>
       {phone && <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />}
       <div className="flex items-center justify-between">
         <h2 className="text-[15px] font-semibold">{head}</h2>
@@ -622,27 +663,29 @@ export function MsCard() {
           Brought over from {carriedFrom.title}
         </p>
       )}
-      <Field label="Name">
-        <span className="font-semibold" style={{ color: msInk(d.code) }}>
-          {d.code}
-        </span>
-        <input aria-label="Name" autoFocus={!phone} value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="What is true by then" className={bare} />
-      </Field>
-      <div className="grid grid-cols-2 gap-2">
-        <DateField value={d.date} onChange={(date) => set({ date })} />
-        <Field label="Goal">
-          <select aria-label="Goal" value={d.goal_id ?? ""} onChange={(e) => set({ goal_id: e.target.value || null })} className={bare}>
-            {ms.goals.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.title}
-              </option>
-            ))}
-          </select>
+      <fieldset disabled={reads} title={reads ? WHO_CHANGES : undefined} className="contents">
+        <Field label="Name">
+          <span className="font-semibold" style={{ color: msInk(d.code) }}>
+            {d.code}
+          </span>
+          <input aria-label="Name" autoFocus={!phone && !reads} value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="What is true by then" className={bare} />
         </Field>
-      </div>
+        <div className="grid grid-cols-2 gap-2">
+          <DateField value={d.date} onChange={(date) => set({ date })} />
+          <Field label="Goal">
+            <select aria-label="Goal" value={d.goal_id ?? ""} onChange={(e) => set({ goal_id: e.target.value || null })} className={bare}>
+              {ms.goals.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.title}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+      </fieldset>
       <div className="flex flex-col gap-1" data-testid="ms-waits-on">
         <span className="text-xs font-semibold text-text2">
-          Items it waits on <span className="font-normal">· tap bars on the chart to add</span>
+          Items it waits on {!reads && <span className="font-normal">· tap bars on the chart to add</span>}
         </span>
         <div className="flex flex-wrap gap-1.5">
           {d.item_ids.map((id) => {
@@ -657,32 +700,49 @@ export function MsCard() {
                   "An item"
                 )}
                 {it && late(id) && <span className="font-semibold text-crit">· ends {day(it.end.date)}, after it</span>}
-                <button type="button" aria-label={`Take ${it?.title ?? "it"} off`} className="text-text2" onClick={() => set({ item_ids: d.item_ids.filter((x) => x !== id) })}>
-                  ×
-                </button>
+                {!reads && (
+                  <button type="button" aria-label={`Take ${it?.title ?? "it"} off`} className="text-text2" onClick={() => set({ item_ids: d.item_ids.filter((x) => x !== id) })}>
+                    ×
+                  </button>
+                )}
               </span>
             );
           })}
           {d.item_ids.length === 0 && <span className="text-xs text-text2">None yet</span>}
         </div>
       </div>
-      <RuleField value={d.counts_when} onChange={(counts_when) => set({ counts_when })} />
+      <fieldset disabled={reads} title={reads ? WHO_CHANGES : undefined} className="contents">
+        <RuleField value={d.counts_when} onChange={(counts_when) => set({ counts_when })} />
+      </fieldset>
+      {error}
       <div className="flex flex-wrap items-center gap-2 pt-1">
-        <Btn primary testid="ms-save" onClick={() => run(() => ms.save(false))}>
-          {d.id ? "Save" : "Add"}
-        </Btn>
+        {rights === "change" && (
+          <Btn primary testid="ms-save" onClick={() => run(() => ms.save(false))}>
+            {d.id ? "Save" : "Add"}
+          </Btn>
+        )}
+        {rights === "propose" && (
+          <Btn primary testid="ms-propose" title={PROPOSE_WHY} onClick={() => run(() => ms.propose(false))}>
+            Propose
+          </Btn>
+        )}
         {!d.id && (
           <Btn testid="ms-add-another" onClick={() => run(() => ms.save(true))}>
             Add and place another
           </Btn>
         )}
-        {d.id && (
+        {d.id && rights === "change" && (
           <Btn className="text-crit" testid="ms-remove" onClick={() => run(ms.remove)}>
             Remove
           </Btn>
         )}
+        {rights === "propose" && (
+          <Btn className="text-crit" testid="ms-propose-remove" title={PROPOSE_WHY} onClick={() => run(() => ms.propose(true))}>
+            Propose removing it
+          </Btn>
+        )}
         <button type="button" className="px-1 text-sm text-text2" onClick={() => ms.setDraft(null)}>
-          Cancel
+          {reads ? "Close" : "Cancel"}
         </button>
       </div>
     </div>

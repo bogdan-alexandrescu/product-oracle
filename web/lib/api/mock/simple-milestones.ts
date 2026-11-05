@@ -145,7 +145,7 @@ export function seedOldMilestones(oldRoadmap: string): MockMilestone[] {
   ];
 }
 
-export function milestoneOut(m: MockMilestone, ids: Record<string, string>, canChange: boolean, titleOf: (slug: string) => string = (slug) => slug): Schemas["SimpleGoalMilestone"] {
+export function milestoneOut(m: MockMilestone, ids: Record<string, string>, canChange: boolean, titleOf: (slug: string) => string = (slug) => slug, canPropose = false): Schemas["SimpleGoalMilestone"] {
   return {
     id: m.id,
     roadmap_id: stableUuid(`simple-doc/${m.roadmap}`),
@@ -160,9 +160,34 @@ export function milestoneOut(m: MockMilestone, ids: Record<string, string>, canC
     prd_owner: m.prd?.owner ?? null,
     pending: m.pending ?? null,
     can_change: canChange,
+    can_propose: !m.prd && !canChange && canPropose,
     carried_from: m.carried_from ? { id: stableUuid(`simple-doc/${m.carried_from}`), slug: m.carried_from, title: titleOf(m.carried_from) } : null,
   };
 }
+
+/** goal_milestones: who is not drafts.can_edit is refused a write (they propose instead). */
+const NOT_YOURS = "Only an owner or the roadmap's decider (with none, its owner) changes its milestones";
+
+/** milestone-rights: a roadmap's own milestone as an edit_goal_milestone proposal holds it (goal_milestones._value). */
+export function milestoneValue(m: MockMilestone, ids: Record<string, string>): Record<string, unknown> {
+  return { name: m.name, date: m.date, goal_id: m.goal ? stableUuid(`simple-goal/${m.goal}`) : null, item_ids: m.gates.map((k) => ids[k]).filter(Boolean), counts_when: m.counts_when };
+}
+
+/** milestone-rights: an accepted edit_goal_milestone writes the milestone (null: removes it). */
+export function writeMilestone(m: MockMilestone, ids: Record<string, string>, v: Record<string, unknown> | null): void {
+  if (!v) {
+    m.deleted = true;
+    return;
+  }
+  const keyOf = (id: unknown) => Object.keys(ids).find((k) => ids[k] === id);
+  m.name = String(v.name);
+  m.date = (v.date as string | null) ?? null;
+  m.goal = v.goal_id ? (GOAL_KEYS.find((g) => stableUuid(`simple-goal/${g}`) === v.goal_id) ?? null) : null;
+  m.gates = ((v.item_ids as string[]) ?? []).map(keyOf).filter((k): k is string => !!k);
+  m.counts_when = String(v.counts_when ?? "");
+}
+
+const GOAL_KEYS = ["grow-retention", "faster-activation", "quiet-alerts"];
 
 const json = (status: number, body: unknown): Response => new Response(status === 204 ? null : JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
@@ -183,7 +208,6 @@ export async function routeMilestones(
   if (carried) return carried;
   const keyOf = (id: string) => Object.keys(db.ids).find((k) => db.ids[k] === id);
   const goalKey = (id: string | null | undefined, goals: string[]) => (id ? (goals.find((g) => stableUuid(`simple-goal/${g}`) === id) ?? null) : null);
-  const GOAL_KEYS = ["grow-retention", "faster-activation", "quiet-alerts"];
   // A viewer changes nothing (Commenter); a commenter only asks a PRD's owner (goal_milestones._may_propose).
   if (me.role === "viewer") return json(403, { detail: "Requires the commenter role" });
   const history = json(409, { detail: "That roadmap is history" });
@@ -192,7 +216,7 @@ export async function routeMilestones(
     const roadmap = slugOf(b.roadmap_id);
     if (!roadmap) return json(404, { detail: "No such roadmap" });
     if (isHistory(roadmap)) return history;
-    if (!canEdit(roadmap)) return json(403, { detail: "Only the roadmap's owners change its milestones" });
+    if (!canEdit(roadmap)) return json(403, { detail: NOT_YOURS });
     const goal = goalKey(b.goal_id, GOAL_KEYS);
     const n = list.filter((m) => m.roadmap === roadmap && m.goal === goal && !m.prd).reduce((a, m) => Math.max(a, Number(m.code.slice(1)) || 0), 0);
     const m: MockMilestone = { id: stableUuid(`simple-gm/${roadmap}/${goal}/${list.length}/${b.name}`), roadmap, code: `M${n + 1}`, name: b.name, date: b.date, goal, gates: (b.item_ids ?? []).map(keyOf).filter((k): k is string => !!k), counts_when: b.counts_when ?? "", progress: "not_started" };
@@ -214,7 +238,7 @@ export async function routeMilestones(
       m.pending = b.date === m.date && !b.counts_when ? null : { date: b.date ?? m.date, counts_when: b.counts_when ?? null, asked_of: m.prd.owner, change_id: stableUuid(`simple-gm-change/${m.id}/${b.date}`) };
       return json(200, milestoneOut(m, db.ids, true));
     }
-    if (!canEdit(m.roadmap)) return json(403, { detail: "Only the roadmap's owners change its milestones" });
+    if (!canEdit(m.roadmap)) return json(403, { detail: NOT_YOURS });
     if (b.name != null) m.name = b.name;
     if (b.date != null) m.date = b.date;
     if (b.goal_id !== undefined) m.goal = goalKey(b.goal_id, GOAL_KEYS);
@@ -223,7 +247,7 @@ export async function routeMilestones(
     return json(200, milestoneOut(m, db.ids, true));
   }
   if (!p[5] && req.method === "DELETE" && m.prd) return json(409, { detail: "This milestone is the PRD's: it changes in the PRD" });
-  if (!canEdit(m.roadmap)) return json(403, { detail: "Only the roadmap's owners change its milestones" });
+  if (!canEdit(m.roadmap)) return json(403, { detail: NOT_YOURS });
   if (p[5] === "restore" && req.method === "POST") {
     m.deleted = false;
     return json(200, milestoneOut(m, db.ids, true));

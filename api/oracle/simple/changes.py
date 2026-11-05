@@ -476,7 +476,11 @@ def current_route(
         if d is not None and d.approver_id is not None:
             return [d.approver_id]
         return list(c.routed_to or [])
-    if c.status != "proposed" or c.op in ("edit_line", *QUESTION_OPS) or c.op in KEY_DATE_OPS:
+    if (
+        c.status != "proposed"
+        or c.op in ("edit_line", "edit_goal_milestone", *QUESTION_OPS)
+        or c.op in KEY_DATE_OPS
+    ):
         return list(c.routed_to or [])
     if c.op == CUT_ALL:
         cut = cut_entries(c, by_id)
@@ -1100,7 +1104,15 @@ async def create(
 ) -> SimpleChangeResult:
     """``meeting_id``: the meeting the change is made in when its session is not given (its
     session closed): it still changes only what the meeting reviews (oracle.simple.agenda)."""
-    from oracle.simple import additions, agenda, key_dates, one_pager, questions, targets
+    from oracle.simple import (
+        additions,
+        agenda,
+        goal_milestones,
+        key_dates,
+        one_pager,
+        questions,
+        targets,
+    )
 
     ag = await agenda.for_session(db, body.session_id) or await agenda.for_meeting(db, meeting_id)
     if body.op in targets.OPS:
@@ -1113,6 +1125,8 @@ async def create(
         return await key_dates.create(db, principal, body)
     if body.op in one_pager.OPS:
         return await one_pager.create(db, principal, body)
+    if body.op in goal_milestones.OPS:
+        return await goal_milestones.create_change(db, principal, body)
     me, now = _me(principal), company_time.now()
     ids = [_uuid(body.target.get("item_id"), "item_id")]
     if body.op in FIXES and body.target.get("subject"):
@@ -1460,9 +1474,7 @@ class _View:
         if c.op in one_pager.OPS:
             return one_pager.may_decide(self.principal, c)
         if c.op in goal_milestones.OPS:
-            return has_role(self.principal.role, "owner") or self.me in self.owners.get(
-                c.document_id, set()
-            )
+            return goal_milestones.may_decide(self.principal, c, self)
         if c.op == CUT_ALL:
             return decides_all(self.principal, cut_entries(c, self.by_id), self.deciders)
         e = self.entry(c)
