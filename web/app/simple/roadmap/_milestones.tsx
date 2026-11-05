@@ -63,7 +63,7 @@ export const MsProvider = ({ value, children }: { value: MsCtl; children: ReactN
 export const useMsCtl = () => useContext(Ctx);
 
 /** The milestones' state and their changes for one read of the roadmap (`reload` reads it again). */
-export function useMilestones({ data, phone, canChange, reload, openItem }: { data: Roadmap | undefined; phone: boolean; canChange: boolean; reload: () => Promise<unknown>; openItem: (itemId: string) => void }): MsCtl | null {
+export function useMilestones({ data, phone, canChange, reload, openItem, knownGoals = [] }: { data: Roadmap | undefined; phone: boolean; canChange: boolean; reload: () => Promise<unknown>; openItem: (itemId: string) => void; /** The company's goals (with no items too), so a milestone's own goal always has its name. */ knownGoals?: { id: string; title: string }[] }): MsCtl | null {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [hover, setHover] = useState<string | null>(null);
   const [moving, setMoving] = useState<{ id: string; date: string } | null>(null);
@@ -72,7 +72,7 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
   if (!data) return null;
   const list = data.goal_milestones ?? [];
   const items = new Map(data.items.map((i) => [i.id, i]));
-  const goals = [...new Map(data.items.flatMap((i) => (i.goal ? [[i.goal.id, { id: i.goal.id, title: i.goal.title }] as const] : []))).values()];
+  const goals = [...new Map([...data.items.flatMap((i) => (i.goal ? [[i.goal.id, { id: i.goal.id, title: i.goal.title }] as const] : [])), ...knownGoals.map((g) => [g.id, g] as const)]).values()];
   const goalTitle = (id: string | null) => goals.find((g) => g.id === id)?.title ?? "No goal";
   const nextCode = (goal: string | null) => `M${list.filter((m) => m.goal_id === goal && !m.prd).reduce((a, m) => Math.max(a, Number(m.code.slice(1)) || 0), 0) + 1}`;
   const roadmapOf = (goal: string | null) => data.roadmap?.id ?? data.items.find((i) => i.goal?.id === goal)?.roadmap.id ?? data.items[0]?.roadmap.id;
@@ -609,6 +609,7 @@ export function MsCard() {
   }
   const head = d.id ? `Edit ${d.code}` : d.second ? "Next milestone" : "New milestone";
   const late = (id: string) => (ms.items.get(id)?.end.date ?? "") > d.date;
+  const carriedFrom = d.id ? ms.list.find((x) => x.id === d.id)?.carried_from : null;
   return (
     <div data-testid="ms-card" role="dialog" aria-label={head} className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}>
       {phone && <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />}
@@ -616,6 +617,11 @@ export function MsCard() {
         <h2 className="text-[15px] font-semibold">{head}</h2>
         <span className="text-xs text-text2">{`${goalTitle} · ${day(d.date)}`}</span>
       </div>
+      {carriedFrom && (
+        <p data-testid="ms-carried-from" className="text-xs text-text2">
+          Brought over from {carriedFrom.title}
+        </p>
+      )}
       <Field label="Name">
         <span className="font-semibold" style={{ color: msInk(d.code) }}>
           {d.code}

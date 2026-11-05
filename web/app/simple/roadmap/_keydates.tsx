@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ds";
 
 import type { Act } from "./_card";
+import { useMsCtl } from "./_milestones";
 import { OldMilestones } from "./_old_milestones";
 import { shortDay, type KeyDate, type Roadmap } from "./_lib";
 
@@ -28,6 +29,7 @@ const dayWords = (day: string, today: string) => (day.slice(0, 4) === today.slic
  */
 export function KeyDatesEditor({ data, act, mayChange, phone, onClose, onOld }: { data: Roadmap; act: Act; mayChange: boolean; phone: boolean; onClose: () => void; onOld: () => Promise<void> | void }) {
   const chosen = data.roadmap ?? null;
+  const ms = useMsCtl();
   // The roadmaps listed: the chosen one, else every roadmap the person may read.
   const roadmaps = data.key_date_roadmaps ?? [];
   // Where a new key date may go: the chosen roadmap, else every roadmap the person may read.
@@ -212,7 +214,18 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose, onOld }: 
             <span aria-hidden className="mt-1.5 inline-block h-2.5 w-2.5 flex-none rotate-45 border-[1.5px] border-accent-ink" />
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-baseline gap-x-1.5 font-medium">
-                <span className="min-w-0 break-words">{m.name}</span>
+                {/* Opens the milestone's own panel, as its diamond on the Timeline does. */}
+                <button
+                  type="button"
+                  className="min-w-0 break-words text-left underline-offset-2 hover:underline"
+                  aria-label={`Open ${m.code} ${m.name}`}
+                  onClick={() => {
+                    onClose();
+                    ms?.edit(m);
+                  }}
+                >
+                  {m.name}
+                </button>
                 <span className="flex-none whitespace-nowrap text-text2">· {dayWords(m.date!, data.today)}</span>
               </div>
               <div className="text-sm text-text2">Milestone brought over from {m.carried_from!.title}</div>

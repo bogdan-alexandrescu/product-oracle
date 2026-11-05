@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { Button, toast } from "@/components/ds";
+import { Button, InfoTip, toast } from "@/components/ds";
 import { api, type Schemas } from "@/lib/api/client";
 
 import { shortDay } from "./_lib";
@@ -150,10 +150,15 @@ export function OldMilestones({
       <h3 className="text-sm font-semibold">Old milestones</h3>
       {moves.length > 0 && (
         <div data-testid="old-milestones-preview">
-          <p className="mt-1 text-sm text-text2">
+          <p className="mt-1 flex items-center gap-1 text-sm text-text2">
             {moves.length === 1 ? "1 milestone" : `${moves.length} milestones`}{" "}
-            from older roadmaps will move to the company roadmap, with the items
-            they wait on:
+            will move to the company roadmap
+            <InfoTip label="Old milestones">
+              They come from older roadmaps and bring the items they wait on
+              that are still on the company roadmap.
+              {needs_call.length > 0 &&
+                ` ${needs_call.length === 1 ? "1 needs your call" : `${needs_call.length} need your call`}: none of their items are left.`}
+            </InfoTip>
           </p>
           <ul className="mt-1" aria-label="Old milestones that move">
             {moves.map((m) => (
@@ -175,14 +180,6 @@ export function OldMilestones({
               </li>
             ))}
           </ul>
-          {needs_call.length > 0 && (
-            <p className="mt-1 text-sm text-text2">
-              {needs_call.length === 1
-                ? "1 needs your call"
-                : `${needs_call.length} need your call`}
-              : none of their items are left.
-            </p>
-          )}
           <div className="mt-2 flex justify-end">
             <Button
               variant="solid"

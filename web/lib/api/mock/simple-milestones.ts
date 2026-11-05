@@ -38,19 +38,38 @@ export interface OldCtx {
   companyItems: Map<string, string>;
   /** The PRDs (slugs) with an item on the company roadmap: their own milestones are read from their plan there. */
   feedingPrds: Set<string>;
+  /** An older roadmap's item (roadmap, item key) -> the company item's key it is there: the
+   * one with the same feature first, else the same item key (old_milestones._plan). */
+  companyKey: (roadmap: string, key: string) => string | undefined;
   roadmapTitle: (slug: string) => string;
   goalTitle: (key: string) => string | null;
 }
 
 /** old-milestones (api/oracle/simple/old_milestones.py): the older roadmaps' own goal milestones not on the company roadmap yet. */
-const stillOld = (list: MockMilestone[], ctx: OldCtx) => (ctx.company ? list.filter((m) => m.roadmap !== ctx.company && (!m.prd || !ctx.feedingPrds.has(m.prd.slug)) && !m.deleted && !m.carried_to && !m.dropped) : []);
-const leftOn = (m: MockMilestone, ctx: OldCtx) => m.gates.filter((k) => ctx.companyItems.has(k));
+const byDate = (a: MockMilestone, b: MockMilestone) => ((a.date ?? "9999") < (b.date ?? "9999") ? -1 : (a.date ?? "9999") > (b.date ?? "9999") ? 1 : a.name.localeCompare(b.name));
+const stillOld = (list: MockMilestone[], ctx: OldCtx) => (ctx.company ? list.filter((m) => m.roadmap !== ctx.company && (!m.prd || !ctx.feedingPrds.has(m.prd.slug)) && !m.deleted && !m.carried_to && !m.dropped).sort(byDate) : []);
+/** The rows to bring, a PRD milestone held by several older roadmaps once (its first), and each first's twins. */
+function firsts(list: MockMilestone[], ctx: OldCtx): { rows: MockMilestone[]; twins: Map<string, MockMilestone[]> } {
+  const seen = new Map<string, MockMilestone>();
+  const twins = new Map<string, MockMilestone[]>();
+  const rows: MockMilestone[] = [];
+  for (const m of stillOld(list, ctx)) {
+    const first = m.prd ? seen.get(`${m.prd.slug}/${m.code}`) : undefined;
+    if (first) twins.set(first.id, [...(twins.get(first.id) ?? []), m]);
+    else {
+      if (m.prd) seen.set(`${m.prd.slug}/${m.code}`, m);
+      rows.push(m);
+    }
+  }
+  return { rows, twins };
+}
+const leftOn = (m: MockMilestone, ctx: OldCtx) => [...new Set(m.gates.flatMap((k) => ctx.companyKey(m.roadmap, k) ?? []))];
 const needsCall = (m: MockMilestone, ctx: OldCtx) => m.gates.length > 0 && leftOn(m, ctx).length === 0;
 
 /** SimpleRoadmapOut.old_milestones: an owner's alone (anyone else reads nothing to act on). */
 export function oldMilestonesOut(list: MockMilestone[], role: string, ctx: OldCtx): Schemas["SimpleOldMilestones"] {
   if (role !== "owner") return { can_act: false, moves: [], needs_call: [] };
-  const rows = stillOld(list, ctx).sort((a, b) => ((a.date ?? "9999") < (b.date ?? "9999") ? -1 : (a.date ?? "9999") > (b.date ?? "9999") ? 1 : a.name.localeCompare(b.name)));
+  const { rows } = firsts(list, ctx);
   const out = (m: MockMilestone): Schemas["SimpleOldMilestone"] => ({
     id: m.id,
     name: m.name,
@@ -70,19 +89,22 @@ function routeOld(list: MockMilestone[], me: { role: string }, req: Request, p: 
   if (req.method !== "POST" || !(carry || decide)) return null;
   if (me.role !== "owner") return json(403, { detail: "Requires the owner role" });
   const copy = (m: MockMilestone, gates: string[]): string => {
-    const n = list.filter((x) => x.roadmap === ctx.company && x.goal === m.goal && !x.prd && !x.deleted).reduce((a, x) => Math.max(a, Number(x.code.slice(1)) || 0), 0);
+    // Every coded milestone of that goal there, a PRD's too (goal_milestones._next_code).
+    const n = list.filter((x) => x.roadmap === ctx.company && x.goal === m.goal && !x.deleted).reduce((a, x) => Math.max(a, Number(x.code.slice(1)) || 0), 0);
     const id = stableUuid(`simple-gm-carried/${m.id}`);
     list.push({ id, roadmap: ctx.company!, code: `M${n + 1}`, name: m.name, date: m.date, goal: m.goal, gates, counts_when: m.counts_when, progress: m.progress, carried_from: m.roadmap });
-    m.carried_to = id;
+    for (const x of [m, ...(twins.get(m.id) ?? [])]) x.carried_to = id;
     return id;
   };
   const done = (carried: string[]) => json(200, { carried, old_milestones: oldMilestonesOut(list, me.role, ctx) });
-  if (carry) return done(stillOld(list, ctx).filter((m) => !needsCall(m, ctx)).map((m) => copy(m, leftOn(m, ctx))));
-  const m = stillOld(list, ctx).find((x) => x.id === p[4]);
+  const { rows, twins } = firsts(list, ctx);
+  if (carry) return done(rows.filter((m) => !needsCall(m, ctx)).map((m) => copy(m, leftOn(m, ctx))));
+  // A twin's id answers through its first copy.
+  const m = rows.find((x) => x.id === p[4] || (twins.get(x.id) ?? []).some((t) => t.id === p[4]));
   if (!m) return list.some((x) => x.id === p[4]) ? json(409, { detail: "That milestone is not waiting on a call" }) : json(404, { detail: "No such milestone" });
   if (!needsCall(m, ctx)) return json(409, { detail: "That milestone still has items: bring it over with the rest" });
   if (p[5] === "keep") return done([copy(m, [])]);
-  m.dropped = true;
+  for (const x of [m, ...(twins.get(m.id) ?? [])]) x.dropped = true;
   return done([]);
 }
 

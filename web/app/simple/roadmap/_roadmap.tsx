@@ -927,7 +927,7 @@ export function SimpleRoadmap() {
   const titleOf = useCallback((id: string | null) => (id ? byId.get(id)?.title : undefined), [byId]);
   const canChange = can("create_simple_change");
   // build-milestones-on-roadmap: the milestones per goal, added on the time axis.
-  const ms = useMilestones({ data, phone, canChange, reload: roadmap.reload, openItem: (id) => setCard({ id, ...anchorOf(id) }) });
+  const ms = useMilestones({ data, phone, canChange, reload: roadmap.reload, openItem: (id) => setCard({ id, ...anchorOf(id) }), knownGoals: suggestions.data?.goals.map((g) => g.goal) });
   // The items as last loaded, for a burst sent after the render that started it.
   const latest = useRef(byId);
   useEffect(() => {

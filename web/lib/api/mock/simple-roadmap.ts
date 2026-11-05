@@ -1244,6 +1244,13 @@ const oldCtx = (db: SimpleDb): OldCtx => ({
   company: db.company_roadmap,
   companyItems: new Map(db.items.filter((s) => s.roadmap === db.company_roadmap).map((s) => [s.key, s.title])),
   feedingPrds: new Set(db.items.filter((s) => s.roadmap === db.company_roadmap).flatMap((s) => (s.prd_doc ? [s.prd_doc.slug] : []))),
+  companyKey: (roadmap, key) => {
+    const on = db.items.filter((s) => s.roadmap === db.company_roadmap);
+    // An item's feature: the item it names (prio-company), else its own.
+    const was = db.items.find((s) => s.roadmap === roadmap && s.key === key);
+    const feature = was && (was.feature ?? was.key);
+    return (feature ? on.find((s) => (s.feature ?? s.key) === feature) : undefined)?.key ?? on.find((s) => s.key === key)?.key;
+  },
   roadmapTitle: (slug) => roadmapTitle(db, slug),
   goalTitle: (key) => GOALS[key] ?? null,
 });
