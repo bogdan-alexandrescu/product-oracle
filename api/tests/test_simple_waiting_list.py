@@ -29,6 +29,10 @@ Test cards (protects / fails_when / no_claim):
   items put it on a roadmap with a decider waits for that decider only; rejecting it
   drops it; fails_when=a non-deciding approver sees it or it survives reject;
   no_claim=accept (covered by test_simple_additions_api).
+- test_goal_waiting_and_confirm: protects=a proposed goal waits for whoever may confirm
+  goals (the approver role confirm_entity needs) and leaves once confirmed; a confirmed or
+  rejected goal never waits; fails_when=a commenter sees it, a confirmed goal is listed, or
+  it survives confirm; no_claim=reject's own flow (covered by the baseline tests).
 - test_run_stop_waiting_and_decide: protects=a pending checkpoint waits for whoever holds
   its approver role; deciding it drops it; fails_when=a commenter sees it or it survives
   the decision; no_claim=engineering stops routed to leads (A3, its own tests).
@@ -41,6 +45,7 @@ import pytest
 from sqlalchemy import select
 
 from oracle import company_time
+from oracle.baseline.models import Entity
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.simple import waiting_list
 from oracle.simple.models import SimpleGoalSuggestion
@@ -154,6 +159,26 @@ async def test_goal_suggestion_waiting_and_reject(client):
                           headers=w.as_("decider"), json={"reason": "Not now"})  # fmt: skip
     assert r.status_code == 200, r.text
     assert find(await waiting(client, w.ctx, "decider"), "goal_suggestion", sid) is None
+
+
+async def test_goal_waiting_and_confirm(client):
+    ctx = await make_ctx()
+    async with tenant_session(ctx.tenant_id) as s:
+        goal = Entity(type="goal", key="cut-early-churn", title="Cut early churn",
+                      status="proposed", origin="agent")  # fmt: skip
+        kept = Entity(type="goal", key="grow-teams", title="Grow teams",
+                      status="confirmed", origin="user")  # fmt: skip
+        s.add_all([goal, kept])
+        await s.commit()
+        gid, kept_id = str(goal.id), str(kept.id)
+    item = find(await waiting(client, ctx, "approver"), "goal", gid)
+    assert item is not None, "a proposed goal waits on who confirms goals"
+    assert item["title"] == "Cut early churn" and item["action"] == "Confirm"
+    assert find(await waiting(client, ctx, "approver"), "goal", kept_id) is None
+    assert find(await waiting(client, ctx, "commenter"), "goal", gid) is None
+    r = await client.post(f"/v1/baseline/entities/{gid}/confirm", headers=ctx.as_("approver"))
+    assert r.status_code == 200, r.text
+    assert find(await waiting(client, ctx, "approver"), "goal", gid) is None
 
 
 async def test_run_stop_waiting_and_decide(client):

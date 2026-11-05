@@ -1,4 +1,5 @@
 import { MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
+import { MOCK_DRAFTING_MS_KEY } from "../lib/api/mock/simple-changes";
 import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
 
@@ -60,6 +61,20 @@ import { expect, test, type Page } from "./test";
  * Card decide-on-home: protects = deciding a decision-log call on Home takes it off Home and the
  * rail's count down at once; fails_when = the call stays or the count does not drop.
  *
+ * Card goal-waits: protects = a proposed goal waits in the one list: Decisions lists it with
+ * Confirm and Not this, the rail counts it, and confirming it on Decisions drops the rail's count
+ * at once and takes it off Home's proposed goals; confirming it on Home drops the count too;
+ * fails_when = Home shows a goal to confirm that Decisions and the rail leave out.
+ *
+ * Card all-words: protects = Home's "In all" line names only the kinds that wait, each with its
+ * number; fails_when = it names kinds that are not there.
+ *
+ * Card drafting-cap: protects = while Oracle drafts a new item Home reads again, backing off, and
+ * stops after a while with a short line and Refresh; fails_when = it keeps reading forever.
+ *
+ * Card roadmap-badge: protects = the rail's Roadmap count is the Roadmap's "Needs a decision"
+ * count and its tooltip says what it counts; fails_when = the two numbers differ.
+ *
  * Card tile-words: protects = Home's decisions tile says plainly that the rail's Decisions count
  * holds more than the decisions; fails_when = two different numbers with no word on why.
  */
@@ -69,6 +84,16 @@ const APPROVER = "approver@example.com";
 const COMMENTER = "commenter@example.com";
 const roadmapCount = (page: Page) => page.locator("[data-testid='simple-nav-roadmap-count'], [data-testid='simple-tab-roadmap-count']").filter({ visible: true });
 const num = async (l: ReturnType<Page["locator"]>) => Number((await l.textContent()) ?? "0");
+/** Home's "In all" line's words per kind, in its order. */
+const ALL_WORDS: [string, string, string][] = [
+  ["run_stop", "run stop", "run stops"],
+  ["broken_link", "broken link", "broken links"],
+  ["date", "date to confirm", "dates to confirm"],
+  ["draft", "draft", "drafts"],
+  ["proposal", "proposal", "proposals"],
+  ["goal_suggestion", "goal suggestion", "goal suggestions"],
+  ["goal", "proposed goal", "proposed goals"],
+];
 const decisionsCount = (page: Page) => page.locator("[data-testid='simple-nav-decisions-count'], [data-testid='simple-tab-decisions-count']").filter({ visible: true });
 
 for (const phone of [false, true]) {
@@ -205,7 +230,7 @@ for (const phone of [false, true]) {
       // No meeting is live: an upcoming meeting waits on nobody, so Meetings has no count.
       await expect(page.locator("[data-testid='simple-nav-meetings-count'], [data-testid='simple-tab-meetings-count'], [data-testid='simple-more-meetings-count']").filter({ visible: true })).toHaveCount(0);
       const roadmap = page.locator("[data-testid='simple-nav-roadmap-count'], [data-testid='simple-tab-roadmap-count']").filter({ visible: true });
-      await expect(roadmap).toHaveAttribute("title", /^\d+ on the roadmap waiting on you: broken links, dates, proposals and drafts$/);
+      await expect(roadmap).toHaveAttribute("title", /^\d+ on the roadmap waiting on you: items with broken links, dates to confirm and proposals$/);
     });
 
     test("The plan this quarter is the company roadmap's, its milestones by name", async ({ page }) => {
@@ -224,7 +249,10 @@ for (const phone of [false, true]) {
       await page.goto("/simple");
       const proposed = page.getByTestId("home-goal-proposed").filter({ hasText: "Cut early churn" });
       await expect(proposed.getByRole("button", { name: "Not this" })).toBeVisible();
+      await expect(decisionsCount(page)).toHaveText(/^\d+$/);
+      const before = await num(decisionsCount(page));
       await proposed.getByRole("button", { name: "Confirm" }).click();
+      await expect(decisionsCount(page)).toHaveText(String(before - 1));
       await expect(page.getByTestId("home-goals-proposed-list")).toHaveCount(0);
       await expect(page.getByTestId("home-goals")).toContainText("Cut early churn");
     });
@@ -331,8 +359,79 @@ for (const phone of [false, true]) {
       const all = await num(decisionsCount(page));
       const line = page.getByTestId("home-summary-all");
       await expect(line).toContainText(`In all, ${all} things wait on you`);
-      await expect(line).toContainText("run stops, broken links, dates, drafts and goal suggestions");
       await expect(page.getByTestId("home-also-waiting")).toHaveCount(1);
+      // Only the kinds that wait are named, each with its number (as Decisions lists them).
+      await nav(page, "Decisions").click();
+      const rows = page.getByTestId("questions-mine").getByTestId("waiting-item");
+      await expect(rows).toHaveCount(all);
+      const kinds = await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-kind")));
+      const named = ALL_WORDS.flatMap(([kind, one, many]) => {
+        const n = kinds.filter((k) => k === kind).length;
+        return n ? [`${n} ${n === 1 ? one : many}`] : [];
+      });
+      const list = named.length > 1 ? `${named.slice(0, -1).join(", ")} and ${named.at(-1)}` : named[0];
+      await nav(page, "Home").click();
+      await expect(line).toContainText(`the Decisions count also counts ${list}.`);
+      for (const [kind, , many] of ALL_WORDS) if (!kinds.includes(kind)) await expect(line).not.toContainText(many);
+    });
+
+    test("A proposed goal waits on Decisions; confirming it there drops the rail's count and takes it off Home", async ({ page }) => {
+      await login(page);
+      await page.goto("/simple");
+      await expect(page.getByTestId("home-goal-proposed").filter({ hasText: "Cut early churn" })).toBeVisible();
+      await nav(page, "Decisions").click();
+      await expect(page).toHaveURL(/\/simple\/decisions/);
+      const mine = page.getByTestId("questions-mine");
+      const goal = mine.getByRole("listitem", { name: "Proposed goal: Cut early churn" });
+      await expect(goal).toBeVisible();
+      await expect(goal.getByRole("button", { name: "Not this" })).toBeVisible();
+      const before = Number(await page.getByTestId("questions-mine-count").textContent());
+      await expect(decisionsCount(page)).toHaveText(String(before));
+      await goal.getByRole("button", { name: "Confirm" }).click();
+      await expect(goal).toHaveCount(0);
+      await expect(decisionsCount(page)).toHaveText(String(before - 1));
+      await expect(page).toHaveURL(/\/simple\/decisions/);
+      await nav(page, "Home").click();
+      await expect(page).toHaveURL(/\/simple$/);
+      await expect(page.getByTestId("home-goals")).toContainText("Cut early churn");
+      await expect(page.getByTestId("home-goal-proposed").filter({ hasText: "Cut early churn" })).toHaveCount(0);
+    });
+
+    test("The rail's Roadmap count is the Roadmap's Needs a decision count, and says what it counts", async ({ page }) => {
+      await login(page);
+      await page.goto("/simple/roadmap");
+      const button = page.getByTestId("needs-decision");
+      await expect(button).toHaveText(/Needs a decision · \d+/);
+      const n = Number((await button.textContent())!.replace(/\D+/g, ""));
+      await expect(roadmapCount(page)).toHaveText(String(n));
+      await expect(roadmapCount(page)).toHaveAttribute("title", `${n} on the roadmap waiting on you: items with broken links, dates to confirm and proposals`);
+    });
+
+    test("While Oracle drafts a new item Home reads again for a while, then offers Refresh", async ({ page }) => {
+      await login(page);
+      await page.evaluate((k) => localStorage.setItem(k, String(30 * 60_000)), MOCK_DRAFTING_MS_KEY);
+      await page.goto("/simple");
+      const also = page.getByTestId("home-also-waiting-list");
+      const goal = also.getByRole("listitem", { name: /^Goal suggestion: / }).first();
+      await goal.getByRole("button", { name: "Confirm" }).click();
+      await expect(goal).toHaveCount(0);
+      const reads: number[] = [];
+      page.on("request", (r) => {
+        if (r.url().includes("/v1/simple/roadmap") && !r.url().includes("date-suggestions")) reads.push(Date.now());
+      });
+      await expect(page.getByTestId("home-drafting-slow")).toHaveCount(0);
+      await page.clock.fastForward(10 * 60_000);
+      const slow = page.getByTestId("home-drafting-slow");
+      await expect(slow).toBeVisible();
+      await expect(slow).toContainText("Oracle is still drafting");
+      // Stopped: no more reads while the line shows.
+      const n = reads.length;
+      await page.clock.fastForward(5 * 60_000);
+      await expect(slow).toBeVisible();
+      expect(reads.length).toBe(n);
+      await slow.getByRole("button", { name: "Refresh" }).click();
+      await expect.poll(() => reads.length).toBeGreaterThan(n);
+      await expect(slow).toHaveCount(0);
     });
   });
 }
