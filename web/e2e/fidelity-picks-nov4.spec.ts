@@ -208,7 +208,7 @@ test.describe("RP1 a: the run's priority order", () => {
     await page.getByTestId("priority-row-N-7").getByRole("button", { name: /Gift notes at checkout/ }).click();
     const problems = page.getByTestId("priority-inspector").getByTestId("run-problems");
     await expect(problems).toBeVisible();
-    await expect(problems.getByText(NO_GOAL)).toBeVisible();
+    await expect(problems.getByText(NO_GOAL, { exact: true })).toBeVisible();
   });
 });
 
