@@ -62,7 +62,12 @@ for (const scheme of ["light", "dark"] as const) {
       // Another item still opens in the side panel.
       await page.locator('[data-testid="timeline-row"][data-item="alert-mobile"]').getByRole("button").first().click();
       await expect(page.locator('[data-testid="timeline-row"][data-item="alert-mobile"]')).toHaveAttribute("data-open", "true");
-      await expect(page.getByTestId("item-panel")).toBeVisible();
+      // build-feature-panel: the item opens Simple's one feature panel, over a dimmed page; closed, the page is back as it was.
+      const card = page.getByTestId("floating-card");
+      await expect(card).toBeVisible();
+      await expect(card).toContainText("Mobile alert push");
+      await page.keyboard.press("Escape");
+      await expect(card).toHaveCount(0);
       // The panel still opens its fixes.
       await c.getByRole("button", { name: "Accept as risk" }).click();
       await expect(page.getByLabel("Why it is an accepted risk")).toBeVisible();

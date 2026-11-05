@@ -110,15 +110,23 @@ for (const [where, size] of [
     test(`qa4-42: an item card says Nothing / None for empty links (${where})`, async ({ page }) => {
       await open(page);
       const card = await openCard(page, "setup-checklist");
-      await expect(card.getByTestId("card-depends")).toHaveText("Nothing");
+      // The feature panel's Links: an empty list says so in words, a count of 0 and no rows.
+      const depends = card.getByTestId("fp-list-depends");
+      await expect(depends.getByRole("heading")).toHaveText("Depends on (0)");
+      await expect(depends.getByTestId("fp-dep")).toHaveCount(0);
+      await expect(depends.getByTestId("fp-empty")).toHaveText("Nothing");
+      await expect(card.getByTestId("fp-list-needed").getByTestId("fp-empty")).toHaveText("None");
     });
 
     test(`qa4-12: cutting an item nothing depends on offers just Cut it (${where})`, async ({ page }) => {
       await open(page, { scenario: "roadmap-talk" });
       const card = await openCard(page, "alert-digest");
-      await expect(card.getByTestId("card-needed")).toHaveText("None");
+      const needed = card.getByTestId("fp-list-needed");
+      await expect(needed.getByRole("heading")).toHaveText("Needed by (0)");
+      // Nothing live depends on it (Oracle's link someone removed stays listed, struck, with Restore).
+      await expect(needed.getByTestId("fp-dep").filter({ hasNotText: "removed by" })).toHaveCount(0);
+      // The feature panel: a desktop shows the talk beside the details, a phone behind its tab.
       if (isPhone(page)) await card.getByRole("tab", { name: "Talk to Oracle" }).click();
-      else await card.getByRole("button", { name: "Talk to Oracle" }).click();
       const talk = card.getByTestId("item-talk");
       await talk.getByRole("textbox", { name: "Message Oracle" }).fill("cut it");
       await talk.getByRole("button", { name: "Send" }).click();

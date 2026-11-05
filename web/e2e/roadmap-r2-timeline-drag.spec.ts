@@ -61,7 +61,10 @@ for (const width of [1440, 1024]) {
       expect(s1 > s0).toBe(true);
       await expect(b).toHaveAttribute("aria-label", new RegExp(`${words(s1)}.*${words(e1)}`));
       await b.click();
-      await expect(page.getByTestId("item-panel").getByTestId("card-dates")).toContainText(words(s1));
+      // build-feature-panel: the side panel is Simple's one feature panel, its Start and Delivery rows.
+      const panel = page.getByTestId("floating-card");
+      await expect(panel.getByTestId("fp-start")).toContainText(words(s1));
+      await expect(panel.getByTestId("fp-delivery")).toContainText(words(e1));
       await page.reload();
       await expect(bar(page, "alert-export")).toHaveAttribute("data-start", s1);
       await expect(bar(page, "alert-export")).toHaveAttribute("data-end", e1);
