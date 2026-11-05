@@ -33,6 +33,13 @@ Test cards (protects / fails_when / no_claim):
   milestone or a feature, Undo moves it to Settings > Trash (restorable, what it holds
   kept) and the undo says so (``after.in_trash``); fails_when=a track holding anything is
   hard-deleted, or an untouched one lands in Trash; no_claim=the web's toast.
+- test_undo_of_an_add_keeps_a_track_that_anything_references: protects=a track alert, a
+  launch or an outcome on the track since the add also sends it to Trash on Undo;
+  fails_when=the hard delete drops the alert or unlinks the launch or outcome;
+  no_claim=other references.
+- test_undo_of_a_put_back_goal_refuses_once_its_state_changed: protects=Undo of
+  ``unarchive_goal`` refuses with "Changed since: the goal's state changed" once the
+  goal's state moved on; fails_when=the undo archives it anyway; no_claim=the web.
 """
 
 import uuid
@@ -397,3 +404,56 @@ async def test_another_company_neither_reads_nor_changes_these(client):
     assert (await read_tracks(client, other))["tracks"] == []
     titles = {t["title"] for t in (await read_tracks(client, ctx))["tracks"]}
     assert titles == {"Guided setup", "Gift boxes"}
+
+
+@pytest.mark.parametrize("kind", ["alert", "launch", "outcome"])
+async def test_undo_of_an_add_keeps_a_track_that_anything_references(client, kind):
+    """A track alert (deleted with its track) or a launch or outcome (unlinked) made since
+    the add: Undo moves the track to Trash, not a hard delete."""
+    from oracle.launches.models import Launch
+    from oracle.quality.models import OutcomeRecord
+    from oracle.roadmap.models import TrackAlert
+
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    after = {"title": "Gift boxes", "prd_id": ids["prd_id"]}
+    added = (await change(client, ctx, "owner", "add_track", {}, after))["change"]
+    track_id = uuid.UUID(added["after"]["track_id"])
+    async with tenant_session(ctx.tenant_id) as s:
+        if kind == "alert":
+            s.add(TrackAlert(track_id=track_id, kind="stale", fingerprint="a1",
+                             detail="No change in two weeks"))  # fmt: skip
+        elif kind == "launch":
+            s.add(Launch(title="Gift boxes launch", track_id=track_id))
+        else:
+            s.add(OutcomeRecord(title="Fewer tickets", goal_id=uuid.UUID(ids["goal_id"]),
+                                track_id=track_id))  # fmt: skip
+        await s.commit()
+    r = await client.post(f"{CHANGES}/{added['id']}/undo", headers=ctx.as_("owner"))
+    assert r.status_code == 201, r.text
+    assert r.json()["change"]["after"].get("in_trash") is True
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.scalar(select(ProductTrack).where(ProductTrack.id == track_id)
+                             .execution_options(**{INCLUDE_TRASHED: True}))  # fmt: skip
+        assert row is not None and row.deleted_at is not None
+
+
+async def test_undo_of_a_put_back_goal_refuses_once_its_state_changed(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    r = await client.post(f"{GOALS}/{ids['goal_id']}/archive", json={"to_goal_id": None},
+                          headers=ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    done = (await change(client, ctx, "owner", "unarchive_goal",
+                         {"goal_id": ids["goal_id"]}))["change"]  # fmt: skip
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(Entity, uuid.UUID(ids["goal_id"]))
+        assert row.status == "confirmed"
+        row.status = "proposed"
+        await s.commit()
+    r = await client.post(f"{CHANGES}/{done['id']}/undo", headers=ctx.as_("owner"))
+    assert r.status_code == 409, r.text
+    assert "the goal's state changed" in r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(Entity, uuid.UUID(ids["goal_id"]))
+        assert row.status == "proposed" and row.archived_at is None
