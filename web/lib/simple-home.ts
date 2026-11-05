@@ -111,18 +111,18 @@ export function goalTiles(goals: Entity[], roadmap: Roadmap | undefined, waiting
 }
 
 /**
- * The broken links on the roadmap: one row per red dependency out of order or cut item others
- * depend on (roadmap-decide: a blocker due late or an end past its milestone is a flag, not a
- * link), on the working draft as the reader sees it, on every item, whoever
- * decides it (its fixes say Propose for the others). The one definition: "Walk me through
- * it" (GET /v1/simple/walk, oracle.simple.chat.broken_links, and its mock) walks the same.
+ * The broken links on the roadmap: one row per red flag that has a one-click fix (a
+ * dependency out of order, a blocker due late, an end past its milestone, a cut item others
+ * depend on; a draft with no owner has no fix, so it is not one), on the working draft as the
+ * reader sees it, on every item, whoever decides it (its fixes say Propose for the others). The
+ * one definition for Home, the walk and the one waiting list (qa-simple-home-3): "Walk me through
+ * it" (GET /v1/simple/walk, oracle.simple.chat.broken_links, and its mock) walks the same, and
+ * Decisions lists the ones I decide (waiting_list._roadmap). The Roadmap page splits them into
+ * its broken links between items and its other flags (fix4 qa-simple-roadmap-8, qa4-simple-roadmap-38).
  */
 export type BrokenLink = { item: Item; flag: Schemas["SimpleFlag"]; dependency: Item | undefined };
 
-/** roadmap-decide: one definition everywhere (Home, the roadmap's strip and its Needs a decision,
- * the side menu's Roadmap count): a red dependency out of order or a cut item others depend on. */
-export const LINK_KINDS: Schemas["SimpleFlag"]["kind"][] = ["dependency_order", "cut_with_dependents"];
-export const isBrokenLink = (f: Schemas["SimpleFlag"]): boolean => f.state === "red" && f.fixes.length > 0 && LINK_KINDS.includes(f.kind);
+export const isBrokenLink = (f: Schemas["SimpleFlag"]): boolean => f.state === "red" && f.fixes.length > 0;
 
 /** The dates an item stores (typed or accepted), as the change engine compares them; null for the others. */
 export function storedDates(i: Item): { start_date: string | null; end_date: string | null } {

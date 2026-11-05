@@ -188,7 +188,9 @@ export const brokenLinks = (i: Item): Flag[] => broken(i).filter((f) => LINK_KIN
  * milestones to keep or drop.
  * roadmap-decide: `links` counts every broken link of the working draft as the reader sees it,
  * whoever decides it (its fixes say Propose for the others): the same number as the strip over
- * the chart, Home's tile and the side menu (web/lib/simple-home.ts brokenLinks). */
+ * the chart and the side menu (GET /v1/simple/roadmap/waiting). Home and Decisions count every
+ * red flag with a fix (web/lib/simple-home.ts isBrokenLink); here an end past its milestone or a
+ * blocker due late is under Other flags. */
 export function decisionCounts(
   items: Item[],
   proposals: Change[],

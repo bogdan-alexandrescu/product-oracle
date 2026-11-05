@@ -2159,15 +2159,11 @@ def _flag_fixes(
     ]  # fmt: skip
 
 
-# roadmap-decide: what a broken link is, everywhere (Home, the roadmap's strip and panel, the
-# side menu): a dependency out of order or a cut item others depend on, red.
-LINK_KINDS = ("dependency_order", "cut_with_dependents")
-
-
 def broken_links(e: service.Entry) -> list[constraints.Flag]:
     """The item's broken links, as Home counts them (web/lib/simple-home.ts brokenLinks):
-    its red dependency flags (LINK_KINDS)."""
-    return [f for f in e.flags if f.state == "red" and f.fixes and f.kind in LINK_KINDS]
+    its red flags that have a one-click fix (qa-simple-home-3: an end past its milestone too; a
+    draft without an owner has none)."""
+    return [f for f in e.flags if f.state == "red" and f.fixes]
 
 
 def _fixes(e: service.Entry, by_id: dict[uuid.UUID, service.Entry]) -> list[ChatFix]:
