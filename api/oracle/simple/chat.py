@@ -1579,7 +1579,7 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
         "today": c.today.isoformat(),
         "ops": [{"op": o.op, "describe": o.describe, "args": o.args} for o in OPS.values()],
         # ask-oracle-actions: every action of the API the person's role reaches (``calls``).
-        "api": _api().offer(c.principal.role, c.api_role),
+        "api": _api().offer(c.principal.role, c.api_role, c.meeting is not None),
     }
 
 

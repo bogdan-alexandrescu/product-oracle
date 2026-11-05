@@ -1,25 +1,36 @@
 """Ask Oracle does what a person can do (owner, Nov 4): the action catalogue of the API.
 
 **The catalogue** is an allow-list: ``ALLOWED`` names each operation the chats may offer,
-with its plain words; each stays inside Oracle and carries no secret. Every other route of
-the app is named in oracle.simple.ask_action_routes (outward or secret-bearing, with why,
-or not offered), and a route added later is not offered until it is allowed here by name
-(tests/test_ask_oracle_actions.py fails while a route is in neither). Each action has its
-parameters, whether it reads (GET) or writes, and the role its route requires (the
-``require_role`` dependency the route declares; a route without one needs a member).
+with its plain words; each stays inside Oracle and carries no secret. None pings a person
+(a Slack DM, the Slack outbox, an email): those that do (a question asked of someone, a
+decision requested of its approver) are not offered, as a card would notify someone it does
+not name (tests/test_ask_oracle_actions.py walks each allowed route's calls). An allowed
+write still sends the company's own webhooks, as the same edit on its page does. Every
+other route of the app is named in oracle.simple.ask_action_routes (outward or
+secret-bearing, with why, or not offered), and a route added later is not offered until
+it is allowed here by name (tests/test_ask_oracle_actions.py fails while a route is in
+neither). Each action has its parameters, whether it reads (GET) or writes, and the role
+its route requires (the ``require_role`` dependency the route declares; a route without
+one needs a member).
 
 **In the chats** (oracle.simple.chat's reader): the model is offered the actions the
 person's role reaches, in a meeting the role every attendee reaches (``offer``), and
 answers ``calls`` (``{"action", "args"}``). A read runs at once and a second call words
 its result in plain words. A write becomes a card (op ``api_action``) naming what changes:
-each record its path names is read first and named in the card (no name, no card); a value
-that looks like a secret is never kept in one. Nothing runs until Apply, which calls the
-same route as the page would, with the person's own session (so the route's own checks
-decide); the route's own audit rows say "via Ask Oracle" (oracle.audit.VIA), and the card's
+each record its path names, and each its body or query points to by id, is read first as the
+person and named in the card (no name, no card); a value that looks like a secret, under a
+secret's key or pasted into any text, is never kept in one. In a meeting no read of one
+person's own records (``OWN_READS``: their sources) is offered, as everyone there reads the
+answer. Nothing runs until Apply, which calls the same route as the page would, with the
+person's own session (so the route's own checks decide); the route's own audit rows say "via Ask Oracle" (oracle.audit.VIA), and the card's
 ``simple_chat.api_action`` row is written with the chat's change. Undo is promised only
 where it is sure: a create whose route makes a new record (201) and returns its one id,
 with a DELETE of it; an edit whose record reads back every field sent; a delete with a
-``/restore``. Any other write's card says before Apply that it cannot be undone.
+``/restore``. Any other write's card says before Apply that it cannot be undone; so does an
+edit sending a dict (``attrs``: the route merges it, so the old dict sent back would keep a
+new key), and a create the route answers 202 (a proposal, not the record) has none. Apply
+marks the card before it calls the route, so a card whose own write then fails is never
+applied twice.
 """
 
 import json
@@ -80,15 +91,12 @@ ALLOWED: dict[str, str] = {
     "delete_edge": "Remove the link",
     "create_blocker": "Add a blocker",
     "update_blocker": "Change the blocker",
-    "create_decision": "Add a decision",
     "update_decision": "Change the decision",
     "create_knowledge_gap": "Add a gap",
     "update_knowledge_gap": "Change the gap",
     "create_learning": "Add a learning",
     "create_outcome": "Add an outcome",
     "update_outcome": "Change the outcome",
-    "create_question": "Add a question",
-    "update_question": "Change the question",
     "create_theme": "Add a theme",
     "update_theme": "Change the theme",
     "archive_theme": "Archive the theme",
@@ -107,6 +115,21 @@ NAME_FIELDS = ("title", "name", "label", "display_name", "key", "email")
 CANNOT_UNDO = "This cannot be undone."
 NO_NAME = "I can't tell which record that changes, so I made no card."
 SECRET_WHY = "a value that looks like a secret is never kept in the chat."
+# A value that looks like a pasted key or token (well-known prefixes, a JWT, a private key,
+# or a long run of letters and digits; never a UUID, never a hyphenated key).
+SECRET_VALUE = re.compile(
+    r"(sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|xox[abposr]-[A-Za-z0-9-]{10,}"
+    r"|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|bearer\s+\S{16,}"
+    r"|-----BEGIN [A-Z ]*PRIVATE KEY|(?<![A-Za-z0-9_+/=-])(?=[A-Za-z0-9_+/=]*\d)"
+    r"(?=[A-Za-z0-9_+/=]*[A-Za-z])[A-Za-z0-9_+/=]{32,})",
+    re.I,
+)
+# Reads of one person's own records (filtered by owner): never in a meeting's chat.
+OWN_READS = frozenset({"list_sources", "get_source"})
+OWN_WHY = "only you read your own sources, so not in a meeting's chat."
+APPLYING = "This card was applied already"
+# A body field's words on a card (its "_id" dropped).
+FIELD_WORDS = {"src": "from", "dst": "to"}
 # What the reader is offered of each action (the model's budget).
 SUMMARY_MAX = 90
 RESULT_MAX = 6000
@@ -227,21 +250,30 @@ def the_app() -> FastAPI:
     return app
 
 
-def offer(role: str, reach: str | None = None) -> list[dict[str, Any]]:
+def offer(role: str, reach: str | None = None, meeting: bool = False) -> list[dict[str, Any]]:
     """What the reader is offered: the actions the role reaches; reads only those ``reach``
-    (in a meeting, every attendee's role: :func:`reach_role`) reaches too."""
+    (in a meeting, every attendee's role: :func:`reach_role`) reaches too, and in a meeting
+    none of ``OWN_READS``."""
     return [a.offer() for a in catalogue(the_app()).for_role(role)
-            if not a.reads or has_role(reach or role, a.needs)]  # type: ignore[arg-type]  # fmt: skip
+            if not a.reads or (has_role(reach or role, a.needs)  # type: ignore[arg-type]
+                               and not (meeting and a.name in OWN_READS))]  # fmt: skip
 
 
 async def reach_role(db: AsyncSession, principal: Any, meeting: Any) -> str:
     """The role whose reads the chat offers: the asker's; in a meeting, the lowest of every
-    attendee's (each of them reads the answer)."""
+    attendee's (each of them reads the answer), read again now (attendees change)."""
     if meeting is None:
         return principal.role
     from sqlalchemy import select
 
-    ids = {meeting.presenter_id, *(getattr(meeting, "attendee_ids", None) or [])} - {None}
+    from oracle.simple.models import SimpleMeeting
+
+    ids = {meeting.presenter_id, *(getattr(meeting, "attendee_ids", None) or [])}
+    mid = getattr(meeting, "meeting_id", None)
+    row = await db.get(SimpleMeeting, mid, populate_existing=True) if mid else None
+    if row is not None:
+        ids |= {row.presenter_id, *(row.attendee_ids or [])}
+    ids -= {None}
     found = list(await db.scalars(select(User.role).where(User.id.in_(ids)))) if ids else []
     return min([principal.role, *found], key=lambda r: ROLES.index(r) if r in ROLES else 0)
 
@@ -264,6 +296,13 @@ async def _person(db: AsyncSession, principal: Any) -> User:
 async def run(db: AsyncSession, principal: Any, action: Action, args: dict[str, Any]) -> Any:
     """The action's route, called as the person (the route's own checks decide); its own
     audit rows say it came via Ask Oracle."""
+    return (await call(db, principal, action, args))[1]
+
+
+async def call(
+    db: AsyncSession, principal: Any, action: Action, args: dict[str, Any]
+) -> tuple[int, Any]:
+    """:func:`run`, with the route's status code."""
     user = await _person(db, principal)
     token = audit.VIA.set(VIA) if not action.reads else None
     try:
@@ -280,7 +319,7 @@ async def run(db: AsyncSession, principal: Any, action: Action, args: dict[str, 
         if isinstance(detail, dict):
             detail = detail.get("message") or json.dumps(detail)
         raise tools.ToolError(str(detail or f"HTTP {resp.status_code}"))
-    return data
+    return resp.status_code, data
 
 
 # --------------------------------------------------------------------------- naming, undo
@@ -318,7 +357,10 @@ def _sent(action: Action, args: dict[str, Any]) -> dict[str, Any]:
 
 
 def _reads_back(before: Any, sent: dict[str, Any]) -> bool:
-    return bool(sent) and isinstance(before, dict) and all(k in before for k in sent)
+    """Each field sent reads back, and none is a dict (the route merges one: sending the
+    old dict back would keep a key the edit added)."""
+    return (bool(sent) and isinstance(before, dict) and all(k in before for k in sent)
+            and not any(isinstance(v, dict) for v in sent.values()))  # fmt: skip
 
 
 def inverse(action: Action, args: dict[str, Any] | None = None, before: Any = None) -> str | None:
@@ -383,12 +425,75 @@ async def _named(
     return names, record
 
 
-def _words(value: Any) -> str:
+def _ids(value: Any, key: str = "") -> list[tuple[str, str]]:
+    """Each (field, id) a value points to, nested ones too."""
     if isinstance(value, dict):
-        return ", ".join(f"{k.replace('_', ' ')} {_words(v)}" for k, v in value.items()
-                         if v is not None and not _is_id(v))  # fmt: skip
+        return [x for k, v in value.items() for x in _ids(v, str(k))]
     if isinstance(value, list):
-        return ", ".join(_words(v) for v in value if not _is_id(v))
+        return [x for v in value for x in _ids(v, key)]
+    return [(key, str(value))] if isinstance(value, str) and _is_id(value) else []
+
+
+def _stem(key: str) -> str:
+    return re.sub(r"_ids?$", "", key)
+
+
+def _readers(action: Action, key: str) -> list[Action]:
+    """The offered reads of one record by its id, likeliest first for ``key``."""
+    own = action.path.rstrip("/").split("/{")[0]
+    stem = _stem(key)
+
+    def rank(a: Action) -> int:
+        p = _path_params(a.path)[0]
+        if p == key or (stem and p == f"{stem}_id"):
+            return 0
+        if stem and stem in a.path.rsplit("/{", 1)[0].rsplit("/", 1)[-1]:
+            return 1
+        return 2 if a.path.startswith(own + "/{") else 3
+
+    one = [a for a in catalogue(the_app()).actions.values()
+           if a.reads and len(_path_params(a.path)) == 1 and a.path.endswith("}")]  # fmt: skip
+    return sorted(one, key=rank)
+
+
+async def _id_names(
+    db: AsyncSession, principal: Any, action: Action, args: dict[str, Any]
+) -> dict[str, str]:
+    """Each id the action's body or query points to, read as the person and named
+    (Refusal when one cannot be)."""
+    path = set(_path_params(action.path))
+    out: dict[str, str] = {}
+    for key, rid in _ids({k: v for k, v in args.items() if k not in path}):
+        if rid in out:
+            continue
+        for reader in _readers(action, key):
+            try:
+                data = await run(db, principal, reader, _args_for(reader, [rid]))
+            except tools.ToolError:
+                continue
+            name = _name_of(data)
+            if name is not None:
+                out[rid] = name
+                break
+        else:
+            raise Refusal(NO_NAME)
+    return out
+
+
+def _field(key: str) -> str:
+    stem = _stem(key) if key.endswith(("_id", "_ids")) else key
+    return FIELD_WORDS.get(stem, stem).replace("_", " ")
+
+
+def _words(value: Any, names: dict[str, str] | None = None) -> str:
+    names = names or {}
+    if isinstance(value, dict):
+        return ", ".join(f"{_field(k)} {_words(v, names)}" for k, v in value.items()
+                         if v is not None and (not _is_id(v) or str(v) in names))  # fmt: skip
+    if isinstance(value, list):
+        return ", ".join(_words(v, names) for v in value if not _is_id(v) or str(v) in names)
+    if isinstance(value, str) and value in names:
+        return f"“{names[value]}”"
     return f"“{value}”" if isinstance(value, str) else str(value)
 
 
@@ -401,18 +506,24 @@ def _is_id(v: Any) -> bool:
 
 
 def _secret(value: Any) -> bool:
+    """A key that names a secret, or a value that looks like one (a token pasted in text)."""
     if isinstance(value, dict):
         return any(SECRET.search(str(k)) or _secret(v) for k, v in value.items())
     if isinstance(value, list):
         return any(_secret(v) for v in value)
+    if isinstance(value, str):
+        return any(not _is_id(m.group(0)) for m in SECRET_VALUE.finditer(value))
     return False
 
 
-def summary(action: Action, args: dict[str, Any], names: list[str], how: str | None) -> str:
-    """The card's line in plain words: what it does, to which named record, with what; and
-    before Apply, when it cannot be undone."""
+def summary(
+    action: Action, args: dict[str, Any], names: list[str], how: str | None,
+    ids: dict[str, str] | None = None,
+) -> str:  # fmt: skip
+    """The card's line in plain words: what it does, to which named record, with what (each
+    record an id points to by its name); and before Apply, when it cannot be undone."""
     line = action.summary + "".join(f" “{n}”" for n in names)
-    said = _words(_sent(action, args))
+    said = _words(_sent(action, args), ids)
     line = f"{line}: {said}" if said else line
     return f"{line}." if how else f"{line}. {CANNOT_UNDO}"
 
@@ -422,9 +533,10 @@ async def card(db: AsyncSession, principal: Any, action: Action, args: dict[str,
     if _secret(args):
         raise Refusal(f"I can't do that from the chat: {SECRET_WHY}")
     names, record = await _named(db, principal, action, args)
+    ids = await _id_names(db, principal, action, args)
     how = inverse(action, args, record)
-    return {"summary": summary(action, args, names, how)[:500], "op": OP, "item_id": None,
-            "target": {"action": action.name, "args": args, "names": names},
+    return {"summary": summary(action, args, names, how, ids)[:500], "op": OP, "item_id": None,
+            "target": {"action": action.name, "args": args, "names": names, "ids": ids},
             "before": {}, "after": {"undo": how}}  # fmt: skip
 
 
@@ -458,6 +570,13 @@ def bar(principal: Any, c: Any) -> str | None:
     return None
 
 
+async def _commit_now(db: AsyncSession) -> None:
+    """A real commit, inside a meeting's one commit too (oracle.simple.changes_router.
+    _one_commit makes ``db.commit`` a flush): the route has committed its write in its own
+    session already, so the card's mark may not wait for the rest."""
+    await type(db).commit(db)
+
+
 async def apply(db: AsyncSession, principal: Any, c: Any) -> None:
     """Apply: the route as the person; the result kept for Undo, the audit log says how."""
     from oracle.simple import chat
@@ -468,18 +587,28 @@ async def apply(db: AsyncSession, principal: Any, c: Any) -> None:
     args = dict(c.target.get("args") or {})
     if _secret(args):
         raise chat.ChatError(409, SECRET_WHY)
-    promised = (c.after or {}).get("undo")
+    was = dict(c.after or {})
+    if was.get("applying"):
+        raise chat.ChatError(409, APPLYING)
+    promised = was.get("undo")
     path_args = {p: args[p] for p in _path_params(action.path) if p in args}
     before = None
+    # Marked before the route runs, in its own commit: should the card's write fail after
+    # the route's, the card is never applied a second time.
+    c.after = {**was, "applying": True}
+    await _commit_now(db)
     try:
         if promised == "edit":
             reader = _at("GET", action.path)
             before = await run(db, principal, reader,  # type: ignore[arg-type]
                                _args_for(reader, list(path_args.values())))  # type: ignore[arg-type]  # fmt: skip
-        result = await run(db, principal, action, args)
+        code, result = await call(db, principal, action, args)
     except tools.ToolError as e:
+        c.after = was
+        await _commit_now(db)
         raise chat.ChatError(409, f"Oracle could not do that: {e}") from e
-    how = promised
+    # 202: a proposal, not the record; nothing of it to undo.
+    how = promised if code != 202 else None
     rid = None
     if how == "edit" and not _reads_back(before, _sent(action, args)):
         how = None
@@ -557,6 +686,9 @@ async def calls(c: Any, answer: dict[str, Any]) -> tuple[list[dict], list[dict],
                            f"{c.principal.role}.")  # fmt: skip
             continue
         if action.reads:
+            if c.meeting is not None and name in OWN_READS:
+                refused.append(f"{action.summary}: {OWN_WHY}")
+                continue
             if not has_role(reach, action.needs):  # type: ignore[arg-type]
                 refused.append(f"{action.summary}: not in this meeting's chat, as everyone "
                                "here reads the answer.")  # fmt: skip

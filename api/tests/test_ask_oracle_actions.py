@@ -605,8 +605,13 @@ async def test_a_card_whose_commit_failed_cannot_apply_twice(client, monkeypatch
     m = await _called(client, ctx, "approver", _entity_call("once-only")["calls"][0])
     [card] = m["cards"]
 
-    async def broken(*a, **k):
-        raise RuntimeError("the card's write failed")
+    real = ask_actions.audit.record
+
+    async def broken(db, principal, action, *a, **k):
+        # The card's own row fails, after the route's write.
+        if action == "simple_chat.api_action":
+            raise RuntimeError("the card's write failed")
+        return await real(db, principal, action, *a, **k)
 
     monkeypatch.setattr(ask_actions.audit, "record", broken)
     try:
