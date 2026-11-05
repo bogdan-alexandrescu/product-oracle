@@ -105,8 +105,11 @@ export function seedHeldGoalSuggestion(): GoalSuggestionRow {
 /** Whether the goal has no live roadmap item. */
 const isEmpty = (db: SimpleDb, goal: string): boolean => !db.items.some((s) => !closed(s) && (s.goal === goal || (s.goals ?? []).includes(goal)));
 
-/** The suggest jobs whose time has come propose up to 3 new features; an empty goal gets one automatically, once. */
-function settle(db: SimpleDb): void {
+/**
+ * The suggest jobs whose time has come propose up to 3 new features; an empty goal gets one
+ * automatically, once. The Inbox's read settles them too (fix 4: the rail's first count has them).
+ */
+export function settle(db: SimpleDb): void {
   // A dated plan's goals are goals people suggest under (fid-prio); Oracle suggests for them only when asked.
   knowTalkGoals(db);
   db.goal_suggestions ??= seedGoalSuggestions();
@@ -205,8 +208,8 @@ function out(db: SimpleDb, s: GoalSuggestionRow, ctx: Ctx): Schemas["SimpleGoalS
 
 /**
  * inbox-meeting-proposals fix (additions.inbox_rows): the open suggestions of the goals whose
- * suggestions I decide, oldest first (a held one only to owners). The mock seeds goal
- * suggestions when a page first lists them, so the Inbox lists them from then on.
+ * suggestions I decide, oldest first (a held one only to owners). The Inbox's read seeds and
+ * settles them first (settle), as a page listing them does.
  */
 export function goalSuggestionInboxRows(db: SimpleDb | undefined, ctx: Ctx, seen: string | null): Schemas["InboxSimpleGoalSuggestion"][] {
   return (db?.goal_suggestions ?? [])

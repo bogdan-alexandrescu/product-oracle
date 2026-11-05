@@ -77,6 +77,8 @@ export function proposalRows(proposals: Proposal[], busy: string | null, act: Ac
     .map((p) => {
       const name = proposalName(p);
       const path = { params: { path: { change_id: p.id } }, body: {} };
+      // The banner's words follow the row's kind (app/inbox/page.tsx ACTED).
+      const words = onQuestion(p) ? "question-" : "";
       return {
         key: `proposal-${p.id}`,
         icon: "roadmap",
@@ -99,10 +101,10 @@ export function proposalRows(proposals: Proposal[], busy: string | null, act: Ac
           <>
             {p.can_decide && (
               <>
-                <Button disabled={busy !== null} onClick={() => act(`proposal-accept-${p.id}`, () => unwrap(api.POST("/v1/simple/changes/{change_id}/accept", path)))}>
+                <Button disabled={busy !== null} onClick={() => act(`proposal-accept-${words}${p.id}`, () => unwrap(api.POST("/v1/simple/changes/{change_id}/accept", path)))}>
                   Accept
                 </Button>
-                <Button variant="ghost" disabled={busy !== null} onClick={() => act(`proposal-decline-${p.id}`, () => unwrap(api.POST("/v1/simple/changes/{change_id}/decline", path)))}>
+                <Button variant="ghost" disabled={busy !== null} onClick={() => act(`proposal-decline-${words}${p.id}`, () => unwrap(api.POST("/v1/simple/changes/{change_id}/decline", path)))}>
                   Decline
                 </Button>
               </>

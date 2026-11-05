@@ -98,6 +98,8 @@ export function SimpleDecisions() {
   };
   const actions = useQuestionActions(() => q.reload());
   const questions = d?.questions ?? [];
+  // inbox-meeting-proposals fix 4: the Inbox's Open on a question decided since says so here.
+  const linkedDecided = questions.find((x) => x.id === linked && x.column === "decided");
   const filtered = !!(prd || goal || meeting);
   const clear = () => {
     window.history.replaceState(null, "", inUrl ? `${pathname}?view=${inUrl}` : pathname);
@@ -118,6 +120,11 @@ export function SimpleDecisions() {
       </div>
       {q.loading && !d && <Loading />}
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
+      {linkedDecided && (
+        <p className="simple-meta" role="status" data-testid="linked-decided">
+          {linkedDecided.code} {linkedDecided.title} is decided already{linkedDecided.decided_label ? `. ${linkedDecided.decided_label}` : ""}.
+        </p>
+      )}
       {d && view === "list" && <QuestionList d={d} actions={actions} filtered={filtered} onClear={clear} linked={linked} />}
       {d && view === "board" && <Board questions={questions} actions={actions} linked={linked} />}
       {d && view !== "board" && (

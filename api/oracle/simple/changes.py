@@ -1507,6 +1507,12 @@ async def inbox_rows(
         else set()
     )
 
+    def asked_of(c: SimpleChange, named: str | None) -> str:
+        if c.status == "proposed" and c.op in ("decide_question", "name_decider"):
+            how = "deciding" if c.op == "decide_question" else "who decides"
+            return f"proposed {how} {named or 'a question'}"
+        return change_words.phrase(c.op, c.target, c.before, c.after, named)
+
     def row(c: SimpleChange, at: datetime | None, state: str | None = None) -> InboxSimpleChange:
         iid = uuid.UUID(str(c.target["item_id"])) if c.target.get("item_id") else None
         m = asked.get(c.session_id) if c.session_id else None
@@ -1515,8 +1521,9 @@ async def inbox_rows(
         named = title or (on.get("subject") if "question_id" in on else None)
         return InboxSimpleChange(
             from_meeting=SimpleChangeMeeting(id=m.id, title=m.title) if m else None,
-            # A question's proposal says the question ("decided Q3 Offline mode scope").
-            asked=change_words.phrase(c.op, c.target, c.before, c.after, named),
+            # A question's proposal says the question; still to decide, it reads as proposed
+            # ("proposed deciding Q3 Offline mode scope"), once decided as done.
+            asked=asked_of(c, named),
             can_decide=v is not None and c.status == "proposed" and v.may_decide(c),
             from_ask=c.id in via_ask and m is None,
             **on,

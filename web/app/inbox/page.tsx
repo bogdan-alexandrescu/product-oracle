@@ -22,6 +22,9 @@ type Source = Schemas["SourceOut"];
 
 /** qa-company-42: what a row's action did, said in the banner (by the action's key). */
 const ACTED: [prefix: string, message: string][] = [
+  // A question's proposal is decided outright; the rest go into the working draft.
+  ["proposal-accept-question-", "Accepted: the question is decided"],
+  ["proposal-decline-question-", "Declined: the question stays open"],
   ["proposal-accept-", "Accepted: it is in your working draft"],
   ["proposal-decline-", "Declined: the item is left as it was"],
   ["report-retry-", "Posting the report again"],

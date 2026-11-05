@@ -363,7 +363,8 @@ export function questionInboxRows(ctx: QuestionsCtx, db: QuestionsDb, seen: stri
       id: c.id, op: c.op, status: c.status, item_id: null, item_title: null, document_id: c.document_id, by: c.by, by_name: c.by_name, at: c.at,
       decided_by: c.decided_by, decided_at: c.decided_at, reason: c.reason, decision_reason: c.decision_reason,
       state: state ?? (!seen || (at && at > seen) ? "new" : "open"), from_meeting: null,
-      asked: c.op === "decide_question" ? `decided ${subject}` : `named who decides ${subject}`,
+      // As the API: still to decide, it reads as proposed.
+      asked: c.status === "proposed" ? `proposed ${c.op === "decide_question" ? "deciding" : "who decides"} ${subject}` : c.op === "decide_question" ? `decided ${subject}` : `named who decides ${subject}`,
       can_decide: c.status === "proposed" && canOf(ctx, q).decide, from_ask: false,
       subject, question_id: String(c.target.decision_id), line_id: null,
     };
