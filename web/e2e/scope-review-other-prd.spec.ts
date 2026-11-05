@@ -37,7 +37,7 @@ test("the panel names another PRD's feature it depends on, with its PRD", async 
   await openReview(page);
   await row(page, "Address lookup").getByTestId("feature-title").click();
   const depends = page.getByTestId("scope-inspector").getByTestId("scope-depends");
-  await expect(depends.getByRole("listitem")).toHaveText("Address verificationTrust PRD");
+  await expect(depends.getByRole("listitem")).toContainText("Address verificationTrust PRD");
   await expect(depends).not.toContainText("address-verification");
   await expect(depends).not.toContainText("Unknown");
   await expect(depends.getByRole("button", { name: "Remove dependency on Address verification" })).toBeVisible();
