@@ -25,18 +25,25 @@ import { expect, test, type Page } from "./test";
  * (and not what an owner deleted) and restores each without an owner; fails_when = the approver
  * has no Trash tab, no Restore, sees the owner's delete, or Restore is refused; no_claim = other
  * approvers (the API's tests).
+ *
+ * Card tfg-restore-after-version (review round 3): protects = a feature deleted before another
+ * edit is submitted and approved shows on Simple's roadmap again after Restore in Settings › Trash;
+ * fails_when = Restore empties the Trash row and the feature stays off the roadmap; no_claim = the
+ * API's copy onto the new version (the mock keeps no versions; pytest
+ * test_restore_after_a_new_version_puts_the_feature_on_the_current_roadmap).
  */
 
 type Call = { status: number; body: unknown };
 
-async function call(page: Page, method: string, path: string): Promise<Call> {
+async function call(page: Page, method: string, path: string, body?: unknown): Promise<Call> {
   return page.evaluate(
-    async ([method, path]) => {
+    async ([method, path, body]) => {
       const w = globalThis as unknown as { __poMockFetch?: (r: Request) => Promise<Response> };
-      const res = await w.__poMockFetch!(new Request(new URL(path, location.origin), { method }));
+      const init = body === undefined ? { method } : { method, body: JSON.stringify(body), headers: { "content-type": "application/json" } };
+      const res = await w.__poMockFetch!(new Request(new URL(path, location.origin), init));
       return { status: res.status, body: await res.json().catch(() => null) };
     },
-    [method, path] as const,
+    [method, path, body] as const,
   );
 }
 
@@ -130,4 +137,32 @@ test("whoever deleted a feature or a goal sees it in Trash and restores it, with
   expect((await items(page)).map((i) => i.id)).toContain(feature.id);
   expect((await goals(page)).map((g) => g.id)).toContain(goal.id);
   expect((await items(page)).map((i) => i.id)).not.toContain(theirs.id);
+});
+
+test("a feature deleted before the roadmap's next version is published comes back on it from Trash", async ({ page }) => {
+  await login(page);
+  const all = await items(page);
+  const feature = all.find((i) => i.can_decide && i.code)!;
+  const other = all.find((i) => i.can_decide && i.id !== feature?.id)!;
+  expect(feature && other).toBeTruthy();
+  expect((await call(page, "DELETE", `/v1/simple/roadmap/items/${feature.id}`)).status).toBe(200);
+  // Another feature renamed, its draft submitted and approved: the next version is published.
+  const edit = { op: "edit_title", target: { item_id: other.id }, before: { title: other.title }, after: { title: "Faster example checkout" } };
+  expect((await call(page, "POST", "/v1/simple/changes", edit)).status).toBe(201);
+  const [draft] = (await call(page, "GET", "/v1/simple/drafts")).body as { id: string }[];
+  expect((await call(page, "POST", `/v1/simple/drafts/${draft.id}/submit`)).status).toBe(200);
+  expect((await call(page, "POST", `/v1/simple/drafts/${draft.id}/approve`)).status).toBe(200);
+
+  await page.goto("/simple/roadmap");
+  const roadmap = page.getByTestId("simple-roadmap");
+  await expect(roadmap).toContainText("Faster example checkout");
+  await expect(roadmap).not.toContainText(feature.title);
+
+  await page.goto("/settings/trash");
+  const row = page.getByTestId("trash-entry").filter({ hasText: feature.title });
+  await row.getByRole("button", { name: `Restore ${feature.title}` }).click();
+  await expect(row).toHaveCount(0);
+  await page.goto("/simple/roadmap");
+  await expect(roadmap).toContainText(feature.title);
+  await expect(roadmap).toContainText("Faster example checkout");
 });
