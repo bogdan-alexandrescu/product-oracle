@@ -1,4 +1,5 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_DRAFTING_MS_KEY } from "../lib/api/mock/simple-changes";
 import { ADMIN, login, signOut } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
@@ -287,6 +288,9 @@ for (const phone of [false, true]) {
     // card: inbox-counts-at-once
     test(`accepting on the roadmap takes it off the Inbox count at once (${where})`, async ({ page }) => {
       test.setTimeout(150_000);
+      // fix 2, minor 4: the feature accepted below stays in Oracle's drafting all through, so its
+      // own date suggestion never lands in the Inbox count between two steps (under load it did).
+      await page.addInitScript((k) => localStorage.setItem(k, String(30 * 60_000)), MOCK_DRAFTING_MS_KEY);
       await login(page);
       await readRoadmap(page);
 
