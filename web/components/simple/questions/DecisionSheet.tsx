@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
 import { Icon } from "@/components/ds/Icon";
 import { Sheet } from "@/components/ds/Sheet";
@@ -22,11 +15,7 @@ type Question = Schemas["SimpleQuestion"];
 type Person = { id: string; name: string };
 
 /** What the sheet shows: an open decision, a PRD's question, or a new one of either. */
-export type SheetTarget =
-  | { kind: "decision"; row: Row }
-  | { kind: "question"; q: Question }
-  | { kind: "new-decision" }
-  | { kind: "new-question"; prds: { id: string; title: string }[] };
+export type SheetTarget = { kind: "decision"; row: Row } | { kind: "question"; q: Question } | { kind: "new-decision" } | { kind: "new-question"; prds: { id: string; title: string }[] };
 
 /** A decision or question withdrawn here this visit: struck through in its list, with Undo. */
 type Withdrawn = { changeId: string; undoing?: boolean };
@@ -46,20 +35,14 @@ export function useDecisionSheet(): SheetApi | null {
 
 /** At most this many options or other answers (decision_sheet.MAX_OPTIONS). */
 const MAX_OPTIONS = 6;
-const FIELD =
-  "w-full rounded-md border border-line-strong bg-surface px-3 text-[15px] text-text";
+const FIELD = "w-full rounded-md border border-line-strong bg-surface px-3 text-[15px] text-text";
 const REASSIGNED = "Reassigned in Simple";
 
 /** "Dec 7, 2026". */
-export const reviewDay = (day: string) =>
-  calendarDay(day, { month: "short", day: "numeric", year: "numeric" });
+export const reviewDay = (day: string) => calendarDay(day, { month: "short", day: "numeric", year: "numeric" });
 
 /** "edited by you just now", "edited by Avery Stone Nov 3" (the row's last sheet edit). */
-export function editedWords(
-  at: string | null | undefined,
-  by: Person | null | undefined,
-  me: string | undefined,
-): string | null {
+export function editedWords(at: string | null | undefined, by: Person | null | undefined, me: string | undefined): string | null {
   if (!at) return null;
   const who = by ? (by.id === me ? " by you" : ` by ${by.name}`) : "";
   const fresh = Date.now() - Date.parse(at) < 10 * 60_000;
@@ -74,13 +57,7 @@ export function editedWords(
  * Delete (to Settings › Trash, with Undo) at its foot, as the item's own `can` says. + New
  * decision and + Ask a question open it empty. `onChanged` reloads the page under it.
  */
-export function DecisionSheetHost({
-  onChanged,
-  children,
-}: {
-  onChanged: () => unknown;
-  children: ReactNode;
-}) {
+export function DecisionSheetHost({ onChanged, children }: { onChanged: () => unknown; children: ReactNode }) {
   const [target, setTarget] = useState<SheetTarget | null>(null);
   const [withdrawn, setWithdrawn] = useState<Record<string, Withdrawn>>({});
   const done = useCallback(() => {
@@ -99,7 +76,7 @@ export function DecisionSheetHost({
         }),
       )
         .then(() => {
-          setWithdrawn(({ [id]: _, ...rest }) => rest);
+          setWithdrawn((x) => Object.fromEntries(Object.entries(x).filter(([k]) => k !== id)));
           toast({ message: "Undone" });
         })
         .catch((e) => {
@@ -110,10 +87,7 @@ export function DecisionSheetHost({
     },
     [withdrawn, done],
   );
-  const value = useMemo<SheetApi>(
-    () => ({ open: setTarget, withdrawn, undoWithdraw }),
-    [withdrawn, undoWithdraw],
-  );
+  const value = useMemo<SheetApi>(() => ({ open: setTarget, withdrawn, undoWithdraw }), [withdrawn, undoWithdraw]);
   const close = () => setTarget(null);
   const title =
     target?.kind === "decision"
@@ -126,28 +100,14 @@ export function DecisionSheetHost({
   return (
     <SheetContext.Provider value={value}>
       {children}
-      <Sheet
-        open={!!target}
-        side
-        title={title}
-        onClose={close}
-        testId="decision-sheet"
-      >
+      <Sheet open={!!target} side title={title} onClose={close} testId="decision-sheet">
         {target && (
           <SheetBody
-            key={
-              target.kind === "decision"
-                ? target.row.id
-                : target.kind === "question"
-                  ? target.q.id
-                  : target.kind
-            }
+            key={target.kind === "decision" ? target.row.id : target.kind === "question" ? target.q.id : target.kind}
             target={target}
             onClose={close}
             done={done}
-            onWithdrawn={(id, changeId) =>
-              setWithdrawn((x) => ({ ...x, [id]: { changeId } }))
-            }
+            onWithdrawn={(id, changeId) => setWithdrawn((x) => ({ ...x, [id]: { changeId } }))}
           />
         )}
       </Sheet>
@@ -205,43 +165,24 @@ function draftOf(t: SheetTarget): Draft {
       options: t.q.alternatives.map((o) => o.label),
       decider: t.q.decider ?? null,
     };
-  if (t.kind === "new-question")
-    return { ...blank, options: [""], prd: t.prds[0]?.id ?? "" };
+  if (t.kind === "new-question") return { ...blank, options: [""], prd: t.prds[0]?.id ?? "" };
   return blank;
 }
 
 function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
-  const isNew =
-    target.kind === "new-decision" || target.kind === "new-question";
+  const isNew = target.kind === "new-decision" || target.kind === "new-question";
   const question = target.kind === "question" || target.kind === "new-question";
-  const can =
-    target.kind === "decision"
-      ? target.row.can
-      : target.kind === "question"
-        ? target.q.can
-        : null;
+  const can = target.kind === "decision" ? target.row.can : target.kind === "question" ? target.q.can : null;
   const writes = !!can && (can.edit || can.propose);
   const [editing, setEditing] = useState(isNew);
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => draftOf(target));
-  const [decider, setDecider] = useState<Person | null>(
-    draftOf(target).decider,
-  );
+  const [decider, setDecider] = useState<Person | null>(draftOf(target).decider);
   const [error, setError] = useState<string | null>(null);
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
-  const id =
-    target.kind === "decision"
-      ? target.row.id
-      : target.kind === "question"
-        ? target.q.id
-        : null;
-  const name =
-    target.kind === "decision"
-      ? `${target.row.code ?? `D-${target.row.number}`}`
-      : target.kind === "question"
-        ? target.q.code
-        : "";
+  const id = target.kind === "decision" ? target.row.id : target.kind === "question" ? target.q.id : null;
+  const name = target.kind === "decision" ? `${target.row.code ?? `D-${target.row.number}`}` : target.kind === "question" ? target.q.code : "";
   const decidesName = decider?.name ?? null;
 
   const act = async (work: () => Promise<void>) => {
@@ -255,14 +196,12 @@ function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
       setBusy(false);
     }
   };
-  const change = (body: Schemas["SimpleChangeIn"]) =>
-    unwrap(api.POST("/v1/simple/changes", { body }));
+  const change = (body: Schemas["SimpleChangeIn"]) => unwrap(api.POST("/v1/simple/changes", { body }));
 
   const save = () =>
     act(async () => {
       const options = draft.options.map((o) => o.trim()).filter(Boolean);
-      if (!draft.title.trim())
-        throw new Error(question ? "Write the question" : "Write a title");
+      if (!draft.title.trim()) throw new Error(question ? "Write the question" : "Write a title");
       if (target.kind === "new-decision") {
         if (!decider) throw new Error("Pick who decides");
         await unwrap(
@@ -295,13 +234,9 @@ function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
             alternatives: options,
           },
         });
-        const prd =
-          target.prds.find((p) => p.id === draft.prd)?.title ?? "the PRD";
+        const prd = target.prds.find((p) => p.id === draft.prd)?.title ?? "the PRD";
         toast({
-          message:
-            r.change.status === "proposed"
-              ? "Sent to who decides on the PRD"
-              : `Added to ${prd}`,
+          message: r.change.status === "proposed" ? "Sent to who decides on the PRD" : `Added to ${prd}`,
         });
       } else if (target.kind === "decision") {
         const r = target.row;
@@ -319,28 +254,17 @@ function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
           options,
           review_at: draft.review_at || null,
         };
-        const after = Object.fromEntries(
-          Object.entries(next).filter(
-            ([k, v]) =>
-              JSON.stringify(v) !== JSON.stringify(now[k as keyof typeof now]),
-          ),
-        );
+        const after = Object.fromEntries(Object.entries(next).filter(([k, v]) => JSON.stringify(v) !== JSON.stringify(now[k as keyof typeof now])));
         if (!Object.keys(after).length) return setEditing(false);
         const c = (
           await change({
             op: "edit_decision",
             target: { decision_id: r.id },
-            before: Object.fromEntries(
-              Object.keys(after).map((k) => [k, now[k as keyof typeof now]]),
-            ),
+            before: Object.fromEntries(Object.keys(after).map((k) => [k, now[k as keyof typeof now]])),
             after,
           })
         ).change;
-        toast(
-          c.status === "proposed"
-            ? { message: `Sent to ${decidesName ?? "the owners"} to decide` }
-            : undoable(`Saved ${name}`, c.id, done),
-        );
+        toast(c.status === "proposed" ? { message: `Sent to ${decidesName ?? "the owners"} to decide` } : undoable(`Saved ${name}`, c.id, done));
       } else if (target.kind === "question") {
         const q = target.q;
         const now = {
@@ -353,28 +277,17 @@ function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
           recommendation: draft.recommendation.trim() || null,
           alternatives: options,
         };
-        const after = Object.fromEntries(
-          Object.entries(next).filter(
-            ([k, v]) =>
-              JSON.stringify(v) !== JSON.stringify(now[k as keyof typeof now]),
-          ),
-        );
+        const after = Object.fromEntries(Object.entries(next).filter(([k, v]) => JSON.stringify(v) !== JSON.stringify(now[k as keyof typeof now])));
         if (!Object.keys(after).length) return setEditing(false);
         const c = (
           await change({
             op: "edit_question",
             target: { decision_id: q.id },
-            before: Object.fromEntries(
-              Object.keys(after).map((k) => [k, now[k as keyof typeof now]]),
-            ),
+            before: Object.fromEntries(Object.keys(after).map((k) => [k, now[k as keyof typeof now]])),
             after,
           })
         ).change;
-        toast(
-          c.status === "proposed"
-            ? { message: `Sent to ${decidesName ?? "the owners"} to decide` }
-            : undoable(`Saved ${name}`, c.id, done),
-        );
+        toast(c.status === "proposed" ? { message: `Sent to ${decidesName ?? "the owners"} to decide` } : undoable(`Saved ${name}`, c.id, done));
       }
       done();
       onClose();
@@ -444,18 +357,11 @@ function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
     });
 
   const decidesRow = !question && (
-    <div
-      className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-line pt-3"
-      data-testid="decision-sheet-decider"
-    >
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-line pt-3" data-testid="decision-sheet-decider">
       <span className="simple-meta font-[650]">Decides</span>
       <span className="min-w-0 flex-1">{decidesName ?? "No one yet"}</span>
       {(target.kind === "new-decision" || (target.kind === "decision" && target.row.can?.reassign)) && !picking && (
-        <button
-          type="button"
-          className="simple-button"
-          onClick={() => setPicking(true)}
-        >
+        <button type="button" className="simple-button" onClick={() => setPicking(true)}>
           {target.kind === "new-decision" ? "Pick" : "Reassign"}
         </button>
       )}
@@ -465,17 +371,10 @@ function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
   return (
     <div className="flex flex-col gap-3 p-4" data-testid="decision-sheet-body">
       {editing ? (
-        <EditFields
-          draft={draft}
-          set={set}
-          question={question}
-          target={target}
-        />
+        <EditFields draft={draft} set={set} question={question} target={target} />
       ) : target.kind === "decision" ? (
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 [overflow-wrap:anywhere]">
-          {target.row.question && (
-            <Field label="Question">{target.row.question}</Field>
-          )}
+          {target.row.question && <Field label="Question">{target.row.question}</Field>}
           {target.row.context && (
             <Field label="Context">
               <span className="whitespace-pre-line">{target.row.context}</span>
@@ -492,15 +391,11 @@ function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
               "None yet"
             )}
           </Field>
-          {target.row.review_at && (
-            <Field label="Review on">{reviewDay(target.row.review_at)}</Field>
-          )}
+          {target.row.review_at && <Field label="Review on">{reviewDay(target.row.review_at)}</Field>}
         </dl>
       ) : target.kind === "question" ? (
         <div className="flex flex-col gap-2 [overflow-wrap:anywhere]">
-          <h3 className="simple-meta font-[650]">
-            Recommended in {target.q.prd.title}
-          </h3>
+          <h3 className="simple-meta font-[650]">Recommended in {target.q.prd.title}</h3>
           <p>{target.q.recommendation ?? "No recommendation yet"}</p>
           <h3 className="simple-meta font-[650]">Other answers</h3>
           {target.q.alternatives.length ? (
@@ -517,14 +412,7 @@ function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
         </div>
       ) : null}
       {decidesRow}
-      {picking && (
-        <People
-          current={decider?.id ?? null}
-          busy={busy}
-          onPick={reassign}
-          onClose={() => setPicking(false)}
-        />
-      )}
+      {picking && <People current={decider?.id ?? null} busy={busy} onPick={reassign} onClose={() => setPicking(false)} />}
       {error && (
         <p className="simple-meta text-crit" role="alert">
           {error}
@@ -532,69 +420,31 @@ function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
       )}
       {/* A viewer reads only: no foot at all. */}
       {(editing || writes) && (
-        <div
-          className="flex flex-wrap items-center gap-2 border-t border-line pt-3"
-          data-testid="decision-sheet-foot"
-        >
+        <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3" data-testid="decision-sheet-foot">
           {editing ? (
             <>
-              <button
-                type="button"
-                className="simple-button simple-button-primary"
-                disabled={busy}
-                onClick={() => void save()}
-              >
-                {target.kind === "new-decision"
-                  ? "Add decision"
-                  : target.kind === "new-question"
-                    ? "Add question"
-                    : can?.edit
-                      ? "Save"
-                      : "Send"}
+              <button type="button" className="simple-button simple-button-primary" disabled={busy} onClick={() => void save()}>
+                {target.kind === "new-decision" ? "Add decision" : target.kind === "new-question" ? "Add question" : can?.edit ? "Save" : "Send"}
               </button>
-              <button
-                type="button"
-                className="simple-button"
-                onClick={() =>
-                  isNew
-                    ? onClose()
-                    : (setEditing(false), setDraft(draftOf(target)))
-                }
-              >
+              <button type="button" className="simple-button" onClick={() => (isNew ? onClose() : (setEditing(false), setDraft(draftOf(target))))}>
                 Cancel
               </button>
-              {!isNew && !can?.edit && decidesName && (
-                <span className="simple-meta">{decidesName} decides</span>
-              )}
+              {!isNew && !can?.edit && decidesName && <span className="simple-meta">{decidesName} decides</span>}
             </>
           ) : (
             writes && (
               <>
-                <button
-                  type="button"
-                  className="simple-button simple-button-primary"
-                  onClick={() => setEditing(true)}
-                >
+                <button type="button" className="simple-button simple-button-primary" onClick={() => setEditing(true)}>
                   {can?.edit ? "Edit" : "Suggest a change"}
                 </button>
                 <span className="flex-1" />
                 {can?.withdraw && (
-                  <button
-                    type="button"
-                    className="simple-button"
-                    disabled={busy}
-                    onClick={() => void withdraw()}
-                  >
+                  <button type="button" className="simple-button" disabled={busy} onClick={() => void withdraw()}>
                     Withdraw
                   </button>
                 )}
                 {can?.delete && (
-                  <button
-                    type="button"
-                    className="simple-button text-crit"
-                    disabled={busy}
-                    onClick={() => void remove()}
-                  >
+                  <button type="button" className="simple-button text-crit" disabled={busy} onClick={() => void remove()}>
                     Delete
                   </button>
                 )}
@@ -636,17 +486,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /** Edit: every field the sheet changes (a decision's; a question's text, recommendation and other answers). */
-function EditFields({
-  draft,
-  set,
-  question,
-  target,
-}: {
-  draft: Draft;
-  set: (p: Partial<Draft>) => void;
-  question: boolean;
-  target: SheetTarget;
-}) {
+function EditFields({ draft, set, question, target }: { draft: Draft; set: (p: Partial<Draft>) => void; question: boolean; target: SheetTarget }) {
   const listName = question ? "Other answers" : "Options";
   const one = question ? "answer" : "option";
   const rows = draft.options;
@@ -655,11 +495,7 @@ function EditFields({
       {target.kind === "new-question" && (
         <label className="flex flex-col gap-1">
           <span className="simple-meta font-[650]">PRD</span>
-          <select
-            className={`${FIELD} h-10`}
-            value={draft.prd}
-            onChange={(e) => set({ prd: e.target.value })}
-          >
+          <select className={`${FIELD} h-10`} value={draft.prd} onChange={(e) => set({ prd: e.target.value })}>
             {target.prds.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.title}
@@ -669,48 +505,23 @@ function EditFields({
         </label>
       )}
       <label className="flex flex-col gap-1">
-        <span className="simple-meta font-[650]">
-          {question ? "Question" : "Title"}
-        </span>
-        <input
-          data-autofocus
-          className={`${FIELD} h-10`}
-          value={draft.title}
-          maxLength={200}
-          onChange={(e) => set({ title: e.target.value })}
-        />
+        <span className="simple-meta font-[650]">{question ? "Question" : "Title"}</span>
+        <input data-autofocus className={`${FIELD} h-10`} value={draft.title} maxLength={200} onChange={(e) => set({ title: e.target.value })} />
       </label>
       {question ? (
         <label className="flex flex-col gap-1">
           <span className="simple-meta font-[650]">Recommendation</span>
-          <input
-            className={`${FIELD} h-10`}
-            value={draft.recommendation}
-            maxLength={500}
-            onChange={(e) => set({ recommendation: e.target.value })}
-          />
+          <input className={`${FIELD} h-10`} value={draft.recommendation} maxLength={500} onChange={(e) => set({ recommendation: e.target.value })} />
         </label>
       ) : (
         <>
           <label className="flex flex-col gap-1">
             <span className="simple-meta font-[650]">Question</span>
-            <textarea
-              className={`${FIELD} py-2`}
-              rows={2}
-              value={draft.question}
-              maxLength={1000}
-              onChange={(e) => set({ question: e.target.value })}
-            />
+            <textarea className={`${FIELD} py-2`} rows={2} value={draft.question} maxLength={1000} onChange={(e) => set({ question: e.target.value })} />
           </label>
           <label className="flex flex-col gap-1">
             <span className="simple-meta font-[650]">Context</span>
-            <textarea
-              className={`${FIELD} py-2`}
-              rows={4}
-              value={draft.context}
-              maxLength={4000}
-              onChange={(e) => set({ context: e.target.value })}
-            />
+            <textarea className={`${FIELD} py-2`} rows={4} value={draft.context} maxLength={4000} onChange={(e) => set({ context: e.target.value })} />
           </label>
         </>
       )}
@@ -740,11 +551,7 @@ function EditFields({
           </div>
         ))}
         {rows.length < MAX_OPTIONS && (
-          <button
-            type="button"
-            className="self-start text-[15px] font-[650] text-accent-ink hover:underline"
-            onClick={() => set({ options: [...rows, ""] })}
-          >
+          <button type="button" className="self-start text-[15px] font-[650] text-accent-ink hover:underline" onClick={() => set({ options: [...rows, ""] })}>
             + Add an {one}
           </button>
         )}
@@ -752,12 +559,7 @@ function EditFields({
       {!question && (
         <label className="flex flex-col gap-1">
           <span className="simple-meta font-[650]">Review on</span>
-          <input
-            type="date"
-            className={`${FIELD} h-10 w-[220px] max-w-full`}
-            value={draft.review_at}
-            onChange={(e) => set({ review_at: e.target.value })}
-          />
+          <input type="date" className={`${FIELD} h-10 w-[220px] max-w-full`} value={draft.review_at} onChange={(e) => set({ review_at: e.target.value })} />
         </label>
       )}
     </div>
@@ -768,17 +570,7 @@ function EditFields({
 const PEOPLE_PAGE = 200;
 
 /** Who decides: the people who may decide, a box to find one, the one who decides now marked. */
-function People({
-  current,
-  busy,
-  onPick,
-  onClose,
-}: {
-  current: string | null;
-  busy: boolean;
-  onPick: (p: Person) => void;
-  onClose: () => void;
-}) {
+function People({ current, busy, onPick, onClose }: { current: string | null; busy: boolean; onPick: (p: Person) => void; onClose: () => void }) {
   const [find, setFind] = useState("");
   const people = useQuery("simple-question-deciders", async () => {
     const out: Person[] = [];
@@ -794,9 +586,7 @@ function People({
       if (rows.length < PEOPLE_PAGE) return out;
     }
   });
-  const shown = (people.data ?? []).filter((p) =>
-    p.name.toLowerCase().includes(find.trim().toLowerCase()),
-  );
+  const shown = (people.data ?? []).filter((p) => p.name.toLowerCase().includes(find.trim().toLowerCase()));
   return (
     <div
       role="group"
@@ -806,48 +596,25 @@ function People({
       data-testid="decision-sheet-people"
       onKeyDown={(e) => e.key === "Escape" && onClose()}
     >
-      <input
-        autoFocus
-        aria-label="Find a person"
-        placeholder="Find a person"
-        className={`${FIELD} mb-1 h-10`}
-        value={find}
-        onChange={(e) => setFind(e.target.value)}
-      />
-      {people.error && (
-        <span className="simple-meta text-crit">{people.error}</span>
-      )}
-      {!people.data && !people.error && (
-        <span className="simple-meta">Loading people…</span>
-      )}
+      <input autoFocus aria-label="Find a person" placeholder="Find a person" className={`${FIELD} mb-1 h-10`} value={find} onChange={(e) => setFind(e.target.value)} />
+      {people.error && <span className="simple-meta text-crit">{people.error}</span>}
+      {!people.data && !people.error && <span className="simple-meta">Loading people…</span>}
       <ul className="flex max-h-[280px] flex-col overflow-y-auto">
         {shown.map((p) => (
           <li key={p.id}>
             {p.id === current ? (
-              <span
-                className="block rounded-md bg-surface2 px-3 py-2 font-[650] text-accent-ink"
-                aria-current="true"
-              >
+              <span className="block rounded-md bg-surface2 px-3 py-2 font-[650] text-accent-ink" aria-current="true">
                 {p.name} · decides now
               </span>
             ) : (
-              <button
-                type="button"
-                disabled={busy}
-                className="block w-full rounded-md px-3 py-2 text-left hover:bg-surface2"
-                onClick={() => onPick(p)}
-              >
+              <button type="button" disabled={busy} className="block w-full rounded-md px-3 py-2 text-left hover:bg-surface2" onClick={() => onPick(p)}>
                 {p.name}
               </button>
             )}
           </li>
         ))}
       </ul>
-      <button
-        type="button"
-        className="simple-button self-start"
-        onClick={onClose}
-      >
+      <button type="button" className="simple-button self-start" onClick={onClose}>
         Cancel
       </button>
     </div>

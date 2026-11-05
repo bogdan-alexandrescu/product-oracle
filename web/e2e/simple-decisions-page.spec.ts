@@ -45,7 +45,8 @@ for (const phone of [false, true]) {
         const outside = group(page, "Outside meetings");
         // prd-decisions A1: a PRD's decided question sits here too, with its code and answer.
         // qa-simple-decide-20: D-3 is listed once, beside its meeting, not here as well.
-        await expect(outside.getByTestId("decision-row")).toHaveCount(3);
+        // edit-decisions: D-5, an open decision with every field the sheet shows, is here too.
+        await expect(outside.getByTestId("decision-row")).toHaveCount(4);
         await expect(outside.getByTestId("decision-row").first()).toContainText("Q1 Data retention period");
         await expect(outside.getByTestId("decision-row").first()).toContainText("Keep 90 days · Avery Stone");
         await expect(outside).not.toContainText("D-3");
