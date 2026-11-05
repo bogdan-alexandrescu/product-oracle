@@ -435,3 +435,72 @@ async def test_a_confirmed_ground_truth_feature_passes_both_stops():
     summary = await _summary(w, "export-logs")
     assert summary["problems"] == []
     assert summary["elsewhere"] == {"export-logs": "Export logs"}
+
+
+async def test_a_new_prd_s_approved_scope_counts_before_its_import_and_any_roadmap():
+    # protects=the area PRDs drafted side by side see each other's approved features while
+    # each PRD is new (its scope names no document yet) and no company roadmap exists;
+    # fails_when=only imported PRDs on an existing company roadmap count.
+    w = await world(roadmap=False)
+    async with tenant_session(w["tenant"]) as s:
+        other = await _add(s, Run(flow="baseline_to_prd", status="running",
+                                  knobs={"document_slug": "user-safety"}))  # fmt: skip
+        scope = await _add(s, PrdScope(run_id=other.id, segment_seq=2, attempt=1,
+                                       status="approved", check_result={},
+                                       approved_at=NOW))  # fmt: skip
+        s.add(PrdScopeItem(scope_id=scope.id, kind="feature", key="session-guard",
+                           title="Session guard", decision="include", position=0))  # fmt: skip
+        await s.commit()
+        known = await feature_set.known_for_run(s, w["run"])
+        mine = await feature_set.known_for_run(s, other.id)
+    assert known.elsewhere["session-guard"].label == "Session guard (User safety PRD)"
+    # Its own run does not see its own feature as another PRD's.
+    assert "session-guard" not in mine.elsewhere
+
+
+async def test_only_each_prd_s_latest_approved_scope_counts():
+    # protects=a feature a PRD dropped from its latest approved scope is no longer on the
+    # company roadmap; fails_when=every approved scope ever is read.
+    w = await world()
+    async with tenant_session(w["tenant"]) as s:
+        safety = await s.get(Document, w["safety"])
+        old = await _add(s, Run(flow="baseline_to_prd", status="succeeded",
+                                document_id=safety.id))  # fmt: skip
+        scope = await _add(s, PrdScope(run_id=old.id, segment_seq=2, attempt=1,
+                                       status="approved", document_id=safety.id,
+                                       check_result={},
+                                       approved_at=datetime(2026, 10, 1, tzinfo=UTC)))  # fmt: skip
+        s.add(PrdScopeItem(scope_id=scope.id, kind="feature", key="dropped-feature",
+                           title="Dropped feature", decision="include", position=0))  # fmt: skip
+        await s.commit()
+        on = await company.features_on_roadmap(s)
+    assert "dropped-feature" not in on
+    assert on["account-health-ledger"].label == "Account health ledger (Safety PRD)"
+
+
+async def test_the_prd_draft_prompt_names_the_other_feature_with_its_prd():
+    # protects=the PRD writer's own prompt (the prd_draft step) carries the link named with
+    # its PRD; fails_when=the line is built but never reaches the drafted PRD's prompt.
+    from oracle.runs import flows
+    from oracle.runs import service as runs_service
+    from oracle.runs.models import RunSegment
+    from oracle.swarm import FakeRuntime
+
+    w = await world()
+    summary = await _summary(w)
+    async with tenant_session(w["tenant"]) as s:
+        s.add(Checkpoint(run_id=w["run"], kind=check.KIND, status="approved", decided_at=NOW,
+                         payload={check.PAYLOAD_KEY: summary,
+                                  "briefs": {"sizes": {"observability": "m"},
+                                             "verdicts": {}, "answers": {}}}))  # fmt: skip
+        flow = flows.FLOWS["baseline_to_prd"]
+        segments = [
+            await _add(s, RunSegment(run_id=w["run"], seq=n, name=d.name, status="pending"))
+            for n, d in enumerate(flow.segments, start=1)
+        ]
+        await s.commit()
+        run = await s.get(Run, w["run"])
+        seg = next(x for x in segments if x.name == "prd_draft")
+        pctx = await runs_service._prompt_context(s, run, seg, segments, 1, None, FakeRuntime())
+        prompt = flows.build_steps(flow, flow.segment("prd_draft"), flows.Knobs(), pctx)[-1][2]
+    assert "Account health ledger (Safety PRD)" in prompt
