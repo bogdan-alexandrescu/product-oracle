@@ -33,6 +33,8 @@ type Db = SimpleDb & {
   /** A track in Trash: its title, state and the items that were on it. */
   /** Applied plan changes, for Undo: what to put back. */
   plan_done?: Record<string, () => void>;
+  /** Track names as Simple changed them (TRACKS is the module's; it is rebuilt on a reload). */
+  track_titles?: Record<string, string>;
   trashed_tracks?: Record<string, { title: string; state: TrackState; owner?: string; items: string[] }>;
 };
 
@@ -64,6 +66,16 @@ function seed(db: Db, ctx: RemovedCtx): Log {
   return (db.removed_log = log);
 }
 
+/** TRACKS as this db has them: names changed or added in Simple, those in Trash left out. */
+export function syncTracks(db: Db): void {
+  for (const [k, t] of Object.entries(db.track_titles ?? {})) TRACKS[k] = t;
+  for (const k of Object.keys(db.trashed_tracks ?? {})) delete TRACKS[k];
+}
+const setTitle = (db: Db, k: string, title: string) => {
+  TRACKS[k] = title;
+  (db.track_titles ??= {})[k] = title;
+};
+
 const trackStates = (db: Db): Record<string, TrackState> => {
   db.track_state ??= {};
   for (const k of Object.keys(TRACKS)) {
@@ -87,6 +99,7 @@ const OPS = new Set(["unarchive_goal", "restore_goal_milestone", "add_track", "e
 /** GET /v1/simple/removed, GET /v1/simple/tracks and the plan ops; null when not one of them. */
 export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: string[], trash: () => TrashEntryRow[]): Promise<Response | null> {
   if (p[1] !== "simple") return null;
+  syncTracks(db);
   const m = req.method;
   const owner = ctx.role === "owner";
   const deciderName = ctx.names[ctx.owners[0] ?? ""] ?? null;
@@ -158,11 +171,11 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     let added = "";
     if (owner) {
       const k = (added = `added-${Object.keys(TRACKS).length + 1}`);
-      TRACKS[k] = title;
+      setTitle(db, k, title);
       states[k] = { status: "active", prd };
       if (a.owner_id) (db.track_owners ??= {})[k] = a.owner_id;
     }
-    return done(change(ctx, body, owner, ctx.owners, `added the track ${title}`), () => delete TRACKS[added]);
+    return done(change(ctx, body, owner, ctx.owners, `added the track ${title}`), () => (delete TRACKS[added], delete db.track_titles?.[added]));
   }
   const k = keyOf(t.track_id ?? "");
   if (!k) return json(404, { detail: "No such track" });
@@ -193,13 +206,13 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     const was = { title, status: states[k].status, owner: own };
     const back = () => {
       if (!(k in TRACKS)) return;
-      TRACKS[k] = was.title;
+      setTitle(db, k, was.title);
       states[k].status = was.status;
       if (was.owner) (db.track_owners ??= {})[k] = was.owner;
       else delete db.track_owners?.[k];
     };
     if (decides) {
-      if (a.title != null && a.title.trim()) TRACKS[k] = a.title.trim();
+      if (a.title != null && a.title.trim()) setTitle(db, k, a.title.trim());
       if (a.status != null) states[k].status = a.status as Status;
       if ("owner_id" in a) {
         db.track_owners ??= {};
@@ -217,7 +230,7 @@ export function restoreTrack(db: Db, released: unknown): boolean {
   const k = (released as { track?: string } | undefined)?.track;
   const t = k ? db.trashed_tracks?.[k] : undefined;
   if (!k || !t) return false;
-  TRACKS[k] = t.title;
+  setTitle(db, k, t.title);
   (db.track_state ??= {})[k] = t.state;
   if (t.owner) (db.track_owners ??= {})[k] = t.owner;
   for (const s of db.items) if (t.items.includes(s.key) && !s.track) s.track = k;

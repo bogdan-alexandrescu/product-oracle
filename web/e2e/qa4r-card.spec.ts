@@ -81,7 +81,7 @@ for (const [where, size] of [
       await details(page, card);
       // The open card reads again: cut, below the line, with no stale flags or fixes.
       await expect(card.getByTestId("fp-status")).toHaveText("Cut");
-      await expect(card.getByTestId("item-cut")).toHaveText("Cut: it sits below the line, out of the plan");
+      await expect(card.getByTestId("fp-cut-by")).toHaveText(/^Cut on [A-Z][a-z]{2} \d+ by .+/);
       await expect(card.getByTestId("fp-clash")).toHaveCount(0);
       await expect(card.getByTestId("fp-clash-flag")).toHaveCount(0);
       await expect(card.getByTestId("card-flags")).toHaveCount(0);

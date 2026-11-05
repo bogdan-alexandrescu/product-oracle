@@ -71,6 +71,7 @@ test.describe("Tracks sheet", () => {
 
     await page.goto("/settings/trash");
     await page.getByRole("button", { name: "Restore Setup and onboarding" }).click();
+    await expect(page.getByRole("button", { name: "Restore Setup and onboarding" })).toHaveCount(0);
     await page.goto("/simple/roadmap");
     await expect(page.getByTestId("tracks-open")).toHaveText("Tracks · 4");
   });

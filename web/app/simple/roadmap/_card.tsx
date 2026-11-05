@@ -773,11 +773,7 @@ export function FloatingCard({
           Oracle is drafting…
         </p>
       )}
-      {cut && (
-        <p className="mt-1 text-sm text-text2" data-testid="item-cut">
-          Cut: it sits below the line, out of the plan
-        </p>
-      )}
+      {/* removed-tracks: a cut feature's head says who cut it and when (FeaturePanel's CutBy). */}
       {item.merged_into && (
         <p className="mt-1 text-sm text-text2" data-testid="item-merged">
           Merged into {item.merged_into.title}

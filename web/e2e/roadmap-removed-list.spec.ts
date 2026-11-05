@@ -42,7 +42,7 @@ test.describe("Removed list", () => {
 
     // The cut feature opens its panel, which says who cut it and when (and no Restore link).
     await row(page, "In-app tour").getByRole("button", { name: "In-app tour" }).click();
-    const panel = page.getByTestId("feature-panel");
+    const panel = page.getByRole("dialog", { name: "In-app tour" });
     await expect(panel.getByTestId("fp-cut-by")).toHaveText(/^Cut on [A-Z][a-z]{2} \d+ by .+/);
     await expect(panel.getByRole("button", { name: /^Restore/ })).toHaveCount(0);
     await shot(page, "ec2-c-mid");
