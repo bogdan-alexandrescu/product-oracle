@@ -27,7 +27,7 @@ from oracle.runs.reasons import (
     reasons_for,
     summarize,
 )
-from oracle.runs.roadmap import check_items
+from oracle.runs.roadmap import Elsewhere, check_items
 from oracle.swarm import Outcome
 from oracle.tenancy import tenant_session
 from tests.conftest import make_tenant
@@ -672,3 +672,60 @@ def test_date_fixes_name_a_date_source_not_a_basis():
         assert "basis" not in fixes.lower()
         assert "Add a date source" in fixes
     assert "basis" not in gate.DATE_NOT_WAIVED
+
+
+LEDGER = Elsewhere("account-health-ledger", "Account health ledger (Safety PRD)", "later", ())
+
+
+def test_a_cross_prd_and_a_local_dependency_each_get_their_own_reason_and_fixes():
+    # protects=an item waiting on another PRD's feature (Later) and on its own item (Next)
+    # gets one reason per dependency, each in its own words with its own fixes;
+    # fails_when=the other PRD's problem is paired with the local item's words and fixes
+    # and the local one shows the check's raw line with no fix.
+    body = """\
+  - {id: base, title: Local base, outcome: o, horizon: next, prd_section: s-1}
+  - {id: obs, title: Observability, outcome: o, horizon: now, prd_section: s-1,
+     depends_on: [account-health-ledger, base]}
+"""
+    items, problems = check(FILE.format(items=body), elsewhere=[LEDGER])
+    assert [p["code"] for p in problems] == ["horizon_breaks_dependency"] * 2
+    out = reasons_for(items, problems, None, elsewhere=[LEDGER])
+    assert codes(out, "obs") == ["horizon_breaks_dependency"] * 2
+    cross, local = [r for r in out if r["item"] == "obs"]
+    assert cross["text"] == (
+        "Needs Account health ledger (Safety PRD), which is in Later. An item cannot ship "
+        "before what it depends on."
+    )
+    assert cross["data"]["dependency"] == "account-health-ledger"
+    assert [(f["label"], f["action"]) for f in cross["fixes"]] == [
+        ("Move to Later", {"kind": "edit", "item": "obs", "field": "horizon", "value": "later"}),
+        ("Remove dependency", {"kind": "edit", "item": "obs", "field": "depends_on",
+                               "value": {"remove": ["account-health-ledger"]}}),
+    ]  # fmt: skip
+    assert local["text"] == (
+        "Needs Local base, which is in Next. An item cannot ship before what it depends on."
+    )
+    assert [f["label"] for f in local["fixes"]] == [
+        "Move to Next", "Pull dependency to Now", "Remove dependency",
+    ]  # fmt: skip
+    assert local["fixes"][2]["action"]["value"] == {"remove": ["base"]}
+    for r in (cross, local):
+        assert "account-health-ledger" not in r["text"] and "base" not in r["text"].split()
+
+
+def test_only_a_cross_prd_dependency_reads_in_plain_words_with_its_fixes():
+    # protects=a lone dependency on another PRD's feature in a later horizon reads with
+    # its name, its PRD and its fixes; fails_when=the reason is the check's line, no fix.
+    body = """\
+  - {id: obs, title: Observability, outcome: o, horizon: next, prd_section: s-1,
+     depends_on: [account-health-ledger]}
+"""
+    items, problems = check(FILE.format(items=body), elsewhere=[LEDGER])
+    out = reasons_for(items, problems, ctx(), elsewhere=[LEDGER])
+    hbd = only(out, "horizon_breaks_dependency")
+    assert hbd["text"] == (
+        "Needs Account health ledger (Safety PRD), which is in Later. An item cannot ship "
+        "before what it depends on."
+    )
+    assert [f["label"] for f in hbd["fixes"]] == ["Move to Later", "Remove dependency"]
+    assert "unknown_dependency" not in codes(out)
