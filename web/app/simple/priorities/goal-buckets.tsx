@@ -23,6 +23,8 @@ type Undo = Schemas["GoalBucketsUndo"];
 
 const BTN = "inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-line-strong bg-surface px-3 text-[14px] font-[650] text-text hover:bg-surface2";
 const PRIMARY = "inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-accent px-3 text-[14px] font-[650] text-on-accent disabled:border-line-strong disabled:bg-surface2 disabled:text-text2";
+// EG1 a (eg1-a-delete): Delete goal is drawn in the warning colour, as the frames do.
+const DANGER = "inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-warn px-3 text-[14px] font-[650] text-on-accent disabled:border-line-strong disabled:bg-surface2 disabled:text-text2";
 const ICON = "inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-transparent text-[16px] text-text hover:border-line-strong hover:bg-surface2";
 const INPUT = "h-9 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2.5 text-[15px] text-text";
 const BAD = "h-9 w-full min-w-0 rounded-lg border-2 border-warn bg-surface px-2.5 text-[15px] text-text";
@@ -433,7 +435,7 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive, 
         <div className="mt-3 flex items-center gap-2">
           <button
             type="button"
-            className={PRIMARY}
+            className={kind === "delete" && !ask ? DANGER : PRIMARY}
             disabled={!picked || busy}
             onClick={async () => {
               setBusy(true);
@@ -492,7 +494,7 @@ export function GoalMenu({ title, onEdit, onArchive, onDelete, archive, del = nu
               key={label}
               type="button"
               role="menuitem"
-              className={ITEM}
+              className={`${ITEM} ${label === "Delete goal" ? "text-warn" : ""}`}
               onClick={() => {
                 setOpen(false);
                 go();
@@ -567,7 +569,7 @@ export function DeleteArchivedDialog({ goal, ask, onClose, onDelete }: { goal: A
         <div className="mt-3 flex items-center gap-2">
           <button
             type="button"
-            className={PRIMARY}
+            className={ask ? PRIMARY : DANGER}
             disabled={busy}
             onClick={async () => {
               setBusy(true);
