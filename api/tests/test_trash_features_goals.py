@@ -99,6 +99,9 @@ async def test_decider_deletes_a_feature_and_restore_puts_it_back(client):
 
     listed = (await client.get("/v1/trash", headers=w.ctx.as_("owner"))).json()
     assert [(e["root"]["kind"], e["root"]["title"]) for e in listed] == [("feature", "Cut A")]
+    # History says it, and keeps naming it, with "(deleted)".
+    r = await client.get("/v1/simple/changes", headers=w.ctx.as_("owner"))
+    assert "Dee Cider moved Cut A (deleted) to Trash" in [c["words"] for c in r.json()]
 
     r = await client.post(f"{ITEMS}/{a}/restore", headers=w.ctx.as_("owner"))
     assert r.status_code == 200, r.text

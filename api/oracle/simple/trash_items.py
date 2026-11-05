@@ -171,21 +171,37 @@ async def _propose(
     return c
 
 
+async def _delete(
+    db: AsyncSession, principal: Any, item_id: uuid.UUID, reason: str | None
+) -> tuple[SimpleChange, TrashEntry | None]:
+    """Applied (the trash entry made) when the caller decides the item, else proposed to
+    whoever does. Either way a ``delete_item`` change, so history says it."""
+    entry, read_ = await _entry_of(db, principal, item_id)
+    if not service.can_decide(principal, entry, read_.deciders):
+        return await _propose(db, principal, entry, read_, reason), None
+    row = await trash_feature(db, principal, entry, reason)
+    c = SimpleChange(
+        document_id=entry.roadmap.id, op="delete_item",
+        target={"item_id": str(entry.row.id), "title": entry.row.title, "name": _name(entry)},
+        before={"deleted": False}, after={"deleted": True}, status="applied",
+        by=_me(principal), at=company_time.now(), reason=reason, routed_to=[],
+    )  # fmt: skip
+    db.add(c)
+    await db.flush()
+    return c, row
+
+
 async def delete_feature(
     db: AsyncSession, principal: Any, item_id: uuid.UUID, reason: str | None
 ) -> TrashedOut:
     from oracle.simple import changes
 
-    entry, read_ = await _entry_of(db, principal, item_id)
-    if service.can_decide(principal, entry, read_.deciders):
-        row = await trash_feature(db, principal, entry, reason)
-        out = TrashedOut(entry=_entry_out(row), can_restore=_restores(principal))
-        await db.commit()
-        return out
-    c = await _propose(db, principal, entry, read_, reason)
+    c, row = await _delete(db, principal, item_id, reason)
+    out = TrashedOut(entry=_entry_out(row) if row else None, can_restore=_restores(principal))
     await db.commit()
-    return TrashedOut(change=await changes.one_out(db, principal, c),
-                      can_restore=_restores(principal))  # fmt: skip
+    if row is None:
+        out.change = await changes.one_out(db, principal, c)
+    return out
 
 
 async def create_change(db: AsyncSession, principal: Any, body: Any) -> Any:
@@ -196,19 +212,7 @@ async def create_change(db: AsyncSession, principal: Any, body: Any) -> Any:
     from oracle.simple.schemas import SimpleChangeResult
 
     item_id = changes._uuid(body.target.get("item_id"), "item_id")
-    entry, read_ = await _entry_of(db, principal, item_id)
-    if service.can_decide(principal, entry, read_.deciders):
-        await trash_feature(db, principal, entry, body.reason)
-        c = SimpleChange(
-            document_id=entry.roadmap.id, op="delete_item",
-            target={"item_id": str(entry.row.id), "title": entry.row.title, "name": _name(entry)},
-            before={"deleted": False}, after={"deleted": True}, status="applied",
-            by=_me(principal), at=company_time.now(), reason=body.reason, routed_to=[],
-        )  # fmt: skip
-        db.add(c)
-        await db.flush()
-    else:
-        c = await _propose(db, principal, entry, read_, body.reason)
+    c, _ = await _delete(db, principal, item_id, body.reason)
     await db.commit()
     return SimpleChangeResult(change=await changes.one_out(db, principal, c), flags=[])
 
