@@ -1106,16 +1106,19 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       ...(chosen ? [chosen] : readable).flatMap((slug) => appliedMilestones(db, slug)),
       // The plan's dated milestones (M1-M3), each naming the items with a slice in it.
       // roadmap-gantt: each planned PRD's own records ("simple-plan-two": two PRDs, M1-M3 each).
-      ...(db.plan ? [PLAN_PRD_SLUG, ...(db.plan.prds ?? [])] : []).flatMap((slug) =>
-        planMilestones().map((m) => ({
+      // simple-replaced-prds (service._milestone_out): a replaced PRD's items are not read, so its
+      // track has no PRD and its milestones keep their target day and counts only, no plan.
+      ...(db.plan ? [PLAN_PRD_SLUG, ...(db.plan.prds ?? [])] : []).flatMap((slug) => {
+        const inPlay = items.some((i) => i.prd?.slug === slug);
+        return planMilestones().map((m) => ({
           id: stableUuid(slug === PLAN_PRD_SLUG ? `simple-plan-milestone/${m.code}` : `simple-plan-milestone/${slug}/${m.code}`),
           track_id: stableUuid(`simple-track/${slug === PLAN_PRD_SLUG ? "onboarding" : (seeds.find((s) => ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-") === slug)?.track ?? "onboarding")}`),
           name: `${m.code} · ${m.name}`, date: m.end_date,
           horizon: (m.end_date <= w.now[1] ? "now" : m.end_date <= w.next[1] ? "next" : "later") as Horizon, status: "planned" as const,
           item_ids: items.filter((i) => i.prd?.slug === slug && i.milestones.includes(m.code)).map((i) => i.id),
-          start_date: m.start_date, end_date: m.end_date, effort_weeks: m.effort_weeks, done_when: m.done_when, targets: m.targets,
-        })),
-      ),
+          ...(inPlay ? { start_date: m.start_date, end_date: m.end_date, effort_weeks: m.effort_weeks, done_when: m.done_when, targets: m.targets } : UNDATED),
+        }));
+      }),
     ],
     // build-milestones-on-roadmap: the shown roadmaps' milestones per goal (a PRD's among them).
     goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)))),
@@ -1221,7 +1224,8 @@ function prdKeyDates(db: SimpleDb, slug: string, roadmap: Schemas["SimpleDocRef"
   const hidden = new Set(db.plan?.hidden ?? []);
   // roadmap-keydates review: every PRD the roadmap's items come from, each item's own (an item
   // added from another approved PRD names that one), as the API's key_date_prds reads them.
-  const prds = [...new Map(db.items.filter((s) => s.roadmap === slug && !s.draft_roadmap).map((s) => [ownPrd(s).id, ownPrd(s)])).values()];
+  // simple-replaced-prds: never a replaced PRD's (service.load drops its items, as visibleItems).
+  const prds = [...new Map(db.items.filter((s) => s.roadmap === slug && !s.draft_roadmap && !ofReplacedPrd(db, s)).map((s) => [ownPrd(s).id, ownPrd(s)])).values()];
   return prds
     .filter((p) => !hidden.has(p.slug))
     .sort((a, b) => a.title.localeCompare(b.title))
