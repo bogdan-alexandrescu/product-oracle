@@ -905,7 +905,7 @@ export const ASSUMED_LINK: Attrs = { contribution: 1, contribution_assumed: true
  * and confidence (attrs), and, as proposed links Oracle made for a person to confirm, the
  * goals it serves (supports: the row's, then the approved feature set's `scope` entry's)
  * and what it depends on. A goal named with no contribution still gets its link, the
- * contribution assumed (ASSUMED_LINK) unless the other names one; one of 0 (does not serve)
+ * contribution assumed (ASSUMED_LINK) unless the other names one; a 0 from either source (does not serve)
  * gets none. Returns how many features were added.
  */
 export function acceptNewFeatures(
@@ -965,9 +965,12 @@ export function acceptNewFeatures(
     const row = rows.find((r) => r.key === entity.key)!;
     const goals = new Map<string, Attrs>();
     const entry = scope.find((f) => f.key === entity.key);
-    for (const g of [...row.explanation.goals, ...(entry?.goals ?? []).map((x) => ({ ...x, goal: x.key }))]) {
+    const named = [...row.explanation.goals, ...(entry?.goals ?? []).map((x) => ({ ...x, goal: x.key }))];
+    // A 0 from either source wins: the feature does not serve that goal.
+    const zero = new Set(named.filter((g) => g.goal && g.contribution === 0).map((g) => g.goal));
+    for (const g of named) {
       const c = contributionOf(g.contribution);
-      if (!g.goal || c === 0) continue;
+      if (!g.goal || zero.has(g.goal)) continue;
       if (c == null || ("contribution_assumed" in g && g.contribution_assumed)) {
         if (!goals.has(g.goal)) goals.set(g.goal, ASSUMED_LINK);
       } else if ((goals.get(g.goal) ?? ASSUMED_LINK) === ASSUMED_LINK) goals.set(g.goal, { contribution: c });

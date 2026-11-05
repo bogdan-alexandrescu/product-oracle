@@ -135,6 +135,7 @@ const PROBLEMS: Record<string, string> = {
   differs_from_live: "Differs from live",
   no_goal: "No confirmed goal",
   new_feature_no_goal: "Names no goal",
+  unknown_goal: "Unknown goal",
 };
 
 function ProblemChip({ p }: { p: PriorityProblem }) {
@@ -143,6 +144,20 @@ function ProblemChip({ p }: { p: PriorityProblem }) {
       {PROBLEMS[p.code] ?? p.code.replace(/_/g, " ")}
       <span className="sr-only">: {p.message}</span>
     </Chip>
+  );
+}
+
+/** Each of a run row's problems: its chip, then its sentence in full (never only a tooltip). */
+function ProblemList({ problems }: { problems: PriorityProblem[] }) {
+  return (
+    <ul className="mt-2 space-y-1 text-sm">
+      {problems.map((p, i) => (
+        <li key={i} className="flex flex-col items-start gap-1">
+          <ProblemChip p={p} />
+          <span className="break-words">{p.message}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -542,16 +557,13 @@ function FeatureInspector({
             <p className="tnum mt-1.5 text-sm text-text2">
               {run.live_rank == null ? "Not in Oracle's live ranking." : `Oracle's live ranking puts it #${run.live_rank} (${deltaText(run.delta)}).`}
             </p>
-            {run.problems.length > 0 && (
-              <ul className="mt-2 space-y-1 text-sm">
-                {run.problems.map((p, i) => (
-                  <li key={i} className="flex flex-col items-start gap-1">
-                    <ProblemChip p={p} />
-                    <span className="break-words">{p.message}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {run.problems.length > 0 && <ProblemList problems={run.problems} />}
+          </InspectorSection>
+        )}
+        {/* A new feature has no "Why rank" section: its problems show on their own (review of PR 1244, round 3). */}
+        {run && !runRow && run.problems.length > 0 && (
+          <InspectorSection label="Problems" testId="run-problems">
+            <ProblemList problems={run.problems} />
           </InspectorSection>
         )}
         {change}
@@ -835,7 +847,8 @@ const STATUS_TEXT = { saved: "Saved", proposed: "Proposed", discarded: "Discarde
 
 /**
  * The features new in the run's PRD (RP1, 'Scored with the rest'): ranked here among the
- * rest; approving the order adds them to the baseline as proposed.
+ * rest; approving the order adds them to the Ground Truth as proposed. An order with a
+ * blocking problem cannot be approved as it is, so the note does not promise it.
  */
 function NewFeaturesNote({ c }: { c: CompareOut }) {
   const n = c.rows.filter((r) => r.new).length;
@@ -844,17 +857,34 @@ function NewFeaturesNote({ c }: { c: CompareOut }) {
   if (c.snapshot.status === "saved")
     return (
       <Notice tone="pass" testId="new-features-note">
-        {`Order approved. The ${n === 1 ? "new feature" : `${n} new features`} joined the baseline as proposed, at the ${n === 1 ? "rank" : "ranks"} you approved.`}
+        {`Order approved. The ${n === 1 ? "new feature" : `${n} new features`} joined the Ground Truth as proposed, at the ${n === 1 ? "rank" : "ranks"} you approved.`}
       </Notice>
     );
   if (c.snapshot.status !== "proposed") return null;
   // As the frame words it: "the 6 features Saved addresses adds", the PRD named without its kind.
   const prd = c.snapshot.document ? prdName(c.snapshot.document).replace(/ PRD$/, "") : "this PRD";
+  const approvable = blockingOf(c).length === 0;
   return (
     <Notice tone="info" testId="new-features-note">
-      {`This order ranks the ${features} ${prd} adds, scored on the same formula and goals as the rest. Approving the order adds ${n === 1 ? "it" : "them"} to the baseline as proposed.`}
+      {`This order ranks the ${features} ${prd} adds, scored on the same formula and goals as the rest.`}
+      {approvable && ` Approving the order adds ${n === 1 ? "it" : "them"} to the Ground Truth as proposed.`}
     </Notice>
   );
+}
+
+/** The order's blocking problems, each once, in row order. */
+const blockingOf = (c: CompareOut) => c.rows.flatMap((r) => r.problems.filter((p) => p.blocking));
+
+/** Problems that ask the run for a goal: sending the order back is what fixes them. */
+const GOAL_PROBLEMS = new Set(["new_feature_no_goal", "unknown_goal"]);
+
+/**
+ * What to do about an order's blocking problems: they are never waived (gate ORDER_NOT_WAIVED),
+ * so Request changes sends the order back for the run to fix.
+ */
+function blockedText(problems: PriorityProblem[]) {
+  const fix = problems.every((p) => GOAL_PROBLEMS.has(p.code)) ? "names the goal" : `fixes ${problems.length === 1 ? "it" : "them"}`;
+  return `${plural(problems.length, "blocking problem")} left. Order problems cannot be waived: request changes so the run ${fix}.`;
 }
 
 /**
@@ -869,7 +899,13 @@ function SnapshotBand({ c, onDecided }: { c: CompareOut; onDecided: () => void }
   const doc = snap.document;
   const prd = doc ? prdName(doc) : null;
   const deciding = snap.status === "proposed" && cp?.status === "pending";
-  const blocked = cp?.cannot_approve ? `${cp.cannot_approve.charAt(0).toUpperCase()}${cp.cannot_approve.slice(1)}.` : null;
+  // The order's own problems are said in full, with what to do; any other reason as the server gives it.
+  const problems = blockingOf(c);
+  const blocked = problems.length
+    ? blockedText(problems)
+    : cp?.cannot_approve
+      ? `${cp.cannot_approve.charAt(0).toUpperCase()}${cp.cannot_approve.slice(1)}.`
+      : null;
 
   async function decide(decision: "approved" | "changes_requested") {
     if (!run || !cp) return;
@@ -928,6 +964,15 @@ function SnapshotBand({ c, onDecided }: { c: CompareOut; onDecided: () => void }
             <p className="text-sm text-warn" data-testid="cannot-approve">
               {blocked}
             </p>
+          )}
+          {problems.length > 0 && (
+            <ul aria-label="Blocking problems" className="mt-1.5 list-disc space-y-1 pl-5 text-sm">
+              {problems.map((p, i) => (
+                <li key={i} className="break-words">
+                  {p.message}
+                </li>
+              ))}
+            </ul>
           )}
           <textarea
             aria-label="Note for the agents"

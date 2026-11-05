@@ -3026,6 +3026,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       acceptNewFeatures(db.baseline, snap.run_id, snap.ranking, by, scope);
       addLiveFeature(db, snap.ranking);
     },
+    goalKeys: () => db.baseline.entities.filter((e) => e.type === "goal" && e.status !== "rejected").map((e) => e.key),
     ask: (q) => {
       const at = now();
       const id = uuid();
