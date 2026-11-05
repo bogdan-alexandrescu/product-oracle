@@ -118,6 +118,9 @@ async function cutKeepingDependents(page: Page, key: string) {
   await talk.getByRole("button", { name: "Send" }).click();
   await talk.getByTestId("chat-card").filter({ hasText: "Cut Alert rules engine" }).getByRole("button", { name: "Cut it, keep the dependents" }).click();
   await card.getByRole("button", { name: "Close" }).first().click().catch(() => undefined);
+  // The feature panel closes on Escape too; its backdrop gone, the page is clickable again.
+  if (await page.getByTestId("feature-panel-backdrop").isVisible()) await page.keyboard.press("Escape");
+  await expect(page.getByTestId("feature-panel-backdrop")).toHaveCount(0);
 }
 
 test("a cut item others depend on: Bring it back, or Remove the dependency, each with Undo", async ({ page }) => {
