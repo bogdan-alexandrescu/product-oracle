@@ -544,30 +544,51 @@ test("a reviewer's approval before the decider's says the draft waits for the de
 
 /**
  * fix 1, minor 6: a message after an action on the roadmap shows at the top right on a desktop,
- * clear of the open Ask panel and of the draft banner where the action was taken.
- * fails_when: the message covers the Ask panel or the banner's buttons, or shows at the foot.
+ * clear of the open Ask panel and of the draft banner where the action was taken. fix 2, minor 1:
+ * at 1440 it covers no control either (the Timeline / Gantt / Now-Next-Later / Waterfall switch
+ * beside the title, the page's buttons), with the Ask panel open or not.
+ * fails_when: the message covers the Ask panel or any control, or shows at the foot.
  */
-test("the roadmap's top message keeps clear of the Ask panel and the draft banner", async ({ page }) => {
-  await open(page, "roadmap-two-drafts");
-  await page.getByTestId("simple-ask").click();
-  const ask = page.locator("#simple-ask-panel").filter({ visible: true });
-  await expect(ask).toBeVisible();
-  await strip(page).locator('[data-testid="conflict"][data-item="setup-tour"]').getByRole("button", { name: "Bring it back" }).click();
-  await expect(page.getByText(/Brought back 'In-app tour'/)).toBeVisible();
-  const banner = page.getByTestId("draft-banner");
-  await banner.getByRole("button", { name: "Send for review" }).click();
-  const toast = page.getByRole("status").filter({ hasText: /^Sent for review/ });
-  await expect(toast).toBeVisible();
-  const t = (await toast.boundingBox())!;
-  const view = page.viewportSize()!;
-  // At the top of the screen, not its foot.
-  expect(t.y).toBeLessThan(view.height / 2);
-  const overlap = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
-    a.width > 0 && b.width > 0 && a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
-  await expect(ask).toBeVisible();
-  expect(overlap(t, (await ask.boundingBox())!)).toBe(false);
-  for (const b of await banner.getByRole("button").all()) {
-    const box = await b.boundingBox();
-    if (box) expect(overlap(t, box), (await b.textContent()) ?? "").toBe(false);
-  }
-});
+for (const withAsk of [true, false])
+  test(`the roadmap's top message keeps clear of every control${withAsk ? " and of the Ask panel" : ""}`, async ({ page }) => {
+    await open(page, "roadmap-two-drafts");
+    const ask = page.locator("#simple-ask-panel").filter({ visible: true });
+    if (withAsk) {
+      await page.getByTestId("simple-ask").click();
+      await expect(ask).toBeVisible();
+    }
+    await strip(page).locator('[data-testid="conflict"][data-item="setup-tour"]').getByRole("button", { name: "Bring it back" }).click();
+    await expect(page.getByText(/Brought back 'In-app tour'/)).toBeVisible();
+    const banner = page.getByTestId("draft-banner");
+    await banner.getByRole("button", { name: "Send for review" }).click();
+    const toast = page.getByRole("status").filter({ hasText: /^Sent for review/ });
+    await expect(toast).toBeVisible();
+    const view = page.viewportSize()!;
+    // Every visible control the message covers, by its words (its own Dismiss aside).
+    const covered = () =>
+      toast.evaluate((t) => {
+        const a = t.getBoundingClientRect();
+        return [...document.querySelectorAll('a[href], button, input, select, textarea, [role="button"], [role="tab"], [role="radio"]')]
+          .filter((el) => !t.contains(el))
+          .filter((el) => {
+            const b = el.getBoundingClientRect();
+            return b.width > 1 && b.height > 1 && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+          })
+          .map((el) => (el.textContent || el.getAttribute("aria-label") || el.tagName).trim());
+      });
+    await expect.poll(covered).toEqual([]);
+    await expect(page.getByTestId("format-switch")).toBeVisible();
+    const t = (await toast.boundingBox())!;
+    // At the top of the screen, not its foot.
+    expect(t.y).toBeLessThan(view.height / 2);
+    const overlap = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+      a.width > 0 && b.width > 0 && a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+    if (withAsk) {
+      await expect(ask).toBeVisible();
+      expect(overlap(t, (await ask.boundingBox())!)).toBe(false);
+    }
+    for (const b of await banner.getByRole("button").all()) {
+      const box = await b.boundingBox();
+      if (box) expect(overlap(t, box), (await b.textContent()) ?? "").toBe(false);
+    }
+  });

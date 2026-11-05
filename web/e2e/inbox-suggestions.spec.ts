@@ -121,6 +121,36 @@ async function inboxCount(page: Page, phone: boolean, tab: "more" | "roadmap" = 
   return t.length ? Number(t[0].trim()) : 0;
 }
 
+/** The badge `inboxCount` reads. */
+const countBadge = (page: Page, phone: boolean, tab: "more" | "roadmap" = "more") => page.getByTestId(phone ? `simple-tab-${tab}-count` : "simple-nav-inbox-count");
+
+/**
+ * fix 2: the count once it holds still (a page's counts load, then may read again as it opens),
+ * over 0: the count an action is measured from.
+ */
+async function settledCount(page: Page, phone: boolean, tab: "more" | "roadmap" = "more"): Promise<number> {
+  let last = -1;
+  await expect
+    .poll(
+      async () => {
+        const a = await inboxCount(page, phone, tab);
+        const same = a === last;
+        last = a;
+        return a > 0 && same;
+      },
+      { intervals: [400], timeout: 20_000 },
+    )
+    .toBe(true);
+  return last;
+}
+
+/** fix 2, minor 4: waits on the badge itself to read `n` (gone at 0), not on a poll of a few seconds. */
+async function expectCount(page: Page, phone: boolean, n: number, tab: "more" | "roadmap" = "more") {
+  const badge = countBadge(page, phone, tab);
+  if (n === 0) await expect(badge).toHaveCount(0, { timeout: 20_000 });
+  else await expect(badge.first()).toHaveText(new RegExp(`^\\s*${n}\\s*$`), { timeout: 20_000 });
+}
+
 /** Home's Needs you counts of Approvals and Proposals, as shown now (0 when not shown). */
 async function homeCounts(page: Page): Promise<{ approvals: number; proposals: number }> {
   const needs = page.getByTestId("home-needs");
@@ -274,21 +304,19 @@ for (const phone of [false, true]) {
       const pop = page.getByTestId("suggestion-popover");
       await expect(pop).toContainText("Oracle suggests");
       // A phone counts Oracle's dates once, on its Roadmap tab (its dates to confirm), not again under More.
-      await expect.poll(() => inboxCount(page, phone, "roadmap")).toBeGreaterThan(0);
-      const n0 = await inboxCount(page, phone, "roadmap");
+      const n0 = await settledCount(page, phone, "roadmap");
       await tap(pop.getByRole("button", { name: "Accept" }));
       await expect(page.getByText("Dates accepted in your working draft")).toBeVisible();
-      await expect.poll(() => inboxCount(page, phone, "roadmap")).toBe(n0 - 1);
+      await expectCount(page, phone, n0 - 1, "roadmap");
 
       // A goal's suggested feature, accepted on its card.
       await openFromInbox("Open the suggestions for Keep alerts quiet");
       const card = page.getByTestId("goal-suggestion").first();
       await expect(card).toBeVisible();
-      await expect.poll(() => inboxCount(page, phone)).toBeGreaterThan(0);
-      const n1 = await inboxCount(page, phone);
+      const n1 = await settledCount(page, phone);
       await tap(card.getByRole("button", { name: "Accept" }));
       await expect(page.getByText(/^Added .+ as a draft$/)).toBeVisible();
-      await expect.poll(() => inboxCount(page, phone)).toBe(n1 - 1);
+      await expectCount(page, phone, n1 - 1);
 
       // A teammate's proposal, accepted in Needs a decision.
       await openFromInbox("Open Weekly alert digest on its roadmap");
@@ -296,11 +324,10 @@ for (const phone of [false, true]) {
       await expect(proposal).toBeVisible();
       // card: inbox-ask-not-in-tray: a feature ask on no roadmap is decided in its Inbox row only: no roadmap's tray lists it.
       await expect(page.getByTestId("decision-tray").getByTestId("tray-proposal").filter({ hasText: "Bulk export" })).toHaveCount(0);
-      await expect.poll(() => inboxCount(page, phone, "roadmap")).toBeGreaterThan(0);
-      const n2 = await inboxCount(page, phone, "roadmap");
+      const n2 = await settledCount(page, phone, "roadmap");
       await tap(proposal.getByRole("button", { name: "Accept" }));
       await expect(page.getByText("Accepted: it is in your working draft")).toBeVisible();
-      await expect.poll(() => inboxCount(page, phone, "roadmap")).toBe(n2 - 1);
+      await expectCount(page, phone, n2 - 1, "roadmap");
     });
 
     // card: inbox-simple-approval

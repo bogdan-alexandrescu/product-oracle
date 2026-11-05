@@ -4,6 +4,7 @@
  */
 import { api, type Schemas } from "@/lib/api/client";
 import { calendarDay, displayZone, todayIn } from "@/lib/dates";
+import { LINK_KINDS } from "@/lib/roadmap-links";
 
 export type Roadmap = Schemas["SimpleRoadmapOut"];
 export type Item = Schemas["SimpleRoadmapItem"];
@@ -177,10 +178,7 @@ export function storedDates(i: Item): { start_date: string | null; end_date: str
 /** The flags drawn red (not accepted as a risk). */
 export const broken = (i: Item): Flag[] => i.flags.filter((f) => f.state === "red");
 
-/** fix4 qa-simple-roadmap-8: the flags that are a broken link between items (a dependency
- * out of order, a cut item others still depend on); a draft with no owner or an end past its
- * milestone is red too, but it is not a broken link. */
-export const LINK_KINDS: Flag["kind"][] = ["dependency_order", "cut_with_dependents"];
+/** The red flags that are a broken link between items (LINK_KINDS). */
 export const brokenLinks = (i: Item): Flag[] => broken(i).filter((f) => LINK_KINDS.includes(f.kind));
 
 /** fix4 qa-simple-roadmap-8: what "Needs a decision" counts, read by its toolbar button and its

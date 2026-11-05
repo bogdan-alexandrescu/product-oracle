@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { LINK_KINDS } from "@/app/simple/roadmap/_lib";
 import { Mark } from "@/components/ds/Brand";
 import { Icon, type IconName } from "@/components/ds/Icon";
 import { ModeSwitch, SEGMENTED } from "@/components/ds/ModeSwitch";
@@ -14,6 +13,7 @@ import { Sheet } from "@/components/ds/Sheet";
 import { setPanelOpen, usePanelOpen } from "@/components/hop/open-state";
 import { SIMPLE_HOME, switchTarget } from "@/lib/experience";
 import { useMe } from "@/lib/me";
+import { LINK_KINDS } from "@/lib/roadmap-links";
 import { api, unwrap } from "@/lib/api/client";
 import { loadInbox, loadMyQuestions, loadWaiting, onWaitingChanged, waitingCount } from "@/lib/waiting";
 
@@ -92,9 +92,13 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
         // is not the roadmap's), Oracle's dates (its dates to confirm) and the versions waiting for
         // my approval that its asks count (roadmap-decide).
         const drafts = new Set(items.filter((i) => i.kind === "draft").map((i) => i.ref_id));
+        // fix 2: Oracle's dates by id, those the Roadmap tab's dates to confirm hold (the
+        // suggestion, or its item: the Inbox has one row per item), never more than it counts.
+        const oracleDates = items.filter((i) => i.kind === "date" && !i.key.startsWith("proposal:"));
+        const dateIds = new Set([...oracleDates.map((i) => i.ref_id), ...oracleDates.map((i) => new URLSearchParams(i.href.split("?")[1] ?? "").get("item"))]);
         const inboxRoadmap = inbox
           ? inbox.simple_proposals.filter((x) => !["decide_question", "name_decider", "edit_line"].includes(x.op)).length +
-            Math.min(dates, inbox.simple_date_suggestions.length) +
+            Math.min(dates, inbox.simple_date_suggestions.filter((x) => dateIds.has(x.id) || dateIds.has(x.item_id)).length) +
             inbox.simple_approvals.filter((x) => drafts.has(x.draft_id)).length
           : 0;
         const all = inbox ? waitingCount(inbox, questions) : 0;
