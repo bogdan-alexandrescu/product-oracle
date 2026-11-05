@@ -1,9 +1,9 @@
 "use client";
 // MOCK-HOOK: this whole file is the mk-edit-decisions mock-up (never merged). Every line below is a MOCK-HOOK.
-// MOCK-HOOK: ?ec1=a|b|c (decisions) and ?eq2=a|b|c (questions); &open=1, &phase=mid|done, &act=edit|reassign|withdraw|new, &long=1, &as=viewer|commenter.
+// MOCK-HOOK: ?ec1=a|b|c (decisions) and ?eq2=a|b|c (questions); &open=1, &phase=mid|done, &act=edit|reassign|withdraw|delete|new|sheet, &long=1, &as=approver|viewer.
 
 import { useSearchParams } from "next/navigation";
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
 
 import { Icon } from "@/components/ds/Icon";
@@ -28,7 +28,8 @@ export function MkStyles() {
     <style>{`:root{--mk-edited:#fff1bf;--mk-edited-bar:#d4a017}
 :root[data-theme="dark"]{--mk-edited:#3b3110;--mk-edited-bar:#f2c94c}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--mk-edited:#3b3110;--mk-edited-bar:#f2c94c}}
-@media (min-width: 1500px){html:has([data-testid="question-sheet"]) .simple-page{margin-left:auto;margin-right:480px}}`}</style>
+@media (min-width: 1500px){html:has([data-testid="question-sheet"]) .simple-page{margin-left:auto;margin-right:480px}}
+@media (min-width: 601px){[data-testid="toasts"]{top:16px;bottom:auto;left:auto;right:24px;justify-content:flex-end;padding:0}}`}</style>
   );
 }
 
@@ -38,6 +39,19 @@ export function useTrashToast(deleted: boolean, label: string, undo: () => void)
     if (deleted) toast({ message: `${label} is in Settings › Trash`, action: { label: "Undo", onClick: undo } });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deleted]);
+}
+
+/** What waits on you, as the mock-up changes it: a question withdrawn or deleted leaves the count, one added joins it. */
+const mkDeltas = new Map<string, number>();
+const mkSubs = new Set<() => void>();
+export function setMkDelta(key: string, n: number) {
+  if ((mkDeltas.get(key) ?? 0) === n) return;
+  mkDeltas.set(key, n);
+  mkSubs.forEach((f) => f());
+}
+const mkDeltaNow = () => Array.from(mkDeltas.values()).reduce((a, b) => a + b, 0);
+export function useMkDelta() {
+  return useSyncExternalStore((f) => { mkSubs.add(f); return () => { mkSubs.delete(f); }; }, mkDeltaNow, () => 0);
 }
 
 export function useMk() {
@@ -114,7 +128,7 @@ export function OptionsEditor({ options, onChange }: { options: string[]; onChan
     <div className="flex flex-col gap-2">
       {options.map((o, i) => (
         <span key={i} className="flex items-center gap-2">
-          <input aria-label={`Option ${i + 1}`} className={FIELD} value={o} onChange={(e) => onChange(options.map((x, j) => (j === i ? e.target.value : x)))} />
+          <textarea rows={1} aria-label={`Option ${i + 1}`} className={`${FIELD} resize-none [field-sizing:content]`} value={o} onChange={(e) => onChange(options.map((x, j) => (j === i ? e.target.value : x)))} />
           <button type="button" aria-label={`Remove option ${i + 1}`} className="simple-button simple-button-quiet !min-h-9 !px-2" onClick={() => onChange(options.filter((_, j) => j !== i))}>
             <Icon name="x" size={18} stroke={1.7} />
           </button>
@@ -214,7 +228,8 @@ export function DecisionEditRow({ title, decider, status, meta, first, long, cod
         : mk.act === "delete"
           ? { ...start, deleted: true }
           : mk.act === "reassign"
-            ? { ...start, decider: "Mei Tanaka", edited: true }
+            ? // From the edited state (the done frame before it): the list opens on it, then Mei Tanaka is picked.
+              mk.open ? edit(start) : { ...edit(start), decider: "Mei Tanaka", edited: true }
             : power === "propose"
               ? { ...edit(start), edited: false, suggested: true }
               : edit(start)
@@ -630,6 +645,10 @@ export function useMkQuestion(q: Q, target: boolean) {
     setMode(null);
   };
   useTrashToast(!!s.deleted, `${q.code} ${s.title}`, () => setS({ ...s, deleted: false }));
+  const waits = q.waiting_for_me && q.status === "proposed" && (q.can.decide || q.can.propose);
+  useEffect(() => {
+    if (mk.eq2 && waits) setMkDelta(`q:${q.id}`, s.withdrawn || s.deleted ? -1 : 0);
+  }, [mk.eq2, waits, q.id, s.withdrawn, s.deleted]);
   return { mk, power, s, setS, draft, setDraft, mode, setMode, save, target: t };
 }
 
@@ -769,7 +788,7 @@ export function AskQuestionRow({ onAdd }: { onAdd: (t: string) => void }) {
 export function AddedQuestion({ q: { title, recommendation, options }, code }: { q: MkQ; code: string }) {
   const answers = options.filter(Boolean);
   return (
-    <li className={`simple-row ${EDITED}`} data-testid="question-row">
+    <li className={`simple-row ${EDITED}`} data-testid="question-row" data-mk-added="">
       <span aria-hidden className="simple-ico">
         <Icon name="flag" size={20} stroke={1.7} />
       </span>

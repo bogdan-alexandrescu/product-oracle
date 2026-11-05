@@ -34,11 +34,11 @@
             },
             {
               "file": "frames/ec1-a-reassign.html",
-              "caption": "Reassign: the person list opens under the row; Sam Okafor decides now."
+              "caption": "Reassign, after that edit: D-81 keeps its edited mark; the person list opens under the row; Sam Okafor decides now."
             },
             {
               "file": "frames/ec1-a-reassigned.html",
-              "caption": "Mei Tanaka picked: D-81 now reads Mei Tanaka decides, marked edited just now."
+              "caption": "Mei Tanaka picked: D-81 now reads Mei Tanaka decides and stays marked edited just now."
             },
             {
               "file": "frames/ec1-a-withdrawn.html",
@@ -105,11 +105,11 @@
             },
             {
               "file": "frames/ec1-b-reassign.html",
-              "caption": "Reassign in the sheet: the person list opens under the decider; Sam Okafor decides now."
+              "caption": "Reassign in the sheet, after that edit: D-81 keeps its third option, Ship to pilot customers first, and Review on Dec 7; the person list opens under the decider; Sam Okafor decides now."
             },
             {
               "file": "frames/ec1-b-reassigned.html",
-              "caption": "Mei Tanaka picked: D-81 now reads Mei Tanaka decides, marked edited just now."
+              "caption": "Mei Tanaka picked: D-81 now reads Mei Tanaka decides and stays marked edited just now."
             },
             {
               "file": "frames/ec1-b-withdrawn.html",
@@ -175,11 +175,11 @@
             },
             {
               "file": "frames/ec1-c-reassign.html",
-              "caption": "The decider's name is a link: the person list opens in the row; Sam Okafor decides now."
+              "caption": "After that edit, the decider's name is a link: D-81 keeps its third option, Ship to pilot customers first; the person list opens in the row; Sam Okafor decides now."
             },
             {
               "file": "frames/ec1-c-reassigned.html",
-              "caption": "Mei Tanaka picked: D-81 now reads Mei Tanaka decides, marked edited just now."
+              "caption": "Mei Tanaka picked: D-81 now reads Mei Tanaka decides, keeps its third option and stays marked edited just now."
             },
             {
               "file": "frames/ec1-c-withdrawn.html",
@@ -207,7 +207,7 @@
             },
             {
               "file": "frames/ec1-c-mid-390.html",
-              "caption": "Phone: labels sit over their values; Options is edited on its own, an option added."
+              "caption": "Phone: labels sit over their values; Options is edited on its own, a third option, Ship to pilot customers first, added and read whole."
             },
             {
               "file": "frames/ec1-c-propose.html",
@@ -224,7 +224,7 @@
     {
       "code": "eq2",
       "name": "Questions edited in Simple",
-      "question": "How does a person add, edit and withdraw a PRD's open question in Simple?",
+      "question": "How does a person add, edit, withdraw and delete a PRD's open question in Simple?",
       "common": "A question's text, the PRD's recommendation and its other answers can be changed; a question can be added to a PRD. Withdraw is the 'not now': the question stays in the PRD's history, with Undo. Delete sends it to Settings > Trash, where it can be restored (a toast offers Undo). An owner changes (so does the question's decider); an approver who is not the decider proposes a change to the decider; a viewer reads. Deciding and naming a decider stay as today. The same question row is used on Home, so what a proposal adds there shows on Home too.",
       "proposals": [
         {
@@ -253,11 +253,11 @@
             },
             {
               "file": "frames/eq2-a-withdrawn.html",
-              "caption": "After that edit, Withdraw, confirmed (the 'not now'): Q5 Do weekly digests include muted alerts? is struck through, kept in the PRD's history, with Undo."
+              "caption": "After that edit, Withdraw, confirmed (the 'not now'): Q5 Do weekly digests include muted alerts? is struck through, kept in the PRD's history, with Undo; Waiting for you and Decisions in the side bar read 20, one fewer."
             },
             {
               "file": "frames/eq2-a-deleted.html",
-              "caption": "After that edit, Delete: Q5 leaves the list; a toast says it is in Settings > Trash, with Undo."
+              "caption": "After that edit, Delete: Q5 leaves the list; a toast says it is in Settings > Trash, with Undo; Waiting for you and Decisions in the side bar read 20, one fewer."
             },
             {
               "file": "frames/eq2-a-new.html",
@@ -265,15 +265,15 @@
             },
             {
               "file": "frames/eq2-a-new-done.html",
-              "caption": "Added: Q17 Who can export a team's alert history? waits for a decider."
+              "caption": "Added: Q17 Who can export a team's alert history? comes after the dated questions (soonest first), as it has no due date yet; it waits for a decider; Waiting for you and Decisions in the side bar read 22, one more."
             },
             {
               "file": "frames/eq2-a-hard.html",
-              "caption": "Hard case at 1440: Q6, a long question with a recommendation and five other answers, makes a tall row, its fields beside the actions."
+              "caption": "Hard case at 1440: Q6 stands in as a long question (no due date) with a recommendation and five other answers; it makes a tall row, its fields beside the actions."
             },
             {
               "file": "frames/eq2-a-hard-1512.html",
-              "caption": "Hard case at 1512: Q6's long question, recommendation and five other answers grow its row beside the actions column."
+              "caption": "Hard case at 1512: Q6 stands in as a long question (no due date); its question, recommendation and five other answers grow its row beside the actions column."
             },
             {
               "file": "frames/eq2-a-mid-390.html",
@@ -320,11 +320,11 @@
             },
             {
               "file": "frames/eq2-b-withdrawn.html",
-              "caption": "After that edit, Withdraw at the sheet's foot (the 'not now'): Q5 Do weekly digests include muted alerts? is struck through, kept in the PRD's history, with Undo."
+              "caption": "After that edit, Withdraw at the sheet's foot (the 'not now'): Q5 Do weekly digests include muted alerts? is struck through, kept in the PRD's history, with Undo; Waiting for you and Decisions in the side bar read 20, one fewer."
             },
             {
               "file": "frames/eq2-b-deleted.html",
-              "caption": "After that edit, Delete at the sheet's foot: Q5 leaves the list; a toast says it is in Settings > Trash, with Undo."
+              "caption": "After that edit, Delete at the sheet's foot: Q5 leaves the list; a toast says it is in Settings > Trash, with Undo; Waiting for you and Decisions in the side bar read 20, one fewer."
             },
             {
               "file": "frames/eq2-b-new.html",
@@ -332,15 +332,15 @@
             },
             {
               "file": "frames/eq2-b-new-done.html",
-              "caption": "Added: Q17 Who can export a team's alert history? keeps its recommendation and two other answers; it waits for a decider."
+              "caption": "Added: Q17 Who can export a team's alert history? keeps its recommendation and two other answers; with no due date yet it comes after the dated questions (soonest first); it waits for a decider; Waiting for you and Decisions in the side bar read 22, one more."
             },
             {
               "file": "frames/eq2-b-hard.html",
-              "caption": "Hard case at 1440: Q6's long question, recommendation and five other answers scroll inside the sheet."
+              "caption": "Hard case at 1440: Q6 stands in as a long question (no due date); its question, recommendation and five other answers scroll inside the sheet."
             },
             {
               "file": "frames/eq2-b-hard-1512.html",
-              "caption": "Hard case at 1512: the list moves left beside the sheet, so Q6's title stays in view; its five other answers scroll inside the sheet."
+              "caption": "Hard case at 1512: the list moves left beside the sheet, so Q6's long title stays in view; its five other answers scroll inside the sheet."
             },
             {
               "file": "frames/eq2-b-mid-390.html",
@@ -357,6 +357,10 @@
             {
               "file": "frames/eq2-b-read.html",
               "caption": "A viewer (Lena Ortiz, signed in): no Ask a question; the titles open a read-only sheet."
+            },
+            {
+              "file": "frames/eq2-b-read-sheet.html",
+              "caption": "The viewer opens Q5 Reminder default time: its sheet reads only (the recommendation, the other answers, Avery Stone decides), with no Edit, Withdraw or Delete."
             }
           ]
         },
@@ -386,11 +390,11 @@
             },
             {
               "file": "frames/eq2-c-withdrawn.html",
-              "caption": "After that edit, Withdraw (the 'not now'), then Done editing: Q5 Do weekly digests include muted alerts? is struck through, kept in the PRD's history, with Undo."
+              "caption": "After that edit, Withdraw (the 'not now'), then Done editing: Q5 Do weekly digests include muted alerts? is struck through, kept in the PRD's history, with Undo; Waiting for you and Decisions in the side bar read 20, one fewer."
             },
             {
               "file": "frames/eq2-c-deleted.html",
-              "caption": "After that edit, Delete, then Done editing: Q5 leaves the list; a toast says it is in Settings > Trash, with Undo."
+              "caption": "After that edit, Delete, then Done editing: Q5 leaves the list; a toast says it is in Settings > Trash, with Undo; Waiting for you and Decisions in the side bar read 20, one fewer."
             },
             {
               "file": "frames/eq2-c-new.html",
@@ -398,7 +402,7 @@
             },
             {
               "file": "frames/eq2-c-new-done.html",
-              "caption": "Added: Q17 Who can export a team's alert history? waits for a decider."
+              "caption": "Added: Q17 Who can export a team's alert history? comes after the dated questions (soonest first), as it has no due date yet; it waits for a decider; Waiting for you and Decisions in the side bar read 22, one more."
             },
             {
               "file": "frames/eq2-c-hard.html",
@@ -422,7 +426,7 @@
             },
             {
               "file": "frames/eq2-c-propose-q5.html",
-              "caption": "The same list further down: Q5 and Q6, which Avery Stone decides, are fields for Priya Raman to suggest a change, with no Withdraw or Delete."
+              "caption": "The same list further down: Q5, Q6 and Q8, which Avery Stone decides, read 'Avery Stone decides: your change goes to them'; Priya Raman's fields there end in Suggest to Avery Stone, in place of Withdraw and Delete."
             },
             {
               "file": "frames/eq2-c-read.html",

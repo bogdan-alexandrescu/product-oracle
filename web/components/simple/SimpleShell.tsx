@@ -15,6 +15,7 @@ import { SIMPLE_HOME, switchTarget } from "@/lib/experience";
 import { useMe } from "@/lib/me";
 import { api, unwrap } from "@/lib/api/client";
 import { loadWaiting, onWaitingChanged } from "@/lib/waiting";
+import { useMkDelta } from "@/components/simple/mock-edit/MockEdit"; // MOCK-HOOK
 
 type Dest = { label: string; href: string; icon: IconName; testId: string };
 
@@ -88,8 +89,9 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
       alive = false;
     };
   }, [enabled, changes, meetingsPath]);
+  const mkDelta = useMkDelta(); // MOCK-HOOK: mk-edit-decisions' withdraw, delete and add move the Decisions count
   // qa-simple-decide-51: "Meetings live": the yellow count only when one is on now.
-  return counts && { ...counts, Meetings: live, "Meetings live": live };
+  return counts && { ...counts, Decisions: Math.max(0, counts.Decisions + mkDelta) /* MOCK-HOOK */, Meetings: live, "Meetings live": live };
 }
 
 /** What a rail count counts, said in words (its accessible name and tooltip). */

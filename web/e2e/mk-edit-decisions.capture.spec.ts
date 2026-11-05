@@ -11,17 +11,19 @@ const OUT = path.resolve(__dirname, "../../mockups-out/mk-edit-decisions");
 const ONLY = process.env.MK_ONLY ?? "";
 
 type Who = "owner" | "approver" | "viewer";
-type Frame = { file: string; url: string; w?: number; h?: number; scroll?: string; click?: string; fill?: [string, string]; who?: Who };
+type Frame = { file: string; url: string; w?: number; h?: number; scroll?: string; block?: ScrollLogicalPosition; click?: string; fill?: [string, string]; who?: Who };
 // Each frame signs in as its own invented person: Avery Stone (owner), Priya Raman (an approver who is not the decider), Lena Ortiz (viewer).
 const PEOPLE: Record<Who, string> = { owner: ADMIN.email, approver: "approver@example.com", viewer: "viewer@example.com" };
 
 const D = "/simple/decisions";
+const CLOCK = "2026-11-05T17:00:00Z";
 const ec1 = (v: string): Frame[] => [
   { file: `ec1-${v}-rest`, url: `${D}?ec1=${v}`, scroll: "#mk-outside" },
   { file: `ec1-${v}-open`, url: `${D}?ec1=${v}&open=1&act=${v === "b" ? "sheet" : "edit"}`, scroll: "#mk-outside" },
   { file: `ec1-${v}-mid`, url: `${D}?ec1=${v}&phase=mid`, scroll: "#mk-outside" },
   { file: `ec1-${v}-done`, url: `${D}?ec1=${v}&phase=done`, scroll: "#mk-outside" },
-  { file: `ec1-${v}-reassign`, url: `${D}?ec1=${v}&open=1&act=reassign`, scroll: "#mk-outside" },
+  // Reassign starts from the edited state (the done frame before it): its third option, review day and edited mark stay.
+  { file: `ec1-${v}-reassign`, url: `${D}?ec1=${v}&phase=done&open=1&act=reassign`, scroll: "#mk-outside" },
   { file: `ec1-${v}-reassigned`, url: `${D}?ec1=${v}&phase=done&act=reassign`, scroll: "#mk-outside" },
   { file: `ec1-${v}-withdrawn`, url: `${D}?ec1=${v}&phase=done&act=withdraw`, scroll: "#mk-outside" },
   { file: `ec1-${v}-deleted`, url: `${D}?ec1=${v}&phase=done&act=delete`, scroll: "#mk-outside" },
@@ -29,7 +31,8 @@ const ec1 = (v: string): Frame[] => [
   { file: `ec1-${v}-new-done`, url: `${D}?ec1=${v}&act=new&phase=done`, scroll: "#mk-outside" },
   { file: `ec1-${v}-hard`, url: `${D}?ec1=${v}&long=1&phase=mid`, scroll: "#mk-outside" },
   { file: `ec1-${v}-hard-1512`, url: `${D}?ec1=${v}&long=1&phase=mid`, w: 1512, h: 982, scroll: "#mk-outside" },
-  { file: `ec1-${v}-mid-390`, url: `${D}?ec1=${v}&phase=mid`, w: 390, h: 844, scroll: "#mk-outside" },
+  // c's options sit low in the row: the phone frame centres the third option, so it reads whole above the tab bar.
+  { file: `ec1-${v}-mid-390`, url: `${D}?ec1=${v}&phase=mid`, w: 390, h: 844, ...(v === "c" ? { scroll: "[aria-label='Option 3']", block: "center" as ScrollLogicalPosition } : { scroll: "#mk-outside" }) },
   { file: `ec1-${v}-propose`, url: `${D}?ec1=${v}&as=approver&open=1&act=${v === "b" ? "sheet" : "edit"}`, scroll: "#mk-outside", who: "approver" },
   { file: `ec1-${v}-read`, url: `${D}?ec1=${v}&as=viewer&open=1&act=${v === "b" ? "sheet" : "edit"}`, scroll: "#mk-outside", who: "viewer" },
 ];
@@ -41,7 +44,7 @@ const eq2 = (v: string): Frame[] => [
   { file: `eq2-${v}-withdrawn`, url: `${D}?eq2=${v}&phase=done&act=withdraw` },
   { file: `eq2-${v}-deleted`, url: `${D}?eq2=${v}&phase=done&act=delete` },
   { file: `eq2-${v}-new`, url: `${D}?eq2=${v}&open=1&act=new&phase=mid`, scroll: v === "b" ? undefined : "[data-testid=mk-ask-row]" },
-  { file: `eq2-${v}-new-done`, url: `${D}?eq2=${v}&act=new&phase=done` },
+  { file: `eq2-${v}-new-done`, url: `${D}?eq2=${v}&act=new&phase=done`, scroll: "[data-mk-added]", block: "center" },
   { file: `eq2-${v}-hard`, url: `${D}?eq2=${v}&long=1&phase=mid`, scroll: "[data-testid=questions-mine] [data-testid=question-row] >> nth=0" },
   { file: `eq2-${v}-hard-1512`, url: `${D}?eq2=${v}&long=1&phase=mid`, w: 1512, h: 982, scroll: "[data-testid=questions-mine] [data-testid=question-row] >> nth=0" },
   { file: `eq2-${v}-mid-390`, url: `${D}?eq2=${v}&phase=mid`, w: 390, h: 844 },
@@ -49,6 +52,7 @@ const eq2 = (v: string): Frame[] => [
   ...(v === "c" ? [{ file: `eq2-c-propose-q5`, url: `${D}?eq2=c&as=approver&open=1&act=edit`, scroll: "[data-mk-target]", who: "approver" as Who }] : []),
   { file: `eq2-${v}-home`, url: `/simple?eq2=${v}`, scroll: "[data-code] >> nth=0" },
   { file: `eq2-${v}-read`, url: `${D}?eq2=${v}&as=viewer`, scroll: "[data-testid=questions-others]", who: "viewer" },
+  ...(v === "b" ? [{ file: `eq2-b-read-sheet`, url: `${D}?eq2=b&as=viewer&open=1&act=sheet`, scroll: "[data-testid=questions-others]", who: "viewer" as Who }] : []),
 ];
 const FRAMES = [...["a", "b", "c"].flatMap(ec1), ...["a", "b", "c"].flatMap(eq2)].filter((f) => !ONLY || new RegExp(ONLY).test(f.file));
 
@@ -65,7 +69,42 @@ async function snapshot(page: Page, f: Frame, w: number, h: number) {
       });
       document.querySelectorAll("textarea").forEach((t) => (t.textContent = t.value));
       document.querySelectorAll("select").forEach((s) => Array.from(s.options).forEach((o) => o.toggleAttribute("selected", o.selected)));
+      // A static file holds no focus: the focused element keeps its ring through a copy of the page's :focus rules on [data-mk-focus]
+      // (theme tokens, so the dark theme reads as the page does).
+      const focused = document.activeElement as HTMLElement | null;
+      const focusCss: string[] = [];
+      if (focused && focused !== document.body) {
+        const visible = focused.matches(":focus-visible");
+        const walk = (rules: CSSRuleList, wrap: (x: string) => string) => {
+          for (const r of Array.from(rules)) {
+            if (r instanceof CSSStyleRule && /:focus(?!-within)/.test(r.selectorText)) {
+              const sel = r.selectorText.split(",").filter((x) => /:focus(?!-within)/.test(x) && (visible || !x.includes(":focus-visible")));
+              if (sel.length) focusCss.push(wrap(`${sel.map((x) => x.replace(/:focus(-visible)?(?!-within)/g, "[data-mk-focus]")).join(",")}{${r.style.cssText}}`));
+            } else if (r instanceof CSSMediaRule) walk(r.cssRules, (x) => wrap(`@media ${r.conditionText}{${x}}`));
+            else if (r instanceof CSSLayerBlockRule || r instanceof CSSSupportsRule) walk(r.cssRules, wrap);
+          }
+        };
+        for (const sh of Array.from(document.styleSheets)) {
+          try { walk(sh.cssRules, (x) => x); } catch { /* another origin's sheet */ }
+        }
+        // The browser's own focus outline is not in the page's sheets: it goes inline.
+        const cs = getComputedStyle(focused);
+        // Its colour, when it is the accent, stays the token, so the dark theme draws its own.
+        const probe = document.createElement("i");
+        probe.style.color = "var(--accent)";
+        document.body.append(probe);
+        const accent = getComputedStyle(probe).color;
+        probe.remove();
+        const color = cs.outlineColor === accent ? "var(--accent)" : cs.outlineColor;
+        const outline = cs.outlineStyle !== "none" ? `outline:${cs.outlineWidth} ${cs.outlineStyle} ${color};outline-offset:${cs.outlineOffset}` : "";
+        focused.setAttribute("data-mk-focus", outline);
+      }
       const doc = document.documentElement.cloneNode(true) as HTMLElement;
+      focused?.removeAttribute("data-mk-focus");
+      doc.querySelectorAll<HTMLElement>("[data-mk-focus]").forEach((n) => {
+        const o = n.getAttribute("data-mk-focus");
+        if (o) n.setAttribute("style", `${n.getAttribute("style") ?? ""};${o}`);
+      });
       doc.querySelectorAll("script, link[rel=preload], link[rel=modulepreload], next-route-announcer").forEach((n) => n.remove());
       const fonts: string[] = [];
       for (const l of Array.from(doc.querySelectorAll("link[rel=stylesheet]"))) {
@@ -81,6 +120,11 @@ async function snapshot(page: Page, f: Frame, w: number, h: number) {
         l.replaceWith(st);
       }
       const head = doc.querySelector("head")!;
+      if (focusCss.length) {
+        const st = document.createElement("style");
+        st.textContent = focusCss.join("\n");
+        head.append(st);
+      }
       const meta = document.createElement("meta");
       meta.name = "mockup-viewport";
       meta.content = `${w}x${h}`;
@@ -116,6 +160,8 @@ test("capture mk-edit-decisions frames", async ({ browser }) => {
   const signedIn = async (who: Who) => {
     if (pages.has(who)) return pages.get(who)!;
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    // One fixed clock for every frame, so a decided row's time reads the same across proposals.
+    await ctx.clock.setFixedTime(new Date(CLOCK));
     const p = await ctx.newPage();
     await p.goto("/login");
     await p.getByLabel("Email").fill(PEOPLE[who]);
@@ -134,7 +180,7 @@ test("capture mk-edit-decisions frames", async ({ browser }) => {
     await expect(page.getByTestId(f.url.startsWith("/simple?") ? "home-greeting" : "simple-page")).toBeVisible();
     await page.waitForTimeout(f.url.startsWith("/simple?") ? 3000 : 1500);
     if (f.click) await page.locator(f.click).click();
-    if (f.scroll) await page.locator(f.scroll).first().evaluate((el, block) => el.scrollIntoView({ block }), (f.url.startsWith("/simple?") ? "center" : "start") as ScrollLogicalPosition);
+    if (f.scroll) await page.locator(f.scroll).first().evaluate((el, block) => el.scrollIntoView({ block }), f.block ?? ((f.url.startsWith("/simple?") ? "center" : "start") as ScrollLogicalPosition));
     await page.waitForTimeout(300);
     await snapshot(page, f, w, h);
     await page.screenshot({ path: path.join(OUT, "frames", `${f.file}.png`) });
