@@ -327,3 +327,58 @@ async def test_a_retry_on_a_closed_session_checks_replaced_again(client, meeting
     r = await client.post(f"{CARDS}/{old[0]['id']}/apply", headers=ctx.as_("owner"))
     assert r.status_code == 409 and r.json()["detail"] == card_order.REPLACED, r.text
     assert (await w.item("Alert digest")).title == "Alert digest"
+
+
+# Fix round 3 (review minors):
+# - test_only_a_short_change_request_ending_instead_is_a_redo: protects=a line ending in
+#   "instead" is a redo only as a short change request with no record prefix ("make it
+#   April instead", "April instead"), and the line read is the person's own words;
+#   "note: we use Redis instead" is a new note of its own whose text keeps "instead";
+#   fails_when=it replaces the earlier note, or the note's text drops "instead".
+# - test_no_after_a_plain_answer_starts_a_new_card: protects="no, ..." redoes only the draft
+#   of the reply right before it; after a plain answer in between it is a new card;
+#   fails_when=it replaces the draft of an older reply.
+
+
+def test_redo_line_reads_only_a_short_change_request_ending_instead():
+    assert card_order.redo_line("make it April instead") == "make it April instead"
+    assert card_order.redo_line("April instead.") == "April instead."
+    assert card_order.redo_line("no, note: the budget is approved") == (
+        "note: the budget is approved"
+    )
+    for line in (
+        "note: we use Redis instead",
+        "decided: we launch billing in April instead",
+        "open question: do we use Redis instead",
+        "we should spend the whole next quarter on the export pipeline instead",
+    ):
+        assert card_order.redo_line(line) is None, line
+
+
+async def test_only_a_short_change_request_ending_instead_is_a_redo(client):
+    from tests.test_simple_chat_actions import one_card
+
+    w = await world()
+    mid = (await start(client, w))["id"]
+    a = await one_card(client, w, "decider", "note: the export runs nightly", mid)
+    b = await one_card(client, w, "decider", "note: we use Redis instead", mid)
+    assert await _active(client, w, "decider", [a, b], mid) == [(None, "apply")] * 2
+    r = await client.post(f"{CARDS}/{b['id']}/apply", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    texts = [n["text"] for n in (await get(client, w, mid, "decider"))["notes"]]
+    assert texts == ["we use Redis instead"]
+
+
+async def test_no_after_a_plain_answer_starts_a_new_card(client):
+    from tests.test_simple_chat_actions import one_card
+
+    w = await world()
+    mid = (await start(client, w))["id"]
+    a = await one_card(client, w, "decider", "note: the budget is approved", mid)
+    await post(client, w, "decider", "when does the pilot start?", mid)
+    plain = {"actions": [], "clarify": None, "answer": "The pilot starts in the spring."}
+    assert await read(w, plain) == 1
+    m = await last(client, w, "decider", mid)
+    assert m["cards"] == [] and m["kind"] != "cards", m
+    b = await one_card(client, w, "decider", "no, note: the budget is approved for the spring", mid)
+    assert await _active(client, w, "decider", [a, b], mid) == [(None, "apply")] * 2

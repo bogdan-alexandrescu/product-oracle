@@ -186,6 +186,11 @@ async def test_viewer_gets_no_card_for_an_approver_action(client):
     [card] = m["cards"]
     assert card["op"] == "api_action" and card["status"] == "open"
     assert "Night shift nurse" in card["summary"]
+    # chat-latest-card fix round 3: no code-like value on a card: the key is left out.
+    assert card["summary"] == (
+        "Add a product record: type “assumption”, title “Night shift nurse”."
+    ), card["summary"]
+    assert "night-nurse" not in card["summary"]
     assert await _entity(ctx, "night-nurse") is None  # nothing until Apply
     r = await client.post(f"{CARDS}/{card['id']}/apply", headers=ctx.as_("approver"))
     assert r.status_code == 200, r.text
@@ -337,8 +342,7 @@ async def test_a_card_names_each_record_and_undo_is_promised_only_when_sure(clie
                       {"action": "create_blocker", "args": {"body": blocker}})  # fmt: skip
     [card] = m["cards"]
     assert card["summary"] == (
-        "Add a blocker: key “night-staffing”, statement “Night staffing is thin”, type “soft”. "
-        "This cannot be undone."
+        "Add a blocker: statement “Night staffing is thin”, type “soft”. This cannot be undone."
     )
     assert (await _apply(client, ctx, "approver", card))["can_undo"] is False
     # The route's own audit rows say it came via Ask Oracle (written with the change).
