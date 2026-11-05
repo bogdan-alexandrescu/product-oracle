@@ -4544,7 +4544,7 @@
           "discussions"
         ],
         "summary": "Propose Discussion Change",
-        "description": "``goal_measure`` and ``entity_edit`` (commenters and up): an open baseline proposal\nwhose reason names the discussion and links its page; approvers accept it in Baseline.\nA goal version takes B6's path: its fields pass B5's checks first (422, every problem),\nand a target the start or current value already meets gets Oracle's pushback once\n(409); proposing it again keeps it and logs the override. ``payload``: the person's\nEdit, proposed instead and saved only when it is used.",
+        "description": "``goal_measure`` and ``entity_edit`` (commenters and up): an open Ground Truth proposal\nwhose reason names the discussion and links its page; approvers accept it in the Ground Truth.\nA goal version takes B6's path: its fields pass B5's checks first (422, every problem),\nand a target the start or current value already meets gets Oracle's pushback once\n(409); proposing it again keeps it and logs the override. ``payload``: the person's\nEdit, proposed instead and saved only when it is used.",
         "operationId": "propose_discussion_change",
         "security": [
           {
@@ -12981,7 +12981,7 @@
           "sources"
         ],
         "summary": "List Source Coverage",
-        "description": "What Oracle read from each of your sources: live and removed items, what it left\nout (by status), how fresh the items are against each kind's half-life, and how often\nthey are used as baseline evidence, citations and section links.",
+        "description": "What Oracle read from each of your sources: live and removed items, what it left\nout (by status), how fresh the items are against each kind's half-life, and how often\nthey are used as Ground Truth evidence, citations and section links.",
         "operationId": "list_source_coverage",
         "responses": {
           "200": {
@@ -14776,7 +14776,7 @@
           "baseline"
         ],
         "summary": "Get Graph",
-        "description": "Every entity and edge (no evidence bodies): what the Baseline screen draws.",
+        "description": "Every entity and edge (no evidence bodies): what the Ground Truth screen draws.",
         "operationId": "get_graph",
         "responses": {
           "200": {
@@ -14806,8 +14806,8 @@
         "tags": [
           "baseline"
         ],
-        "summary": "Get Baseline Review Status",
-        "description": "Whether a new PRD run may use the current baseline instead of rebuilding it: the\nlast baseline review, its age, whether a baseline build is under way, and the\nbaseline segment's estimate per depth (B1 \"Reuse base\").",
+        "summary": "Get Ground Truth Review Status",
+        "description": "Whether a new PRD run may use the current Ground Truth instead of rebuilding it: the\nlast Ground Truth review, its age, whether a Ground Truth build is under way, and the\nGround Truth segment's estimate per depth (B1 \"Reuse base\").",
         "operationId": "get_baseline_review_status",
         "responses": {
           "200": {
@@ -15389,8 +15389,8 @@
         "tags": [
           "baseline"
         ],
-        "summary": "Get Baseline From Run",
-        "description": "What a run wrote to the baseline, for a person to review (B2): every item it\ncreated, changed or proposed a change to, with the reasons each needs a person and the\nshared draft's actions on it; the run's Confirm the baseline stop with its gate; the\nother proposed goals.",
+        "summary": "Get Ground Truth From Run",
+        "description": "What a run wrote to the Ground Truth, for a person to review (B2): every item it\ncreated, changed or proposed a change to, with the reasons each needs a person and the\nshared draft's actions on it; the run's Confirm the Ground Truth stop with its gate; the\nother proposed goals.",
         "operationId": "get_baseline_from_run",
         "security": [
           {
@@ -16811,7 +16811,7 @@
           "baseline"
         ],
         "summary": "Create Proposal",
-        "description": "Suggest a change; an approver accepts or rejects it. A run's proposal records\nthe run, and is refused while Oracle is set to observe the baseline (H11); a\nperson's never is.",
+        "description": "Suggest a change; an approver accepts or rejects it. A run's proposal records\nthe run, and is refused while Oracle is set to observe the Ground Truth (H11); a\nperson's never is.",
         "operationId": "create_proposal",
         "security": [
           {
@@ -17511,7 +17511,7 @@
           "priorities"
         ],
         "summary": "Get Priorities",
-        "description": "Rank the baseline's features by ``method``, in dependency order.\n\nFeatures that serve no confirmed goal sink to the bottom and are flagged;\ndependency cycles are listed in ``cycles`` and their members flagged. People's\nactive moves and pins apply after the formula (``overrides=false`` leaves them out):\neach row carries ``formula_rank`` (Oracle's rank) and the ``override`` that placed it.",
+        "description": "Rank the Ground Truth's features by ``method``, in dependency order.\n\nFeatures that serve no confirmed goal sink to the bottom and are flagged;\ndependency cycles are listed in ``cycles`` and their members flagged. People's\nactive moves and pins apply after the formula (``overrides=false`` leaves them out):\neach row carries ``formula_rank`` (Oracle's rank) and the ``override`` that placed it.",
         "operationId": "get_priorities",
         "security": [
           {
@@ -22856,7 +22856,7 @@
           "scope"
         ],
         "summary": "Add Scope Requirement",
-        "description": "Add a requirement to a feature (approver role or above): ``origin: person``; its\ngoals default to the feature's. Approving writes it to the baseline as the approver's.",
+        "description": "Add a requirement to a feature (approver role or above): ``origin: person``; its\ngoals default to the feature's. Approving writes it to the Ground Truth as the approver's.",
         "operationId": "add_scope_requirement",
         "security": [
           {
@@ -24620,7 +24620,7 @@
           "intake"
         ],
         "summary": "Create Question",
-        "description": "Ask a teammate: a named person (commenter or above) is asked a question about an\nintake, a document section, a run checkpoint item or a baseline entity. It lands in\ntheir Inbox as \"<your name> asks\"; you see the answer on the subject. 422 when the\nsubject does not exist or the person cannot answer. Audited (``question.asked``).",
+        "description": "Ask a teammate: a named person (commenter or above) is asked a question about an\nintake, a document section, a run checkpoint item or a Ground Truth entity. It lands in\ntheir Inbox as \"<your name> asks\"; you see the answer on the subject. 422 when the\nsubject does not exist or the person cannot answer. Audited (``question.asked``).",
         "operationId": "create_question",
         "security": [
           {
@@ -27400,7 +27400,7 @@
           "intake"
         ],
         "summary": "Analyze Intake",
-        "description": "Re-read the pinned snapshot and the baseline (the author only). Decided gaps are\nnever changed and answered questions never asked again.",
+        "description": "Re-read the pinned snapshot and the Ground Truth (the author only). Decided gaps are\nnever changed and answered questions never asked again.",
         "operationId": "analyze_intake",
         "security": [
           {
@@ -27918,7 +27918,7 @@
           "intake"
         ],
         "summary": "Get Intake Composition Inputs",
-        "description": "What the module composer reads from this intake (brief, signals, scope, baseline\nlinks, pinned snapshots, open critical gaps).",
+        "description": "What the module composer reads from this intake (brief, signals, scope, Ground Truth\nlinks, pinned snapshots, open critical gaps).",
         "operationId": "get_intake_composition_inputs",
         "security": [
           {
@@ -27971,7 +27971,7 @@
           "intake"
         ],
         "summary": "Start Intake Run",
-        "description": "Create a draft baseline-to-PRD run pinned to the intake's snapshot. Nothing runs\nuntil an approver estimates and starts it; while that run is a draft, posting again\nupdates it (no second run), and the intake stays open until it starts (then it is\nconverted). Drafting waits until decided (C5): 409\nwith ``blocking_gap_ids`` while a critical question everyone may see is neither\nanswered nor decided (a private one gates nothing until shared, S6).",
+        "description": "Create a draft Ground Truth to PRD run pinned to the intake's snapshot. Nothing runs\nuntil an approver estimates and starts it; while that run is a draft, posting again\nupdates it (no second run), and the intake stays open until it starts (then it is\nconverted). Drafting waits until decided (C5): 409\nwith ``blocking_gap_ids`` while a critical question everyone may see is neither\nanswered nor decided (a private one gates nothing until shared, S6).",
         "operationId": "start_intake_run",
         "security": [
           {
@@ -30642,7 +30642,7 @@
           "trace"
         ],
         "summary": "Get Version Trace",
-        "description": "A version's trace: its anchors (template, composition revision, snapshots), each\nsection's links to the baseline and the goals they serve, and the outputs that\ndepend on each section (artifacts, roadmap items) with their freshness.",
+        "description": "A version's trace: its anchors (template, composition revision, snapshots), each\nsection's links to the Ground Truth and the goals they serve, and the outputs that\ndepend on each section (artifacts, roadmap items) with their freshness.",
         "operationId": "get_version_trace",
         "security": [
           {
@@ -30842,7 +30842,7 @@
           "trace"
         ],
         "summary": "Create Section Links",
-        "description": "Link sections of a version to baseline items, evidence or source items (the\ninternal per-claim links behind O1c). Pinned to the section's current hash. An\napproved version's links are pinned with it (409).",
+        "description": "Link sections of a version to Ground Truth items, evidence or source items (the\ninternal per-claim links behind O1c). Pinned to the section's current hash. An\napproved version's links are pinned with it (409).",
         "operationId": "create_section_links",
         "security": [
           {
@@ -30917,7 +30917,7 @@
           "trace"
         ],
         "summary": "Get Entity Trace",
-        "description": "A baseline node's trace: up to the goals it serves, down to requirements and\nacceptance criteria, the sections linking it and the outputs built on it; for a\nrequirement, its assumptions, blockers, alternatives, experiments, decisions, owners\nand risks. A feature serving no confirmed goal is flagged, with its priority.",
+        "description": "A Ground Truth node's trace: up to the goals it serves, down to requirements and\nacceptance criteria, the sections linking it and the outputs built on it; for a\nrequirement, its assumptions, blockers, alternatives, experiments, decisions, owners\nand risks. A feature serving no confirmed goal is flagged, with its priority.",
         "operationId": "get_entity_trace",
         "security": [
           {
@@ -31232,7 +31232,7 @@
           "trace"
         ],
         "summary": "Create Artifact Dependencies",
-        "description": "Record what an artifact version (or a derived document version) was made from:\ndocument sections, whole document versions or baseline items, anchored at their\ncurrent hash. Idempotent per anchor.",
+        "description": "Record what an artifact version (or a derived document version) was made from:\ndocument sections, whole document versions or Ground Truth items, anchored at their\ncurrent hash. Idempotent per anchor.",
         "operationId": "create_artifact_dependencies",
         "requestBody": {
           "content": {
@@ -31677,7 +31677,7 @@
           "blockers"
         ],
         "summary": "List Blockers",
-        "description": "Blockers (baseline constraints with a strategy), most severe first. Third-party\nlimits filter by ``limit_kind``: capacity, eligibility, permission or policy.",
+        "description": "Blockers (Ground Truth constraints with a strategy), most severe first. Third-party\nlimits filter by ``limit_kind``: capacity, eligibility, permission or policy.",
         "operationId": "list_blockers",
         "security": [
           {
@@ -43072,7 +43072,7 @@
           "simple"
         ],
         "summary": "Update Bucket Goal",
-        "description": "Edit a goal's name, measure, target and date (its order stays Baseline's).",
+        "description": "Edit a goal's name, measure, target and date (its order stays the Ground Truth's).",
         "operationId": "update_bucket_goal",
         "security": [
           {
@@ -52055,7 +52055,7 @@
           "horizon"
         ],
         "title": "AddChange",
-        "description": "Add an item: a Baseline feature (``feature_id``) or a new one (``title``)."
+        "description": "Add an item: a Ground Truth feature (``feature_id``) or a new one (``title``)."
       },
       "AdvisoryIn": {
         "properties": {
@@ -66780,7 +66780,7 @@
           "status"
         ],
         "title": "DecisionEntityRef",
-        "description": "A linked baseline item, as a person reads it."
+        "description": "A linked Ground Truth item, as a person reads it."
       },
       "DecisionEvidenceRef": {
         "properties": {
@@ -66840,7 +66840,7 @@
           "id"
         ],
         "title": "DecisionEvidenceRef",
-        "description": "Evidence it rests on: the excerpt and link anyone who reads the baseline sees."
+        "description": "Evidence it rests on: the excerpt and link anyone who reads the Ground Truth sees."
       },
       "DecisionIn": {
         "properties": {
@@ -75445,7 +75445,7 @@
           "rationale"
         ],
         "title": "FeatureTrace",
-        "description": "A feature the intake touches: from the baseline (``key``) or the brief."
+        "description": "A feature the intake touches: from the Ground Truth (``key``) or the brief."
       },
       "FeedbackItemOut": {
         "properties": {
@@ -76977,7 +76977,7 @@
           "wait"
         ],
         "title": "FromRunCheckpoint",
-        "description": "The run's latest Confirm the baseline stop, as the caller may use it."
+        "description": "The run's latest Confirm the Ground Truth stop, as the caller may use it."
       },
       "FromRunEdges": {
         "properties": {
@@ -77060,7 +77060,7 @@
           "summary"
         ],
         "title": "FromRunOut",
-        "description": "GET /v1/baseline/from-run/{run_id}: what the run wrote to the baseline, for a\nperson to review (B2). ``checkpoint`` null when the run never stopped at Confirm the\nbaseline."
+        "description": "GET /v1/baseline/from-run/{run_id}: what the run wrote to the Ground Truth, for a\nperson to review (B2). ``checkpoint`` null when the run never stopped at Confirm the\nGround Truth."
       },
       "FromRunProposal": {
         "properties": {
@@ -77171,7 +77171,7 @@
           "merge"
         ],
         "title": "FromRunRow",
-        "description": "One baseline item a run created (``new``), changed (``changed``) or proposed a\nchange to (``proposal``), as B2 Baseline review from this run lists it: its reasons\n(recomputed on every read), the shared draft's actions on its key and its state."
+        "description": "One Ground Truth item a run created (``new``), changed (``changed``) or proposed a\nchange to (``proposal``), as B2 Ground Truth review from this run lists it: its reasons\n(recomputed on every read), the shared draft's actions on its key and its state."
       },
       "FromRunSummary": {
         "properties": {
@@ -106116,7 +106116,7 @@
           "approved_at"
         ],
         "title": "ReusedBaseline",
-        "description": "The baseline review a run reuses: its Confirm the baseline checkpoint."
+        "description": "The Ground Truth review a run reuses: its Confirm the Ground Truth checkpoint."
       },
       "ReviewAction": {
         "properties": {
@@ -106917,7 +106917,7 @@
           "baseline_segment_usd"
         ],
         "title": "ReviewStatusOut",
-        "description": "Whether a new PRD run may use the current baseline (B1 \"Reuse base\"): the last\nbaseline review (the newest approved Confirm the baseline) was approved in the past\n30 days and no baseline build is under way."
+        "description": "Whether a new PRD run may use the current Ground Truth (B1 \"Reuse base\"): the last\nGround Truth review (the newest approved Confirm the Ground Truth) was approved in the\npast 30 days and no Ground Truth build is under way."
       },
       "ReviewTally": {
         "properties": {
@@ -108715,7 +108715,7 @@
           "text"
         ],
         "title": "RowReason",
-        "description": "B2: why a run's baseline row needs a person. Its own fields, so a roadmap item's\nreasons read as they are stored."
+        "description": "B2: why a run's Ground Truth row needs a person. Its own fields, so a roadmap item's\nreasons read as they are stored."
       },
       "RunCreate": {
         "properties": {
@@ -108848,7 +108848,7 @@
           "label"
         ],
         "title": "RunDecidedChange",
-        "description": "A change already done (an answer, a verified basis, a baseline proposal)."
+        "description": "A change already done (an answer, a verified basis, a Ground Truth proposal)."
       },
       "RunDecision": {
         "properties": {
@@ -131734,7 +131734,7 @@
         },
         "type": "object",
         "title": "TraceUpstreamRef",
-        "description": "A dependency's upstream: a document version (a section of it, or all of it), or a\nbaseline entity."
+        "description": "A dependency's upstream: a document version (a section of it, or all of it), or a\nGround Truth entity."
       },
       "TrackAlertAccept": {
         "properties": {
@@ -134126,7 +134126,7 @@
           "item"
         ],
         "title": "UsedIn",
-        "description": "One use of one of the source's items: baseline evidence (on an entity, or on an\nedge, shown on its source entity), a citation in a document version, or a section's\nevidence link."
+        "description": "One use of one of the source's items: Ground Truth evidence (on an entity, or on an\nedge, shown on its source entity), a citation in a document version, or a section's\nevidence link."
       },
       "UsedItem": {
         "properties": {

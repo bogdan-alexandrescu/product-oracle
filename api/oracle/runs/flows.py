@@ -528,7 +528,7 @@ BASELINE_SEGMENT = SegmentDef(
     outputs=("baseline.yaml", "summary.md"),
     checkpoint="baseline_confirm",
     imports_baseline=True,
-    task="Propose the baseline: company goals with typed fields: metric, unit (%, "
+    task="Propose the Ground Truth: company goals with typed fields: metric, unit (%, "
     "USD, EUR, GBP, ms, s, min, h, days, or a counted noun), comparison (at_least | "
     "above | at_most | below), target (a number), horizon (short | medium | long), "
     "optionally start and due. Leave owner and weight to people; say who the sources "
@@ -536,8 +536,9 @@ BASELINE_SEGMENT = SegmentDef(
     "evidence. Propose changes through propose_change; write the whole "
     "proposal to baseline.yaml in the baseline YAML format (version: 1, "
     "entities and edges, as get_baseline and `oracle baseline pull` give it) "
-    "and a one-page summary to summary.md. Oracle merges baseline.yaml into "
-    "the baseline when the segment ends: locked items become proposals.",
+    "and a one-page summary to summary.md (call it the Ground Truth, never the "
+    "baseline). Oracle merges baseline.yaml into the Ground Truth when the segment "
+    "ends: locked items become proposals.",
     tools=(
         "search",
         "get_source_item",
@@ -620,11 +621,11 @@ FLOWS: dict[str, FlowDef] = {
                     scopes=(*READ, "write:proposals"),
                     outputs=("feature_set.yaml", "design.md"),
                     checkpoint="feature_set",
-                    task="From the confirmed baseline, propose the feature set for the next "
+                    task="From the confirmed Ground Truth, propose the feature set for the next "
                     "version: each feature traces to a confirmed goal or is flagged as "
                     "serving none; list depends_on and blocks edges. Every included feature "
                     "lists at least one confirmed goal or `goals: []`; Oracle flags the "
-                    "second kind. Use baseline feature and requirement keys, or propose new "
+                    "second kind. Use Ground Truth feature and requirement keys, or propose new "
                     "ones with propose_change first. List what you considered and left out "
                     "under excluded, with the reason. Oracle checks the file when the "
                     "segment ends; what the approver approves becomes this PRD's scope. "
