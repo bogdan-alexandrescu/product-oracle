@@ -29,7 +29,7 @@ def citation_contract() -> str:
     return (
         "Citation contract: citations are a list under citations in the YAML front matter; "
         f"each has id, source (one of: {sources}), ref (a URL to the item; for oracle, the "
-        'baseline item\'s kind and key, e.g. "baseline decision <key>": an identifier Oracle '
+        'Ground Truth item\'s kind and key, e.g. "baseline decision <key>": an identifier Oracle '
         "reads, never shown to people, who read it as the Ground Truth's decision <key>), "
         "title, excerpt and "
         "retrieved_at (when you read it, ISO 8601), and may have item (the id of the source "
@@ -38,8 +38,8 @@ def citation_contract() -> str:
         "(true when the confidence is under the company's low threshold). Every [c:id] chip "
         "in the body must match a citation's id. Oracle refuses a draft with any other "
         f"source, a confidence outside {CONFIDENCE_MIN} to {CONFIDENCE_MAX}, a ref with "
-        "a scheme other than http, https or urn (for oracle, one that names no baseline "
-        "item of the company), or a chip that matches no id."
+        "a scheme other than http, https or urn (for oracle, one that names no Ground "
+        "Truth item of the company), or a chip that matches no id."
     )
 
 

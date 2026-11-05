@@ -186,7 +186,13 @@ def _reworded(reason: str) -> str:
     migration is never needed: the read path keeps up with the wording on its own."""
     if m := _OLD_SECTION_LINK.fullmatch(reason):
         return f"PRD section {m[1]} links {_noun(m[2], 1)}{m[3]}"
-    return _OLD_COUNT.sub(r"\1 Ground Truth \2", reason)
+    return ground_truth_count(reason)
+
+
+def ground_truth_count(text: str) -> str:
+    """``text`` with an old bulk write's size ("42 baseline items") in the Ground Truth
+    words; the stale reasons and a change's impact page (oracle.trace.impact) read it so."""
+    return _OLD_COUNT.sub(r"\1 Ground Truth \2", text)
 
 
 # The reason an earlier rule wrote on an item with no PRD section for any new PRD version:

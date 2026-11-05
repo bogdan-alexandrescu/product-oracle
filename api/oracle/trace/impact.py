@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document, DocumentVersion
+from oracle.roadmap.staleness import ground_truth_count
 from oracle.trace import staleness
 from oracle.trace.outputs import describe, entity_ref
 from oracle.trace.schemas import (
@@ -122,8 +123,8 @@ async def _report(
     counts["approved"] = sum(v.approved for v in views)
     return ImpactReport(
         subject=subject,
-        change=ChangeEventOut.model_validate(change) if change is not None else None,
-        changes=[ChangeEventOut.model_validate(c) for c in changes or []],
+        change=_change_out(change) if change is not None else None,
+        changes=[_change_out(c) for c in changes or []],
         preview=preview,
         affected=views,
         affected_entities=entities,
@@ -131,6 +132,15 @@ async def _report(
         counts=dict(counts),
         truncated=truncated,
     )
+
+
+def _change_out(event: ChangeEvent) -> ChangeEventOut:
+    """A change as the impact page reads it: an old bulk write's "42 baseline items" in
+    the Ground Truth words, as stale reasons are (no migration)."""
+    out = ChangeEventOut.model_validate(event)
+    if out.subject_ref:
+        out = out.model_copy(update={"subject_ref": ground_truth_count(out.subject_ref)})
+    return out
 
 
 async def _subject_of_event(db: AsyncSession, event: ChangeEvent) -> ImpactSubject:
@@ -150,7 +160,7 @@ async def _subject_of_event(db: AsyncSession, event: ChangeEvent) -> ImpactSubje
     return ImpactSubject(
         kind=event.subject_kind,
         id=event.subject_id,
-        ref=event.subject_ref,
+        ref=ground_truth_count(event.subject_ref) if event.subject_ref else None,
         title=title,
         document_id=event.document_id,
     )

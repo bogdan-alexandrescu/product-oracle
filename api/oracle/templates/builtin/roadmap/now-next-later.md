@@ -93,7 +93,7 @@ layout:
     goal: {required: true, multiple: true, flag_if_missing: "serves no confirmed goal"}
     confidence: {enum: [high, medium, low]}
     owner: {required: false}
-    depends_on: {list: true}          # from baseline depends_on / blocks edges
+    depends_on: {list: true}          # from Ground Truth depends_on / blocks edges
     milestones: {list: true, only_in: [now], fields: [name, date, source]}
     effort: {required: false}         # from tracker estimates
     date_kind: {enum: [estimate, external, announced], only_in: [now]}

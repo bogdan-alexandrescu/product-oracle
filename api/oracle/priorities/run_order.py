@@ -70,7 +70,7 @@ order:                                 # every feature the approved PRD scope in
     rank: <1..N, each once; a feature after every feature it depends on>
     score: <the score you computed>
     explanation: <every number of the score, and why it is ranked here>
-    # A feature new in this PRD (not in the baseline yet) also gives the formula's inputs,
+    # A feature new in this PRD (not in the Ground Truth yet) also gives the formula's inputs,
     # so it is scored on the same formula and ranked among the rest:
     goal: <the goal key it serves>
     weight: <that goal's weight>

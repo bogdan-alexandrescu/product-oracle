@@ -87,7 +87,7 @@ FORMAT = """\
 version: 1
 document: <this PRD's slug>
 features:
-  - key: <a baseline feature key, or one you proposed with propose_change>
+  - key: <a Ground Truth feature key, or one you proposed with propose_change>
     title: <title>
     summary: <one line>
     goals: [{key: <a confirmed goal key>, contribution: <0-3>}]   # [] = serves none
@@ -96,7 +96,7 @@ features:
     confidence: <0-1, from the evidence>
     evidence: [<evidence or source item ids>]   # optional
     requirements:
-      - key: <a baseline requirement key, or one you proposed>
+      - key: <a Ground Truth requirement key, or one you proposed>
         text: <the requirement>
         acceptance: [<criteria>]
 excluded:                                # considered and left out
