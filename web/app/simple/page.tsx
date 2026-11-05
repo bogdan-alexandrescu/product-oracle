@@ -20,6 +20,8 @@ import { GoalNum, GoalOrderEdit } from "@/components/simple/GoalOrder";
 import { meetingMoment } from "@/components/simple/FlowVisual";
 import { NewPrdButton, NewPrdSheet, StartedCard, useCanStartPrd, useStartedPrds } from "@/components/simple/NewPrd";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
+import { Named } from "./roadmap/_fields";
+import { FeaturePanel } from "./roadmap/_panel";
 import { QuestionRow, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
 import { SimplePage } from "@/components/simple/SimplePage";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -131,6 +133,8 @@ export default function SimpleHome() {
   const { me, can, capsReady } = useMe();
   const zone = useCompanyZone();
   const [stamp, setStamp] = useState(0);
+  // one-feature-panel: a feature named on Home opens its panel (the roadmap's).
+  const [opened, setOpened] = useState<Schemas["SimpleRoadmapItem"] | null>(null);
   // S9: "Walk me through it" turns Home into a guided pass; Done returns here.
   const [walking, setWalking] = useState(false);
   // qa4-simple-home-10: Done gives the focus back to "Walk me through it".
@@ -531,6 +535,18 @@ export default function SimpleHome() {
 
   return (
     <SimplePage title="Home">
+      {opened && (
+        <FeaturePanel
+          key={opened.id}
+          feature={{ id: opened.id, code: opened.code ?? "", name: opened.title, prd: opened.prd }}
+          phone={phone}
+          canChange={can("create_simple_change")}
+          onClose={() => {
+            setOpened(null);
+            void roadmap.reload();
+          }}
+        />
+      )}
       {newPrd && <NewPrdSheet onClose={closeNewPrd} onStarted={() => void started.reload()} />}
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
       {confirming && (
@@ -1003,7 +1019,9 @@ export default function SimpleHome() {
                         lead={<RowIcon name="alert" />}
                         title={
                           <>
-                            <span className="text-crit">{links[0].item.title}</span>
+                            <button type="button" className="text-left text-crit hover:underline" onClick={() => setOpened(links[0].item)}>
+                              <Named item={links[0].item} />
+                            </button>
                             {/* qa4-simple-home-7: the plan draws one PRD; with links on several roadmaps each item says its own. */}
                             {brokenRoadmaps.length > 1 && (
                               <span data-testid="home-broken-roadmap" className="font-normal text-text2">
@@ -1058,9 +1076,9 @@ export default function SimpleHome() {
                         testId="home-milestone-row"
                         lead={<RowIcon name="roadmap" />}
                         title={
-                          <Link href={i.prd ? `/simple/roadmap?prd=${encodeURIComponent(i.prd.slug)}` : `/simple/roadmap?roadmap=${encodeURIComponent(i.roadmap.id)}`} className="hover:underline">
-                            {i.title}
-                          </Link>
+                          <button type="button" className="text-left hover:underline" onClick={() => setOpened(i)}>
+                            <Named item={i} />
+                          </button>
                         }
                         meta={`${m.name} · ${i.outcome ?? i.roadmap.title}`}
                       />
