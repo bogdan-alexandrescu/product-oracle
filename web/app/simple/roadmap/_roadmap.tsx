@@ -814,12 +814,15 @@ export function SimpleRoadmap() {
   const reload = useCallback(async () => {
     await Promise.all([roadmap.reload(), proposals.reload(), drafts.reload()]);
   }, [roadmap, proposals, drafts]);
+  // After an action that may change what waits on someone (a move, an add, an undo, a version
+  // sent or applied): the page and the rail's and More's Inbox counts read again at once.
+  const reloadAfter = useCallback(() => reloadWaiting(reload), [reload]);
   // roadmap-talk: a chat card applied, proposed, rejected or undone (the item's talk, the Ask panel) reads the roadmap again.
   useEffect(() => {
-    const on = () => void reload();
+    const on = () => void reloadAfter();
     window.addEventListener(CARD_CHANGED_EVENT, on);
     return () => window.removeEventListener(CARD_CHANGED_EVENT, on);
-  }, [reload]);
+  }, [reloadAfter]);
   // S7: Oracle's suggested features by goal; an accept (or its undo) changes the roadmap.
   const suggestions = useGoalSuggestions(reload);
   const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
@@ -977,7 +980,7 @@ export function SimpleRoadmap() {
         const target = latest.current.get(String(body.target?.item_id ?? ""));
         toast({
           message: resultWords(r, what, target?.deciders),
-          action: r.change.status === "applied" && r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(reload, (e) => toast({ message: String(e.message) })) } : undefined,
+          action: r.change.status === "applied" && r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(reloadAfter, (e) => toast({ message: String(e.message) })) } : undefined,
         });
         return r;
       } catch (e) {
@@ -989,10 +992,10 @@ export function SimpleRoadmap() {
         } else toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not make this change" });
         return null;
       } finally {
-        await reload();
+        await reloadAfter();
       }
     },
-    [reload],
+    [reload, reloadAfter],
   );
   const act: Act = useCallback(
     async (what, body) => {
@@ -1069,9 +1072,9 @@ export function SimpleRoadmap() {
         toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not decide it" });
       }
       // The rail's and More's counts read again at once (a decided proposal leaves the Inbox).
-      await reloadWaiting(reload);
+      await reloadAfter();
     },
-    [reload],
+    [reloadAfter],
   );
 
   const onSuggestion = useCallback(
@@ -1086,9 +1089,9 @@ export function SimpleRoadmap() {
       }
       setPop(null);
       // As a decided proposal: Oracle's dates leave the Inbox, and the counts read again at once.
-      await reloadWaiting(reload);
+      await reloadAfter();
     },
-    [reload],
+    [reloadAfter],
   );
 
   /** The filters in words, for the export's header. */
@@ -1129,7 +1132,9 @@ export function SimpleRoadmap() {
 
   const cardItem = card ? byId.get(card.id) : undefined;
   const popItem = pop ? byId.get(pop.id) : undefined;
-  const allProposals = proposals.data ?? [];
+  // A feature ask on no roadmap is decided in its Inbox row only (it is filed in Requests, on no
+  // roadmap): no roadmap's Needs a decision lists or counts it.
+  const allProposals = (proposals.data ?? []).filter((c) => !(c.op === "add_feature_ask" && !c.document_id));
   const decides = can("accept_simple_change") || data.items.some((i) => i.can_decide);
   // #13: viewers and commenters never start a review (the PRD's own decider or an owner
   // does, per_item "owner" on start_simple_meeting); gate the button here too, not only
@@ -1190,7 +1195,7 @@ export function SimpleRoadmap() {
                   void undo(c.id).then(
                     () => {
                       toast({ message: "Undone" });
-                      return reload();
+                      return reloadAfter();
                     },
                     (e) => toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not undo it" }),
                   ),
@@ -1199,7 +1204,7 @@ export function SimpleRoadmap() {
         });
       // fix4 qa-simple-roadmap-21: who decides, and where the proposal shows.
       else toast({ message: `Proposed ${title} (${w.label}): it waits for ${deciderWords(undefined)} in Needs a decision` });
-      await reload();
+      await reloadAfter();
       return true;
     } catch (e) {
       toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not add it" });
@@ -1383,7 +1388,7 @@ export function SimpleRoadmap() {
         void undo(id).then(
           () => {
             toast({ message: "Undone" });
-            return reload();
+            return reloadAfter();
           },
           (e) => toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not undo it" }),
         )
@@ -1394,13 +1399,14 @@ export function SimpleRoadmap() {
           if (!r.data) toast({ message: `${d.document.title} could not be sent for review` });
         }
         toast({ message: ds.every((d) => d.published) ? "Sent for review: the approved roadmap stays published until it passes" : "Sent for review: the roadmap is published once it passes" });
-        await reload();
+        // A version sent for review waits on its reviewers and decider, the sender among them when they decide.
+        await reloadAfter();
       }}
       onApprove={async (d) => {
         const r = await api.POST("/v1/simple/drafts/{draft_id}/approve", { params: { path: { draft_id: d.id } } });
         toast({ message: !r.data ? `${d.document.title} could not be approved` : r.data.status === "approved" ? `Approved: ${d.document.title} is published` : "Approved: it waits for the other approvals" });
         // The rail's and More's counts read again at once (the approval leaves the Inbox).
-        await reloadWaiting(reload);
+        await reloadAfter();
       }}
     />
   );
@@ -1483,7 +1489,7 @@ export function SimpleRoadmap() {
         onApply={async (l) => {
           const r = await api.POST("/v1/simple/roadmap/apply-approved", { params: { query: { roadmap: l.roadmap.id } } });
           toast({ message: r.data ? `Applied version ${l.version} of ${l.roadmap.title}` : `Version ${l.version} could not be applied` });
-          await reload();
+          await reloadAfter();
         }}
       />
       {/* #36: on a phone, Roadmap/Goal/Track and Group by read before the chart, not after
