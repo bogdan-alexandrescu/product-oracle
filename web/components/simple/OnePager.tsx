@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
-import { Button, LinkButton } from "@/components/ds";
+import { Button, LinkButton, toast as dsToast } from "@/components/ds";
 import { clock, FlowPanel, meetingMoment } from "@/components/simple/FlowVisual";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { dmy, ew, PrdPlan, TAP44, usePhone } from "@/components/simple/PrdTimeline";
+import { PrdMenu, restorePrd } from "@/components/simple/PrdMenu";
 import { PrdStatus } from "@/components/simple/PrdStatus";
 import { RunReviewStep } from "@/components/simple/RunReviewStep";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
@@ -100,6 +102,7 @@ const TINT: Record<Line["state"], string> = {
  * go through the meeting's session and become the meeting's decisions.
  */
 export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onChanged }: { doc: string; sessionId?: string; meetingDecisionIds?: string[]; refresh?: string; onChanged?: () => void }) {
+  const router = useRouter();
   const q = useQuery(`simple-one-pager|${doc}`, () =>
     unwrap(api.GET("/v1/simple/one-pagers/{doc}", { params: { path: { doc } } })),
   );
@@ -448,6 +451,20 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
         {/* qa4-simple-prd-34: it says it leaves Simple for Detailed. */}
         Open in Detailed{sessionId ? " (new tab)" : ""}
       </Link>
+      {/* EP2 a (ep2-a-hard): the PRD's ⋯ menu ends the header's row; deleted, it goes back to One-pagers. */}
+      {!sessionId && (
+        <PrdMenu
+          doc={v.document}
+          btnClass={`${btn(phone)} justify-center ${phone ? "min-w-[34px] px-0" : "min-w-10 px-0"}`}
+          onDeleted={(entry) => {
+            dsToast({
+              message: `Deleted ${v.document.title}. It is in Settings > Trash for 30 days.`,
+              action: { label: "Undo", onClick: () => void restorePrd(entry).then(() => router.push(`/simple/one-pagers/${v.document.slug}`)) },
+            });
+            router.push("/simple/one-pagers");
+          }}
+        />
+      )}
       {phone && startWhyLine}
     </>
   );

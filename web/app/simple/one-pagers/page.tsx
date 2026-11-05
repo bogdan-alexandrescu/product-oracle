@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useCallback, useState } from "react";
 
 import { NewPrdButton, NewPrdSheet, StartedRows, useCanStartPrd, useStartedPrds } from "@/components/simple/NewPrd";
+import { PrdMenu, restorePrd } from "@/components/simple/PrdMenu";
 import { PrdStatus } from "@/components/simple/PrdStatus";
 import { dmy } from "@/components/simple/PrdTimeline";
 import { SimpleEmpty, SimplePage, SimpleSection } from "@/components/simple/SimplePage";
 import { Loading } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone, dayIn } from "@/lib/dates";
-import { useQuery } from "@/lib/use-query";
+import { errorMessage, useQuery } from "@/lib/use-query";
 import { RebuildSign } from "@/components/RebuildSign";
 
 /** One-pagers (#723 S1): the PRDs I may read (the API lists only those), each opening its one-pager. */
@@ -22,6 +23,21 @@ export default function OnePagers() {
   const closeNewPrd = useCallback(() => setNewPrd(false), []);
   const started = useStartedPrds(canStartPrd);
   const mine = started.data ?? [];
+  // EP2 a (ep2-a-result): what a delete did, with Undo, at the top of the list.
+  const [note, setNote] = useState<{ text: string; entry?: Schemas["TrashEntryOut"] } | null>(null);
+  const reload = q.reload;
+  const undo = useCallback(
+    async (entry: Schemas["TrashEntryOut"]) => {
+      try {
+        await restorePrd(entry);
+        setNote({ text: `Restored ${entry.root.title}.` });
+      } catch (e) {
+        setNote({ text: errorMessage(e) });
+      }
+      await reload();
+    },
+    [reload],
+  );
   // qa-simple-prd-p3-30: newest first, by when each last changed (and the list says so).
   const rows = q.data ? [...q.data].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)) : null;
   return (
@@ -38,6 +54,16 @@ export default function OnePagers() {
           </span>
         }
       >
+        {note && (
+          <div role="status" data-testid="one-pagers-note" className="mb-2 flex items-center gap-3 rounded-lg border border-accent bg-accent-soft px-4 py-2.5 text-[15px] text-text">
+            <span className="min-w-0 flex-1">{note.text}</span>
+            {note.entry && (
+              <button type="button" className="flex-none font-[650] text-accent-ink underline" onClick={() => note.entry && void undo(note.entry)}>
+                Undo
+              </button>
+            )}
+          </div>
+        )}
         {q.error ? (
           <p className="simple-small">{q.error}</p>
         ) : !rows ? (
@@ -64,6 +90,13 @@ export default function OnePagers() {
                   <RebuildSign slug={d.slug} compact />
                 </span>
                 <span className="simple-small ml-auto">Updated {dmy(dayIn(d.updated_at, zone))}</span>
+                <PrdMenu
+                  doc={d}
+                  onDeleted={(entry) => {
+                    setNote({ text: `Deleted ${d.title}. It is in Settings > Trash for 30 days.`, entry });
+                    void reload();
+                  }}
+                />
               </li>
             ))}
           </ul>
