@@ -785,6 +785,20 @@ function rebaseShift(c: StoredCard, current: Record<string, unknown>) {
  */
 const API_OP = "api_action";
 const API_CANNOT_UNDO = "This cannot be undone.";
+/** ask_actions.Action.needs and .summary: the role each offered action's route requires (its require_role), and its name. */
+const API_NEEDS: Record<string, { needs: Role; summary: string }> = {
+  create_entity: { needs: "approver", summary: "Create Entity" },
+  create_knowledge_gap: { needs: "commenter", summary: "Create Knowledge Gap" },
+  create_decision: { needs: "commenter", summary: "Create Decision" },
+};
+const ROLE_ORDER: readonly Role[] = ["viewer", "commenter", "approver", "owner"];
+
+/** ask_actions.bar: why the reader may not apply (or undo) an action's card: its route's role. */
+function apiBar(c: StoredCard, ctx: ChatCtx): string | null {
+  const action = API_NEEDS[String(c.target.action)];
+  if (!action) return "That action is no longer offered";
+  return ROLE_ORDER.indexOf(ctx.role) < ROLE_ORDER.indexOf(action.needs) ? `${action.summary} needs the ${action.needs} role` : null;
+}
 const API_ADD = /^(?:please\s+)?add\s+(?:the\s+|an?\s+)?(?:new\s+)?(assumption|gap)\s+(.+?)\.?$/i;
 /** ask_actions.SECRET_VALUE: a pasted key or token is never kept in a card (the API refuses it). */
 const API_SECRET =
@@ -1582,8 +1596,11 @@ function mayOf(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): { may: 
   if (c.status !== "open") return { may: null, why_not: null };
   if (replacedBy(chat, c)) return { may: null, why_not: null };
   const m = meetingOf(chat, c);
-  const bar = m ? meetingBar(m, ctx) : ctx.role === "viewer" ? "Viewers read the plan; they don't change it" : null;
+  // As the API (chat_actions.bar): an action's card keeps its route's role bar, in a meeting first.
+  const bar = (c.op === API_OP ? apiBar(c, ctx) : null) ?? (m ? meetingBar(m, ctx) : ctx.role === "viewer" ? "Viewers read the plan; they don't change it" : null);
   if (bar) return { may: null, why_not: bar };
+  // As the API (chat_actions.DIRECT_OPS has ask_actions.OP): whoever passes the route's role decides an action's card.
+  if (c.op === API_OP) return { may: "apply", why_not: null };
   // As the API (chat_actions.proposes): on Ask, approvers and owners record decisions; a commenter proposes one.
   if (!m && c.op === "record_decision" && ctx.role === "commenter") return { may: "propose", why_not: null };
   // item-chat-understands (shipped.bar): only an owner marks an item as already shipped.
@@ -1637,6 +1654,8 @@ function cardTopics(cards: StoredCard[]): string[] {
  * card_order.redo_line: the change a line asks for when it answers the previous card to change it ("no, note: ...": what
  * follows; a short change request ending "instead" with no record prefix, "make it April instead": the line itself), else null.
  */
+// REDO and INSTEAD (its record prefixes: note|decided|decision|open|question|suggest|add|idea) are copied by
+// hand from _REDO and _INSTEAD in api/oracle/simple/card_order.py: change both together.
 const REDO = /^(?:no|nope|rather|instead)\b[,:;.!]?\s+(.+)$/i;
 const INSTEAD = /^(?!(?:note|decided|decision|open|question|suggest|add|idea)\b)(?:[^\s:]+\s+){0,4}[^\s:]+,?\s+instead[.!]?$/i;
 function redoLine(text: string): string | null {
@@ -1710,7 +1729,7 @@ export const REPLACED = "This card was replaced by a newer card in the chat: use
 /** qa4-simple-decide-1 (chat._undo_bar): why the reader may not undo an applied card, by its Apply's rule. */
 function undoBar(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): string | null {
   const m = meetingOf(chat, c);
-  const bar = m ? meetingBar(m, ctx) : ctx.role === "viewer" ? "Viewers read the plan; they don't change it" : null;
+  const bar = (c.op === API_OP ? apiBar(c, ctx) : null) ?? (m ? meetingBar(m, ctx) : ctx.role === "viewer" ? "Viewers read the plan; they don't change it" : null);
   if (!bar && c.op === API_OP && !c.after.undo) return API_CANNOT_UNDO;
   if (bar || c.op === API_OP || LOCAL_OPS.has(c.op) || c.op === "add_feature_ask" || c.op === "suggest_feature" || c.decided_by === ctx.id) return bar;
   const item = c.item_id ? itemsFor(db, ctx).find((i) => i.id === c.item_id) : undefined;

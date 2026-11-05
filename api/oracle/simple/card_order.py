@@ -38,6 +38,8 @@ NEW_OPS = ("minutes_note", "open_question", "record_decision", "suggest_feature"
 # The person's line answering the previous card to change it: "no, ...", "instead, ..."
 # (what follows is the change itself), or a short change request ending "instead" with no
 # record prefix ("make it April instead", "April instead"), read in the person's own words.
+# _REDO and _INSTEAD (its record prefixes: note|decided|decision|open|question|suggest|add|idea)
+# are copied by hand as REDO and INSTEAD in web/lib/api/mock/simple-chat.ts: change both together.
 _REDO = re.compile(r"^(?:no|nope|rather|instead)\b[,:;.!]?\s+(.+)$", re.I)
 _INSTEAD = re.compile(
     r"^(?!(?:note|decided|decision|open|question|suggest|add|idea)\b)"
