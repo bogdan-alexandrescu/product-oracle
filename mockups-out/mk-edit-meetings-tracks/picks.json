@@ -10,7 +10,7 @@
    "proposals": [
     {
      "letter": "a",
-     "name": "Edit the strip in place",
+     "name": "Edit strip in place",
      "recommended": false,
      "what": "Edit agenda turns the strip under the attendees into an editable row: each item gets a drag handle and ×, a click on its name renames it, and + Add joins the end. Done closes it.",
      "plus": "Nothing opens; the change happens where people already look.",
