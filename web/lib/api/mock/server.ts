@@ -162,6 +162,7 @@ import {
 } from "./pricing";
 import { routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith } from "./goal-buckets";
 import { featureKeyOf } from "./simple-priorities";
+import { restoreTrack, routeRemoved } from "./simple-removed";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
@@ -5752,7 +5753,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       // New PRD (4): a PRD moved to Trash releases its requests; Restore links back the free ones.
       // TRASH_KEPT_LINKS_SCENARIO: a PRD trashed before this release kept its request links.
       onTrash: (ids) => (localStorage.getItem(MOCK_SCENARIO_KEY) === TRASH_KEPT_LINKS_SCENARIO ? undefined : releaseDocuments(ensureRequests(db), ids)),
-      onRestore: (released) => relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
+      onRestore: (released) => (db.simple_roadmap && restoreTrack(db.simple_roadmap, released)) || relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
       uuid,
       now,
     },
@@ -6603,6 +6604,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       const out = appliedVersionOf(db.simple_roadmap!, doc.slug, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames });
       return out ? json(200, out) : json(404, { detail: "No such roadmap" });
     }
+    // removed-tracks: Simple's removed list, its tracks and their change ops (./simple-removed.ts).
+    const removedRes = await routeRemoved(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames }, r, p, () => (db.trash ??= emptyTrash()).entries);
+    if (removedRes) return removedRes;
     const bucketsRes = await routeGoalBuckets(db.simple_roadmap!, me.role, r, p);
     if (bucketsRes) return bucketsRes;
     const simpleRes = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, r, p, q);

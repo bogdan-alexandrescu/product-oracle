@@ -17,6 +17,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import { Button } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
 import { calendarDay, displayZone, todayIn } from "@/lib/dates";
+import { formatDay } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
 
 import type { Act } from "@/app/simple/roadmap/_card";
@@ -702,6 +703,19 @@ function Links({ c, late, onAdded }: { c: Ctx; late: Item[]; onAdded: (i: Item) 
   );
 }
 
+/** removed-tracks: who cut a cut feature and when (the removed list's own row); Restore is the header menu's. */
+function CutBy({ id }: { id: string }) {
+  const removed = useQuery("simple-removed", () => unwrap(api.GET("/v1/simple/removed")));
+  const r = removed.data?.items.find((x) => x.kind === "feature" && x.id === id);
+  if (!r?.at) return null;
+  return (
+    <p className="mt-1 text-sm text-text2" data-testid="fp-cut-by">
+      Cut on {formatDay(r.at)}
+      {r.by_name ? ` by ${r.by_name}` : ""}
+    </p>
+  );
+}
+
 export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk, more, onSuggest, testId = "feature-panel" }: { item: Item; items: Map<string, Item>; act: Act; canChange: boolean; phone: boolean; onClose: () => void; talk: ReactNode; more?: ReactNode; onSuggest?: () => void; testId?: string }) {
   const [tab, setTab] = useState<"details" | "talk">("details");
   // The link added here last: while it is late, the clash offers to remove it.
@@ -738,6 +752,7 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
         {item.confidence && <span data-testid="fp-confidence">{confidenceWord(item.confidence)} confidence</span>}
         {clash && <span className="rounded-full bg-crit-bg px-2 py-px font-medium text-crit" data-testid="fp-clash-flag">Dates clash</span>}
       </p>
+      {cut && <CutBy id={item.id} />}
       {!canChange && (
         <p className="mt-2 rounded-lg bg-surface2 px-3 py-2 text-sm text-text2" data-testid="fp-read-only">
           You can read this feature. Its owner and approvers can change it.{" "}
