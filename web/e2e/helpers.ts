@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
 import { MOCK_LOGIN } from "../lib/api/mock/fixtures";
-import { CONSOLE_HELD_RUN, ROADMAP_CROSS_PRD_RUN, ROADMAP_DRIFT_RUN, ROADMAP_FILE_PROBLEM_RUN, ROADMAP_REVIEW_RUN, ROADMAP_REVIEW_RUN_ATTEMPT2 } from "../lib/api/mock/runs";
+import { CONSOLE_HELD_RUN, ROADMAP_CROSS_PRD_RUN, ROADMAP_DEPS_CHANGED_RUN, ROADMAP_DRIFT_RUN, ROADMAP_FILE_PROBLEM_RUN, ROADMAP_REVIEW_RUN, ROADMAP_REVIEW_RUN_ATTEMPT2 } from "../lib/api/mock/runs";
 
 export const ADMIN = MOCK_LOGIN;
 
@@ -365,6 +365,14 @@ export async function seedRoadmapFileProblem(page: Page): Promise<string> {
  */
 export async function seedRoadmapAttempt2(page: Page): Promise<string> {
   return seedRun(page, ROADMAP_REVIEW_RUN_ATTEMPT2);
+}
+
+/**
+ * Seeds the mock with attempt 2's twin whose agents also swapped Webhooks' dependency on Budget
+ * caps for Usage export unasked (ROADMAP_DEPS_CHANGED_RUN): its Revert adds a dependency back.
+ */
+export async function seedRoadmapDepsChanged(page: Page): Promise<string> {
+  return seedRun(page, ROADMAP_DEPS_CHANGED_RUN);
 }
 
 /**
