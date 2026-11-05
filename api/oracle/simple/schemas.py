@@ -571,6 +571,12 @@ ChangeOp = Literal[
     # build-milestones-on-roadmap: a proposed date/counts_when on a PRD's own goal
     # milestone, on the PRD document, routed to its owner (oracle.simple.goal_milestones).
     "edit_goal_milestone",
+    # trash-features-goals: a feature moved to Trash, proposed to its decider by who may
+    # not decide on it (oracle.simple.trash_items).
+    "delete_item",
+    # trash-features-goals: a goal moved to Trash, proposed by a commenter to the company's
+    # owners (oracle.simple.trash_items).
+    "delete_goal",
 ]
 # chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
 # the change engine (oracle.simple.chat_actions).

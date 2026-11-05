@@ -164,7 +164,7 @@ import {
   type PricingDb,
 } from "./pricing";
 import { routeGoalBuckets, seedGoalBucketsHard } from "./goal-buckets";
-import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
+import { proposeGoalDelete, routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./currentstate";
 import { prioritiesOut } from "./simple-priorities";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
@@ -588,6 +588,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * approver owning the alerts track) deciding Grow retention's suggestions (suggest review);
  * "simple-home-deciders" as "simple-deciders" plus a commenter's proposal waiting on the
  * pricing roadmap's decider (#723 S1 Home review).
+ * "trash-reviewer" as "simple-deciders" with Avery Lane the alerts roadmap's required reviewer
+ * (trash-features-goals review 4).
  * "simple-home-move" as "simple-home" plus a "Move the dependents" proposal Home's Accept confirms.
  * "simple-home-same-name" as "simple-home" plus a second goal named Grow retention and a proposal to change an owner.
  * "goal-order" as "simple-home" with five goals in a set order, each with work; "goal-order-hard" adds three more and an archived one.
@@ -948,6 +950,18 @@ function seedSimpleDecidersScenario(): Db {
     viewer: join("vic.moss@example.com", "Vic Moss", "viewer", 3),
   });
   db.simple_roadmap.people = Object.fromEntries(db.members.map((m) => [m.id, m.name ?? m.email]));
+  return db;
+}
+
+/**
+ * trash-features-goals review 4 "trash-reviewer" scenario: "simple-deciders" with Avery Lane (the
+ * alerts track's owner, an approver, so the alerts roadmap's approver) its required reviewer: a
+ * draft sent for review waits on them on Home until they approve it.
+ */
+function seedTrashReviewerScenario(): Db {
+  const db = seedSimpleDecidersScenario();
+  const avery = db.members.find((m) => m.email === "avery.lane@example.com")!;
+  db.simple_roadmap!.reviewers = { "alerts-roadmap": [avery.id] };
   return db;
 }
 
@@ -3398,6 +3412,8 @@ function load(): Db {
                 ? seedManyPeople
               : scenario === "simple-deciders"
                 ? seedSimpleDecidersScenario
+              : scenario === "trash-reviewer"
+                ? seedTrashReviewerScenario
               : scenario === "meeting-agenda"
                 ? seedMeetingAgendaScenario
               : scenario === "simple-cross-prd-dates"
@@ -5787,6 +5803,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       // New PRD (4): a PRD moved to Trash releases its requests; Restore links back the free ones.
       // TRASH_KEPT_LINKS_SCENARIO: a PRD trashed before this release kept its request links.
       onTrash: (ids) => (localStorage.getItem(MOCK_SCENARIO_KEY) === TRASH_KEPT_LINKS_SCENARIO ? undefined : releaseDocuments(ensureRequests(db), ids)),
+      simple: () => db.simple_roadmap,
       onRestore: (released) => relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
       uuid,
       now,
@@ -6648,7 +6665,13 @@ async function route(db: Db, req: Request): Promise<Response> {
       const out = appliedVersionOf(db.simple_roadmap!, doc.slug, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames });
       return out ? json(200, out) : json(404, { detail: "No such roadmap" });
     }
-    const bucketsRes = await routeGoalBuckets(db.simple_roadmap!, me.role, r, p);
+    // trash-features-goals: a goal deleted to Settings › Trash (./trash.ts).
+    const bin = {
+      trash: (db.trash ??= emptyTrash()), id: me.id, name: simpleNames[me.id] ?? me.email, now: () => new Date(mockNowMs()).toISOString(),
+      propose: (g: { id: string; title: string }, to: string | null, reason: string | null) =>
+        proposeGoalDelete(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames, trash: db.trash }, g, to, reason),
+    };
+    const bucketsRes = await routeGoalBuckets(db.simple_roadmap!, me.role, r, p, bin);
     if (bucketsRes) return bucketsRes;
     const goalMapRes = await routeGoalMap(db, localStorage.getItem(MOCK_SCENARIO_KEY), { role: me.role, name: simpleNames[me.id] ?? "You" }, r, p, (itemId) => {
       const key = db.simple_roadmap && Object.keys(db.simple_roadmap.ids).find((k) => db.simple_roadmap!.ids[k] === itemId);
@@ -6658,7 +6681,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const simpleRes = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, r, p, q);
     if (simpleRes) return simpleRes;
     const companyGoals = db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title }));
-    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals }, r, p, q);
+    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash }, r, p, q);
   };
   // Simple S8: review meetings, the Decisions page, and changes made through a meeting.
   // Seeded on the first meetings or Decisions read, so the other Simple screens keep their data.

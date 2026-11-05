@@ -42,6 +42,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
+from oracle.trash.models import Trashable, trashed_index
 from oracle.v2.models import FRESHNESS, _fk, _json, _lock_version, _texts, _updated_at, _uuids
 
 HORIZONS = ("now", "next", "later")
@@ -312,7 +313,7 @@ class DraftRoadmap(TenantScoped, Base):
     updated_at: Mapped[datetime] = _updated_at()
 
 
-class RoadmapItem(TenantScoped, Base):
+class RoadmapItem(Trashable, TenantScoped, Base):
     """One item of a roadmap version, traced to the PRD version it came from (§11.4).
     Or (E1) one item of a PRD draft's items-only roadmap (``draft_roadmap_id``): exactly
     one owner each.
@@ -320,7 +321,15 @@ class RoadmapItem(TenantScoped, Base):
     Rows of an approved roadmap version are never rewritten; only their freshness
     columns move (as ``artifact_dependencies`` do, §11.5), and approving the version
     applies its own plan to them once (oracle.simple.approved_roadmap: dates, plan state,
-    added items).
+    added items). One exception: restoring a feature from Trash adds its row to the
+    published version and the one waiting for approval, when made while it was in Trash
+    (so without it); older approved versions are left as approved
+    (oracle.simple.trash_items._onto_current); no existing row is changed. A feature only
+    ever in a Simple draft is back in its draft and on no version, or, when that draft was
+    sent for review meanwhile, only on its version in review; when that draft was approved
+    meanwhile, in the roadmap's working draft (opened if needed), never the published
+    version. Approving a draft leaves its rows in Trash as they are: only the purge
+    deletes one.
     """
 
     __tablename__ = "roadmap_items"
@@ -339,6 +348,8 @@ class RoadmapItem(TenantScoped, Base):
             f"date_source IS NULL OR {_in('date_source', DATE_SOURCES)}", name="date_source"
         ),
         Index("ix_roadmap_items_prd_section", "prd_version_id", "prd_section_key"),
+        # trash-features-goals: a feature deleted to Trash (oracle.simple.trash_items).
+        trashed_index("roadmap_items"),
         Index(
             "uq_roadmap_items_draft_key",
             "draft_roadmap_id",

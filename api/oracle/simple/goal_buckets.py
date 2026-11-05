@@ -327,6 +327,23 @@ async def update_bucket_goal(
     return GoalBucketWrite(goal=out, undo=_signed(principal.tenant_id, undo))
 
 
+async def move_off(db: AsyncSession, g: Entity, to_goal_id: uuid.UUID | None) -> list[FeatureSnap]:
+    """Move the goal's features off it (Archive, and a delete to Trash): those that serve
+    another goal too keep it (now first), the rest go to ``to_goal_id`` or to no goal.
+    The links as they were, for Undo."""
+    held = sorted({e.src_id for e in await _links(db) if e.dst_id == g.id})
+    before = await _snap(db, held)
+    for snap in before:
+        first_here = bool(snap.links) and snap.links[0].goal_id == g.id
+        rest = [lk for lk in snap.links if lk.goal_id != g.id]
+        if first_here and rest:
+            rest = [GoalLinkSnap(goal_id=rest[0].goal_id, contribution=TOP), *rest[1:]]
+        elif first_here and to_goal_id is not None:
+            rest = [GoalLinkSnap(goal_id=to_goal_id, contribution=TOP)]
+        await _set_links(db, snap.feature_id, rest)
+    return before
+
+
 @router.post("/goals/{goal_id}/archive", response_model=GoalBucketWrite, name="archive_bucket_goal")
 async def archive_bucket_goal(
     goal_id: uuid.UUID, body: ArchiveIn, principal: Approver, db: TenantDB
@@ -337,17 +354,7 @@ async def archive_bucket_goal(
         to = await _entity(db, body.to_goal_id, "goal")
         if to.id == g.id or to.status == "rejected":
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Pick another goal")
-    held = sorted({e.src_id for e in await _links(db) if e.dst_id == g.id})
-    before = await _snap(db, held)
-    undo = GoalBucketsUndo(goals=[_goal_snap(g)], features=before)
-    for snap in before:
-        first_here = bool(snap.links) and snap.links[0].goal_id == g.id
-        rest = [lk for lk in snap.links if lk.goal_id != g.id]
-        if first_here and rest:
-            rest = [GoalLinkSnap(goal_id=rest[0].goal_id, contribution=TOP), *rest[1:]]
-        elif first_here and body.to_goal_id is not None:
-            rest = [GoalLinkSnap(goal_id=body.to_goal_id, contribution=TOP)]
-        await _set_links(db, snap.feature_id, rest)
+    undo = GoalBucketsUndo(goals=[_goal_snap(g)], features=await move_off(db, g, body.to_goal_id))
     g.status = "rejected"
     await db.commit()
     return GoalBucketWrite(undo=_signed(principal.tenant_id, undo))

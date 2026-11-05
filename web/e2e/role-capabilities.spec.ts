@@ -26,12 +26,14 @@ const ALL = [
   "nav-autonomy",
   "nav-trash",
 ];
-// API tokens, Notifications and Trash read owner-only routes; Members reads the people list
+// API tokens and Notifications read owner-only routes; Members reads the people list
 // (A5: everyone sees who is in the company, read-only below owner); Company reads the branding
 // (O5 lane 4: everyone reads it, owners change it and the other company settings).
 const EVERYONE = ["nav-members", "nav-company", "nav-connections", "nav-claude-accounts", "nav-sources", "nav-templates", "nav-themes", "nav-autonomy"];
+// trash-features-goals: commenters and up read Trash (the features and goals they deleted).
+const COMMENTER = [...EVERYONE, "nav-trash"];
 // I1: approvers also read Settings › Webhooks (list_webhooks).
-const APPROVER = ["nav-members", "nav-company", "nav-connections", "nav-claude-accounts", "nav-sources", "nav-webhooks", "nav-templates", "nav-themes", "nav-autonomy"];
+const APPROVER = ["nav-members", "nav-company", "nav-connections", "nav-claude-accounts", "nav-sources", "nav-webhooks", "nav-templates", "nav-themes", "nav-autonomy", "nav-trash"];
 
 const settingsNav = (page: Page) => page.getByRole("navigation", { name: "Settings" });
 const rail = (page: Page) => page.getByRole("navigation", { name: "Oracle" });
@@ -69,7 +71,7 @@ for (const role of ["approver", "commenter", "viewer"] as const) {
     await openSettings(page, `${role}@example.com`);
     // Settings opens on the first tab the role can read.
     await expect(page).toHaveURL(/\/settings\/members$/);
-    expect(await tabsShown(page)).toEqual(role === "approver" ? APPROVER : EVERYONE);
+    expect(await tabsShown(page)).toEqual(role === "approver" ? APPROVER : role === "commenter" ? COMMENTER : EVERYONE);
 
     // Claude accounts: read the pool, no controls, View only.
     await settingsNav(page).getByTestId("nav-claude-accounts").click();
@@ -139,7 +141,7 @@ test("engineering lead: the flag adds no Settings tab; the lead keeps the commen
   await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "eng-review"]);
   await openSettings(page, "commenter@example.com");
   await expect(page).toHaveURL(/\/settings\/members$/);
-  expect(await tabsShown(page)).toEqual(EVERYONE);
+  expect(await tabsShown(page)).toEqual(COMMENTER);
   await settingsNav(page).getByTestId("nav-templates").click();
   await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveText("View only");
 });

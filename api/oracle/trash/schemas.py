@@ -4,18 +4,22 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-TrashItemType = Literal["document", "intake", "run"]
+# trash-features-goals: a roadmap feature or a goal, too (oracle.simple.trash_items).
+TrashItemType = Literal["document", "intake", "run", "feature", "goal"]
 
 
 class TrashItem(BaseModel):
-    """A document, intake or run as it was when it went to Trash."""
+    """A document, intake, run, roadmap feature or goal as it was when it went to Trash."""
 
     type: TrashItemType
     id: uuid.UUID
     slug: str | None = None
     title: str
-    # A document's kind (prd, roadmap, spec, update, ...), "intake", or a run's flow.
+    # A document's kind (prd, roadmap, spec, update, ...), "intake", a run's flow,
+    # "feature" or "goal".
     kind: str
+    # A feature's code on its roadmap ("F-26"), shown before its name.
+    code: str | None = None
     # qa4-docs-26: a run in the delete dialog, in words: when it ran and what it wrote.
     created_at: datetime | None = None
     wrote: str | None = None
@@ -54,6 +58,9 @@ class TrashEntryOut(BaseModel):
     days_left: int
     # A restore's answer: what could not come back with it (empty in Trash's list).
     not_restored: list[NotRestored] = []
+    # Whether the caller may restore it: owners anything, whoever deleted a feature or a
+    # goal that one too (oracle.trash.service.may_restore).
+    can_restore: bool = False
 
 
 class RegenerateEstimateIn(BaseModel):
