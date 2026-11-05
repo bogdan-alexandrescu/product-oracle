@@ -450,13 +450,17 @@ export const NEW_FLOW_OPS = new Set(["add_item_task", "add_launch_task", "add_ac
  * The roadmap's banner and Home say the same. `names` names the people it waits on.
  */
 export function draftNext(
-  d: Pick<Schemas["SimpleDraftOut"], "status" | "can_submit" | "can_approve" | "can_publish" | "base_version" | "published" | "waiting_on"> & { required_reviewers?: string[] },
+  d: Pick<Schemas["SimpleDraftOut"], "status" | "can_submit" | "can_approve" | "can_publish" | "base_version" | "published" | "waiting_on"> &
+    Partial<Pick<Schemas["SimpleDraftOut"], "decider" | "decider_approved">> & { required_reviewers?: string[] },
   names?: (id: string) => string,
 ): { words: string; action: "submit" | "approve" | "publish" | null } {
   const v = `version ${(d.base_version ?? 0) + 1}`;
   const publish = d.published ? `${v} replaces the approved roadmap` : `${v} is published`;
-  const who = d.waiting_on.length && names ? d.waiting_on.map(names).join(", ") : "its decider";
-  const verb = d.waiting_on.length > 1 && names ? "approve" : "approves";
+  // Review: the roadmap's decider by name (the draft carries it) until they approve, then whom it waits on.
+  const decider = d.decider && !d.decider_approved ? [d.decider.name] : [];
+  const people = [...decider, ...(names ? d.waiting_on.filter((id) => id !== d.decider?.id).map(names) : [])];
+  const who = people.length ? people.join(", ") : "its decider";
+  const verb = people.length > 1 ? "approve" : "approves";
   if (d.status === "submitted") {
     if (d.can_approve) return { words: `Sent for review: it waits for your approval. When you approve, ${publish}`, action: "approve" };
     return { words: `Sent for review: it waits for ${who} to approve. Then ${publish}`, action: null };

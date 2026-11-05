@@ -79,6 +79,7 @@ from oracle.simple.schemas import (
     SimpleDraftOut,
     SimpleMeetingApproval,
     SimpleNotApproved,
+    SimplePersonRef,
 )
 
 OPEN = ("working", "submitted")
@@ -816,9 +817,17 @@ async def outs(
         else set()
     )
     me = _me(principal)
+    # roadmap-decide review: the author's and the decider's names, read with the draft.
+    ids = {d.created_by for d in ds} | {x for d in ds if (x := w.deciders.get(d.document_id))}
+    names = (
+        {u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(ids)))}
+        if ids
+        else {}
+    )
     out = []
     for d in ds:
         doc = docs[d.document_id]
+        decider = w.deciders.get(d.document_id)
         out.append(
             SimpleDraftOut(
                 id=d.id,
@@ -827,8 +836,12 @@ async def outs(
                 base_version=numbers.get(d.base_version_id),  # type: ignore[arg-type]
                 version=numbers.get(d.version_id),
                 created_by=d.created_by,
+                created_by_name=names.get(d.created_by),
                 created_at=d.created_at,
                 participant_ids=list(d.participant_ids or []),
+                decider=SimplePersonRef(id=decider, name=names[decider])
+                if decider in names
+                else None,
                 changes=n.get(d.id, 0),
                 submitted_at=d.submitted_at,
                 submitted_by=d.submitted_by,
@@ -1420,6 +1433,8 @@ async def approve(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) -
         if not can_publish(principal, d, w):
             raise DraftError(403, "Only the roadmap's decider approves and publishes this draft")
         await submit(db, principal, d.id)
+        # Review minor 5: the draft as submitting left it, not as read before.
+        d, w = await _get(db, principal, draft_id)
     other = await _approve(db, principal.tenant_id, d, w, principal, [], None)
     return (await outs(db, principal, [d], other))[0]
 

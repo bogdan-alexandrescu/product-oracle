@@ -182,13 +182,13 @@ export function FixButtons({
                 {/* Review: the dependent's name opens its feature panel, as other item names do. */}
                 Removing the dependency of{" "}
                 {openItem ? (
-                  <button type="button" className="font-medium text-text underline-offset-2 hover:underline" onClick={() => openItem(n.id)}>
+                  <button type="button" className="font-medium text-accent-ink underline-offset-2 hover:underline" onClick={() => openItem(n.id)}>
                     ‘{n.title}’
                   </button>
                 ) : (
                   `‘${n.title}’`
                 )}
-                {`: proposed, waits for ${waits}`}
+                {waits ? `: proposed, waits for ${waits}` : ": proposed"}
               </span>
             ) : (
               // A long name wraps inside its button rather than run past a phone's edge.

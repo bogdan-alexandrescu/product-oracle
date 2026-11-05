@@ -418,17 +418,28 @@ function changeLog(db: SimpleDb, id: string): Schemas["SimpleDraftChange"][] {
     });
 }
 
+/** drafts._approver_of: the draft's final approval, the roadmap's decider's; with none, an editor's. */
+function approverOf(db: SimpleDb, ctx: SimpleChangesCtx, d: MockDraft): boolean {
+  const decider = db.deciders?.[d.roadmap];
+  return decider ? decider === ctx.id : canEditRoadmap(db, d.roadmap, ctx);
+}
+
 function draftOut(db: SimpleDb, ctx: SimpleChangesCtx, d: MockDraft): Schemas["SimpleDraftOut"] {
   const edits = canEditRoadmap(db, d.roadmap, ctx);
   const decider = db.deciders?.[d.roadmap];
+  const approver = approverOf(db, ctx, d);
   return {
     ...d.out, changes: draftChanges(db, d.out.id), change_log: changeLog(db, d.out.id), from_prds: draftPrds(d),
+    // roadmap-decide review (drafts.outs): the author and the roadmap's set decider, by name.
+    created_by_name: ctx.names[d.out.created_by] ?? null,
+    decider: decider ? { id: decider, name: ctx.names[decider] ?? "its decider" } : null,
     can_submit: d.out.status === "working" && edits,
     can_resume: d.out.status === "working" && (d.out.created_by === ctx.id || decider === ctx.id),
-    // Review: a decider who approved already waits on the required reviewers, not on themself.
-    can_approve: d.out.status === "submitted" && ((edits && !d.out.decider_approved) || d.out.waiting_on.includes(ctx.id)),
+    // Review: a decider who approved already waits on the required reviewers, not on themself;
+    // an owner who sent a roadmap someone else decides does not approve it (drafts._approver_of).
+    can_approve: d.out.status === "submitted" && ((approver && !d.out.decider_approved) || d.out.waiting_on.includes(ctx.id)),
     // roadmap-decide (drafts.outs): the decider's Approve and publish on a working draft (with no decider, an owner's).
-    can_publish: d.out.status === "working" && edits && (decider ? decider === ctx.id : true),
+    can_publish: d.out.status === "working" && approver && edits,
     // roadmap-decide review: who still reviews a working draft after the decider's approval.
     required_reviewers: d.out.status === "working" ? (db.reviewers?.[d.roadmap] ?? []).filter((r) => r !== ctx.id) : [],
     can_withdraw: d.out.status === "submitted" && (d.out.created_by === ctx.id || edits),
@@ -468,10 +479,11 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
     }
     if (d.out.status !== "submitted") return json(409, { detail: `This draft is ${d.out.status}: only a submitted draft is approved` });
     const reviewers = db.reviewers?.[d.roadmap] ?? [];
-    if (!canEditRoadmap(db, d.roadmap, ctx) && !reviewers.includes(ctx.id)) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
+    const approver = approverOf(db, ctx, d);
+    if (!approver && !reviewers.includes(ctx.id) && !d.out.waiting_on.includes(ctx.id)) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
     // The decider's approval waits for the required reviewers (drafts._settle); the last one publishes it.
-    const left = (canEditRoadmap(db, d.roadmap, ctx) ? (d.out.decider_approved ? d.out.waiting_on : reviewers) : d.out.waiting_on).filter((r) => r !== ctx.id);
-    const decided = d.out.decider_approved || canEditRoadmap(db, d.roadmap, ctx);
+    const left = (approver ? (d.out.decider_approved ? d.out.waiting_on : reviewers) : d.out.waiting_on).filter((r) => r !== ctx.id);
+    const decided = d.out.decider_approved || approver;
     if (left.length || !decided) Object.assign(d.out, { decider_approved: decided, waiting_on: left });
     else Object.assign(d.out, { decider_approved: true, status: "approved", approved_at: now, waiting_on: [] });
     return json(200, draftOut(db, ctx, d));

@@ -841,8 +841,13 @@ class SimpleDraftOut(BaseModel):
     base_version: int | None
     version: int | None
     created_by: uuid.UUID
+    # roadmap-decide review: the author's name, so the banner names whose draft it is at once.
+    created_by_name: str | None = None
     created_at: dt.datetime
     participant_ids: list[uuid.UUID]
+    # roadmap-decide review: the roadmap's set decider (who approves it), by name; none when
+    # an owner decides.
+    decider: SimplePersonRef | None = None
     # Applied changes in it, not undone.
     changes: int
     submitted_at: dt.datetime | None

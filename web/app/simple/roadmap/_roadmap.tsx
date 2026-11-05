@@ -390,6 +390,8 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onRe
       </Button>
     ) : null;
   const mine = focus ? working.find((d) => d.id === focus) : undefined;
+  // Review minor: whose draft it is, named by the draft itself, so it is right from the first paint.
+  const author = (d: Draft) => d.created_by_name ?? personOf?.(d.created_by);
   return (
     <section
       data-testid="draft-banner"
@@ -407,7 +409,7 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onRe
           ) : (
             <>
               {/* Review: another person's draft (the decider reading the owner's) names whose it is and its roadmap. */}
-              <b>{working[0].created_by === meId || !meId ? "Your working draft" : `${personOf?.(working[0].created_by) ?? "Someone"}'s working draft of the ${working[0].document.title}`}</b> · <span data-testid="draft-count">{changes}</span> {changes === 1 ? "change" : "changes"} since {time(since)} · <span data-testid="draft-next">{next.words}</span>
+              <b>{working[0].created_by === meId || !meId ? "Your working draft" : author(working[0]) ? `${author(working[0])}'s working draft of the ${working[0].document.title}` : `The working draft of the ${working[0].document.title}`}</b> · <span data-testid="draft-count">{changes}</span> {changes === 1 ? "change" : "changes"} since {time(since)} · <span data-testid="draft-next">{next.words}</span>
             </>
           )}
         </p>
@@ -684,7 +686,7 @@ function DecisionTray({
     <li key={c.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-proposal">
       <span className="min-w-0 flex-1 text-[15px]">
         {title(c)}: {opWords(c.op).toLowerCase()} · <span className="text-text2">{c.by_name}</span>
-        {c.op === "remove_dependency" && waitsFor && <span className="text-text2"> · waits for {waitsFor(c)}</span>}
+        {c.op === "remove_dependency" && waitsFor && waitsFor(c) && <span className="text-text2"> · waits for {waitsFor(c)}</span>}
         {c.from_meeting && <span className="block text-sm text-text2" data-testid="proposal-from-meeting">Asked for by the meeting {c.from_meeting.title}</span>}
       </span>
       <Button onClick={() => onDecide(c, "accept")}>Accept</Button>
@@ -713,7 +715,8 @@ function DecisionTray({
       {/* roadmap-decide: what the button's count is, said in words; the broken links are the same ones Home and the side menu count. */}
       <p className="mt-1 text-sm text-text2" data-testid="tray-scope">
         {/* Review: under a filter, every kind on one basis: what these filters show, and the whole roadmap's. */}
-        {whole !== here ? `${here} here, ${whole} in all${oneRoadmap ? "" : " your roadmaps"}` : whole} to decide in this roadmap&apos;s working draft: broken links, dates to confirm, proposals and items pulled in.
+        {/* Review: "this roadmap's" only when one roadmap is chosen; else every roadmap's draft is counted. */}
+        {whole !== here ? `${here} here, ${whole} in all` : whole} to decide {oneRoadmap ? "in this roadmap's working draft" : "in your roadmaps' working drafts"}: broken links, dates to confirm, proposals and items pulled in.
         {allLinks !== undefined && allLinks !== counts.links && (
           <span data-testid="tray-links-here">
             {" "}
@@ -958,8 +961,9 @@ export function SimpleRoadmap() {
   const waitsFor = useCallback(
     (c: Change) => {
       if (myId && c.routed_to.includes(myId)) return "you";
-      const who = c.routed_to.map((id) => draftPeople.data?.find((p) => p.user_id === id)?.name).filter(Boolean);
-      return who.length ? who.join(", ") : "its decider";
+      // Review minor: held ("") until every name is known, never "its decider" for a moment.
+      const who = c.routed_to.map((id) => draftPeople.data?.find((p) => p.user_id === id)?.name);
+      return who.every(Boolean) ? who.join(", ") || "its decider" : "";
     },
     [myId, draftPeople.data],
   );
@@ -1119,7 +1123,10 @@ export function SimpleRoadmap() {
       try {
         const r = await propose(body);
         const target = latest.current.get(String(body.target?.item_id ?? ""));
+        // Review minor: the message keeps clear of the flag it was acted on (its fixes and the proposed line).
+        const keys = [target?.key, latest.current.get(String(body.target?.subject ?? ""))?.key].filter(Boolean);
         toast({
+          avoid: keys.length ? keys.map((k) => `[data-testid="conflict"][data-item="${k}"]`).join(", ") : undefined,
           message: resultWords(r, what, target?.deciders),
           action: r.change.status === "applied" && r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(reload, (e) => toast({ message: String(e.message) })) } : undefined,
         });

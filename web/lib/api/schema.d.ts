@@ -38948,6 +38948,8 @@ export interface components {
              * Format: uuid
              */
             created_by: string;
+            /** Created By Name */
+            created_by_name?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -38955,6 +38957,7 @@ export interface components {
             created_at: string;
             /** Participant Ids */
             participant_ids: string[];
+            decider?: components["schemas"]["SimplePersonRef"] | null;
             /** Changes */
             changes: number;
             /** Submitted At */

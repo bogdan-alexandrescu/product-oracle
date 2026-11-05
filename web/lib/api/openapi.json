@@ -117039,6 +117039,17 @@
             "format": "uuid",
             "title": "Created By"
           },
+          "created_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Name"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -117051,6 +117062,16 @@
             },
             "type": "array",
             "title": "Participant Ids"
+          },
+          "decider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "changes": {
             "type": "integer",
