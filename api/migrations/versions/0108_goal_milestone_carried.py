@@ -31,6 +31,7 @@ def upgrade() -> None:
             nullable=True,
         ),
     )
+    op.create_index("ix_track_milestones_carried_to_id", "track_milestones", ["carried_to_id"])
     op.add_column(
         "track_milestones", sa.Column("carry_dropped_at", sa.DateTime(timezone=True), nullable=True)
     )
@@ -38,4 +39,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_column("track_milestones", "carry_dropped_at")
+    op.drop_index("ix_track_milestones_carried_to_id", table_name="track_milestones")
     op.drop_column("track_milestones", "carried_to_id")
