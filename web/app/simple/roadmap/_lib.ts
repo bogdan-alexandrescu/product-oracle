@@ -559,6 +559,14 @@ export function lanes(data: Roadmap, by: Lane): Roadmap {
       if (at !== bt) return Number(at) - Number(bt);
       return ac.localeCompare(bc, undefined, { numeric: true }) || ap.localeCompare(bp);
     });
-  else groups.sort((a, b) => Number(a.key === "none") - Number(b.key === "none"));
+  else {
+    // goal-order: the goals in the API's order (the one goal order), whichever item came first;
+    // a plan goal the API does not group by comes after them, No goal last.
+    const rank = (key: string) => {
+      const n = data.groups.findIndex((x) => x.key === key && x.key !== "none");
+      return key === "none" ? Infinity : n < 0 ? data.groups.length : n;
+    };
+    groups.sort((a, b) => rank(a.key) - rank(b.key));
+  }
   return { ...data, groups };
 }

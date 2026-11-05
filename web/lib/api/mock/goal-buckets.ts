@@ -181,10 +181,13 @@ const orderKey = (g: Goal) => itemGoalKey(g) ?? g.title.toLowerCase();
 
 /**
  * goal-order: the bucket goals the baseline does not hold, each with the place stored on it, so the
- * one goal order (simple-roadmap knowCompanyGoals) ranks them as the API ranks every goal.
+ * one goal order (simple-roadmap knowCompanyGoals) ranks them as the API ranks every goal. With no
+ * place they come after the baseline's goals, in the buckets' own order (each made after the last).
  */
-export function bucketGoalsInOrder(simple: { goal_buckets?: GoalBucketsDb }, baselineKeys: Set<string>): { id: string; key: string; title: string; position: number }[] {
-  return (simple.goal_buckets?.goals ?? []).filter((g) => g.position != null && !baselineKeys.has(orderKey(g))).map((g) => ({ id: g.id, key: orderKey(g), title: g.title, position: g.position! }));
+export function bucketGoalsInOrder(simple: { goal_buckets?: GoalBucketsDb }, baselineKeys: Set<string>): { id: string; key: string; title: string; position: number | null; created_at: string }[] {
+  return (simple.goal_buckets?.goals ?? [])
+    .filter((g) => !g.trashed && !baselineKeys.has(orderKey(g)))
+    .map((g, i) => ({ id: g.id, key: orderKey(g), title: g.title, position: g.position ?? null, created_at: `9999-01-01T00:00:00.${String(i).padStart(3, "0")}Z` }));
 }
 
 /**
