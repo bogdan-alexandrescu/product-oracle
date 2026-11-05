@@ -16,9 +16,11 @@ suggestion. Pure functions: the caller (oracle.simple.service) gathers the candi
 
 An item's own dates stored with ``date_source`` ``engineering`` or ``tracker`` rank with that
 source. Ties within a source: the most recently updated candidate wins. A start that no
-source gives is the window's start, or 42 days before the end when the end comes before the
-window; an end that no source gives is the window's end, or 42 days from a start after the
-window. Every resolved date says its source and whether it is estimated.
+source gives is the window's start when no source gives an end either; else (hotfix-effort-
+start) the end minus the feature's effort (``effort_weeks`` x 7 calendar days, as
+Priorities reads it), or minus 28 days without one, even before the window's start, never
+after the end. An end that no source gives is the window's end, or 42 days from a start
+after the window. Every resolved date says its source and whether it is estimated.
 
 **Waterfall** (:func:`phases`): discover, build, beta, launch. The item's milestone and
 validation gates that name a phase (``phase``, else ``name``) and carry a ``date`` end that
@@ -28,7 +30,7 @@ split of the bar, estimated, ending before the next dated gate (they may bunch u
 **Suggestion** (:func:`suggest`), for an undated item (both dates estimated): start = the
 later of its window's start and the day after its dependencies' latest resolved end;
 duration = the median duration (whole days, both ends included) of the dated items with
-the same confidence, else 42 days; the end is clipped to the window's end when the start
+the same confidence, else 28 days; the end is clipped to the window's end when the start
 lies inside the window; the basis says why in one sentence.
 """
 
@@ -46,7 +48,9 @@ SPLIT = (0.15, 0.55, 0.20, 0.10)
 # The planning horizon each roadmap horizon is estimated across.
 HORIZON_WINDOW = {"now": "short", "next": "medium", "later": "long"}
 HORIZON_WORD = {"now": "Now", "next": "Next", "later": "Later"}
-FALLBACK_DAYS = 42
+FALLBACK_DAYS = 28
+# An end no source gives, after a start past the window: 42 days from it.
+END_LEAD_DAYS = 42
 # Lower is stronger.
 TIER = {"typed": 0, "accepted": 0, "engineering": 1, "tracker": 2}
 DAY = timedelta(days=1)
@@ -139,21 +143,31 @@ def _best(candidates: Iterable[Candidate], field: str) -> Candidate | None:
     return out
 
 
-def resolve(candidates: list[Candidate], window: tuple[date, date]) -> Resolved:
-    """The item's start and end by precedence, falling back to ``window``."""
+def lead_days(effort_weeks: float | None) -> int:
+    """The calendar days an estimated start lies before its end: the effort's weeks x 7,
+    else 28 days."""
+    if effort_weeks is None or effort_weeks <= 0:
+        return FALLBACK_DAYS
+    return int(effort_weeks * 7 + 0.5)
+
+
+def resolve(
+    candidates: list[Candidate], window: tuple[date, date], effort_weeks: float | None = None
+) -> Resolved:
+    """The item's start and end by precedence, falling back to ``window``; a start no
+    source gives lies the feature's effort (``effort_weeks``) before a given end."""
     s, e = _best(candidates, "start"), _best(candidates, "end")
     end = Dated(e.end, e.source, False) if e is not None and e.end else None
     start = Dated(s.start, s.source, False) if s is not None and s.start else None
-    lead = timedelta(days=FALLBACK_DAYS - 1)
     if start is None:
         day = window[0]
-        if end is not None and end.date < day:
-            day = end.date - lead
+        if end is not None:
+            day = end.date - timedelta(days=lead_days(effort_weeks))
         start = Dated(day, "estimated", True)
     if end is None:
         day = window[1]
         if start.date > day:
-            day = start.date + lead
+            day = start.date + timedelta(days=END_LEAD_DAYS - 1)
         end = Dated(day, "estimated", True)
     return Resolved(start, end)
 
