@@ -3782,13 +3782,15 @@ function engInvalid(cp: CheckpointOut, a: Schemas["ActionIn"]): string | null {
 type EngAnswer = { question_id: string; question: string; answer: string; by: string | null; at: string };
 
 /**
- * As oracle.runs.stop_answers: the questions answered at an approved stop, the architect's at the
+ * As oracle.runs.stop_answers: the questions answered at a decided stop, the architect's at the
  * Engineering check and the agents' on the Questions from the agents cards, each with who and when.
  */
 function stopAnswers(ctx: RunsContext, c: CheckpointOut, people: Map<string, string>): RunDecision["answers"] {
-  if (c.status !== "approved") return [];
+  // A stop sent back keeps its answered cards (carried into the next attempt); only an approved
+  // check decides the architect's questions.
+  if (c.status !== "approved" && c.status !== "changes_requested") return [];
   const out: NonNullable<RunDecision["answers"]> = [];
-  const check = briefsOf(c);
+  const check = c.status === "approved" ? briefsOf(c) : null;
   const recorded = (c.payload.briefs as { answers?: Record<string, EngAnswer[]> } | undefined)?.answers ?? {};
   for (const [key, listed] of Object.entries(check ? recorded : {})) {
     const title = check?.features.find((f) => f.key === key)?.title;

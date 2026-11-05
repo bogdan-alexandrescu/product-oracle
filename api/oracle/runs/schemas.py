@@ -917,8 +917,9 @@ class CheckpointOut(BaseModel):
 
 
 class RunDecisionAnswer(BaseModel):
-    """A question answered at an approved stop: the architect's at the Engineering check,
-    or the agents' on the Questions from the agents cards (``oracle.runs.stop_answers``)."""
+    """A question answered at a decided stop: the architect's at an approved Engineering
+    check, or the agents' on the Questions from the agents cards of a stop approved or sent
+    back (``oracle.runs.stop_answers``)."""
 
     question: str
     answer: str
