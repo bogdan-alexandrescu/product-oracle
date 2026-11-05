@@ -376,3 +376,24 @@ async def test_undo_of_an_add_never_hard_deletes_a_track_that_holds_something(cl
     async with tenant_session(ctx.tenant_id) as s:
         item = await s.get(RoadmapItem, uuid.UUID(ids["item_id"]))
         assert str(item.track_id) == new_id
+
+
+async def test_another_company_neither_reads_nor_changes_these(client):
+    # protects=the removed list, the tracks and their ops are the company's own (tenant
+    # scope); fails_when=another company reads them, changes one by its id or adds a
+    # track on this company's PRD (refused in words that do not say whether it exists).
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    await change(client, ctx, "owner", "add_track", {},
+                 {"title": "Gift boxes", "prd_id": ids["prd_id"]})  # fmt: skip
+    other = await make_ctx()
+    out = await read_tracks(client, other)
+    assert out["tracks"] == [] and out["prds"] == []
+    assert await removed(client, other) == []
+    await change(client, other, "owner", "delete_track", {"track_id": ids["track_id"]},
+                 code=404)  # fmt: skip
+    await change(client, other, "owner", "add_track", {},
+                 {"title": "Theirs", "prd_id": ids["prd_id"]}, code=409)  # fmt: skip
+    assert (await read_tracks(client, other))["tracks"] == []
+    titles = {t["title"] for t in (await read_tracks(client, ctx))["tracks"]}
+    assert titles == {"Guided setup", "Gift boxes"}
