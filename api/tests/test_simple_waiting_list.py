@@ -231,3 +231,30 @@ def test_day_reads_this_year_in_the_company_zone(monkeypatch):
     today = company_time.today()
     assert waiting_list._day(date(2026, 12, 30), today) == "Dec 30"
     assert waiting_list._day(date(2027, 1, 8), today) == "Jan 8, 2027"
+
+
+async def test_only_dependency_links_wait_as_broken_links(monkeypatch):
+    """protects=merge of roadmap-decide into train AN: a "Broken link" on the one waiting list
+    is a red dependency out of order or a cut item others depend on (service.LINK_KINDS), the
+    same links Home, the roadmap's strip and the side menu count; another red flag with a fix
+    (an end past its milestone) is not one; fails_when=it is listed as a broken link."""
+    from types import SimpleNamespace as NS
+
+    from oracle.simple import service
+
+    def flag(kind: str) -> NS:
+        return NS(state="red", fixes=["shift_dependents"], kind=kind, subject=None, reason="Late")
+
+    item = NS(id=uuid.uuid4(), title="Example item", can_decide=True, suggestion=None,
+              flags=[flag("dependency_order"), flag("end_past_milestone")])  # fmt: skip
+
+    async def build(db, principal):
+        return NS(items=[item])
+
+    async def today(db):
+        return date(2026, 11, 5)
+
+    monkeypatch.setattr(service, "build", build)
+    monkeypatch.setattr(company_time, "company_today", today)
+    out = await waiting_list._roadmap(None, None)  # type: ignore[arg-type]
+    assert [i.key.split(":")[2] for i in out] == ["dependency_order"]
