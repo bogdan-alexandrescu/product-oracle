@@ -616,10 +616,12 @@ def test_a_short_question_one_word_apart_is_the_answered_one_but_not_reordered()
     ]
     for listed in (
         "Which datastore should hold the audit trail?",
-        "Should we keep exports for seven months?",
+        "Should we keep exports for seven yrs?",
     ):
         assert len(listed_open(answers, _prd(f"- {listed}"))) == 1, listed
+    # Review round 5: "months" for "years" is another span, so another question (it imports).
     for listed in (
+        "Should we keep exports for seven months?",
         "Should Beta replace Alpha in checkout flow?",
         "Which database should hold the old audit trail?",
         "Should we keep exports for seven years or more?",
@@ -679,9 +681,12 @@ def test_a_different_short_question_one_word_apart_imports():
     for asked, listed in pairs:
         assert listed_open([_answered(asked)], _prd(f"- {listed}")) == [], listed
         assert len(listed_open([_answered(asked)], _prd(f"- {asked}"))) == 1, asked
-    # Five words or more: one word apart is still the answered question.
+    # Five words or more, one word apart: the answered question only when the two words are
+    # one word spelt two ways (review round 5: "backups" is another thing kept than
+    # "exports", so another question, and it imports).
     five = [_answered("Should we keep audit exports?")]
-    assert len(listed_open(five, _prd("- Should we keep audit backups?"))) == 1
+    assert listed_open(five, _prd("- Should we keep audit backups?")) == []
+    assert len(listed_open(five, _prd("- Should we keep audit export?"))) == 1
 
 
 def test_the_refusal_quotes_the_draft_line_that_matched():
@@ -704,3 +709,48 @@ def test_an_owner_word_inside_the_question_is_not_a_tail():
     answers = [_answered("Who is the?")]
     assert listed_open(answers, _prd("- Who is the owner: finance or ops?")) == []
     assert len(listed_open(answers, _prd("- Who is the? Owner: Rae Example"))) == 1
+
+
+# ------------------------------------------------------------------ review round 5
+
+
+def test_a_question_one_content_word_apart_is_a_new_question():
+    # protects=at five words or more, one word apart is the answered question only when the
+    # two words are one word spelt two ways (an abbreviation, a plural, a known synonym such
+    # as datastore/database); fails_when="Should we support Firefox on launch?" is refused
+    # because "Should we support Safari on launch?" was answered, or "slow" for "fast";
+    # no_claim=paraphrases.
+    pairs = (
+        ("Should we support Safari on launch?", "Should we support Firefox on launch?"),
+        ("Is it fast enough today?", "Is it slow enough today?"),
+        ("Should we keep audit exports?", "Should we keep audit backups?"),
+        ("Who signs off the Nova pricing page?", "Who signs off the Orbit pricing page?"),
+        ("Should we keep exports for seven years?", "Should we keep exports for seven weeks?"),
+        ("Should the export run every night?", "Should the expert run every night?"),
+    )
+    for asked, listed in pairs:
+        assert listed_open([_answered(asked)], _prd(f"- {listed}")) == [], listed
+        assert len(listed_open([_answered(asked)], _prd(f"- {asked}"))) == 1, asked
+    long_q = (
+        "Which datastore should hold the audit trail that the records team reads every "
+        "quarter when the finance team closes its books?"
+    )
+    refused = (
+        ("Should we keep exports for seven years?", "Should we keep exports for seven yrs?"),
+        (long_q, long_q.replace("datastore", "database")),
+        (long_q, long_q.replace("datastore", "db")),
+        ("Should we keep the audit exports?", "Should we keep the audit export?"),
+        ("Which colour should the banner use?", "Which color should the banner use?"),
+        ("Should we organise the audit exports?", "Should we organize the audit exports?"),
+        ("Who reads the management report weekly?", "Who reads the mgmt report weekly?"),
+    )
+    for asked, listed in refused:
+        assert len(listed_open([_answered(asked)], _prd(f"- {listed}"))) == 1, listed
+
+
+def test_same_question_reads_variants_both_ways():
+    # protects=a variant pair is the same either way round; fails_when="yrs" answered lets
+    # "years" import; no_claim=variants of two words or more.
+    assert stop_answers.same_question("keep exports for seven yrs", "keep exports for seven years")
+    assert stop_answers.same_question("keep exports for seven years", "keep exports for seven yrs")
+    assert not stop_answers.same_question("keep exports for seven years", "keep exports for seven yards")

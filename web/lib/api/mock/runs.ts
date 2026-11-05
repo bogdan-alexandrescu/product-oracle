@@ -2957,6 +2957,24 @@ export function seedEngCheckRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOu
 }
 
 /**
+ * The "eng-check-answered-by-id" scenario: the "eng-check" run, its Engineering check approved
+ * by `by` with one answer recorded by its question's id only (no question text), as an older
+ * check recorded it.
+ */
+export function seedEngCheckAnsweredByIdRun(db: RunsDb, ctx: Omit<RunsContext, "db">, by: string): RunOut {
+  const r = seedEngCheckRun(db, ctx);
+  const cp = r.checkpoints.find((c) => c.status === "pending" && c.kind === "eng_review")!;
+  const at = "2026-10-17T15:20:00Z";
+  const answers: Record<string, Omit<EngAnswer, "question">[]> = {
+    "f.guided-setup": [{ question_id: "q1", answer: "Yes, the sandbox takes test orders.", by, at }],
+  };
+  Object.assign(cp, { status: "approved", decided_by: by, decided_at: at });
+  cp.payload = { ...cp.payload, briefs: { verdicts: {}, sizes: {}, answers }, decided: { role: "commenter", via: "oracle", by } };
+  refresh(r);
+  return r;
+}
+
+/**
  * The "eng-check-unmapped" scenario: the "eng-check" run whose maps cover example/shop-app and
  * example/shop-api while the features cite ids of example/shop-web, which has no map.
  */
