@@ -10,9 +10,12 @@ Test cards (protects / fails_when / no_claim):
 - test_ties_within_a_source_take_the_latest_update: protects=two tracker dates (two
   engineering dates) -> the most recently updated wins; fails_when=the first or the
   earliest wins; no_claim=none.
-- test_an_end_only_source_keeps_the_window_start_or_backs_off: protects=an engineering
-  end inside the window keeps the window's start (estimated); one before the window
-  starts 42 days back; fails_when=a bar starts after it ends; no_claim=none.
+- test_an_end_only_item_starts_its_effort_before_its_end (and the tests after it):
+  protects=a start no source gives is the end minus the feature's effort (weeks x 7
+  days), else the end minus 28 days, before the window's start if need be, never after
+  the end; a typed start is never changed; an estimated end keeps its rule;
+  fails_when=the bar starts at the window's start (a 1-week feature read as a 10-week
+  bar); no_claim=where the effort comes from (tests/test_simple_roadmap_api.py).
 - test_horizon_windows_at_a_quarter_boundary: protects=now/next/later are the company's
   short/medium/long windows on the company's day; Dec 31 and Jan 1 give different
   quarters; fails_when=the server's (UTC) day anchors them; no_claim=the API's clock
@@ -25,7 +28,7 @@ Test cards (protects / fails_when / no_claim):
   estimated; fails_when=a named date is ignored; no_claim=gates without a phase name.
 - test_suggestion_* (dependencies, median, fallback, clipping, no clip past the window):
   protects=start = the later of the window start and the day after the dependencies'
-  latest end; duration = the median of same-confidence dated items, else 42 days, put in
+  latest end; duration = the median of same-confidence dated items, else 28 days, put in
   plain words ("about the same as N similar items"), not "median"; end clipped to the
   window's end when the start is inside it; one-sentence basis; fails_when=any of these
   rules is not the one applied; no_claim=the daily regeneration (API tests).
@@ -58,7 +61,7 @@ def test_precedence_own_over_engineering_over_tracker_over_window():
 
     r = dates.resolve([tracker, engineering], WINDOW)
     assert r.end == Dated(date(2026, 11, 20), "engineering", False)
-    assert r.start == Dated(WINDOW[0], "estimated", True)
+    assert r.start == Dated(date(2026, 10, 23), "estimated", True)
     assert (r.source, r.estimated) == ("engineering", False)
 
     r = dates.resolve([tracker], WINDOW)
@@ -80,15 +83,46 @@ def test_ties_within_a_source_take_the_latest_update():
     assert dates.resolve([e_new, e_old, newer], WINDOW).end.date == date(2026, 11, 9)
 
 
-def test_an_end_only_source_keeps_the_window_start_or_backs_off():
-    inside = dates.resolve([Candidate(None, date(2026, 11, 30), "tracker", NEW)], WINDOW)
-    assert inside.start == Dated(WINDOW[0], "estimated", True)
+def test_an_end_only_item_starts_its_effort_before_its_end():
+    end = Candidate(None, date(2026, 11, 30), "tracker", NEW)
+    week = dates.resolve([end], WINDOW, effort_weeks=1)
+    assert week.start == Dated(date(2026, 11, 23), "estimated", True)
+    assert week.end == Dated(date(2026, 11, 30), "tracker", False)
+    assert dates.resolve([end], WINDOW, effort_weeks=0.5).start.date == date(2026, 11, 26)
+    assert dates.resolve([end], WINDOW, effort_weeks=4).start.date == date(2026, 11, 2)
+
+
+def test_an_end_only_item_without_effort_starts_28_days_before_its_end():
+    end = Candidate(None, date(2026, 11, 30), "tracker", NEW)
+    assert dates.resolve([end], WINDOW).start == Dated(date(2026, 11, 2), "estimated", True)
+    assert dates.resolve([end], WINDOW, effort_weeks=None).start.date == date(2026, 11, 2)
+
+
+def test_an_estimated_start_may_lie_before_the_window_never_after_the_end():
+    early = Candidate(None, date(2026, 10, 10), "engineering", NEW)
+    r = dates.resolve([early], WINDOW, effort_weeks=2)
+    assert r.start == Dated(date(2026, 9, 26), "estimated", True)
+    # An end before its window keeps working: its effort back from the end.
     before = dates.resolve([Candidate(None, date(2026, 9, 30), "tracker", NEW)], WINDOW)
-    assert before.start == Dated(date(2026, 8, 20), "estimated", True)
+    assert before.start == Dated(date(2026, 9, 2), "estimated", True)
     assert before.start.date <= before.end.date
-    # A typed start after the window's end: the end follows it (estimated).
-    late = dates.resolve([Candidate(date(2027, 2, 1), None, "typed", NEW)], WINDOW)
+    tiny = dates.resolve([early], WINDOW, effort_weeks=0.01)
+    assert tiny.start.date <= tiny.end.date
+
+
+def test_a_typed_start_is_never_changed_and_an_estimated_end_keeps_its_rule():
+    typed = Candidate(date(2026, 10, 2), date(2026, 11, 30), "typed", NEW)
+    r = dates.resolve([typed], WINDOW, effort_weeks=1)
+    assert r.start == Dated(date(2026, 10, 2), "typed", False)
+    start_only = dates.resolve([Candidate(date(2026, 10, 2), None, "typed", NEW)], WINDOW, 1)
+    assert start_only.start == Dated(date(2026, 10, 2), "typed", False)
+    assert start_only.end == Dated(WINDOW[1], "estimated", True)
+    # A typed start after the window's end: the end follows it (estimated), as before.
+    late = dates.resolve([Candidate(date(2027, 2, 1), None, "typed", NEW)], WINDOW, 1)
     assert late.end == Dated(date(2027, 3, 14), "estimated", True)
+    # An undated item keeps its window.
+    none = dates.resolve([], WINDOW, effort_weeks=1)
+    assert (none.start.date, none.end.date) == WINDOW
 
 
 def test_horizon_windows_at_a_quarter_boundary():
@@ -143,21 +177,22 @@ def test_suggestion_without_dependencies_starts_with_the_window():
     assert "similar" in s.basis and "median" not in s.basis
 
 
-def test_suggestion_falls_back_to_42_days():
+def test_suggestion_falls_back_to_28_days():
     s = dates.suggest(WINDOW, [], [], None, "now")
-    assert (s.start, s.end) == (date(2026, 10, 1), date(2026, 11, 11))
-    assert "42 days" in s.basis
+    assert (s.start, s.end) == (date(2026, 10, 1), date(2026, 10, 28))
+    assert "28 days" in s.basis
+    assert dates.FALLBACK_DAYS == 28
 
 
 def test_suggestion_end_is_clipped_to_the_window():
-    s = dates.suggest(WINDOW, [("Ledger", date(2026, 12, 1))], [], None, "now")
-    assert (s.start, s.end) == (date(2026, 12, 2), date(2026, 12, 31))
+    s = dates.suggest(WINDOW, [("Ledger", date(2026, 12, 10))], [], None, "now")
+    assert (s.start, s.end) == (date(2026, 12, 11), date(2026, 12, 31))
     assert "window" in s.basis
 
 
 def test_suggestion_past_the_window_is_not_clipped():
     s = dates.suggest(WINDOW, [("Ledger", date(2027, 1, 10))], [], None, "now")
-    assert (s.start, s.end) == (date(2027, 1, 11), date(2027, 2, 21))
+    assert (s.start, s.end) == (date(2027, 1, 11), date(2027, 2, 7))
 
 
 def test_median_is_of_whole_days():

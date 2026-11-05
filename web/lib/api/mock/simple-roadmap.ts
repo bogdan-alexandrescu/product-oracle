@@ -21,6 +21,7 @@ import type { OnePagerDb } from "./simple-one-pager";
 import { appliedMilestones, type AppliedRecord } from "./approved-roadmap";
 import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
 import { COMPANY_SLUG, COMPANY_TITLE } from "./one-roadmap";
+import { estimates } from "./simple-priorities";
 import { basePlan as fitBasePlan, PLAN_TARGET as FIT_PLAN_TARGET, schedule as fitSchedule } from "./fit-date-engine";
 
 type Item = Schemas["SimpleRoadmapItem"];
@@ -643,6 +644,15 @@ export function ownDates(db: SimpleDb, s: SeedItem): SimpleDb["own"][string] | u
   return { start: addDays(w[0], s.start), end: addDays(w[0], s.end), source: s.source };
 }
 
+/**
+ * dates.lead_days (hotfix-effort-start): an estimated start lies the item's effort as Priorities
+ * reads it (weeks x 7 calendar days) before a given end, else 28 days.
+ */
+function leadDays(db: SimpleDb, s: SeedItem): number {
+  const weeks = estimates(db, s.key, db.ids[s.key] ?? stableUuid(`simple-item/${s.key}`)).effort;
+  return weeks && weeks > 0 ? Math.floor(weeks * 7 + 0.5) : 28;
+}
+
 function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated; end: Dated } {
   const own = db.own[s.key];
   if (own) {
@@ -652,12 +662,12 @@ function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated
   if (s.dates) {
     const end: Dated = { date: s.dates.end, source: s.dates.source, estimated: false };
     if (s.dates.start) return { start: { date: s.dates.start, source: s.dates.source, estimated: false }, end };
-    return { start: { date: end.date < w[0] ? addDays(end.date, -41) : w[0], source: "estimated", estimated: true }, end };
+    return { start: { date: addDays(end.date, -leadDays(db, s)), source: "estimated", estimated: true }, end };
   }
   const end: Dated = s.end !== undefined && s.source ? { date: addDays(w[0], s.end), source: s.source, estimated: false } : { date: w[1], source: "estimated", estimated: true };
   let start: Dated = { date: w[0], source: "estimated", estimated: true };
   if (s.start !== undefined && s.source) start = { date: addDays(w[0], s.start), source: s.source, estimated: false };
-  else if (end.date < w[0]) start = { date: addDays(end.date, -41), source: "estimated", estimated: true };
+  else if (!end.estimated) start = { date: addDays(end.date, -leadDays(db, s)), source: "estimated", estimated: true };
   return { start, end };
 }
 
@@ -990,7 +1000,7 @@ function regenerate(db: SimpleDb, today: string): number {
       why = `starts the day after ‘${latest.s.title}’ ends`;
     }
     const same = [...(durations.get(s.confidence ?? "") ?? [])].sort((a, b) => a - b);
-    const mid = same.length ? (same.length % 2 ? same[(same.length - 1) / 2] : Math.floor((same[same.length / 2 - 1] + same[same.length / 2]) / 2 + 0.5)) : 42;
+    const mid = same.length ? (same.length % 2 ? same[(same.length - 1) / 2] : Math.floor((same[same.length / 2 - 1] + same[same.length / 2]) / 2 + 0.5)) : 28;
     const conf = s.confidence ? `${s.confidence}-confidence` : "unrated";
     // finding 30: plain words, not statistics jargon ("median").
     const how = same.length ? `${mid} days, about the same as ${same.length} similar ${conf} item${same.length === 1 ? "" : "s"}` : `${mid} days, typical with no dated ${conf} items yet`;
