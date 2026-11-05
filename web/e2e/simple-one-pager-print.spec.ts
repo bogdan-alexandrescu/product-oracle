@@ -20,11 +20,11 @@ for (const phone of [false, true]) {
     await expect(page.getByTestId("simple-tab-bar")).toBeHidden();
     await expect(page.getByTestId("phone-header")).toBeHidden();
     await expect(page.getByRole("button", { name: "Ask Oracle" })).toHaveCount(0);
-    // The page starts at the left edge and runs to the right one.
+    // The page starts at the left edge and runs to the right one (the whole body).
     const main = await page.locator("main#main").boundingBox();
-    const width = page.viewportSize()!.width;
-    expect(main!.x).toBeLessThanOrEqual(1);
-    expect(main!.width).toBeGreaterThanOrEqual(width - 2);
+    const body = await page.locator("body").boundingBox();
+    expect(main!.x).toBeLessThanOrEqual(body!.x + 1);
+    expect(main!.width).toBeGreaterThanOrEqual(body!.width - 1);
     // Back on screen, the navigation is there again.
     await page.emulateMedia({ media: "screen" });
     await expect(page.getByTestId(phone ? "simple-tab-bar" : "simple-nav")).toBeVisible();

@@ -2493,7 +2493,9 @@ function seedSharingRoadmap(db: Db, audience: "team" | "public") {
         locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: created, updated_at: created,
       });
     }
-    return { ...i, feature: { id: f.id, type: f.type, key: f.key, title: f.title, status: f.status } };
+    // E-14: Falcon alerts rework carries a confidence, the status a link holder's card shows.
+    const confidence = i.item_key === "item-falcon" ? "high" : i.confidence;
+    return { ...i, confidence, feature: { id: f.id, type: f.type, key: f.key, title: f.title, status: f.status } };
   });
   db.sharing_items = { [v.id]: items };
 }

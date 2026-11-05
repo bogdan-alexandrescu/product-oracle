@@ -45,6 +45,7 @@ for (const width of [1440, 390]) {
         const card = frame.locator("tr").filter({ hasText: "Falcon alerts rework" });
         await expect(card).toHaveCount(1);
         await expect(card).toContainText("Now");
+        await expect(card).toContainText("High confidence");
         await expect(frame.locator("tr").filter({ hasText: "Partner API beta" })).toContainText("Next");
         // A card is drawn as a card: its own border and rounded corners.
         const look = await card.evaluate((el) => {
