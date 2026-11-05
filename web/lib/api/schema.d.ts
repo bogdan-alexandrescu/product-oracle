@@ -33656,6 +33656,8 @@ export interface components {
             document_title?: string | null;
             /** Document Kind */
             document_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing") | null;
+            /** Source Slug */
+            source_slug?: string | null;
             /**
              * State
              * @enum {string}

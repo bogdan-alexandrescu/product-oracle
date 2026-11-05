@@ -1048,6 +1048,8 @@ class Rebuild(BaseModel):
     document_slug: str
     document_title: str | None = None
     document_kind: DocumentKind | None = None
+    # prd_to_roadmap: the PRD it reads (its sign lists the run beside the PRD's own runs).
+    source_slug: str | None = None
     # scheduled: not started yet; waiting: at a stop on a person; done: its new version
     # landed and is not approved yet.
     state: Literal["scheduled", "running", "waiting", "failed", "done"]

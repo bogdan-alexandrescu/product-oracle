@@ -76,29 +76,48 @@ def _imported(segments: list[RunSegment]) -> int | None:
     return max(numbers) if numbers else None
 
 
-async def _durations(db: AsyncSession, flow: str) -> dict[str, float]:
-    """The median minutes each of the flow's segments took in its finished runs."""
-    rows = await db.execute(
-        select(RunSegment.name, RunSegment.started_at, RunSegment.finished_at)
+async def _durations(db: AsyncSession, names: set[str]) -> dict[str, dict[str, float]]:
+    """The median minutes each segment of the ``names`` flows took in their finished runs
+    (the last 200 of each flow), in one read."""
+    if not names:
+        return {}
+    ranked = (
+        select(
+            Run.flow,
+            RunSegment.name,
+            RunSegment.started_at,
+            RunSegment.finished_at,
+            func.row_number()
+            .over(partition_by=Run.flow, order_by=RunSegment.finished_at.desc())
+            .label("n"),
+        )
         .join(Run, Run.id == RunSegment.run_id)
         .where(
-            Run.flow == flow,
+            Run.flow.in_(names),
             RunSegment.status == "succeeded",
             RunSegment.started_at.is_not(None),
             RunSegment.finished_at.is_not(None),
         )
-        .order_by(RunSegment.finished_at.desc())
-        .limit(200)
+        .subquery()
     )
-    took: dict[str, list[float]] = {}
-    for name, start, end in rows.all():
-        took.setdefault(name, []).append(max(0.0, (end - start).total_seconds() / 60))
-    return {k: statistics.median(v) for k, v in took.items()}
+    rows = await db.execute(
+        select(ranked.c.flow, ranked.c.name, ranked.c.started_at, ranked.c.finished_at).where(
+            ranked.c.n <= 200
+        )
+    )
+    took: dict[str, dict[str, list[float]]] = {}
+    for flow, name, start, end in rows.all():
+        took.setdefault(flow, {}).setdefault(name, []).append(
+            max(0.0, (end - start).total_seconds() / 60)
+        )
+    return {f: {k: statistics.median(v) for k, v in t.items()} for f, t in took.items()}
 
 
-async def _name(db: AsyncSession, user_id: uuid.UUID | None) -> str | None:
-    u = await db.get(User, user_id) if user_id else None
-    return (u.name or u.email) if u else None
+async def _names(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
+    """Each user's name, else their email, in one read."""
+    if not ids:
+        return {}
+    return {u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(ids)))}
 
 
 async def _decider(db: AsyncSession, document: Document | None) -> str | None:
@@ -134,24 +153,28 @@ async def list_rebuilds(db: AsyncSession, visible: list[RunSummary]) -> Rebuilds
             select(Checkpoint).where(Checkpoint.run_id.in_(ids), Checkpoint.status == "pending")
         ):
             pending[cp.run_id] = cp
+    # Each document's latest and latest approved version, in one read.
     versions: dict[uuid.UUID, tuple[int | None, int | None]] = {}
-    for d in docs.values():
-        latest = await db.scalar(
-            select(func.max(DocumentVersion.number)).where(DocumentVersion.document_id == d.id)
-        )
-        approved = await db.scalar(
-            select(func.max(DocumentVersion.number)).where(
-                DocumentVersion.document_id == d.id, DocumentVersion.approved_at.is_not(None)
+    if docs:
+        for doc_id, latest, approved in await db.execute(
+            select(
+                DocumentVersion.document_id,
+                func.max(DocumentVersion.number),
+                func.max(DocumentVersion.number).filter(DocumentVersion.approved_at.is_not(None)),
             )
-        )
-        versions[d.id] = (latest, approved)
+            .where(DocumentVersion.document_id.in_([d.id for d in docs.values()]))
+            .group_by(DocumentVersion.document_id)
+        ):
+            versions[doc_id] = (latest, approved)
+    names = await _names(db, {r.created_by for r in rows if r.created_by})
+    durations = await _durations(db, {r.flow for r in rows if r.status == "running"})
+    owner: list[str | None] = []
 
     now = datetime.now(UTC)
     newest: dict[str, datetime] = {}
     for r in rows:
         newest[r.document_slug] = max(newest.get(r.document_slug, r.created_at), r.created_at)  # type: ignore[index]
-    durations: dict[str, dict[str, float]] = {}
-    deciders: dict[str, str | None] = {}
+    deciders: dict[uuid.UUID | None, str | None] = {}
     out: list[Rebuild] = []
     for s in rows:
         doc = docs.get(s.document_slug)  # type: ignore[arg-type]
@@ -191,15 +214,13 @@ async def list_rebuilds(db: AsyncSession, visible: list[RunSummary]) -> Rebuilds
             None,
         )
         stop_kind = flow.segment(stop_seg.name).checkpoint_for(kind) if stop_seg else None
-        key = s.document_slug or ""
+        key = doc.id if doc else None
         if key not in deciders:
             deciders[key] = await _decider(db, doc)
         who = deciders[key]
         minutes = None
         if state == "running":
-            if s.flow not in durations:
-                durations[s.flow] = await _durations(db, s.flow)
-            took = durations[s.flow]
+            took = durations.get(s.flow, {})
             left = [took.get(g.name) for g in segs[current:]]
             if left and all(m is not None for m in left):
                 total = sum(m for m in left if m is not None)
@@ -210,6 +231,8 @@ async def list_rebuilds(db: AsyncSession, visible: list[RunSummary]) -> Rebuilds
         start_at = _when((run.knobs or {}).get("start_at")) if state == "scheduled" else None
         cp = pending.get(s.id)
         waiting_kind = cp.kind if cp is not None else None
+        if state == "waiting" and not waiting_kind and not owner:
+            owner.append(await _owner_name(db))
         out.append(
             Rebuild(
                 run_id=s.id,
@@ -218,12 +241,15 @@ async def list_rebuilds(db: AsyncSession, visible: list[RunSummary]) -> Rebuilds
                 document_slug=s.document_slug or "",
                 document_title=s.document_title,
                 document_kind=s.document_kind,
+                source_slug=s.source.slug
+                if s.flow == "prd_to_roadmap" and s.source and s.source.document_id not in hidden
+                else None,
                 state=state,  # type: ignore[arg-type]
                 steps=[flow.segment(g.name).title for g in segs],
                 step=len(segs) if state == "done" else min(current + 1, max(len(segs), 1)),
                 from_version=approved,
                 to_version=made if made is not None else (latest or 0) + 1,
-                started_by=await _name(db, s.created_by),
+                started_by=names.get(s.created_by) if s.created_by else None,
                 started_at=s.started_at,
                 scheduled_for=start_at,
                 minutes_left=minutes,
@@ -232,9 +258,7 @@ async def list_rebuilds(db: AsyncSession, visible: list[RunSummary]) -> Rebuilds
                 next_stop_action=STOP_ACTIONS.get(stop_kind or "")
                 if state in ("running", "scheduled")
                 else None,
-                waits_on=(who if waiting_kind else await _owner_name(db))
-                if state == "waiting"
-                else None,
+                waits_on=(who if waiting_kind else owner[0]) if state == "waiting" else None,
                 waits_on_action=(
                     STOP_ACTIONS.get(waiting_kind or "")
                     or (
@@ -277,5 +301,10 @@ async def _company_roadmap(db: AsyncSession, hidden: Any) -> CompanyRoadmapRebui
     )
     if roadmap is None or roadmap.id in hidden:
         return None
-    prds = await db.scalar(select(func.count()).select_from(Document).where(Document.kind == "prd"))
+    # The PRDs the reader may see, as the PRD list counts them.
+    prds = await db.scalar(
+        select(func.count())
+        .select_from(Document)
+        .where(Document.kind == "prd", Document.id.not_in(hidden or {uuid.uuid4()}))
+    )
     return CompanyRoadmapRebuilds(slug=roadmap.slug, title=roadmap.title, prds=int(prds or 0))
