@@ -304,8 +304,7 @@ function BlocksLine({ q }: { q: Question }) {
         <span key={f.code}>
           {i > 0 && ", "}
           <button type="button" data-testid="question-blocks-feature" onClick={() => open({ code: f.code, name: f.title, prd: q.prd })} className="hover:underline">
-            <span className="simple-code mr-1">{f.code}</span>
-            {f.title}
+            <span className="simple-code">{f.code}</span> {f.title}
           </button>
         </span>
       ))}

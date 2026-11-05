@@ -127,3 +127,12 @@ for (const size of SIZES) {
     });
   });
 }
+
+test("a feature a decision blocks opens its panel from Decisions, its code first", async ({ page }) => {
+  await login(page);
+  await page.goto("/simple/decisions");
+  const feature = page.getByTestId("question-blocks-feature").filter({ hasText: "Health log" }).first();
+  await expect(feature).toHaveText("F-03 Health log");
+  await tap(feature);
+  await expect(page.getByTestId("item-panel")).toBeVisible();
+});
