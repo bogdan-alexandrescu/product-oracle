@@ -23,8 +23,12 @@ Test cards (protects / fails_when / no_claim):
   shows for a non-deciding approver; no_claim=the other fixes (move_dependency,
   accept_risk).
 - test_draft_waiting_and_approve: protects=a submitted working draft waits for its
-  required reviewer only; approving it drops it; fails_when=the decider (not in
-  ``waiting_on``) sees it or it survives approve; no_claim=the decider's own approval.
+  required reviewer, and not for a commenter; approving it drops it; fails_when=a
+  commenter sees it or it survives approve; no_claim=the decider's own approval.
+- test_draft_waits_for_its_decider: protects=a draft an owner sent waits for the
+  roadmap's decider (not in ``waiting_on``) until their approval is in, as the Inbox lists
+  it to them; fails_when=the decider does not see it, the sender does, or it survives the
+  decider's approval; no_claim=publishing.
 - test_goal_suggestion_waiting_and_reject: protects=an open suggestion on a goal whose
   items put it on a roadmap with a decider waits for that decider only; rejecting it
   drops it; fails_when=a non-deciding approver sees it or it survives reject;
@@ -138,10 +142,27 @@ async def test_draft_waiting_and_approve(client):
     submit = await client.post(f"{DRAFTS}/{d['id']}/submit", headers=w.ctx.as_("decider"))
     assert submit.status_code == 200, submit.text
     assert find(await waiting(client, w.ctx, "approver"), "draft", d["id"]) is not None
-    assert find(await waiting(client, w.ctx, "decider"), "draft", d["id"]) is None
+    assert find(await waiting(client, w.ctx, "commenter"), "draft", d["id"]) is None
     approve = await client.post(f"{DRAFTS}/{d['id']}/approve", headers=w.ctx.as_("approver"))
     assert approve.status_code == 200, approve.text
     assert find(await waiting(client, w.ctx, "approver"), "draft", d["id"]) is None
+
+
+async def test_draft_waits_for_its_decider(client):
+    w = await drafts_world(reviewers=("approver",))
+    await edit_title(client, w, "owner")
+    d = await the_draft(client, w, "owner")
+    submit = await client.post(f"{DRAFTS}/{d['id']}/submit", headers=w.ctx.as_("owner"))
+    assert submit.status_code == 200, submit.text
+    # The decider gives the final approval: it waits on them as on the required reviewer,
+    # as the Inbox lists it to both (drafts.inbox_rows).
+    assert find(await waiting(client, w.ctx, "decider"), "draft", d["id"]) is not None
+    assert find(await waiting(client, w.ctx, "approver"), "draft", d["id"]) is not None
+    assert find(await waiting(client, w.ctx, "owner"), "draft", d["id"]) is None
+    approve = await client.post(f"{DRAFTS}/{d['id']}/approve", headers=w.ctx.as_("decider"))
+    assert approve.status_code == 200, approve.text
+    assert find(await waiting(client, w.ctx, "decider"), "draft", d["id"]) is None
+    assert find(await waiting(client, w.ctx, "approver"), "draft", d["id"]) is not None
 
 
 async def test_goal_suggestion_waiting_and_reject(client):
