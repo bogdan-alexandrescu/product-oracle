@@ -121,14 +121,15 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(b).toHaveAttribute("data-kind", "draft");
       await b.locator("rect[data-body]").click();
       const card = page.getByTestId("floating-card");
-      await expect(card.getByTestId("draft-tag")).toHaveText("Draft");
+      // build-feature-panel: the feature panel says a draft by its status chip.
+      await expect(card.getByTestId("fp-status")).toHaveText("Draft");
       await expect(card.getByTestId("item-drafting")).toHaveText("Oracle is drafting…");
       await expect(card.getByTestId("item-flow-none")).toHaveText("No flow yet. Once the draft is confirmed, Oracle can draw one.");
       await expect(card.getByTestId("item-drafting")).toHaveCount(0, { timeout: 10_000 });
-      await expect(card.getByTestId("card-outcome")).toContainText("Teams get quiet hours setting");
+      await expect(card.getByTestId("fp-outcome")).toContainText("Teams get quiet hours setting");
       await expect(page.locator('[data-testid="suggestion-outline"][data-item="quiet-hours-setting"]')).toBeAttached();
       await card.getByTestId("item-flow-thumb").click();
-      await expect(card).toHaveAttribute("data-wide", "true");
+      await expect(card.getByTestId("fp-more")).toHaveAttribute("data-wide", "true");
       await expect(card.getByTestId("flow-detail")).toContainText("User flow: Quiet hours setting");
     });
 
@@ -346,8 +347,8 @@ for (const scheme of ["light", "dark"] as const) {
 
     /**
      * Card simple-additions-phone-owner: protects = on a phone an owner's Add opens a sheet
-     * with Title and Where; Add applies the draft (Undo in the toast), its card is a bottom
-     * sheet with the Draft tag, and once drafted its flow opens as a full-height sheet; the
+     * with Title and Where; Add applies the draft (Undo in the toast), its feature panel is
+     * full screen with the Draft status, and once drafted its flow opens full height; the
      * page never scrolls sideways; fails_when = no Add button or sheet, the button reads
      * Propose for an owner, the draft is missing, or the widened card is not full height;
      * no_claim = drag on a phone (the sheet replaces it).
@@ -363,11 +364,13 @@ for (const scheme of ["light", "dark"] as const) {
       await noSidewaysScroll(page);
       await row.click();
       const card = page.getByTestId("floating-card");
-      await expect(card).toHaveAttribute("data-sheet", "bottom");
-      await expect(card.getByTestId("draft-tag")).toHaveText("Draft");
+      // build-feature-panel: on a phone the feature panel is full screen from the start.
+      await expect(card).toHaveAttribute("data-sheet", "full");
+      await expect(card.getByTestId("fp-status")).toHaveText("Draft");
       await expect(card.getByTestId("item-flow-thumb")).toBeVisible({ timeout: 10_000 });
       await card.getByTestId("item-flow-thumb").click();
-      await expect(card).toHaveAttribute("data-wide", "true");
+      await expect(card.getByTestId("fp-more")).toHaveAttribute("data-wide", "true");
+      await expect(card.getByTestId("flow-detail")).toContainText("User flow: Mute a rule for a week");
       const box = (await card.boundingBox())!;
       expect(Math.round(box.height)).toBeGreaterThanOrEqual(840);
     });
