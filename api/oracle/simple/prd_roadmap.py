@@ -7,11 +7,14 @@ draft, for the roadmap's owner to review and publish. No run, no cost.
 - the roadmap: the PRD's track's, else the roadmap its published items are on, else the one
   its derived items (E1, ``draft_roadmaps``) name, else the company's only roadmap; none:
   nothing is written. A roadmap whose draft is in review waits: nothing is written;
-- its items: the approved version's derived items that have a date. The end is the date the
+- its items: the approved version's derived items that have a date, not left out or merged
+  (``cut``, ``merged_into``: the roadmap's draft layer, the meeting's Roadmap step). The end
+  is dates typed on the draft (Change dates, source ``typed``), else the date the
   engineering lead accepted (the PRD's newest verified schedule basis for the item, source
-  ``engineering``), else the item's own; the start is the item's own (an end-only item stays
-  end-only, its start estimated). An undated item is not added. Each is an item added to the
-  working draft (``simple_draft_id``, as S7's additions), with the PRD as its PRD;
+  ``engineering``), else the item's own, else its engineering milestone's; the start is
+  the item's own (an end-only item stays end-only, its start estimated). An undated item
+  is not added. Each is an item added to the working draft (``simple_draft_id``, as S7's
+  additions), with the PRD as its PRD;
 - an item already on the published roadmap (same PRD, same key) only adds what changed:
   its dates or title, as the draft's fields on the published item; unchanged, nothing;
 - no key dates (ah-prd-milestones-once, the owner's pick: 'Read-only from the PRD'): its
@@ -46,7 +49,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.docs.models import Document, DocumentVersion
 from oracle.roadmap.models import RoadmapItem, ScheduleBasis
-from oracle.simple import drafts
+from oracle.simple import dates, drafts
 from oracle.simple.models import SimpleChange, SimpleDraft
 from oracle.simple.schemas import SimpleDocRef, SimpleDraftPrd
 
@@ -99,10 +102,15 @@ async def _accepted(db: AsyncSession, prd_id: uuid.UUID) -> dict[str, date]:
 
 
 def _dated(row: RoadmapItem, accepted: dict[str, date]) -> tuple[date | None, date, str] | None:
-    """(start, end, source) of a derived item, or None when it has no date."""
-    end, source = accepted.get(row.item_key), "engineering"
+    """(start, end, source) of a derived item, or None when it has no date. Dates typed on
+    the draft (the roadmap's draft layer, the meeting's Roadmap step) win; else the date the
+    lead accepted; else the item's own end; else its engineering milestone's date."""
+    typed = row.date_source == "typed" and row.end_date is not None
+    end, source = (None, "") if typed else (accepted.get(row.item_key), "engineering")
     if end is None:
         end, source = row.end_date, row.date_source or "accepted"
+    if end is None:
+        end, source = dates.as_date((row.milestone or {}).get("date")), "engineering"
     if end is None:
         return None
     start = row.start_date if row.start_date and row.start_date <= end else None
@@ -208,11 +216,16 @@ async def on_prd_approved(
     from oracle.roadmap import draft_items, views
 
     derived_row = await draft_items._row(db, version.id)
-    derived = (
-        await draft_items.draft_items(db, derived_row)
-        if derived_row is not None and derived_row.status == "ready"
-        else []
-    )
+    derived = [
+        r
+        for r in (
+            await draft_items.draft_items(db, derived_row)
+            if derived_row is not None and derived_row.status == "ready"
+            else []
+        )
+        # Left out or merged on the draft (the draft layer, the meeting's step): not added.
+        if not r.cut and r.merged_into is None
+    ]
     doc = await _roadmap(db, prd, derived)
     if doc is None:
         return
