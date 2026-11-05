@@ -131,6 +131,8 @@ function useFittingLabels(track: React.RefObject<HTMLDivElement | null>, width: 
       const text = seg.querySelector<HTMLElement>("[data-label]");
       if (text && text.offsetWidth + LABEL_PAD <= seg.clientWidth) next.add(seg.dataset.milestone!);
     }
+    // A measurement of the drawn labels, set only when the set changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFitting((old) => (old && old.size === next.size && [...next].every((m) => old.has(m)) ? old : next));
   }, [track, width, key, fonts]);
   return fitting;
