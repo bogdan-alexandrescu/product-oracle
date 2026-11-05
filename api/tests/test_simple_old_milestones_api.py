@@ -143,6 +143,7 @@ async def test_carry_over_copies_milestones_with_their_items_re_pointed(client):
     shown = {m["name"]: m for m in (await read(client, ctx))["goal_milestones"]}
     assert shown["Beta ready"]["roadmap_id"] == str(ids["company"])
     assert shown["Beta ready"]["item_ids"] == [str(ids["c1"]), str(ids["c2"])]
+    assert shown["Beta ready"]["carried_from"]["title"] == "Trail App"
     assert "Old pilot" not in shown
 
 

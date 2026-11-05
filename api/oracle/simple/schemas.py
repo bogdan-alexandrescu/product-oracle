@@ -501,6 +501,8 @@ class SimpleGoalMilestone(BaseModel):
     prd_owner: str | None = None
     pending: SimpleMilestonePending | None = None
     can_change: bool = False
+    # old-milestones: the older per-PRD roadmap it was brought over from, if it was.
+    carried_from: "SimpleDocRef | None" = None
 
 
 class SimpleGoalMilestoneIn(BaseModel):

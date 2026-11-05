@@ -118446,6 +118446,16 @@
             "type": "boolean",
             "title": "Can Change",
             "default": false
+          },
+          "carried_from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

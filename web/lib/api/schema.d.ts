@@ -39493,6 +39493,7 @@ export interface components {
              * @default false
              */
             can_change: boolean;
+            carried_from?: components["schemas"]["SimpleDocRef"] | null;
         };
         /** SimpleGoalMilestoneIn */
         SimpleGoalMilestoneIn: {

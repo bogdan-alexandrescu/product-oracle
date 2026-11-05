@@ -27,6 +27,8 @@ export interface MockMilestone {
   /** old-milestones: carried onto the company roadmap (its copy's id), or dropped by an owner. */
   carried_to?: string;
   dropped?: boolean;
+  /** Its copy on the company roadmap: the older roadmap it came from (slug). */
+  carried_from?: string;
 }
 
 /** What the old-milestones read and routes need of the roadmap db (./simple-roadmap.ts). */
@@ -68,7 +70,7 @@ function routeOld(list: MockMilestone[], me: { role: string }, req: Request, p: 
   const copy = (m: MockMilestone, gates: string[]): string => {
     const n = list.filter((x) => x.roadmap === ctx.company && x.goal === m.goal && !x.prd && !x.deleted).reduce((a, x) => Math.max(a, Number(x.code.slice(1)) || 0), 0);
     const id = stableUuid(`simple-gm-carried/${m.id}`);
-    list.push({ id, roadmap: ctx.company!, code: `M${n + 1}`, name: m.name, date: m.date, goal: m.goal, gates, counts_when: m.counts_when, progress: m.progress });
+    list.push({ id, roadmap: ctx.company!, code: `M${n + 1}`, name: m.name, date: m.date, goal: m.goal, gates, counts_when: m.counts_when, progress: m.progress, carried_from: m.roadmap });
     m.carried_to = id;
     return id;
   };
@@ -119,7 +121,7 @@ export function seedOldMilestones(oldRoadmap: string): MockMilestone[] {
   ];
 }
 
-export function milestoneOut(m: MockMilestone, ids: Record<string, string>, canChange: boolean): Schemas["SimpleGoalMilestone"] {
+export function milestoneOut(m: MockMilestone, ids: Record<string, string>, canChange: boolean, titleOf: (slug: string) => string = (slug) => slug): Schemas["SimpleGoalMilestone"] {
   return {
     id: m.id,
     roadmap_id: stableUuid(`simple-doc/${m.roadmap}`),
@@ -134,6 +136,7 @@ export function milestoneOut(m: MockMilestone, ids: Record<string, string>, canC
     prd_owner: m.prd?.owner ?? null,
     pending: m.pending ?? null,
     can_change: canChange,
+    carried_from: m.carried_from ? { id: stableUuid(`simple-doc/${m.carried_from}`), slug: m.carried_from, title: titleOf(m.carried_from) } : null,
   };
 }
 

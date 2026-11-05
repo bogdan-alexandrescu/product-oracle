@@ -220,6 +220,17 @@ async def list_for_roadmaps(
         )
         for r in shown
     ]
+    # old-milestones: each one brought over from an older roadmap names it (one read).
+    came = (
+        await db.execute(
+            select(TrackMilestone.carried_to_id, Document)
+            .join(Document, Document.id == TrackMilestone.roadmap_id)
+            .where(TrackMilestone.carried_to_id.in_([m.id for m in out]))
+        )
+    ).all()
+    from_ = {to: SimpleDocRef(id=d.id, slug=d.slug, title=d.title) for to, d in came}
+    for m in out:
+        m.carried_from = from_.get(m.id)
     out.sort(key=lambda m: (str(m.roadmap_id), m.goal_id is None, str(m.goal_id), m.code))
     return out
 
