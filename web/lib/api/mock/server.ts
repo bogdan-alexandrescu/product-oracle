@@ -163,7 +163,7 @@ import {
   type PricingContext,
   type PricingDb,
 } from "./pricing";
-import { routeGoalBuckets, seedGoalBucketsHard } from "./goal-buckets";
+import { bucketGoalsInOrder, placeBucketGoal, routeGoalBuckets, seedGoalBucketsHard } from "./goal-buckets";
 import { proposeGoalDelete, routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./currentstate";
 import { prioritiesOut } from "./simple-priorities";
@@ -6107,6 +6107,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       return accepted;
     }
   }
+  // goal-order: a goal bucket's Move up or Move down stores its place as the baseline's goals do.
+  if (p[1] === "baseline" && db.simple_roadmap) {
+    const placed = await placeBucketGoal(db.simple_roadmap, me.role, req, p, db.baseline.entities);
+    if (placed) return placed;
+  }
   // The baseline mock checks roles itself (commenters propose, approvers decide).
   if (p[1] === "baseline") return routeBaselineFor(db, me, req, p, q);
   // Sources and connections belong to each user: every role manages their own.
@@ -6600,8 +6605,10 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
   const simpleRoute = async (r: Request): Promise<Response | null> => {
-    // goal-order: Simple's goals follow the baseline's one goal order.
-    knowCompanyGoals(db.baseline.entities.filter((e) => e.type === "goal"));
+    // goal-order: Simple's goals follow the baseline's one goal order (and the place Move up or Move
+    // down stored on a bucket goal the baseline does not hold).
+    const baselineGoals = db.baseline.entities.filter((e) => e.type === "goal");
+    knowCompanyGoals([...baselineGoals, ...(db.simple_roadmap ? bucketGoalsInOrder(db.simple_roadmap, new Set(baselineGoals.map((e) => e.key))) : [])]);
     // build-goal-order-control: the "goal-order" scenarios' added goals name their roadmap work on every load.
     knowGoalOrderGoals(db.baseline.entities);
     // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
@@ -6666,8 +6673,10 @@ async function route(db: Db, req: Request): Promise<Response> {
       return out ? json(200, out) : json(404, { detail: "No such roadmap" });
     }
     // trash-features-goals: a goal deleted to Settings › Trash (./trash.ts).
+    // edit-goals-prds EG1: a goal's owner is one of the members; an ask goes to the company's owners.
+    const people = db.members.map((x) => ({ id: x.id, name: displayName(x.email, x.name), email: x.email, role: x.role, disabled: x.status === "disabled" }));
     const bin = {
-      trash: (db.trash ??= emptyTrash()), id: me.id, name: simpleNames[me.id] ?? me.email, now: () => new Date(mockNowMs()).toISOString(),
+      trash: (db.trash ??= emptyTrash()), id: me.id, name: simpleNames[me.id] ?? me.email, now: () => new Date(mockNowMs()).toISOString(), people,
       propose: (g: { id: string; title: string }, to: string | null, reason: string | null) =>
         proposeGoalDelete(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames, trash: db.trash }, g, to, reason),
     };
@@ -6681,7 +6690,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const simpleRes = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, r, p, q);
     if (simpleRes) return simpleRes;
     const companyGoals = db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title }));
-    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash }, r, p, q);
+    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin }, r, p, q);
   };
   // Simple S8: review meetings, the Decisions page, and changes made through a meeting.
   // Seeded on the first meetings or Decisions read, so the other Simple screens keep their data.

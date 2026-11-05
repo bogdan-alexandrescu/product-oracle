@@ -943,7 +943,7 @@
           "trash"
         ],
         "summary": "List Trash",
-        "description": "What is in Trash, newest first: who deleted it, when, why, what went with it and\nthe days left before the ticker purges it.",
+        "description": "What is in Trash, newest first: who deleted it, when, why, what went with it and\nthe days left before the ticker purges it. Owners see everything; others the features\nand goals they deleted, which they restore themselves (``can_restore``).",
         "operationId": "list_trash",
         "responses": {
           "200": {
@@ -969,7 +969,7 @@
             "APIKeyCookie": []
           }
         ],
-        "x-min-role": "owner"
+        "x-min-role": "commenter"
       }
     },
     "/v1/trash/{entry_id}/restore": {
@@ -978,7 +978,7 @@
           "trash"
         ],
         "summary": "Restore Trash Entry",
-        "description": "Restore everything the delete took, together; ``not_restored`` says what could not\ncome back with it (what it was built from, purged or still in Trash, and what was\ntrashed separately).",
+        "description": "Restore everything the delete took, together (owners; whoever deleted a feature or\na goal, too); ``not_restored`` says what could not\ncome back with it (what it was built from, purged or still in Trash, and what was\ntrashed separately).",
         "operationId": "restore_trash_entry",
         "security": [
           {
@@ -1022,7 +1022,8 @@
             }
           }
         },
-        "x-min-role": "owner"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/trash/{entry_id}": {
@@ -43194,6 +43195,91 @@
           }
         },
         "x-min-role": "approver"
+      },
+      "delete": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Delete Bucket Goal",
+        "description": "Move the goal to Trash; its features move to ``to_goal_id`` when one is picked, as\nArchive moves them. A commenter proposes it instead (``change``); viewers are refused.",
+        "operationId": "delete_bucket_goal",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Goal Id"
+            }
+          },
+          {
+            "name": "to_goal_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To Goal Id"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashedOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/simple/goal-buckets/goals/{goal_id}/archive": {
@@ -43234,6 +43320,59 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalBucketWrite"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/goal-buckets/goals/{goal_id}/unarchive": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Unarchive Bucket Goal",
+        "description": "Restore an archived goal to the buckets (its features stay where Archive moved them).",
+        "operationId": "unarchive_bucket_goal",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Goal Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -44007,6 +44146,184 @@
           }
         },
         "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/roadmap/items/{item_id}": {
+      "delete": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Delete Simple Item",
+        "description": "Move the feature to Trash (30 days, then deleted for good). Who may not decide on it\nproposes it to its decider instead (``change``); viewers are refused.",
+        "operationId": "delete_simple_item",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashedOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
+    "/v1/simple/roadmap/items/{item_id}/restore": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Restore Simple Item",
+        "description": "Put the feature back from Trash with its links, goal and milestone: an owner, or\nwhoever deleted it.",
+        "operationId": "restore_simple_item",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/goal-buckets/goals/{goal_id}/restore": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Restore Bucket Goal",
+        "description": "Put the goal back from Trash with its order, measure, target and due: an owner, or\nwhoever deleted it.",
+        "operationId": "restore_bucket_goal",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/sessions": {
@@ -54466,6 +54783,48 @@
         "type": "object",
         "title": "ArchiveIn"
       },
+      "ArchivedGoal": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "owner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name"
+          },
+          "archived_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ArchivedGoal"
+      },
       "AreaIn": {
         "properties": {
           "name": {
@@ -61655,7 +62014,11 @@
                   "decide_question",
                   "name_decider",
                   "cut_with_dependents",
-                  "edit_goal_milestone"
+                  "edit_goal_milestone",
+                  "delete_item",
+                  "delete_goal",
+                  "archive_goal",
+                  "unarchive_goal"
                 ]
               },
               {
@@ -62047,7 +62410,11 @@
               "decide_question",
               "name_decider",
               "cut_with_dependents",
-              "edit_goal_milestone"
+              "edit_goal_milestone",
+              "delete_item",
+              "delete_goal",
+              "archive_goal",
+              "unarchive_goal"
             ],
             "title": "Op"
           },
@@ -80918,6 +81285,29 @@
             "type": "boolean",
             "title": "Can Edit",
             "default": false
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "owner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name"
           }
         },
         "type": "object",
@@ -80969,6 +81359,20 @@
             },
             "type": "array",
             "title": "Features"
+          },
+          "archived": {
+            "items": {
+              "$ref": "#/components/schemas/ArchivedGoal"
+            },
+            "type": "array",
+            "title": "Archived"
+          },
+          "asks_to": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Asks To"
           }
         },
         "type": "object",
@@ -81148,6 +81552,18 @@
             "type": "string",
             "format": "date",
             "title": "Due"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
           }
         },
         "type": "object",
@@ -85557,7 +85973,11 @@
               "decide_question",
               "name_decider",
               "cut_with_dependents",
-              "edit_goal_milestone"
+              "edit_goal_milestone",
+              "delete_item",
+              "delete_goal",
+              "archive_goal",
+              "unarchive_goal"
             ],
             "title": "Op"
           },
@@ -119397,7 +119817,11 @@
               "decide_question",
               "name_decider",
               "cut_with_dependents",
-              "edit_goal_milestone"
+              "edit_goal_milestone",
+              "delete_item",
+              "delete_goal",
+              "archive_goal",
+              "unarchive_goal"
             ],
             "title": "Op"
           },
@@ -119536,7 +119960,11 @@
               "decide_question",
               "name_decider",
               "cut_with_dependents",
-              "edit_goal_milestone"
+              "edit_goal_milestone",
+              "delete_item",
+              "delete_goal",
+              "archive_goal",
+              "unarchive_goal"
             ],
             "title": "Op"
           },
@@ -136964,6 +137392,11 @@
             "type": "array",
             "title": "Not Restored",
             "default": []
+          },
+          "can_restore": {
+            "type": "boolean",
+            "title": "Can Restore",
+            "default": false
           }
         },
         "type": "object",
@@ -136986,7 +137419,9 @@
             "enum": [
               "document",
               "intake",
-              "run"
+              "run",
+              "feature",
+              "goal"
             ],
             "title": "Type"
           },
@@ -137013,6 +137448,17 @@
           "kind": {
             "type": "string",
             "title": "Kind"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
           },
           "created_at": {
             "anyOf": [
@@ -137046,7 +137492,39 @@
           "kind"
         ],
         "title": "TrashItem",
-        "description": "A document, intake or run as it was when it went to Trash."
+        "description": "A document, intake, run, roadmap feature or goal as it was when it went to Trash."
+      },
+      "TrashedOut": {
+        "properties": {
+          "entry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrashEntryOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "change": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleChangeOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "can_restore": {
+            "type": "boolean",
+            "title": "Can Restore",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "TrashedOut",
+        "description": "A delete's answer: the Trash entry when it went to Trash, or the proposal made when\nthe caller may not delete it (``change``, routed to its decider). ``can_restore``:\nwhether the caller may restore it from Trash (an owner, or who deleted it)."
       },
       "TriageDailyIn": {
         "properties": {

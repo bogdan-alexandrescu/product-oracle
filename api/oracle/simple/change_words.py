@@ -135,8 +135,13 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
         # trash-features-goals: a feature deleted to Trash (oracle.simple.trash_items).
         case "delete_item":
             return f"moved {x} to Trash"
+        # edit-goals-prds: a goal archived, moved to Trash or restored (oracle.simple.goal_asks).
+        case "archive_goal":
+            return f"archived the goal {_quoted(target.get('title')) or 'a goal'}"
         case "delete_goal":
-            return f"moved the goal {item or target.get('title') or 'a goal'} to Trash"
+            return f"moved the goal {_quoted(target.get('title')) or 'a goal'} to Trash"
+        case "unarchive_goal":
+            return f"restored the goal {_quoted(target.get('title')) or 'a goal'}"
     return f"changed {x}"
 
 
@@ -160,7 +165,13 @@ def sentence(
     what = phrase(op, target, before, after, item)
     words = f"{who} {what}"
     # What was asked, not done: "proposed: move F-26 Alert rules engine to Trash".
-    asked = "move" + what[len("moved") :] if op in ("delete_item", "delete_goal") else what
+    asked = what
+    if op in ("delete_item", "delete_goal"):
+        asked = "move" + what[len("moved") :]
+    elif op == "archive_goal":
+        asked = "archive" + what[len("archived") :]
+    elif op == "unarchive_goal":
+        asked = "restore" + what[len("restored") :]
     if status == "proposed":
         words = f"{who} proposed: {asked}"
     elif status == "declined":

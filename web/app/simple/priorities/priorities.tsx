@@ -17,7 +17,7 @@ import { useSetParams } from "@/lib/use-set-params";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { FeaturePanel } from "../roadmap/_panel";
-import { ArchiveDialog, BTN, count, dayOf, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type Note } from "./goal-buckets";
+import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
 import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan } from "./plan-buckets";
 
@@ -1947,7 +1947,6 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
   const noGoal = plan.slices.some((x) => !x.goal);
   const [panel, setPanel] = useState<{ goal: GoalBrief; start?: GoalPanelStart } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
-  const [archiving, setArchiving] = useState<string | null>(null);
   const [note, setNote] = useState<Note | null>(null);
   const noteSlot = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1972,15 +1971,27 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
   const outside = data.buckets
     .map((b) => ({ b, rows: b.codes.map((c) => rowOf.get(c)).filter((r): r is Row => !!r && !r.in_plan) }))
     .filter((x) => x.rows.length > 0);
-  const archivedGoal = gb?.goals.find((g) => g.id === archiving);
   // A feature's name opens the Simple item panel, as the roadmap does.
   const phone = usePhone();
+  const acts = useGoalActs({
+    gb,
+    plan,
+    featuresOf: (t) => planFeatures(plan, t),
+    writes,
+    rights,
+    // gb2-a-result: the archived bucket is gone, so on a wider screen the page scrolls back to the
+    // note's own place above the buckets, where it covers no goal's title. A phone's note is fixed
+    // above the bottom bar: the page stays, any title it covers lifted clear.
+    onArchived: () => {
+      if (!phone && (noteSlot.current?.getBoundingClientRect().top ?? 0) < 0) noteSlot.current?.scrollIntoView({ block: "start" });
+    },
+  });
   const [opened, setOpened] = useState<{ code: string; name: string } | null>(null);
   return (
     <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
       <PlanBucketsHead plan={plan} codeOf={codeOf} />
       <div ref={noteSlot} className="scroll-mt-4" />
-      {note && <UndoNote id={note.id} clear='[data-testid="plan-goal"] h3' onUndo={note.undo ? () => void writes.undo(note.undo!) : undefined}>{note.text}</UndoNote>}
+      {note && <UndoNote id={note.id} clear='[data-testid="plan-goal"] h3' onUndo={undoOf(note, writes)}>{note.text}</UndoNote>}
       {error && (
         <p role="alert" className="mt-3 text-[15px] text-warn">
           {error}
@@ -2011,7 +2022,7 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
             >
               {rec && editing === rec.id ? (
                 <GoalForm
-                  start={{ title: rec.title, measure: rec.measure ?? "", target: rec.target ?? "", due: dayOf(rec.due, year) }}
+                  start={{ title: rec.title, measure: rec.measure ?? "", target: rec.target ?? "", due: dayOf(rec.due, year), owner: rec.owner_id ?? null }}
                   order={rec.order}
                   title="Edit goal"
                   year={year}
@@ -2034,7 +2045,7 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
                         ✎
                       </button>
                     )}
-                    {rights.edit(rec) && rights.archive && <GoalMenu title={g} archive onEdit={() => setEditing(rec!.id)} onArchive={() => setArchiving(rec!.id)} />}
+                    {rec && acts.menu(rec, g, rights.edit(rec) ? () => setEditing(rec.id) : undefined)}
                   </div>
                   {rec && (
                     <p data-testid="goal-measure" className={`mt-0.5 text-[15px] leading-5 text-text2 ${rec ? "pl-8" : ""}`}>
@@ -2045,6 +2056,13 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
                           {rec.measure}: <b className="font-[650] text-text">{rec.target}</b> by {dayOf(rec.due, year)}
                         </>
                       )}
+                    </p>
+                  )}
+                  {rec?.owner_name && (
+                    <p className="mt-0.5 pl-8">
+                      <span data-testid="goal-owner" className="text-[14px] text-text2">
+                        Owner: <b className="font-[650] text-text">{rec.owner_name}</b>
+                      </span>
                     </p>
                   )}
                 </>
@@ -2108,6 +2126,7 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
               </button>
             </li>
           ))}
+        {acts.fold(year)}
         {noGoal && (
           <li data-testid="plan-goal" data-goal="" className="rounded-[var(--simple-card-radius)] border border-warn bg-surface p-4">
             <div className="flex flex-wrap items-baseline gap-x-2">
@@ -2145,39 +2164,117 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
       {drag.edge}
       {drag.ghost}
       {opened && <FeaturePanel key={opened.code} feature={{ ...opened, prd: plan.prd }} phone={phone} canChange={can("create_simple_change")} onClose={() => setOpened(null)} />}
-      {archivedGoal && gb && (
-        <ArchiveDialog
-          goal={archivedGoal}
-          plan={plan}
-          gb={gb}
-          onClose={() => setArchiving(null)}
-          onArchive={async (to) => {
-            if (!(await writes.archive(archivedGoal, to, archiveWords(plan, gb, archivedGoal, to)))) return;
-            setArchiving(null);
-            // gb2-a-result: the archived bucket is gone, so on a wider screen the page scrolls back
-            // to the note's own place above the buckets, where it covers no goal's title. A phone's
-            // note is fixed above the bottom bar: the page stays, any title it covers lifted clear.
-            if (!phone && (noteSlot.current?.getBoundingClientRect().top ?? 0) < 0) noteSlot.current?.scrollIntoView({ block: "start" });
-          }}
-        />
-      )}
+      {acts.dialogs}
       {panel && <GoalPanel key={`${panel.goal.key}:${panel.start ?? ""}`} goal={panel.goal} start={panel.start} api={suggestions} onClose={() => setPanel(null)} />}
     </section>
   );
 }
 
+/** What the note's Undo does: a goal back from Trash with its links, a goal's move, or a bucket write's Undo. */
+function undoOf(note: Note, writes: ReturnType<typeof useBucketWrites>): (() => void) | undefined {
+  if (note.restore) return () => void writes.restore(note.restore!);
+  if (note.order) return () => void writes.unorder(note.order!);
+  if (note.undo) return () => void writes.undo(note.undo!);
+  return undefined;
+}
+
+/**
+ * EG1 a, with a dated plan or without: a goal's ⋯ menu (Archive goal, Delete goal, or the asks
+ * for who may not), the Archived goals fold (Restore and Delete, or Ask to restore), and the
+ * questions each asks first.
+ */
+function useGoalActs({ gb, plan, featuresOf, writes, rights, onArchived }: { gb: Schemas["GoalBucketsOut"] | undefined; plan: Schemas["SimplePlanOut"]; featuresOf: GoalFeatures; writes: ReturnType<typeof useBucketWrites>; rights: ReturnType<typeof useBucketRights>; onArchived?: () => void }) {
+  const [archiving, setArchiving] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [archOpen, setArchOpen] = useState(false);
+  const [delArchived, setDelArchived] = useState<Schemas["ArchivedGoal"] | null>(null);
+  const archivedGoal = gb?.goals.find((g) => g.id === archiving);
+  const deletedGoal = gb?.goals.find((g) => g.id === deleting);
+  const asksTo = gb?.asks_to ?? [];
+  const trashed = (words: string) => `${words} It is in Settings > Trash for 30 days.`;
+  return {
+    menu: (rec: Schemas["GoalBucketGoal"], title: string, onEdit?: () => void) => {
+      // Move up and Move down, in the goal order the goal buckets list (none on the first or the last goal).
+      const live = gb?.goals ?? [];
+      const at = live.findIndex((g) => g.id === rec.id);
+      const by = (d: -1 | 1) => (rights.order(rec) && at >= 0 && live[at + d] ? () => void writes.reorder(live, rec.id, d) : undefined);
+      return <GoalMenu title={title} archive={rights.archiveAct} del={rights.deleteAct} onEdit={onEdit} onUp={by(-1)} onDown={by(1)} onArchive={() => setArchiving(rec.id)} onDelete={() => setDeleting(rec.id)} />;
+    },
+    fold: (year: string) =>
+      gb && (
+        <ArchivedGoals
+          gb={gb}
+          year={year}
+          open={archOpen}
+          onToggle={setArchOpen}
+          restore={rights.unarchiveAct}
+          del={rights.deleteAct}
+          onRestore={(g) => void (rights.unarchiveAct === "ask" ? writes.ask("unarchive_goal", g, null, asksTo) : writes.unarchive(g))}
+          onDelete={setDelArchived}
+        />
+      ),
+    dialogs: (
+      <>
+        {deletedGoal && gb && (
+          <ArchiveDialog
+            goal={deletedGoal}
+            plan={plan}
+            gb={gb}
+            kind="delete"
+            ask={rights.deleteAct === "ask" ? asksTo : null}
+            onClose={() => setDeleting(null)}
+            onArchive={async (to) => {
+              const done = rights.deleteAct === "ask" ? await writes.ask("delete_goal", deletedGoal, to, asksTo) : await writes.remove(deletedGoal, to, trashed(archiveWords(featuresOf, gb, deletedGoal, to, "Deleted")));
+              if (done) setDeleting(null);
+            }}
+          />
+        )}
+        {delArchived && (
+          <DeleteArchivedDialog
+            goal={delArchived}
+            onClose={() => setDelArchived(null)}
+            onDelete={async () => {
+              if (await writes.remove(delArchived, null, trashed(`Deleted ${delArchived.title}.`))) setDelArchived(null);
+            }}
+          />
+        )}
+        {archivedGoal && gb && (
+          <ArchiveDialog
+            goal={archivedGoal}
+            plan={plan}
+            gb={gb}
+            ask={rights.archiveAct === "ask" ? asksTo : null}
+            onClose={() => setArchiving(null)}
+            onArchive={async (to) => {
+              if (rights.archiveAct === "ask") {
+                if (await writes.ask("archive_goal", archivedGoal, to, asksTo)) setArchiving(null);
+                return;
+              }
+              if (!(await writes.archive(archivedGoal, to, archiveWords(featuresOf, gb, archivedGoal, to)))) return;
+              setArchiving(null);
+              // eg1-a-result: the archived goal tops the opened Archived goals fold.
+              setArchOpen(true);
+              onArchived?.();
+            }}
+          />
+        )}
+      </>
+    ),
+  };
+}
+
 const ICON_BTN = "inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-transparent text-[16px] text-text hover:border-line-strong hover:bg-surface2 disabled:opacity-40";
 
 /** GB2 a's note: "Archived Grow shop partners. 1 feature moved to Faster first ride, 1 to the other goal it serves." */
-function archiveWords(plan: Schemas["SimplePlanOut"], gb: Schemas["GoalBucketsOut"], goal: Schemas["GoalBucketGoal"], to: string | null): string {
-  const list = planFeatures(plan, goal.title);
+function archiveWords(listOf: GoalFeatures, gb: Schemas["GoalBucketsOut"], goal: Schemas["GoalBucketGoal"], to: string | null, verb = "Archived"): string {
+  const list = listOf(goal.title);
   const own = list.filter((f) => (featureOf(gb, f.code, f.name)?.goal_ids ?? []).some((g) => g !== goal.id)).length;
   const rest = list.length - own;
   const toTitle = gb.goals.find((g) => g.id === to)?.title;
   const feats = (n: number) => `${n} ${n === 1 ? "feature" : "features"}`;
   const ownWords = own ? `${own} to the other goal ${own === 1 ? "it serves" : "each serves"}` : "";
-  if (!list.length) return `Archived ${goal.title}. It held no features.`;
-  if (!rest) return `Archived ${goal.title}. ${feats(own)} moved to the other goal ${own === 1 ? "it serves" : "each serves"}.`;
+  if (!list.length) return `${verb} ${goal.title}. It held no features.`;
+  if (!rest) return `${verb} ${goal.title}. ${feats(own)} moved to the other goal ${own === 1 ? "it serves" : "each serves"}.`;
   const restWords = toTitle ? `${feats(rest)} moved to ${toTitle}` : `${feats(rest)} ${rest === 1 ? "is" : "are"} under No goal now`;
-  return `Archived ${goal.title}. ${restWords}${ownWords ? `, ${ownWords}` : ""}.`;
+  return `${verb} ${goal.title}. ${restWords}${ownWords ? `, ${ownWords}` : ""}.`;
 }

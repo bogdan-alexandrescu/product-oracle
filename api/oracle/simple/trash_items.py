@@ -379,8 +379,9 @@ async def after_restore(
     db: AsyncSession, entry: TrashEntry, principal: Any = None
 ) -> list[dict[str, Any]]:
     """A feature back on its roadmap's current version (:func:`_onto_current`); a goal's
-    features' links and the items' goal_ids, exactly as before its delete moved them
-    (``links`` and ``goal_ids`` on the entry; none when nothing was moved). Returns what
+    features' links as before its delete moved them, and each item's goal back where it
+    was, less the goal the delete added (``links``, ``goal_ids`` and ``to_goal_id`` on the
+    entry; none when nothing was moved): a goal given to the item since stays. Returns what
     did not come back with it (a dependency no longer on the roadmap)."""
     from oracle.simple import goal_buckets
 
@@ -390,13 +391,22 @@ async def after_restore(
         return []
     for snap in entry.root.get("links") or []:
         await goal_buckets._restore_links(db, goal_buckets.FeatureSnap.model_validate(snap))
+    to = uuid.UUID(entry.root["to_goal_id"]) if entry.root.get("to_goal_id") else None
     for item_id, ids in (entry.root.get("goal_ids") or {}).items():
         row = await db.scalar(
             select(RoadmapItem).where(RoadmapItem.id == uuid.UUID(item_id))
             .execution_options(**ALL).with_for_update()
         )  # fmt: skip
-        if row is not None:
-            row.goal_ids = [uuid.UUID(i) for i in ids]
+        if row is None:
+            continue
+        # Only what the delete did: the goal goes back where it was, and the goal it moved
+        # the item to comes off only where the delete added it; later changes stay.
+        was = [uuid.UUID(i) for i in ids]
+        now = [g for g in row.goal_ids or [] if g != entry.root_id]
+        if to is not None and to not in was and now[:1] == [to]:
+            now = now[1:]
+        at = was.index(entry.root_id) if entry.root_id in was else 0
+        row.goal_ids = [*now[:at], entry.root_id, *now[at:]]
     await db.flush()
     return []
 

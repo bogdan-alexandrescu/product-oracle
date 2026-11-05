@@ -921,6 +921,7 @@ async def create(
     from oracle.simple import (
         additions,
         agenda,
+        goal_asks,
         key_dates,
         one_pager,
         questions,
@@ -941,6 +942,8 @@ async def create(
         return await one_pager.create(db, principal, body)
     if body.op in trash_items.OPS:
         return await trash_items.create_change(db, principal, body)
+    if body.op in goal_asks.OPS:
+        return await goal_asks.create_change(db, principal, body)
     me, now = _me(principal), company_time.now()
     ids = [_uuid(body.target.get("item_id"), "item_id")]
     if body.op in FIXES and body.target.get("subject"):
@@ -1048,6 +1051,7 @@ async def decide(
     """Accept (apply the proposal, unless outdated) or decline it."""
     from oracle.simple import (
         additions,
+        goal_asks,
         goal_milestones,
         key_dates,
         one_pager,
@@ -1073,6 +1077,8 @@ async def decide(
         return await goal_milestones.decide(db, principal, c, action, reason)
     if c.op in trash_items.OPS:
         return await trash_items.decide(db, principal, c, action, reason)
+    if c.op in goal_asks.OPS:
+        return await goal_asks.decide(db, principal, c, action, reason)
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     entry = read_.by_id().get(uuid.UUID(c.target["item_id"]))
     if entry is None:
@@ -1276,6 +1282,7 @@ class _View:
     def may_decide(self, c: SimpleChange) -> bool:
         from oracle.simple import (
             additions,
+            goal_asks,
             goal_milestones,
             key_dates,
             one_pager,
@@ -1301,6 +1308,8 @@ class _View:
             from oracle.simple import trash_items
 
             return trash_items.may_decide_goal(self.principal)
+        if c.op in goal_asks.OPS:
+            return goal_asks.may_decide(self.principal)
         if c.op == CUT_ALL:
             return decides_all(self.principal, cut_entries(c, self.by_id), self.deciders)
         e = self.entry(c)

@@ -577,6 +577,10 @@ ChangeOp = Literal[
     # trash-features-goals: a goal moved to Trash, proposed by a commenter to the company's
     # owners (oracle.simple.trash_items).
     "delete_goal",
+    # edit-goals-prds: a goal archived or restored from the archive, asked of the company's
+    # owners by who may not (oracle.simple.goal_asks).
+    "archive_goal",
+    "unarchive_goal",
 ]
 # chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
 # the change engine (oracle.simple.chat_actions).

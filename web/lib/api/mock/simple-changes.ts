@@ -28,7 +28,7 @@ import { draftDecisionNotes } from "./decision-notes";
 import { stableUuid } from "./ids";
 import { changeSentence } from "./simple-change-words";
 import { priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
-import { trashGoal } from "./goal-buckets";
+import { archiveGoal, goalBucketsDb, trashGoal, unarchiveGoal, type GoalBucketsTrash } from "./goal-buckets";
 import {
   canDecideItem,
   canEditRoadmap,
@@ -83,6 +83,56 @@ export interface SimpleChangesCtx {
   companyGoals?: { id: string; key: string; title: string }[];
   /** trash-features-goals: Settings › Trash (./trash.ts), shared with documents, intakes and runs. */
   trash?: TrashDb;
+  /** edit-goals-prds: the goal buckets' Trash, writer and members (an accepted Ask to delete a goal). */
+  goalBin?: GoalBucketsTrash;
+}
+
+/** edit-goals-prds (oracle.simple.goal_asks): a goal archived or restored, asked by who may not
+ * (a goal's delete is trash_items', decided by approvers and owners). */
+const GOAL_ASK_OPS = ["archive_goal", "unarchive_goal"];
+const approves = (ctx: Pick<SimpleChangesCtx, "role">) => ctx.role === "owner" || ctx.role === "approver";
+
+/** Applies a goal ask: Archive (its features to `to_goal_id`), the goal to Trash, or Restore. */
+function applyGoalAsk(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target" | "reason">): Response | null {
+  const gb = goalBucketsDb(db, ctx.goalBin?.people);
+  const id = String(c.target.goal_id ?? "");
+  const to = (c.target.to_goal_id as string | null | undefined) ?? null;
+  if (c.op === "archive_goal") {
+    const undo = archiveGoal(gb, id, to, iso(mockNowMs()));
+    return undo instanceof Response ? undo : null;
+  }
+  if (c.op === "unarchive_goal") {
+    const done = unarchiveGoal(gb, id);
+    return done instanceof Response ? done : null;
+  }
+  const bin = ctx.goalBin ?? { trash: (ctx.trash ??= { entries: [], estimates: {} }), id: ctx.id, name: ctx.names[ctx.id] ?? null, now: () => iso(mockNowMs()) };
+  const row = trashGoal(gb, bin, id, to, c.reason ?? null, db);
+  return row instanceof Response ? row : null;
+}
+
+/** POST /v1/simple/changes op `archive_goal` / `delete_goal`: an approver's applies, a commenter's goes to the company's owners. */
+function createGoalAsk(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"]): Response {
+  const gb = goalBucketsDb(db, ctx.goalBin?.people);
+  const g = gb.goals.find((x) => x.id === body.target.goal_id && !x.trashed);
+  if (!g) return json(404, { detail: "No such goal" });
+  if (body.op === "archive_goal" && g.archived) return json(409, { detail: `${g.title} is archived already` });
+  if (body.op === "unarchive_goal" && !g.archived) return json(409, { detail: `${g.title} is not archived` });
+  const applies = approves(ctx);
+  if (!applies && (db.changes ?? []).some((c) => c.op === body.op && c.status === "proposed" && c.target.goal_id === g.id)) return json(409, { detail: "This is asked already" });
+  const target = { goal_id: g.id, title: g.title, to_goal_id: (body.target.to_goal_id as string | null | undefined) ?? null };
+  const change: Change = {
+    id: crypto.randomUUID(), session_id: null, document_id: null, draft_ids: [],
+    op: body.op, target, before: {}, after: {}, status: applies ? "applied" : "proposed",
+    by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
+    decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null,
+    routed_to: applies ? [] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
+  };
+  if (applies) {
+    const err = applyGoalAsk(db, ctx, change);
+    if (err) return err;
+  }
+  (db.changes ??= []).push(change);
+  return json(201, { change: view(db, ctx, change), flags: [] });
 }
 
 const IDLE_MS = 30 * 60_000;
@@ -184,6 +234,8 @@ const slugOf = (id: unknown): string | undefined => ROADMAP_SLUGS().find((r) => 
 function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target"> & Partial<Pick<Change, "routed_to" | "after">>): boolean {
   // Review major (changes.decides_all): a cut with its dependents needs rights on every item it cuts.
   if (c.op === CUT_ALL && c.after) return Object.keys(c.after).every((id) => decides(db, ctx, id));
+  // A goal ask is decided by the owners it is sent to (goal_asks.may_decide).
+  if (GOAL_ASK_OPS.includes(c.op)) return ctx.role === "owner";
   if (KEY_DATE_OPS.includes(c.op)) {
     const rm = roadmapOfDoc(db, c.target.document_id);
     return ctx.role === "owner" || (c.routed_to ?? []).includes(ctx.id) || (!!rm && canEditRoadmap(db, rm, ctx));
@@ -740,6 +792,7 @@ function createKeyDate(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simpl
 async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"]): Promise<Response> {
   if (S7_OPS.includes(body.op)) return createS7(db, ctx, body);
   if (body.op === "delete_item") return createDeleteItem(db, ctx, body);
+  if (GOAL_ASK_OPS.includes(body.op) || body.op === "delete_goal") return createGoalAsk(db, ctx, body);
   const now = iso(mockNowMs());
   if (KEY_DATE_OPS.includes(body.op)) {
     // The Roadmap filter names the roadmap as roadmap_id (as add_item does); either works.
@@ -1021,19 +1074,22 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     session.last_change_at = now;
     applyS7(db, c);
   } else if (p[4] === "decline" && c.op === "add_item") reopenSuggestion(db, c);
-  else if (p[4] === "accept" && c.op === "delete_item") {
+  else if (p[4] === "accept" && GOAL_ASK_OPS.includes(c.op)) {
+    const err = applyGoalAsk(db, ctx, c);
+    if (err) return err;
+  } else if (p[4] === "accept" && c.op === "delete_item") {
     const key = keyOf(db, c.target.item_id);
     if (!key) return json(404, { detail: "The feature is gone" });
     if (seed(db, key).trashed) return alreadyInTrash(db, ctx, c, now);
     trashFeature(db, ctx, key, c.reason ?? null, now);
   } else if (p[4] === "accept" && c.op === "delete_goal") {
-    const gb = (db.goal_buckets ??= seedGoalBuckets());
+    const gb = goalBucketsDb(db, ctx.goalBin?.people);
     const g = gb.goals.find((x) => x.id === c.target.goal_id);
     if (!g) return json(404, { detail: "The goal is gone" });
     if (g.trashed) return alreadyInTrash(db, ctx, c, now);
     const to = typeof c.target.to_goal_id === "string" ? c.target.to_goal_id : null;
     const bin = { trash: (ctx.trash ??= { entries: [], estimates: {} }), id: ctx.id, name: ctx.names[ctx.id] ?? null, now: () => now };
-    trashGoal(gb, bin, g, to, c.reason ?? null, db);
+    trashGoal(gb, bin, g.id, to, c.reason ?? null, db);
   } else if (p[4] === "accept") {
     const now_ = current(db, c, c.before);
     if (!same(now_, c.before)) return conflict(db, ctx, now_, touched(c), "outdated");
