@@ -298,11 +298,22 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
         if replaced := await company.replaced_prd_ids(db):
             rows = [r for r in rows if r.prd_document_id not in replaced]
     if overlays:
+        # S7: the items added in Simple to the drafts the reader sees; approved-prd-shown-once:
+        # one that copies a shown item (same roadmap, PRD and key) is read as that item, once.
+        added = await drafts.added_raw(db, overlays)
+        copies = drafts.twins(rows, [a for a, _ in added])
+        folded = {c.id for c in copies.values()}
         rows = [
-            drafts.overlaid(r, overlays.get(r.roadmap_document_id, {}).get(str(r.id))) for r in rows
+            drafts.fold(r, copies[r.id], overlays.get(r.roadmap_document_id, {}))
+            if r.id in copies
+            else drafts.overlaid(r, overlays.get(r.roadmap_document_id, {}).get(str(r.id)))
+            for r in rows
         ]
-        # S7: the items added in Simple to the drafts the reader sees.
-        rows += await drafts.added_rows(db, overlays)
+        rows += [
+            drafts.placed(a, base, overlays[a.roadmap_document_id].get(str(a.id)))
+            for a, base in added
+            if a.id not in folded
+        ]
         rows.sort(key=lambda r: (r.position, r.item_key))
     tracks: dict[uuid.UUID, ProductTrack] = {}
     owner_roles: dict[uuid.UUID, str] = {}

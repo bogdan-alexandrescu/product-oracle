@@ -12,8 +12,12 @@ draft, for the roadmap's owner to review and publish. No run, no cost.
   ``engineering``), else the item's own; the start is the item's own (an end-only item stays
   end-only, its start estimated). An undated item is not added. Each is an item added to the
   working draft (``simple_draft_id``, as S7's additions), with the PRD as its PRD;
-- an item already on the published roadmap (same PRD, same key) only adds what changed:
-  its dates or title, as the draft's fields on the published item; unchanged, nothing;
+- an item already on the published roadmap (same PRD, same key, else same feature, else
+  same title) only adds what changed: its dates or title, as the draft's fields on the
+  published item; unchanged, nothing. approved-prd-shown-once: "published" is the version
+  the Simple roadmap shows (its latest approved with items, else its latest with items),
+  which is not the draft's base when a later unapproved version holds items; a copy added
+  before this is read as the shown item, once (oracle.simple.drafts.fold);
 - no key dates (ah-prd-milestones-once, the owner's pick: 'Read-only from the PRD'): its
   milestones show as read-only key dates drawn from the PRD (oracle.simple.key_dates
   .prd_key_dates), once each, and move when the PRD does. A draft made before this holds
@@ -202,6 +206,56 @@ async def _take_out(
     return overlay, kept, kept_keys
 
 
+async def _shown_version(db: AsyncSession, doc: uuid.UUID) -> uuid.UUID | None:
+    """The roadmap's version the Simple roadmap shows, as oracle.simple.service.load picks
+    it: its latest approved version with items, else its latest with items."""
+    from oracle.simple import service
+
+    versions = (
+        await db.execute(
+            select(
+                DocumentVersion.id,
+                DocumentVersion.document_id,
+                DocumentVersion.number,
+                DocumentVersion.approved_at,
+            ).where(DocumentVersion.document_id == doc)
+        )
+    ).all()
+    with_items = set(
+        await db.scalars(
+            select(RoadmapItem.roadmap_version_id)
+            .where(RoadmapItem.roadmap_document_id == doc)
+            .distinct()
+        )
+    )
+    return service._versions(versions, with_items, await drafts.submitted_versions(db)).get(doc)
+
+
+def _matches(rows: list[RoadmapItem], ours: list[RoadmapItem]) -> dict[uuid.UUID, RoadmapItem]:
+    """Derived item id -> the shown item of the PRD it is: same key, else same feature,
+    else same title; every key match before any other, each shown item matched once."""
+
+    def title(r: RoadmapItem) -> str:
+        return (r.title or "").strip().casefold()
+
+    tests = (
+        lambda a, b: a.item_key == b.item_key,
+        lambda a, b: a.feature_id is not None and a.feature_id == b.feature_id,
+        lambda a, b: bool(title(a)) and title(a) == title(b),
+    )
+    out: dict[uuid.UUID, RoadmapItem] = {}
+    left = list(ours)
+    for test in tests:
+        for row in rows:
+            if row.id in out:
+                continue
+            pub = next((r for r in left if test(row, r)), None)
+            if pub is not None:
+                out[row.id] = pub
+                left.remove(pub)
+    return out
+
+
 async def on_prd_approved(
     db: AsyncSession, principal: Any, prd: Document, version: DocumentVersion
 ) -> None:
@@ -228,8 +282,15 @@ async def on_prd_approved(
     overlay, kept, kept_keys = await _take_out(db, d, str(prd.id))
     base = await db.get(DocumentVersion, d.base_version_id) if d.base_version_id else None
     published = await views.version_items(db, base) if base is not None else []
-    ours = {r.item_key: r for r in published if r.prd_document_id == prd.id}
-    taken = {r.item_key for r in published} | set(
+    # approved-prd-shown-once: the items the Simple roadmap shows, which are not the base's
+    # when a later version is shown (no approved version, the latest has items).
+    shown = await _shown_version(db, doc)
+    if shown is None or shown == d.base_version_id:
+        pool = published
+    else:
+        pool = await views.version_items(db, await db.get(DocumentVersion, shown))
+    ours = [r for r in pool if r.prd_document_id == prd.id]
+    taken = {r.item_key for r in [*published, *pool]} | set(
         await db.scalars(
             select(RoadmapItem.item_key).where(
                 RoadmapItem.simple_draft_id == d.id, RoadmapItem.roadmap_version_id.is_(None)
@@ -247,12 +308,13 @@ async def on_prd_approved(
 
     track = await tracks.track_of_prd(db, prd.id)
     note = f"From {prd.title} (version {version.number})"
+    matched = _matches([r for r, _ in dated if r.item_key not in kept_keys], ours)
     items: list[str] = list(kept)
     wrote: dict[str, Any] = {}
     for row, (start, end, source) in dated:
         if row.item_key in kept_keys:
             continue
-        pub = ours.get(row.item_key)
+        pub = matched.get(row.id)
         if pub is not None:
             if str(pub.id) in overlay:
                 # The owner's own change to it in the draft wins.

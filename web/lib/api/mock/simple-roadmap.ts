@@ -1519,16 +1519,32 @@ export function approvedPrdToDraft(
   }
   const w = simpleWindows(companyToday());
   const keys: string[] = [];
+  // approved-prd-shown-once: the PRD's item the roadmap shows already (same key, else same
+  // title; every key match first, each shown item matched once) is updated, never added again.
+  const ours = db.items.filter(
+    (x) =>
+      x.roadmap === rm &&
+      (x.from_prd?.slug ??
+        ROADMAPS[rm].prd.toLowerCase().replace(/ /g, "-")) === a.prd.slug,
+  );
+  const named = (t: string) => t.trim().toLowerCase();
+  const matched = new Map<string, SeedItem>();
+  for (const same of [
+    (it: PrdApproval["items"][number], x: SeedItem) => x.key === it.key,
+    (it: PrdApproval["items"][number], x: SeedItem) =>
+      !!named(it.title) && named(x.title) === named(it.title),
+  ]) {
+    for (const it of a.items) {
+      if (!it.end || matched.has(it.key)) continue;
+      const taken = new Set(matched.values());
+      const x = ours.find((o) => !taken.has(o) && same(it, o));
+      if (x) matched.set(it.key, x);
+    }
+  }
   for (const it of a.items) {
     if (!it.end) continue;
     const start = it.start && it.start <= it.end ? it.start : null;
-    const pub = db.items.find(
-      (x) =>
-        x.roadmap === rm &&
-        x.key === it.key &&
-        (x.from_prd?.slug ??
-          ROADMAPS[rm].prd.toLowerCase().replace(/ /g, "-")) === a.prd.slug,
-    );
+    const pub = matched.get(it.key);
     if (pub) {
       const r = resolve(db, pub, w[pub.horizon]);
       if (
