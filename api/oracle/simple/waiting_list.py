@@ -74,7 +74,9 @@ async def _roadmap(db: AsyncSession, principal: Any) -> list[SimpleWaitingItem]:
         if not i.can_decide:
             continue
         for f in i.flags:
-            if f.state != "red" or not f.fixes:
+            # roadmap-decide: a broken link is a dependency out of order or a cut item others
+            # depend on (service.LINK_KINDS), as Home, the roadmap's strip and the side menu count.
+            if f.state != "red" or not f.fixes or f.kind not in service.LINK_KINDS:
                 continue
             dep = titles.get(_uuid(f.subject)) if f.subject else None
             out.append(SimpleWaitingItem(
