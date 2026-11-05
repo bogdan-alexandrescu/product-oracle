@@ -8,8 +8,8 @@ import { login, openSection, openTab } from "./helpers";
  * (the citation contract's identifier), but a person reads it as "Ground Truth decision D-12"
  * everywhere it shows: the chip's name and hover card, the review panel's Sources tab (text and
  * tooltip) and the Evidence tab's matrix and inspector. The mock's "oracle://baseline/goals"
- * source reads the same way. Hover cards, Ask Oracle answers and the Ground Truth's Approve
- * notice say no "baseline" either. Mock API; made-up data.
+ * source reads the same way. Hover cards, Ask Oracle answers and what a decision on the Ground
+ * Truth's review says back say no "baseline" either. Mock API; made-up data.
  */
 
 const DOC = "/documents/checkout-redesign/v/2";
@@ -74,19 +74,18 @@ test("the Evidence tab names the cited decision 'Ground Truth decision D-12' in 
   expect(await inspector.innerText()).not.toMatch(OLD_NAME);
 });
 
-test("the update's Oracle source 'oracle://baseline/goals' reads as the Ground Truth's goals", async ({ page }) => {
+test("the update's Oracle source 'oracle://baseline/goals' says no 'baseline' in its Sources row or tooltips", async ({ page }) => {
   await login(page);
   await page.goto("/documents/investor-update-2026-09/v/1");
-  await page.getByTestId("version-tab-evidence").filter({ visible: true }).click();
-  const matrix = page.getByTestId("evidence-matrix");
-  await expect(matrix).toBeVisible();
-  await matrix.locator("tr[data-target]", { hasText: "Goals in the Ground Truth" }).locator("td").first().click();
-  const inspector = page.getByTestId("evidence-citation-inspector").filter({ visible: true });
-  await expect(inspector.getByTestId("evidence-citation")).toContainText("Ground Truth goals");
-  expect(await inspector.innerText()).not.toMatch(OLD_NAME);
+  await openTab(page, "Sources");
+  const row = page.getByTestId("sources-list").filter({ visible: true }).getByRole("listitem").filter({ hasText: "Goals in the Ground Truth" });
+  await expect(row).toBeVisible();
+  expect(await row.innerText()).not.toMatch(OLD_NAME);
+  const titles = await row.locator("[title]").evaluateAll((els) => els.map((e) => e.getAttribute("title") ?? ""));
+  for (const t of titles) expect(t).not.toMatch(OLD_NAME);
 });
 
-test("an Ask Oracle answer about the Ground Truth, and the Ground Truth's Approve, say no 'baseline'", async ({ page }) => {
+test("an Ask Oracle answer about the Ground Truth, and a decision on its review, say no 'baseline'", async ({ page }) => {
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "baseline-review"] as const);
   await login(page);
   await page.goto("/home");
@@ -106,9 +105,10 @@ test("an Ask Oracle answer about the Ground Truth, and the Ground Truth's Approv
     if (await card.count()) expect(await card.first().innerText()).not.toMatch(OLD_NAME);
   }
 
+  // A decision on the review, and whatever it says back (a notice or a toast).
   await page.goto("/ground-truth?run=7a11c0de-0000-4000-8000-0000000000b2");
-  await page.getByTestId("from-run-bar").getByRole("button", { name: "Approve the Ground Truth" }).click();
-  // The notice or toast it leaves.
-  await expect(page.getByRole("status").or(page.getByRole("alert")).filter({ visible: true }).first()).toBeVisible();
+  const row = page.getByTestId("from-run-row").filter({ hasText: "Guided setup" });
+  await row.getByRole("button", { name: "Accept" }).click();
+  await expect(row).toContainText("Accepted");
   expect(await page.locator("body").innerText()).not.toMatch(OLD_NAME);
 });

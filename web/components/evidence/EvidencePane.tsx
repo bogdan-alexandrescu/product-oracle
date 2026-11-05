@@ -52,7 +52,7 @@ import {
   type SectionLinkTarget,
   type SectionLinkView,
 } from "@/lib/evidence";
-import { formatDate, formatDateTime, plural } from "@/lib/format";
+import { citationRefText, formatDate, formatDateTime, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -882,7 +882,7 @@ function CitationInspector({ citation: c, sections, result }: { citation: Eviden
   return (
     <Inspector
       eyebrow={`Draft citation · ${sourceLabel(c.source)}`}
-      title={c.title || c.ref}
+      title={c.title || citationRefText(c.ref)}
       testId="evidence-citation-inspector"
       chips={<Chip hero>{sourceLabel(c.source)}</Chip>}
       action={
@@ -920,8 +920,8 @@ function CitationBody({ c }: { c: EvidenceCitation }) {
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[13px] font-semibold text-text2">{sourceLabel(c.source)}</span>
       </div>
-      <span className="font-semibold">{c.title || c.ref}</span>
-      {c.title && c.ref !== c.title && <span className="text-[13px] break-all text-text2">{c.ref}</span>}
+      <span className="font-semibold">{c.title || citationRefText(c.ref)}</span>
+      {c.title && c.ref !== c.title && <span className="text-[13px] break-all text-text2">{citationRefText(c.ref)}</span>}
       {c.excerpt && <blockquote className="border-l-2 border-line-strong pl-2.5">{c.excerpt}</blockquote>}
       {(!c.excerpt || !c.retrieved_at) && (
         <span className="text-[13px] text-text2">

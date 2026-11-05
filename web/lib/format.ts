@@ -129,6 +129,16 @@ export const SOURCE_LABEL: Record<CitationOut["source"], string> = {
   oracle: "Oracle Ground Truth",
 };
 
+/**
+ * A citation's ref as a person reads it (PR 1248): the contract's "baseline decision D-12"
+ * names the Ground Truth, "Ground Truth decision D-12", and so does an "oracle://baseline/goals"
+ * source, "Ground Truth goals". Any other ref (a URL) is shown as it is.
+ */
+export const citationRefText = (ref: string): string =>
+  ref
+    .replace(/^(\s*)baseline\b/i, "$1Ground Truth")
+    .replace(/^oracle:\/\/baseline(?:\/+(.*))?$/i, (_, rest: string | undefined) => (rest ? `Ground Truth ${rest.split("/").filter(Boolean).join(" ")}` : "Ground Truth"));
+
 /** An absolute http(s) URL with a host: the only ref a citation opens as a link. */
 const HTTP_URL = /^https?:\/\/[^\s/\\?#]+/i;
 

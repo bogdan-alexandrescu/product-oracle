@@ -5,6 +5,7 @@
  * reads the sections as they come (links already strongest first).
  */
 import type { Schemas } from "@/lib/api/client";
+import { citationRefText } from "@/lib/format";
 
 export type EvidenceInspector = Schemas["EvidenceInspector"];
 export type SectionEvidence = Schemas["SectionEvidence"];
@@ -136,7 +137,7 @@ export function pivot(sections: SectionEvidence[]): MatrixRow[] {
         row = {
           id,
           group: "citations",
-          title: c.title || c.ref,
+          title: c.title || citationRefText(c.ref),
           sub: sourceLabel(c.source),
           muted: false,
           citation: c,

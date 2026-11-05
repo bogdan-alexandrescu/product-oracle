@@ -1261,7 +1261,7 @@ function checkOrder(spec: OrderSpec, scope: PrdScopeOut["features"] | null): Pri
   const add = (code: string, feature: string, message: string, blocking = true) => problems.push({ code, blocking, feature, message });
   const inScope = new Set((scope ?? []).map((f) => f.key));
   for (const k of keys) {
-    if (!live.some((f) => f.key === k) && !inScope.has(k) && !proposed.has(k)) add("unknown_feature", k, `${k} is not a feature of the baseline or the scope`);
+    if (!live.some((f) => f.key === k) && !inScope.has(k) && !proposed.has(k)) add("unknown_feature", k, `${k} is not a feature of the Ground Truth or the scope`);
     else if (scope && !inScope.has(k)) add("not_in_scope", k, `${k} is not included in the approved PRD scope`);
   }
   for (const f of scope ?? []) if (!(f.key in rank)) add("missing_feature", f.key, `${f.key} is in the approved PRD scope and not ranked`);

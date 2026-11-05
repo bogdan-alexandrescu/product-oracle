@@ -29,7 +29,9 @@ def citation_contract() -> str:
     return (
         "Citation contract: citations are a list under citations in the YAML front matter; "
         f"each has id, source (one of: {sources}), ref (a URL to the item; for oracle, the "
-        'baseline item\'s kind and key, e.g. "baseline decision <key>"), title, excerpt and '
+        'baseline item\'s kind and key, e.g. "baseline decision <key>": an identifier Oracle '
+        "reads, never shown to people, who read it as the Ground Truth's decision <key>), "
+        "title, excerpt and "
         "retrieved_at (when you read it, ISO 8601), and may have item (the id of the source "
         f"item you read), confidence ({CONFIDENCE_RANGE}: how much the evidence counts; "
         "null when there is no score, with confidence_note saying why) and low_confidence "

@@ -2204,8 +2204,8 @@ function Artifacts({
         type="button"
         onClick={() => void show(name, attempt)}
         aria-expanded={on}
-        // qa-work-8: the file in words ("Roadmap items"); its name on hover.
-        title={name}
+        // qa-work-8: the file in words ("Roadmap items"); its name on hover, said as a file name.
+        title={`File: ${name}`}
         className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 text-[13px] ${
           on ? "border-accent bg-accent-soft text-accent-ink" : "border-line-strong bg-surface text-text hover:bg-surface2"
         }`}
