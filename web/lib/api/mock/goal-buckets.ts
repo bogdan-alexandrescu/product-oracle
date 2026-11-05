@@ -11,7 +11,8 @@ import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRo
 import { planGoalNames, planSlices } from "./simple-plan";
 
 // trash-features-goals: `trashed` while in Settings › Trash (left out of every read, kept for Restore).
-type Goal = { id: string; title: string; order: number; measure: string | null; target: string | null; due: string | null; archived: boolean; trashed?: boolean };
+// edit-goals-prds EG1: a goal's owner (a member's id; seeded by email, matched to the member on first read) and when it was archived.
+type Goal = { id: string; title: string; order: number; measure: string | null; target: string | null; due: string | null; archived: boolean; trashed?: boolean; owner_id?: string | null; owner_email?: string; archived_at?: string | null };
 type Feature = { id: string; key: string; title: string; goal_ids: string[] };
 export type GoalBucketsDb = { goals: Goal[]; features: Feature[] };
 type Undo = Schemas["GoalBucketsUndo"];
@@ -24,10 +25,29 @@ const MEASURES: Record<string, [string, string, string]> = {
   Revenue: ["Monthly recurring revenue", "$20,000", "2027-02-26"],
 };
 
+/** Invented owners for the plan's goals: the mock's members, by email. */
+const OWNERS: Record<string, string> = {
+  Reliability: "approver@example.com",
+  Growth: "admin@example.com",
+  Activation: "commenter@example.com",
+  Revenue: "approver@example.com",
+};
+
+/** EG1 (eg1-a-rest): goals archived before, shut in the "Archived goals" fold. Invented. */
+const ARCHIVED: [string, string, string][] = [
+  ["Cut support tickets in half", "approver@example.com", "2026-10-14T15:00:00Z"],
+  ["Launch in two new regions", "commenter@example.com", "2026-09-30T15:00:00Z"],
+  ["Faster first report", "admin@example.com", "2026-08-22T15:00:00Z"],
+];
+
 export function seedGoalBuckets(): GoalBucketsDb {
-  const goals = planGoalNames().map((title, i) => {
+  const goals: Goal[] = planGoalNames().map((title, i) => {
     const [measure, target, due] = MEASURES[title] ?? [null, null, null];
-    return { id: stableUuid(`goal-bucket/${title}`), title, order: i + 1, measure, target, due, archived: false };
+    return { id: stableUuid(`goal-bucket/${title}`), title, order: i + 1, measure, target, due, archived: false, owner_email: OWNERS[title] };
+  });
+  const live = goals.length;
+  ARCHIVED.forEach(([title, owner_email, archived_at], i) => {
+    goals.push({ id: stableUuid(`goal-bucket/${title}`), title, order: live + i + 1, measure: null, target: null, due: null, archived: true, owner_email, archived_at });
   });
   const features: Feature[] = [];
   for (const s of planSlices()) {
@@ -54,7 +74,7 @@ export function seedGoalBuckets(): GoalBucketsDb {
 export function seedGoalBucketsHard(): GoalBucketsDb {
   const base = seedGoalBuckets();
   const bigId = stableUuid("goal-bucket/grow-partner-network");
-  const big: Goal = { id: bigId, title: "Grow partner network", order: base.goals.length + 1, measure: "Live partner integrations", target: "40 partners", due: "2027-03-31", archived: false };
+  const big: Goal = { id: bigId, title: "Grow partner network", order: base.goals.filter((g) => !g.archived).length + 1, measure: "Live partner integrations", target: "40 partners", due: "2027-03-31", archived: false, owner_email: "viewer@example.com" };
   const growth = base.goals.find((g) => g.title === "Growth")!;
   const codes = ["F-07", "F-08", "F-09", "F-10", "F-11", "F-12", "F-13", "F-14", "F-15", "F-16", "F-17", "F-18", "F-19", "F-20", "F-22"];
   const also = new Set(["F-09", "F-12", "F-15", "F-19"]);
@@ -77,7 +97,7 @@ export function seedGoalBucketsWith(
   const goalOf = (name: string): string => {
     let g = goals.find((x) => x.title.toLowerCase() === name.toLowerCase());
     if (!g) {
-      g = { id: stableUuid(`goal-bucket/${name}`), title: name, order: goals.length + 1, measure: null, target: null, due: null, archived: false };
+      g = { id: stableUuid(`goal-bucket/${name}`), title: name, order: goals.filter((x) => !x.archived).length + 1, measure: null, target: null, due: null, archived: false };
       goals.push(g);
     }
     return g.id;
@@ -95,18 +115,25 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-function out(db: GoalBucketsDb, edits: boolean): Schemas["GoalBucketsOut"] {
+/** The members a goal's owner is one of, and who the company's owners are (an ask goes to them). */
+export type GoalPeople = { id: string; name: string; email: string; role: string; disabled?: boolean }[];
+
+function out(db: GoalBucketsDb, edits: boolean, people: GoalPeople = []): Schemas["GoalBucketsOut"] {
   const live = db.goals.filter((g) => !g.archived && !g.trashed);
   const ids = new Set(live.map((g) => g.id));
+  const archived = db.goals.filter((g) => g.archived && !g.trashed).sort((a, b) => ((a.archived_at ?? "") < (b.archived_at ?? "") ? 1 : -1));
   return {
     can_edit: edits,
-    goals: live.map((g) => ({ id: g.id, title: g.title, order: g.order, measure: g.measure, target: g.target, due: g.due, can_edit: edits })),
+    goals: live.map((g) => ({ ...goalOut(g, people), can_edit: edits })),
     features: db.features.map((f) => ({ id: f.id, key: f.key, title: f.title, goal_ids: f.goal_ids.filter((g) => ids.has(g)) })),
+    archived: archived.map((g) => ({ id: g.id, title: g.title, owner_name: nameOf(people, g.owner_id), archived_at: g.archived_at ?? null })),
+    asks_to: people.filter((x) => x.role === "owner" && !x.disabled).map((x) => x.name),
   };
 }
 
-const goalOut = (g: Goal): Schemas["GoalBucketGoal"] => ({ id: g.id, title: g.title, order: g.order, measure: g.measure, target: g.target, due: g.due, can_edit: true });
-const goalSnap = (g: Goal) => ({ id: g.id, title: g.title, status: g.archived ? "rejected" : "confirmed", attrs: { metric: g.measure, target_text: g.target, due: g.due, position: g.order } });
+const nameOf = (people: GoalPeople, id: string | null | undefined) => (id ? (people.find((x) => x.id === id)?.name ?? null) : null);
+const goalOut = (g: Goal, people: GoalPeople = []): Schemas["GoalBucketGoal"] => ({ id: g.id, title: g.title, order: g.order, measure: g.measure, target: g.target, due: g.due, can_edit: true, owner_id: g.owner_id ?? null, owner_name: nameOf(people, g.owner_id) });
+const goalSnap = (g: Goal) => ({ id: g.id, title: g.title, status: g.archived ? "rejected" : "confirmed", attrs: { metric: g.measure, target_text: g.target, due: g.due, position: g.order, owner: g.owner_id ?? null, archived_at: g.archived_at ?? null } });
 // The mock keeps links in order, and Undo puts that order back; each link is snapshotted whole, as the API does.
 const featureSnap = (f: Feature) => ({
   feature_id: f.id,
@@ -120,7 +147,13 @@ const sigOf = (u: Omit<Undo, "sig">) => {
 };
 const signed = (u: Omit<Undo, "sig">): Undo => ({ ...u, sig: sigOf(u) });
 
-type GoalIn = { title?: string; measure?: string; target?: string; due?: string };
+type GoalIn = { title?: string; measure?: string; target?: string; due?: string; owner_id?: string | null };
+/** EG1: the owner a goal's form sends: left out, as it was; null clears it; else a member (422 when not). */
+const ownerIn = (b: GoalIn, people: GoalPeople): { ok: boolean; set: boolean; id: string | null } => {
+  if (!("owner_id" in b)) return { ok: true, set: false, id: null };
+  if (b.owner_id == null) return { ok: true, set: true, id: null };
+  return { ok: people.some((x) => x.id === b.owner_id && !x.disabled), set: true, id: b.owner_id };
+};
 const complete = (b: GoalIn) => !!(b.title?.trim() && b.measure?.trim() && b.target?.trim() && b.due && /^\d{4}-\d{2}-\d{2}$/.test(b.due));
 
 /** Archive and a delete to Trash: the goal's features leave it; those that serve another goal
@@ -136,15 +169,57 @@ function moveOff(db: GoalBucketsDb, g: Goal, to: string | null): Feature[] {
 }
 
 /** trash-features-goals (oracle.simple.trash_items): Settings › Trash and who writes there. */
-export type GoalBucketsTrash = { trash: TrashDb; id: string; name: string | null; now: () => string };
+export type GoalBucketsTrash = { trash: TrashDb; id: string; name: string | null; now: () => string; people?: GoalPeople };
+
+/** Archive (goal_buckets.archive), also an accepted Ask to archive: the Undo, or an error. */
+export function archiveGoal(db: GoalBucketsDb, id: string, to: string | null, now: string): Undo | Response {
+  const g = db.goals.find((x) => x.id === id && !x.archived && !x.trashed);
+  if (!g) return json(404, { detail: "No such goal" });
+  if (to && !db.goals.some((x) => x.id === to && !x.archived && !x.trashed && x.id !== g.id)) return json(422, { detail: "Pick another goal" });
+  const undo = signed({ goals: [goalSnap(g)], features: moveOff(db, g, to).map(featureSnap), added_goal_id: null });
+  g.archived = true;
+  g.archived_at = now;
+  return undo;
+}
+
+/** A goal to Trash (trash_items.trash_goal), also an accepted Ask to delete: the Trash row, or an error. */
+export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, id: string, to: string | null, reason: string | null): TrashEntryRow | Response {
+  const g = db.goals.find((x) => x.id === id && !x.trashed);
+  if (!g) return json(404, { detail: "No such goal" });
+  if (to && !db.goals.some((x) => x.id === to && !x.archived && !x.trashed && x.id !== g.id)) return json(422, { detail: "Pick another goal" });
+  moveOff(db, g, to);
+  g.trashed = true;
+  const at = bin.now();
+  const row: TrashEntryRow = {
+    out: {
+      id: crypto.randomUUID(),
+      root: { type: "goal", id: g.id, slug: null, title: g.title, kind: "goal", code: null },
+      items: [], deleted_by: bin.id, deleted_by_name: bin.name, deleted_at: at, reason,
+      published: false, purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
+    },
+    documents: [], versions: [], runs: [], intakes: [],
+  };
+  bin.trash.entries.push(row);
+  return row;
+}
+
+/** The goal buckets' db, its seeded owners matched to the members by email. */
+export function goalBucketsDb(simple: { goal_buckets?: GoalBucketsDb }, people: GoalPeople = []): GoalBucketsDb {
+  const db = (simple.goal_buckets ??= seedGoalBuckets());
+  for (const g of db.goals) {
+    if (g.owner_email && g.owner_id === undefined) g.owner_id = people.find((x) => x.email === g.owner_email)?.id ?? null;
+  }
+  return db;
+}
 
 /** /v1/simple/goal-buckets... (as the API: approvers and owners write; anyone reads). */
 export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb }, role: string, req: Request, p: string[], bin?: GoalBucketsTrash): Promise<Response | null> {
   if (p[1] !== "simple" || p[2] !== "goal-buckets") return null;
-  const db = (simple.goal_buckets ??= seedGoalBuckets());
+  const people = bin?.people ?? [];
+  const db = goalBucketsDb(simple, people);
   const edits = role === "owner" || role === "approver";
   const m = req.method;
-  if (!p[3] && m === "GET") return json(200, out(db, edits));
+  if (!p[3] && m === "GET") return json(200, out(db, edits, people));
   // trash-features-goals: a goal's restore, by an owner or whoever deleted it (mayRestore).
   if (bin && p[3] === "goals" && p[4] && p[5] === "restore" && m === "POST") {
     if (role === "viewer") return json(403, { detail: "Requires the commenter role" });
@@ -158,52 +233,48 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
   if (!edits) return json(403, { detail: "Requires the approver role" });
   // trash-features-goals: DELETE .../goals/{id}?to_goal_id= (approvers and owners): whoever deletes it restores it.
   if (bin && p[3] === "goals" && p[4] && !p[5] && m === "DELETE") {
-    const g = db.goals.find((x) => x.id === p[4] && !x.trashed);
-    if (!g) return json(404, { detail: "No such goal" });
     const q = new URL(req.url).searchParams;
-    const to = q.get("to_goal_id");
-    if (to && !db.goals.some((x) => x.id === to && !x.archived && !x.trashed && x.id !== g.id)) return json(422, { detail: "Pick another goal" });
-    moveOff(db, g, to);
-    g.trashed = true;
-    const at = bin.now();
-    const row: TrashEntryRow = {
-      out: {
-        id: crypto.randomUUID(),
-        root: { type: "goal", id: g.id, slug: null, title: g.title, kind: "goal", code: null },
-        items: [], deleted_by: bin.id, deleted_by_name: bin.name, deleted_at: at, reason: q.get("reason"),
-        published: false, purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
-      },
-      documents: [], versions: [], runs: [], intakes: [],
-    };
-    bin.trash.entries.push(row);
-    return json(200, { entry: entryOut(row, at, true), change: null, can_restore: true });
+    const row = trashGoal(db, bin, p[4], q.get("to_goal_id"), q.get("reason"));
+    if (row instanceof Response) return row;
+    return json(200, { entry: entryOut(row, row.out.deleted_at, true), change: null, can_restore: true });
   }
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   if (p[3] === "goals" && !p[4] && m === "POST") {
     const b = body as GoalIn;
     if (!complete(b)) return json(422, { detail: "A goal needs a measure, a target and a date" });
-    const order = Math.max(0, ...db.goals.map((g) => g.order)) + 1;
-    const g: Goal = { id: crypto.randomUUID(), title: b.title!.trim(), order, measure: b.measure!.trim(), target: b.target!.trim(), due: b.due!, archived: false };
+    const owner = ownerIn(b, people);
+    if (!owner.ok) return json(422, { detail: "Pick a member as its owner" });
+    const order = Math.max(0, ...db.goals.filter((g) => !g.archived && !g.trashed).map((g) => g.order)) + 1;
+    const g: Goal = { id: crypto.randomUUID(), title: b.title!.trim(), order, measure: b.measure!.trim(), target: b.target!.trim(), due: b.due!, archived: false, owner_id: owner.id };
     db.goals.push(g);
-    return json(201, { goal: goalOut(g), undo: signed({ goals: [], features: [], added_goal_id: g.id }) });
+    return json(201, { goal: goalOut(g, people), undo: signed({ goals: [], features: [], added_goal_id: g.id }) });
   }
   if (p[3] === "goals" && p[4] && !p[5] && m === "PATCH") {
     const g = db.goals.find((x) => x.id === p[4] && !x.archived);
     if (!g) return json(404, { detail: "No such goal" });
     const b = body as GoalIn;
     if (!complete(b)) return json(422, { detail: "A goal needs a measure, a target and a date" });
+    const owner = ownerIn(b, people);
+    if (!owner.ok) return json(422, { detail: "Pick a member as its owner" });
     const undo = signed({ goals: [goalSnap(g)], features: [], added_goal_id: null });
     Object.assign(g, { title: b.title!.trim(), measure: b.measure!.trim(), target: b.target!.trim(), due: b.due! });
-    return json(200, { goal: goalOut(g), undo });
+    if (owner.set) g.owner_id = owner.id;
+    return json(200, { goal: goalOut(g, people), undo });
   }
   if (p[3] === "goals" && p[5] === "archive" && m === "POST") {
-    const g = db.goals.find((x) => x.id === p[4] && !x.archived);
-    if (!g) return json(404, { detail: "No such goal" });
-    const to = (body.to_goal_id as string | null | undefined) ?? null;
-    if (to && !db.goals.some((x) => x.id === to && !x.archived && x.id !== g.id)) return json(422, { detail: "Pick another goal" });
-    const undo = signed({ goals: [goalSnap(g)], features: moveOff(db, g, to).map(featureSnap), added_goal_id: null });
-    g.archived = true;
+    const undo = archiveGoal(db, p[4], (body.to_goal_id as string | null | undefined) ?? null, bin?.now() ?? new Date().toISOString());
+    if (undo instanceof Response) return undo;
     return json(200, { goal: null, undo });
+  }
+  // edit-goals-prds EG1: Restore an archived goal to the buckets, with Undo.
+  if (p[3] === "goals" && p[5] === "unarchive" && m === "POST") {
+    const g = db.goals.find((x) => x.id === p[4] && !x.trashed);
+    if (!g) return json(404, { detail: "No such goal" });
+    if (!g.archived) return json(409, { detail: `${g.title} is not archived` });
+    const undo = signed({ goals: [goalSnap(g)], features: [], added_goal_id: null });
+    g.archived = false;
+    g.archived_at = null;
+    return json(200, { goal: goalOut(g, people), undo });
   }
   if (p[3] === "features" && p[5] === "move" && m === "POST") {
     const f = db.features.find((x) => x.id === p[4]);
@@ -221,7 +292,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
       const g = db.goals.find((x) => x.id === s.id);
       if (!g) continue;
       const a = s.attrs as Record<string, string | number | null>;
-      Object.assign(g, { title: s.title, archived: s.status === "rejected", measure: a.metric ?? null, target: a.target_text ?? null, due: a.due ?? null });
+      Object.assign(g, { title: s.title, archived: s.status === "rejected", measure: a.metric ?? null, target: a.target_text ?? null, due: a.due ?? null, owner_id: a.owner ?? null, archived_at: a.archived_at ?? null });
     }
     for (const s of u.features ?? []) {
       const f = db.features.find((x) => x.id === s.feature_id);
@@ -231,7 +302,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
       const g = db.goals.find((x) => x.id === u.added_goal_id);
       if (g) g.archived = true;
     }
-    return json(200, out(db, edits));
+    return json(200, out(db, edits, people));
   }
   return null;
 }

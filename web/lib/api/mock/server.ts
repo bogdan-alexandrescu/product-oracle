@@ -6598,7 +6598,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       return out ? json(200, out) : json(404, { detail: "No such roadmap" });
     }
     // trash-features-goals: a goal deleted to Settings › Trash (./trash.ts).
-    const bin = { trash: (db.trash ??= emptyTrash()), id: me.id, name: simpleNames[me.id] ?? me.email, now: () => new Date(mockNowMs()).toISOString() };
+    // edit-goals-prds EG1: a goal's owner is one of the members; an ask goes to the company's owners.
+    const people = db.members.map((x) => ({ id: x.id, name: displayName(x.email, x.name), email: x.email, role: x.role, disabled: x.status === "disabled" }));
+    const bin = { trash: (db.trash ??= emptyTrash()), id: me.id, name: simpleNames[me.id] ?? me.email, now: () => new Date(mockNowMs()).toISOString(), people };
     const bucketsRes = await routeGoalBuckets(db.simple_roadmap!, me.role, r, p, bin);
     if (bucketsRes) return bucketsRes;
     const simpleRes = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, r, p, q);
@@ -6606,7 +6608,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const companyGoals = db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title }));
     // simple-replaced-prds: the PRDs marked replaced (their drafts are left out, as drafts.listing).
     const replaced = replacedPrds(db);
-    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, replaced, trash: bin.trash }, r, p, q);
+    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, replaced, trash: bin.trash, goalBin: bin }, r, p, q);
   };
   // Simple S8: review meetings, the Decisions page, and changes made through a meeting.
   // Seeded on the first meetings or Decisions read, so the other Simple screens keep their data.

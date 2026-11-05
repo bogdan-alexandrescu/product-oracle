@@ -17,7 +17,7 @@ import { useSetParams } from "@/lib/use-set-params";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { FeaturePanel } from "../roadmap/_panel";
-import { ArchiveDialog, BTN, count, dayOf, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
+import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
 import { knownCode, TaskRow, useBucketTasks, type Task } from "./task-edit";
 import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan } from "./plan-buckets";
@@ -2093,7 +2093,7 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
             >
               {rec && editingGoal === rec.id ? (
                 <GoalForm
-                  start={{ title: rec.title, measure: rec.measure ?? "", target: rec.target ?? "", due: dayOf(rec.due, year) }}
+                  start={{ title: rec.title, measure: rec.measure ?? "", target: rec.target ?? "", due: dayOf(rec.due, year), owner: rec.owner_id ?? null }}
                   order={rec.order}
                   title="Edit goal"
                   year={year}
@@ -2253,6 +2253,10 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
   const [panel, setPanel] = useState<{ goal: GoalBrief; start?: GoalPanelStart } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [archiving, setArchiving] = useState<string | null>(null);
+  // EG1 a: Delete goal asks where its features go, as Archive does; the Archived goals fold.
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [archOpen, setArchOpen] = useState(false);
+  const [delArchived, setDelArchived] = useState<Schemas["ArchivedGoal"] | null>(null);
   const [note, setNote] = useState<Note | null>(null);
   const noteSlot = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -2345,6 +2349,8 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
     .map((b) => ({ b, rows: b.codes.map((c) => rowOf.get(c)).filter((r): r is Row => !!r && !r.in_plan) }))
     .filter((x) => x.rows.length > 0);
   const archivedGoal = gb?.goals.find((g) => g.id === archiving);
+  const deletedGoal = gb?.goals.find((g) => g.id === deleting);
+  const asksTo = gb?.asks_to ?? [];
   // A feature's name opens the Simple item panel, as the roadmap does.
   const phone = usePhone();
   const [opened, setOpened] = useState<{ code: string; name: string } | null>(null);
@@ -2383,7 +2389,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
             >
               {rec && editing === rec.id ? (
                 <GoalForm
-                  start={{ title: rec.title, measure: rec.measure ?? "", target: rec.target ?? "", due: dayOf(rec.due, year) }}
+                  start={{ title: rec.title, measure: rec.measure ?? "", target: rec.target ?? "", due: dayOf(rec.due, year), owner: rec.owner_id ?? null }}
                   order={rec.order}
                   title="Edit goal"
                   year={year}
@@ -2407,7 +2413,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
                         ✎
                       </button>
                     )}
-                    {rights.edit(rec) && rights.archive && <GoalMenu title={g} archive onEdit={() => setEditing(rec!.id)} onArchive={() => setArchiving(rec!.id)} />}
+                    {rec && <GoalMenu title={g} archive={rights.archiveAct} del={rights.deleteAct} onEdit={rights.edit(rec) ? () => setEditing(rec.id) : undefined} onArchive={() => setArchiving(rec.id)} onDelete={() => setDeleting(rec.id)} />}
                   </div>
                   {rec && (
                     <p data-testid="goal-measure" className={`mt-0.5 text-[15px] leading-5 text-text2 ${rec ? "pl-8" : ""}`}>
@@ -2418,6 +2424,13 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
                           {rec.measure}: <b className="font-[650] text-text">{rec.target}</b> by {dayOf(rec.due, year)}
                         </>
                       )}
+                    </p>
+                  )}
+                  {rec?.owner_name && (
+                    <p className="mt-0.5 pl-8">
+                      <span data-testid="goal-owner" className="text-[14px] text-text2">
+                        Owner: <b className="font-[650] text-text">{rec.owner_name}</b>
+                      </span>
                     </p>
                   )}
                 </>
@@ -2481,6 +2494,18 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
               </button>
             </li>
           ))}
+        {gb && (
+          <ArchivedGoals
+            gb={gb}
+            year={year}
+            open={archOpen}
+            onToggle={setArchOpen}
+            restore={rights.unarchive}
+            del={rights.deleteAct}
+            onRestore={(g) => void writes.unarchive(g)}
+            onDelete={setDelArchived}
+          />
+        )}
         {noGoal && (
           <li data-testid="plan-goal" data-goal="" className="rounded-[var(--simple-card-radius)] border border-warn bg-surface p-4">
             <div className="flex flex-wrap items-baseline gap-x-2">
@@ -2522,15 +2547,47 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
       {drag.ghost}
       {tasks.dialog}
       {opened && <FeaturePanel key={opened.code} feature={{ ...opened, prd: plan.prd }} phone={phone} canChange={can("create_simple_change")} onClose={() => setOpened(null)} />}
+      {deletedGoal && gb && (
+        <ArchiveDialog
+          goal={deletedGoal}
+          plan={plan}
+          gb={gb}
+          kind="delete"
+          ask={rights.deleteAct === "ask" ? asksTo : null}
+          onClose={() => setDeleting(null)}
+          onArchive={async (to) => {
+            const done = rights.deleteAct === "ask" ? await writes.ask("delete_goal", deletedGoal, to, asksTo) : await writes.remove(deletedGoal, to, archiveWords((t) => planFeatures(plan, t), gb, deletedGoal, to, "Deleted"));
+            if (done) setDeleting(null);
+          }}
+        />
+      )}
+      {delArchived && (
+        <DeleteArchivedDialog
+          goal={delArchived}
+          ask={rights.deleteAct === "ask" ? asksTo : null}
+          onClose={() => setDelArchived(null)}
+          onDelete={async () => {
+            const done = rights.deleteAct === "ask" ? await writes.ask("delete_goal", delArchived, null, asksTo) : await writes.remove(delArchived, null, `Deleted ${delArchived.title}. It is in Settings > Trash for 30 days.`);
+            if (done) setDelArchived(null);
+          }}
+        />
+      )}
       {archivedGoal && gb && (
         <ArchiveDialog
           goal={archivedGoal}
           plan={plan}
           gb={gb}
+          ask={rights.archiveAct === "ask" ? asksTo : null}
           onClose={() => setArchiving(null)}
           onArchive={async (to) => {
+            if (rights.archiveAct === "ask") {
+              if (await writes.ask("archive_goal", archivedGoal, to, asksTo)) setArchiving(null);
+              return;
+            }
             if (!(await writes.archive(archivedGoal, to, archiveWords((t) => planFeatures(plan, t), gb, archivedGoal, to)))) return;
             setArchiving(null);
+            // eg1-a-result: the archived goal tops the opened Archived goals fold.
+            setArchOpen(true);
             // gb2-a-result: the archived bucket is gone, so the page scrolls back to the note's own
             // place above the buckets, where it covers no goal's title.
             if ((noteSlot.current?.getBoundingClientRect().top ?? 0) < 0) noteSlot.current?.scrollIntoView({ block: "start" });
@@ -2545,15 +2602,15 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
 const ICON_BTN = "inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-transparent text-[16px] text-text hover:border-line-strong hover:bg-surface2 disabled:opacity-40";
 
 /** GB2 a's note: "Archived Grow shop partners. 1 feature moved to Faster first ride, 1 to the other goal it serves." */
-function archiveWords(listOf: GoalFeatures, gb: Schemas["GoalBucketsOut"], goal: Schemas["GoalBucketGoal"], to: string | null): string {
+function archiveWords(listOf: GoalFeatures, gb: Schemas["GoalBucketsOut"], goal: Schemas["GoalBucketGoal"], to: string | null, verb = "Archived"): string {
   const list = listOf(goal.title);
   const own = list.filter((f) => (featureOf(gb, f.code, f.name)?.goal_ids ?? []).some((g) => g !== goal.id)).length;
   const rest = list.length - own;
   const toTitle = gb.goals.find((g) => g.id === to)?.title;
   const feats = (n: number) => `${n} ${n === 1 ? "feature" : "features"}`;
   const ownWords = own ? `${own} to the other goal ${own === 1 ? "it serves" : "each serves"}` : "";
-  if (!list.length) return `Archived ${goal.title}. It held no features.`;
-  if (!rest) return `Archived ${goal.title}. ${feats(own)} moved to the other goal ${own === 1 ? "it serves" : "each serves"}.`;
+  if (!list.length) return `${verb} ${goal.title}. It held no features.`;
+  if (!rest) return `${verb} ${goal.title}. ${feats(own)} moved to the other goal ${own === 1 ? "it serves" : "each serves"}.`;
   const restWords = toTitle ? `${feats(rest)} moved to ${toTitle}` : `${feats(rest)} ${rest === 1 ? "is" : "are"} under No goal now`;
-  return `Archived ${goal.title}. ${restWords}${ownWords ? `, ${ownWords}` : ""}.`;
+  return `${verb} ${goal.title}. ${restWords}${ownWords ? `, ${ownWords}` : ""}.`;
 }

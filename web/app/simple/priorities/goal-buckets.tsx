@@ -105,7 +105,12 @@ function Field({ label, children, error }: { label: string; children: ReactNode;
   );
 }
 
-type Fields = { title: string; measure: string; target: string; due: string };
+type Fields = { title: string; measure: string; target: string; due: string; owner?: string | null };
+
+/** The members a goal's owner is picked from (edit-goals-prds EG1). */
+function usePeople() {
+  return useQuery("simple-goal-owners", () => unwrap(api.GET("/v1/people", { params: { query: { limit: 200 } } })));
+}
 
 /** GB1 a: the goal's header turned into a small form, right where it sits. */
 export function GoalForm({ start, order, title, year, onSave, onCancel }: { start: Fields; order: number; title: string; year: string; onSave: (f: Fields & { day: string }) => Promise<void>; onCancel: () => void }) {
@@ -154,6 +159,7 @@ export function GoalForm({ start, order, title, year, onSave, onCancel }: { star
           <input type="text" value={f.due} onChange={set("due")} placeholder="Pick a day" className={day ? INPUT : BAD} />
         </Field>
       </div>
+      <OwnerField value={f.owner ?? null} onChange={(owner) => setF((x) => ({ ...x, owner }))} />
       <div className="mt-1 flex items-center gap-2">
         <button type="submit" className={PRIMARY} disabled={!done || busy}>
           Save goal
@@ -164,6 +170,24 @@ export function GoalForm({ start, order, title, year, onSave, onCancel }: { star
         {!done && <span className="min-w-0 text-[13px] text-text2">A goal needs a measure, a target and a date.</span>}
       </div>
     </form>
+  );
+}
+
+/** EG1 a (eg1-a-owner): the goal's owner, one of the members. */
+function OwnerField({ value, onChange }: { value: string | null; onChange: (id: string | null) => void }) {
+  const people = usePeople();
+  const list = people.data ?? [];
+  return (
+    <Field label="Owner">
+      <select value={value ?? ""} onChange={(e) => onChange(e.target.value || null)} className={INPUT}>
+        {(!value || !list.some((x) => x.user_id === value)) && <option value="">{value ? "Someone else" : "No owner"}</option>}
+        {list.map((x) => (
+          <option key={x.user_id} value={x.user_id}>
+            {x.name}
+          </option>
+        ))}
+      </select>
+    </Field>
   );
 }
 
@@ -320,7 +344,11 @@ export function FeatureRows({
 /** A goal's features as ArchiveDialog counts them: the plan's, or with no dated plan the bucket's. */
 export type GoalFeatures = (goal: string) => { code: string; name: string; slices: Plan["slices"] }[];
 
-export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive }: { goal: Goal; plan: Plan | null; featuresOf?: GoalFeatures; gb: Buckets; onClose: () => void; onArchive: (to: string | null) => Promise<void> }) {
+/**
+ * EG1 a: the same question for Delete goal (eg1-a-hard: it goes to Settings > Trash first), and,
+ * for who may not archive or delete, an ask (`ask`: whom it goes to, eg1-a-propose).
+ */
+export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive, kind = "archive", ask }: { goal: Goal; plan: Plan | null; featuresOf?: GoalFeatures; gb: Buckets; onClose: () => void; onArchive: (to: string | null) => Promise<void>; kind?: "archive" | "delete"; ask?: string[] | null }) {
   const [mode, setMode] = useState<"move" | "none">("move");
   const [to, setTo] = useState("");
   const [busy, setBusy] = useState(false);
@@ -336,6 +364,8 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive }
   const feats = `${list.length} ${list.length === 1 ? "feature" : "features"}`;
   const picked = mode === "none" || !!to || rest === 0;
   const holds = to ? listOf(titleOf(to)).length + rest : 0;
+  const verb = kind === "delete" ? "Delete" : "Archive";
+  const heading = ask ? `Ask to ${verb.toLowerCase()}` : verb;
   useEffect(() => {
     ref.current?.querySelector<HTMLElement>("select, button")?.focus();
     const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -344,8 +374,11 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive }
   }, [onClose]);
   return (
     <div data-backdrop="" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-label={`Archive ${goal.title}`} className="flex max-h-[88vh] w-full max-w-lg flex-col rounded-t-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg sm:rounded-[var(--simple-card-radius)]" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Archive {goal.title}?</h2>
+      <div ref={ref} role="dialog" aria-modal="true" aria-label={`${heading} ${goal.title}`} className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-y-auto rounded-t-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg sm:rounded-[var(--simple-card-radius)]" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">
+          {heading} {goal.title}?
+        </h2>
+        {kind === "delete" && <p className="mt-1 text-[15px] text-text">It goes to Settings &gt; Trash for 30 days.</p>}
         <p className="mt-1 text-[15px] text-text2">
           {!plan
             ? list.length
@@ -390,7 +423,7 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive }
                 </label>
                 {mode === "move" && to && (
                   <p className="rounded-lg bg-accent-soft px-3 py-2 text-accent-ink">
-                    {titleOf(to)} will hold {holds} features. Undo puts every link back.
+                    {titleOf(to)} will hold {holds} features.{ask ? "" : " Undo puts every link back."}
                   </p>
                 )}
               </>
@@ -411,7 +444,7 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive }
               }
             }}
           >
-            Archive goal
+            {ask ? `Send to ${andList(ask) || "an owner"}` : `${verb} goal`}
           </button>
           <button type="button" className={BTN} onClick={onClose}>
             Cancel
@@ -423,8 +456,11 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive }
   );
 }
 
-/** The ⋯ menu on a goal: Edit goal, Archive goal. */
-export function GoalMenu({ title, onEdit, onArchive, archive }: { title: string; onEdit: () => void; onArchive: () => void; archive: boolean }) {
+/** "do": the person archives or deletes; "ask": they ask whoever may (Ask to archive, Ask to delete); null: neither. */
+export type Act = "do" | "ask" | null;
+
+/** The ⋯ menu on a goal (eg1-a-open): Edit goal, Archive goal, Delete goal; Ask to archive and Ask to delete for who may not. */
+export function GoalMenu({ title, onEdit, onArchive, onDelete, archive, del = null }: { title: string; onEdit?: () => void; onArchive: () => void; onDelete?: () => void; archive: Act | boolean; del?: Act }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
@@ -438,6 +474,12 @@ export function GoalMenu({ title, onEdit, onArchive, archive }: { title: string;
       window.removeEventListener("keydown", esc);
     };
   }, [open]);
+  const arch: Act = archive === true ? "do" : archive || null;
+  const items: [string, () => void][] = [];
+  if (onEdit) items.push(["Edit goal", onEdit]);
+  if (arch) items.push([arch === "do" ? "Archive goal" : "Ask to archive", onArchive]);
+  if (del && onDelete) items.push([del === "do" ? "Delete goal" : "Ask to delete", onDelete]);
+  if (!items.length) return null;
   return (
     <span ref={ref} className="relative">
       <button type="button" aria-label={`More for ${title}`} aria-haspopup="menu" aria-expanded={open} className={`${ICON} ${open ? "border-line-strong bg-surface2" : ""}`} onClick={() => setOpen((o) => !o)}>
@@ -445,33 +487,105 @@ export function GoalMenu({ title, onEdit, onArchive, archive }: { title: string;
       </button>
       {open && (
         <div role="menu" className={MENU}>
-          <button
-            type="button"
-            role="menuitem"
-            className={ITEM}
-            onClick={() => {
-              setOpen(false);
-              onEdit();
-            }}
-          >
-            Edit goal
-          </button>
-          {archive && (
+          {items.map(([label, go]) => (
             <button
+              key={label}
               type="button"
               role="menuitem"
               className={ITEM}
               onClick={() => {
                 setOpen(false);
-                onArchive();
+                go();
               }}
             >
-              Archive goal
+              {label}
             </button>
-          )}
+          ))}
         </div>
       )}
     </span>
+  );
+}
+
+type Archived = Schemas["ArchivedGoal"];
+
+/**
+ * EG1 a (eg1-a-result, eg1-a-readonly): archived goals in an "Archived goals" fold at the end of
+ * the buckets, newest first, each with its owner and the day it was archived, Restore and Delete.
+ */
+export function ArchivedGoals({ gb, year, open, onToggle, restore, del, onRestore, onDelete }: { gb: Buckets; year: string; open: boolean; onToggle: (open: boolean) => void; restore: boolean; del: Act; onRestore: (g: Archived) => void; onDelete: (g: Archived) => void }) {
+  const list = gb.archived ?? [];
+  if (!list.length) return null;
+  return (
+    <li data-testid="archived-goals" className="rounded-[var(--simple-card-radius)] border border-line bg-surface sm:col-span-2">
+      <details open={open} onToggle={(e) => onToggle((e.target as HTMLDetailsElement).open)}>
+        <summary className="cursor-pointer px-4 py-3 text-[17px] font-[650]">
+          Archived goals <span className="font-normal text-text2">· {list.length}</span>
+        </summary>
+        <ul className="border-t border-line px-4">
+          {list.map((g) => (
+            <li key={g.id} data-testid="archived-goal" data-goal-id={g.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line py-2.5 last:border-b-0">
+              <span className="min-w-0 font-[650]">{g.title}</span>
+              <span className="text-[14px] text-text2">{[g.owner_name, g.archived_at && `archived ${dayOf(g.archived_at.slice(0, 10), year)}`].filter(Boolean).join(" · ")}</span>
+              <span className="flex-1" />
+              {restore && (
+                <button type="button" className={BTN} onClick={() => onRestore(g)}>
+                  Restore
+                </button>
+              )}
+              {del && (
+                <button type="button" className={`${BTN} text-warn`} onClick={() => onDelete(g)}>
+                  {del === "do" ? "Delete" : "Ask to delete"}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      </details>
+    </li>
+  );
+}
+
+/** EG1 a (eg1-a-delete): Delete on an archived goal asks once more; it holds no features now. */
+export function DeleteArchivedDialog({ goal, ask, onClose, onDelete }: { goal: Archived; ask?: string[] | null; onClose: () => void; onDelete: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.querySelector<HTMLElement>("button")?.focus();
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [onClose]);
+  const heading = ask ? "Ask to delete" : "Delete";
+  return (
+    <div data-backdrop="" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
+      <div ref={ref} role="dialog" aria-modal="true" aria-label={`${heading} ${goal.title}`} className="w-full max-w-lg rounded-t-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg sm:rounded-[var(--simple-card-radius)]" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">
+          {heading} {goal.title}?
+        </h2>
+        <p className="mt-1 text-[15px] text-text">It goes to Settings &gt; Trash for 30 days.</p>
+        <div className="mt-3 flex items-center gap-2">
+          <button
+            type="button"
+            className={PRIMARY}
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await onDelete();
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {ask ? `Send to ${andList(ask) || "an owner"}` : "Delete goal"}
+          </button>
+          <button type="button" className={BTN} onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -494,15 +608,40 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
   }
   return {
     add: (f: Fields & { day: string }, order: number) =>
-      run(() => unwrap(api.POST("/v1/simple/goal-buckets/goals", { body: { title: f.title, measure: f.measure, target: f.target, due: f.day } })), <>Added {f.title.trim()} as goal {order}.</>),
+      run(() => unwrap(api.POST("/v1/simple/goal-buckets/goals", { body: { title: f.title, measure: f.measure, target: f.target, due: f.day, ...(f.owner !== undefined ? { owner_id: f.owner } : {}) } })), <>Added {f.title.trim()} as goal {order}.</>),
     edit: (g: Goal, f: Fields & { day: string }, year: string) =>
       run(
-        () => unwrap(api.PATCH("/v1/simple/goal-buckets/goals/{goal_id}", { params: { path: { goal_id: g.id } }, body: { title: f.title, measure: f.measure, target: f.target, due: f.day } })),
+        () => unwrap(api.PATCH("/v1/simple/goal-buckets/goals/{goal_id}", { params: { path: { goal_id: g.id } }, body: { title: f.title, measure: f.measure, target: f.target, due: f.day, ...(f.owner !== undefined ? { owner_id: f.owner } : {}) } })),
         <>
           Saved {f.title.trim()}: {lower(f.target.trim())} by {dayOf(f.day, year)}.
         </>,
       ),
     archive: (g: Goal, to: string | null, text: ReactNode) => run(() => unwrap(api.POST("/v1/simple/goal-buckets/goals/{goal_id}/archive", { params: { path: { goal_id: g.id } }, body: { to_goal_id: to } })), text),
+    // EG1 a: Restore an archived goal (with Undo), Delete a goal to Settings > Trash, and an ask for who may not.
+    unarchive: (g: { id: string; title: string }) => run(() => unwrap(api.POST("/v1/simple/goal-buckets/goals/{goal_id}/unarchive", { params: { path: { goal_id: g.id } } })), <>Restored {g.title}.</>),
+    remove: async (g: { id: string }, to: string | null, text: ReactNode): Promise<boolean> => {
+      try {
+        await unwrap(api.DELETE("/v1/simple/goal-buckets/goals/{goal_id}", { params: { path: { goal_id: g.id }, query: to ? { to_goal_id: to } : {} } }));
+        setError(null);
+        setNote({ text });
+        await reload();
+        return true;
+      } catch (e) {
+        setError(errorMessage(e));
+        return false;
+      }
+    },
+    ask: async (op: "archive_goal" | "delete_goal", g: { id: string; title: string }, to: string | null, askTo: string[]): Promise<boolean> => {
+      try {
+        await unwrap(api.POST("/v1/simple/changes", { body: { op, target: { goal_id: g.id, to_goal_id: to }, before: {}, after: {} } }));
+        setError(null);
+        setNote({ text: <>Sent to {andList(askTo) || "an owner"}: {op === "archive_goal" ? "archive" : "delete"} {g.title}.</> });
+        return true;
+      } catch (e) {
+        setError(errorMessage(e));
+        return false;
+      }
+    },
     move: (feature: string, from: string | null, to: string, text: ReactNode) =>
       run(() => unwrap(api.POST("/v1/simple/goal-buckets/features/{feature_id}/move", { params: { path: { feature_id: feature } }, body: { from_goal_id: from, to_goal_id: to } })), text),
     undo: async (u: Undo) => {
@@ -517,7 +656,7 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
   };
 }
 
-export { BTN, dayOf, featureOf, count };
+export { BTN, andList, dayOf, featureOf, count };
 
 /** Who may do what (can(), never a role name). */
 export function useBucketRights(gb: Buckets | undefined) {
@@ -526,6 +665,10 @@ export function useBucketRights(gb: Buckets | undefined) {
     add: !!gb && can("create_bucket_goal"),
     edit: (g: Goal | undefined) => !!g && g.can_edit && can("update_bucket_goal"),
     archive: !!gb && can("archive_bucket_goal"),
+    // EG1 a: Archive and Delete for who may, an ask through the change engine for who may not.
+    archiveAct: (!gb ? null : can("archive_bucket_goal") ? "do" : can("create_simple_change") ? "ask" : null) as Act,
+    deleteAct: (!gb ? null : can("delete_bucket_goal") ? "do" : can("create_simple_change") ? "ask" : null) as Act,
+    unarchive: !!gb && can("unarchive_bucket_goal"),
     move: !!gb && can("move_bucket_feature"),
     // Tasks: the change engine applies or proposes, by the roadmap's own rule.
     task: can("create_simple_change"),
