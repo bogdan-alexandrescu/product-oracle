@@ -4,7 +4,8 @@ import { login } from "./helpers";
 
 // walkb-roadmap 3: Mobile alert push has only an end date and depends on Alert rules engine.
 // Its start is never made up as its window's first day: it starts after Alert rules engine
-// ends, and raises no broken link "starts Oct 1, but ...".
+// ends, and raises no broken link "starts Oct 1, but ...". hotfix-effort-start: it starts its
+// effort (3 weeks) before its Dec 20 end, Nov 29, well after the rules engine ends (Nov 10).
 
 // build-roadmap (47361c89): the picked Timeline draws a bar per item in its own row, with its
 // dates on it, and lists broken links in the conflicts panel above the chart, not by the bar.
@@ -12,11 +13,12 @@ const bar = (page: Page, key: string) => page.locator(`[data-testid="timeline-ro
 const ganttBar = (page: Page, key: string) => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
 const dayAfter = (day: string) => new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 
-/** The second bar starts the day after the first ends (its dates), and is drawn after it. */
-async function startsAfter(page: Page, first: string, then: string) {
+/** The second bar starts the day after the first ends (its dates; else on `on`), and is drawn after it. */
+async function startsAfter(page: Page, first: string, then: string, on?: string) {
   await expect(bar(page, then)).toBeVisible();
   const end = (await bar(page, first).getAttribute("data-end"))!;
-  await expect(bar(page, then)).toHaveAttribute("data-start", dayAfter(end));
+  await expect(bar(page, then)).toHaveAttribute("data-start", on ?? dayAfter(end));
+  expect((on ?? dayAfter(end)) > end).toBe(true);
   const a = (await bar(page, first).boundingBox())!;
   const b = (await bar(page, then).boundingBox())!;
   expect(b.x).toBeGreaterThanOrEqual(a.x + a.width - 1);
@@ -36,7 +38,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       await expect(page.getByRole("main")).not.toContainText(/‘Mobile alert push’ starts/);
       await expect(page.getByTestId("conflicts")).toBeVisible();
       await expect(page.locator('[data-testid="conflict"][data-item="alert-mobile"]')).toHaveCount(0);
-      if (viewport.width > 600) await startsAfter(page, "alert-rules", "alert-mobile");
+      if (viewport.width > 600) await startsAfter(page, "alert-rules", "alert-mobile", "2026-11-29");
     });
 
     // Card entry (walkb-roadmap review): protects = a fully estimated item (Alert routing by
