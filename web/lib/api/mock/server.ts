@@ -5745,6 +5745,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       // New PRD (4): a PRD moved to Trash releases its requests; Restore links back the free ones.
       // TRASH_KEPT_LINKS_SCENARIO: a PRD trashed before this release kept its request links.
       onTrash: (ids) => (localStorage.getItem(MOCK_SCENARIO_KEY) === TRASH_KEPT_LINKS_SCENARIO ? undefined : releaseDocuments(ensureRequests(db), ids)),
+      simple: () => db.simple_roadmap,
       onRestore: (released) => relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
       uuid,
       now,

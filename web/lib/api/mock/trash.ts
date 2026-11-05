@@ -41,9 +41,6 @@ export interface TrashEntryRow {
   intakes: Intake[];
   /** What the delete released (New PRD 4: the requests linked to its PRDs), for Restore. */
   released?: unknown;
-  /** trash-features-goals: puts back what this entry holds besides a document, a version, a
-   * run or an intake (a roadmap feature's row, a goal), on Restore. */
-  restoreExtra?: () => void;
 }
 
 export interface TrashDb {
@@ -71,6 +68,8 @@ export interface TrashContext<D extends TrashDocument, V extends TrashVersion> {
   onTrash?: (documentIds: string[]) => unknown;
   /** Restore: link back what onTrash released (after the rows are back). */
   onRestore?: (released: unknown) => void;
+  /** trash-features-goals: Restore of a roadmap feature or a goal (kept in place, marked `trashed`). */
+  simple?: () => TrashedSimple | undefined;
   uuid: () => string;
   now: () => string;
 }
@@ -140,11 +139,19 @@ function daysLeft(entry: TrashEntryRow, now: string): number {
 
 export const entryOut = (e: TrashEntryRow, now: string): Schemas["TrashEntryOut"] => ({ ...e.out, days_left: daysLeft(e, now), not_restored: [] });
 
-/** trash-features-goals: takes `entry` out of Trash, restoring what `restoreExtra` holds (a
- * feature's row, a goal); the generic `/v1/trash/{id}/restore` and the type's own restore
- * route both end here. */
-export function restoreFromTrash(db: TrashDb, entry: TrashEntryRow, now: string): Schemas["TrashEntryOut"] {
-  entry.restoreExtra?.();
+/** trash-features-goals: the Simple rows a feature's or a goal's entry marks `trashed`; the mock
+ * db is kept as JSON, so Restore finds them by the entry's root, never through a closure. */
+export type TrashedSimple = {
+  items: { key: string; trashed?: boolean }[];
+  goal_buckets?: { goals: { id: string; trashed?: boolean }[] };
+};
+
+/** trash-features-goals: takes `entry` out of Trash, putting back the feature or the goal it
+ * holds; the generic `/v1/trash/{id}/restore` and the type's own restore route both end here. */
+export function restoreFromTrash(db: TrashDb, entry: TrashEntryRow, now: string, simple?: TrashedSimple): Schemas["TrashEntryOut"] {
+  const root = entry.out.root;
+  if (root.type === "feature") simple?.items.filter((s) => s.key === root.slug).forEach((s) => (s.trashed = false));
+  if (root.type === "goal") simple?.goal_buckets?.goals.filter((g) => g.id === root.id).forEach((g) => (g.trashed = false));
   db.entries = db.entries.filter((e) => e !== entry);
   return entryOut(entry, now);
 }
@@ -310,7 +317,7 @@ function restore<D extends TrashDocument, V extends TrashVersion>(ctx: TrashCont
   ctx.versions.push(...(entry.versions as V[]));
   ctx.runs().push(...entry.runs);
   ctx.intakes().push(...entry.intakes);
-  const out = restoreFromTrash(ctx.db, entry, now);
+  const out = restoreFromTrash(ctx.db, entry, now, ctx.simple?.());
   if (entry.released !== undefined) ctx.onRestore?.(entry.released);
   return out;
 }

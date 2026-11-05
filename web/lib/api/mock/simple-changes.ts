@@ -768,7 +768,6 @@ function trashFeature(db: SimpleDb, ctx: SimpleChangesCtx, key: string, reason: 
       reason, published: false, purge_after: new Date(Date.parse(now) + 30 * DAY).toISOString(),
     },
     documents: [], versions: [], runs: [], intakes: [],
-    restoreExtra: () => { s.trashed = false; },
   };
   const trash = (ctx.trash ??= { entries: [], estimates: {} });
   trash.entries.push(row);
@@ -825,7 +824,7 @@ function restoreItemRoute(db: SimpleDb, ctx: SimpleChangesCtx, itemId: string): 
   if (ctx.role !== "owner") return json(403, { detail: "Requires the owner role" });
   const entry = ctx.trash?.entries.find((e) => e.out.root.type === "feature" && e.out.root.id === itemId);
   if (!entry) return json(404, { detail: "No such roadmap item" });
-  return json(200, restoreFromTrash(ctx.trash!, entry, iso(mockNowMs())));
+  return json(200, restoreFromTrash(ctx.trash!, entry, iso(mockNowMs()), db));
 }
 
 /** add_key_date / edit_key_date / remove_key_date (key_dates.create). */

@@ -164,7 +164,6 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
         published: false, purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
       },
       documents: [], versions: [], runs: [], intakes: [],
-      restoreExtra: () => { g.trashed = false; },
     };
     bin.trash.entries.push(row);
     return json(200, { entry: entryOut(row, at), change: null, can_restore: role === "owner" });
@@ -173,7 +172,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
     if (role !== "owner") return json(403, { detail: "Requires the owner role" });
     const entry = bin.trash.entries.find((e) => e.out.root.type === "goal" && e.out.root.id === p[4]);
     if (!entry) return json(404, { detail: "goal not found in Trash" });
-    return json(200, restoreFromTrash(bin.trash, entry, bin.now()));
+    return json(200, restoreFromTrash(bin.trash, entry, bin.now(), { items: [], goal_buckets: db }));
   }
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   if (p[3] === "goals" && !p[4] && m === "POST") {
