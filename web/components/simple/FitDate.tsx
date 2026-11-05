@@ -72,7 +72,7 @@ function Meter({ date, target, was, pw, n, milestone }: { date: string; target: 
             Was {day(was)}.
           </>
         )}
-        {` ${pw} person-weeks off the milestone, ${plural(n, "change")} picked.`}
+        {` ${plural(pw, "person-week")} off the milestone, ${plural(n, "change")} picked.`}
       </p>
     </div>
   );
@@ -99,7 +99,7 @@ function Locked({ a, hard = false }: { a: Answer; hard?: boolean }) {
       <ul className="flex flex-col gap-1.5">
         {a.locked.map((l) => (
           <li key={l.item} className="simple-small">
-            <span className="font-medium text-text">{l.item}</span> ({l.pw} person-weeks). {l.why}
+            <span className="font-medium text-text">{l.item}</span> ({plural(l.pw, "person-week")}). {l.why}
             {hard && l.would_reach && <span className="font-semibold text-crit"> Cutting it would reach {day(a.target)}; Oracle will not offer it.</span>}
           </li>
         ))}
@@ -161,11 +161,11 @@ function RankedList({ a, picks, setPicks, live }: { a: Answer; picks: string[]; 
                       )}
                       {i + 1}. {c.item}
                     </span>
-                    <span className="tnum text-[14px] font-semibold text-pass">{c.days} days sooner</span>
+                    <span className="tnum text-[14px] font-semibold text-pass">{plural(c.days, "day")} sooner</span>
                   </span>
                   <span className="simple-small">
                     <span className="font-medium text-text">{c.title}.</span> {c.effect}.
-                    {c.pw_saved > 0 && ` Saves ${c.pw_saved} ${c.pw_saved === 1 ? "person-week" : "person-weeks"}.`}
+                    {c.pw_saved > 0 && ` Saves ${plural(c.pw_saved, "person-week")}.`}
                   </span>
                   <span className="simple-small flex flex-wrap items-center gap-2">
                     <CostTag c={c} /> {c.cost}
@@ -233,6 +233,12 @@ function Diff({ a, d }: { a: Answer; d: Draft }) {
 function targetWords(g: BaselineGoal, value = g.target): string {
   const t = typedTarget({ target: value, unit: g.unit, comparison: g.comparison });
   return t ? t.words : `${value ?? "no target"}`;
+}
+
+/** The same words inside a sentence ("the PRD asks for at least 40 threads"). */
+function targetInSentence(g: BaselineGoal, value = g.target): string {
+  const w = targetWords(g, value);
+  return w.charAt(0).toLowerCase() + w.slice(1);
 }
 
 const CURRENCY: Record<string, string> = { USD: "$", EUR: "€", GBP: "£" };
@@ -344,7 +350,7 @@ function GoalSheet({ goal, onClose, onSaved }: { goal: BaselineGoal; onClose: ()
     <Sheet open title={`Goal: ${goal.title}`} onClose={onClose} dialog testId="fit-goal-sheet">
       <form className="flex flex-col gap-3 px-4 pt-3 pb-4" onSubmit={(e) => void save(e)} aria-label="Edit the goal" noValidate>
         <p className="simple-small">
-          The PRD asks for {targetWords(goal, goal.plan_target)}. A smaller target needs less of the goal&rsquo;s own work before the milestone, so Oracle works out the date again.
+          The PRD asks for {targetInSentence(goal, goal.plan_target)}. A smaller target needs less of the goal&rsquo;s own work before the milestone, so Oracle works out the date again.
         </p>
         {entity.error && <p className="simple-small text-crit">{entity.error}</p>}
         {!d && !entity.error && <p className="simple-small">Opening the goal…</p>}
@@ -470,7 +476,7 @@ export function FitPanel({ goal, onClose, onApproved, onGoalSaved }: { goal: Goa
           {!a && !answer.error && <p className="simple-small">Working out the changes…</p>}
           {a && bg?.smaller && (
             <p className="simple-small rounded-xl border border-line bg-surface2 p-3" data-testid="fit-smaller" aria-live="polite">
-              Counted against the smaller goal: <span className="font-medium text-text">{targetWords(bg)}</span> (the PRD asks for {targetWords(bg, bg.plan_target)}).{" "}
+              Counted against the smaller goal: <span className="font-medium text-text">{targetWords(bg)}</span> (the PRD asks for {targetInSentence(bg, bg.plan_target)}).{" "}
               <span className={`font-semibold ${a.reachable ? "text-pass" : "text-warn"}`}>
                 {a.reachable ? `${a.milestone_name} now reaches ${day(a.target)}.` : `${a.milestone_name} still lands after ${day(a.target)}.`}
               </span>
@@ -484,7 +490,7 @@ export function FitPanel({ goal, onClose, onApproved, onGoalSaved }: { goal: Goa
               <p className="simple-small">
                 {!bg
                   ? `Oracle finds no Baseline goal named “${goal.goal ?? goal.milestone_name}”, so it cannot offer to keep ${day(a.target)} with a smaller goal.`
-                  : `Or keep ${day(a.target)} and ask for less: the goal is ${targetWords(bg)}. Only an owner or approver can change it.`}
+                  : `Or keep ${day(a.target)} and ask for less: the goal is ${targetInSentence(bg)}. Only an owner or approver can change it.`}
               </p>
             </div>
           )}

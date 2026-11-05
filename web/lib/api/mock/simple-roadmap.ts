@@ -21,6 +21,7 @@ import type { OnePagerDb } from "./simple-one-pager";
 import { appliedMilestones, type AppliedRecord } from "./approved-roadmap";
 import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
 import { COMPANY_SLUG, COMPANY_TITLE } from "./one-roadmap";
+import { basePlan as fitBasePlan, PLAN_TARGET as FIT_PLAN_TARGET, schedule as fitSchedule } from "./fit-date-engine";
 
 type Item = Schemas["SimpleRoadmapItem"];
 type Suggestion = Schemas["DateSuggestionOut"];
@@ -545,19 +546,12 @@ export function seedSimpleMany(n = 500): SimpleDb {
  */
 const FIT_ROADMAP = "help-desk-roadmap";
 const FIT_PRD = { id: stableUuid("fit-date/prd"), slug: "reply-faster", title: "Reply faster in the shared inbox" };
-const FIT_ITEMS: [key: string, title: string, end: string][] = [
-  ["fit-views", "Shared inbox views", "2026-11-27"],
-  ["fit-assign", "Assign a thread", "2026-12-04"],
-  ["fit-drafts", "Reply drafts in the inbox", "2026-12-18"],
-  ["fit-guard", "Send check before a draft goes out", "2026-12-30"],
-  ["fit-summary", "Thread summary card", "2027-01-22"],
-  ["fit-bulk", "Reply to similar threads at once", "2027-02-12"],
-  ["fit-analytics", "Reply time chart", "2027-02-19"],
-  ["fit-tone", "Tone presets", "2027-02-26"],
-  ["fit-snippets", "Import saved snippets", "2027-03-05"],
-  ["fit-redact", "Hide card numbers in drafts", "2027-03-12"],
-  ["fit-edit", "Edit a thread summary", "2027-04-02"],
-];
+// Each item ends where the fit-date plan's capacity queue has it (./fit-date-engine, the API's
+// fit_date.schedule), so the roadmap and the panel read the same dates.
+const FIT_PLAN = fitBasePlan(1, FIT_PLAN_TARGET);
+const FIT_SCHEDULE = fitSchedule(FIT_PLAN);
+const FIT_M1_END = FIT_SCHEDULE.milestones.M1;
+const FIT_ITEMS: [key: string, title: string, end: string][] = FIT_PLAN.items.map((i) => [`fit-${i.id}`, i.title, FIT_SCHEDULE.items[i.id]]);
 const horizonOf = (end: string): Horizon => {
   const w = simpleWindows(companyToday());
   return end <= w.now[1] ? "now" : end <= w.next[1] ? "next" : "later";
@@ -589,7 +583,7 @@ export function seedFitDateRoadmap(db: SimpleDb, company = false): void {
   for (const [key, title, end] of FIT_ITEMS) {
     db.items.push({
       key, title, horizon: horizonOf(end), roadmap, goal: "reply-faster", track: "help-desk", confidence: "medium",
-      status: end <= "2026-12-04" ? "in_progress" : "planned", prd_doc: FIT_PRD,
+      status: end <= FIT_M1_END ? "in_progress" : "planned", prd_doc: FIT_PRD,
       dates: { start: addDays(end, -20), end, source: "engineering" },
     });
     db.ids[key] = stableUuid(`simple-item/${key}`);

@@ -51,6 +51,13 @@ Test cards (protects / fails_when / no_claim):
 - test_approve_lands_on_the_company_roadmap (train review): protects=with a company roadmap,
   the answer and the re-plan read and write it, even when the PRD's track points at an
   older roadmap; fails_when=the re-plan is written or approved on the track's old roadmap.
+- test_smaller_goal_floor_rounds_to_a_tenth_of_a_week (fit-date follow-ups): protects=the
+  10% floor is rounded to one decimal like every engineer-week in fit a date, a 0.3-week
+  item keeping 0.1; fails_when=the floor is pw * 0.1 unrounded (0.33 for a 3.3-week item).
+- test_a_slice_never_grows_an_item (fit-date follow-ups, round 1): protects=a sliced item's
+  slice is capped at its own size, and a slice or split that saves nothing is not offered;
+  fails_when=a 4-week item shrunk to 0.4 slices to ceil(0.4) / 2 = 0.5 and its change reads
+  "Saves -0.1 person-weeks".
 - test_smaller_goal_shrinks_each_item_to_a_tenth_at_least (smaller goal, owner): protects=each
   of the goal's own unlocked items counts at least 10% of its effort, a 0.3-week one too, and
   a safety item keeps its full size like guardrail and must-include ones; fails_when=a small
@@ -486,3 +493,65 @@ def test_smaller_goal_shrinks_each_item_to_a_tenth_at_least():
     assert pw["F-08"] == pytest.approx(0.2)
     assert pw["F-09"] >= 0.03 - 1e-9, pw
     assert (pw["F-06"], pw["F-07"], pw["F-10"]) == (4, 3, 2)
+
+
+ODD = TINY.replace(
+    "| F-10 | Audit trail | M2 | 2 | Activation | then |\n",
+    "| F-10 | Audit trail | M2 | 2 | Activation | then |\n"
+    "| F-11 | Saved filters | M2 | 3.3 | Activation | then |\n",
+)
+
+
+@pytest.mark.parametrize("scale", [0.1, 0.13, 0.5])
+def test_smaller_goal_floor_rounds_to_a_tenth_of_a_week(scale):
+    """The 10% floor is rounded to a tenth of an engineer-week, as every other size in fit a
+    date is: a 3.3-week item counts 0.3 at the floor, never 0.33; a 0.3-week one keeps 0.1."""
+    import datetime as dt
+
+    from oracle.simple import plan
+    from oracle.simple.fit_date_router import build_plan
+
+    today = dt.date(2026, 11, 2)
+    view = plan.compute(plan.parse(ODD, today))
+    p = build_plan(ODD, view, "M2", today, scale=scale)
+    pw = {i.id: i.pw for i in p.items}
+    for code in ("F-08", "F-09", "F-11"):
+        assert pw[code] == round(pw[code], 1), pw
+    if scale == 0.1:
+        assert (pw["F-09"], pw["F-11"]) == (0.1, 0.3), pw
+
+
+SLICED = TINY.replace(
+    "| F-10 | Audit trail | M2 | 2 | Activation | then |\n",
+    "| F-10 | Audit trail | M2 | 2 | Activation | then |\n"
+    "| F-12 | Bulk invite | M2 | 4 | Activation | then |\n",
+)
+
+
+@pytest.mark.parametrize("scale", [1.0, 0.5, 0.1, 0.05])
+def test_a_slice_never_grows_an_item(scale):
+    """A slice is at most the item's own size: a 4-week slice item a smaller goal shrinks to
+    0.4 never slices to ceil(0.4) / 2 = 0.5, and a change that saves nothing is not offered."""
+    import datetime as dt
+
+    from oracle.simple import fit_date as fd
+    from oracle.simple import plan
+    from oracle.simple.fit_date_router import build_plan
+
+    today = dt.date(2026, 11, 2)
+    view = plan.compute(plan.parse(SLICED, today))
+    p = build_plan(SLICED, view, "M2", today, scale=scale)
+    item = next(i for i in p.items if i.id == "F-12")
+    assert item.lever == "slice"
+    for i in p.items:
+        assert i.slice_pw is None or i.slice_pw <= i.pw, (i.id, i.pw, i.slice_pw)
+    changes = {c.id: c for c in fd.answer(p).changes}
+    for c in changes.values():
+        if c.lever in ("slice", "split"):
+            assert c.pw_saved > 0, (c.id, c.pw_saved)
+    if scale == 1.0:
+        assert (item.slice_pw, changes["F-12"].pw_saved) == (2, 2)
+    if scale == 0.1:
+        # 0.4 slices to 0.4: nothing saved, so no slice is offered.
+        assert (item.pw, item.slice_pw) == (0.4, 0.4)
+        assert "F-12" not in changes

@@ -59,7 +59,7 @@ test.describe("desktop", () => {
     await page.goto("/simple/roadmap?roadmap=product-roadmap");
     await expect(page.getByTestId("fit-goal")).toBeVisible();
     await page.getByTestId("format-board").click();
-    await expect(boardCard(page, "Thread summary card")).toContainText("Jan 22");
+    await expect(boardCard(page, "Thread summary card")).toContainText("Jan 31");
     // The older roadmap's own item is history, never on Simple.
     await expect(boardCard(page, "Saved reply folders")).toHaveCount(0);
 
@@ -70,14 +70,14 @@ test.describe("desktop", () => {
     await expect(panel).toContainText("Check the new drafts");
     await page.getByRole("button", { name: "Approve both", exact: true }).click();
     await expect(panel).toBeHidden();
-    await expect(page.getByTestId("fit-approved")).toContainText("roadmap version 7 are live: M2 lands Jan 25.");
+    await expect(page.getByTestId("fit-approved")).toContainText("roadmap version 7 are live: M2 lands Jan 24.");
 
     await page.goto("/simple/roadmap?roadmap=product-roadmap");
     await page.getByTestId("format-board").click();
     const summary = boardCard(page, "Thread summary card");
-    await expect(summary).toContainText("Jan 8");
+    await expect(summary).toContainText("Jan 15");
     await expect(summary).toContainText("Estimate pending");
-    await expect(boardCard(page, "Reply to similar threads at once")).toContainText("Mar 19");
+    await expect(boardCard(page, "Reply to similar threads at once")).toContainText("Feb 17");
     await expect(boardCard(page, "Saved reply folders")).toHaveCount(0);
   });
 });

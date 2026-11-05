@@ -186,6 +186,8 @@ def _levers(plan: Plan) -> list[Change]:
     for it in plan.items:
         if it.milestone != asked or not it.gate or it.guard:
             continue
+        if it.lever in ("slice", "split") and it.slice_pw is not None and it.slice_pw >= it.pw:
+            continue  # its slice is the whole item: slicing it saves nothing
         lever: Lever = it.lever or "move"
         kind: CostKind = "must" if it.must else LEVER_COST[lever]
         cost = it.cost or ""
