@@ -599,3 +599,42 @@ async def test_restore_after_a_new_version_still_refuses_a_key_clash(client):
     r = await client.post(f"{ITEMS}/{victim}/restore", headers=w.ctx.as_("owner"))
     assert r.status_code == 409, r.text
     assert len((await client.get("/v1/trash", headers=w.ctx.as_("owner"))).json()) == 1
+
+
+@pytest.mark.asyncio
+async def test_restore_reaches_a_version_proposed_from_a_detailed_change_set(client):
+    """protects=(review round 4) a feature deleted, then a change set proposed in Detailed
+    (Edit plan, Propose: v2 waits for approval), then restored: it is on v2 too, so when
+    the decider approves v2 it stays on the roadmap (Simple and Detailed);
+    fails_when=Restore puts it on v1 only and approving v2 drops it; no_claim=the web."""
+    from tests import test_simple_drafts_api as D
+
+    w = await D.world()
+    victim = w.ids["move_dates-b"]
+    r = await client.delete(f"{ITEMS}/{victim}", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    sets = f"/v1/roadmaps/{await D.slug(w)}/change-sets"
+    r = await client.post(sets, headers=w.ctx.as_("decider"))
+    assert r.status_code == 201, r.text
+    out = r.json()
+    r = await client.patch(
+        f"{sets}/{out['id']}", headers=w.ctx.as_("decider"),
+        json={"changes": [{"op": "add", "title": "Gift cards", "horizon": "next"}],
+              "lock_version": out["lock_version"]},
+    )  # fmt: skip
+    assert r.status_code == 200, r.text
+    r = await client.post(f"{sets}/{out['id']}/propose", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    number = r.json()["proposed_version"]
+
+    r = await client.post(f"{ITEMS}/{victim}/restore", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert "move_dates-b" in await _items(client, w)
+    r = await client.post(
+        f"/v1/documents/{await D.slug(w)}/versions/{number}/approve",
+        headers=w.ctx.as_("decider"),
+    )
+    assert r.status_code == 200, r.text
+    items = await _items(client, w)
+    assert "gift-cards" in items, "v2 is the roadmap now"
+    assert "move_dates-b" in items and "move_dates-b" in await _detailed(client, w)
