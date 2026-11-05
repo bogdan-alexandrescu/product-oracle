@@ -511,8 +511,21 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onRe
  * for an approver and up (the line's own can_apply).
  */
 /** roadmap-done: the items done (shipped), off the plan, kept for history in a collapsed list; each opens the item. */
-function DoneItems({ items, open, onOpen }: { items: Item[]; open: string | null; onOpen: (item: Item) => void }) {
+function DoneItems({ items, open, reveal, onOpen }: { items: Item[]; open: string | null; reveal?: string | null; onOpen: (item: Item) => void }) {
   const [shown, setShown] = useState(false);
+  // A link to a done item (?item=): the list opens, then its panel opens at its row, once.
+  const revealed = useRef<string | null>(null);
+  useEffect(() => {
+    const item = items.find((i) => i.id === reveal);
+    if (!item || revealed.current === item.id) return;
+    if (!shown) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShown(true);
+      return;
+    }
+    revealed.current = item.id;
+    onOpen(item);
+  }, [items, reveal, shown, onOpen]);
   if (!items.length) return null;
   return (
     <section data-testid="done-items" className="mt-3 rounded-xl border border-line bg-surface px-3 py-2">
@@ -1147,21 +1160,8 @@ export function SimpleRoadmap() {
     });
   }
   const byId = useMemo(() => new Map((all?.items ?? []).map((i) => [i.id, i])), [all]);
-  // inbox-meeting-proposals fix: a link (the Inbox) opens one item's feature panel
-  // (?item=<id>), Oracle's dates for one item (?dates=<item id>) or a goal's suggestions
-  // (?suggestions=<goal id>), once, when the roadmap has loaded.
-  const itemLinked = useRef(false);
-  useEffect(() => {
-    if (itemLinked.current || !data) return;
-    const it = byId.get(params.get("item") ?? "");
-    const dated = byId.get(params.get("dates") ?? "");
-    if (!it && !dated?.suggestion) return;
-    itemLinked.current = true;
-    requestAnimationFrame(() => {
-      if (it) setCard({ id: it.id, ...barAnchor(wrap.current, it.id) });
-      else if (dated) setPop({ id: dated.id, ...barAnchor(wrap.current, dated.id) });
-    });
-  }, [data, byId, params]);
+  // inbox-meeting-proposals fix: a link (the Inbox) opens a goal's suggestions
+  // (?suggestions=<goal id>), once, when they have loaded; ?item= and ?dates= open below.
   const goalLinked = useRef(false);
   useEffect(() => {
     const asked = params.get("suggestions");
@@ -1276,19 +1276,30 @@ export function SimpleRoadmap() {
   // Review: an item's name in a fix's line opens its feature panel, as its bar does.
   const openCard = (id: string) => setCard({ id, ...anchorOf(id) });
 
-  // home-waiting-one-list: a "waiting for you" row links ?item=<id> (Fix the link, Confirm the
-  // dates, Accept): the item's panel opens once, on what waits there, its actions in view.
+  // home-waiting-one-list, inbox-meeting-proposals fix: a link (a "waiting for you" row, the
+  // Inbox) opens one item's feature panel (?item=<id>) or Oracle's dates for one item
+  // (?dates=<item id>), once per link, on what waits there, its actions in view. A done item's
+  // panel opens at its row in the Done list, which opens for it (DoneItems `reveal`).
   const linkedItem = params.get("item");
+  const linkedDates = params.get("dates");
   const [opened, setOpened] = useState<string | null>(null);
+  const [reveal, setReveal] = useState<string | null>(null);
   useEffect(() => {
-    if (!linkedItem || opened === linkedItem || !byId.has(linkedItem)) return;
+    const link = linkedItem ? `item:${linkedItem}` : linkedDates ? `dates:${linkedDates}` : null;
+    const it = linkedItem ? byId.get(linkedItem) : undefined;
+    const dated = !linkedItem && linkedDates ? byId.get(linkedDates) : undefined;
+    if (!link || opened === link || (!it && !dated?.suggestion)) return;
     // Once the roadmap that holds it is read (the link is the outside system here).
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOpened(linkedItem);
+    setOpened(link);
     setPop(null);
-    setCard({ id: linkedItem, ...anchorOf(linkedItem) });
-    // anchorOf reads the drawn bars: once the item is known, not on every render.
-  }, [linkedItem, opened, byId]);
+    if (it?.status === "done") return void setReveal(it.id);
+    // The bars are drawn by the next frame.
+    requestAnimationFrame(() => {
+      if (it) setCard({ id: it.id, ...barAnchor(wrap.current, it.id) });
+      else if (dated) setPop({ id: dated.id, ...barAnchor(wrap.current, dated.id) });
+    });
+  }, [linkedItem, linkedDates, opened, byId]);
 
   const onDecide = useCallback(
     async (c: Change, how: "accept" | "decline") => {
@@ -1651,7 +1662,9 @@ export function SimpleRoadmap() {
               ? `${d.document.title} could not be approved`
               : r.data.status === "approved"
                 ? `Approved: ${d.document.title} is published`
-                : left
+                : !r.data.decider_approved && r.data.decider
+                  ? `Approved: ${d.document.title} waits for ${r.data.decider.name} to decide`
+                  : left
                   ? `Approved: ${d.document.title} waits for ${left} more ${left === 1 ? "reviewer" : "reviewers"}`
                   : "Approved: it waits for the other approvals",
           });
@@ -1920,6 +1933,7 @@ export function SimpleRoadmap() {
         <DoneItems
           items={doneItems}
           open={card?.id ?? null}
+          reveal={reveal}
           onOpen={(item) => {
             setPop(null);
             setCard({ id: item.id, ...anchorOf(item.id) });

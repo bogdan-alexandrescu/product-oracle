@@ -491,7 +491,7 @@ function draftOut(db: SimpleDb, ctx: SimpleChangesCtx, d: MockDraft): Schemas["S
     can_publish: d.out.status === "working" && approver && edits,
     // roadmap-decide review: who still reviews a working draft after the decider's approval.
     required_reviewers: d.out.status === "working" ? (db.reviewers?.[d.roadmap] ?? []).filter((r) => r !== ctx.id) : [],
-    can_withdraw: d.out.status === "submitted" && (d.out.created_by === ctx.id || edits),
+    can_withdraw: d.out.status === "submitted" && (d.out.created_by === ctx.id || approver),
     published: !(db.unapproved ?? []).includes(d.roadmap),
     // decisions-reversed-or-trashed: notes on decisions it cited that were reversed since.
     decision_notes: [...(d.out.decision_notes ?? []), ...draftDecisionNotes()],
@@ -548,7 +548,7 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
   }
   if (p[4] === "withdraw") {
     // S3b-1: back to working, its changes kept; the version is withdrawn (never approved).
-    if (d.out.created_by !== ctx.id && !canEditRoadmap(db, d.roadmap, ctx)) return json(403, { detail: "Only the draft's author or the roadmap's decider withdraws it" });
+    if (d.out.created_by !== ctx.id && !approverOf(db, ctx, d)) return json(403, { detail: "Only the draft's author or the roadmap's decider withdraws it" });
     if (d.out.status !== "submitted") return json(409, { detail: `This draft is ${d.out.status}: only a submitted draft is withdrawn` });
     Object.assign(d.out, { status: "working", version: null, submitted_at: null, submitted_by: null, decider_approved: false, waiting_on: [] });
     return json(200, draftOut(db, ctx, d));
