@@ -904,7 +904,8 @@ export default function SimpleHome() {
                         <>
                           <br />
                           <span data-testid="home-meeting-deleted">
-                            Its roadmap was deleted ·{" "}
+                            Its roadmap was deleted
+                            {next.reviews_deleted_at && ` for good on ${formatInZone(next.reviews_deleted_at, zone, { month: "short", day: "numeric" })}`} ·{" "}
                             <Link className="underline" href={`/company/rituals?ritual=${next.ritual_id}`}>
                               Ritual settings
                             </Link>

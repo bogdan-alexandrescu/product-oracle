@@ -10,7 +10,14 @@ Test cards (protects / fails_when / no_claim):
   ritual that reviews no roadmap never is; fails_when=the refresh is listed as if its
   roadmap were live or in Trash after the purge, or another ritual is marked;
   no_claim=the web line (web/e2e/home-deleted-roadmap.spec.ts).
+- test_deleted_roadmap_says_the_day_it_was_deleted: protects=the marked refresh carries
+  ``reviews_deleted_at``, the time of the last purge of a roadmap (Home shows its day);
+  it is null while the roadmap is live or in Trash and on a ritual that reviews no
+  roadmap; fails_when=the field is missing, set too early, or not the purge's time;
+  no_claim=the day as the web writes it (web/e2e/home-deleted-roadmap.spec.ts).
 """
+
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 
@@ -60,3 +67,38 @@ async def test_roadmap_refresh_says_its_roadmaps_were_deleted_for_good(client):
     marks = await _marks(client, w)
     assert marks[refresh] == (None, "roadmap")
     assert marks[custom] == (None, None)
+
+
+async def test_deleted_roadmap_says_the_day_it_was_deleted(client):
+    w = await meeting_world()
+    refresh, custom = await _rituals(w)
+    async with tenant_session(w.ctx.tenant_id) as s:
+        roadmaps = list(await s.scalars(select(Document.slug).where(Document.kind == "roadmap")))
+
+    async def deleted_at() -> dict[str, str | None]:
+        r = await client.get(MEETINGS, headers=w.ctx.as_("owner"))
+        assert r.status_code == 200, r.text
+        return {
+            row["ritual_id"]: row.get("reviews_deleted_at", "missing")
+            for row in r.json()["upcoming"]
+        }
+
+    assert (await deleted_at())[refresh] is None
+    entries = []
+    for slug in roadmaps:
+        resp = await client.request("DELETE", f"/v1/documents/{slug}", headers=w.ctx.as_("owner"))
+        assert resp.status_code == 200, resp.text
+        entries.append(resp.json()["id"])
+    assert (await deleted_at())[refresh] is None
+
+    owner = {**w.ctx.as_("owner"), "Origin": "http://test"}
+    before = datetime.now(UTC)
+    for entry in entries:
+        gone = await client.request("DELETE", f"/v1/trash/{entry}", headers=owner)
+        assert gone.status_code == 204, gone.text
+    after = datetime.now(UTC)
+    at = await deleted_at()
+    assert at[custom] is None
+    assert at[refresh] not in (None, "missing")
+    when = datetime.fromisoformat(at[refresh])
+    assert before - timedelta(seconds=5) <= when.astimezone(UTC) <= after + timedelta(seconds=5)

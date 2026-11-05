@@ -6512,7 +6512,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       deletedForGood: (kind) =>
         !db.documents.some((d) => d.kind === kind) &&
         !(db.trash?.entries ?? []).some((e) => (e.documents as { kind?: string }[]).some((d) => d.kind === kind)) &&
-        (db.trash?.purged ?? []).includes(kind),
+        (db.trash?.purged ?? []).includes(kind)
+          ? (db.trash?.purged_at?.[kind] ?? null)
+          : null,
       chatLines: (id) =>
         Object.values(db.simple_chat?.threads ?? {})
           .filter((t) => t.meeting_id === id)

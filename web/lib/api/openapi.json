@@ -122895,6 +122895,18 @@
               }
             ],
             "title": "Reviews Deleted"
+          },
+          "reviews_deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviews Deleted At"
           }
         },
         "type": "object",
