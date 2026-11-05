@@ -63,7 +63,7 @@ export default function OnePagers() {
           // qa-simple-prd-p3-29: the whole row opens the one-pager, as its hover says: the title's
           // link stretches over the row (one link still, its name the title).
           <> {/* MOCK-HOOK */}
-          <PrdNote /> {/* MOCK-HOOK */}
+          <PrdNote sticky /> {/* MOCK-HOOK */}
           {picked && ( // MOCK-HOOK
             <div data-testid="mk-select-bar" className="sticky top-2 z-20 max-[600px]:top-[var(--phone-top-bar)] max-[600px]:rounded-t-none mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-accent bg-surface shadow-md px-3 py-2 text-[15px]"> {/* MOCK-HOOK */}
               <strong className="mr-auto">{picked.length ? `${picked.length} selected` : "Pick PRDs"}</strong> {/* MOCK-HOOK */}

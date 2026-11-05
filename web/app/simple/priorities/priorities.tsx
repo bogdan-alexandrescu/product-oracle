@@ -2455,7 +2455,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
                       )}
                     </p>
                   )}
-                  {eg && rec && <p className="mt-0.5 pl-8"><GoalOwner title={rec.title} picker={eg === "c"} access={access} /></p>} {/* MOCK-HOOK */}
+                  {eg && rec && <div className="mt-0.5 pl-8"><GoalOwner title={rec.title} picker={eg === "c"} access={access} /></div>} {/* MOCK-HOOK: a div, so the picker menu inside stays put when the frame HTML is parsed again */}
                 </>
               )}
               <FeatureRows plan={plan} goal={g} gb={gb} grips={rights.move || rights.task} lifted={drag.lifted} onGrip={featureGrip} onOpen={setOpened} {...taskRows(g, rec)} />

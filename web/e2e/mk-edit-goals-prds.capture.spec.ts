@@ -19,13 +19,14 @@ const W = { d: { width: 1440, height: 900 }, h: { width: 1512, height: 900 }, p:
 type Size = (typeof W)[keyof typeof W]; // MOCK-HOOK
 
 // MOCK-HOOK: sign in as the given role (through the mock's role switch, so can() decides) on a scenario.
-async function start(browser: Browser, size: Size, role: string, scenario = "simple-plan"): Promise<Page> { // MOCK-HOOK
+// MOCK-HOOK: `as` signs in as that role's own invented member (commenter Theo Brandt, viewer Lena Ortiz), not the PRDs' owner.
+async function start(browser: Browser, size: Size, role: string, scenario = "simple-plan", as = ADMIN.email): Promise<Page> { // MOCK-HOOK
   for (const c of browser.contexts()) await c.close(); // MOCK-HOOK
   const ctx = await browser.newContext({ viewport: size, baseURL: `http://localhost:${process.env.E2E_PORT ?? 3100}` }); // MOCK-HOOK
   await ctx.clock.install({ time: MOCK_NOW }); // MOCK-HOOK
   const page = await ctx.newPage(); // MOCK-HOOK
   await ctx.addInitScript(([sk, sv, tk, rk, rv]) => { localStorage.setItem(sk, sv); localStorage.setItem(tk, "light"); if (rv) localStorage.setItem(rk, rv); else localStorage.removeItem(rk); }, [MOCK_SCENARIO_KEY, scenario, THEME_KEY, MOCK_ROLE_KEY, role === "owner" ? "" : role] as const); // MOCK-HOOK
-  await login(page, ADMIN.email); // MOCK-HOOK
+  await login(page, as); // MOCK-HOOK
   return page; // MOCK-HOOK
 } // MOCK-HOOK
 
@@ -36,7 +37,8 @@ async function frame(page: Page, name: string, size: Size) { // MOCK-HOOK
   fs.mkdirSync(path.join(OUT, "assets"), { recursive: true }); // MOCK-HOOK
   const snap = await page.evaluate(() => { // MOCK-HOOK
     const css: string[] = []; // MOCK-HOOK
-    for (const sh of Array.from(document.styleSheets)) { try { css.push(Array.from(sh.cssRules).map((r) => r.cssText).join("\n")); } catch { /* cross-origin */ } } // MOCK-HOOK
+    // MOCK-HOOK: a font's url() is relative to its stylesheet, not the page: make it absolute before saving the font.
+    for (const sh of Array.from(document.styleSheets)) { try { const base = sh.href ?? location.href; css.push(Array.from(sh.cssRules).map((r) => r.cssText.replace(/url\("?([^")]+\.(?:woff2?|ttf|otf))"?\)/g, (_m, u: string) => `url("${new URL(u, base).href}")`)).join("\n")); } catch { /* cross-origin */ } } // MOCK-HOOK
     const live = Array.from(document.querySelectorAll("input,textarea,select,details")); // MOCK-HOOK
     const clone = document.documentElement.cloneNode(true) as HTMLElement; // MOCK-HOOK
     const dead = Array.from(clone.querySelectorAll("input,textarea,select,details")); // MOCK-HOOK
@@ -56,10 +58,12 @@ async function frame(page: Page, name: string, size: Size) { // MOCK-HOOK
   for (const u of urls) { // MOCK-HOOK
     const base = path.basename(u.split("?")[0]); // MOCK-HOOK
     const file = path.join(OUT, "assets", base); // MOCK-HOOK
-    if (!fs.existsSync(file)) { const r = await page.request.get(new URL(u, page.url()).toString()); fs.writeFileSync(file, await r.body()); } // MOCK-HOOK
+    const ok = (b: Buffer) => b.subarray(0, 4).toString("latin1") === "wOF2" || b.subarray(0, 4).toString("latin1") === "wOFF"; // MOCK-HOOK
+    if (!fs.existsSync(file) || !ok(fs.readFileSync(file))) { const r = await page.request.get(u); const b = await r.body(); expect(ok(b), `${u} is a font`).toBe(true); fs.writeFileSync(file, b); } // MOCK-HOOK
     css = css.split(u).join(`../assets/${base}`); // MOCK-HOOK
   } // MOCK-HOOK
-  const hook = `<meta name="mockup-viewport" content="${size.width}x${size.height}"><style>${css}</style><script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);addEventListener("load",function(){scrollTo(0,${snap.y})})})()</script>`; // MOCK-HOOK
+  css = css.replace(/@font-face \{[^}]*src: local\([^)]*\);[^}]*\}\n?/g, ""); // MOCK-HOOK: next/font's local("Arial") metric fallbacks fail where Arial is absent; the frame's own fonts are in assets/
+  const hook = `<meta name="mockup-viewport" content="${size.width}x${size.height}"><style>${css}</style><script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);else document.documentElement.removeAttribute("data-theme");addEventListener("load",function(){scrollTo(0,${snap.y})})})()</script>`; // MOCK-HOOK
   const html = `<!doctype html>\n${snap.html.replace(/<head([^>]*)>/, `<head$1>${hook}`)}`; // MOCK-HOOK
   fs.writeFileSync(path.join(OUT, "frames", `${name}.html`), html); // MOCK-HOOK
   await page.screenshot({ path: path.join(OUT, "frames", `${name}.png`) }); // MOCK-HOOK
@@ -276,6 +280,8 @@ test("ep2-a", async ({ browser }) => { // MOCK-HOOK
   await frame(page, "ep2-a-mid", W.d); // MOCK-HOOK
   await dialog(page).getByRole("button", { name: "Archive PRD" }).click(); // MOCK-HOOK
   await page.getByTestId("mk-archived-prds").locator("summary").click(); // MOCK-HOOK
+  await toEnd(page, "mk-archived-prds"); // MOCK-HOOK: the fold at the foot, the sticky note with Undo at the top
+  await expect(page.getByTestId("mk-prd-note")).toBeInViewport(); // MOCK-HOOK
   await frame(page, "ep2-a-result", W.d); // MOCK-HOOK
   await page.getByRole("button", { name: "More for Usage alerts before plan limits" }).click(); // MOCK-HOOK
   await item(page, "Delete PRD").click(); // MOCK-HOOK
@@ -301,13 +307,13 @@ test("ep2-a-roles", async ({ browser }) => { // MOCK-HOOK
   await page.getByRole("button", { name: "More for Guided setup" }).click(); // MOCK-HOOK
   await item(page, "Delete PRD").click(); // MOCK-HOOK
   await frame(page, "ep2-a-phone", W.p); // MOCK-HOOK
-  page = await start(browser, W.d, "commenter"); // MOCK-HOOK
+  page = await start(browser, W.d, "commenter", "simple-plan", "commenter@example.com"); // MOCK-HOOK
   await list(page, "a"); // MOCK-HOOK
   await page.getByRole("button", { name: "More for Guided setup" }).click(); // MOCK-HOOK
   await item(page, "Ask to archive").click(); // MOCK-HOOK
   await dialog(page).getByText("Keep them on the roadmap, with no PRD").click(); // MOCK-HOOK
   await frame(page, "ep2-a-propose", W.d); // MOCK-HOOK
-  page = await start(browser, W.d, "viewer"); // MOCK-HOOK
+  page = await start(browser, W.d, "viewer", "simple-plan", "viewer@example.com"); // MOCK-HOOK
   await list(page, "a"); // MOCK-HOOK
   await frame(page, "ep2-a-readonly", W.d); // MOCK-HOOK
 }); // MOCK-HOOK
@@ -351,11 +357,11 @@ test("ep2-b-roles", async ({ browser }) => { // MOCK-HOOK
   await paper(page, "b"); // MOCK-HOOK
   await page.getByRole("button", { name: "More for Guided setup" }).click(); // MOCK-HOOK
   await frame(page, "ep2-b-phone", W.p); // MOCK-HOOK
-  page = await start(browser, W.d, "commenter"); // MOCK-HOOK
+  page = await start(browser, W.d, "commenter", "simple-plan", "commenter@example.com"); // MOCK-HOOK
   await paper(page, "b"); // MOCK-HOOK
   await page.getByRole("button", { name: "More for Guided setup" }).click(); // MOCK-HOOK
   await frame(page, "ep2-b-propose", W.d); // MOCK-HOOK
-  page = await start(browser, W.d, "viewer"); // MOCK-HOOK
+  page = await start(browser, W.d, "viewer", "simple-plan", "viewer@example.com"); // MOCK-HOOK
   await paper(page, "b"); // MOCK-HOOK
   await frame(page, "ep2-b-readonly", W.d); // MOCK-HOOK
 }); // MOCK-HOOK
@@ -400,14 +406,11 @@ test("ep2-c-roles", async ({ browser }) => { // MOCK-HOOK
   await page.getByRole("checkbox", { name: "Select Guided setup" }).check(); // MOCK-HOOK
   await page.getByRole("checkbox", { name: "Select Import customers from a CSV file" }).evaluate((e) => { const bar = document.querySelector("[data-testid=mk-select-bar]")!.getBoundingClientRect(); window.scrollTo(0, e.closest("li")!.getBoundingClientRect().top + window.scrollY - bar.height - 60); }); // MOCK-HOOK
   await frame(page, "ep2-c-phone", W.p); // MOCK-HOOK
-  page = await start(browser, W.d, "commenter"); // MOCK-HOOK
+  page = await start(browser, W.d, "commenter", "simple-plan", "commenter@example.com"); // MOCK-HOOK
   await list(page, "c"); // MOCK-HOOK
   await page.getByTestId("mk-select").click(); // MOCK-HOOK
   await page.getByRole("checkbox", { name: "Select Billing history page" }).check(); // MOCK-HOOK
   await frame(page, "ep2-c-propose", W.d); // MOCK-HOOK
-  page = await start(browser, W.d, "viewer"); // MOCK-HOOK
-  await list(page, "c"); // MOCK-HOOK
-  await frame(page, "ep2-c-readonly", W.d); // MOCK-HOOK
   page = await start(browser, W.d, "owner"); // MOCK-HOOK
   await paper(page, "c"); // MOCK-HOOK
   await frame(page, "ep2-c-page", W.d); // MOCK-HOOK

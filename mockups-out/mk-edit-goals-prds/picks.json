@@ -55,7 +55,7 @@
       },
       {
        "file": "frames/eg1-a-propose.html",
-       "caption": "An approver who is not the decider proposes: Ask to archive and Ask to delete, sent to the decider."
+       "caption": "An approver who is not the decider proposes: Growth's ⋯ menu offers Ask to archive and Ask to delete in place of Archive goal and Delete goal."
       },
       {
        "file": "frames/eg1-a-readonly.html",
@@ -97,11 +97,11 @@
       },
       {
        "file": "frames/eg1-b-hard.html",
-       "caption": "Hard case: 'Show archived' on with 5 live goals; the archived ones sit below a long bucket (1440)."
+       "caption": "Hard case, the large plan (Growth not archived here): 'Show archived' on, its three older archived goals sit below a long bucket (1440)."
       },
       {
        "file": "frames/eg1-b-hard-1512.html",
-       "caption": "The same at 1512."
+       "caption": "The same large plan at 1512."
       },
       {
        "file": "frames/eg1-b-phone.html",
@@ -113,7 +113,7 @@
       },
       {
        "file": "frames/eg1-b-readonly.html",
-       "caption": "A viewer sees archived goals greyed with no Restore and no pencil or menu."
+       "caption": "A viewer, on a fresh plan (Growth not archived here): the three older archived goals greyed, with no Restore, pencil or menu."
       }
      ]
     },
@@ -123,7 +123,7 @@
      "recommended": false,
      "what": "Each goal's owner is a chip that opens a people picker right on the bucket. The rest is as in a: the ⋯ menu has Edit goal, Archive goal and Delete goal, and archived goals collect in the 'Archived goals' fold with Restore and Delete.",
      "plus": "Changing the owner is a single click, with no form to open; archive, restore and delete work as in a.",
-     "cost": "A chip on every bucket adds weight to each header; the owner is set apart from the goal's other fields, which stay in the form.",
+     "cost": "A chip on every bucket adds weight to each header.",
      "frames": [
       {
        "file": "frames/eg1-c-rest.html",
@@ -198,7 +198,7 @@
       },
       {
        "file": "frames/ep2-a-result.html",
-       "caption": "Done, with Undo: the row is gone and the opened Archived fold lists it with Restore."
+       "caption": "Done: the 'Archived Guided setup' note with Undo stays at the top while the opened Archived fold below lists it with Restore."
       },
       {
        "file": "frames/ep2-a-delete.html",
@@ -256,11 +256,11 @@
       },
       {
        "file": "frames/ep2-b-hard.html",
-       "caption": "Hard case: Delete over the long one-pager, its 20 features to take off (1440)."
+       "caption": "Hard case, on a fresh copy (not after the archive above): Delete over Guided setup, the longest one-pager, with all 20 of its features to take off (1440)."
       },
       {
        "file": "frames/ep2-b-hard-1512.html",
-       "caption": "The same at 1512."
+       "caption": "The same delete at 1512."
       },
       {
        "file": "frames/ep2-b-phone.html",
@@ -315,10 +315,6 @@
       {
        "file": "frames/ep2-c-propose.html",
        "caption": "A commenter's bar: Ask to archive, Ask to delete."
-      },
-      {
-       "file": "frames/ep2-c-readonly.html",
-       "caption": "A viewer's list: no Select."
       },
       {
        "file": "frames/ep2-c-page.html",

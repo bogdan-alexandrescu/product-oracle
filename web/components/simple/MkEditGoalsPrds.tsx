@@ -239,14 +239,14 @@ export function PrdConfirm({ titles, slugs, verb, access, onClose, onDone }: { t
   const V = verb === "archive" ? "Archive" : "Delete"; // MOCK-HOOK
   return ( // MOCK-HOOK
     <Confirm title={access === "propose" ? `Ask to ${verb} ${name}?` : `${V} ${name}?`} button={access === "propose" ? "Send to an owner" : `${V} ${titles.length === 1 ? "PRD" : `${titles.length} PRDs`}`} danger={verb === "delete" && access === "change"} disabled={feats.length > 0 && keep === null} onClose={onClose} onYes={() => onDone(!!keep)}> {/* MOCK-HOOK */}
-      <p className="text-text2">{verb === "archive" ? "It leaves the One-pagers list and can be restored any time." : "It goes to Settings > Trash for 30 days."}</p> {/* MOCK-HOOK */}
+      <p className="text-text2">{verb === "archive" ? `${titles.length === 1 ? "It leaves" : "They leave"} the One-pagers list and can be restored any time.` : `${titles.length === 1 ? "It goes" : "They go"} to Settings > Trash for 30 days.`}</p> {/* MOCK-HOOK */}
       {feats.length > 0 ? ( // MOCK-HOOK
         <> {/* MOCK-HOOK */}
           <p className="font-[650]">{feats.length} {feats.length === 1 ? "feature is" : "features are"} on the roadmap, in {ms.join(", ")}:</p> {/* MOCK-HOOK */}
           <label className="flex items-start gap-2"><input type="radio" name="mk-keep" checked={keep === true} onChange={() => setKeep(true)} className="mt-1 h-4 w-4 accent-[var(--accent)]" /> <span>Keep them on the roadmap, with no PRD</span></label> {/* MOCK-HOOK */}
-          <label className="flex items-start gap-2"><input type="radio" name="mk-keep" checked={keep === false} onChange={() => setKeep(false)} className="mt-1 h-4 w-4 accent-[var(--accent)]" /> <span>Take them off the roadmap too {verb === "delete" ? "(to Trash with it)" : "(back when restored)"} <span title={`${ms.length} ${ms.length === 1 ? "milestone gets" : "milestones get"} ${feats.length} fewer features; their dates are worked out again.`} aria-label="What taking them off does to the milestones" className="cursor-help rounded-full border border-line-strong px-1.5 text-[12px] text-text2">i</span></span></label> {/* MOCK-HOOK */}
+          <label className="flex items-start gap-2"><input type="radio" name="mk-keep" checked={keep === false} onChange={() => setKeep(false)} className="mt-1 h-4 w-4 accent-[var(--accent)]" /> <span>Take them off the roadmap too {verb === "delete" ? (titles.length === 1 ? "(to Trash with it)" : "(to Trash with them)") : "(back when restored)"} <span title={`${ms.length} ${ms.length === 1 ? "milestone gets" : "milestones get"} ${feats.length} fewer ${feats.length === 1 ? "feature" : "features"}; ${ms.length === 1 ? "its dates are" : "their dates are"} worked out again.`} aria-label="What taking them off does to the milestones" className="cursor-help rounded-full border border-line-strong px-1.5 text-[12px] text-text2">i</span></span></label> {/* MOCK-HOOK */}
         </> // MOCK-HOOK
-      ) : <p>It has no features on the roadmap.</p>} {/* MOCK-HOOK */}
+      ) : <p>{titles.length === 1 ? "It has" : "They have"} no features on the roadmap.</p>} {/* MOCK-HOOK */}
     </Confirm> // MOCK-HOOK
   ); // MOCK-HOOK
 } // MOCK-HOOK
@@ -283,10 +283,10 @@ export const MK_TODAY = "Nov 5"; // MOCK-HOOK
 // MOCK-HOOK: the last PRD change's note, shown above the list or the one-pager.
 let prdNote: string | null = null; // MOCK-HOOK
 export function setPrdNote(n: string | null) { prdNote = n; mkSet((x) => ({ ...x })); } // MOCK-HOOK
-export function PrdNote() { // MOCK-HOOK
+export function PrdNote({ sticky = false }: { sticky?: boolean }) { // MOCK-HOOK: sticky on the list, so the note stays in view while the Archived fold is open below
   useMkStore(); // MOCK-HOOK
   if (!prdNote) return null; // MOCK-HOOK
-  return <div role="status" data-testid="mk-prd-note" className="simple-noprint z-30 mb-3 flex items-center gap-3 rounded-lg border border-accent bg-accent-soft px-4 py-2.5 text-[15px] text-text shadow-md"><span className="min-w-0 flex-1">{prdNote}</span>{!prdNote.startsWith("Sent") && <button type="button" className="flex-none font-[650] text-accent-ink underline" onClick={() => setPrdNote(null)}>Undo</button>}</div>; // MOCK-HOOK
+  return <div role="status" data-testid="mk-prd-note" className={`simple-noprint z-30 mb-3 flex${sticky ? " sticky top-2 max-[600px]:top-[var(--phone-top-bar)]" : ""} items-center gap-3 rounded-lg border border-accent bg-accent-soft px-4 py-2.5 text-[15px] text-text shadow-md`}><span className="min-w-0 flex-1">{prdNote}</span>{!prdNote.startsWith("Sent") && <button type="button" className="flex-none font-[650] text-accent-ink underline" onClick={() => setPrdNote(null)}>Undo</button>}</div>; // MOCK-HOOK
 } // MOCK-HOOK
 
 // MOCK-HOOK: what an archive or delete says once done.
@@ -294,8 +294,10 @@ export function prdDoneWords(titles: string[], slugs: string[], verb: "archive" 
   const name = titles.length === 1 ? titles[0] : `${titles.length} PRDs`; // MOCK-HOOK
   const n = slugs.flatMap(prdFeatures).length; // MOCK-HOOK
   if (access === "propose") return `Sent to an owner: ${verb} ${name}.`; // MOCK-HOOK
-  const feats = n ? (keep ? ` Its ${n} features stay on the roadmap with no PRD.` : ` Its ${n} features are off the roadmap.`) : ""; // MOCK-HOOK
-  return verb === "archive" ? `Archived ${name}.${feats}` : `Deleted ${name}: it is in Settings > Trash for 30 days.${feats}`; // MOCK-HOOK
+  const their = titles.length === 1 ? "Its" : "Their"; // MOCK-HOOK
+  const fw = `${n} ${n === 1 ? "feature" : "features"}`; // MOCK-HOOK
+  const feats = n ? (keep ? ` ${their} ${fw} ${n === 1 ? "stays" : "stay"} on the roadmap with no PRD.` : ` ${their} ${fw} ${n === 1 ? "is" : "are"} off the roadmap.`) : ""; // MOCK-HOOK
+  return verb === "archive" ? `Archived ${name}.${feats}` : `Deleted ${name}: ${titles.length === 1 ? "it is" : "they are"} in Settings > Trash for 30 days.${feats}`; // MOCK-HOOK
 } // MOCK-HOOK
 
 // MOCK-HOOK: the one-pager header's ⋯ menu (proposals a and b) and the archived banner.
