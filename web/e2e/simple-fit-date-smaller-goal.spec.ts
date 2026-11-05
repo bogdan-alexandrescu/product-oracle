@@ -1,4 +1,5 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import plan from "../lib/api/mock/fit-date-plan.json";
 import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
 
@@ -13,6 +14,21 @@ import { expect, test, type Page } from "./test";
  * item. Mock scenarios "fit-date-hard" and "fit-date-hard-no-goal"
  * (invented data: Larkspur Help Desk's M2 Agent reply flow, the goal 40 replied threads per agent).
  */
+
+/** "Jan 15" from "2027-01-15", as the panel reads a day. */
+const words = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+const sooner = (days: number) => `${days} ${days === 1 ? "day" : "days"} sooner`;
+
+/** The ranked rows, their days and the live date are the API engine's on the mock's plan
+ * (web/lib/api/mock/fit-date-plan.json, pinned by api/tests/test_simple_fit_date_mock_plan.py). */
+async function readsTheEngine(page: Page, scenarioAt: keyof typeof plan.expect) {
+  const want = plan.expect[scenarioAt];
+  const rows = page.getByTestId("fit-ranked").locator('[data-testid^="fit-change-"]:not([data-testid="fit-change-lock"])');
+  await expect(rows).toHaveCount(want.changes.length);
+  expect(await rows.evaluateAll((els) => els.map((el) => el.getAttribute("data-testid")))).toEqual(want.changes.map(([id]) => `fit-change-${id}`));
+  for (const [id, days] of want.changes) await expect(page.getByTestId(`fit-change-${id}`)).toContainText(sooner(days as number));
+  await expect(page.getByTestId("fit-meter-date")).toHaveText(words(want.pick_date));
+}
 
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 
@@ -128,6 +144,53 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("fit-smaller")).toContainText("Counted against the smaller goal: At least 25 threads");
     await expect(page.getByTestId("fit-change-bulk")).toContainText("Saves 1.2 person-weeks.");
     await expect(page.getByTestId("fit-change-summary")).toContainText("2 person-weeks down to 1. Saves 1 person-week.");
+  });
+
+  test("each row's days, the ranking and the live date are the API engine's, at 40 and at 25", async ({ page }) => {
+    // The slice saves 4 of the summary card's 8 person-weeks: 10 days, below the bulk reply's 13
+    // (5 person-weeks); at 25 both save 2 days and the slice, the smaller harm, ranks first.
+    await openHard(page);
+    await readsTheEngine(page, "fit-date-hard@40");
+    await expect(page.getByTestId("fit-change-summary")).toContainText("10 days sooner");
+    await page.getByRole("button", { name: "Keep Jan 8 with a smaller goal" }).click();
+    const sheet = page.getByTestId("fit-goal-sheet");
+    await sheet.getByLabel("Target", { exact: true }).fill("25");
+    await sheet.getByRole("button", { name: "Save" }).click();
+    await expect(sheet).toBeHidden();
+    await expect(page.getByTestId("fit-smaller")).toContainText("Counted against the smaller goal: At least 25 threads");
+    await readsTheEngine(page, "fit-date-hard@25");
+    await expect(page.getByTestId("fit-change-summary")).toContainText("2 days sooner");
+  });
+
+  test("at 21 the slice saves one day, read singular, as the API engine measures it", async ({ page }) => {
+    await openHard(page);
+    await page.getByRole("button", { name: "Keep Jan 8 with a smaller goal" }).click();
+    const sheet = page.getByTestId("fit-goal-sheet");
+    await sheet.getByLabel("Target", { exact: true }).fill("21");
+    await sheet.getByRole("button", { name: "Save" }).click();
+    await expect(sheet).toBeHidden();
+    await readsTheEngine(page, "fit-date-hard@21");
+    await expect(page.getByTestId("fit-change-summary")).toContainText("1 day sooner");
+  });
+
+  test("the default case reads the API engine's rows and date, and one person-week or one day reads singular", async ({ page }) => {
+    await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "fit-date"] as const);
+    await login(page);
+    await page.goto("/simple/roadmap");
+    await page.getByRole("button", { name: "Bring this date in" }).click();
+    await readsTheEngine(page, "fit-date@40");
+    // The split saves 1 person-week; with it alone ticked the meter reads it singular.
+    const ticked = page.getByTestId("fit-ranked").getByRole("checkbox", { checked: true });
+    while ((await ticked.count()) > 0) await ticked.first().click();
+    await page.getByTestId("fit-change-snippets").getByRole("checkbox").click();
+    await expect(page.getByTestId("fit-meter")).toContainText("1 person-week off the milestone, 1 change picked.");
+    await expect(page.getByTestId("fit-change-snippets")).toContainText("Saves 1 person-week.");
+    // The draft's PRD line names the sliced item only, in the API's words, not its sizes.
+    await page.getByTestId("fit-change-summary").getByRole("checkbox").click();
+    await page.getByTestId("fit-draft").click();
+    const diff = page.getByTestId("fit-diff");
+    await expect(diff).toContainText("Thread summary card: First slice only in this milestone");
+    await expect(diff).not.toContainText("person-weeks");
   });
 
   for (const [target, row, total] of [
