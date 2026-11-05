@@ -18,7 +18,7 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { FeaturePanel } from "../roadmap/_panel";
 import { ArchiveDialog, BTN, count, dayOf, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
-import { TaskRow, useBucketTasks, type Task } from "./task-edit";
+import { knownCode, TaskRow, useBucketTasks, type Task } from "./task-edit";
 import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan } from "./plan-buckets";
 
 type Out = Schemas["SimplePrioritiesOut"];
@@ -1822,12 +1822,20 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
   const [archiving, setArchiving] = useState<string | null>(null);
   const archivedGoal = gb?.goals.find((g) => g.id === archiving);
   const year = data.today.slice(0, 4);
-  // A task just added (a draft, which the goal buckets do not list yet) moves by the change engine.
+  // A task just added (a draft, which the goal buckets do not list yet) moves by the change engine;
+  // its preview shows a code only once it has one people know.
   const draftGrip = (t: Task, from: string | null) => {
     if (!rights.task || !gb) return undefined;
     const f = { code: t.code, name: t.name, slices: [], weeks: null };
-    const own = { from, move: (to: { id: string; title: string }) => tasks.move(t, to) };
+    const own = { from, move: (to: { id: string; title: string }) => tasks.move(t, to), code: knownCode(t.code) ? t.code : null, draft: true };
     return { onPointerDown: (e: React.PointerEvent) => drag.grip(f, e, own), onKeyDown: (e: React.KeyboardEvent) => drag.grip(f, e, own) };
+  };
+  // A feature's grip: moved at once by who may move it, else proposed by the change engine (commenters).
+  const featureGrip = (f: Parameters<typeof drag.grip>[0], e: React.PointerEvent | React.KeyboardEvent) => {
+    if (rights.move) return drag.grip(f, e);
+    const t = tasks.taskOf(f.code, f.name);
+    if (!t || !rights.task) return;
+    drag.grip(f, e, { from: featureOf(gb, f.code, f.name)?.goal_ids[0] ?? null, move: (to) => tasks.move(t, to), code: f.code });
   };
   const phone = usePhone();
   const [opened, setOpened] = useState<{ code: string; name: string } | null>(null);
@@ -1961,7 +1969,7 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
                         </li>
                       );
                     const f = { code: c, name, slices: [], weeks: r?.effort ?? null };
-                    const movable = rights.move && !!r && !!featureOf(gb, r.code, r.title);
+                    const movable = (rights.move || (rights.task && !!t)) && !!r && !!featureOf(gb, r.code, r.title);
                     return (
                       <TaskRow
                         key={c}
@@ -1969,7 +1977,7 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
                         name={name}
                         milestone={(t && tasks.milestoneName(t)) ?? r?.milestone ?? null}
                         weeks={r ? weeksOf(r) : ""}
-                        grip={movable ? { onPointerDown: (e) => drag.grip(f, e), onKeyDown: (e) => drag.grip(f, e) } : undefined}
+                        grip={movable ? { onPointerDown: (e) => featureGrip(f, e), onKeyDown: (e) => featureGrip(f, e) } : undefined}
                         lifted={drag.lifted === c}
                         onOpen={() => setOpened({ code: c, name })}
                         actions={tasks.actions(t)}
@@ -2137,12 +2145,20 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
   const nextOrder = Math.max(0, ...(gb?.goals ?? []).map((g) => g.order)) + 1;
   // GB3 a: a feature carried by its grip, by pointer or by keyboard.
   const drag = useBucketDrag({ gb, writes });
-  // A task just added (a draft, which the goal buckets do not list yet) moves by the change engine.
+  // A task just added (a draft, which the goal buckets do not list yet) moves by the change engine;
+  // its preview shows a code only once it has one people know.
   const draftGrip = (t: Task, from: string | null) => {
     if (!rights.task || !gb) return undefined;
     const f = { code: t.code, name: t.name, slices: [], weeks: null };
-    const own = { from, move: (to: { id: string; title: string }) => tasks.move(t, to) };
+    const own = { from, move: (to: { id: string; title: string }) => tasks.move(t, to), code: knownCode(t.code) ? t.code : null, draft: true };
     return { onPointerDown: (e: React.PointerEvent) => drag.grip(f, e, own), onKeyDown: (e: React.KeyboardEvent) => drag.grip(f, e, own) };
+  };
+  // A feature's grip: moved at once by who may move it, else proposed by the change engine (commenters).
+  const featureGrip = (f: Parameters<typeof drag.grip>[0], e: React.PointerEvent | React.KeyboardEvent) => {
+    if (rights.move) return drag.grip(f, e);
+    const t = tasks.taskOf(f.code, f.name);
+    if (!t || !rights.task) return;
+    drag.grip(f, e, { from: featureOf(gb, f.code, f.name)?.goal_ids[0] ?? null, move: (to) => tasks.move(t, to), code: f.code });
   };
   // Who may suggest (commenters and up) gets B's two buttons; anyone else, the suggestions to read.
   const suggests = can("create_goal_suggestion");
@@ -2235,7 +2251,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
                   )}
                 </>
               )}
-              <FeatureRows plan={plan} goal={g} gb={gb} grips={rights.move} lifted={drag.lifted} onGrip={drag.grip} onOpen={setOpened} {...taskRows(g, rec)} />
+              <FeatureRows plan={plan} goal={g} gb={gb} grips={rights.move || rights.task} lifted={drag.lifted} onGrip={featureGrip} onOpen={setOpened} {...taskRows(g, rec)} />
               {over && (
                 <p data-testid="drop-note" className="mt-2 rounded-lg border border-dashed border-accent px-3 py-2 text-[15px] text-accent-ink">
                   Drop here: {g} becomes the goal it moves most
@@ -2303,7 +2319,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
               </span>
             </div>
             <p className="mt-1 text-[15px] text-warn">⚠ Serves no goal in the plan</p>
-            <FeatureRows plan={plan} goal={null} gb={gb} grips={rights.move} lifted={drag.lifted} onGrip={drag.grip} onOpen={setOpened} {...taskRows(null, undefined)} />
+            <FeatureRows plan={plan} goal={null} gb={gb} grips={rights.move || rights.task} lifted={drag.lifted} onGrip={featureGrip} onOpen={setOpened} {...taskRows(null, undefined)} />
           </li>
         )}
         {outside.length > 0 && (

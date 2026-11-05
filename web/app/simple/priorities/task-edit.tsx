@@ -299,16 +299,24 @@ export function useTaskWrites(reload: () => Promise<void>, setNote: (n: Note | n
     edit: (task: Task, item: Item | undefined, f: TaskFields, options: MilestoneOption[]) => {
       const name = f.name.trim();
       const was = { title: item?.title ?? task.name, outcome: item?.outcome ?? "", milestone: item?.milestone?.source === "item" ? (item.milestone.name ?? "") : "" };
+      const target = { item_id: task.itemId };
+      const ins: ChangeIn[] = [];
+      if (name !== was.title) ins.push({ op: "edit_title", target, before: { title: was.title }, after: { title: name } });
+      if (f.outcome.trim() !== was.outcome.trim()) ins.push({ op: "edit_outcome", target, before: { outcome: item?.outcome ?? null }, after: { outcome: f.outcome.trim() || null } });
+      if (f.milestone !== was.milestone) {
+        const before = item?.milestone?.source === "item" && item.milestone.name ? { name: item.milestone.name, date: item.milestone.date ?? null } : null;
+        ins.push({ op: "set_milestone", target, before: { milestone: before }, after: { milestone: milestoneOf(f.milestone, options) } });
+      }
+      // Nothing changed: say so, and send nothing.
+      if (!ins.length) {
+        setError(null);
+        setNote({ text: <>No changes.</> });
+        return Promise.resolve(true);
+      }
       return run(
         async () => {
           const made: Change[] = [];
-          const target = { item_id: task.itemId };
-          if (name !== was.title) made.push(await send({ op: "edit_title", target, before: { title: was.title }, after: { title: name } }));
-          if (f.outcome.trim() !== was.outcome.trim()) made.push(await send({ op: "edit_outcome", target, before: { outcome: item?.outcome ?? null }, after: { outcome: f.outcome.trim() || null } }));
-          if (f.milestone !== was.milestone) {
-            const before = item?.milestone?.source === "item" && item.milestone.name ? { name: item.milestone.name, date: item.milestone.date ?? null } : null;
-            made.push(await send({ op: "set_milestone", target, before: { milestone: before }, after: { milestone: milestoneOf(f.milestone, options) } }));
-          }
+          for (const body of ins) made.push(await send(body));
           return made;
         },
         `Saved ${name}.`,
@@ -351,7 +359,7 @@ export function dependentsOf(rows: Row[], code: string): string[] {
 }
 
 /** A code people know ("F-27"), not an item's raw key ("saved-carts"): a draft shows no chip until it has one. */
-const knownCode = (code: string) => /^[a-z]+\d*-\d+[a-z]?$/i.test(code);
+export const knownCode = (code: string) => /^[a-z]+\d*-\d+[a-z]?$/i.test(code);
 
 /** A task's row where the plan does not place it (an added draft; every task with no dated plan), as FeatureRows draws a feature's. */
 export function TaskRow({

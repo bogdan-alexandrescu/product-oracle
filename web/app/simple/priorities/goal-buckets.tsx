@@ -182,11 +182,11 @@ export function UndoNote({ children, onUndo }: { children: ReactNode; onUndo?: (
 }
 
 /** The dragged feature's card. */
-export function DragGhost({ code, name, weeks, style, className = "" }: { code: string; name: string; weeks: string; style?: React.CSSProperties; className?: string }) {
+export function DragGhost({ code, name, weeks, style, className = "" }: { code: string | null; name: string; weeks: string; style?: React.CSSProperties; className?: string }) {
   return (
     <div aria-hidden data-testid="drag-ghost" className={`pointer-events-none fixed z-40 flex w-[420px] max-w-[80vw] rotate-[-1.5deg] items-center gap-2 rounded-md border-2 border-accent bg-surface px-2 py-[5px] text-[16px] shadow-2xl ${className}`} style={style}>
       <span className="text-[15px]">⠿</span>
-      <CodeTag code={code} />
+      {code && <CodeTag code={code} />}
       <span className="flex-1">{name}</span>
       <span className="text-[15px] text-text2">{weeks}</span>
     </div>
@@ -241,7 +241,9 @@ export function FeatureRows({
         const milestones = [...new Set(f.slices.map((s) => s.milestone))];
         const movable = grips && !!featureOf(gb, f.code, f.name);
         const up = lifted === f.code;
-        const own = task?.milestone(f) ?? null;
+        // Its own milestone, unless a plan chip already names it.
+        const mine = task?.milestone(f) ?? null;
+        const own = mine && !milestones.some((code) => plan.milestones.find((m) => m.code === code)?.name === mine) ? mine : null;
         return (
           <li
             key={f.code}
