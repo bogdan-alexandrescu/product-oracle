@@ -16,8 +16,11 @@ import { expect, test, type Locator, type Page } from "./test";
  * naming the feature and the goal; Open shows the goal's suggestions with it; fails_when = no
  * row, or Open does not show it.
  *
- * Card inbox-feature-ask-open: protects = a proposal on no roadmap (a feature ask) still has
- * Open, to Requests; fails_when = no Open.
+ * Card inbox-open-shows-it: protects = every Open in the Inbox's Proposals and suggestions
+ * leads to a page that shows that item with its action (Accept); a feature ask on no roadmap,
+ * which no other page shows until it is filed, has no Open and is decided in its row, and once
+ * accepted it is in Requests; fails_when = an Open leads where the item or its action is not
+ * shown, the feature ask has an Open, or after Accept Requests does not list it.
  *
  * Card inbox-simple-approval: protects = a roadmap version sent for review waits in its required
  * reviewer's Inbox, reached from Simple's rail whose count equals "N waiting": the roadmap by
@@ -78,6 +81,16 @@ async function shownCount(page: Page, phone: boolean): Promise<number> {
   return t.length ? Number(t[0].trim()) : 0;
 }
 
+/** Home's Needs you counts of Approvals and Proposals, as shown now (0 when not shown). */
+async function homeCounts(page: Page): Promise<{ approvals: number; proposals: number }> {
+  const needs = page.getByTestId("home-needs");
+  const n = async (id: string) => {
+    const t = await needs.getByTestId(id).allTextContents();
+    return t.length ? Number(t[0].replace(/\D+/g, "")) : 0;
+  };
+  return { approvals: await n("home-count-approvals"), proposals: await n("home-count-proposals") };
+}
+
 /** The owner reads the roadmap (Oracle's dates and goal suggestions are made as it is first read). */
 async function readRoadmap(page: Page) {
   await page.goto("/simple/roadmap");
@@ -134,14 +147,61 @@ for (const phone of [false, true]) {
       await expect(page.getByTestId("goal-suggestion").filter({ hasText: title }).first()).toBeVisible();
     });
 
-    // card: inbox-feature-ask-open
-    test(`a proposal on no roadmap opens where it is decided (${where})`, async ({ page }) => {
+    // card: inbox-open-shows-it
+    test(`every Open in Proposals and suggestions shows the item with its action; the feature ask is decided in its row (${where})`, async ({ page }) => {
+      test.setTimeout(180_000);
       await login(page);
+      await readRoadmap(page);
       await page.goto("/inbox");
-      const row = page.getByRole("row").filter({ hasText: "Bulk export" }).filter({ hasText: "asked for by" });
-      await expect(row).toHaveCount(1);
-      await tap(row.getByRole("link", { name: "Open Bulk export in Requests" }));
-      await expect(page).toHaveURL(/\/requests$/);
+      const table = page.getByTestId("inbox-proposals");
+      await expect(table).toBeVisible();
+
+      // A feature ask on no roadmap: no Open (no page shows it before it is filed), Accept and Decline in its row.
+      const ask = table.getByRole("row").filter({ hasText: "Bulk export" }).filter({ hasText: "asked for by" });
+      await expect(ask).toHaveCount(1);
+      await expect(ask.getByRole("link", { name: /^Open/ })).toHaveCount(0);
+      await expect(ask.getByRole("button", { name: "Accept" })).toBeVisible();
+      await expect(ask.getByRole("button", { name: "Decline" })).toBeVisible();
+
+      // Every other row's Open, each followed by a click.
+      const labels = (await table.getByRole("link", { name: /^Open / }).evaluateAll((els) => els.map((el) => el.getAttribute("aria-label") ?? ""))).filter(Boolean);
+      expect(labels.length).toBeGreaterThan(2);
+      const kinds = new Set<string>();
+      for (const label of labels) {
+        await page.goto("/inbox");
+        const row = page.getByTestId("inbox-proposals").getByRole("row").filter({ has: page.getByRole("link", { name: label, exact: true }) }).first();
+        const goal = row.getByTestId("goal-suggestion-title");
+        const title = (await goal.count()) ? (await goal.textContent())!.trim() : "";
+        await tap(row.getByRole("link", { name: label, exact: true }));
+        let m: RegExpMatchArray | null;
+        if ((m = label.match(/^Open (.+) on its roadmap$/))) {
+          kinds.add("roadmap");
+          const there = page.getByTestId("decision-tray").getByTestId("tray-proposal").filter({ hasText: m[1] }).first();
+          await expect(there).toBeVisible();
+          await expect(there.getByRole("button", { name: "Accept" })).toBeVisible();
+        } else if ((m = label.match(/^Open Oracle's dates for (.+)$/))) {
+          kinds.add("dates");
+          const there = page.getByTestId("suggestion-popover");
+          await expect(there).toContainText("Oracle suggests");
+          await expect(there.getByRole("button", { name: "Accept" })).toBeVisible();
+        } else if ((m = label.match(/^Open the suggestions for (.+)$/))) {
+          kinds.add("goal");
+          const there = page.locator(`[data-testid="goal-suggestion"][data-title="${title}"]`).first();
+          await expect(there).toBeVisible();
+          await expect(there.getByRole("button", { name: "Accept" })).toBeVisible();
+        } else {
+          throw new Error(`An Open the spec does not know: ${label}`);
+        }
+      }
+      expect([...kinds].sort()).toEqual(["dates", "goal", "roadmap"]);
+
+      // Accepted in the Inbox, the ask is filed: Requests lists it.
+      await page.goto("/inbox");
+      await tap(page.getByTestId("inbox-proposals").getByRole("row").filter({ hasText: "Bulk export" }).getByRole("button", { name: "Accept" }));
+      await expect(page.getByText("Accepted: it is filed in Requests")).toBeVisible();
+      await expect(page.getByRole("row").filter({ hasText: "Bulk export" }).filter({ hasText: "asked for by" })).toHaveCount(0);
+      await page.goto("/requests");
+      await expect(page.getByTestId("request-row").filter({ hasText: "Bulk export" }).first()).toBeVisible();
     });
 
     // card: inbox-simple-approval
@@ -166,11 +226,20 @@ for (const phone of [false, true]) {
       const railCount = await openInboxFromRail(page, phone);
       const row = page.getByRole("row").filter({ has: page.getByTestId("simple-approval-context") });
       await expect(row).toHaveCount(1);
+      // An approval, not a proposal: listed under Roadmap approvals.
+      await expect(page.getByTestId("inbox-roadmap-approvals").getByTestId("simple-approval-context")).toHaveCount(1);
+      await expect(page.getByTestId("inbox-proposals").getByTestId("simple-approval-context")).toHaveCount(0);
       await expect(row).toContainText(/Alerts roadmap version \d+/);
       await expect(row.getByTestId("simple-approval-context")).toContainText(/^Sent for review by \S.* on /);
       await expect(row.getByTestId("simple-approval-context")).toContainText(MONTH_FIRST);
       // The rail's count is the page's "N waiting", the approval among them.
       expect(await waiting(page)).toBe(railCount);
+      // Home counts it under Approvals, not Proposals.
+      await page.goto("/home");
+      await expect(page.getByTestId("home-needs").getByTestId("home-count-approvals")).toBeVisible();
+      const before = await homeCounts(page);
+      await page.goto("/inbox");
+      await expect(row).toHaveCount(1);
 
       await tap(row.getByRole("link", { name: /^Open Alerts roadmap version \d+ to approve it$/ }));
       await expect(page).toHaveURL(/\/simple\/roadmap\?roadmap=/);
@@ -187,6 +256,9 @@ for (const phone of [false, true]) {
       await page.goto("/inbox");
       await expect(page.getByTestId("inbox-needs")).toBeVisible();
       await expect(page.getByRole("row").filter({ has: page.getByTestId("simple-approval-context") })).toHaveCount(0);
+      await page.goto("/home");
+      await expect(page.getByTestId("home-needs")).toBeVisible();
+      await expect.poll(() => homeCounts(page)).toEqual({ approvals: before.approvals - 1, proposals: before.proposals });
 
       // The decider (the owner, who sent it) has it waiting in their Inbox too.
       await switchTo(page, ADMIN.email);

@@ -189,6 +189,10 @@ test("A Simple proposal waiting on me: rail badge, Home and the Inbox count the 
   const waiting = (await badge.textContent())!.trim();
   await expect(page.getByText(`${waiting} waiting`)).toBeVisible();
   await expect(needs.getByTestId("panel-count")).toHaveText(waiting);
+  // The (i) says what it counts, Simple's proposals, Oracle's dates and goal suggestions among them.
+  await needs.getByRole("button", { name: "About Needs you" }).click();
+  await expect(page.getByText(/approvals, runs, access, reviews, questions, proposals, Oracle's dates and goal suggestions\./)).toBeVisible();
+  await page.keyboard.press("Escape");
 
   await page.getByTestId("nav-inbox").click();
   await expect(page).toHaveURL(/\/inbox$/);
