@@ -521,6 +521,28 @@ test("the decider of a draft another owner sent sees it on the rail and on Home"
 });
 
 /**
+ * fix 2: a required reviewer who approves a draft another owner sent, before its decider does,
+ * reads that it now waits for the decider, by name.
+ * fails_when: the toast leaves the decider out (or counts reviewers); no_claim: the API's own
+ * rule (api/tests/test_simple_roadmap_decide.py).
+ */
+test("a reviewer's approval before the decider's says the draft waits for the decider, by name", async ({ page }) => {
+  await open(page, "roadmap-two-drafts-reviewer");
+  await strip(page).locator('[data-testid="conflict"][data-item="setup-tour"]').getByRole("button", { name: "Bring it back" }).click();
+  await expect(page.getByText(/Brought back 'In-app tour'/)).toBeVisible();
+  await page.getByTestId("draft-banner").getByRole("button", { name: "Send for review" }).click();
+  await expect(page.getByText(/Sent for review/).first()).toBeVisible();
+  // Theo Brandt reviews the Onboarding roadmap; Priya Raman decides it.
+  await signOut(page);
+  await login(page, "commenter@example.com");
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  const line = page.getByTestId("draft-banner").getByTestId("draft-line").filter({ hasText: "Onboarding roadmap" });
+  await line.getByRole("button", { name: "Approve", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Approved: Onboarding roadmap waits for Priya Raman to decide" })).toBeVisible();
+});
+
+/**
  * fix 1, minor 6: a message after an action on the roadmap shows at the top right on a desktop,
  * clear of the open Ask panel and of the draft banner where the action was taken.
  * fails_when: the message covers the Ask panel or the banner's buttons, or shows at the foot.

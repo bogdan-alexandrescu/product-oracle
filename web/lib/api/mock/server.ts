@@ -3689,6 +3689,18 @@ function load(): Db {
                     rm.deciders = { ...rm.deciders, "onboarding-roadmap": approver.id };
                     return db;
                   }
+              : scenario === "roadmap-two-drafts-reviewer"
+                ? () => {
+                    // fix 2: as roadmap-two-drafts (Priya Raman decides the Onboarding roadmap), with
+                    // commenter@example.com (Theo Brandt) its required reviewer, who may approve first.
+                    const db = seed();
+                    const approver = db.members.find((m) => m.email === "approver@example.com")!;
+                    const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+                    const rm = (db.simple_roadmap ??= seedSimpleRoadmap());
+                    rm.deciders = { ...rm.deciders, "onboarding-roadmap": approver.id };
+                    rm.reviewers = { ...rm.reviewers, "onboarding-roadmap": [commenter.id] };
+                    return db;
+                  }
               : scenario === "roadmap-reviewers"
                 ? () => {
                     // roadmap-decide review: Alerts roadmap has a required reviewer, approver@example.com.
