@@ -327,8 +327,13 @@ export function MsLayer(props: MsLayerProps) {
         let cw = w;
         const room = Math.min(lead ? Infinity : nextT - 4, right) - l;
         if (w > room) {
-          if ((lead || nextT === Infinity) && mx - 6 - w >= Math.max(leftEdge, end + 4)) l = mx - 6 - w;
-          else cw = Math.max(40, Math.min(w, room));
+          const roomL = mx - 6 - Math.max(leftEdge, end + 4);
+          if ((lead || nextT === Infinity) && w <= roomL) l = mx - 6 - w;
+          // A phone's narrow chart: no room right of its diamond, so cut short on its left (still clickable).
+          else if (room < 40 && roomL >= 40) {
+            cw = Math.min(w, roomL);
+            l = mx - 6 - cw;
+          } else cw = Math.max(40, Math.min(w, room));
         }
         if (l + cw > right) {
           // No room left in the row: it waits behind the ones before it (its diamond keeps its name).
