@@ -2019,6 +2019,7 @@ const seedEngCheckNoPrd = () => {
   });
   const at = "2026-10-20T15:00:00Z";
   db.baseline.entities.push({ id: entity, type: "feature", key: "export-logs", title: "Export logs", body: "People download their activity log as a file.", attrs: {}, status: "confirmed", origin: "user", locked: false, locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: at, updated_at: at });
+  db.runs!.no_prd_features = { "export-logs": { name: "Export logs", entity } };
   return db;
 };
 

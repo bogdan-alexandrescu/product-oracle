@@ -76,6 +76,8 @@ export interface RunsDb {
    * named with their PRD.
    */
   roadmap_features?: Record<string, string>;
+  // Ground Truth features no PRD holds, by key (oracle.engineering.check.in_no_prd): read again too.
+  no_prd_features?: Record<string, { name: string; entity: string }>;
 }
 
 /** B2: what the baseline says of a run at Confirm the baseline (./from-run.ts, over the baseline mock). */
@@ -4076,15 +4078,17 @@ function briefsYaml(briefs: Brief[], attempt: number): string {
 
 /**
  * As oracle.engineering.check.refresh: a pending Engineering check stored with a dependency
- * problem a later rule may answer is checked again as the rules now are (its other problems
+ * problem a later rule may answer (check.STALE: an unknown one, or one in no PRD) is checked again as the rules now are (its other problems
  * stay as they were), so the stop's page and its gate count the same problems.
  */
+const STALE = new Set(["unknown_dependency", "dependency_in_no_prd"]);
+
 export function recheckBriefs(db: RunsDb, r: RunOut) {
   for (const cp of r.checkpoints) {
     const check = cp.kind === "eng_review" && cp.status === "pending" ? briefsOf(cp) : null;
-    if (!check?.problems.some((p) => p.code === "unknown_dependency")) continue;
-    const deps = briefsCheckOf(check.features, undefined, undefined, db.roadmap_features ?? {});
-    const problems = [...deps.problems, ...check.problems.filter((p) => p.code !== "unknown_dependency")];
+    if (!check?.problems.some((p) => STALE.has(p.code))) continue;
+    const deps = briefsCheckOf(check.features, undefined, undefined, db.roadmap_features ?? {}, db.no_prd_features ?? {});
+    const problems = [...deps.problems, ...check.problems.filter((p) => !STALE.has(p.code))];
     cp.payload = { ...cp.payload, briefs_check: { ...check, problems, elsewhere: { ...check.elsewhere, ...deps.elsewhere } } };
   }
 }
