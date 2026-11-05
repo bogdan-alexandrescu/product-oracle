@@ -469,6 +469,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
             if e.milestone is not None and e.milestone.date is not None
             else None,
             accepted_risks=list(e.row.accepted_risks or []),
+            prd=company.OnRoadmap("", e.prd.title).prd_name if e.prd is not None else None,
         )
         for e in entries
     ]
