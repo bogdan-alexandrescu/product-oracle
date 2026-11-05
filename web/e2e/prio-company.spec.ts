@@ -136,9 +136,11 @@ for (const scheme of ["light", "dark"] as const) {
         await expect(badge.getByTestId("prio-adds")).toHaveCount(0);
         await expect(badge.getByTestId("prio-override")).toBeVisible();
         // It is on the company roadmap now.
-        await page.getByRole("link", { name: "Roadmap", exact: true }).first().click();
+        await page.getByRole("link", { name: "Roadmap", exact: true }).filter({ visible: true }).first().click();
         await expect(page.getByTestId("simple-roadmap").getByText(OLD_ITEM, { exact: true }).first()).toBeAttached();
-        await page.getByRole("link", { name: "Priorities", exact: true }).first().click();
+        // A phone keeps Priorities behind More.
+        if (phone) await page.getByRole("button", { name: "More", exact: true }).click();
+        await page.getByRole("link", { name: "Priorities", exact: true }).filter({ visible: true }).first().click();
         await expect(rowByTitle(page, OLD_ITEM)).toBeVisible();
         await expect(page.getByTestId("prio-adds")).toHaveCount(0);
       });
