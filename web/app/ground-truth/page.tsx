@@ -391,6 +391,8 @@ export default function BaselinePage() {
 
   const openConflicts = conflicts.data?.filter((c) => c.status === "open").length;
   const view = runId ? fromRun.data : null;
+  // A stale ?tab=from-run link without its run opens Graph, not an empty panel (visual QA GT-3).
+  const active: Tab = tab === "from-run" && !view && !(runId && fromRun.loading) ? "graph" : tab;
   const tabs: TabItem<Tab>[] = [
     ...(view ? [{ id: "from-run" as const, label: "From this run", count: view.summary.need_you, kind: "crit" as const }] : []),
     { id: "graph", label: "Graph" },
@@ -578,16 +580,16 @@ export default function BaselinePage() {
         {view && <FromRunBand view={view} />}
         {runId && fromRun.error && <Notice tone="error">{fromRun.error}</Notice>}
 
-        <Tabs label="Ground Truth views" items={tabs} value={tab} onChange={setTab} />
+        <Tabs label="Ground Truth views" items={tabs} value={active} onChange={setTab} />
 
         {error && <Notice tone="error">{error}</Notice>}
         {notice && <Notice>{notice}</Notice>}
 
-        <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="flex min-w-0 flex-col gap-4">
-          {tab === "from-run" && view && (
+        <div role="tabpanel" id={`panel-${active}`} aria-labelledby={`tab-${active}`} className="flex min-w-0 flex-col gap-4">
+          {active === "from-run" && view && (
             <FromRunTab view={view} entities={graph.data?.entities ?? []} busy={busy} selectedId={openId} act={act} onOpen={openItem} />
           )}
-          {tab === "graph" && (
+          {active === "graph" && (
             <>
               {graph.error && <Notice tone="error">{graph.error}</Notice>}
               {graph.loading && !graph.data && <Loading />}
@@ -613,7 +615,7 @@ export default function BaselinePage() {
               )}
             </>
           )}
-          {tab === "items" && (
+          {active === "items" && (
             <>
               {graph.error && <Notice tone="error">{graph.error}</Notice>}
               {graph.loading && !graph.data && <Loading />}
@@ -629,14 +631,14 @@ export default function BaselinePage() {
               )}
             </>
           )}
-          {tab === "flagged" && (
+          {active === "flagged" && (
             <>
               {trace.error && <Notice tone="error">{trace.error}</Notice>}
               {trace.loading && !trace.data && <Loading />}
               {trace.data && <FlaggedTab trace={trace.data} tags={tags} selectedId={openId} onOpen={openItem} />}
             </>
           )}
-          {tab === "conflicts" && (
+          {active === "conflicts" && (
             <>
               {conflicts.error && <Notice tone="error">{conflicts.error}</Notice>}
               {conflicts.loading && !conflicts.data && <Loading />}
@@ -653,14 +655,14 @@ export default function BaselinePage() {
               )}
             </>
           )}
-          {tab === "blockers" && (
+          {active === "blockers" && (
             <>
               {blockers.error && <Notice tone="error">{blockers.error}</Notice>}
               {blockers.loading && !blockers.data && <Loading />}
               {blockers.data && <BlockersTab blockers={blockers.data} selectedId={blockerId} onOpen={openBlocker} />}
             </>
           )}
-          {tab === "proposals" && (
+          {active === "proposals" && (
             <>
               {(from ? filtered : proposals).error && <Notice tone="error">{(from ? filtered : proposals).error}</Notice>}
               {!shown && <Loading />}

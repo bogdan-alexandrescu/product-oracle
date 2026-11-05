@@ -116,6 +116,8 @@ test("Fill goals from text asks first, naming the goal, and Back changes nothing
 test("feature × goal: a legend, Confidence and Delivery headers; goals' Review header", async ({ page }) => {
   await openBaseline(page);
   const ledger = page.getByRole("table", { name: "Feature × goal" });
+  // Visual QA GT-5: the legend is behind the panel's (i).
+  await page.getByRole("button", { name: "About Feature × goal" }).click();
   await expect(page.getByTestId("ledger-legend")).toContainText("Rings: confidence, 0 to 100%");
   await expect(ledger.getByRole("columnheader", { name: "Delivery" })).toBeVisible();
   await expect(ledger.getByRole("columnheader", { name: "Confidence" })).toBeVisible();
