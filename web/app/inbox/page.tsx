@@ -57,7 +57,8 @@ export default function InboxPage() {
 
 function Inbox() {
   // QA pass D-2: ?kind= (Home's Needs you chips) shows that kind only.
-  const kind = NEED_KINDS.find((k) => k.id === asNeedKind(useSearchParams().get("kind")));
+  const kindParam = asNeedKind(useSearchParams().get("kind"));
+  const kind = NEED_KINDS.find((k) => k.id === kindParam);
   const q = useQuery("inbox", loadInbox);
   // Questions asked of me (I3): their own group, counted with the rest as the rail badge counts.
   const questionsQ = useQuery("inbox|questions", loadMyQuestions);
