@@ -6,10 +6,10 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { setupReturn } from "@/app/settings/_nav";
 import { Button, Chip, InfoTip, KpiStrip, LinkButton, Notice, Page, PageHeader, Split, ViewOnly, type Kpi } from "@/components/ds";
 import { VagueGoalsLine } from "@/components/discuss/VagueGoalsLine";
-import { Loading } from "@/components/ui";
+import { LoadError, Loading } from "@/components/ui";
 import { startInterview, startInterviews, vagueGoals } from "@/lib/api/goal-interview";
 import { GOALS_OBSERVE, useGoalsLevel } from "@/lib/goals-autonomy";
-import { api, unwrap, type ConflictOut, type EntityOut, type ProposalOut } from "@/lib/api/client";
+import { api, ApiError, unwrap, type ConflictOut, type EntityOut, type ProposalOut } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
@@ -28,6 +28,21 @@ import { GraphTab } from "@/app/baseline/_components/GraphTab";
 import { ItemsTab } from "@/app/baseline/_components/ItemsTab";
 import { cardsOf, fieldName, noChange, ProposalsTab, type FromFilter } from "@/app/baseline/_components/ProposalsTab";
 import { Tabs, type TabItem } from "@/app/baseline/_components/Tabs";
+
+/**
+ * What a run wrote to the Ground Truth (B2). A 404 is asked once more after a moment: a run
+ * just started, or mock data just reseeded, can answer before the run is there (visual QA B-03).
+ */
+async function loadFromRun(runId: string) {
+  const get = () => unwrap(api.GET("/v1/baseline/from-run/{run_id}", { params: { path: { run_id: runId } } }));
+  try {
+    return await get();
+  } catch (e) {
+    if (!(e instanceof ApiError) || e.status !== 404) throw e;
+    await new Promise((done) => setTimeout(done, 500));
+    return get();
+  }
+}
 
 type Tab = "from-run" | "graph" | "items" | "flagged" | "conflicts" | "proposals" | "blockers";
 const TABS: readonly Tab[] = ["from-run", "graph", "items", "flagged", "conflicts", "proposals", "blockers"];
@@ -145,11 +160,7 @@ export default function BaselinePage() {
   const [from, setFrom] = useState<FromFilter>("");
   // B2: the run whose review this is (?run=), and what it wrote to the baseline.
   const [runId, setRunId] = useState("");
-  const fromRun = useQuery(
-    `baseline-from-run:${runId}`,
-    () => (runId ? unwrap(api.GET("/v1/baseline/from-run/{run_id}", { params: { path: { run_id: runId } } })) : Promise.resolve(null)),
-    { keepPrevious: true },
-  );
+  const fromRun = useQuery(`baseline-from-run:${runId}`, () => (runId ? loadFromRun(runId) : Promise.resolve(null)), { keepPrevious: true });
   // Every open proposal (the tab's count and the From select's runs), and the From filter's.
   const proposals = useQuery("baseline-proposals", () =>
     unwrap(api.GET("/v1/baseline/proposals", { params: { query: { status: "open" } } })),
@@ -391,10 +402,13 @@ export default function BaselinePage() {
 
   const openConflicts = conflicts.data?.filter((c) => c.status === "open").length;
   const view = runId ? fromRun.data : null;
+  // A review that could not load keeps its tab, which says so with Try again (visual QA B-03).
+  const fromRunFailed = !!runId && !view && !!fromRun.error;
   // A stale ?tab=from-run link without its run opens Graph, not an empty panel (visual QA GT-3).
-  const active: Tab = tab === "from-run" && !view && !(runId && fromRun.loading) ? "graph" : tab;
+  const active: Tab = tab === "from-run" && !view && !fromRunFailed && !(runId && fromRun.loading) ? "graph" : tab;
   const tabs: TabItem<Tab>[] = [
     ...(view ? [{ id: "from-run" as const, label: "From this run", count: view.summary.need_you, kind: "crit" as const }] : []),
+    ...(fromRunFailed ? [{ id: "from-run" as const, label: "From this run" }] : []),
     { id: "graph", label: "Graph" },
     { id: "items", label: "Items" },
     { id: "flagged", label: "Flagged", count: trace.data?.summary.flagged, kind: "crit" },
@@ -578,7 +592,6 @@ export default function BaselinePage() {
         )}
         {build && <BuildBanner build={build} />}
         {view && <FromRunBand view={view} />}
-        {runId && fromRun.error && <Notice tone="error">{fromRun.error}</Notice>}
 
         <Tabs label="Ground Truth views" items={tabs} value={active} onChange={setTab} />
 
@@ -586,6 +599,7 @@ export default function BaselinePage() {
         {notice && <Notice>{notice}</Notice>}
 
         <div role="tabpanel" id={`panel-${active}`} aria-labelledby={`tab-${active}`} className="flex min-w-0 flex-col gap-4">
+          {active === "from-run" && fromRunFailed && <LoadError what="this run's review" error="" onRetry={() => void reloadFromRun()} />}
           {active === "from-run" && view && (
             <FromRunTab view={view} entities={graph.data?.entities ?? []} busy={busy} selectedId={openId} act={act} onOpen={openItem} />
           )}

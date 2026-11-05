@@ -411,7 +411,6 @@ export function FromRunTab({ view, entities, busy, selectedId, act, onOpen }: Pr
                       Subgoal of {parentOf(r)!.title}
                     </span>
                   )}
-                  <span className="block font-mono text-sm text-text2">{r.key}</span>
                 </div>
                 <div className="flex min-w-0 flex-1 flex-wrap gap-1" aria-label="Needs you because">
                   {r.reasons.map((x) => (
@@ -471,7 +470,7 @@ function BottomBar({ view, busy, act }: { view: FromRunOut; busy: boolean; act: 
       role="region"
       aria-label="Decide: Confirm the Ground Truth"
       data-testid="from-run-bar"
-      className="fixed inset-x-0 bottom-0 z-20 flex flex-wrap items-center gap-2 border-t border-line bg-surface px-4 py-3 shadow-lg md:left-auto md:w-[min(100%,56rem)]"
+      className="sticky bottom-0 z-20 flex flex-wrap items-center gap-2 rounded-panel border border-line bg-surface px-4 py-3 shadow-lg max-[600px]:bottom-[var(--phone-tab-bar)]"
     >
       <span className="font-medium" data-testid="bar-tally">
         {s.items - s.need_you} of {s.items} handled · {s.not_decided} not decided

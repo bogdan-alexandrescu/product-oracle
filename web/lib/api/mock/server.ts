@@ -5926,7 +5926,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "baseline" && p[2] === "from-run" && p[3] && req.method === "GET") {
     db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
     const found = fromRunCheckpoint({ ...runsContext(db), db: db.runs }, p[3]);
-    if (!found) return json(404, { detail: `run ${p[3]} not found` });
+    if (!found) return json(404, { detail: "Run not found" });
     return json(200, { ...found, ...fromRun(db.baseline, p[3], found.actions), checkpoint: found.checkpoint });
   }
   // B6 Goals interview: its routes write discussions and proposals, so they come first.
