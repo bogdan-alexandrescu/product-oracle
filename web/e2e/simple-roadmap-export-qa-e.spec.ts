@@ -164,9 +164,9 @@ test.describe("desktop", () => {
       const doc = new DOMParser().parseFromString(markup, "image/svg+xml");
       return [...doc.querySelectorAll("rect, text")].map((e) => (e.getAttribute("fill") ?? "").toLowerCase());
     }, svg);
-    expect(fills[0], "the page behind the picture is white").toBe("#ffffff");
+    expect(fills[0], "the page behind the picture is white").toMatch(/^#(fff|ffffff)$/);
     // None of the dark theme's surfaces or text colours.
-    for (const dark of ["#0c1a2e", "#06101e", "#11233b", "#eef4fa"]) expect(fills, `no ${dark}`).not.toContain(dark);
+    for (const dark of ["#0c1a2e", "#06101e", "#11233b", "#1e3350"]) expect(fills, `no ${dark}`).not.toContain(dark);
   });
 
   test("E-5: a cut row's export keeps its name and its note", async ({ page }) => {
@@ -252,10 +252,14 @@ test.describe("500 items", () => {
     expect(file.suggestedFilename()).toBe("roadmap-gantt.png");
     await expect(png).toBeEnabled();
 
+    await page.evaluate(() => (window.__poExports = []));
     const { bytes } = await exported(page, "PDF");
+    const [drawn] = await page.evaluate(() => window.__poExports ?? []);
     const pdf = bytes.toString("latin1");
     const pages = pdf.match(/\/Type \/Page\b/g) ?? [];
     expect(pages.length, "several pages").toBeGreaterThan(1);
+    // Each page holds at most a page's height of the picture, its header again on top.
+    expect(pages.length).toBeGreaterThanOrEqual(Math.ceil(drawn.height / 1300));
     expect(pdf).toContain("/MediaBox [0 0 792 612]");
     expect(pdf).toContain("/FlateDecode");
     expect(pdf).not.toContain("/DCTDecode");
