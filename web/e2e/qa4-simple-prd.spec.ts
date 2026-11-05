@@ -53,9 +53,9 @@ test.describe("desktop", () => {
 
     await page.getByRole("button", { name: "Edit “Single sign-on setup" }).click();
     // qa4-simple-prd-16: the editor and its Save come into view.
-    await expect(page.getByRole("button", { name: "Save" })).toBeInViewport();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeInViewport();
     await page.getByLabel("New wording for").fill("Single sign-on setup for every plan");
-    await page.getByRole("button", { name: "Save" }).click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
     const banner = page.getByRole("status", { name: "Working draft" });
     await expect(banner).toContainText("nothing is published until approved");
     await expect(banner).not.toContainText("published v");
@@ -65,7 +65,7 @@ test.describe("desktop", () => {
     await openFromList(page, "Saved carts PRD");
     await page.getByRole("button", { name: "Edit “Single sign-on setup" }).click();
     await page.getByLabel("New wording for").fill("Single sign-on setup for every plan");
-    await page.getByRole("button", { name: "Save" }).click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
     const note = page.getByRole("note").filter({ visible: true }).filter({ hasText: "changed “Single sign-on setup" });
     await expect(note).toContainText("You changed");
     await note.getByRole("button", { name: "See before/after" }).click();
@@ -171,7 +171,7 @@ test.describe("desktop", () => {
     await page.keyboard.press("Enter");
     const sources = page.getByRole("region", { name: /^Sources of/ });
     await sources.getByRole("button", { name: "Edit this line" }).press("Enter");
-    await expect(page.getByRole("button", { name: "Save" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
   });
 
   test("a bet's first flow is titled after its line, as Version 1 (qa4-simple-prd-22)", async ({ page }) => {
