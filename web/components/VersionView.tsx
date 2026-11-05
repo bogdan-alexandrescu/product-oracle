@@ -3,7 +3,7 @@
 import { RoleBadge } from "@/components/RoleBadge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
 
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import { CommentPopover, SelectionButton, type PageRect } from "@/components/CommentPopover";
@@ -1419,28 +1419,30 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
             {/* B-09: the warnings themselves are in the header chip's tip (dates: its own chip);
                 the body names, in one short line, the sections they point to. */}
             {warnedSections.length > 0 && (
-              <p role="status" data-testid="warned-sections" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text2">
+              <p role="status" data-testid="warned-sections" className="flex items-start gap-x-2 text-sm text-text2">
                 <Icon name="alert" size={16} className="text-warn" />
-                <span>Still open in</span>
-                {warnedSections.map((k, i) => (
-                  <span key={k}>
-                    <a
-                      href={sectionHref(doc, n, k)}
-                      data-own-nav
-                      onClick={(e) => {
-                        // On the Items tab the link opens the section on the Document tab.
-                        if (!plainClick(e) || !onDocument) return;
-                        e.preventDefault();
-                        if (!shownSections.some((s) => s.section_key === k)) setViewOverride("full");
-                        select(k);
-                      }}
-                      className="font-medium text-accent-ink underline underline-offset-2"
-                    >
-                      {headings.get(k) ?? k}
-                    </a>
-                    {i < warnedSections.length - 1 ? "," : ""}
-                  </span>
-                ))}
+                <span>
+                  Still open in{" "}
+                  {warnedSections.map((k, i) => (
+                    <Fragment key={k}>
+                      {i > 0 && ", "}
+                      <a
+                        href={sectionHref(doc, n, k)}
+                        data-own-nav
+                        onClick={(e) => {
+                          // On the Items tab the link opens the section on the Document tab.
+                          if (!plainClick(e) || !onDocument) return;
+                          e.preventDefault();
+                          if (!shownSections.some((s) => s.section_key === k)) setViewOverride("full");
+                          select(k);
+                        }}
+                        className="font-medium text-accent-ink underline underline-offset-2"
+                      >
+                        {headings.get(k) ?? k}
+                      </a>
+                    </Fragment>
+                  ))}
+                </span>
               </p>
             )}
             {readOnly && (

@@ -182,7 +182,7 @@ function AudienceView({ doc, n, audience }: { doc: string; n: number; audience: 
             sandbox="allow-popups allow-popups-to-escape-sandbox"
             srcDoc={q.data}
             data-testid="audience-preview"
-            className="block h-[560px] w-full rounded-lg border-2 border-line-strong bg-white max-[600px]:h-[420px]"
+            className="block h-[560px] w-full rounded-lg border-2 border-line-strong bg-[#ffffff] max-[600px]:h-[420px]"
           />
         </figure>
       )}

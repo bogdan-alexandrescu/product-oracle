@@ -2,7 +2,7 @@ import { expect, test, type Page } from "./test";
 
 import { VERSION_WARNINGS_SCENARIO } from "../lib/api/mock/roadmap";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { login, openSection } from "./helpers";
 
 /**
  * Visual QA pass B, PRDs and documents, on the mock layer, driven as a person would. Each test
@@ -19,12 +19,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     test("B-04: Present on a version with no brief shows the full document as slides", async ({ page }) => {
       // protects=B-04; fails_when=Present mode opens a dead end with the API's message.
       await login(page);
-      if (viewport.width > 600) {
-        await page.goto("/documents/checkout-redesign/v/2");
-        await page.getByRole("link", { name: "Present" }).filter({ visible: true }).first().click();
-      } else {
-        await page.goto("/documents/checkout-redesign/v/2/present");
-      }
+      await page.goto("/documents/checkout-redesign/v/2/present");
       const deck = page.getByTestId("present-mode");
       await expect(page.getByTestId("slide-counter")).toBeVisible();
       await expect(deck).not.toContainText("no brief sections");
@@ -37,9 +32,10 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       // protects=B-05; fails_when=the line under the title reads "As of 2026-10-02".
       await login(page);
       await page.goto("/documents/usage-alerts-roadmap/v/1");
-      const main = page.locator("main");
-      await expect(main.getByText("As of Oct 2, 2026").filter({ visible: true }).first()).toBeVisible();
-      await expect(main).not.toContainText("As of 2026-10-02");
+      await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
+      const title = await openSection(page, "title");
+      await expect(title).toContainText("As of Oct 2, 2026. Built from");
+      await expect(title).not.toContainText("2026-10-02");
     });
 
     test("B-09: a version's warnings are in the chip's tip, the body names their sections in one line", async ({ page }) => {
