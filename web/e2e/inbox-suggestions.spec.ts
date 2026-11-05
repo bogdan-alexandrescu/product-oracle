@@ -94,9 +94,12 @@ async function openInboxFromRail(page: Page, phone: boolean): Promise<number> {
   return n;
 }
 
-/** The count Simple's rail shows for the Inbox (on a phone, the Roadmap tab's, where an approval counts); 0 when none shows. */
+/**
+ * The count Simple's rail shows for the Inbox (on a phone, the More tab's, where an approval
+ * counts: the Roadmap tab's count is the roadmap page's Needs a decision); 0 when none shows.
+ */
 async function shownCount(page: Page, phone: boolean): Promise<number> {
-  const count = page.getByTestId(phone ? "simple-tab-roadmap-count" : "simple-nav-inbox-count");
+  const count = page.getByTestId(phone ? "simple-tab-more-count" : "simple-nav-inbox-count");
   // Read without waiting: the badge goes away as the count drops to 0.
   const t = await count.allTextContents();
   return t.length ? Number(t[0].trim()) : 0;
@@ -302,7 +305,7 @@ for (const phone of [false, true]) {
       // Read once first: Oracle's dates and goal suggestions, made as it is first read, are in the counts.
       await readRoadmap(page);
       await readRoadmap(page);
-      // On a phone, the Roadmap tab's count (Weekly alert digest's proposal waits there).
+      // On a phone, the More tab's count (the Inbox beyond what the tabs count waits there).
       if (phone) await expect.poll(() => shownCount(page, true)).toBeGreaterThan(0);
       const phoneBefore = phone ? await shownCount(page, true) : 0;
       await page.setViewportSize({ width: 1440, height: 900 });
