@@ -6744,6 +6744,18 @@ async function route(db: Db, req: Request): Promise<Response> {
   // The decision log (H1): judgement calls, and a record of every run stop decided.
   const decisionsCtx = decisionsContext(db, me);
   ensureDecisions(db, decisionsCtx);
+  // edit-decisions: Reassign from Simple's sheet on a decision only Simple's store holds (one
+  // decisions table in the API): the same checks as POST /v1/decisions/{id}/reassign.
+  const simpleOnly = req.method === "POST" && p[1] === "decisions" && p[3] === "reassign" && !db.decisions!.decisions.some((d) => d.id === p[2]) ? db.simple_meetings?.decisions.find((d) => d.id === p[2]) : undefined;
+  if (simpleOnly) {
+    if (me.role !== "owner") return json(403, { detail: "Requires the owner role" });
+    if (simpleOnly.status !== "proposed" && simpleOnly.status !== "decided") return json(409, { detail: `D-${simpleOnly.number} is ${simpleOnly.status}` });
+    const b = (await req.clone().json()) as Schemas["ReassignIn"];
+    const to = decisionsCtx.members.find((x) => x.id === b.approver_id);
+    if (!to || to.status === "disabled" || !["approver", "owner"].includes(to.role)) return json(422, { detail: "The approver must be an active member with the approver role or above" });
+    simpleOnly.approver_id = b.approver_id;
+    return json(200, { id: simpleOnly.id, number: simpleOnly.number, title: simpleOnly.title, approver_id: b.approver_id });
+  }
   const decided = await routeDecisions(decisionsCtx, db.decisions!, req, p, q);
   // edit-decisions: a decision made from Simple's sheet is listed there; Reassign shows there too.
   if (decided?.ok && req.method === "POST" && p[1] === "decisions" && p.length === 2 && db.simple_meetings) {

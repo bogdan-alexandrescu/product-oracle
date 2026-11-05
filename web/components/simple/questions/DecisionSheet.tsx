@@ -274,6 +274,12 @@ function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
               options: options.map((label, i) => ({ key: `o${i + 1}`, label, pros: [], cons: [], evidence_ids: [], recommended: false })),
               approver_id: decider.id,
               review_at: draft.review_at || null,
+              reversibility: "reversible",
+              contributor_ids: [],
+              informed_ids: [],
+              evidence_ids: [],
+              entity_ids: [],
+              subjects: [],
             },
           }),
         );

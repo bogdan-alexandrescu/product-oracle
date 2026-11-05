@@ -18,6 +18,7 @@ import { GoalNum, GoalOrderEdit } from "@/components/simple/GoalOrder";
 import { meetingMoment } from "@/components/simple/FlowVisual";
 import { NewPrdButton, NewPrdSheet, StartedCard, useCanStartPrd, useStartedPrds } from "@/components/simple/NewPrd";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
+import { DecisionSheetHost } from "@/components/simple/questions/DecisionSheet";
 import { QuestionRow, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
 import { SimplePage } from "@/components/simple/SimplePage";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -620,6 +621,8 @@ export default function SimpleHome() {
 
   return (
     <SimplePage title="Home">
+      {/* eq2 b: the question titles on Home open the same decision sheet as on Decisions. */}
+      <DecisionSheetHost onChanged={reloadAll}>
       {newPrd && <NewPrdSheet onClose={closeNewPrd} onStarted={() => void started.reload()} />}
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
       {confirming && (
@@ -1327,6 +1330,7 @@ export default function SimpleHome() {
       )}
       </>
       )}
+      </DecisionSheetHost>
     </SimplePage>
   );
 }
