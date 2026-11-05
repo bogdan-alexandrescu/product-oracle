@@ -144,7 +144,7 @@ for (const phone of [false, true]) {
           expect(b.height).toBeGreaterThanOrEqual(PHONE.height - 2);
           await expect(opened.getByRole("button", { name: "Close" })).toBeVisible();
         } else {
-          // Across the page: 16 px inside the page, over the roadmap; the card steps out of the way.
+          // Across the page: 16 px inside the page, over the roadmap and the feature panel.
           const fit = await opened.evaluate((el) => {
             const r = el.getBoundingClientRect();
             const main = document.querySelector("main")!.getBoundingClientRect();
@@ -153,8 +153,16 @@ for (const phone of [false, true]) {
           expect(Math.round(fit.left)).toBe(16);
           expect(Math.round(fit.right)).toBe(16);
           expect(Math.round(fit.top)).toBe(16);
-          await expect(card).toHaveAttribute("data-flow-open", "true");
-          await expect(card).toHaveCSS("opacity", "0");
+          await expect(card.getByTestId("fp-more")).toHaveAttribute("data-flow-open", "true");
+          // build-feature-panel: the panel stays open under the flow; the flow is on top of it
+          // (where the panel sits, the opened flow is what a person sees and clicks).
+          const panel = (await card.boundingBox())!;
+          const onTop = await opened.evaluate((el, p) => {
+            const r = el.getBoundingClientRect();
+            const y = r.top + 40;
+            return [r.left + 40, r.left + r.width / 2, p.x + p.width / 2, r.right - 40].every((x) => el.contains(document.elementFromPoint(x, y)));
+          }, panel);
+          expect(onTop).toBe(true);
           await expect(opened.getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
         }
         await tap(opened.getByRole("button", { name: "Full screen" }));
@@ -192,7 +200,7 @@ for (const phone of [false, true]) {
         await tap(opened.getByRole("button", { name: "Close" }));
         await expect(page.getByTestId("flow-detail")).toHaveCount(0);
         await expect(card).toBeVisible();
-        await expect(card).toHaveAttribute("data-flow-open", "false");
+        await expect(card.getByTestId("fp-more")).toHaveAttribute("data-flow-open", "false");
         await expect(row.getByTestId("flow-meta")).toBeVisible();
       });
 

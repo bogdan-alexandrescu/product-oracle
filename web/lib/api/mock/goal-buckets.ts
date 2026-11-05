@@ -10,7 +10,8 @@ import { stableUuid } from "./ids";
 import { planGoalNames, planSlices } from "./simple-plan";
 
 type Goal = { id: string; title: string; order: number; measure: string | null; target: string | null; due: string | null; archived: boolean };
-type Feature = { id: string; key: string; title: string; goal_ids: string[] };
+/** assumed_goal_ids: the links whose contribution is assumed (an approved order's, api ASSUMED_LINK). */
+type Feature = { id: string; key: string; title: string; goal_ids: string[]; assumed_goal_ids?: string[] };
 export type GoalBucketsDb = { goals: Goal[]; features: Feature[] };
 type Undo = Schemas["GoalBucketsUndo"];
 
@@ -41,6 +42,9 @@ export function seedGoalBuckets(): GoalBucketsDb {
     const goal = goals.find((g) => g.title === title);
     if (feature && goal && !feature.goal_ids.includes(goal.id)) feature.goal_ids.push(goal.id);
   }
+  // Sample data import joined from an approved order naming its goal with no contribution: assumed until a person sets it.
+  const sample = features.find((f) => f.key === "F-02");
+  if (sample) sample.assumed_goal_ids = sample.goal_ids.slice(0, 1);
   return { goals, features };
 }
 
@@ -61,6 +65,34 @@ export function seedGoalBucketsHard(): GoalBucketsDb {
   return { goals: [...base.goals, big], features };
 }
 
+/**
+ * The goal buckets as the API lists them for a roadmap's company: every live goal (the plan's, then
+ * the roadmap's own, by name: Grow retention, ...) and every feature with an item, the plan's and
+ * the roadmap's, each linked to the goals its item serves. Drafts are no feature yet. Invented data.
+ */
+export function seedGoalBucketsWith(
+  base: GoalBucketsDb,
+  goalNames: string[],
+  items: { key: string; title: string; goals: string[] }[],
+): GoalBucketsDb {
+  const goals = [...base.goals];
+  const goalOf = (name: string): string => {
+    let g = goals.find((x) => x.title.toLowerCase() === name.toLowerCase());
+    if (!g) {
+      g = { id: stableUuid(`goal-bucket/${name}`), title: name, order: goals.length + 1, measure: null, target: null, due: null, archived: false };
+      goals.push(g);
+    }
+    return g.id;
+  };
+  for (const name of goalNames) goalOf(name);
+  const features = [...base.features];
+  for (const i of items) {
+    if (features.some((f) => f.key.toLowerCase() === i.key.toLowerCase())) continue;
+    features.push({ id: stableUuid(`feature-bucket/${i.key}`), key: i.key, title: i.title, goal_ids: [...new Set(i.goals.map(goalOf))] });
+  }
+  return { goals, features };
+}
+
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
@@ -71,7 +103,7 @@ function out(db: GoalBucketsDb, edits: boolean): Schemas["GoalBucketsOut"] {
   return {
     can_edit: edits,
     goals: live.map((g) => ({ id: g.id, title: g.title, order: g.order, measure: g.measure, target: g.target, due: g.due, can_edit: edits })),
-    features: db.features.map((f) => ({ id: f.id, key: f.key, title: f.title, goal_ids: f.goal_ids.filter((g) => ids.has(g)) })),
+    features: db.features.map((f) => ({ id: f.id, key: f.key, title: f.title, goal_ids: f.goal_ids.filter((g) => ids.has(g)), assumed_goal_ids: (f.assumed_goal_ids ?? []).filter((g) => ids.has(g)) })),
   };
 }
 
@@ -80,7 +112,10 @@ const goalSnap = (g: Goal) => ({ id: g.id, title: g.title, status: g.archived ? 
 // The mock keeps links in order, and Undo puts that order back; each link is snapshotted whole, as the API does.
 const featureSnap = (f: Feature) => ({
   feature_id: f.id,
-  links: f.goal_ids.map((goal_id, i) => ({ goal_id, contribution: i ? 2 : 3, id: `${f.id}:${goal_id}`, attrs: { contribution: i ? 2 : 3 }, status: "confirmed", origin: "user", created_at: "2026-01-05T00:00:00Z" })),
+  links: f.goal_ids.map((goal_id, i) => {
+    const attrs = f.assumed_goal_ids?.includes(goal_id) ? { contribution: 1, contribution_assumed: true } : { contribution: i ? 2 : 3 };
+    return { goal_id, contribution: attrs.contribution, id: `${f.id}:${goal_id}`, attrs, status: "confirmed", origin: "user", created_at: "2026-01-05T00:00:00Z" };
+  }),
 });
 // The API signs each undo and refuses one it did not give; the mock signs with a plain hash of the rest.
 const sigOf = (u: Omit<Undo, "sig">) => {
@@ -128,7 +163,10 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
     const undo = signed({ goals: [goalSnap(g)], features: held.map(featureSnap), added_goal_id: null });
     for (const f of held) {
       const rest = f.goal_ids.filter((x) => x !== g.id);
-      f.goal_ids = f.goal_ids[0] === g.id && !rest.length && to ? [to] : rest;
+      const first = f.goal_ids[0] === g.id;
+      f.goal_ids = first && !rest.length && to ? [to] : rest;
+      // The link that becomes first gets its contribution set (the API's TOP): no longer assumed.
+      if (first) f.assumed_goal_ids = f.assumed_goal_ids?.filter((x) => x !== f.goal_ids[0]);
     }
     g.archived = true;
     return json(200, { goal: null, undo });
@@ -140,6 +178,8 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
     if (!db.goals.some((x) => x.id === to)) return json(404, { detail: "No such goal" });
     const undo = signed({ goals: [], features: [featureSnap(f)], added_goal_id: null });
     f.goal_ids = [to, ...f.goal_ids.filter((x) => x !== to && x !== body.from_goal_id)];
+    // The goal it is dropped on gets its contribution set (the API's TOP): no longer assumed.
+    f.assumed_goal_ids = f.assumed_goal_ids?.filter((x) => x !== to && x !== body.from_goal_id);
     return json(200, { goal: null, undo });
   }
   if (p[3] === "undo" && m === "POST") {
@@ -153,7 +193,10 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
     }
     for (const s of u.features ?? []) {
       const f = db.features.find((x) => x.id === s.feature_id);
-      if (f) f.goal_ids = s.links.map((l) => l.goal_id);
+      if (f) {
+        f.goal_ids = s.links.map((l) => l.goal_id);
+        f.assumed_goal_ids = s.links.filter((l) => (l.attrs as Record<string, unknown> | null)?.contribution_assumed === true).map((l) => l.goal_id);
+      }
     }
     if (u.added_goal_id) {
       const g = db.goals.find((x) => x.id === u.added_goal_id);

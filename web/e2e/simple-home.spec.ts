@@ -75,9 +75,11 @@ for (const phone of [false, true]) {
           // Labels beside the icons at 18 px.
           const home = page.getByTestId("simple-nav-home");
           expect(await home.evaluate((el) => getComputedStyle(el).fontSize)).toBe("18px");
-          // A yellow count only where something waits on me: the commenter's three proposals on the Roadmap.
-          // roadmap-decide: the Roadmap count adds the broken links to what waits on me, and says both.
-          await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveAttribute("title", /, 3 changes or drafts waiting on you$/);
+          // A yellow count only where something waits on me (home-waiting-one-list): on the Roadmap the
+          // broken links (roadmap-decide: as the roadmap counts them), the dates to confirm and the
+          // commenter's three proposals on my items, each said in its title.
+          await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveText("9");
+          await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveAttribute("title", /^9 on the roadmap waiting on you: .*, 3 changes or drafts$/);
           await expect(page.getByTestId("simple-nav-one-pagers-count")).toHaveCount(0);
           await expect(page.getByTestId("simple-nav-priorities-count")).toHaveCount(0);
           await expect(page.getByTestId("simple-person")).toContainText(/owner/i);
@@ -120,6 +122,7 @@ for (const phone of [false, true]) {
         await task.getByTestId("home-flow-thumb").click();
         await expect(task.getByTestId("home-flow-wide")).toContainText("No flow yet");
 
+        const railBefore = phone ? 0 : Number(await page.getByTestId("simple-nav-roadmap-count").textContent());
         await retitle.getByRole("button", { name: "Accept" }).click();
         await expect(page.getByText("Accepted", { exact: true })).toBeVisible();
         await expect(proposals.getByTestId("home-proposal")).toHaveCount(2);
@@ -128,7 +131,9 @@ for (const phone of [false, true]) {
         await expect(page.getByTestId("home-draft")).toContainText("Next: you approve it, and version");
         await proposals.getByTestId("home-proposal").filter({ hasText: "Move to another horizon" }).getByRole("button", { name: "Decline" }).click();
         await expect(proposals.getByTestId("home-proposal")).toHaveCount(1);
-        if (!phone) await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveAttribute("title", /, 1 change or draft waiting on you$/);
+        // The two proposals acted on leave the rail's Roadmap count at once.
+        if (!phone) await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveText(String(railBefore - 2));
+        if (!phone) await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveAttribute("title", /, 1 change or draft$/);
 
         // A broken dependency: Move dependents applies into the roadmap's working draft, with Undo.
         const broken = card(page, "plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ });

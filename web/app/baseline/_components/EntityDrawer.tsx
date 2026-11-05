@@ -844,6 +844,11 @@ function Links({
                 <div className="flex min-h-8 min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
                   <span className="min-w-[9rem] flex-1">{link(e[end])}</span>
                   {e.status === "proposed" && <Chip kind="warn">Proposed</Chip>}
+                  {contribution && e.attrs?.contribution_assumed === true && (
+                    <span title="Oracle assumed this contribution: the run named the goal but not how much it helps. Set it to what it is.">
+                      <Chip kind="warn">Contribution assumed</Chip>
+                    </span>
+                  )}
                   {contribution && (
                     <span className="flex flex-none items-center gap-2" data-testid="contribution">
                       <ContributionPips value={value} proposed={e.status === "proposed"} />
@@ -853,7 +858,7 @@ function Links({
                             label={`Contribution to ${name}`}
                             value={String(value)}
                             disabled={busy}
-                            onChange={(v) => onPatch(e, { attrs: { contribution: Number(v) } }, `Contribution set to ${v}.`)}
+                            onChange={(v) => onPatch(e, { attrs: { contribution: Number(v), contribution_assumed: null } }, `Contribution set to ${v}.`)}
                           />
                         </span>
                       ) : (

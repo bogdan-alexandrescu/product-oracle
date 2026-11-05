@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ds";
 
 import type { Act } from "./_card";
+import { useMsCtl } from "./_milestones";
+import { OldMilestones } from "./_old_milestones";
 import { shortDay, type KeyDate, type Roadmap } from "./_lib";
 
 type Draft = { name: string; date: string; note: string };
@@ -25,8 +27,9 @@ const dayWords = (day: string, today: string) => (day.slice(0, 4) === today.slic
  * names it, target.roadmap_id); all roadmaps, it lists the key dates per roadmap and adding
  * one asks which roadmap.
  */
-export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data: Roadmap; act: Act; mayChange: boolean; phone: boolean; onClose: () => void }) {
+export function KeyDatesEditor({ data, act, mayChange, phone, onClose, onOld }: { data: Roadmap; act: Act; mayChange: boolean; phone: boolean; onClose: () => void; onOld: () => Promise<void> | void }) {
   const chosen = data.roadmap ?? null;
+  const ms = useMsCtl();
   // The roadmaps listed: the chosen one, else every roadmap the person may read.
   const roadmaps = data.key_date_roadmaps ?? [];
   // Where a new key date may go: the chosen roadmap, else every roadmap the person may read.
@@ -48,7 +51,12 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
   const of = (id: string) => roadmaps.find((r) => r.roadmap.id === id) ?? (data.roadmaps ?? []).find((r) => r.roadmap.id === id);
   const can = mayChange && (current ? !!current.can_change : addable.some((r) => r.can_change));
   const applies = current ? current.applies : addable.length > 0 && addable.every((r) => r.applies);
-  const groups = roadmaps.map((r) => ({ r, list: (data.key_dates ?? []).filter((k) => k.roadmap.id === r.roadmap.id) }));
+  const groups = roadmaps.map((r) => ({
+    r,
+    list: (data.key_dates ?? []).filter((k) => k.roadmap.id === r.roadmap.id),
+    // old-milestones: the goal milestones brought over from older roadmaps, dated, by day.
+    carried: (data.goal_milestones ?? []).filter((m) => m.roadmap_id === r.roadmap.id && m.carried_from && m.date).sort((a, b) => a.date!.localeCompare(b.date!)),
+  }));
 
   const add = async () => {
     const to = addable.find((r) => r.roadmap.id === rm);
@@ -115,11 +123,11 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
             : "Owners and the roadmap's decider change key dates; yours are proposals they accept or decline."}
       </p>
       {groups.length === 0 && <p className="mt-3 text-sm text-text2">No key dates yet.</p>}
-      {groups.map(({ r, list }) => (
+      {groups.map(({ r, list, carried }) => (
         <section key={r.roadmap.id} data-testid="key-dates-group" data-roadmap={r.roadmap.title}>
           {groups.length > 1 && <h3 className="mt-3 text-sm font-semibold text-text2">{r.roadmap.title}</h3>}
           <ul className="mt-2 space-y-2" aria-label={`${r.roadmap.title}'s key dates`}>
-        {list.length === 0 && <li className="text-sm text-text2">No key dates yet.</li>}
+        {list.length === 0 && carried.length === 0 && <li className="text-sm text-text2">No key dates yet.</li>}
         {list.map((k) =>
           editing === k.id ? (
             <li key={k.id} className="space-y-2 rounded-lg border border-accent p-2" data-testid="key-date-edit">
@@ -201,9 +209,34 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
             </li>
           ),
         )}
+        {carried.map((m) => (
+          <li key={m.id} className="flex items-start gap-2 rounded-lg border border-line p-2" data-testid="key-date-milestone" data-name={m.name}>
+            <span aria-hidden className="mt-1.5 inline-block h-2.5 w-2.5 flex-none rotate-45 border-[1.5px] border-accent-ink" />
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-baseline gap-x-1.5 font-medium">
+                {/* Opens the milestone's own panel, as its diamond on the Timeline does. */}
+                <button
+                  type="button"
+                  className="min-w-0 break-words text-left underline-offset-2 hover:underline"
+                  aria-label={`Open ${m.code} ${m.name}`}
+                  onClick={() => {
+                    onClose();
+                    ms?.edit(m);
+                  }}
+                >
+                  {m.name}
+                </button>
+                <span className="flex-none whitespace-nowrap text-text2">· {dayWords(m.date!, data.today)}</span>
+              </div>
+              <div className="text-sm text-text2">Milestone brought over from {m.carried_from!.title}</div>
+            </div>
+          </li>
+        ))}
           </ul>
         </section>
       ))}
+      {/* old-milestones: an owner brings the older roadmaps' goal milestones over. */}
+      <OldMilestones old={data.old_milestones} today={data.today} onDone={onOld} />
       {can && (
         <form
           className="mt-3 space-y-2 border-t border-line pt-3"

@@ -30,7 +30,7 @@ async function signIn(page: Page) {
   await tap(page.getByTestId("format-gantt"));
 }
 
-/** Opens Adaptive pacing's card from its bar (a done item, off the plan: from the Done list), then its talk (a phone: the Talk to Oracle tab). */
+/** Opens Adaptive pacing's feature panel from its bar (a done item, off the plan: from the Done list), then its talk (a phone: the Talk to Oracle tab). */
 async function openTalk(page: Page, phone: boolean, done = false): Promise<{ card: Locator; talk: Locator }> {
   if (done) {
     await tap(page.getByTestId("done-items-toggle"));
@@ -42,7 +42,8 @@ async function openTalk(page: Page, phone: boolean, done = false): Promise<{ car
   }
   const card = page.getByTestId("floating-card");
   await expect(card).toBeVisible();
-  await tap(card.getByRole(phone ? "tab" : "button", { name: "Talk to Oracle" }));
+  // The feature panel: a desktop's talk is always beside the details, a phone's behind its tab.
+  if (phone) await tap(card.getByRole("tab", { name: "Talk to Oracle" }));
   const talk = card.getByTestId("item-talk");
   await expect(talk.getByRole("textbox", { name: "Message Oracle" })).toBeVisible();
   return { card, talk };
@@ -84,7 +85,7 @@ for (const phone of [false, true]) {
       await tap(ship.getByRole("button", { name: "Apply" }));
       await expect(ship).toHaveAttribute("data-status", "applied");
       if (phone) await tap(card.getByRole("tab", { name: "Details" }));
-      await expect(card.getByTestId("card-status")).toHaveText("Done");
+      await expect(card.getByTestId("fp-status")).toHaveText("Done");
     });
 
     /**
@@ -151,7 +152,7 @@ for (const phone of [false, true]) {
       await expect(page.locator('[data-testid="bar"][data-item="adaptive-pacing"]')).toHaveCount(0);
       const { card, talk } = await openTalk(page, phone, true);
       if (phone) await tap(card.getByRole("tab", { name: "Details" }));
-      await expect(card.getByTestId("card-status")).toHaveText("Done");
+      await expect(card.getByTestId("fp-status")).toHaveText("Done");
       if (phone) await tap(card.getByRole("tab", { name: "Talk to Oracle" }));
       await say(talk, "this is already live in the partner app");
       await expect(talk).not.toContainText("marked as shipped already");

@@ -15,6 +15,7 @@ from sqlalchemy import select
 from oracle.docs.models import Document
 from oracle.roadmap.models import RoadmapItem
 from oracle.runs import plan_tables
+from oracle.runs.roadmap import check_items
 from oracle.simple import approved_roadmap
 from oracle.swarm import Outcome
 from oracle.templates.builtins import BUILTIN_TEMPLATES, builtin_body
@@ -62,7 +63,7 @@ def _codes(run: dict) -> list[str]:
 
 
 def test_the_engineering_plan_reads_the_items_file_and_the_verified_bases():
-    plan = plan_tables.engineering_plan(ITEMS, BASES)
+    plan = plan_tables.engineering_plan(check_items(ITEMS).items, BASES)
     pay, ship = plan.items
     assert (pay.key, pay.start, pay.end, pay.basis) == ("payment-step", None,
                                                         date(2026, 11, 30), "estimate")  # fmt: skip
@@ -74,13 +75,13 @@ def test_the_engineering_plan_reads_the_items_file_and_the_verified_bases():
 
 
 def test_without_a_verified_basis_an_item_has_no_date():
-    plan = plan_tables.engineering_plan(ITEMS, [])
+    plan = plan_tables.engineering_plan(check_items(ITEMS).items, [])
     assert [(r.end, r.basis) for r in plan.items] == [(None, "no date yet")] * 2
     assert plan.milestones[0].date is None
 
 
 def test_the_tables_read_month_first():
-    lines = plan_tables.table_lines(plan_tables.engineering_plan(ITEMS, BASES))
+    lines = plan_tables.table_lines(plan_tables.engineering_plan(check_items(ITEMS).items, BASES))
     assert "| payment-step | Payment step |  | Nov 30, 2026 | estimate | planned |" in lines
     assert "| shipping-step | Shipping step |  | Jan 15, 2027 | team queue | planned |" in lines
     assert "| Beta | Nov 30, 2026 | Payment step |  |" in lines
@@ -88,7 +89,7 @@ def test_the_tables_read_month_first():
 
 
 def test_the_check_finds_each_problem():
-    plan = plan_tables.engineering_plan(ITEMS, BASES[:1])
+    plan = plan_tables.engineering_plan(check_items(ITEMS).items, BASES[:1])
     today = date(2026, 11, 4)
     assert plan_tables.check(ROADMAP_MD, plan, today) == []
     bare = ROADMAP_MD.replace(PLAN_TABLES, "")
@@ -108,7 +109,7 @@ def test_the_check_finds_each_problem():
 
 
 def test_the_check_finds_an_item_missing_from_the_plan_table():
-    plan = plan_tables.engineering_plan(ITEMS, BASES[:1])
+    plan = plan_tables.engineering_plan(check_items(ITEMS).items, BASES[:1])
     row = "| shipping-step | Shipping step |  |  | no date yet | planned |\n"
     short = ROADMAP_MD.replace(row, "")
     (p,) = plan_tables.check(short, plan, date(2026, 11, 4))
@@ -117,7 +118,7 @@ def test_the_check_finds_an_item_missing_from_the_plan_table():
 
 
 def test_the_check_reads_the_dates_from_words():
-    plan = plan_tables.engineering_plan(ITEMS, BASES[:1])
+    plan = plan_tables.engineering_plan(check_items(ITEMS).items, BASES[:1])
     today = date(2026, 11, 4)
     said = ROADMAP_MD.replace("| Nov 30, 2026 | estimate |", "| Nov 30, 2026 | commitment |")
     (p,) = plan_tables.check(said, plan, today)

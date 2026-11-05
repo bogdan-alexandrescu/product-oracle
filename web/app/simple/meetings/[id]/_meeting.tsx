@@ -408,8 +408,8 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
                 {m.meeting_decisions.map((d) => (
                   <li key={d.id} data-testid="meeting-decision">
                     <strong>{code(d)}</strong> {d.title}
-                    {/* qa-simple-decide-50: the day too, as elsewhere in Simple; qa4-simple-decide-19: the meeting's one format, no zone letters. */}
-                    <span className="block text-sm text-text-faint">{d.approver.name} · {momentWords(d.at, zone)}</span>
+                    {/* qa-simple-decide-50: the day too, as elsewhere in Simple; RP2 c: the decision stamp keeps its zone ("Wed Nov 4, 4:41 PM PST"). */}
+                    <span className="block text-sm text-text-faint" data-testid="decision-stamp">{d.approver.name} · {momentWords(d.at, zone, false, true)}</span>
                   </li>
                 ))}
               </ul>
@@ -428,12 +428,24 @@ function AgendaStrip({ agenda }: { agenda?: MeetingAgenda }) {
     <div role="status" aria-label="Agenda" data-testid="agenda-strip" className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-line px-4 py-2 text-base [overflow-wrap:anywhere]">
       {agenda.next && (
         <p data-testid="agenda-next">
-          <span className="font-semibold">Next:</span> {agenda.next.title}
+          {/* build-feature-panel review 5: each name opens the one feature panel. */}
+          <span className="font-semibold">Next:</span>{" "}
+          <button type="button" data-feature={agenda.next.id} className="text-left hover:underline">
+            {agenda.next.title}
+          </button>
         </p>
       )}
       {agenda.skipped.length > 0 && (
         <p data-testid="agenda-skipped" className="text-text2">
-          <span className="font-semibold">Skipped:</span> {agenda.skipped.map((x) => x.title).join(", ")}
+          <span className="font-semibold">Skipped:</span>{" "}
+          {agenda.skipped.map((x, k) => (
+            <span key={x.id}>
+              {k > 0 && ", "}
+              <button type="button" data-feature={x.id} className="text-left hover:underline">
+                {x.title}
+              </button>
+            </span>
+          ))}
         </p>
       )}
     </div>
@@ -565,7 +577,11 @@ function RoadmapSlice({ m, reload, refresh }: { m: Meeting; reload: () => Promis
         {items.map((i) => (
           <li key={i.id} data-item={i.key} className="flex flex-wrap items-center justify-between gap-2 py-2">
             <span className="min-w-0 flex-1">
-              <strong>{i.title}</strong> · {i.status === "cut" ? "Cut" : cap(i.horizon)} · <span className="whitespace-nowrap" data-testid="roadmap-span">{dayWords(i.start.date, zone)} – {dayWords(i.end.date, zone)}</span>
+              {/* build-feature-panel: a feature's name opens the one feature panel. */}
+              <button type="button" data-feature={i.id} className="text-left hover:underline">
+                <strong>{i.title}</strong>
+              </button>{" "}
+              · {i.status === "cut" ? "Cut" : cap(i.horizon)} · <span className="whitespace-nowrap" data-testid="roadmap-span">{dayWords(i.start.date, zone)} – {dayWords(i.end.date, zone)}</span>
             </span>
             {/* qa-simple-decide-45: a cut item comes back with Restore. */}
             {m.can.change && i.status === "cut" && (

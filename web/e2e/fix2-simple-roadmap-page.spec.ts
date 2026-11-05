@@ -194,8 +194,8 @@ test.describe("desktop", () => {
 
   /**
    * #47: on the Gantt the item card floats with a dimmed backdrop behind it on desktop;
-   * clicking the backdrop closes the card, the same as its own close button. (The Timeline
-   * opens an item in a side panel that dims nothing.)
+   * clicking the backdrop closes the card, the same as its own close button. (build-feature-panel:
+   * the card is now Simple's one feature panel, whose backdrop is feature-panel-backdrop.)
    */
   test("the Gantt's item card shows a backdrop and closes when it is clicked", async ({ page }) => {
     await open(page);
@@ -203,10 +203,11 @@ test.describe("desktop", () => {
     await bar(page, "alert-rules").click();
     const card = page.getByTestId("floating-card");
     await expect(card).toBeVisible();
-    const backdrop = page.getByTestId("floating-card-backdrop");
+    const backdrop = page.getByTestId("feature-panel-backdrop");
     await expect(backdrop).toBeVisible();
     await page.mouse.click(420, 870);
     await expect(card).not.toBeVisible();
+    await expect(backdrop).toHaveCount(0);
   });
 
   /**

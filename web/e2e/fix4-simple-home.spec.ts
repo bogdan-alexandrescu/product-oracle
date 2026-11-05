@@ -135,7 +135,8 @@ test.describe("desktop", () => {
     await expect(goal.getByTestId("home-goal-link")).toHaveAttribute("href", /^\/simple\/(roadmap\?goal=|priorities)/);
     await expect(home(page).getByTestId("home-goal-weight").first()).toHaveText(/^Counts for \d+% of each feature's score$/);
     const labels = home(page).getByTestId("home-strip-label");
-    await expect(labels.filter({ hasText: /· no milestone ·/ }).first()).toHaveText(/^\S.* · no milestone · \d+ items?$/);
+    // home-waiting-one-list: the plan is the company roadmap's, every PRD's items: each row is a milestone by its name, or the items in none.
+    for (const t of await labels.allTextContents()) expect(t).toMatch(/^(Not in a milestone|[^·]+) · \d+ items?$/);
     await expect(labels.filter({ hasText: /^No milestone/ })).toHaveCount(0);
     const months = await home(page).getByTestId("home-strip-month").allTextContents();
     expect(months.length).toBeGreaterThanOrEqual(3);

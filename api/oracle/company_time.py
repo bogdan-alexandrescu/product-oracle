@@ -81,11 +81,20 @@ def date_in_words(on: date) -> str:
     return f"{on:%a} {on:%b} {on.day}"
 
 
-def calendar_day(d: date | str) -> str:
-    """A calendar day (no zone: a milestone's, a tracker issue's target) as "Nov 30"."""
+def calendar_day(d: date | str, today: date | None = None) -> str:
+    """A calendar day (no zone: a milestone's, a tracker issue's target) as "Nov 30"; given
+    ``today`` (the company's), "Nov 30, 2027" when it falls in another year."""
     if isinstance(d, str):
         d = date.fromisoformat(d[:10])
+    if today is not None and d.year != today.year:
+        return f"{d:%b} {d.day}, {d.year}"
     return f"{d:%b} {d.day}"
+
+
+def calendar_day_with_year(d: date | None) -> str:
+    """A calendar day with its year, month first, as "Nov 30, 2026" (the plan tables, the
+    company queue); empty for no day."""
+    return f"{calendar_day(d)}, {d.year}" if d else ""
 
 
 def day_first_in_words(moment: datetime | str, zone: str = DEFAULT_ZONE) -> str:

@@ -98,17 +98,15 @@ test("4 the run's Goal column breaks no goal name inside a word at 1512 px", asy
   expect(await brokenWords(goals)).toEqual([]);
 });
 
-test("5 Depends on names a dependency the PRD left out and says it is outside the PRD's scope", async ({ page }) => {
+test("5 Depends on names a dependency the PRD left out, with no extra note (RP1 a)", async ({ page }) => {
   await page.setViewportSize({ width: 1512, height: 900 });
   await seeded(page);
   await runOrder(page);
   const deps = page.getByTestId("row-deps");
   await expect(deps.filter({ hasText: "Address lookup service" })).toHaveCount(1);
   await expect(page.locator("main")).not.toContainText(/\bF-8\b/);
-  const outside = page.getByTestId("row-deps-outside");
-  await expect(outside).toHaveCount(1);
-  await expect(outside).toHaveText("Outside this PRD's scope");
-  await expect(deps.filter({ has: outside })).toContainText("Scheduled exports");
+  await expect(deps.filter({ hasText: "Scheduled exports" })).toHaveCount(1);
+  await expect(page.locator("main")).not.toContainText("Outside this PRD's scope");
   // The cycle banner names it too.
   await expect(page.getByTestId("cycles-banner")).toContainText("Bulk export → Scheduled exports");
 });
