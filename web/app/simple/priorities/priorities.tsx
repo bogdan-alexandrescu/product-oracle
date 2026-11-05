@@ -609,8 +609,9 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
             )}
             {mayChange && !r.can_reorder && (
               <p className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12" data-testid="prio-locked">
-                {/* prio-company: never the owner's (an owner moves every row); someone who truly lacks the right. */}
-                Only people with access to this feature&apos;s roadmap can move it. Ask the owner for access.
+                {/* prio-company: never the owner's (an owner moves every row); someone who truly lacks the right. A feature on
+                    no roadmap waits for the owner to add it, which no access changes. */}
+                {r.on_roadmap ? "Only people with access to this feature's roadmap can move it. Ask the owner for access." : "Only the owner can add this to the roadmap."}
               </p>
             )}
             {r.after && (
@@ -1665,8 +1666,9 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
 function lineGroups(lines: Line[]): [Line["prd"], Line[]][] {
   const out: [Line["prd"], Line[]][] = [];
   for (const l of lines) {
-    const last = out[out.length - 1];
-    if (last && (last[0]?.id ?? null) === (l.prd?.id ?? null)) last[1].push(l);
+    // Each PRD is one group, at its first line, even when another's line falls between by date.
+    const mine = l.prd ? out.find(([p]) => p?.id === l.prd!.id) : out.at(-1)?.[0] ? undefined : out.at(-1);
+    if (mine) mine[1].push(l);
     else out.push([l.prd ?? null, [l]]);
   }
   return out;
@@ -1866,7 +1868,7 @@ function EffortEdit({ r, changed }: { r: Row; changed: Changed }) {
     );
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5" data-testid="prio-effort-edit">
-      <label className="inline-flex items-center gap-1">
+      <label className="inline-flex items-center gap-2">
         <span>Effort</span>
         <input
           type="number"

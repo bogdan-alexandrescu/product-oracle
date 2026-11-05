@@ -671,8 +671,9 @@ async def _who(
 
 async def add_to_company(db: AsyncSession, principal: Any, feature_id: Any) -> service.Entry | None:
     """prio-company (Nov 4): the feature's item on the company roadmap, added to its shown
-    version (made when it has none) when it has none there; None while there is no company
-    roadmap (a move then ranks the feature alone). The caller commits."""
+    version (made when it has none) when it has none there, its draft there confirmed rather
+    than a second item added; None while there is no company roadmap (a move then ranks the
+    feature alone). The caller commits."""
     from oracle.simple.additions import _shown_version
 
     fid = changes._uuid(feature_id, "feature_id")
@@ -683,10 +684,19 @@ async def add_to_company(db: AsyncSession, principal: Any, feature_id: Any) -> s
     if doc is None:
         return None
     read_ = await service.load(db)
-    for e in read_.entries:
-        if e.roadmap.id == doc.id and e.row.feature_id == fid and not e.row.draft:
-            if e.status != "cut":
-                return e
+    there = [e for e in read_.entries
+             if e.roadmap.id == doc.id and e.row.feature_id == fid and e.status != "cut"
+             and not e.row.merged_into]  # fmt: skip
+    for e in there:
+        if not e.row.draft:
+            return e
+    if there:
+        row = there[0].row
+        row.draft = False
+        await db.flush()
+        data = {"feature_id": str(fid), "roadmap_id": str(doc.id), "from": "priorities"}
+        await audit.record(db, principal, "roadmap.item_confirmed", "roadmap_item", row.id, data)
+        return (await service.load(db)).by_id().get(row.id)
     base = await _shown_version(db, doc.id)
     if base is None:
         body = f"# {doc.title}\n"

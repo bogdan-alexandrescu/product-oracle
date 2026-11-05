@@ -27,7 +27,7 @@ import { mockNowMs } from "./clock";
 import { draftDecisionNotes } from "./decision-notes";
 import { stableUuid } from "./ids";
 import { changeSentence } from "./simple-change-words";
-import { priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
+import { addToCompany, featureItem, priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
 import {
   canDecideItem,
   canEditRoadmap,
@@ -476,11 +476,21 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   if (target.item_id && !keyOf(db, target.item_id)) return json(404, { detail: "No such roadmap item" });
   // A feature ask is filed directly by every commenter and up (targets.py _who).
   const applies = body.op === "add_feature_ask" || decides(db, ctx, target.item_id);
+  // S6 (./simple-priorities.ts): a pin and an estimate are compared and stored as targets.py does.
+  const ranking = body.op === "override_priority" || body.op === "estimate_feature";
+  if (ranking && !target.item_id) {
+    if (typeof target.feature_id !== "string" || !target.feature_id) return json(422, { detail: "target: item_id or feature_id" });
+    // prio-company (targets.create): moving a feature not on the company roadmap adds it there,
+    // an owner's right; then the move is the item's. An estimate is the feature's (stored here
+    // under the item standing for it).
+    if (body.op === "override_priority" && ctx.role !== "owner") return json(403, { detail: "Only an owner can add a feature to the company roadmap" });
+    const key = body.op === "override_priority" ? addToCompany(db, target.feature_id) : featureItem(db, target.feature_id);
+    if (!key) return json(404, { detail: "No such feature" });
+    target.item_id = db.ids[key];
+  }
   if (spec.adds) target[spec.id] = crypto.randomUUID();
   const id = String(target[spec.id] ?? "");
   const stored = (db.targets ??= {})[id] ?? {};
-  // S6 (./simple-priorities.ts): a pin and an estimate are compared and stored as targets.py does.
-  const ranking = body.op === "override_priority" || body.op === "estimate_feature";
   const after = ranking ? priorityAfter(body.op, body.after ?? {}) : { ...body.after };
   if (typeof after === "string") return json(422, { detail: after });
   // walkc-roadmap-tasks: a task's owner is a person (targets.py stores owner_id); the chat's

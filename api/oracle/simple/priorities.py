@@ -491,9 +491,9 @@ def _same_as(name: str, day: date) -> set[tuple[str, date]]:
     return {(re.split(r"[\s·]", name)[0], day)} | ({("~" + words, day)} if words else set())
 
 
-# prio-company (Nov 4): a name carrying a template's literal placeholder ("Milestone N
-# agents", "M{n}", "<name>") is no name a person reads.
-_PLACEHOLDER = re.compile(r"(^|\s)N(\s|$)|[{<\[][^}>\]]*[}>\]]")
+# prio-company (Nov 4): a name carrying a template's lone "N" placeholder ("Milestone N
+# agents") is no name a person reads; a real name with brackets ("Beta [internal]") is.
+_PLACEHOLDER = re.compile(r"(^|\s)N(\s|$)")
 
 
 def readable(name: str | None) -> str | None:

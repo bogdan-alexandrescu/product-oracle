@@ -68,6 +68,9 @@ interface SeedItem {
   kept_both?: boolean;
   /** S7: the key of the item this draft was merged into (the draft is closed). */
   merged_into?: string;
+  /** prio-company: the key of the item whose feature this one is (an item a move on Priorities
+   * added to the company roadmap for a feature it did not hold); else its own feature. */
+  feature?: string;
   /** S7: the baseline feature (with no item) this draft was linked to by a merge. */
   // A draft merged with a baseline feature that has no item: linked to it (still a draft).
   linked_feature?: string;
