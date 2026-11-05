@@ -22,6 +22,11 @@ import { login } from "./helpers";
  *   marked assumed until a person sets it; a new feature naming no goal blocks Approve order,
  *   named plainly; fails_when=the link is dropped ("Serves no goal"), the assumed mark is missing
  *   or stays after the person sets it, or Approve order is enabled for a feature with no goal.
+ * - RP1 a, round 3: protects=a new feature naming a goal the Ground Truth does not have blocks
+ *   Approve order too; each blocking problem is said in full under the band and in the new
+ *   feature's panel, with what to do (request changes: order problems are never waived), at
+ *   1440 and 390; fails_when=the sentence sits only in a tooltip, the band says "waive", the
+ *   info line promises the order adds the features, or the unknown goal is let through.
  * - RP2 c (mk-runplan): protects=Approve these 6 dates brings its ask into view; the decision
  *   stamp keeps its zone ("Avery Stone · Wed Nov 4, 4:41 PM PST"); fails_when=the ask opens out of
  *   view, or the stamp drops the zone.
@@ -189,16 +194,61 @@ test.describe("RP1 a: the run's priority order", () => {
   });
 
   test("a new feature that names no goal blocks Approve order, named plainly", async ({ page }) => {
-    await withScenario(page, "priority-order");
-    await login(page, "approver@example.com");
-    await page.goto(`/runs/${PRIORITY_NO_GOAL_RUN}`);
-    await page.getByTestId("checkpoint-priority_order").getByRole("link", { name: "Review the order" }).click();
+    await openNoGoalOrder(page);
     const band = page.getByTestId("snapshot-band");
     await expect(band.getByRole("button", { name: "Approve order" })).toBeDisabled();
-    await expect(band.getByTestId("cannot-approve")).toContainText("1 blocking problem");
+    await expect(band.getByTestId("cannot-approve")).toContainText("2 blocking problems");
     const chip = page.getByTestId("priority-row-N-7").getByTestId("problem-new_feature_no_goal");
     await expect(chip).toHaveText(/^Names no goal/);
-    await expect(chip).toHaveAttribute("title", "Gift notes at checkout is new and names no goal it serves: the run must name one");
+    await expect(chip).toHaveAttribute("title", NO_GOAL);
+    await expect(page.getByTestId("priority-row-N-8").getByTestId("problem-unknown_goal")).toHaveText(/^Unknown goal/);
+    await expectBlockingSaid(page);
+
+    // The new feature's panel names its problem in a plain sentence.
+    await page.getByTestId("priority-row-N-7").getByRole("button", { name: /Gift notes at checkout/ }).click();
+    const problems = page.getByTestId("priority-inspector").getByTestId("run-problems");
+    await expect(problems).toBeVisible();
+    await expect(problems.getByText(NO_GOAL)).toBeVisible();
+  });
+});
+
+// Review of PR 1244, round 3: an order's blocking problems are said in full under the band,
+// with what to do (order problems are never waived), at 1440 and on a phone.
+const NO_GOAL = "Gift notes at checkout is new and names no goal it serves: the run must name one";
+const UNKNOWN_GOAL = "Gift wrap choice names the goal g.no-such-goal, which is not a goal in the Ground Truth: the run must name one that is";
+
+async function openNoGoalOrder(page: Page) {
+  await withScenario(page, "priority-order");
+  await login(page, "approver@example.com");
+  await page.goto(`/runs/${PRIORITY_NO_GOAL_RUN}`);
+  await page.getByTestId("checkpoint-priority_order").getByRole("link", { name: "Review the order" }).click();
+  await expect(page.getByTestId("snapshot-band")).toBeVisible();
+}
+
+async function expectBlockingSaid(page: Page) {
+  const band = page.getByTestId("snapshot-band");
+  const said = band.getByTestId("cannot-approve");
+  await expect(said).toHaveText("2 blocking problems left. Order problems cannot be waived: request changes so the run names the goal.");
+  const list = band.getByRole("list", { name: "Blocking problems" });
+  await expect(list.getByRole("listitem")).toHaveCount(2);
+  await expect(list.getByText(NO_GOAL)).toBeVisible();
+  await expect(list.getByText(UNKNOWN_GOAL)).toBeVisible();
+  await expect(band).not.toContainText("waive them");
+  // The info line no longer promises the order adds them: it cannot be approved as it is.
+  const note = page.getByTestId("new-features-note");
+  await expect(note).toContainText("This order ranks the 2 features Gift notes adds");
+  await expect(note).not.toContainText("Approving the order");
+}
+
+test.describe("RP1 a: an order naming no goal, or an unknown one, on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test("at 390 px each blocking problem is said in full under the band", async ({ page }) => {
+    await openNoGoalOrder(page);
+    await expect(page.getByTestId("snapshot-band").getByRole("button", { name: "Approve order" })).toBeDisabled();
+    await expectBlockingSaid(page);
+    const sideways = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(sideways).toBeLessThanOrEqual(0);
   });
 });
 

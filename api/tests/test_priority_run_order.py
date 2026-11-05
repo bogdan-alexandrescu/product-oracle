@@ -928,6 +928,7 @@ def new_known(goals) -> run_order.Known:
     k = known(("a", "b"), scope=("a", "b", "new-one"))
     k.features["new-one"] = "Gift notes"
     k.new_goals = {"new-one": goals}
+    k.goals = {"activation": "Activation"}
     return k
 
 
@@ -965,6 +966,48 @@ def test_check_a_new_feature_naming_its_goal_is_clean(goals, extra):
 def test_check_a_row_goal_that_does_not_serve_is_no_goal():
     text = NEW_ONE + "    goal: activation\n    contribution: 0\n"
     out = run_order.check_order(text, known=new_known([]))
+    assert codes(out) == [("new_feature_no_goal", True, "new-one")]
+
+
+# Review of PR 1244, round 3: a goal counts only when it is a known, non-rejected goal.
+@pytest.mark.parametrize(
+    "goals,extra",
+    [
+        ([], "    goal: no-such-goal\n"),
+        ([], "    goal: no-such-goal\n    contribution: 2\n"),
+        ([{"key": "no-such-goal", "contribution": 2}], ""),
+    ],
+    ids=["row-key-alone", "row-with-contribution", "feature-set"],
+)
+def test_check_a_new_feature_naming_an_unknown_goal_is_blocking(goals, extra):
+    out = run_order.check_order(NEW_ONE + extra, known=new_known(goals))
+    assert codes(out) == [("unknown_goal", True, "new-one")]
+    assert out.problems[0]["message"] == (
+        "Gift notes names the goal no-such-goal, which is not a goal in the Ground Truth: "
+        "the run must name one that is"
+    )
+
+
+def test_check_an_unknown_goal_beside_a_known_one_is_still_blocking():
+    text = NEW_ONE + "    goal: no-such-goal\n"
+    out = run_order.check_order(text, known=new_known([{"key": "activation", "contribution": 2}]))
+    assert codes(out) == [("unknown_goal", True, "new-one")]
+
+
+@pytest.mark.parametrize(
+    "goals,extra",
+    [
+        (
+            [{"key": "activation", "contribution": None}],
+            "    goal: activation\n    contribution: 0\n",
+        ),
+        ([{"key": "activation", "contribution": 0}], "    goal: activation\n"),
+        ([{"key": "activation", "contribution": 0}], "    goal: activation\n    contribution: 2\n"),
+    ],
+    ids=["row-zero", "feature-set-zero", "feature-set-zero-row-two"],
+)
+def test_check_a_contribution_of_0_from_either_source_wins(goals, extra):
+    out = run_order.check_order(NEW_ONE + extra, known=new_known(goals))
     assert codes(out) == [("new_feature_no_goal", True, "new-one")]
 
 
@@ -1022,30 +1065,58 @@ async def test_a_row_goal_with_no_contribution_is_proposed_as_assumed(client, ow
     ]
 
 
-@pytest.mark.parametrize(
-    "goals", ["goals: []", "goals: [{key: activation, contribution: 0}]"], ids=["none", "zero"]
+NO_GOAL = "Bulk edit is new and names no goal it serves: the run must name one"
+UNKNOWN_GOAL = (
+    "Bulk edit names the goal no-such-goal, which is not a goal in the Ground Truth: "
+    "the run must name one that is"
 )
-async def test_approve_is_refused_while_a_new_feature_names_no_goal(client, owner, runtime, goals):  # noqa: F811
-    """goals: [] (or a goal it does not serve) and a row with no goal: a blocking problem
-    naming the feature, so Approve order is refused and nothing joins the Ground Truth."""
+# bulk-edit's row naming its goal with no contribution: the feature set's 0 wins.
+ROW_GOAL_ALONE = ORDER_NEW.replace("    weight: 3\n    contribution: 2\n", "")
+# bulk-edit's row naming a goal the Ground Truth does not have (review of PR 1244, round 3).
+ROW_UNKNOWN_GOAL = ORDER_NEW.replace("    goal: activation\n", "    goal: no-such-goal\n")
+
+
+@pytest.mark.parametrize(
+    "goals,text,problem",
+    [
+        ("goals: []", ORDER_NO_GOAL, ("new_feature_no_goal", NO_GOAL)),
+        (
+            "goals: [{key: activation, contribution: 0}]",
+            ORDER_NO_GOAL,
+            ("new_feature_no_goal", NO_GOAL),
+        ),
+        (
+            "goals: [{key: activation, contribution: 0}]",
+            ROW_GOAL_ALONE,
+            ("new_feature_no_goal", NO_GOAL),
+        ),
+        ("goals: []", ROW_UNKNOWN_GOAL, ("unknown_goal", UNKNOWN_GOAL)),
+    ],
+    ids=["none", "zero", "zero-wins-over-the-row", "unknown-goal"],
+)
+async def test_approve_is_refused_while_a_new_feature_names_no_goal(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+    goals,
+    text,
+    problem,
+):
+    """goals: [] (or a goal it does not serve) and a row with no goal, or a goal the Ground
+    Truth does not have: a blocking problem naming the feature, so Approve order is refused
+    and nothing joins the Ground Truth."""
     tenant_id, _ = owner
     features = CLEAN.replace(
         "    title: Bulk edit\n    goals: []\n", f"    title: Bulk edit\n    {goals}\n"
     )
-    run = await at_priority(client, owner, runtime, ORDER_NO_GOAL, features=features)
+    run = await at_priority(client, owner, runtime, text, features=features)
     (snap,) = await snapshots(tenant_id, run["id"])
     blocking = [
         (p["code"], p["feature"], p["message"])
         for p in snap.check_result["problems"]
         if p["blocking"]
     ]
-    assert blocking == [
-        (
-            "new_feature_no_goal",
-            "bulk-edit",
-            "Bulk edit is new and names no goal it serves: the run must name one",
-        )
-    ]
+    assert blocking == [(problem[0], "bulk-edit", problem[1])]
     cp = pending(run)
     assert cp["cannot_approve"] == BLOCKED
     resp = await client.post(
@@ -1058,3 +1129,19 @@ async def test_approve_is_refused_while_a_new_feature_names_no_goal(client, owne
     assert snap.status == "proposed"
     entity, _ = await new_feature_graph(tenant_id)
     assert entity is None
+
+
+async def test_a_rejected_goal_does_not_count(client, owner, runtime):  # noqa: F811
+    """The row names a goal the Ground Truth rejected: unknown_goal, blocking."""
+    tenant_id, _ = owner
+    async with tenant_session(tenant_id) as s:
+        s.add(
+            Entity(type="goal", key="old-goal", title="Old goal", status="rejected", origin="user")
+        )
+        await s.commit()
+    rejected = ORDER_NEW.replace("    goal: activation\n", "    goal: old-goal\n")
+    run = await at_priority(client, owner, runtime, rejected, features=CLEAN)
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert [(p["code"], p["feature"]) for p in snap.check_result["problems"] if p["blocking"]] == [
+        ("unknown_goal", "bulk-edit")
+    ]

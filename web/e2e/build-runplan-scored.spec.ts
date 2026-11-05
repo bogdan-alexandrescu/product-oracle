@@ -7,7 +7,7 @@ import { login } from "./helpers";
 /**
  * RP1 'Scored with the rest' (build-runplan): the run's order stop scores the features its
  * PRD adds on the same formula and goals as the baseline's and ranks them among the rest,
- * each marked New in this PRD; approving the order adds them to the baseline as proposed.
+ * each marked New in this PRD; approving the order adds them to the Ground Truth as proposed.
  *
  * Test cards (protects / fails_when / no_claim):
  * - "the new features are ranked among the rest and approving adds them": protects=the
@@ -36,7 +36,7 @@ test.describe("desktop", () => {
     await openOrder(page);
     const note = page.getByTestId("new-features-note");
     await expect(note).toHaveText(
-      "This order ranks the 6 features Saved addresses adds, scored on the same formula and goals as the rest. Approving the order adds them to the baseline as proposed.",
+      "This order ranks the 6 features Saved addresses adds, scored on the same formula and goals as the rest. Approving the order adds them to the Ground Truth as proposed.",
     );
     const rows = page.locator('tr[data-testid^="priority-row-"]');
     await expect(rows).toHaveCount(11);
@@ -65,11 +65,11 @@ test.describe("desktop", () => {
     await expect(steps).toContainText("Goal value = 3×2");
     await expect(steps).toContainText(/Score = 6 × 60% ÷ 2 = 1\.80$/);
 
-    // Approve order: saved, and the 6 new features joined the baseline as proposed.
+    // Approve order: saved, and the 6 new features joined the Ground Truth as proposed.
     const band = page.getByTestId("snapshot-band");
     await band.getByRole("button", { name: "Approve order" }).click();
     await expect(band).toContainText("Saved for Saved addresses");
-    await expect(note).toHaveText("Order approved. The 6 new features joined the baseline as proposed, at the ranks you approved.");
+    await expect(note).toHaveText("Order approved. The 6 new features joined the Ground Truth as proposed, at the ranks you approved.");
     await expect(page.getByTestId("priority-row-N-1").getByText("New in this PRD")).toBeVisible();
   });
 });
