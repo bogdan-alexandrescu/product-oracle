@@ -174,8 +174,7 @@ async def test_decided_checkpoints_in_segment_then_decided_order_and_who_decided
         "Ground Truth · approved by Pat Example, an approver · note: Good enough"
     )
     assert first["summary"] == (
-        "Ground Truth · changes requested by Pat Example, an approver · note: Name the owner "
-        "of G1"
+        "Ground Truth · changes requested by Pat Example, an approver · note: Name the owner of G1"
     )
     # The pending Engineering check is absent.
     assert pending(run)["kind"] == "eng_review"

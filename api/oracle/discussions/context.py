@@ -318,7 +318,7 @@ PAGES = {
     "home": "Home", "requests": "Requests", "baseline": "Ground Truth",
     "documents": "PRDs", "priorities": "Priorities", "plan": "Plan", "roadmap": "Plan",
     "runs": "Runs", "inbox": "Inbox", "company": "Company", "sources": "Sources",
-    "settings": "Settings",
+    "settings": "Settings", "ground-truth": "Ground Truth",
 }  # fmt: skip
 # The walk: Simple's pages by their segment after ``/simple`` ("Home" for ``/simple``).
 SIMPLE_PAGES = {

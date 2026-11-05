@@ -150,9 +150,7 @@ async def test_at_observe_propose_change_is_refused_for_run_tokens_only(client):
         token = await run_token(tenant_id, ["write:proposals"], person.user.id)
         async with mcp_client(token) as c:
             refused = await c.call_tool("propose_change", {"body": change})
-        assert refused.is_error and "Oracle is set to observe the Ground Truth" in text_of(
-            refused
-        )
+        assert refused.is_error and "Oracle is set to observe the Ground Truth" in text_of(refused)
         assert (await client.get("/v1/baseline/proposals", headers=person.headers)).json() == []
         resp = await client.post("/v1/baseline/proposals", json=change, headers=person.headers)
         assert resp.status_code == 201, resp.text

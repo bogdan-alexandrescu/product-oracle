@@ -19,6 +19,7 @@ const PAGES: Record<string, string> = {
   home: "Home",
   requests: "Requests",
   baseline: "Ground Truth",
+  "ground-truth": "Ground Truth",
   documents: "PRDs",
   priorities: "Priorities",
   plan: "Plan",
