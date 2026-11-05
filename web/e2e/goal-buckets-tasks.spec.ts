@@ -28,6 +28,15 @@ import { expect, test, type Page } from "./test";
  * keys, and Undo puts it back; fails_when = no grip, the raw item key as its chip, or it stays.
  * Card tasks-goal-menu: with no dated plan a goal has the same pencil and ⋯ (Edit goal, Archive)
  * as with one.
+ *
+ * Fix round 2 (PR 1224 re-review). Card tasks-draft-ghost: protects = while a just-added task is
+ * dragged, its floating preview shows its name and Draft; fails_when = the raw item key shows as
+ * a chip or "PM-owned" stands in its weeks. Card tasks-propose: protects = a commenter's grip
+ * proposes a move (the task stays, the note says it waits for a decision), as their add and edit
+ * do; an approver's add proposes and their move applies. Card tasks-no-change: protects = saving
+ * the form unchanged says "No changes." and sends nothing. Card tasks-milestone-once: a task's own
+ * milestone named as its plan chip shows once. Card tasks-heading: at 390px a goal's heading never
+ * runs into its "N features in the plan".
  */
 
 const SIZES = [
@@ -191,7 +200,10 @@ for (const view of VIEWS) {
           await expect(form).toHaveCount(0);
           await expect(page.locator('section[aria-label="Goal buckets"]').getByRole("alert")).toHaveCount(0);
           await expect(note(page)).toContainText("Saved Setup failure alerts.");
-          if (name) await expect(row.getByTestId("task-milestone")).toHaveText(name);
+          // A milestone a plan chip already names shows once, as that chip.
+          const chip = name ? row.getByTestId("plan-chip").filter({ hasText: name }) : null;
+          if (chip && (await chip.count())) await expect(row.getByTestId("task-milestone")).toHaveCount(0);
+          else if (name) await expect(row.getByTestId("task-milestone")).toHaveText(name);
           else await expect(row.getByTestId("task-milestone")).toHaveCount(0);
         }
         await row.getByRole("button", { name: "Edit Setup failure alerts" }).click();
@@ -220,6 +232,13 @@ for (const view of VIEWS) {
           const to = (await bucket(page, view, "Revenue").getByRole("heading", { name: "Revenue", exact: true }).boundingBox())!;
           await page.mouse.move(to.x + 10, to.y + to.height / 2, { steps: 8 });
           await expect(bucket(page, view, "Revenue")).toHaveAttribute("data-drop", "");
+          // The floating preview: its name and Draft, never the raw key as a chip nor "PM-owned".
+          const ghost = page.getByTestId("drag-ghost");
+          await expect(ghost).toContainText("Saved carts");
+          await expect(ghost).toContainText("Draft");
+          await expect(ghost.getByTestId("prio-code")).toHaveCount(0);
+          await expect(ghost).not.toContainText("saved-carts");
+          await expect(ghost).not.toContainText("PM-owned");
           await page.mouse.up();
         } else {
           await grip.focus();
@@ -237,6 +256,83 @@ for (const view of VIEWS) {
         await expect(made("Growth")).toBeVisible();
         await expect(made(there)).toHaveCount(0);
       });
+
+      test("save a task's form with nothing changed: No changes, nothing sent", async ({ page }) => {
+        await open(page, view, size.viewport);
+        const row = bucket(page, view, "Reliability").locator('[data-code="F-03"]');
+        await row.getByRole("button", { name: "Edit Setup failure alerts" }).click();
+        await row.getByTestId("task-form").getByRole("button", { name: "Save task" }).click();
+        await expect(row.getByTestId("task-form")).toHaveCount(0);
+        await expect(note(page)).toHaveText("No changes.");
+        await expect(note(page).getByRole("button", { name: "Undo" })).toHaveCount(0);
+      });
+
+      test("a commenter proposes moving, adding and editing a task", async ({ page }) => {
+        await open(page, view, size.viewport, "commenter@example.com");
+        const row = bucket(page, view, "Reliability").locator('[data-code="F-03"]');
+        const grip = row.getByTestId("feature-grip");
+        await expect(grip).toHaveAccessibleName("Move Setup failure alerts to another goal");
+        await grip.focus();
+        await page.keyboard.press("Enter");
+        await page.keyboard.press("ArrowDown");
+        await expect(page.getByTestId("bucket-live")).toHaveText("Over goal 2, Growth. Enter drops it there.");
+        await page.keyboard.press("Enter");
+        await expect(note(page)).toContainText("Proposed moving Setup failure alerts to Growth: it waits for a decision.");
+        // A proposal: the task stays where it is until someone decides.
+        await expect(row).toBeVisible();
+        await expect(bucket(page, view, "Growth").locator('[data-code="F-03"]')).toHaveCount(0);
+        const add = bucket(page, view, "Growth").getByTestId("add-task");
+        await add.getByRole("button", { name: "+ Add a task" }).click();
+        await add.getByTestId("task-form").getByLabel("Name").fill("Gift wrap notes");
+        await add.getByTestId("task-form").getByRole("button", { name: "Save task" }).click();
+        await expect(note(page)).toContainText("Proposed adding Gift wrap notes to Growth: it waits for a decision.");
+        await row.getByRole("button", { name: "Edit Setup failure alerts" }).click();
+        await row.getByTestId("task-form").getByLabel("Name").fill("Setup failure alerts by email");
+        await row.getByTestId("task-form").getByRole("button", { name: "Save task" }).click();
+        await expect(note(page)).toContainText("Proposed the change to Setup failure alerts by email: it waits for a decision.");
+      });
+
+      test("an approver proposes adding a task and moves one at once", async ({ page }) => {
+        await open(page, view, size.viewport, "approver@example.com");
+        const add = bucket(page, view, "Growth").getByTestId("add-task");
+        await add.getByRole("button", { name: "+ Add a task" }).click();
+        await add.getByTestId("task-form").getByLabel("Name").fill("Gift wrap notes");
+        await add.getByTestId("task-form").getByRole("button", { name: "Save task" }).click();
+        await expect(note(page)).toContainText("Proposed adding Gift wrap notes to Growth: it waits for a decision.");
+        const grip = bucket(page, view, "Reliability").locator('[data-code="F-03"]').getByTestId("feature-grip");
+        await grip.focus();
+        await page.keyboard.press("Enter");
+        await page.keyboard.press("ArrowDown");
+        await page.keyboard.press("Enter");
+        await expect(note(page)).toContainText("Moved Setup failure alerts to Growth.");
+        await expect(bucket(page, view, "Growth").locator('[data-code="F-03"]')).toBeVisible();
+      });
+
+      if (view.card === "plan-goal") {
+        test("a task's own milestone named as its plan chip shows once", async ({ page }) => {
+          await open(page, view, size.viewport);
+          const row = bucket(page, view, "Reliability").locator('[data-code="F-03"]');
+          const name = (await row.getByTestId("plan-chip").first().locator("span").nth(1).textContent())!.trim();
+          await row.getByRole("button", { name: "Edit Setup failure alerts" }).click();
+          await row.getByTestId("task-form").getByLabel("Milestone").selectOption({ label: name });
+          await row.getByTestId("task-form").getByRole("button", { name: "Save task" }).click();
+          await expect(note(page)).toContainText("Saved Setup failure alerts.");
+          await expect(row.getByTestId("plan-chip").filter({ hasText: name })).toHaveCount(1);
+          await expect(row.getByTestId("task-milestone")).toHaveCount(0);
+        });
+
+        test("each goal's heading clears its feature count", async ({ page }) => {
+          await open(page, view, size.viewport);
+          for (const card of await page.getByTestId("plan-goal").filter({ has: page.getByTestId("plan-goal-count") }).all()) {
+            const head = (await card.locator("h3").boundingBox())!;
+            const count = (await card.getByTestId("plan-goal-count").boundingBox())!;
+            const apart = head.x + head.width <= count.x + 1 || count.y >= head.y + head.height - 1;
+            expect(apart, `${await card.locator("h3").textContent()}: heading and count overlap`).toBe(true);
+            // The heading's words fit inside its own box.
+            expect(await card.locator("h3").evaluate((h) => h.scrollWidth <= h.clientWidth + 1)).toBe(true);
+          }
+        });
+      }
 
       test("a goal has its pencil and ⋯ to edit or archive it", async ({ page }) => {
         await open(page, view, size.viewport);

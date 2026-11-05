@@ -61,6 +61,34 @@ export function seedGoalBucketsHard(): GoalBucketsDb {
   return { goals: [...base.goals, big], features };
 }
 
+/**
+ * The goal buckets as the API lists them for a roadmap's company: every live goal (the plan's, then
+ * the roadmap's own, by name: Grow retention, ...) and every feature with an item, the plan's and
+ * the roadmap's, each linked to the goals its item serves. Drafts are no feature yet. Invented data.
+ */
+export function seedGoalBucketsWith(
+  base: GoalBucketsDb,
+  goalNames: string[],
+  items: { key: string; title: string; goals: string[] }[],
+): GoalBucketsDb {
+  const goals = [...base.goals];
+  const goalOf = (name: string): string => {
+    let g = goals.find((x) => x.title.toLowerCase() === name.toLowerCase());
+    if (!g) {
+      g = { id: stableUuid(`goal-bucket/${name}`), title: name, order: goals.length + 1, measure: null, target: null, due: null, archived: false };
+      goals.push(g);
+    }
+    return g.id;
+  };
+  for (const name of goalNames) goalOf(name);
+  const features = [...base.features];
+  for (const i of items) {
+    if (features.some((f) => f.key.toLowerCase() === i.key.toLowerCase())) continue;
+    features.push({ id: stableUuid(`feature-bucket/${i.key}`), key: i.key, title: i.title, goal_ids: [...new Set(i.goals.map(goalOf))] });
+  }
+  return { goals, features };
+}
+
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }

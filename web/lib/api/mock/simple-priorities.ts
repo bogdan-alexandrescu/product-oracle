@@ -54,6 +54,15 @@ function planCode(db: SimpleDb, key: string): string | null {
   return m ? `F-${m[1]}` : (PLAN_EXISTING[key] ?? null);
 }
 
+/**
+ * The baseline feature key of an item: its plan code, else its own code, else its key (as Priorities
+ * reads it); an item added for a feature (SeedItem.feature) reads that feature's.
+ */
+export function featureKeyOf(db: SimpleDb, key: string): string {
+  const k = featureOf(db, key);
+  return planCode(db, k) ?? FEATURES[k]?.code ?? k;
+}
+
 /** The plan's engineer-weeks of a feature across its slices; null when it is all PM-owned (no engineer-weeks, as plan.py). */
 function planWeeks(code: string): number | null {
   const of = planSlices().filter((x) => x.feature_code === code);
@@ -440,7 +449,7 @@ export function prioritiesOut(
   // In the mock each item's key is its feature's key (its own code when it has one); FEATURES
   // is in creation order, a feature outside it after them by key.
   // With a plan, a feature the plan names is keyed by the plan's code (F-06), so one feature reads one code on every tab.
-  const featureKey = (k: string): string => planCode(db, featureOf(db, k)) ?? FEATURES[featureOf(db, k)]?.code ?? featureOf(db, k);
+  const featureKey = (k: string): string => featureKeyOf(db, k);
   const created = [...Object.keys(FEATURES), ...yours.map((i) => i.key).filter((k) => !FEATURES[k]).sort()].map(featureKey);
   const prdCodes = Object.fromEntries(yours.filter((i) => i.code).map((i) => [featureKey(i.key), i.code!]));
   // Each feature's shown name (priorities.py `_shown_names`): its item's title as every reader

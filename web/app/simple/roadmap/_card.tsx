@@ -405,6 +405,7 @@ const OP_WORDS: Record<string, string> = {
   keep_both: "Keep both",
   confirm_item: "Confirm the draft",
   cut_with_dependents: "Cut it and its dependents",
+  set_goals: "Move it to another goal",
 };
 
 /** S7: a draft's likely duplicates, "Looks like <code> <title>", with Merge and Keep both
