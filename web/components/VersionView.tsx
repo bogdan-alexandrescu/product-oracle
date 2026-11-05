@@ -60,6 +60,7 @@ import { keyFromHash, sectionHref } from "@/lib/section-link";
 import { useLiveRefresh } from "@/lib/use-live-refresh";
 import { useQuery } from "@/lib/use-query";
 import { useViewportFit } from "@/lib/use-viewport-fit";
+import { isDoneNotice, realWarnings } from "@/lib/warnings";
 
 type Selection = { sectionKey: string; anchor: TextQuoteSelector; rect: PageRect };
 
@@ -925,7 +926,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   // date-warnings-honest: one date warning per date and item that lacks a basis (the API
   // counts them so); the header names how many dates and opens Plan › Dates filtered to them.
   const dateWarnings = warnings.filter((w) => w.code === "unverified_date");
-  const otherWarnings = warnings.length - dateWarnings.length;
+  // A send-back note answered in full is done, not a warning: the header does not count it.
+  const otherWarnings = realWarnings(warnings).filter((w) => w.code !== "unverified_date");
   const lackingDays = [...new Set(dateWarnings.map(warningDay).filter((d): d is string => !!d))];
   // The header counts dates, not date-and-item pairs: one date written for two items is one.
   const lackingCount = new Set(dateWarnings.map((w) => warningDay(w) ?? w.message)).size;
@@ -1206,9 +1208,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                 </span>
               )}
               {latest != null && n !== latest && <Chip kind="na">Earlier version</Chip>}
-              {otherWarnings > 0 && (
-                <Chip kind="warn">
-                  {otherWarnings} warning{otherWarnings === 1 ? "" : "s"}
+              {otherWarnings.length > 0 && (
+                <Chip kind="warn" data-testid="version-warnings-chip" title={otherWarnings.map((w) => w.message).join("\n")}>
+                  {otherWarnings.length} warning{otherWarnings.length === 1 ? "" : "s"}
                 </Chip>
               )}
               {dateWarnings.length > 0 && (
@@ -1389,7 +1391,13 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                 </Link>
               </p>
             )}
-            {warnings.map((w, i) => (
+            {warnings.filter(isDoneNotice).map((w, i) => (
+              <p key={i} role="status" data-warning={w.code} data-state="done" className="flex items-center gap-x-3 rounded-button bg-pass-bg px-3 py-2 text-sm font-medium text-pass">
+                <Icon name="check" size={16} />
+                {w.message.charAt(0).toUpperCase() + w.message.slice(1)}
+              </p>
+            ))}
+            {realWarnings(warnings).map((w, i) => (
               <div key={i} role="status" data-warning={w.code} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn">
                 <Icon name="alert" size={16} />
                 <p className="min-w-0 flex-1 font-medium">{w.message}</p>

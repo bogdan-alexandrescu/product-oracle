@@ -40,6 +40,7 @@ import { useScreenSubject } from "@/lib/screen-subject";
 import { NAMES_FAILED, useTemplateNames } from "@/lib/template-names";
 import { useQuery, type Query } from "@/lib/use-query";
 import { versionHref } from "@/lib/version-href";
+import { realWarnings } from "@/lib/warnings";
 import { RebuildSign } from "@/components/RebuildSign";
 
 /** A template or theme beside the title, by its name: a small hairline pill. */
@@ -112,9 +113,9 @@ function versionColumns(
             </Chip>
           )}
           {v.number === latest && <Chip kind="now">Latest</Chip>}
-          {v.warnings.length > 0 && (
-            <Chip kind="warn" title={v.warnings.map((w) => warningText(w, headings)).join("\n")}>
-              {plural(v.warnings.length, "warning")}
+          {realWarnings(v.warnings).length > 0 && (
+            <Chip kind="warn" title={realWarnings(v.warnings).map((w) => warningText(w, headings)).join("\n")}>
+              {plural(realWarnings(v.warnings).length, "warning")}
             </Chip>
           )}
         </span>
@@ -199,7 +200,7 @@ function VersionInspector({
         <InspectorRow value={<span data-testid="version-approved">{v.approved_at ? formatDateTime(v.approved_at) : "Not approved"}</span>}>
           Approved
         </InspectorRow>
-        <InspectorRow value={v.warnings.length ? plural(v.warnings.length, "warning") : "None"}>Warnings</InspectorRow>
+        <InspectorRow value={realWarnings(v.warnings).length ? plural(realWarnings(v.warnings).length, "warning") : "None"}>Warnings</InspectorRow>
         <InspectorRow value={formatDateTime(v.created_at)}>{made.date}</InspectorRow>
         {byName && (
           <InspectorRow

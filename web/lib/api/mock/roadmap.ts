@@ -2207,5 +2207,12 @@ export function versionWarnings(prdTitle: string, prdSlug: string): Schemas["Ver
       section_keys: ["item-behaviour", "summary"],
       refs: { feedback_items: ["00000000-0000-4000-8000-000000000397", "00000000-0000-4000-8000-000000000398"] },
     },
+    // A send-back note the draft answered in full (as api/oracle/docs/service.py words it): done, not a warning.
+    {
+      code: "note_answered",
+      message: "the draft answers every point of the send-back note: 2 points, all addressed",
+      section_keys: [],
+      refs: { note_points: ["note-1", "note-2"], declined: [] },
+    },
   ];
 }
