@@ -123210,6 +123210,7 @@
             "enum": [
               "run_stop",
               "question",
+              "decision",
               "broken_link",
               "date",
               "draft",

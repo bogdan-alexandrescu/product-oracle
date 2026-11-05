@@ -2260,10 +2260,18 @@ class SimpleWaitingItem(BaseModel):
     (oracle.simple.waiting_list): what it is, its action in words and where it is done."""
 
     kind: Literal[
-        "run_stop", "question", "broken_link", "date", "draft", "proposal", "goal_suggestion"
+        "run_stop",
+        "question",
+        "decision",
+        "broken_link",
+        "date",
+        "draft",
+        "proposal",
+        "goal_suggestion",
     ]
     # Unique in the list (kind and id); ``ref_id`` is the id its own endpoint acts on (the
-    # checkpoint, question, item, date suggestion, draft, change or goal suggestion).
+    # checkpoint, question, decision's number, item, date suggestion, draft, change or goal
+    # suggestion).
     key: str
     ref_id: str
     title: str
@@ -2290,7 +2298,8 @@ class SimpleDecisionsWaitingOut(BaseModel):
     # ``count``, which is decisions only).
     tasks: list[SimpleTaskWaiting] = []
     # home-decisions-one-list: everything waiting on this person (run stops, questions,
-    # broken links, dates, drafts, proposals, goal suggestions), each with its action.
+    # decision-log calls, broken links, dates, drafts, proposals, goal suggestions), each
+    # with its action.
     items: list[SimpleWaitingItem] = []
 
 

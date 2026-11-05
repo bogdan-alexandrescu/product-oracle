@@ -2,18 +2,21 @@
 waiting cards, the Decisions page's "Waiting for you" and the rail's counts read
 (GET /v1/simple/decisions/waiting ``items``): the run stops they may decide, the roadmap's
 broken links on items they decide, the drafts waiting for their approval, the PRD questions
-they own, the proposals on their items, the dates to confirm and the goal suggestions they
-decide. Each item says what it is, its action in words and where it is done; acting on it
-(through that kind's own endpoint) drops it from the next read, so every page and the rail
-agree.
+they own, the decision-log calls proposed to them, the proposals on their items, the dates to
+confirm and the goal suggestions they decide. Each item says what it is, its action in words
+and where it is done; acting on it (through that kind's own endpoint) drops it from the next
+read, so every page and the rail agree.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import company_time
+from oracle.decisions.models import Decision
 from oracle.simple.schemas import SimpleQuestion, SimpleWaitingItem
 
 # What a run stop asks, in plain words (web/app/simple/_home/run-stops.tsx ACTION).
@@ -62,6 +65,7 @@ async def _roadmap(db: AsyncSession, principal: Any) -> list[SimpleWaitingItem]:
     from oracle.simple import service
 
     rm = await service.build(db, principal)
+    today = await company_time.company_today(db)
     titles = {i.id: i.title for i in rm.items}
     out = []
     for i in rm.items:
@@ -81,7 +85,7 @@ async def _roadmap(db: AsyncSession, principal: Any) -> list[SimpleWaitingItem]:
         if s is not None and s.status == "open" and s.can_decide:
             out.append(SimpleWaitingItem(
                 kind="date", key=f"date:{s.id}", ref_id=str(s.id), title=i.title,
-                detail=f"Oracle suggests {_day(s.start_date)} – {_day(s.end_date)}",
+                detail=f"Oracle suggests {_day(s.start_date, today)} – {_day(s.end_date, today)}",
                 action="Confirm the dates", href=f"/simple/roadmap?item={i.id}",
                 at=s.created_at,
             ))  # fmt: skip
@@ -160,16 +164,38 @@ def _questions(qs: list[SimpleQuestion]) -> list[SimpleWaitingItem]:
     ]
 
 
+async def _calls(db: AsyncSession, principal: Any) -> list[SimpleWaitingItem]:
+    """The decision log's calls proposed to this person (neither a PRD's question nor Oracle's
+    run approval: the ``others`` the decisions count holds), decided in place by number."""
+    rows = await db.scalars(select(Decision).where(
+        Decision.status == "proposed", Decision.approver_id == principal.user_id,
+        Decision.origin.not_in(("prd", "checkpoint"))).order_by(Decision.number))  # fmt: skip
+    return [
+        SimpleWaitingItem(
+            kind="decision",
+            key=f"decision:{d.id}",
+            ref_id=str(d.number),
+            title=d.title,
+            detail=d.question or "",
+            action="Decide",
+            href=f"/company/decisions?d={d.number}",
+            at=d.created_at,
+        )  # fmt: skip
+        for d in rows
+    ]
+
+
 async def items(
     db: AsyncSession, principal: Any, qs: list[SimpleQuestion]
 ) -> list[SimpleWaitingItem]:
-    """The one list, run stops first, then the questions, roadmap, drafts, proposals and
-    goal suggestions. Each source is read as its own page reads it, so what this
-    person cannot see or decide is never here."""
+    """The one list, run stops first, then the questions, decision-log calls, roadmap,
+    drafts, proposals and goal suggestions. Each source is read as its own page reads it, so
+    what this person cannot see or decide is never here."""
     if getattr(principal, "user_id", None) is None:
         return []
     out = await _stops(db, principal)
     out += _questions(qs)
+    out += await _calls(db, principal)
     out += await _roadmap(db, principal)
     out += await _drafts(db, principal)
     out += await _proposals(db, principal)
@@ -186,9 +212,6 @@ def _uuid(v: str | None) -> Any:
         return None
 
 
-def _day(d: Any) -> str:
-    """ "Nov 4" (the year too when it is not this year's)."""
-    from oracle import company_time
-
-    today = company_time.now().date()
+def _day(d: Any, today: Any) -> str:
+    """ "Nov 4" (the year too when it is not ``today``'s, the company's day)."""
     return d.strftime("%b %-d") if d.year == today.year else d.strftime("%b %-d, %Y")
