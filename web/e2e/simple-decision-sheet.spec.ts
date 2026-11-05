@@ -42,6 +42,9 @@ for (const phone of [false, true]) {
       test("ec1: a decision's sheet edits every field and reassigns it", async ({ page }) => {
         await decisions(page);
         const row = outside(page, "D-5");
+        // ec1-b-rest: an open row names who decides, as its sheet does; no "waiting for a decider".
+        await expect(row.locator(".simple-meta")).toHaveText(/^Avery Stone decides · /);
+        await expect(row).not.toContainText("waiting for a decider");
         await row.getByTestId("decision-open").click();
         const s = sheet(page);
         await expect(s.getByRole("heading", { name: "D-5 Keep the free plan's five-seat limit" })).toBeVisible();
@@ -55,7 +58,11 @@ for (const phone of [false, true]) {
         await s.getByRole("button", { name: "Edit" }).click();
         await s.getByRole("button", { name: "+ Add an option" }).click();
         await s.getByRole("textbox", { name: "Option 3", exact: true }).fill("Ship to pilot customers first");
-        await s.getByLabel("Review on").fill("2026-12-07");
+        // ec1-b-mid: Review on has its (i) and reads the day month first, in the repo's day field.
+        await s.getByRole("button", { name: "About Review on" }).hover();
+        await expect(page.getByText("The day the decider looks at this call again.")).toBeVisible();
+        await s.getByLabel("Review on", { exact: true }).fill("2026-12-07");
+        await expect(s.getByTestId("decision-sheet-review")).toHaveText("Dec 7, 2026");
         await s.getByRole("button", { name: "Save" }).click();
         await expect(s).toHaveCount(0);
         await expect(toast(page, "Saved D-5")).toBeVisible();
@@ -190,10 +197,14 @@ for (const phone of [false, true]) {
        */
       test("eq2: + Ask a question adds one to a PRD", async ({ page }) => {
         await decisions(page);
+        // Every PRD the person reads is offered, as the PRD filter lists them (not only those with questions).
+        const readable = (await page.locator("label", { hasText: /^PRD/ }).first().locator("option").allTextContents()).filter((t) => t !== "All PRDs");
+        expect(readable.length).toBeGreaterThan(1);
         await region(page, "Waiting for you").getByTestId("questions-ask").click();
         const s = sheet(page);
         await expect(s.getByRole("heading", { name: "New question" })).toBeVisible();
         await expect(s.getByLabel("PRD")).toBeVisible();
+        expect((await s.getByLabel("PRD").locator("option").allTextContents()).sort()).toEqual([...readable].sort());
         await s.getByRole("textbox", { name: "Question", exact: true }).fill("Who can export a team's alert history?");
         await s.getByRole("textbox", { name: "Recommendation", exact: true }).fill("Owners and admins");
         await s.getByRole("textbox", { name: "Answer 1", exact: true }).fill("Everyone on the team");
@@ -245,6 +256,33 @@ for (const phone of [false, true]) {
         await expect(s.getByTestId("decision-sheet-body")).toBeVisible();
         await expect(s.getByTestId("decision-sheet-foot")).toHaveCount(0);
         await expect(s.getByRole("button", { name: /^(Edit|Suggest a change|Withdraw|Delete|Reassign)$/ })).toHaveCount(0);
+      });
+
+      /**
+       * Card ec1-home-call: protects = a decision-log call waiting for me (D-5 Ship usage caps before
+       * anomaly detection, the approver's) opens the same decision sheet from Home's title and from
+       * Decisions' Waiting for you, with its question, options and Edit; Edit saves; fails_when = the
+       * title is plain or the sheet lacks its fields; no_claim = the log's own page.
+       */
+      test("ec1: Home's and Waiting for you's decision-log calls open the same sheet", async ({ page }) => {
+        await login(page, "approver@example.com");
+        await page.goto("/simple");
+        const open = page.getByTestId("home-decision").filter({ hasText: "Ship usage caps before anomaly detection" }).getByTestId("home-decision-open");
+        await open.scrollIntoViewIfNeeded();
+        await open.click();
+        const s = sheet(page);
+        await expect(s.getByRole("heading", { name: "D-5 Ship usage caps before anomaly detection" })).toBeVisible();
+        await expect(s.getByTestId("decision-sheet-decider")).toBeVisible();
+        await s.getByRole("button", { name: "Edit" }).click();
+        await expect(s.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Ship usage caps before anomaly detection");
+        await page.keyboard.press("Escape");
+        await expect(s).toHaveCount(0);
+
+        await page.goto("/simple/decisions");
+        const call = page.getByTestId("questions-mine").getByRole("listitem", { name: "Decision: Ship usage caps before anomaly detection" });
+        await call.getByTestId("waiting-decision-open").click();
+        await expect(s.getByRole("heading", { name: "D-5 Ship usage caps before anomaly detection" })).toBeVisible();
+        await expect(s.getByRole("button", { name: "Edit" })).toBeVisible();
       });
 
       /** Card eq2-home: protects = Home's question titles open the same sheet; fails_when = they do not. */

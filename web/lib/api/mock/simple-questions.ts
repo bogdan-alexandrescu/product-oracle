@@ -407,7 +407,8 @@ function sheetChange(ctx: QuestionsCtx, db: QuestionsDb, b: Record<string, unkno
     routed_to: routed, undoes_id: null, undone: false, can_decide: false, can_undo: applies && !noUndo(),
   });
   if (b.op === "add_question") {
-    if (target.document_id !== QUESTIONS_PRD.id) return json(404, { detail: "No such PRD" });
+    // As decision_sheet._prd: the PRD by its id or by the slug Decisions' PRD list gives.
+    if (target.document_id !== QUESTIONS_PRD.id && target.document_id !== QUESTIONS_PRD.slug) return json(404, { detail: "No such PRD" });
     const clean = cleanQuestion(after, true);
     if (typeof clean === "string") return json(422, { detail: clean });
     // As _ask: an owner (the PRD's decider) adds it at once; anyone else proposes it to them.

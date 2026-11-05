@@ -182,9 +182,12 @@ function NewDecision() {
 }
 
 /** eq2 b: + Ask a question, at the top of Waiting for you: the sheet, with its PRD to pick (every PRD the person reads, as the PRD filter lists them). */
-function AskQuestion({ prds }: { prds: { id: string; title: string }[] }) {
+function AskQuestion({ prds: all, questions }: { prds: { id: string; title: string }[]; questions: Question[] }) {
   const { can } = useMe();
   const sheet = useDecisionSheet();
+  // The PRDs that already have questions first (the sheet starts on the first), then the others.
+  const asked = new Set(questions.map((x) => x.prd.slug));
+  const prds = [...all.filter((p) => asked.has(p.id)), ...all.filter((p) => !asked.has(p.id))];
   if (!sheet || !prds.length || !can("create_simple_change")) return null;
   return (
     <div>
@@ -271,7 +274,7 @@ function QuestionList({ d, actions, filtered, onClear }: { d: Schemas["SimpleDec
   return (
     <>
       <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={count} source>
-        <AskQuestion prds={d.prds} />
+        <AskQuestion prds={d.prds} questions={d.questions} />
         {mine.length === 0 && extra.length === 0 ? (
           !filtered && !waiting.data && !waiting.error ? (
             <p className="simple-meta" role="status">
