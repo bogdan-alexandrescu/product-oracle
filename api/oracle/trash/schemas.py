@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-TrashItemType = Literal["document", "intake", "run"]
+TrashItemType = Literal["document", "intake", "run", "track"]
 
 
 class TrashItem(BaseModel):

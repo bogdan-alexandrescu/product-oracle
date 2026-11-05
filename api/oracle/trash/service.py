@@ -91,6 +91,11 @@ def describe(row: Any) -> dict[str, Any]:
             "title": row.title,
             "kind": row.kind,
         }
+    from oracle.roadmap.models import ProductTrack
+
+    if isinstance(row, ProductTrack):
+        return {"type": "track", "id": str(row.id), "slug": None, "title": row.title,
+                "kind": "Track"}  # fmt: skip
     if isinstance(row, ProductIntake):
         return {"type": "intake", "id": str(row.id), "slug": None, "title": row.title,
                 "kind": "intake"}  # fmt: skip
@@ -349,7 +354,68 @@ async def trashed_documents(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.
 
 
 def _models() -> tuple[type, ...]:
-    return (Document, ProductIntake, Run)
+    from oracle.roadmap.models import ProductTrack
+
+    return (Document, ProductIntake, Run, ProductTrack)
+
+
+async def delete_track(
+    db: AsyncSession, principal: Principal, track: Any, reason: str | None = None
+) -> TrashEntry:
+    """removed-tracks: a track deleted in Simple goes to Trash on its own. Its features go to
+    no track (their PRD stays); the entry keeps which they were, and a restore puts back
+    the ones still on no track."""
+    from oracle.roadmap.models import RoadmapItem
+
+    at = now()
+    held = list(
+        await db.scalars(
+            select(RoadmapItem.id).where(RoadmapItem.track_id == track.id).execution_options(**ALL)
+        )
+    )
+    entry = TrashEntry(
+        root_type="track",
+        root_id=track.id,
+        root={**describe(track), "item_ids": [str(i) for i in held]},
+        items=[],
+        deleted_by=principal.id,
+        deleted_by_name=await _actor_name(db, principal),
+        reason=reason,
+        published=False,
+        purge_after=at + timedelta(days=RETENTION_DAYS),
+    )
+    entry.created_at = at
+    db.add(entry)
+    await db.flush()
+    if held:
+        await db.execute(
+            update(RoadmapItem)
+            .where(RoadmapItem.id.in_(held))
+            .values(track_id=None)
+            .execution_options(synchronize_session=False)
+        )
+    track.deleted_at, track.deleted_by = at, principal.id
+    track.deleted_reason, track.trash_entry_id = reason, entry.id
+    await audit.record(db, principal, "trash.delete", "track", track.id,
+                       {"entry_id": str(entry.id), "root": entry.root, "items": [],
+                        "reason": reason})  # fmt: skip
+    await db.flush()
+    return entry
+
+
+async def _track_items_back(db: AsyncSession, entry: TrashEntry) -> None:
+    """A restored track takes back its features that are still on no track."""
+    from oracle.roadmap.models import RoadmapItem
+
+    ids = [uuid.UUID(i) for i in entry.root.get("item_ids") or []]
+    if entry.root_type != "track" or not ids:
+        return
+    await db.execute(
+        update(RoadmapItem)
+        .where(RoadmapItem.id.in_(ids), RoadmapItem.track_id.is_(None))
+        .values(track_id=entry.root_id)
+        .execution_options(synchronize_session=False)
+    )
 
 
 async def get_entry(db: AsyncSession, entry_id: uuid.UUID) -> TrashEntry:
@@ -433,6 +499,7 @@ async def restore_entry(
             .values(deleted_at=None, deleted_by=None, deleted_reason=None, trash_entry_id=None)
             .execution_options(synchronize_session=False)
         )
+    await _track_items_back(db, entry)
     from oracle.roadmap import alerts
 
     await alerts.reopen_after_trash(db, entry.root.get("closed_alerts") or [])
@@ -474,7 +541,9 @@ async def purge_entry(
     db: AsyncSession, principal: Principal | str | None, entry: TrashEntry
 ) -> None:
     """Delete the entry's rows for good (what hangs off them goes by cascade)."""
-    for model in (Run, Document, ProductIntake):
+    from oracle.roadmap.models import ProductTrack
+
+    for model in (Run, Document, ProductIntake, ProductTrack):
         await db.execute(
             delete(model)
             .where(model.trash_entry_id == entry.id, model.deleted_at.is_not(None))

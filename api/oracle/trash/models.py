@@ -21,8 +21,8 @@ from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 from oracle.db import Base, TenantScoped
 
 # What can be deleted on its own: a document (PRD, roadmap, spec, update, ...), an intake
-# (a brief) or a run.
-ROOT_TYPES = ("document", "intake", "run")
+# (a brief), a run or a product track (removed-tracks).
+ROOT_TYPES = ("document", "intake", "run", "track")
 # Days a deleted artifact waits in Trash before the ticker purges it.
 RETENTION_DAYS = 30
 
@@ -46,7 +46,7 @@ class TrashEntry(TenantScoped, Base):
 
     __tablename__ = "trash_entries"
     __table_args__ = (
-        CheckConstraint("root_type IN ('document', 'intake', 'run')", name="root_type"),
+        CheckConstraint("root_type IN ('document', 'intake', 'run', 'track')", name="root_type"),
         Index("ix_trash_entries_purge_after", "purge_after"),
     )
 

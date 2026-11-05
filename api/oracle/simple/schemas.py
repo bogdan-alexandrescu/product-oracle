@@ -679,6 +679,13 @@ ChangeOp = Literal[
     "edit_goal_milestone",
     # ask-oracle-actions: an item's own depends_on (into the working draft).
     "set_depends_on",
+    # removed-tracks: an archived goal and a removed goal milestone put back; a track added,
+    # edited (title, owner, status) or moved to Trash (oracle.simple.plan_changes).
+    "unarchive_goal",
+    "restore_goal_milestone",
+    "add_track",
+    "edit_track",
+    "delete_track",
 ]
 # chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
 # the change engine (oracle.simple.chat_actions).
@@ -2445,3 +2452,61 @@ OnePagerOut.model_rebuild()
 
 
 SimpleMeetingOut.model_rebuild()
+
+
+# --------------------------------------------------------------------------- removed-tracks
+
+
+class SimpleRemovedItem(BaseModel):
+    """Something removed in Simple, to put back: a cut feature, an archived goal or a removed
+    goal milestone, with who removed it and when."""
+
+    kind: Literal["feature", "goal", "milestone"]
+    # The roadmap item's, the goal entity's or the milestone's id.
+    id: uuid.UUID
+    title: str
+    # Where it was: the feature's roadmap, "Goals", the milestone's goal.
+    where: str
+    at: dt.datetime | None = None
+    by_name: str | None = None
+    # The reader puts it back directly; else it is proposed to ``decider_name``.
+    can_decide: bool = False
+    decider_name: str | None = None
+    roadmap_id: uuid.UUID | None = None
+
+
+class SimpleRemovedList(BaseModel):
+    items: list[SimpleRemovedItem]
+
+
+class SimpleTrackRow(BaseModel):
+    id: uuid.UUID
+    title: str
+    status: Literal["active", "paused", "closed"]
+    owner_id: uuid.UUID | None = None
+    owner_name: str | None = None
+    prd_id: uuid.UUID
+    prd_title: str | None = None
+    # The reader edits or deletes it directly; else it is proposed to ``decider_name``.
+    can_decide: bool = False
+    decider_name: str | None = None
+
+
+class SimplePerson(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+class SimplePrdRef(BaseModel):
+    id: uuid.UUID
+    title: str
+
+
+class SimpleTracks(BaseModel):
+    tracks: list[SimpleTrackRow]
+    # The reader adds a track directly; else it is proposed to ``add_decider_name``.
+    can_add: bool = False
+    add_decider_name: str | None = None
+    # Who can own a track (enabled members), and the PRDs a new track can take.
+    people: list[SimplePerson]
+    prds: list[SimplePrdRef]

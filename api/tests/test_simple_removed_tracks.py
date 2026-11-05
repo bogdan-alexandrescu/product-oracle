@@ -56,6 +56,12 @@ def name(ctx: Ctx, role: str) -> str:
     return display_name(u.email, u.name)
 
 
+def who(ctx: Ctx, role: str) -> str:
+    """Who in a change's words (oracle.simple.changes._names)."""
+    u = ctx.users[role]
+    return u.name or u.email
+
+
 async def seed(ctx: Ctx) -> dict:
     async with tenant_session(ctx.tenant_id) as s:
         sd = Seed(s)
@@ -169,9 +175,9 @@ async def test_unarchive_goal_and_restore_milestone_through_the_change_engine(cl
     done = (await change(client, ctx, "owner", "unarchive_goal",
                          {"goal_id": ids["goal_id"]}))["change"]  # fmt: skip
     assert done["status"] == "applied" and done["can_undo"] is True
-    assert done["words"] == f"{name(ctx, 'owner')} restored the goal Fewer support tickets"
+    assert done["words"] == f"{who(ctx, 'owner')} restored the goal Fewer support tickets"
     r = await client.post(f"{CHANGES}/{done['id']}/undo", headers=ctx.as_("owner"))
-    assert r.status_code == 200, r.text
+    assert r.status_code == 201, r.text
     assert [i for i in await removed(client, ctx) if i["kind"] == "goal"]
 
     m = await add_milestone(client, ctx, ids)
@@ -179,7 +185,8 @@ async def test_unarchive_goal_and_restore_milestone_through_the_change_engine(cl
     assert r.status_code in (200, 204), r.text
     await change(client, ctx, "viewer", "restore_goal_milestone", {"milestone_id": m["id"]},
                  code=403)  # fmt: skip
-    prop = (await change(client, ctx, "approver", "restore_goal_milestone",
+    # The approver owns the roadmap's track (they change it directly): a commenter proposes.
+    prop = (await change(client, ctx, "commenter", "restore_goal_milestone",
                          {"milestone_id": m["id"]}))["change"]  # fmt: skip
     assert prop["status"] == "proposed" and "restored the milestone Prove it" in prop["words"]
     done = (await change(client, ctx, "owner", "restore_goal_milestone",
@@ -227,7 +234,7 @@ async def test_tracks_add_edit_delete_and_restore_from_trash(client):
                           {"title": "Gift boxes", "prd_id": ids["prd_id"],
                            "owner_id": str(ctx.users["owner"].id)}))["change"]  # fmt: skip
     assert added["status"] == "applied"
-    assert added["words"] == f"{name(ctx, 'owner')} added the track Gift boxes"
+    assert added["words"] == f"{who(ctx, 'owner')} added the track Gift boxes"
     new_id = added["after"]["track_id"]
     out = await read_tracks(client, ctx)
     assert {t["title"] for t in out["tracks"]} == {"Guided setup", "Gift boxes"}
@@ -235,10 +242,10 @@ async def test_tracks_add_edit_delete_and_restore_from_trash(client):
 
     renamed = (await change(client, ctx, "owner", "edit_track", {"track_id": new_id},
                             {"title": "Gift wrap"}))["change"]  # fmt: skip
-    assert renamed["words"] == f"{name(ctx, 'owner')} renamed the track Gift boxes to Gift wrap"
+    assert renamed["words"] == f"{who(ctx, 'owner')} renamed the track Gift boxes to Gift wrap"
     paused = (await change(client, ctx, "owner", "edit_track", {"track_id": new_id},
                            {"status": "paused"}))["change"]  # fmt: skip
-    assert paused["words"] == f"{name(ctx, 'owner')} paused the track Gift wrap"
+    assert paused["words"] == f"{who(ctx, 'owner')} paused the track Gift wrap"
     out = await read_tracks(client, ctx)
     assert {t["title"]: t["status"] for t in out["tracks"]}["Gift wrap"] == "paused"
 
@@ -246,7 +253,7 @@ async def test_tracks_add_edit_delete_and_restore_from_trash(client):
     own = (await change(client, ctx, "approver", "edit_track", {"track_id": ids["track_id"]},
                         {"owner_id": str(ctx.users["owner"].id)}))["change"]  # fmt: skip
     assert own["status"] == "applied"
-    assert own["words"] == (f"{name(ctx, 'approver')} set Guided setup's owner to "
+    assert own["words"] == (f"{who(ctx, 'approver')} set Guided setup's owner to "
                             f"{name(ctx, 'owner')}")  # fmt: skip
     prop = (await change(client, ctx, "approver", "edit_track", {"track_id": new_id},
                          {"status": "closed"}))["change"]  # fmt: skip
@@ -256,7 +263,7 @@ async def test_tracks_add_edit_delete_and_restore_from_trash(client):
     gone = (await change(client, ctx, "owner", "delete_track",
                          {"track_id": ids["track_id"]}))["change"]  # fmt: skip
     assert gone["status"] == "applied"
-    assert gone["words"] == f"{name(ctx, 'owner')} moved the track Guided setup to Trash"
+    assert gone["words"] == f"{who(ctx, 'owner')} moved the track Guided setup to Trash"
     out = await read_tracks(client, ctx)
     assert [t["title"] for t in out["tracks"]] == ["Gift wrap"]
     r = await client.get("/v1/tracks", headers=ctx.as_("owner"))
@@ -279,7 +286,7 @@ async def test_tracks_add_edit_delete_and_restore_from_trash(client):
     gone = (await change(client, ctx, "owner", "delete_track",
                          {"track_id": new_id}))["change"]  # fmt: skip
     r = await client.post(f"{CHANGES}/{gone['id']}/undo", headers=ctx.as_("owner"))
-    assert r.status_code == 200, r.text
+    assert r.status_code == 201, r.text
     async with tenant_session(ctx.tenant_id) as s:
         row = await s.scalar(select(ProductTrack).where(ProductTrack.id == uuid.UUID(new_id))
                              .execution_options(**{INCLUDE_TRASHED: True}))  # fmt: skip

@@ -119,6 +119,9 @@ class Entity(TenantScoped, Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
+    # removed-tracks: a goal archived in Simple (status rejected): when and by whom.
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    archived_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
 
 
 class Edge(TenantScoped, Base):

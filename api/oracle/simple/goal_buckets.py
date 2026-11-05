@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import company_time
 from oracle.auth.deps import TenantDB
 from oracle.authz import has_role
 from oracle.baseline.goal_order import goal_position, sort_goals
@@ -375,6 +376,8 @@ async def archive_bucket_goal(
             rest = [GoalLinkSnap(goal_id=body.to_goal_id, contribution=TOP)]
         await _set_links(db, snap.feature_id, rest)
     g.status = "rejected"
+    # removed-tracks: who archived it and when (Simple's Removed list).
+    g.archived_at, g.archived_by = company_time.now(), principal.user_id
     await db.commit()
     return GoalBucketWrite(undo=_signed(principal.tenant_id, undo))
 
@@ -405,6 +408,8 @@ async def undo_goal_buckets(
     for snap in body.goals:
         g = await _entity(db, snap.id, "goal")
         g.title, g.status, g.attrs = snap.title, snap.status, snap.attrs
+        if g.status != "rejected":
+            g.archived_at = g.archived_by = None
     for f in body.features:
         await _entity(db, f.feature_id, "feature")
         await _restore_links(db, f)

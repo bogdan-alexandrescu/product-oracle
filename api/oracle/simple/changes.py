@@ -158,6 +158,8 @@ WRITTEN = ("applied", "accepted", "undone")
 # Roadmap-plus: a roadmap's key dates (oracle.simple.key_dates).
 KEY_DATE_OPS = ("add_key_date", "edit_key_date", "remove_key_date")
 QUESTION_OPS = ("decide_question", "name_decider")
+# removed-tracks: things put back and tracks changed (oracle.simple.plan_changes).
+PLAN_OPS = ("unarchive_goal", "restore_goal_milestone", "add_track", "edit_track", "delete_track")
 
 
 class ChangeError(Exception):
@@ -480,6 +482,7 @@ def current_route(
         c.status != "proposed"
         or c.op in ("edit_line", "edit_goal_milestone", *QUESTION_OPS)
         or c.op in KEY_DATE_OPS
+        or c.op in PLAN_OPS
     ):
         return list(c.routed_to or [])
     if c.op == CUT_ALL:
@@ -1110,6 +1113,7 @@ async def create(
         goal_milestones,
         key_dates,
         one_pager,
+        plan_changes,
         questions,
         targets,
     )
@@ -1127,6 +1131,8 @@ async def create(
         return await one_pager.create(db, principal, body)
     if body.op in goal_milestones.OPS:
         return await goal_milestones.create_change(db, principal, body)
+    if body.op in plan_changes.OPS:
+        return await plan_changes.create_change(db, principal, body)
     me, now = _me(principal), company_time.now()
     ids = [_uuid(body.target.get("item_id"), "item_id")]
     if body.op in FIXES and body.target.get("subject"):
@@ -1231,10 +1237,20 @@ async def decide(
     session_id: uuid.UUID | None = None,
 ) -> SimpleChangeResult:
     """Accept (apply the proposal, unless outdated) or decline it."""
-    from oracle.simple import additions, goal_milestones, key_dates, one_pager, questions, targets
+    from oracle.simple import (
+        additions,
+        goal_milestones,
+        key_dates,
+        one_pager,
+        plan_changes,
+        questions,
+        targets,
+    )
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
+    if c.op in plan_changes.OPS:
+        return await plan_changes.decide(db, principal, c, action, reason)
     await off_agenda_bar(db, c, session_id)
     if c.op in questions.OPS:
         return await questions.decide(db, principal, c, action, reason, session_id)
@@ -1339,10 +1355,12 @@ async def withdraw(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> Si
 
 
 async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> SimpleChangeResult:
-    from oracle.simple import additions, key_dates, one_pager, questions, targets
+    from oracle.simple import additions, key_dates, one_pager, plan_changes, questions, targets
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
+    if c.op in plan_changes.OPS:
+        return await plan_changes.undo(db, principal, c)
     if c.op in questions.OPS:
         return await questions.undo(db, principal, c)
     if c.op in key_dates.OPS:
@@ -1459,6 +1477,7 @@ class _View:
             goal_milestones,
             key_dates,
             one_pager,
+            plan_changes,
             questions,
             targets,
         )
@@ -1475,6 +1494,8 @@ class _View:
             return one_pager.may_decide(self.principal, c)
         if c.op in goal_milestones.OPS:
             return goal_milestones.may_decide(self.principal, c, self)
+        if c.op in PLAN_OPS:
+            return plan_changes.may_decide(self.principal, c)
         if c.op == CUT_ALL:
             return decides_all(self.principal, cut_entries(c, self.by_id), self.deciders)
         e = self.entry(c)
@@ -1503,6 +1524,9 @@ class _View:
         return self.may_decide(c)
 
     def can_undo(self, c: SimpleChange) -> bool:
+        if c.op in PLAN_OPS:
+            # removed-tracks: undone by who made it, any time (oracle.simple.plan_changes).
+            return c.status == "applied" and c.by == self.me and c.id not in self.undone
         s = self.sessions.get(c.session_id) if c.session_id else None
         return (
             c.status == "applied"
