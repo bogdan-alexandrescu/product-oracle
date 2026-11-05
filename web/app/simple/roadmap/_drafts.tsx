@@ -173,7 +173,7 @@ export function DraftLayer({
       {drafts.map((d, n) => {
         const open = !closed.has(d.prd.id);
         return (
-          <div key={d.prd.id} data-draft-prd={d.prd.slug} className={n ? "mt-4 border-t border-line pt-4" : ""}>
+          <div key={d.prd.id} data-draft-prd={d.prd.slug} className={`flex flex-col gap-[var(--simple-gap)] ${n ? "border-t border-line pt-[var(--simple-gap)]" : ""}`}>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <h2 className="simple-h2">
                 <button
