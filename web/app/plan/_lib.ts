@@ -178,3 +178,21 @@ const TRACK_HEALTH: Record<Schemas["TrackOverview"]["health"], { kind: ChipKind;
 export function trackHealth(health: Schemas["TrackOverview"]["health"]): { kind: ChipKind; label: string } {
   return TRACK_HEALTH[health] ?? { kind: "na", label: "No roadmap" };
 }
+
+/**
+ * The row a /plan?item= link asks for (plan-open-from-simple): its key and PRD (&prd=<id>) when
+ * both match, else its key alone (Simple's card can name another PRD than the Plan reads it under).
+ * A report's link names the PRD by slug, "<prd>:<key>", or the PRD alone, "<prd>" (its first row).
+ * Undefined when the Plan holds no such row: never another item in its place.
+ */
+export function wantedRow(rows: PlanItem[], wanted: string, prdId: string | null): PlanItem | undefined {
+  const hit = rows.find((i) => i.key === wanted && prdId != null && i.prd?.id === prdId) ?? rows.find((i) => i.key === wanted);
+  if (hit) return hit;
+  const at = wanted.indexOf(":");
+  if (at > 0) {
+    const slug = wanted.slice(0, at);
+    const row = rows.find((i) => i.key === wanted.slice(at + 1) && i.prd?.slug === slug);
+    if (row) return row;
+  }
+  return rows.find((i) => i.prd?.slug === wanted);
+}
