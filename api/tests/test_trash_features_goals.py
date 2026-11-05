@@ -14,9 +14,14 @@ Test cards (protects / fails_when / no_claim):
   the decider accepts it and the feature goes to Trash; a declined one leaves it;
   fails_when=the approver deletes directly or the words show the op's name;
   no_claim=the Inbox screen.
-- test_viewers_neither_delete_nor_restore: protects=a viewer is refused a delete (403),
-  a non-owner restore is refused (403) and Trash stays owners'; fails_when=either is let
-  through; no_claim=commenters' proposals.
+- test_viewers_neither_delete_nor_restore: protects=a viewer is refused a delete (403) and
+  Trash; who neither owns nor deleted it is refused its restore (403) and Trash does not
+  list it to them; fails_when=either is let through; no_claim=commenters' proposals.
+- test_whoever_deleted_a_feature_or_goal_restores_it: protects=(owner's answer, Nov 5) the
+  approver who deleted a feature or a goal sees it in Trash and restores it, with no
+  owner; another approver neither sees it nor restores it (403); an owner sees and
+  restores anything; fails_when=the deleter is refused, another approver is let through,
+  or a can_restore says otherwise; no_claim=documents, intakes and runs (owners' alone).
 - test_delete_a_goal_moves_its_features_and_restore_brings_it_back: protects=deleting a
   goal moves its features to the goal picked (or to none) and the goal leaves the goal
   buckets; Restore brings it back with its order, measure, target and due;
@@ -78,7 +83,7 @@ async def test_decider_deletes_a_feature_and_restore_puts_it_back(client):
     r = await client.delete(f"{ITEMS}/{a}", headers=w.ctx.as_("decider"))
     assert r.status_code == 200, r.text
     out = r.json()
-    assert out["change"] is None and out["can_restore"] is False
+    assert out["change"] is None and out["can_restore"] is True
     entry = out["entry"]
     assert entry["root"]["type"] == "feature" and entry["root"]["title"] == "Cut A"
     assert entry["deleted_by_name"] == "Dee Cider" and entry["days_left"] == 30
@@ -169,13 +174,78 @@ async def test_viewers_neither_delete_nor_restore(client):
     r = await client.delete(f"{ITEMS}/{a}", headers=w.ctx.as_("owner"))
     assert r.status_code == 200, r.text
     assert r.json()["can_restore"] is True
+    entry = r.json()["entry"]["id"]
     for who in ("viewer", "approver", "decider"):
         assert (
             await client.post(f"{ITEMS}/{a}/restore", headers=w.ctx.as_(who))
         ).status_code == 403
-        assert (await client.get("/v1/trash", headers=w.ctx.as_(who))).status_code == 403
+        assert (
+            await client.post(f"/v1/trash/{entry}/restore", headers=w.ctx.as_(who))
+        ).status_code == 403
+    assert (await client.get("/v1/trash", headers=w.ctx.as_("viewer"))).status_code == 403
+    for who in ("approver", "decider"):
+        assert (await client.get("/v1/trash", headers=w.ctx.as_(who))).json() == []
     g = await client.delete(f"{BUCKETS}/goals/{w.goal_id}", headers=w.ctx.as_("commenter"))
     assert g.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_whoever_deleted_a_feature_or_goal_restores_it(client):
+    w = await _world()
+    a, b = w.ids["cut-a"], w.ids["cut-b"]
+
+    def trash(who: str):
+        return client.get("/v1/trash", headers=w.ctx.as_(who))
+
+    # The decider (an approver) deletes a feature: they may restore it, another approver not.
+    r = await client.delete(f"{ITEMS}/{a}", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    assert r.json()["can_restore"] is True
+    entry = r.json()["entry"]["id"]
+    listed = (await trash("decider")).json()
+    assert [(e["root"]["title"], e["can_restore"]) for e in listed] == [("Cut A", True)]
+    assert (await trash("approver")).json() == []
+    assert [(e["id"], e["can_restore"]) for e in (await trash("owner")).json()] == [(entry, True)]
+    for url in (f"{ITEMS}/{a}/restore", f"/v1/trash/{entry}/restore"):
+        r = await client.post(url, headers=w.ctx.as_("approver"))
+        assert r.status_code == 403, url
+    r = await client.post(f"{ITEMS}/{a}/restore", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    assert "cut-a" in await _items(client, w)
+
+    # Deleted again: from Trash's own Restore, by the deleter; an owner restores anyone's.
+    entry = (await client.delete(f"{ITEMS}/{a}", headers=w.ctx.as_("decider"))).json()
+    r = await client.post(f"/v1/trash/{entry['entry']['id']}/restore",
+                          headers=w.ctx.as_("decider"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    r = await client.delete(f"{ITEMS}/{b}", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    r = await client.post(f"/v1/trash/{r.json()['entry']['id']}/restore",
+                          headers=w.ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert {"cut-a", "cut-b"} <= set(await _items(client, w))
+
+    # A goal: the approver who deleted it restores it; another approver may not.
+    r = await client.delete(f"{BUCKETS}/goals/{w.goal_id}", headers=w.ctx.as_("approver"))
+    assert r.status_code == 200, r.text
+    assert r.json()["can_restore"] is True
+    assert [e["root"]["kind"] for e in (await trash("approver")).json()] == ["goal"]
+    assert (await trash("decider")).json() == []
+    url = f"{BUCKETS}/goals/{w.goal_id}/restore"
+    assert (await client.post(url, headers=w.ctx.as_("decider"))).status_code == 403
+    r = await client.post(url, headers=w.ctx.as_("approver"))
+    assert r.status_code == 200, r.text
+    assert (await trash("owner")).json() == []
+
+    # An owner's own delete stays theirs and the owners': the approvers neither see nor
+    # restore it.
+    r = await client.delete(f"{ITEMS}/{a}", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert (await trash("decider")).json() == []
+    r = await client.post(f"{ITEMS}/{a}/restore", headers=w.ctx.as_("decider"))
+    assert r.status_code == 403
+    r = await client.post(f"{ITEMS}/{a}/restore", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
 
 
 @pytest.mark.asyncio
@@ -202,8 +272,6 @@ async def test_delete_a_goal_moves_its_features_and_restore_brings_it_back(clien
     listed = (await client.get("/v1/trash", headers=w.as_("owner"))).json()
     assert [(e["root"]["kind"], e["root"]["title"]) for e in listed] == [("goal", "Grow")]
 
-    r = await client.post(f"{BUCKETS}/goals/{grow}/restore", headers=w.as_("approver"))
-    assert r.status_code == 403
     r = await client.post(f"{BUCKETS}/goals/{grow}/restore", headers=w.as_("owner"))
     assert r.status_code == 200, r.text
     back = next(g for g in (await w.read(client))["goals"] if g["id"] == grow)
