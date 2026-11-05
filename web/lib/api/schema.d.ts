@@ -23658,6 +23658,13 @@ export interface components {
             flags: {
                 [key: string]: string[];
             };
+            /**
+             * Titles
+             * @default {}
+             */
+            titles: {
+                [key: string]: string;
+            };
         };
         /**
          * FeatureSetProblem
@@ -24459,6 +24466,11 @@ export interface components {
             item_title?: string | null;
             /** Code */
             code: string;
+            /**
+             * Ref
+             * @default
+             */
+            ref: string;
             /** Label */
             label: string;
             /** Waivable */
@@ -36875,6 +36887,11 @@ export interface components {
         ScopeReason: {
             /** Code */
             code: string;
+            /**
+             * Ref
+             * @default
+             */
+            ref: string;
             /**
              * Severity
              * @enum {string}

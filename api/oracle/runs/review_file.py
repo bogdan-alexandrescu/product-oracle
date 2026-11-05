@@ -20,7 +20,7 @@ from datetime import datetime
 from typing import Any, Protocol
 
 from oracle import company_time, safe_yaml
-from oracle.runs.gate import OWNER_WAIVES
+from oracle.runs.gate import OWNER_WAIVES, answer_code, names
 from oracle.runs.schemas import ReviewAction
 
 VERSION = 1
@@ -67,14 +67,14 @@ def _answers(action: ReviewAction, reason: dict[str, Any]) -> bool:
     if action.kind == "question":
         return False
     if action.answers:
-        return reason["code"] in action.answers
+        return names(action.answers, reason["code"], reason.get("ref"))
     return action.kind != "waive" or reason["code"] not in OWNER_WAIVES
 
 
 def _waived_codes(action: ReviewAction, reasons: list[dict[str, Any]], key: str) -> list[str]:
     """The codes a waiver answers: those it names, else its item's but an owner's."""
     if action.answers:
-        return list(action.answers)
+        return list(dict.fromkeys(answer_code(a) for a in action.answers))
     return [r["code"] for r in reasons if r["item"] == key and r["code"] not in OWNER_WAIVES]
 
 
