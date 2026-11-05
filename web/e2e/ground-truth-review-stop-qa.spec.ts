@@ -144,6 +144,14 @@ test("B-03: switching to a run whose review cannot load says so above the earlie
   await expect(page.getByTestId("from-run-row")).toHaveCount(4);
   await expect(page.getByTestId("from-run-view")).toHaveAttribute("data-current", "true");
   await expect(page.getByTestId("load-error")).toHaveCount(0);
+  await expect(page.getByTestId("tab-count-from-run")).toBeVisible();
+  // A row's drawer, open before the switch, with its Why card and its decisions.
+  const first = page.getByTestId("from-run-row").first();
+  await first.getByRole("button").first().click();
+  const drawer = page.getByTestId("entity-drawer");
+  await expect(drawer.getByTestId("why-card")).toBeVisible();
+  const decisions = drawer.getByRole("button", { name: /^(Leave proposed…|Merge into…|Look again…)$/ });
+  expect(await decisions.count()).toBeGreaterThan(0);
   // Another run in the Proposals tab's From select, whose review fails to load (mock).
   await page.getByRole("tab", { name: "Proposals" }).click();
   const from = page.getByLabel("From", { exact: true });
@@ -164,6 +172,15 @@ test("B-03: switching to a run whose review cannot load says so above the earlie
   await expect(kept).toHaveAttribute("inert", "");
   expect((await box(err)).y).toBeLessThan((await box(kept)).y);
   await expect(bar(page)).toHaveCount(0);
+  // The open drawer offers no decision on the earlier run's row: no Why card, none of its buttons.
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByTestId("why-card")).toHaveCount(0);
+  await expect(drawer.getByText("Why it needs you")).toHaveCount(0);
+  await expect(decisions).toHaveCount(0);
+  // The band naming the earlier run is dimmed, and the tab drops its count; the notice says why.
+  await expect(page.getByTestId("from-run-band-wrap")).toHaveAttribute("data-current", "false");
+  expect(Number(await page.getByTestId("from-run-band-wrap").evaluate((el) => getComputedStyle(el).opacity))).toBeLessThan(1);
+  await expect(page.getByTestId("tab-count-from-run")).toHaveCount(0);
   await err.getByRole("button", { name: "Try again" }).click();
   await expect(err).toContainText("Couldn't load this run's review.");
   await shot(page, "b03-kept-review-failed");

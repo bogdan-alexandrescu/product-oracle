@@ -84,15 +84,26 @@ async function gt1(page: Page, { phone, tag, ask, drawer }: { phone: boolean; ta
   await expect(name).toBeInViewport();
   // The pinned column's right edge is a line in the theme's line colour, on its header and cells.
   for (const pinned of [ledger.getByRole("columnheader", { name: "Feature" }), cell]) {
+    // Parsed, not matched as a string: some inset shadow, offset left (so drawn on the right
+    // edge), unblurred, in the line colour once both colours are resolved the same way.
     const edge = await pinned.evaluate((el) => {
-      const probe = document.createElement("span");
-      probe.style.color = "var(--line)";
-      document.body.append(probe);
-      const line = getComputedStyle(probe).color;
-      probe.remove();
-      return { shadow: getComputedStyle(el).boxShadow, line };
+      const resolve = (c: string) => {
+        const probe = document.createElement("span");
+        probe.style.color = c;
+        document.body.append(probe);
+        const out = getComputedStyle(probe).color;
+        probe.remove();
+        return out;
+      };
+      const line = resolve("var(--line)");
+      const shadows = getComputedStyle(el).boxShadow.split(/,(?![^(]*\))/).map((sh) => {
+        const colour = sh.match(/(?:rgba?|hsla?|oklch|oklab|lab|lch|color)\([^)]*\)|#[0-9a-f]{3,8}\b/i)?.[0] ?? "";
+        const lengths = sh.replace(colour, "").match(/-?[\d.]+px/g)?.map(parseFloat) ?? [];
+        return { inset: /\binset\b/.test(sh), x: lengths[0] ?? 0, blur: lengths[2] ?? 0, colour: colour && resolve(colour) };
+      });
+      return shadows.some((sh) => sh.inset && sh.x < 0 && sh.blur === 0 && sh.colour === line);
     });
-    expect(edge.shadow).toContain(`${edge.line} -1px 0px 0px 0px inset`);
+    expect(edge).toBe(true);
   }
   await shot(page, `gt1-graph-scrolled-${tag}`);
 }

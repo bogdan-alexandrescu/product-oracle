@@ -409,7 +409,8 @@ export default function BaselinePage() {
   // A stale ?tab=from-run link without its run opens Graph, not an empty panel (visual QA GT-3).
   const active: Tab = tab === "from-run" && !view && !fromRunFailed && !(runId && fromRun.loading) ? "graph" : tab;
   const tabs: TabItem<Tab>[] = [
-    ...(view ? [{ id: "from-run" as const, label: "From this run", count: view.summary.need_you, kind: "crit" as const }] : []),
+    // A kept review that is not current shows no count: the notice says why (visual QA B-03).
+    ...(view ? [{ id: "from-run" as const, label: "From this run", count: fromRunFailed ? undefined : view.summary.need_you, kind: "crit" as const }] : []),
     ...(!view && fromRunFailed ? [{ id: "from-run" as const, label: "From this run" }] : []),
     { id: "graph", label: "Graph" },
     { id: "items", label: "Items" },
@@ -571,7 +572,8 @@ export default function BaselinePage() {
               }}
               why={
                 openRow &&
-                view && (
+                view &&
+                !fromRunFailed && (
                   <WhyCard
                     row={openRow}
                     fixes={<RowActions view={view} row={openRow} entities={graph.data?.entities ?? []} busy={busy} act={act} onOpen={openItem} inDrawer />}
@@ -593,7 +595,11 @@ export default function BaselinePage() {
           </Suspense>
         )}
         {build && <BuildBanner build={build} />}
-        {view && <FromRunBand view={view} />}
+        {view && (
+          <div data-testid="from-run-band-wrap" data-current={!fromRunFailed} className={fromRunFailed ? "opacity-60" : undefined}>
+            <FromRunBand view={view} />
+          </div>
+        )}
 
         <Tabs label="Ground Truth views" items={tabs} value={active} onChange={setTab} />
 
