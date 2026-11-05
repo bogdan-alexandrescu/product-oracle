@@ -164,6 +164,12 @@ test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
   await expect(prdFilter.locator("option", { hasText: "Plan changes" })).toHaveCount(1);
   expect((await optionTexts(prdFilter)).filter((t) => /Usage alerts|Guided setup/.test(t))).toEqual([]);
   for (const title of GONE) await expect(page.getByText(title, { exact: true }).filter({ visible: true })).toHaveCount(0);
+  // Round 8: Key dates names no replaced PRD's milestone (key_dates.key_date_prds reads service.load's entries).
+  await page.getByTestId("key-dates-open").filter({ visible: true }).click();
+  const keyDates = page.getByTestId("key-dates-editor");
+  await expect(keyDates).toBeVisible();
+  await expect(keyDates.getByTestId("key-date-from-prd")).toHaveCount(0);
+  await expect(keyDates.getByText(/Guided setup|Usage alerts/)).toHaveCount(0);
 
   await page.goto("/simple/priorities?tab=buckets");
   const buckets = page.getByRole("region", { name: "Goal buckets" });
@@ -185,6 +191,13 @@ test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
   await expect(ranked.getByText("New plan tiers").first()).toBeVisible();
   for (const title of GONE) await expect(ranked.getByText(title)).toHaveCount(0);
   await expect(page.getByTestId("prio-subtitle")).toContainText("Q4 2026.");
+  // Round 8: the Line picker offers no replaced PRD's milestone "From the PRD"; the track's M1-M3 stay.
+  const line = page.getByTestId("line-picker").getByLabel("Line", { exact: true });
+  await expect(line).toBeVisible();
+  await expect(line.locator("option", { hasText: "This quarter (Now)" })).toHaveCount(1);
+  await expect(line.locator("option", { hasText: "Milestone: M1 · Prove it" })).toHaveCount(1);
+  await expect(line.locator("option", { hasText: "From the PRD" })).toHaveCount(0);
+  await expect(line.locator('option[title*="Guided setup"], option[title*="Usage alerts"]')).toHaveCount(0);
 
   // Round 5: Needs a decision names none of them: no suggested feature "Looks like" one
   // (additions.reconcile reads service.load), and a proposal on one (Team invite nudges, of
