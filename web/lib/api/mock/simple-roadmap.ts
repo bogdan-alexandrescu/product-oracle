@@ -85,6 +85,8 @@ interface SeedItem {
   draft_roadmap?: boolean;
   /** approved-prd-roadmap: an item an approved PRD put in the draft names that PRD. */
   from_prd?: { slug: string; title: string };
+  /** The Baseline feature it is (RoadmapItem.feature_id): an approved PRD's item matches by it. */
+  feature_id?: string | null;
   /** approved-prd-roadmap: its dates as the PRD has them (ISO days; no start: end-only). */
   dates?: { start: string | null; end: string; source: "engineering" | "accepted" };
   /** build-runplan RP2: the PRD it belongs to when not its roadmap's own (./meeting-draft.ts). */
@@ -1072,6 +1074,7 @@ export function readerDb(db: SimpleDb, me: { id: string; role: Role }): SimpleDb
 export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Who): Schemas["SimpleRoadmapOut"] | null {
   knowTalkGoals(db);
   knowExtraRoadmaps(db);
+  foldPrdCopies(db);
   const decides = (s: SeedItem) => canDecideItem(db, s, me ?? { id: "", role });
   const deciders = (s: SeedItem) => {
     const ids = deciderIds(db, s, me?.roles);
@@ -1447,10 +1450,37 @@ export interface PrdApproval {
     title: string;
     horizon: Horizon;
     outcome?: string | null;
+    feature_id?: string | null;
     start: string | null;
     end: string | null;
     source: "engineering" | "accepted";
   }[];
+}
+
+/**
+ * approved-prd-shown-once (hotfix PR 1273): a copy of a shown item (same roadmap and PRD, its key
+ * the shown one's with "-2", "-3", ... as the mock re-keys an added item) reads as that item, once,
+ * as the API's drafts.fold: the copy's title and dates, its own dates and cut on top. Folded for
+ * good, so a change made later on the item always takes effect.
+ */
+export function foldPrdCopies(db: SimpleDb): void {
+  const prdOf = (x: SeedItem) => x.from_prd?.slug ?? ROADMAPS[x.roadmap]?.prd.toLowerCase().replace(/ /g, "-");
+  for (const copy of [...db.items]) {
+    if (!copy.from_prd) continue;
+    const m = /^(.+)-\d+$/.exec(copy.key);
+    const shown = m && db.items.find((x) => x !== copy && x.key === m[1] && x.roadmap === copy.roadmap && prdOf(x) === prdOf(copy));
+    if (!shown) continue;
+    shown.title = copy.title;
+    if (copy.dates) shown.dates = copy.dates;
+    if (db.own[copy.key]) db.own[shown.key] = db.own[copy.key];
+    else if (copy.dates) delete db.own[shown.key];
+    if (copy.status === "cut") shown.status = "cut";
+    delete db.own[copy.key];
+    db.items = db.items.filter((x) => x !== copy);
+    for (const d of db.drafts ?? [])
+      for (const p of Object.values(d.prds ?? {}))
+        p.keys = [...new Set(p.keys.map((k) => (k === copy.key ? shown.key : k)))];
+  }
 }
 
 /**
@@ -1527,10 +1557,12 @@ export function approvedPrdToDraft(
         : [x],
     );
   }
+  foldPrdCopies(db);
   const w = simpleWindows(companyToday());
   const keys: string[] = [];
   // approved-prd-shown-once: the PRD's item the roadmap shows already (same key, else same
-  // title; every key match first, each shown item matched once) is updated, never added again.
+  // feature, else same title; every key match first, each shown item matched once) is updated,
+  // never added again.
   const ours = db.items.filter(
     (x) =>
       x.roadmap === rm &&
@@ -1541,6 +1573,7 @@ export function approvedPrdToDraft(
   const matched = new Map<string, SeedItem>();
   for (const same of [
     (it: PrdApproval["items"][number], x: SeedItem) => x.key === it.key,
+    (it: PrdApproval["items"][number], x: SeedItem) => !!it.feature_id && x.feature_id === it.feature_id,
     (it: PrdApproval["items"][number], x: SeedItem) =>
       !!named(it.title) && named(x.title) === named(it.title),
   ]) {

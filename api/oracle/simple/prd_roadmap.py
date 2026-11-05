@@ -398,14 +398,34 @@ async def sources_out(db: AsyncSession, d: SimpleDraft) -> list[SimpleDraftPrd]:
         )
     }
 
+    # hotfix PR 1273: a copy folded into a shown item (drafts.fold) is that item: counted
+    # once, cut when the item reads cut.
+    from oracle.roadmap import views
+
+    shown = await _shown_version(db, d.document_id)
+    pool = await views.version_items(db, await db.get(DocumentVersion, shown)) if shown else []
+    added = [r for r in rows.values() if r.simple_draft_id == d.id and r.roadmap_version_id is None]
+    copies = drafts.twins(pool, sorted(added, key=lambda r: r.id))
+    folded = {
+        i: (r, c)
+        for r in pool
+        if (c := copies.get(r.id)) is not None
+        for i in (str(r.id), str(c.id))
+    }
+
     def there(i: str) -> bool:
         row = rows.get(i)
         if row is None:
             return False
+        if i in folded:
+            return not drafts.fold(*folded[i], overlay).cut
         added = row.simple_draft_id == d.id and row.roadmap_version_id is None
         if not added and overlay.get(i) is None:
             return False
         return not drafts.overlaid(row, overlay.get(i)).cut
+
+    def one(i: str) -> str:
+        return str(folded[i][0].id) if i in folded else i
 
     out = []
     for k, v in sources.items():
@@ -416,7 +436,7 @@ async def sources_out(db: AsyncSession, d: SimpleDraft) -> list[SimpleDraftPrd]:
             SimpleDraftPrd(
                 prd=SimpleDocRef(id=doc.id, slug=doc.slug, title=doc.title),
                 version=v.get("version"),
-                items=sum(1 for i in v.get("items") or [] if there(str(i))),
+                items=len({one(str(i)) for i in v.get("items") or [] if there(str(i))}),
                 key_dates=0,
             )
         )

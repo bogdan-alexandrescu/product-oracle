@@ -89,3 +89,31 @@ test("an approved PRD's items show once on the Simple roadmap", async ({ page })
     await expect(page.getByRole("button", { name: new RegExp(`^${title}, .*${day}\\.`) })).toHaveCount(1);
   }
 });
+
+test("a copy the draft holds already shows as the one item it copies", async ({ page }) => {
+  // hotfix PR 1273: an earlier approval left a copy of Weekly alert digest (same roadmap and PRD,
+  // re-keyed) with the PRD's newer end; the roadmap reads it as one item with that end, as the API.
+  await login(page);
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await page.evaluate((slug) => {
+    const db = JSON.parse(localStorage.getItem("po-mock-db-v2")!);
+    const doc = db.documents.find((d: { slug: string }) => d.slug === slug);
+    const items = db.simple_roadmap.items as { key: string; from_prd?: unknown }[];
+    const shown = items.find((it) => it.key === "alert-digest")!;
+    shown.from_prd = { slug, title: doc.title };
+    items.push({
+      ...shown, key: "alert-digest-2", from_prd: { slug, title: doc.title },
+      dates: { start: null, end: "2027-02-19", source: "accepted" },
+    } as typeof shown);
+    localStorage.setItem("po-mock-db-v2", JSON.stringify(db));
+  }, PRD);
+
+  await page.goto("/simple/roadmap?roadmap=alerts-roadmap");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await page.getByTestId("format-gantt").click();
+  await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
+  const bar = page.locator('g[data-testid="bar"][aria-label^="Weekly alert digest:"]');
+  await expect(bar).toHaveCount(1);
+  await expect(bar).toHaveAttribute("data-end", "2027-02-19");
+});
