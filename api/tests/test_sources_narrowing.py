@@ -544,6 +544,24 @@ async def test_a_source_with_a_now_refused_date_needs_attention(a, tenant_id, al
     result = (await a.post(f"/v1/sources/{source['id']}/sync")).json()
     assert result["outcome"] == "needs_attention"
     assert "Since must be a date" in result["error"]
+    # Review of PR 1286: a cause that is not an action keeps the action to take.
+    assert result["error"].endswith(": edit this source to sync it again")
+    assert "then it syncs again" not in result["error"]
+
+
+async def test_a_source_with_a_now_refused_order_names_the_edit(a, tenant_id, alice, slack):
+    source = await add(a, tenant_id, alice, "slack", {"channels": BOTH})
+    async with tenant_session(tenant_id) as s:
+        await s.execute(
+            update(Source)
+            .where(Source.id == uuid.UUID(source["id"]))
+            .values(config={"channels": BOTH, "since": "2026-03-01", "until": "2026-02-01"})
+        )
+        await s.commit()
+    result = (await a.post(f"/v1/sources/{source['id']}/sync")).json()
+    assert result["outcome"] == "needs_attention"
+    assert result["error"] == "Until must be on or after since: edit this source to sync it again"
+    assert result["source"]["last_error"] == result["error"]
 
 
 # --- Roles ----------------------------------------------------------------------------
