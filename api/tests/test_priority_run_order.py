@@ -912,3 +912,139 @@ async def test_a_new_feature_with_no_open_create_is_still_added(client, owner, r
         ("depends_on", "address-lookup", "proposed"),
         ("supports", "activation", "proposed"),
     ]
+
+
+# Review of PR 1244, round 2: no feature joins the Ground Truth without its goal.
+def new_known(goals) -> run_order.Known:
+    """a and b in the baseline; new-one, new in the approved scope, naming ``goals``."""
+    k = known(("a", "b"), scope=("a", "b", "new-one"))
+    k.features["new-one"] = "Gift notes"
+    k.new_goals = {"new-one": goals}
+    return k
+
+
+NEW_ONE = order(("a", 1), ("b", 2), ("new-one", 3))
+
+
+@pytest.mark.parametrize(
+    "goals",
+    [[], [{"key": "activation", "contribution": 0}]],
+    ids=["no-goal", "does-not-serve"],
+)
+def test_check_a_new_feature_naming_no_goal_is_blocking(goals):
+    out = run_order.check_order(NEW_ONE, known=new_known(goals))
+    assert codes(out) == [("new_feature_no_goal", True, "new-one")]
+    assert out.problems[0]["message"] == (
+        "Gift notes is new and names no goal it serves: the run must name one"
+    )
+
+
+@pytest.mark.parametrize(
+    "goals,extra",
+    [
+        ([{"key": "activation", "contribution": None}], ""),
+        ([], "    goal: activation\n"),
+        ([], "    goal: activation\n    contribution: 2\n"),
+    ],
+    ids=["feature-set-key-alone", "row-goal-alone", "row-goal-and-contribution"],
+)
+def test_check_a_new_feature_naming_its_goal_is_clean(goals, extra):
+    text = NEW_ONE + extra
+    out = run_order.check_order(text, known=new_known(goals))
+    assert out.problems == []
+
+
+def test_check_a_row_goal_that_does_not_serve_is_no_goal():
+    text = NEW_ONE + "    goal: activation\n    contribution: 0\n"
+    out = run_order.check_order(text, known=new_known([]))
+    assert codes(out) == [("new_feature_no_goal", True, "new-one")]
+
+
+# The run's feature set names bulk-edit's goal by key alone; its order row names none.
+KEY_ALONE = CLEAN.replace(
+    "    title: Bulk edit\n    goals: []\n", "    title: Bulk edit\n    goals: [activation]\n"
+)
+# bulk-edit ranked with no goal, weight or contribution in its row.
+ORDER_NO_GOAL = ORDER_NEW.replace("    goal: activation\n    weight: 3\n    contribution: 2\n", "")
+
+
+async def test_a_goal_named_by_key_alone_is_proposed_with_an_assumed_contribution(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    """The feature set names the goal with no contribution and the row leaves it out: the
+    supports link is still proposed, its contribution 1 marked assumed for a person to set;
+    live Priorities scores it under the goal, the contribution assumed."""
+    tenant_id, auth = owner
+    assert KEY_ALONE != CLEAN and ORDER_NO_GOAL != ORDER_NEW
+    run = await at_priority(client, owner, runtime, ORDER_NO_GOAL, features=KEY_ALONE)
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert run_order.blocking_of(snap.check_result) == 0, snap.check_result
+    approver = await as_user(tenant_id, "approver")
+    run = await decide(client, approver, run, note="Good order")
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert snap.status == "saved"
+    _, links = await new_feature_graph(tenant_id)
+    assert links == [
+        ("supports", "activation", "proposed", {"contribution": 1, "contribution_assumed": True})
+    ]
+    live = (await client.get("/v1/priorities", headers=auth)).json()
+    row = {f["key"]: f for f in live["features"]}["bulk-edit"]
+    assert row["serves_goal"] is True
+    (term,) = row["explanation"]["goals"]
+    assert (term["goal"], term["contribution"], term["contribution_assumed"]) == (
+        "activation",
+        1,
+        True,
+    )
+
+
+async def test_a_row_goal_with_no_contribution_is_proposed_as_assumed(client, owner, runtime):  # noqa: F811
+    tenant_id, _ = owner
+    row_goal = ORDER_NEW.replace("    weight: 3\n    contribution: 2\n", "")
+    run = await at_priority(client, owner, runtime, row_goal)
+    approver = await as_user(tenant_id, "approver")
+    run = await decide(client, approver, run, note="Good order")
+    _, links = await new_feature_graph(tenant_id)
+    assert links == [
+        ("supports", "activation", "proposed", {"contribution": 1, "contribution_assumed": True})
+    ]
+
+
+@pytest.mark.parametrize(
+    "goals", ["goals: []", "goals: [{key: activation, contribution: 0}]"], ids=["none", "zero"]
+)
+async def test_approve_is_refused_while_a_new_feature_names_no_goal(client, owner, runtime, goals):  # noqa: F811
+    """goals: [] (or a goal it does not serve) and a row with no goal: a blocking problem
+    naming the feature, so Approve order is refused and nothing joins the Ground Truth."""
+    tenant_id, _ = owner
+    features = CLEAN.replace(
+        "    title: Bulk edit\n    goals: []\n", f"    title: Bulk edit\n    {goals}\n"
+    )
+    run = await at_priority(client, owner, runtime, ORDER_NO_GOAL, features=features)
+    (snap,) = await snapshots(tenant_id, run["id"])
+    blocking = [
+        (p["code"], p["feature"], p["message"])
+        for p in snap.check_result["problems"]
+        if p["blocking"]
+    ]
+    assert blocking == [
+        (
+            "new_feature_no_goal",
+            "bulk-edit",
+            "Bulk edit is new and names no goal it serves: the run must name one",
+        )
+    ]
+    cp = pending(run)
+    assert cp["cannot_approve"] == BLOCKED
+    resp = await client.post(
+        f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/decide",
+        json={"decision": "approved"},
+        headers=await as_user(tenant_id, "approver"),
+    )
+    assert resp.status_code == 409, resp.text
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert snap.status == "proposed"
+    entity, _ = await new_feature_graph(tenant_id)
+    assert entity is None
