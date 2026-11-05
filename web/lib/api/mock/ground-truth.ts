@@ -1,6 +1,6 @@
 /**
  * The Ground Truth check (docs/ground-truth.md; the owner, Nov 5: "Flag it, don't refuse"):
- * GET /v1/baseline/check, as api/oracle/baseline/check.py serves it (CheckOut). Readable by
+ * GET /v1/baseline/check, as api/oracle/baseline/check.py serves it (GroundTruthOut). Readable by
  * anyone who reads the roadmap; it only lists flags and never refuses a save.
  *
  * The "ground-truth-flags" scenario (MOCK_SCENARIO_KEY): one flag of each kind on the one
@@ -11,8 +11,8 @@ import { stableUuid } from "./ids";
 
 export const GROUND_TRUTH_FLAGS_SCENARIO = "ground-truth-flags";
 
-type Kind = Schemas["CheckFlag"]["kind"];
-type Action = Schemas["CheckFix"]["action"];
+type Kind = Schemas["GroundTruthFlag"]["kind"];
+type Action = Schemas["GroundTruthFix"]["action"];
 
 /** In the API's order (CHECK_KINDS). */
 export const CHECK_KINDS: Kind[] = ["unlinked_item", "slice_parent_missing", "prd_feature_missing", "no_code", "no_goal", "runs_today_on_roadmap"];
@@ -30,7 +30,7 @@ const ROADMAP = { id: stableUuid("ground-truth/roadmap"), title: "Product roadma
 const PRD = { id: stableUuid("ground-truth/prd/scale"), title: "Scale" };
 const id = (key: string) => stableUuid(`ground-truth/${key}`);
 
-const flag = (kind: Kind, fixes: [Action, string][], rest: Partial<Schemas["CheckFlag"]>): Schemas["CheckFlag"] => ({
+const flag = (kind: Kind, fixes: [Action, string][], rest: Partial<Schemas["GroundTruthFlag"]>): Schemas["GroundTruthFlag"] => ({
   kind,
   item: null,
   feature: null,
@@ -40,7 +40,7 @@ const flag = (kind: Kind, fixes: [Action, string][], rest: Partial<Schemas["Chec
   ...rest,
 });
 
-function seedFlags(): Schemas["CheckFlag"][] {
+function seedFlags(): Schemas["GroundTruthFlag"][] {
   const both = { roadmap: ROADMAP, prd: PRD };
   return [
     flag("unlinked_item", [["add_to_ground_truth", id("item/export")], ["link_to_feature", id("item/export")]], {
@@ -69,8 +69,8 @@ function seedFlags(): Schemas["CheckFlag"][] {
   ];
 }
 
-/** CheckOut for the scenario: its flags, their counts per kind (zero included) and the total. */
-export function groundTruthCheck(scenario: string | null): Schemas["CheckOut"] {
+/** GroundTruthOut for the scenario: its flags, their counts per kind (zero included) and the total. */
+export function groundTruthCheck(scenario: string | null): Schemas["GroundTruthOut"] {
   const flags = scenario === GROUND_TRUTH_FLAGS_SCENARIO ? seedFlags() : [];
   const counts = Object.fromEntries(CHECK_KINDS.map((k) => [k, flags.filter((f) => f.kind === k).length]));
   return { flags, counts, total: flags.length };

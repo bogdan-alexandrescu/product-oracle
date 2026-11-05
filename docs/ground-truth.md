@@ -84,7 +84,7 @@ People read "Ground Truth". The code keeps its older name, "baseline", in these 
 they are not renamed:
 
 - **API routes**: `/v1/baseline/*`, including the check, `GET /v1/baseline/check`
-  (`get_check`, schema `CheckOut`). Readable by anyone who can read the roadmap (viewer and
+  (`get_check`, schema `GroundTruthOut`). Readable by anyone who can read the roadmap (viewer and
   up), in the caller's company only.
 - **Code**: the `oracle.baseline` package (the check is `oracle/baseline/check.py`), the web
   route `web/app/baseline` and the mock `web/lib/api/mock/baseline.ts`; the check's mock is

@@ -17235,7 +17235,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/oracle__baseline__schemas__CheckOut"
+                  "$ref": "#/components/schemas/GroundTruthOut"
                 }
               }
             }
@@ -48685,7 +48685,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/oracle__strategy__schemas__CheckOut"
+                  "$ref": "#/components/schemas/CheckOut"
                 }
               }
             }
@@ -62974,175 +62974,23 @@
         ],
         "title": "ChatThreadOut"
       },
-      "CheckDoc": {
+      "CheckOut": {
         "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id"
+          "opened": {
+            "type": "integer",
+            "title": "Opened"
           },
-          "title": {
-            "type": "string",
-            "title": "Title"
+          "resolved": {
+            "type": "integer",
+            "title": "Resolved"
           }
         },
         "type": "object",
         "required": [
-          "id",
-          "title"
+          "opened",
+          "resolved"
         ],
-        "title": "CheckDoc"
-      },
-      "CheckFix": {
-        "properties": {
-          "action": {
-            "type": "string",
-            "enum": [
-              "add_to_ground_truth",
-              "link_to_feature",
-              "give_code",
-              "pick_goal",
-              "take_off_roadmap"
-            ],
-            "title": "Action"
-          },
-          "target": {
-            "type": "string",
-            "title": "Target"
-          }
-        },
-        "type": "object",
-        "required": [
-          "action",
-          "target"
-        ],
-        "title": "CheckFix",
-        "description": "A fix a person makes in the UI. ``target``: the item's or feature's id, or for a PRD's\nfeature or slice the PRD feature's code (with ``where.prd``)."
-      },
-      "CheckFlag": {
-        "properties": {
-          "kind": {
-            "type": "string",
-            "enum": [
-              "unlinked_item",
-              "slice_parent_missing",
-              "prd_feature_missing",
-              "no_code",
-              "no_goal",
-              "runs_today_on_roadmap"
-            ],
-            "title": "Kind"
-          },
-          "item": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CheckRef"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "feature": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CheckRef"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "where": {
-            "$ref": "#/components/schemas/CheckWhere"
-          },
-          "words": {
-            "type": "string",
-            "title": "Words"
-          },
-          "fixes": {
-            "items": {
-              "$ref": "#/components/schemas/CheckFix"
-            },
-            "type": "array",
-            "title": "Fixes"
-          }
-        },
-        "type": "object",
-        "required": [
-          "kind",
-          "where",
-          "words",
-          "fixes"
-        ],
-        "title": "CheckFlag",
-        "description": "One place that breaks the Ground Truth: allowed, flagged \"Not in the Ground Truth\"."
-      },
-      "CheckRef": {
-        "properties": {
-          "id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
-          },
-          "code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Code"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "code",
-          "name"
-        ],
-        "title": "CheckRef",
-        "description": "A roadmap item, slice or feature: its id (none for a PRD's feature or slice that is no\nrow of its own), its code (F-15, F-15a; none when it has no F-code) and its name."
-      },
-      "CheckWhere": {
-        "properties": {
-          "roadmap": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CheckDoc"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "prd": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CheckDoc"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "title": "CheckWhere",
-        "description": "Where the flag shows: the roadmap and the PRD (with its title), when it has them."
+        "title": "CheckOut"
       },
       "CheckpointDecision": {
         "properties": {
@@ -82256,6 +82104,205 @@
           "edges"
         ],
         "title": "GraphOut"
+      },
+      "GroundTruthDoc": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "GroundTruthDoc"
+      },
+      "GroundTruthFix": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "add_to_ground_truth",
+              "link_to_feature",
+              "give_code",
+              "pick_goal",
+              "take_off_roadmap"
+            ],
+            "title": "Action"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "target"
+        ],
+        "title": "GroundTruthFix",
+        "description": "A fix a person makes in the UI. ``target``: the item's or feature's id, or for a PRD's\nfeature or slice the PRD feature's code (with ``where.prd``)."
+      },
+      "GroundTruthFlag": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "unlinked_item",
+              "slice_parent_missing",
+              "prd_feature_missing",
+              "no_code",
+              "no_goal",
+              "runs_today_on_roadmap"
+            ],
+            "title": "Kind"
+          },
+          "item": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroundTruthRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "feature": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroundTruthRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "where": {
+            "$ref": "#/components/schemas/GroundTruthWhere"
+          },
+          "words": {
+            "type": "string",
+            "title": "Words"
+          },
+          "fixes": {
+            "items": {
+              "$ref": "#/components/schemas/GroundTruthFix"
+            },
+            "type": "array",
+            "title": "Fixes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "where",
+          "words",
+          "fixes"
+        ],
+        "title": "GroundTruthFlag",
+        "description": "One place that breaks the Ground Truth: allowed, flagged \"Not in the Ground Truth\"."
+      },
+      "GroundTruthOut": {
+        "properties": {
+          "flags": {
+            "items": {
+              "$ref": "#/components/schemas/GroundTruthFlag"
+            },
+            "type": "array",
+            "title": "Flags"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "flags",
+          "counts",
+          "total"
+        ],
+        "title": "GroundTruthOut"
+      },
+      "GroundTruthRef": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "name"
+        ],
+        "title": "GroundTruthRef",
+        "description": "A roadmap item, slice or feature: its id (none for a PRD's feature or slice that is no\nrow of its own), its code (F-15, F-15a; none when it has no F-code) and its name."
+      },
+      "GroundTruthWhere": {
+        "properties": {
+          "roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroundTruthDoc"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroundTruthDoc"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "GroundTruthWhere",
+        "description": "Where the flag shows: the roadmap and the PRD (with its title), when it has them."
       },
       "HTTPValidationError": {
         "properties": {
@@ -140370,35 +140417,6 @@
         "type": "object",
         "title": "YamlImportResult"
       },
-      "oracle__baseline__schemas__CheckOut": {
-        "properties": {
-          "flags": {
-            "items": {
-              "$ref": "#/components/schemas/CheckFlag"
-            },
-            "type": "array",
-            "title": "Flags"
-          },
-          "counts": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object",
-            "title": "Counts"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          }
-        },
-        "type": "object",
-        "required": [
-          "flags",
-          "counts",
-          "total"
-        ],
-        "title": "CheckOut"
-      },
       "oracle__baseline__schemas__MergeIn": {
         "properties": {
           "into": {
@@ -140793,24 +140811,6 @@
         },
         "type": "object",
         "title": "RegenerateIn"
-      },
-      "oracle__strategy__schemas__CheckOut": {
-        "properties": {
-          "opened": {
-            "type": "integer",
-            "title": "Opened"
-          },
-          "resolved": {
-            "type": "integer",
-            "title": "Resolved"
-          }
-        },
-        "type": "object",
-        "required": [
-          "opened",
-          "resolved"
-        ],
-        "title": "CheckOut"
       },
       "oracle__trash__schemas__RegenerateIn": {
         "properties": {

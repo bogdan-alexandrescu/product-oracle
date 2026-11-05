@@ -30,12 +30,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle.baseline.models import Edge, Entity
 from oracle.baseline.schemas import (
     CHECK_KINDS,
-    CheckDoc,
-    CheckFix,
-    CheckFlag,
-    CheckOut,
-    CheckRef,
-    CheckWhere,
+    GroundTruthDoc,
+    GroundTruthFix,
+    GroundTruthFlag,
+    GroundTruthOut,
+    GroundTruthRef,
+    GroundTruthWhere,
 )
 from oracle.currentstate.models import FeatureState
 from oracle.currentstate.service import exists
@@ -61,8 +61,8 @@ WORDS = {
 }
 
 
-def _doc(d: Document | None) -> CheckDoc | None:
-    return CheckDoc(id=d.id, title=d.title) if d is not None else None
+def _doc(d: Document | None) -> GroundTruthDoc | None:
+    return GroundTruthDoc(id=d.id, title=d.title) if d is not None else None
 
 
 async def _roadmap_items(db: AsyncSession) -> tuple[list[RoadmapItem], dict[uuid.UUID, Document]]:
@@ -134,7 +134,7 @@ async def _prd_plans(db: AsyncSession) -> list[tuple[Document, dict[str, Any]]]:
     return [(d, data or {}) for d, data in rows.all() if d.id not in replaced]
 
 
-async def run(db: AsyncSession) -> CheckOut:
+async def run(db: AsyncSession) -> GroundTruthOut:
     """Every flag in the company (the tenant session), in the order of ``CHECK_KINDS``."""
     from oracle.simple.priorities import _short_codes, prd_code
 
@@ -148,19 +148,19 @@ async def run(db: AsyncSession) -> CheckOut:
     short = await _short_codes(db, names=False)
     code_of = {f.id: c for f in features if F_CODE.fullmatch(c := short.get(f.key, ""))}
 
-    def ref(f: Entity) -> CheckRef:
-        return CheckRef(id=f.id, code=code_of.get(f.id), name=f.title)
+    def ref(f: Entity) -> GroundTruthRef:
+        return GroundTruthRef(id=f.id, code=code_of.get(f.id), name=f.title)
 
     items, roadmaps = await _roadmap_items(db)
     truth_ids = {f.id for f in truth}
-    flags: dict[str, list[CheckFlag]] = {k: [] for k in CHECK_KINDS}
+    flags: dict[str, list[GroundTruthFlag]] = {k: [] for k in CHECK_KINDS}
 
     def flag(kind: str, fixes: list[tuple[str, str]], **kw: Any) -> None:
         flags[kind].append(
-            CheckFlag(
+            GroundTruthFlag(
                 kind=kind,  # type: ignore[arg-type]
                 words=WORDS[kind],
-                fixes=[CheckFix(action=a, target=t) for a, t in fixes],  # type: ignore[arg-type]
+                fixes=[GroundTruthFix(action=a, target=t) for a, t in fixes],  # type: ignore[arg-type]
                 **kw,
             )
         )
@@ -181,9 +181,9 @@ async def run(db: AsyncSession) -> CheckOut:
         flag(
             "unlinked_item",
             [("add_to_ground_truth", target), ("link_to_feature", target)],
-            item=CheckRef(id=i.id, code=prd_code(i.prd_section_key), name=i.title),
+            item=GroundTruthRef(id=i.id, code=prd_code(i.prd_section_key), name=i.title),
             feature=ref(linked) if linked is not None else None,
-            where=CheckWhere(
+            where=GroundTruthWhere(
                 roadmap=_doc(roadmaps.get(i.roadmap_document_id)),  # type: ignore[arg-type]
                 prd=_doc(prd_docs.get(i.prd_document_id)),  # type: ignore[arg-type]
             ),
@@ -204,11 +204,11 @@ async def run(db: AsyncSession) -> CheckOut:
             if not code or code in truth_codes or name.casefold() in truth_names:
                 continue
             fixes = [("add_to_ground_truth", code), ("link_to_feature", code)]
-            where = CheckWhere(roadmap=_doc(roadmap), prd=_doc(prd))
+            where = GroundTruthWhere(roadmap=_doc(roadmap), prd=_doc(prd))
             flag(
                 "prd_feature_missing",
                 fixes,
-                feature=CheckRef(id=None, code=code, name=name),
+                feature=GroundTruthRef(id=None, code=code, name=name),
                 where=where,
             )
             spans = [m for m in f.get("milestones") or [] if m]
@@ -217,13 +217,13 @@ async def run(db: AsyncSession) -> CheckOut:
                     flag(
                         "slice_parent_missing",
                         fixes,
-                        item=CheckRef(id=None, code=f"{code}{LETTERS[n]}", name=name),
+                        item=GroundTruthRef(id=None, code=f"{code}{LETTERS[n]}", name=name),
                         where=where,
                     )
 
     for f in truth:
         if f.id not in code_of:
-            flag("no_code", [("give_code", str(f.id))], feature=ref(f), where=CheckWhere())
+            flag("no_code", [("give_code", str(f.id))], feature=ref(f), where=GroundTruthWhere())
 
     goals = set(
         await db.scalars(
@@ -242,7 +242,7 @@ async def run(db: AsyncSession) -> CheckOut:
     )
     for f in truth:
         if f.id not in serving:
-            flag("no_goal", [("pick_goal", str(f.id))], feature=ref(f), where=CheckWhere())
+            flag("no_goal", [("pick_goal", str(f.id))], feature=ref(f), where=GroundTruthWhere())
 
     running = {
         s.feature_id
@@ -254,13 +254,13 @@ async def run(db: AsyncSession) -> CheckOut:
             flag(
                 "runs_today_on_roadmap",
                 [("take_off_roadmap", str(i.id))],
-                item=CheckRef(id=i.id, code=prd_code(i.prd_section_key), name=i.title),
+                item=GroundTruthRef(id=i.id, code=prd_code(i.prd_section_key), name=i.title),
                 feature=ref(by_id[i.feature_id]),  # type: ignore[index]
-                where=CheckWhere(
+                where=GroundTruthWhere(
                     roadmap=_doc(roadmaps.get(i.roadmap_document_id)),  # type: ignore[arg-type]
                     prd=_doc(prd_docs.get(i.prd_document_id)),  # type: ignore[arg-type]
                 ),
             )
 
     out = [f for k in CHECK_KINDS for f in flags[k]]
-    return CheckOut(flags=out, counts={k: len(flags[k]) for k in CHECK_KINDS}, total=len(out))
+    return GroundTruthOut(flags=out, counts={k: len(flags[k]) for k in CHECK_KINDS}, total=len(out))

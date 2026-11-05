@@ -31,7 +31,6 @@ from oracle.baseline import (
 )
 from oracle.baseline.models import Edge, Entity, Proposal
 from oracle.baseline.schemas import (
-    CheckOut,
     ConflictCreate,
     ConflictOut,
     ConflictResolve,
@@ -54,6 +53,7 @@ from oracle.baseline.schemas import (
     FillFromTextResult,
     GoalProgress,
     GraphOut,
+    GroundTruthOut,
     LinkErrorOut,
     LinkPreviewOut,
     LinkTarget,
@@ -972,8 +972,8 @@ async def get_trace(principal: Reader, db: TenantDB) -> TraceReport:
     return await trace.report(db, principal)
 
 
-@router.get("/check", response_model=CheckOut)
-async def get_check(principal: Reader, db: TenantDB) -> CheckOut:
+@router.get("/check", response_model=GroundTruthOut)
+async def get_check(principal: Reader, db: TenantDB) -> GroundTruthOut:
     """The Ground Truth check (docs/ground-truth.md): every roadmap item, slice and PRD
     feature not in the Ground Truth, and every feature with no F-code, no goal, or running
     today while still on the roadmap; each with plain words and its fixes, counted per kind.

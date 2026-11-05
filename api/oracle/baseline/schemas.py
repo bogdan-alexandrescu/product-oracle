@@ -640,7 +640,7 @@ CheckAction = Literal[
 ]
 
 
-class CheckRef(BaseModel):
+class GroundTruthRef(BaseModel):
     """A roadmap item, slice or feature: its id (none for a PRD's feature or slice that is no
     row of its own), its code (F-15, F-15a; none when it has no F-code) and its name."""
 
@@ -649,19 +649,19 @@ class CheckRef(BaseModel):
     name: str
 
 
-class CheckDoc(BaseModel):
+class GroundTruthDoc(BaseModel):
     id: uuid.UUID
     title: str
 
 
-class CheckWhere(BaseModel):
+class GroundTruthWhere(BaseModel):
     """Where the flag shows: the roadmap and the PRD (with its title), when it has them."""
 
-    roadmap: CheckDoc | None = None
-    prd: CheckDoc | None = None
+    roadmap: GroundTruthDoc | None = None
+    prd: GroundTruthDoc | None = None
 
 
-class CheckFix(BaseModel):
+class GroundTruthFix(BaseModel):
     """A fix a person makes in the UI. ``target``: the item's or feature's id, or for a PRD's
     feature or slice the PRD feature's code (with ``where.prd``)."""
 
@@ -669,20 +669,20 @@ class CheckFix(BaseModel):
     target: str
 
 
-class CheckFlag(BaseModel):
+class GroundTruthFlag(BaseModel):
     """One place that breaks the Ground Truth: allowed, flagged "Not in the Ground Truth"."""
 
     kind: CheckKind
-    item: CheckRef | None = None
-    feature: CheckRef | None = None
-    where: CheckWhere
+    item: GroundTruthRef | None = None
+    feature: GroundTruthRef | None = None
+    where: GroundTruthWhere
     # One short plain sentence, no ids.
     words: str
-    fixes: list[CheckFix]
+    fixes: list[GroundTruthFix]
 
 
-class CheckOut(BaseModel):
-    flags: list[CheckFlag]
+class GroundTruthOut(BaseModel):
+    flags: list[GroundTruthFlag]
     # Every kind, zero included.
     counts: dict[str, int]
     total: int

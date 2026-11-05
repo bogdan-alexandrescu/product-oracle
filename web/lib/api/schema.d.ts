@@ -19206,68 +19206,12 @@ export interface components {
             /** Ask Id */
             ask_id?: string | null;
         };
-        /** CheckDoc */
-        CheckDoc: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Title */
-            title: string;
-        };
-        /**
-         * CheckFix
-         * @description A fix a person makes in the UI. ``target``: the item's or feature's id, or for a PRD's
-         *     feature or slice the PRD feature's code (with ``where.prd``).
-         */
-        CheckFix: {
-            /**
-             * Action
-             * @enum {string}
-             */
-            action: "add_to_ground_truth" | "link_to_feature" | "give_code" | "pick_goal" | "take_off_roadmap";
-            /** Target */
-            target: string;
-        };
-        /**
-         * CheckFlag
-         * @description One place that breaks the Ground Truth: allowed, flagged "Not in the Ground Truth".
-         */
-        CheckFlag: {
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "unlinked_item" | "slice_parent_missing" | "prd_feature_missing" | "no_code" | "no_goal" | "runs_today_on_roadmap";
-            item?: components["schemas"]["CheckRef"] | null;
-            feature?: components["schemas"]["CheckRef"] | null;
-            where: components["schemas"]["CheckWhere"];
-            /** Words */
-            words: string;
-            /** Fixes */
-            fixes: components["schemas"]["CheckFix"][];
-        };
-        /**
-         * CheckRef
-         * @description A roadmap item, slice or feature: its id (none for a PRD's feature or slice that is no
-         *     row of its own), its code (F-15, F-15a; none when it has no F-code) and its name.
-         */
-        CheckRef: {
-            /** Id */
-            id: string | null;
-            /** Code */
-            code: string | null;
-            /** Name */
-            name: string;
-        };
-        /**
-         * CheckWhere
-         * @description Where the flag shows: the roadmap and the PRD (with its title), when it has them.
-         */
-        CheckWhere: {
-            roadmap?: components["schemas"]["CheckDoc"] | null;
-            prd?: components["schemas"]["CheckDoc"] | null;
+        /** CheckOut */
+        CheckOut: {
+            /** Opened */
+            opened: number;
+            /** Resolved */
+            resolved: number;
         };
         /** CheckpointDecision */
         CheckpointDecision: {
@@ -26183,6 +26127,80 @@ export interface components {
             entities: components["schemas"]["EntityOut"][];
             /** Edges */
             edges: components["schemas"]["EdgeOut"][];
+        };
+        /** GroundTruthDoc */
+        GroundTruthDoc: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * GroundTruthFix
+         * @description A fix a person makes in the UI. ``target``: the item's or feature's id, or for a PRD's
+         *     feature or slice the PRD feature's code (with ``where.prd``).
+         */
+        GroundTruthFix: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "add_to_ground_truth" | "link_to_feature" | "give_code" | "pick_goal" | "take_off_roadmap";
+            /** Target */
+            target: string;
+        };
+        /**
+         * GroundTruthFlag
+         * @description One place that breaks the Ground Truth: allowed, flagged "Not in the Ground Truth".
+         */
+        GroundTruthFlag: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "unlinked_item" | "slice_parent_missing" | "prd_feature_missing" | "no_code" | "no_goal" | "runs_today_on_roadmap";
+            item?: components["schemas"]["GroundTruthRef"] | null;
+            feature?: components["schemas"]["GroundTruthRef"] | null;
+            where: components["schemas"]["GroundTruthWhere"];
+            /** Words */
+            words: string;
+            /** Fixes */
+            fixes: components["schemas"]["GroundTruthFix"][];
+        };
+        /** GroundTruthOut */
+        GroundTruthOut: {
+            /** Flags */
+            flags: components["schemas"]["GroundTruthFlag"][];
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Total */
+            total: number;
+        };
+        /**
+         * GroundTruthRef
+         * @description A roadmap item, slice or feature: its id (none for a PRD's feature or slice that is no
+         *     row of its own), its code (F-15, F-15a; none when it has no F-code) and its name.
+         */
+        GroundTruthRef: {
+            /** Id */
+            id: string | null;
+            /** Code */
+            code: string | null;
+            /** Name */
+            name: string;
+        };
+        /**
+         * GroundTruthWhere
+         * @description Where the flag shows: the roadmap and the PRD (with its title), when it has them.
+         */
+        GroundTruthWhere: {
+            roadmap?: components["schemas"]["GroundTruthDoc"] | null;
+            prd?: components["schemas"]["GroundTruthDoc"] | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -47488,17 +47506,6 @@ export interface components {
              */
             notes: components["schemas"]["ImportIssue"][];
         };
-        /** CheckOut */
-        oracle__baseline__schemas__CheckOut: {
-            /** Flags */
-            flags: components["schemas"]["CheckFlag"][];
-            /** Counts */
-            counts: {
-                [key: string]: number;
-            };
-            /** Total */
-            total: number;
-        };
         /**
          * MergeIn
          * @description Merge into… (B2): the item to merge the duplicate into, and why.
@@ -47620,13 +47627,6 @@ export interface components {
              *     }
              */
             knobs: components["schemas"]["KnobsIn"];
-        };
-        /** CheckOut */
-        oracle__strategy__schemas__CheckOut: {
-            /** Opened */
-            opened: number;
-            /** Resolved */
-            resolved: number;
         };
         /** RegenerateIn */
         oracle__trash__schemas__RegenerateIn: {
@@ -58534,7 +58534,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["oracle__baseline__schemas__CheckOut"];
+                    "application/json": components["schemas"]["GroundTruthOut"];
                 };
             };
         };
@@ -75615,7 +75615,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["oracle__strategy__schemas__CheckOut"];
+                    "application/json": components["schemas"]["CheckOut"];
                 };
             };
         };
