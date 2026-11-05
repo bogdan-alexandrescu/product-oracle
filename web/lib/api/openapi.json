@@ -43741,6 +43741,129 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/simple/decisions/{decision_id}": {
+      "delete": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Delete Simple Decision",
+        "description": "Move an open decision or PRD question to Trash (30 days, then deleted for good): who\nmay withdraw it (its decider, whoever made it, an owner); others are refused.",
+        "operationId": "delete_simple_decision",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Decision Id"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashedOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
+    "/v1/simple/decisions/{decision_id}/restore": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Restore Simple Decision",
+        "description": "Put the decision or question back from Trash with every link: an owner, or whoever\ndeleted it.",
+        "operationId": "restore_simple_decision",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Decision Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
     "/v1/simple/sessions": {
       "post": {
         "tags": [
@@ -60887,7 +61010,11 @@
                   "restore_goal",
                   "edit_goal_milestone",
                   "set_depends_on",
-                  "delete_item"
+                  "delete_item",
+                  "edit_decision",
+                  "edit_question",
+                  "withdraw_decision",
+                  "add_question"
                 ]
               },
               {
@@ -61290,7 +61417,11 @@
               "restore_goal",
               "edit_goal_milestone",
               "set_depends_on",
-              "delete_item"
+              "delete_item",
+              "edit_decision",
+              "edit_question",
+              "withdraw_decision",
+              "add_question"
             ],
             "title": "Op"
           },
@@ -67253,6 +67384,18 @@
             "maxItems": 10,
             "title": "Subjects",
             "default": []
+          },
+          "review_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review At"
           }
         },
         "type": "object",
@@ -82786,7 +82929,11 @@
               "restore_goal",
               "edit_goal_milestone",
               "set_depends_on",
-              "delete_item"
+              "delete_item",
+              "edit_decision",
+              "edit_question",
+              "withdraw_decision",
+              "add_question"
             ],
             "title": "Op"
           },
@@ -116865,7 +117012,11 @@
               "restore_goal",
               "edit_goal_milestone",
               "set_depends_on",
-              "delete_item"
+              "delete_item",
+              "edit_decision",
+              "edit_question",
+              "withdraw_decision",
+              "add_question"
             ],
             "title": "Op"
           },
@@ -117014,7 +117165,11 @@
               "restore_goal",
               "edit_goal_milestone",
               "set_depends_on",
-              "delete_item"
+              "delete_item",
+              "edit_decision",
+              "edit_question",
+              "withdraw_decision",
+              "add_question"
             ],
             "title": "Op"
           },
@@ -117348,6 +117503,38 @@
         "title": "SimpleDecidedRef",
         "description": "A decided decision naming the item: who decided, when, and (decided in a meeting)\nthe meeting and its minutes' page."
       },
+      "SimpleDecisionCan": {
+        "properties": {
+          "edit": {
+            "type": "boolean",
+            "title": "Edit",
+            "default": false
+          },
+          "propose": {
+            "type": "boolean",
+            "title": "Propose",
+            "default": false
+          },
+          "withdraw": {
+            "type": "boolean",
+            "title": "Withdraw",
+            "default": false
+          },
+          "delete": {
+            "type": "boolean",
+            "title": "Delete",
+            "default": false
+          },
+          "reassign": {
+            "type": "boolean",
+            "title": "Reassign",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "SimpleDecisionCan",
+        "description": "edit-decisions (ec1 b): what the reader may do on an open decision's sheet, from\nthe decision's own rights (its creator, its decider or an owner edits, withdraws and\ndeletes; owners reassign; another commenter or approver proposes an edit)."
+      },
       "SimpleDecisionIn": {
         "properties": {
           "reason": {
@@ -117468,6 +117655,80 @@
               }
             ],
             "title": "Chosen"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleQuestionOption"
+            },
+            "type": "array",
+            "title": "Options",
+            "default": []
+          },
+          "review_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review At"
+          },
+          "can": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDecisionCan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "edited_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edited At"
+          },
+          "edited_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -122718,7 +122979,10 @@
             "default": {
               "decide": false,
               "propose": false,
-              "name_decider": false
+              "name_decider": false,
+              "edit": false,
+              "withdraw": false,
+              "delete": false
             }
           },
           "source": {
@@ -122742,6 +123006,28 @@
               }
             ],
             "title": "Undo Id"
+          },
+          "edited_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edited At"
+          },
+          "edited_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -122816,6 +123102,21 @@
           "name_decider": {
             "type": "boolean",
             "title": "Name Decider",
+            "default": false
+          },
+          "edit": {
+            "type": "boolean",
+            "title": "Edit",
+            "default": false
+          },
+          "withdraw": {
+            "type": "boolean",
+            "title": "Withdraw",
+            "default": false
+          },
+          "delete": {
+            "type": "boolean",
+            "title": "Delete",
             "default": false
           }
         },
@@ -135003,7 +135304,9 @@
               "intake",
               "run",
               "feature",
-              "goal"
+              "goal",
+              "decision",
+              "question"
             ],
             "title": "Type"
           },
