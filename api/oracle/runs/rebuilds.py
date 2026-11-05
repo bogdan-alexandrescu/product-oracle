@@ -241,6 +241,7 @@ async def list_rebuilds(db: AsyncSession, visible: list[RunSummary]) -> Rebuilds
                 document_slug=s.document_slug or "",
                 document_title=s.document_title,
                 document_kind=s.document_kind,
+                new_document=latest is None,
                 source_slug=s.source.slug
                 if s.flow == "prd_to_roadmap" and s.source and s.source.document_id not in hidden
                 else None,

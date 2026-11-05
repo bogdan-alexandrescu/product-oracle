@@ -19,8 +19,12 @@ export interface RebuildsInput {
   versions: (documentId: string) => { number: number; approved: boolean }[];
   /** A member's name (else email) by id. */
   name: (userId: string | null) => string | null;
-  /** Who decides the document's stops (the API's ask_decider): the first owner. */
-  decider: string | null;
+  /**
+   * Who decides the document's stops, as the API's ask_decider: the document's decider, else
+   * its tracks' owners, else the company's owners; the first who may decide. null: a new
+   * document (no page yet), the company's owners only.
+   */
+  decider: (documentId: string | null) => string | null;
   now: Date;
 }
 
@@ -54,21 +58,27 @@ const STOP_ACTIONS: Record<string, string> = {
   roadmap_items: "approve the roadmap items",
   roadmap_review: "review the new roadmap",
 };
-/** The API's _writes_document: a flow with a segment whose draft Oracle imports. */
-const WRITES_DOCUMENT = FLOW_CATALOG.flows.filter((f) => f.segments.some((g) => importsDraft(g.outputs))).map((f) => f.key);
+/**
+ * The API's _writes_document: a flow with a segment whose draft Oracle imports. Read on
+ * first use: runs.ts and this module import each other, so FLOW_CATALOG is not set yet
+ * while this module loads under Node (the real-stack specs import the mock through helpers).
+ */
+let writesDocument: string[] | null = null;
+const writes = (flow: string) => (writesDocument ??= FLOW_CATALOG.flows.filter((f) => f.segments.some((g) => importsDraft(g.outputs))).map((f) => f.key)).includes(flow);
 
 export function rebuildsOut(input: RebuildsInput): Schemas["RebuildsOut"] {
   // As the API: only the documents the reader may see.
   const visible = input.documents.filter((d) => canSee(input.role, d.visibility));
   const docs = new Map(visible.map((d) => [d.slug, d]));
-  const rows = input.runs.filter((r) => r.document_slug && STATES[r.status] && WRITES_DOCUMENT.includes(r.flow) && docs.has(r.document_slug));
+  // A run writing a new document (no document yet, its slug only on the run) is listed too.
+  const rows = input.runs.filter((r) => r.document_slug && STATES[r.status] && writes(r.flow) && (docs.has(r.document_slug) || r.document_id == null));
   const newest = new Map<string, string>();
   for (const r of rows) if ((newest.get(r.document_slug!) ?? "") < r.created_at) newest.set(r.document_slug!, r.created_at);
   const out: Rebuild[] = [];
   for (const r of rows) {
-    const doc = docs.get(r.document_slug!)!;
+    const doc = docs.get(r.document_slug!) ?? null;
     const state = STATES[r.status]!;
-    const vs = input.versions(doc.id);
+    const vs = doc ? input.versions(doc.id) : [];
     const latest = vs.length ? Math.max(...vs.map((v) => v.number)) : null;
     const approvedNs = vs.filter((v) => v.approved).map((v) => v.number);
     const approved = approvedNs.length ? Math.max(...approvedNs) : null;
@@ -92,9 +102,10 @@ export function rebuildsOut(input: RebuildsInput): Schemas["RebuildsOut"] {
       run_id: r.id,
       flow: r.flow,
       flow_title: r.flow_title,
-      document_slug: doc.slug,
-      document_title: doc.title,
-      document_kind: doc.kind as Rebuild["document_kind"],
+      document_slug: r.document_slug!,
+      document_title: doc ? doc.title : (r.document_title ?? null),
+      document_kind: (doc ? doc.kind : r.document_kind) as Rebuild["document_kind"],
+      new_document: latest == null,
       source_slug: r.flow === "prd_to_roadmap" && r.source && docs.has(r.source.slug) ? r.source.slug : null,
       state,
       steps: segs.map((s) => s.title),
@@ -107,9 +118,10 @@ export function rebuildsOut(input: RebuildsInput): Schemas["RebuildsOut"] {
       // The mock keeps no history of how long steps took: its runs say it on their knobs.
       minutes_left: state === "running" ? ((r.knobs as { minutes_left?: number }).minutes_left ?? null) : null,
       next_stop: stop ? (STOP_TITLES[stop] ?? stop) : null,
-      next_stop_who: stop && ahead ? input.decider : null,
+      next_stop_who: stop && ahead ? input.decider(doc?.id ?? null) : null,
       next_stop_action: ahead ? (STOP_ACTIONS[stop ?? ""] ?? null) : null,
-      waits_on: state === "waiting" ? input.decider : null,
+      // At a stop: who decides it; paused on spend (no stop): the company's first owner.
+      waits_on: state === "waiting" ? input.decider(waiting ? (doc?.id ?? null) : null) : null,
       waits_on_action: state === "waiting" ? (waiting ? (STOP_ACTIONS[waiting] ?? `decide the ${(STOP_TITLES[waiting] ?? waiting).toLowerCase()}`) : "approve the extra spend") : null,
       review_link: r.review_link ?? null,
       error: state === "failed" ? (r.error ?? null) : null,

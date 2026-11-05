@@ -3,9 +3,10 @@
 // The rebuild sign (owner's pick A, PR 1232's status chip): a live chip beside a PRD's or
 // roadmap's version saying the run that will make its next version, opening the run's steps,
 // who started it, its next stop and who it waits on, what will change, and Open run.
-// GET /v1/rebuilds (oracle.runs.rebuilds), re-read every 5 s while a run moves (the run
-// page's POLL_MS, RunDetail in app/runs/_run-detail.tsx) and the tab is shown; while nothing
-// moves, re-read only when the tab comes back, on a page change and after a change is saved.
+// GET /v1/rebuilds (oracle.runs.rebuilds), re-read every 5 s while a run runs (the run
+// page's POLL_MS, RunDetail in app/runs/_run-detail.tsx) and the tab is shown, once a minute
+// while one waits on a person or to start; else only when the tab comes back. Always also on
+// a page change, on focus and after a change is saved.
 
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
@@ -19,8 +20,10 @@ type Rebuild = Schemas["Rebuild"];
 type State = Rebuild["state"];
 type Data = Schemas["RebuildsOut"];
 
-/** While a run moves, the sign re-reads as often as the run page does. */
+/** While a run runs, the sign re-reads as often as the run page does. */
 export const POLL_MS = 5000;
+/** While a run waits on a person or to start (that may be days): once a minute. */
+export const WAIT_POLL_MS = 60_000;
 /** Landed versions this browser opened ("v4 ready: review it" goes away), as "slug@4". */
 export const OPENED_KEY = "po-rebuild-opened";
 /** A change that may start, move or end a run: the sign re-reads at once. */
@@ -34,7 +37,9 @@ let again = false;
 let opened: string[] | null = null;
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
-const moving = (d: Data | null) => !!d?.rebuilds.some((r) => r.state === "running" || r.state === "waiting" || r.state === "scheduled");
+/** How soon to read again: soon while a run runs, slowly while one waits, else never. */
+const pollMs = (d: Data | null) =>
+  d?.rebuilds.some((r) => r.state === "running") ? POLL_MS : d?.rebuilds.some((r) => r.state === "waiting" || r.state === "scheduled") ? WAIT_POLL_MS : null;
 
 async function read() {
   if (timer) clearTimeout(timer);
@@ -62,12 +67,13 @@ async function read() {
   schedule();
 }
 
-/** The next read: in 5 s while a run moves and the tab is shown; else none until a wake. */
+/** The next read while the tab is shown: in 5 s while a run runs, in a minute while one waits; else none until a wake. */
 function schedule() {
   if (timer) clearTimeout(timer);
   timer = null;
-  if (!listeners.size || document.hidden || !moving(data)) return;
-  timer = setTimeout(() => void read(), POLL_MS);
+  const ms = pollMs(data);
+  if (!listeners.size || document.hidden || ms == null) return;
+  timer = setTimeout(() => void read(), ms);
 }
 
 /** Re-read now, if a sign is on the page. */
@@ -134,8 +140,12 @@ const getData = () => data;
 const getOpened = () => (typeof window === "undefined" ? null : openedIds());
 const noop = () => () => {};
 
-/** The runs that will make a new version of a document, live; null until read. */
-export function useRebuilds() {
+/**
+ * The runs that will make a new version of a document, live; null until read. A landed
+ * version this person opened is left out, except on `own`, the document's own page, which
+ * says it until it is approved (frames a-one-pager-done and a-detailed-done).
+ */
+export function useRebuilds(own?: string) {
   const d = useSyncExternalStore(subscribe, getData, () => null);
   const seen = useSyncExternalStore(subscribe, getOpened, () => null);
   // A page change re-reads: what was started or approved elsewhere shows at once.
@@ -149,7 +159,7 @@ export function useRebuilds() {
     refreshRebuilds();
   }, [path]);
   if (!d) return null;
-  return { ...d, rebuilds: d.rebuilds.filter((r) => r.state !== "done" || !seen?.includes(versionKey(r.document_slug, r.to_version))) };
+  return { ...d, rebuilds: d.rebuilds.filter((r) => r.state !== "done" || r.document_slug === own || !seen?.includes(versionKey(r.document_slug, r.to_version))) };
 }
 
 /** The version page (and a page showing a version): it marks that version opened. */
@@ -187,8 +197,35 @@ function stepsWord(r: Rebuild) {
   return `step ${r.step} of ${r.steps.length}`;
 }
 
+/** A document's name; a new one not written yet may have none but its slug, said in words. */
+export function titleOf(r: Rebuild) {
+  if (r.document_title) return r.document_title;
+  const words = r.document_slug.replace(/[-_]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** A new document being written: "New PRD", "New roadmap". */
+export const newWord = (r: Rebuild) => (r.document_kind === "roadmap" ? "New roadmap" : r.document_kind === "prd" || !r.document_kind ? "New PRD" : "New document");
+
+/** A run writing a new document: no page of it yet, so the line says it is being written. */
+function newLine(r: Rebuild, zone: string) {
+  switch (r.state) {
+    case "running":
+      return `Being written · ${stepsWord(r)}${r.minutes_left != null ? ` · about ${r.minutes_left} min` : ""}`;
+    case "scheduled":
+      return r.scheduled_for ? `Being written · starts ${zoneWeekday(r.scheduled_for, zone).split(",")[0]} ${zoneTime(r.scheduled_for, zone)}` : "Being written · not started yet";
+    case "waiting":
+      return `Being written · waiting on ${(r.waits_on ?? "a person").split(" ")[0]}`;
+    case "failed":
+      return `Writing stopped at ${stepsWord(r)}`;
+    case "done":
+      return `v${r.to_version} ready: review it`;
+  }
+}
+
 /** The short line for one run, as the chip says it. */
 function line(r: Rebuild, zone: string, roadmap: boolean) {
+  if (r.new_document) return newLine(r, zone);
   switch (r.state) {
     case "running": {
       const left = r.minutes_left != null ? ` · about ${r.minutes_left} min` : "";
@@ -207,6 +244,7 @@ function line(r: Rebuild, zone: string, roadmap: boolean) {
 
 /** Lists and Home: the compact chip. */
 function shortLine(r: Rebuild, zone: string) {
+  if (r.new_document) return newLine(r, zone);
   switch (r.state) {
     case "running":
       return `Rebuilding v${r.to_version} · ${r.step}/${r.steps.length}`;
@@ -299,6 +337,7 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 /** What happens to the page while it runs, in one sentence. */
 function outcome(r: Rebuild) {
   const was = r.from_version != null ? `v${r.from_version}` : null;
+  if (r.new_document && r.state !== "failed") return `It writes a ${newWord(r).toLowerCase()}, ${titleOf(r)}. Nobody reads it until it is approved.`;
   if (r.state === "done") return was ? `v${r.to_version} is a draft until it is approved. Until then, everyone keeps seeing ${was}.` : `v${r.to_version} is a draft until it is approved.`;
   if (r.state === "failed") {
     const why = (r.error ?? "It stopped").replace(/\.$/, "");
@@ -337,7 +376,7 @@ function RunCard({ r, zone }: { r: Rebuild; zone: string }) {
   return (
     <div className="flex flex-col gap-2" data-testid="rb-run">
       <p className="text-[14px] leading-[20px] font-semibold text-text">
-        {kind} · {r.document_title ?? r.document_slug}
+        {kind} · {titleOf(r)}
       </p>
       <p className="text-[13px] leading-[18px] text-text2">
         {r.state === "scheduled"
@@ -435,21 +474,20 @@ function Chip({ runs, compact, summary, roadmap }: { runs: Rebuild[]; compact?: 
  * The sign beside a PRD's or roadmap's version or title: nothing while no run will make a
  * new version of it. `compact` in lists and on Home.
  */
-export function RebuildSign({ slug: named, compact = false, version }: { slug: string | null; compact?: boolean; version?: number | null }) {
-  const rb = useRebuilds();
+export function RebuildSign({ slug: named, compact = false, own = false }: { slug: string | null; compact?: boolean; own?: boolean }) {
+  // `own`: the document's own page (the one-pager, the Detailed page) keeps "ready: review it".
+  const rb = useRebuilds(own && named ? named : undefined);
   // No document named (the Roadmap's All roadmaps): the company roadmap.
   const slug = named ?? rb?.company_roadmap?.slug;
   if (!rb || !slug) return null;
-  const sign = signFor(rb, slug, version);
+  const sign = signFor(rb, slug);
   if (!sign) return null;
   return <Chip runs={sign.runs} compact={compact} summary={sign.summary} roadmap={sign.roadmap} />;
 }
 
 /** What a document's sign shows: its runs, first the one the chip names, and A's summary. */
-function signFor(rb: Rb, slug: string, version?: number | null) {
-  const { own: all, feeds } = runsFor(rb, slug);
-  // A page already showing the landed version says nothing of it.
-  const own = all.filter((r) => !(r.state === "done" && r.document_slug === slug && version != null && r.to_version === version));
+function signFor(rb: Rb, slug: string) {
+  const { own, feeds } = runsFor(rb, slug);
   const roadmap = rb.company_roadmap?.slug === slug;
   // The company roadmap fed by several PRDs: how many of them rebuild, then its own run. Only
   // then are the PRDs' runs folded in (A's '2 of 4 PRDs rebuilding'); else its own runs.
@@ -468,7 +506,9 @@ export function RebuildHome() {
   for (const r of rb.rebuilds) {
     if (items.has(r.document_slug)) continue;
     const roadmap = r.document_kind === "roadmap" || rb.company_roadmap?.slug === r.document_slug;
-    items.set(r.document_slug, { slug: r.document_slug, title: r.document_title ?? r.document_slug, href: roadmap ? "/simple/roadmap" : `/simple/one-pagers/${r.document_slug}` });
+    // A new document has no page until its first version: the row opens the run writing it.
+    const href = r.new_document ? `/runs/${r.run_id}` : roadmap ? "/simple/roadmap" : `/simple/one-pagers/${r.document_slug}`;
+    items.set(r.document_slug, { slug: r.document_slug, title: r.new_document ? `${newWord(r)}: ${titleOf(r)}` : titleOf(r), href });
   }
   // As A: the heading says what every row's chip says first.
   const states = new Set([...items.values()].map((it) => signFor(rb, it.slug)?.runs[0].state));

@@ -440,7 +440,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
               status={
                 <>
                   <DocStatusChip status={d.status} />
-                  <RebuildSign slug={d.slug} version={selected ? selected.number : d.latest_version} />
+                  <RebuildSign slug={d.slug} own />
                   <RoleBadge />
                   {d.template && (
                     <span className={META} data-testid="doc-template" title={d.template_version ? `Template, its version ${d.template_version}` : "Template"}>

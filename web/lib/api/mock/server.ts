@@ -176,7 +176,7 @@ import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADM
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { appliedVersionOf, approvedPrdToDraft, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
-import { shownDates, storedDates } from "./simple-roadmap";
+import { prdTrackOwnerIds, shownDates, storedDates } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -6653,7 +6653,17 @@ async function route(db: Db, req: Request): Promise<Response> {
       const mm = db.members.find((x) => x.id === id);
       return mm ? displayName(mm.email, mm.name) : null;
     };
-    const owner = db.members.find((x) => x.role === "owner" && x.status !== "disabled");
+    // As the API's ask_decider: the document's decider (its review policy), else its tracks'
+    // owners, else the company's owners; the first active approver or above.
+    const decider = (documentId: string | null) => {
+      const doc = documentId ? db.documents.find((d) => d.id === documentId) : undefined;
+      const ids = doc
+        ? [db.review_v2?.policies.find((x) => x.document_id === doc.id)?.decider_id ?? null, ...(db.simple_roadmap ? prdTrackOwnerIds(db.simple_roadmap, doc.slug) : [])]
+        : [];
+      ids.push(...db.members.filter((x) => x.role === "owner").sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)).map((x) => x.id));
+      const to = ids.map((id) => db.members.find((x) => x.id === id && x.status !== "disabled" && atLeast(x.role, "approver"))).find((x) => !!x);
+      return to ? displayName(to.email, to.name) : null;
+    };
     return json(
       200,
       rebuildsOut({
@@ -6662,7 +6672,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         role: me.role,
         versions: (id) => db.versions.filter((v) => v.document_id === id).map((v) => ({ number: v.number, approved: !!v.approved_at })),
         name: nameOf,
-        decider: owner ? displayName(owner.email, owner.name) : null,
+        decider,
         now: new Date(mockNowMs()),
       }),
     );

@@ -102133,6 +102133,11 @@
             ],
             "title": "Document Kind"
           },
+          "new_document": {
+            "type": "boolean",
+            "title": "New Document",
+            "default": false
+          },
           "source_slug": {
             "anyOf": [
               {

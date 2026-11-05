@@ -1048,6 +1048,9 @@ class Rebuild(BaseModel):
     document_slug: str
     document_title: str | None = None
     document_kind: DocumentKind | None = None
+    # A run writing a new document (Ground Truth to PRD making a new PRD): no version of it
+    # exists yet, so there is no page to open; the sign names it as a new PRD and links the run.
+    new_document: bool = False
     # prd_to_roadmap: the PRD it reads (its sign lists the run beside the PRD's own runs).
     source_slug: str | None = None
     # scheduled: not started yet; waiting: at a stop on a person; done: its new version

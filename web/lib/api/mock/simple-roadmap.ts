@@ -753,6 +753,12 @@ const namedOn = (db: SimpleDb, key: string, field: "owner_id" | "decider_id"): s
   return t && field in t ? ((t[field] as string | null) ?? null) : undefined;
 };
 
+/** The owners of a PRD's tracks (the API's one_pager.who track_owners): the tracks of the items its roadmap holds. */
+export function prdTrackOwnerIds(db: SimpleDb, prdSlug: string): string[] {
+  const tracks = new Set(db.items.filter((s) => ROADMAPS[s.roadmap]?.prd.toLowerCase().replace(/ /g, "-") === prdSlug).flatMap((s) => (s.track ? [s.track] : [])));
+  return [...tracks].flatMap((t) => (db.track_owners?.[t] ? [db.track_owners[t]] : []));
+}
+
 /** The item's owner: the one a chat card named, else its track's owner. */
 export function itemOwnerId(db: SimpleDb, key: string): string | null {
   const named = namedOn(db, key, "owner_id");
