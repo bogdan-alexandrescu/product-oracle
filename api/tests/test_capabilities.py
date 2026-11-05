@@ -214,6 +214,11 @@ NOT_PER_ITEM = {
     "reject_schedule_basis",
     "verify_schedule_basis",
     "withdraw_schedule_basis",
+    # trash-features-goals: Trash's restore lets whoever deleted a feature or goal through
+    # (may_restore); these routes are an owner's already, so it never refuses them.
+    "restore_document",
+    "restore_intake",
+    "restore_run",
 }
 
 
