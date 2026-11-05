@@ -93,18 +93,17 @@ test("RQ-2: with many goals, New request scrolls its body and keeps Cancel and F
   await expect(dialog.getByRole("button", { name: "File request", exact: true })).toBeInViewport();
 });
 
-test("RQ-3: Request heads the title, and State sits over the state chip", async ({ page }) => {
+test("RQ-3: Request heads the title, on the one line of headers, and no State header sits over it", async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   await login(page);
   await openRequests(page);
   const head = page.getByTestId("request-list-head");
   const first = page.getByTestId("request-row").first();
+  await expect(page.getByTestId("request-list-head-title")).toHaveText("Request");
   const titleHead = (await page.getByTestId("request-list-head-title").boundingBox())!;
   const titleBox = (await first.getByRole("button").first().boundingBox())!;
   expect(Math.abs(titleHead.x - titleBox.x)).toBeLessThan(2);
-  const state = (await head.getByText("State", { exact: true }).boundingBox())!;
-  const chip = (await first.getByTestId("request-state").boundingBox())!;
-  expect(Math.abs(state.x - chip.x)).toBeLessThan(2);
-  // State is no longer the label over the title: it sits below "Request".
-  expect(state.y).toBeGreaterThan(titleHead.y + titleHead.height - 1);
+  await expect(head.getByText("State", { exact: true })).toHaveCount(0);
+  const goal = (await head.getByText("Goal", { exact: true }).boundingBox())!;
+  expect(Math.abs(goal.y - titleHead.y)).toBeLessThan(2);
 });
