@@ -21,7 +21,7 @@ from pptx.util import Emu, Inches, Pt
 
 from oracle.docs.parser import strip_citations
 from oracle.export.deck import Deck, Slide
-from oracle.export.render import image_label, stored_image
+from oracle.export.render import days_in_words, image_label, stored_image
 
 WIDTH, HEIGHT = Inches(13.333), Inches(7.5)
 MARGIN = Inches(0.8)
@@ -78,7 +78,9 @@ def _runs(children) -> list[Run]:
     bold = italic = False
     for t in children or []:
         if t.type == "text":
-            runs.append(Run(t.content, bold, italic))
+            # B-05: days month first, as the HTML, PDF and deck read them ("As of Oct 2,
+            # 2026"); the stored text keeps its day as written.
+            runs.append(Run(days_in_words(t.content), bold, italic))
         elif t.type == "code_inline":
             runs.append(Run(t.content, bold, italic, mono=True))
         elif t.type in ("softbreak", "hardbreak"):

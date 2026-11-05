@@ -67,9 +67,12 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       await login(page);
       await page.goto("/documents/usage-alerts-roadmap/v/1");
       await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
+      // Stored as "As of 2026-10-02" (a roadmap drafted before B-05): it reads month first.
       const title = await openSection(page, "title");
-      await expect(title).toContainText("As of Oct 2, 2026. Built from");
-      await expect(title).not.toContainText("2026-10-02");
+      await expect(title).toContainText("Built from");
+      const seen = await title.evaluate((el) => (el as HTMLElement).innerText);
+      expect(seen).toContain("As of Oct 2, 2026. Built from");
+      expect(seen).not.toContain("2026-10-02");
     });
 
     test("B-09: a version's warnings are in the chip's tip, the body names their sections in one line", async ({ page }) => {
