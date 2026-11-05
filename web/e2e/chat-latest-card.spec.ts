@@ -138,6 +138,11 @@ test("the Ask Oracle panel keeps only the newest card per item active", async ({
   await latestCard(page, box, { first: "rename Setup checklist to First-run checklist", again: "rename Setup checklist to Setup guide", other: "rename In-app tour to Product tour" }, async () => {
     await page.reload();
     await open();
+    // Ask opens a clean chat: Recent chats reopens this one.
+    const panel = page.getByTestId("hop-panel").filter({ visible: true });
+    await tap(panel.getByRole("button", { name: "Recent chats" }));
+    await tap(panel.getByTestId("ask-recent-row").first());
+    await expect(box().getByTestId("chat-card")).toHaveCount(3);
   });
 });
 
