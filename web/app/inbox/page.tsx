@@ -25,6 +25,9 @@ const ACTED: [prefix: string, message: string][] = [
   // A question's proposal is decided outright; the rest go into the working draft.
   ["proposal-accept-question-", "Accepted: the question is decided"],
   ["proposal-decline-question-", "Declined: the question stays open"],
+  // A feature ask on no roadmap is filed in Requests, or not filed.
+  ["proposal-accept-ask-", "Accepted: it is filed in Requests"],
+  ["proposal-decline-ask-", "Declined: it is not filed"],
   ["proposal-accept-", "Accepted: it is in your working draft"],
   ["proposal-decline-", "Declined: the item is left as it was"],
   ["report-retry-", "Posting the report again"],
@@ -173,6 +176,7 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   },
   { id: "discussions", title: "Discussions" },
   { id: "approvals", title: "Cost approvals" },
+  { id: "roadmap-approvals", title: "Roadmap approvals" },
   { id: "overruns", title: "Paused on overrun" },
   { id: "lookups", title: "Stuck runs" },
   { id: "imports", title: "Couldn't import" },

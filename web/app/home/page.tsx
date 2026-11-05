@@ -201,7 +201,8 @@ export default function HomePage() {
   const visible = all.filter((r) => needs.includes(r) || (r.group === "access-requests" && !r.counted && r.state !== "done"));
   // Checkpoints, cost approvals and overruns: "Approvals", what they are (qa-shell-6), not the
   // decision log's Decisions.
-  const approvals = needs.filter((r) => r.group === "checkpoints" || r.group === "approvals" || r.group === "overruns");
+  // A roadmap version waiting for my approval counts here too.
+  const approvals = needs.filter((r) => r.group === "checkpoints" || r.group === "approvals" || r.group === "roadmap-approvals" || r.group === "overruns");
   // Stuck runs and failed imports: counted in the badge, so drawn here too (searches are not).
   const runs = needs.filter((r) => r.group === "lookups" || r.group === "imports");
   // Revokes a removed member's disable could not make, and access changes still failing
@@ -299,8 +300,8 @@ export default function HomePage() {
             <>
               {/* qa-shell-16: what this count counts, and why Simple's Home says another number. */}
               <InfoTip label="Needs you" side="bottom">
-                Everything the Inbox has waiting on you: approvals, runs, access requests, reviews and the questions asked of you.
-                Simple&apos;s Home counts something else, the product decisions on PRDs that wait on you, so its number can differ.
+                Everything waiting on you in the Inbox: approvals, runs, access, reviews, questions, proposals, Oracle&apos;s dates and goal suggestions.
+                Simple&apos;s Home counts something else, so its number can differ.
               </InfoTip>
               {/* qa-company-5: plain counts; the Inbox link opens the Inbox, where the items are.
                   qa4-company-50: one group; on a phone it takes its own line under the title, so

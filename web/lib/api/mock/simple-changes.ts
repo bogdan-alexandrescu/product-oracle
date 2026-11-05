@@ -77,6 +77,9 @@ export interface SimpleChangesCtx {
   roles?: Record<string, Role>;
   /** The company's confirmed goals (the baseline's), as the API lists them for suggestions (qa4-simple-home-4). */
   companyGoals?: { id: string; key: string; title: string }[];
+  /** S9 (targets.py add_feature_ask): files a feature ask in Requests, and drops it on undo. */
+  fileAsk?: (input: { id: string; title: string; channel: string; requester_name: string | null; requester_kind: string; filed_by: string }) => void;
+  dropAsk?: (id: string) => void;
 }
 
 const IDLE_MS = 30 * 60_000;
@@ -132,7 +135,7 @@ const TARGETS: Record<string, { id: string; adds?: boolean }> = {
   estimate_feature: { id: "item_id" },
   // S9: a milestone typed in chat, and a new feature ask (targets.py set_milestone, add_feature_ask).
   set_milestone: { id: "item_id" },
-  add_feature_ask: { id: "ask_id", adds: true },
+  add_feature_ask: { id: "request_id", adds: true },
   // Chat actions: an item's owner or decider (stored by item id; simple-roadmap's itemOwnerId / itemDeciderId read them).
   set_owner: { id: "item_id" },
   set_decider: { id: "item_id" },
@@ -489,6 +492,11 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   const ranking = body.op === "override_priority" || body.op === "estimate_feature";
   const after = ranking ? priorityAfter(body.op, body.after ?? {}) : { ...body.after };
   if (typeof after === "string") return json(422, { detail: after });
+  // S9: a feature ask's requester and channel as targets.py stores them.
+  if (body.op === "add_feature_ask") {
+    const name = typeof after.requester_name === "string" ? after.requester_name.split(/\s+/).filter(Boolean).join(" ") || null : null;
+    Object.assign(after, { requester_name: name, requester_kind: after.requester_kind || (name ? "customer" : "unknown"), channel: after.channel || "other" });
+  }
   // walkc-roadmap-tasks: a task's owner is a person (targets.py stores owner_id); the chat's
   // "for <name>" names them.
   if (body.op === "add_item_task" && !after.owner_id && typeof after.owner_name === "string") {
@@ -514,15 +522,25 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   };
   if (!applies) change.routed_to = route(db, ctx, change);
   if (applies) {
-    writeTarget(db, change, change.after);
+    writeTarget(db, change, change.after, false, ctx);
     session!.last_change_at = now;
   }
   (db.changes ??= []).push(change);
   return json(201, { change: view(db, ctx, change), flags: [] });
 }
 
-function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false): void {
+function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false, ctx?: SimpleChangesCtx): void {
   const spec = TARGETS[c.op];
+  // S9: a feature ask is a request in Requests (targets.py: a ProductRequest under target.request_id).
+  if (c.op === "add_feature_ask" && ctx) {
+    const id = String(c.target[spec.id]);
+    if (undo) ctx.dropAsk?.(id);
+    else
+      ctx.fileAsk?.({
+        id, title: String(values.title ?? ""), channel: String(values.channel ?? "other"), requester_name: (values.requester_name as string | null) ?? null,
+        requester_kind: String(values.requester_kind ?? (values.requester_name ? "customer" : "unknown")), filed_by: c.by,
+      });
+  }
   const id = String(c.target[spec.id]);
   const targets = (db.targets ??= {});
   if (spec.adds && undo) delete targets[id];
@@ -854,7 +872,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     if ((db.changes ?? []).some((x) => x.undoes_id === c.id)) return json(409, { detail: "This change is undone already" });
     const s = (db.sessions ?? []).find((x) => x.id === c.session_id);
     if (!s || s.closed_at || idle(s)) return json(409, { detail: "Its session is closed: undo works only in the change's session" });
-    if (TARGETS[c.op]) writeTarget(db, c, c.before, true);
+    if (TARGETS[c.op]) writeTarget(db, c, c.before, true, ctx);
     else if (KEY_DATE_OPS.includes(c.op)) {
       const rm = roadmapOfDoc(db, c.target.document_id)!;
       if (!same(kdValue(keyDateNow(db, ctx, rm, String(c.target.key_date_id))), c.after.key_date ?? null)) return json(409, { detail: "Changed since" });
@@ -882,7 +900,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   if (!decidesChange(db, ctx, c)) return json(403, { detail: "Only an owner or the roadmap's decider (with no decider, its owner) decides proposals" });
   if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
   const body = (await req.json().catch(() => ({}))) as { reason?: string | null };
-  if (p[4] === "accept" && TARGETS[c.op]) writeTarget(db, c, c.after);
+  if (p[4] === "accept" && TARGETS[c.op]) writeTarget(db, c, c.after, false, ctx);
   else if (p[4] === "accept" && KEY_DATE_OPS.includes(c.op)) {
     const rm = roadmapOfDoc(db, c.target.document_id)!;
     if (!same(kdValue(keyDateNow(db, ctx, rm, String(c.target.key_date_id))), c.before.key_date ?? null)) return json(409, { detail: "outdated: the key date changed since the proposal" });
@@ -946,7 +964,7 @@ export function seedSimpleProposal(
 export function seedFeatureAskProposal(db: SimpleDb, who: Pick<SimpleChangesCtx, "owners"> & { id: string; name: string }, title: string, at: string): void {
   (db.changes ??= []).push({
     id: stableUuid(`simple-proposal/ask/${title}`), session_id: null, document_id: null, draft_ids: [],
-    op: "add_feature_ask", target: { ask_id: stableUuid(`simple-ask/${title}`) }, before: {}, after: { title }, status: "proposed", by: who.id, by_name: who.name, at,
+    op: "add_feature_ask", target: { request_id: stableUuid(`simple-ask/${title}`) }, before: {}, after: { title, requester_name: null, requester_kind: "unknown", channel: "other" }, status: "proposed", by: who.id, by_name: who.name, at,
     decided_by: null, decided_at: null, reason: null, decision_reason: null, routed_to: [...who.owners], undoes_id: null, undone: false, can_decide: false, can_undo: false,
   });
 }

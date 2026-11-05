@@ -355,6 +355,7 @@ export type NeedGroup =
   | "tracks"
   | "deliveries"
   | "approvals"
+  | "roadmap-approvals"
   | "overruns"
   | "lookups"
   | "imports"
