@@ -953,7 +953,7 @@ async def _oracle_ref_problems(
         ImportProblem(
             code="invalid_citation",
             message=f"citation #{i + 1} ({key}) is invalid: ref names no "
-            "baseline item of this company",
+            "Ground Truth item of this company",
             cite_key=key,
         )
         for i, key in keys.items()

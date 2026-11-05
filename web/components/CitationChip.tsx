@@ -73,7 +73,7 @@ export function CitationChip({ citeKey, citation, number }: { citeKey: string; c
         ) : (
           // A baseline item named in free text: no link to open.
           <span className="mt-2 block font-mono text-[13px] text-text2" data-testid="cite-ref">
-            {citation.ref}
+            {citation.ref.replace(/^(\s*)baseline\b/, "$1Ground Truth")}
           </span>
         )}
       </HoverCard>
