@@ -494,6 +494,11 @@ function DayChart(props: TimelineProps) {
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
   }, [msCard, msList]);
+  // The card takes the focus as it opens (a chip's list it came from closes).
+  const msCardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (msCard) msCardRef.current?.focus();
+  }, [msCard]);
   const msWords = (m: (typeof marks)[number]["m"]) =>
     `${m.name}, ${fullDay(m.date as string)}${m.done_when.length ? ` · counts when ${m.done_when.join("; ")}` : ""}`;
   // A tip or a card stays inside the chart's view, right of the names column.
@@ -827,7 +832,7 @@ function DayChart(props: TimelineProps) {
                     aria-label={`${more.length} more ${more.length === 1 ? "milestone" : "milestones"}: ${more.map((k) => k.m.name).join(", ")}`}
                     aria-expanded={msList === m.id}
                     onClick={() => setMsList((l) => (l === m.id ? null : m.id))}
-                    className="cursor-pointer rounded-full border border-line bg-surface px-1.5 text-xs leading-4 font-semibold text-text2 hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+                    className="block cursor-pointer rounded-full border border-line bg-surface px-1.5 text-xs leading-4 font-semibold text-text2 hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
                     style={{ minWidth: MS_CHIP_W - 4 }}
                   >
                     +{more.length}
@@ -874,10 +879,12 @@ function DayChart(props: TimelineProps) {
               const gates = m.item_ids.map((id) => data.items.find((i) => i.id === id)).filter((i) => i !== undefined);
               return (
                 <div
+                  ref={msCardRef}
+                  tabIndex={-1}
                   data-testid="timeline-milestone-card"
                   role="dialog"
                   aria-label={`${m.name}, ${fullDay(m.date as string)}`}
-                  className="absolute top-12 z-40 flex w-72 flex-col gap-2 rounded-xl border border-line bg-surface p-3 text-sm shadow-xl"
+                  className="absolute top-12 z-40 flex w-72 flex-col gap-2 rounded-xl border border-line bg-surface p-3 text-sm shadow-xl outline-none"
                   style={{ left: inView(labelW + at + 4, 288) }}
                 >
                   <div className="flex items-start gap-2">
@@ -886,9 +893,9 @@ function DayChart(props: TimelineProps) {
                       type="button"
                       aria-label="Close"
                       onClick={() => setMsCard(null)}
-                      className="flex-none rounded px-1 text-text2 hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-accent"
+                      className="h-6 w-6 flex-none rounded text-text2 hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-accent"
                     >
-                      ✕
+                      ×
                     </button>
                   </div>
                   <span className="text-text2">{fullDay(m.date as string)}</span>

@@ -45,7 +45,7 @@ async function zoom(page: Page, z: string) {
 
 /** Slides the chart till Jan 15's line sits a third of the way in. */
 async function toJanuary(page: Page) {
-  const line = page.locator('[data-testid="timeline-milestone-line"][data-day="2027-01-15"]');
+  const line = page.locator('[data-testid="timeline-milestone-line"][data-day="2027-01-15"]').first();
   const view = page.getByTestId("timeline-scroll");
   await view.evaluate((el) => (el.scrollLeft = 0));
   const v = (await view.boundingBox())!;
@@ -110,13 +110,13 @@ for (const scheme of ["light", "dark"] as const)
 
     test(`${scheme}: a same-day pair reads "First name +1" and the chip opens the other`, async ({ page }) => {
       await open(page, scheme);
-      await zoom(page, "6m");
+      await zoom(page, "3m");
       await toJanuary(page);
-      // At 6 months the Jan 15 pair has room before Jan 25 only for one name: the other folds.
+      // At 3 months the Jan 15 pair has room for one name before Jan 25's: the other folds.
       const first = page.getByTestId("timeline-milestone").filter({ hasText: "Trail beta" });
       await expect(first).toBeVisible();
-      const chip = page.getByTestId("timeline-milestone-more").first();
-      await expect(chip).toBeVisible();
+      const chip = first.locator("xpath=..").getByTestId("timeline-milestone-more");
+      await expect(chip).toHaveText("+1");
       const fb = (await first.boundingBox())!;
       const cb = (await chip.boundingBox())!;
       expect(cb.x - (fb.x + fb.width), "the chip sits right after the label").toBeLessThan(8);
