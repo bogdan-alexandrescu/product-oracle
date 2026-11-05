@@ -17,6 +17,9 @@ Test cards (protects / fails_when / no_claim):
 - test_keep_copies_and_drop_does_not: protects=Keep copies the no-items milestone (no
   items, linked) and Drop leaves it behind; both take it off the list; fails_when=either
   stays listed, Drop copies, or Keep does not.
+- test_a_prd_milestone_moves_only_when_its_prd_is_off_the_company_roadmap: protects=a PRD's
+  own milestone is carried only while its PRD has no item on the company roadmap, once for
+  twins; fails_when=a feeding PRD's is copied, or twins are copied twice.
 - test_only_an_owner_acts: protects=an approver or viewer sees nothing to act on and is
   refused every action; fails_when=they see the preview or get through.
 """
@@ -28,6 +31,7 @@ import pytest
 from sqlalchemy import select
 
 from oracle import company_time
+from oracle.docs.models import Document
 from oracle.roadmap.models import TrackMilestone
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
@@ -204,3 +208,39 @@ async def test_only_an_owner_acts(client):
             r = await client.post(path, headers=ctx.as_(role))
             assert r.status_code == 403, (role, path, r.text)
     assert await company_rows(ctx, ids["company"]) == []
+
+
+async def test_a_prd_milestone_moves_only_when_its_prd_is_off_the_company_roadmap(client):
+    """A PRD's own milestone on an older roadmap is read onto the company roadmap from its
+    plan while the PRD has items there; a replaced PRD's (no items there) is carried, once
+    even when two older roadmaps hold it, both linked to the copy."""
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        sd = Seed(s)
+        feeding = await s.scalar(select(Document).where(Document.slug == "trail-app-prd"))
+        gone = await sd.doc("paper-maps-prd")
+        other = await sd.doc("paper-maps", "roadmap")
+        rows = [
+            TrackMilestone(track_id=None, roadmap_id=ids["old"], origin_prd_id=feeding.id,
+                           code="M1", name="Read from its plan", target_date=date(2026, 12, 1)),
+            TrackMilestone(track_id=None, roadmap_id=ids["old"], origin_prd_id=gone.id,
+                           code="M1", name="Paper maps printed", target_date=date(2026, 12, 9)),
+            TrackMilestone(track_id=None, roadmap_id=other.id, origin_prd_id=gone.id,
+                           code="M1", name="Paper maps printed", target_date=date(2026, 12, 9)),
+        ]  # fmt: skip
+        s.add_all(rows)
+        await s.commit()
+        twin_ids = [rows[1].id, rows[2].id]
+    moves = [m["name"] for m in (await read(client, ctx))["old_milestones"]["moves"]]
+    assert moves.count("Paper maps printed") == 1
+    assert "Read from its plan" not in moves
+    r = await client.post(CARRY, headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    copies = [r for r in await company_rows(ctx, ids["company"]) if r.name == "Paper maps printed"]
+    assert len(copies) == 1 and copies[0].origin_prd_id is None
+    async with tenant_session(ctx.tenant_id) as s:
+        for i in twin_ids:
+            assert (await s.get(TrackMilestone, i)).carried_to_id == copies[0].id
+    names = {r.name for r in await company_rows(ctx, ids["company"])}
+    assert "Read from its plan" not in names

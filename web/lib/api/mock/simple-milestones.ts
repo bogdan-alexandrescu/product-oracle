@@ -36,12 +36,14 @@ export interface OldCtx {
   company: string | undefined;
   /** The company roadmap's items (key -> title), as Simple shows them. */
   companyItems: Map<string, string>;
+  /** The PRDs (slugs) with an item on the company roadmap: their own milestones are read from their plan there. */
+  feedingPrds: Set<string>;
   roadmapTitle: (slug: string) => string;
   goalTitle: (key: string) => string | null;
 }
 
 /** old-milestones (api/oracle/simple/old_milestones.py): the older roadmaps' own goal milestones not on the company roadmap yet. */
-const stillOld = (list: MockMilestone[], ctx: OldCtx) => (ctx.company ? list.filter((m) => m.roadmap !== ctx.company && !m.prd && !m.deleted && !m.carried_to && !m.dropped) : []);
+const stillOld = (list: MockMilestone[], ctx: OldCtx) => (ctx.company ? list.filter((m) => m.roadmap !== ctx.company && (!m.prd || !ctx.feedingPrds.has(m.prd.slug)) && !m.deleted && !m.carried_to && !m.dropped) : []);
 const leftOn = (m: MockMilestone, ctx: OldCtx) => m.gates.filter((k) => ctx.companyItems.has(k));
 const needsCall = (m: MockMilestone, ctx: OldCtx) => m.gates.length > 0 && leftOn(m, ctx).length === 0;
 

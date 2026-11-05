@@ -3,9 +3,11 @@ per-PRD roadmaps, history while the company roadmap exists (oracle.roadmap.compa
 carried onto the company roadmap once, by an owner (``POST
 /v1/simple/roadmap/milestones/carry-over``), never on a read or a deploy.
 
-Each old milestone of its roadmap's own (``origin_prd_id`` null; a PRD's own milestones are
-read from its plan onto the company roadmap already) is copied with its name, date, goal and
-counts-when rule, coded the next "M<n>" of its goal there. The items it gates are re-pointed
+Each old milestone is copied with its name, date, goal and counts-when rule, coded the next
+"M<n>" of its goal there, as the company roadmap's own. A PRD's own milestone (``origin_prd_id``)
+is carried only while that PRD has no item on the company roadmap (a replaced PRD): one that
+does is read from its plan onto the company roadmap already. The same PRD milestone on two
+older roadmaps is carried once, both linked to the copy. The items it gates are re-pointed
 to the company roadmap's items as Simple shows them: the item with the same feature, else
 the same item key. The old milestone links to its copy (``carried_to_id``), which keeps a
 second run from copying it again. One none of whose items are left is not copied: it waits
@@ -83,6 +85,11 @@ class _Plan:
         self.targets: dict[uuid.UUID, list[RoadmapItem]] = {}
         self.roadmaps: dict[uuid.UUID, Document] = {}
         self.goals: dict[uuid.UUID, str] = {}
+        # The same PRD milestone on other older roadmaps: carried or dropped with the first.
+        self.twins: dict[uuid.UUID, list[TrackMilestone]] = {}
+
+    def with_twins(self, row: TrackMilestone) -> list[TrackMilestone]:
+        return [row, *self.twins.get(row.id, [])]
 
     def needs_call(self, row: TrackMilestone) -> bool:
         return bool(row.item_ids) and not self.targets[row.id]
@@ -98,7 +105,6 @@ async def _plan(db: AsyncSession, lock: bool = False) -> _Plan:
         .join(Document, Document.id == TrackMilestone.roadmap_id)
         .where(
             TrackMilestone.roadmap_id != plan.company.id,
-            TrackMilestone.origin_prd_id.is_(None),
             TrackMilestone.deleted_at.is_(None),
             TrackMilestone.carried_to_id.is_(None),
             TrackMilestone.carry_dropped_at.is_(None),
@@ -113,6 +119,22 @@ async def _plan(db: AsyncSession, lock: bool = False) -> _Plan:
     if not plan.rows:
         return plan
     items = await _company_items(db, plan.company.id)
+    feeding = {r.prd_document_id for r in items}
+    first: dict[tuple[uuid.UUID, str | None], TrackMilestone] = {}
+    rows: list[TrackMilestone] = []
+    for row in plan.rows:
+        if row.origin_prd_id is None:
+            rows.append(row)
+        elif row.origin_prd_id not in feeding:
+            key = (row.origin_prd_id, row.code)
+            if key in first:
+                plan.twins.setdefault(first[key].id, []).append(row)
+            else:
+                first[key] = row
+                rows.append(row)
+    plan.rows = rows
+    if not plan.rows:
+        return plan
     by_feature: dict[uuid.UUID, RoadmapItem] = {}
     by_key: dict[str, RoadmapItem] = {}
     for r in items:
@@ -194,7 +216,8 @@ async def _copy(
     )  # fmt: skip
     db.add(new)
     await db.flush()
-    row.carried_to_id = new.id
+    for r in plan.with_twins(row):
+        r.carried_to_id = new.id
     await db.flush()
     await audit.record(db, principal, "goal_milestone.carried", "track_milestone", row.id,
                        data={"to": str(new.id), "roadmap_id": str(plan.company.id)})  # fmt: skip
@@ -237,7 +260,8 @@ async def decide(
     if action == "keep":
         carried.append((await _copy(db, principal, plan, row, [])).id)
     else:
-        row.carry_dropped_at = company_time.now()
+        for r in plan.with_twins(row):
+            r.carry_dropped_at = company_time.now()
         await db.flush()
         await audit.record(db, principal, "goal_milestone.dropped", "track_milestone", row.id,
                            data={})  # fmt: skip

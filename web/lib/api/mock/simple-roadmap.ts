@@ -1243,6 +1243,7 @@ const roadmapTitle = (db: SimpleDb, slug: string): string => db.titles?.[slug] ?
 const oldCtx = (db: SimpleDb): OldCtx => ({
   company: db.company_roadmap,
   companyItems: new Map(db.items.filter((s) => s.roadmap === db.company_roadmap).map((s) => [s.key, s.title])),
+  feedingPrds: new Set(db.items.filter((s) => s.roadmap === db.company_roadmap).flatMap((s) => (s.prd_doc ? [s.prd_doc.slug] : []))),
   roadmapTitle: (slug) => roadmapTitle(db, slug),
   goalTitle: (key) => GOALS[key] ?? null,
 });
