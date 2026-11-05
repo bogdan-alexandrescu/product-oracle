@@ -27,7 +27,7 @@ import { expect, test, type Page } from "./test";
  * approvers (the API's tests).
  *
  * Card tfg-restore-after-version (review round 3): protects = a feature deleted before another
- * edit is submitted and approved shows on Simple's roadmap again after Restore in Settings › Trash;
+ * edit is submitted and approved (review round 4: by the required reviewer, on Home) shows on Simple's roadmap again after Restore in Settings › Trash;
  * fails_when = Restore empties the Trash row and the feature stays off the roadmap (review round 4:
  * the mock keeps each roadmap's published versions with the features in Trash when each was made,
  * so a Restore that leaves the newer version alone fails here); no_claim = the API's copy onto
@@ -141,29 +141,64 @@ test("whoever deleted a feature or a goal sees it in Trash and restores it, with
   expect((await items(page)).map((i) => i.id)).not.toContain(theirs.id);
 });
 
+/** The alerts roadmap's required reviewer ("trash-reviewer"), who approves its drafts on Home. */
+const REVIEWER = "avery.lane@example.com";
+
+/** Signs in as the alerts roadmap's required reviewer, presses Approve on the Alerts roadmap's
+ * draft in Home's waiting list (the version is published), and stays signed in as them. */
+async function approveOnHome(page: Page) {
+  await signOut(page);
+  await login(page, REVIEWER);
+  await page.goto("/simple");
+  const row = page.getByTestId("home-also-waiting-list").getByTestId("waiting-item").filter({ hasText: "Alerts roadmap" });
+  await expect(row).toContainText("A roadmap draft waits for your approval");
+  await row.getByRole("button", { name: "Approve" }).click();
+  await expect(row).toHaveCount(0);
+}
+
+/** Moves `key`'s bar on the Timeline a step later: one change in the open draft. */
+async function moveBar(page: Page, key: string) {
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  const count = page.getByTestId("draft-count");
+  const before = (await count.count()) ? await count.textContent() : null;
+  await page.locator(`[data-testid="timeline-row"][data-item="${key}"] [data-testid="timeline-bar"]`).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(count).not.toHaveText(before ?? "");
+}
+
+async function sendForReview(page: Page) {
+  await page.getByTestId("draft-banner").getByRole("button", { name: "Send for review" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Sent for review" })).toBeVisible();
+}
+
+type RoadmapItem = Item & { key: string; roadmap: { slug: string } };
+
+async function alerts(page: Page): Promise<RoadmapItem[]> {
+  const all = (await call(page, "GET", "/v1/simple/roadmap")).body as { items: RoadmapItem[] };
+  return all.items.filter((i) => i.roadmap.slug === "alerts-roadmap");
+}
+
 test("a feature deleted before the roadmap's next version is published comes back on it from Trash", async ({ page }) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "trash-reviewer"), MOCK_SCENARIO_KEY);
   await login(page);
-  const all = (await call(page, "GET", "/v1/simple/roadmap")).body as { items: (Item & { key: string; roadmap: { slug: string } })[] };
-  const feature = all.items.find((i) => i.can_decide && i.code)!;
-  const other = all.items.find((i) => i.can_decide && i.id !== feature?.id && i.roadmap.slug === feature?.roadmap.slug)!;
+  const mine = await alerts(page);
+  const feature = mine.find((i) => i.can_decide && i.code)!;
+  const other = mine.find((i) => i.can_decide && i.id !== feature?.id)!;
   expect(feature && other).toBeTruthy();
   // No screen deletes a feature yet: the delete goes through the mock API's route.
   expect((await call(page, "DELETE", `/v1/simple/roadmap/items/${feature.id}`)).status).toBe(200);
 
   // Another feature's dates moved on the Timeline and the draft sent for review.
-  await page.goto("/simple/roadmap");
+  await moveBar(page, other.key);
   const roadmap = page.getByTestId("simple-roadmap");
-  await expect(page.getByTestId("simple-chart")).toBeVisible();
   await expect(roadmap).not.toContainText(feature.title);
-  await page.locator(`[data-testid="timeline-row"][data-item="${other.key}"] [data-testid="timeline-bar"]`).focus();
-  await page.keyboard.press("ArrowRight");
-  await expect(page.getByTestId("draft-count")).toHaveText("1");
-  await page.getByTestId("draft-banner").getByRole("button", { name: "Send for review" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Sent for review" })).toBeVisible();
-  // The decider's approval publishes the next version, made without the feature in Trash (the
-  // approve button is on Home's waiting list, for the reviewers the draft waits on only).
-  const [draft] = (await call(page, "GET", "/v1/simple/drafts")).body as { id: string }[];
-  expect((await call(page, "POST", `/v1/simple/drafts/${draft.id}/approve`)).status).toBe(200);
+  await sendForReview(page);
+  // The required reviewer's approval on Home publishes the next version, made without the
+  // feature in Trash.
+  await approveOnHome(page);
+  await signOut(page);
+  await login(page);
 
   await page.goto("/settings/trash");
   const row = page.getByTestId("trash-entry").filter({ hasText: feature.title });
@@ -173,4 +208,65 @@ test("a feature deleted before the roadmap's next version is published comes bac
   await expect(page.getByTestId("simple-chart")).toBeVisible();
   await expect(roadmap).toContainText(feature.title);
   await expect(roadmap).toContainText(other.title);
+});
+
+/*
+ * Card tfg-draft-only (review round 4): protects = a feature added in the open draft (never
+ * approved), deleted, and restored while the draft is in review is back in the draft only: a
+ * viewer, who reads the published roadmap, does not see it; once the required reviewer approves
+ * the draft on Home it is on the roadmap; fails_when = Restore puts it on the published roadmap,
+ * the draft waits on no one, or the approval loses it; no_claim = the API's copy onto the version
+ * in review (pytest test_a_feature_only_in_the_draft_is_restored_to_the_draft_only).
+ */
+test("a feature added in the draft and restored while the draft is in review stays off the published roadmap until approved", async ({ page }) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "trash-reviewer"), MOCK_SCENARIO_KEY);
+  await login(page);
+  const other = (await alerts(page)).find((i) => i.can_decide)!;
+  const title = "Quiet hours digest";
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await page.getByLabel("Add an item").fill(title);
+  await page.getByTestId("quick-add-roadmap").selectOption({ label: "Alerts roadmap" });
+  const chip = page.getByTestId("quick-add-chip");
+  await expect(chip).toHaveAttribute("aria-disabled", "false");
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const target = page.locator('[data-testid="quarter-drop"][data-add-where="quarter:2027-Q1"]');
+  const from = (await chip.boundingBox())!;
+  const to = (await target.boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, Math.min(to.y + 20, (page.viewportSize()?.height ?? 800) - 12), { steps: 12 });
+  await page.mouse.up();
+  await expect(page.getByRole("status").filter({ hasText: `Added ${title} as a draft` })).toBeVisible();
+  const added = (await alerts(page)).find((i) => i.title === title)!;
+  expect(added).toBeTruthy();
+  expect((await call(page, "DELETE", `/v1/simple/roadmap/items/${added.id}`)).status).toBe(200);
+
+  await moveBar(page, other.key);
+  const roadmap = page.getByTestId("simple-roadmap");
+  await expect(roadmap).not.toContainText(title);
+  await sendForReview(page);
+
+  await page.goto("/settings/trash");
+  const row = page.getByTestId("trash-entry").filter({ hasText: title });
+  await row.getByRole("button", { name: `Restore ${title}` }).click();
+  await expect(row).toHaveCount(0);
+  // Back in the draft, which its owner reads.
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await expect(roadmap).toContainText(title);
+
+  // A viewer reads the published roadmap: it is not there.
+  await signOut(page);
+  await login(page, "vic.moss@example.com");
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await expect(roadmap).toContainText(other.title);
+  await expect(roadmap).not.toContainText(title);
+
+  // Approved on Home, it is on the roadmap.
+  await approveOnHome(page);
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await expect(roadmap).toContainText(title);
 });

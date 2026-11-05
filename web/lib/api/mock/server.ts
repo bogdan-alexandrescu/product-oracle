@@ -579,6 +579,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * approver owning the alerts track) deciding Grow retention's suggestions (suggest review);
  * "simple-home-deciders" as "simple-deciders" plus a commenter's proposal waiting on the
  * pricing roadmap's decider (#723 S1 Home review).
+ * "trash-reviewer" as "simple-deciders" with Avery Lane the alerts roadmap's required reviewer
+ * (trash-features-goals review 4).
  * "feature-panel-frames" as "simple-deciders" with Maya Ortiz owning the alerts track and a talk
  * about Weekly alert digest, as the picked mk-featurepanel frames draw it (build-feature-panel review 2).
  * "simple-home-move" as "simple-home" plus a "Move the dependents" proposal Home's Accept confirms.
@@ -925,6 +927,18 @@ function seedSimpleDecidersScenario(): Db {
     viewer: join("vic.moss@example.com", "Vic Moss", "viewer", 3),
   });
   db.simple_roadmap.people = Object.fromEntries(db.members.map((m) => [m.id, m.name ?? m.email]));
+  return db;
+}
+
+/**
+ * trash-features-goals review 4 "trash-reviewer" scenario: "simple-deciders" with Avery Lane (the
+ * alerts track's owner, an approver, so the alerts roadmap's approver) its required reviewer: a
+ * draft sent for review waits on them on Home until they approve it.
+ */
+function seedTrashReviewerScenario(): Db {
+  const db = seedSimpleDecidersScenario();
+  const avery = db.members.find((m) => m.email === "avery.lane@example.com")!;
+  db.simple_roadmap!.reviewers = { "alerts-roadmap": [avery.id] };
   return db;
 }
 
@@ -3377,6 +3391,8 @@ function load(): Db {
                 ? seedManyPeople
               : scenario === "simple-deciders"
                 ? seedSimpleDecidersScenario
+              : scenario === "trash-reviewer"
+                ? seedTrashReviewerScenario
               : scenario === "feature-panel-frames"
                 ? seedFeaturePanelFramesScenario
               : scenario === "meeting-agenda"

@@ -497,14 +497,20 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
     if (!canEditRoadmap(db, d.roadmap, ctx)) return json(403, { detail: "Only an owner or the roadmap's decider (with none, its owner) submits" });
     if (d.out.status !== "working") return json(409, { detail: `This draft is ${d.out.status} already` });
     if (!draftChanges(db, d.out.id) && !draftPrds(d).length) return json(422, { detail: "Nothing to submit: the draft has no changes" });
-    Object.assign(d.out, { status: "submitted", version: (d.out.base_version ?? 1) + 1, submitted_at: now, submitted_by: ctx.id });
+    // drafts._submit_roadmap: it waits on the roadmap's required reviewers.
+    Object.assign(d.out, { status: "submitted", version: (d.out.base_version ?? 1) + 1, submitted_at: now, submitted_by: ctx.id, waiting_on: [...(db.reviewers?.[d.roadmap] ?? [])] });
     return json(200, draftOut(db, ctx, d));
   }
   if (p[4] === "approve") {
     if (d.out.status !== "submitted") return json(409, { detail: `This draft is ${d.out.status}: only a submitted draft is approved` });
-    if (!canEditRoadmap(db, d.roadmap, ctx)) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
-    // No required reviewers in the mock: the approval publishes the version.
-    Object.assign(d.out, { decider_approved: true, status: "approved", approved_at: now });
+    const waited = d.out.waiting_on.includes(ctx.id);
+    if (!canEditRoadmap(db, d.roadmap, ctx) && !waited) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
+    // drafts._approve: a required reviewer's approval, the decider's (an editor's here); the
+    // version is approved once the decider's is in and no reviewer is still waited on.
+    d.out.waiting_on = d.out.waiting_on.filter((i) => i !== ctx.id);
+    if (canEditRoadmap(db, d.roadmap, ctx)) d.out.decider_approved = true;
+    if (!d.out.decider_approved || d.out.waiting_on.length) return json(200, draftOut(db, ctx, d));
+    Object.assign(d.out, { status: "approved", approved_at: now });
     // trash-features-goals review 4: the version is made without the features in Trash.
     const without = db.items.filter((s) => s.trashed && s.roadmap === d.roadmap).map((s) => s.key);
     (db.versions ??= []).push({ roadmap: d.roadmap, number: d.out.version ?? (d.out.base_version ?? 1) + 1, without });
@@ -1372,8 +1378,10 @@ export function simpleInboxRows(
     simple_decisions: changes
       .filter((c) => c.by === me && (c.status === "accepted" || c.status === "declined"))
       .map((c) => row(c, c.decided_at, !seen || (c.decided_at ?? "") > seen ? undefined : "done")),
-    // S3b: the mock's roadmaps name no required reviewers, so no draft waits on anyone.
-    simple_approvals: [],
+    // S3b (drafts.inbox_rows): the drafts in review waiting on me.
+    simple_approvals: (db?.drafts ?? [])
+      .filter((d) => d.out.status === "submitted" && d.out.waiting_on.includes(me))
+      .map((d) => ({ draft_id: d.out.id, document: { id: d.out.document.id, slug: d.out.document.slug, title: d.out.document.title }, version: d.out.version ?? null, submitted_by: d.out.submitted_by ?? null, submitted_at: d.out.submitted_at ?? null, decider_approved: !!d.out.decider_approved, state: !seen || (d.out.submitted_at ?? "") > seen ? ("new" as const) : ("open" as const) })),
   };
 }
 

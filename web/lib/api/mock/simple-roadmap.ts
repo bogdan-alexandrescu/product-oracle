@@ -144,6 +144,9 @@ interface SimpleDb {
   targets?: Record<string, Record<string, unknown>>;
   /** D-a (#730 review): each roadmap's designated decider (roadmap slug -> person id). */
   deciders?: Record<string, string>;
+  /** Each roadmap's required reviewers (roadmap slug -> person ids; drafts.Who.reviewers): a
+   * draft sent for review waits on them (the "trash-reviewer" scenario names one). */
+  reviewers?: Record<string, string[]>;
   /** D-a: each track's owner (track key -> person id); their role (Who.roles) says whether they decide. */
   track_owners?: Record<string, string>;
   /** S4: people's display names (person id -> name), for the items' owners. */
