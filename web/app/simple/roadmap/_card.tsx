@@ -422,6 +422,7 @@ const OP_WORDS: Record<string, string> = {
   add_key_date: "Add a key date",
   edit_key_date: "Change a key date",
   remove_key_date: "Remove a key date",
+  edit_goal_milestone: "Change a milestone",
   add_item: "Add an item",
   merge_item: "Merge a duplicate",
   keep_both: "Keep both",

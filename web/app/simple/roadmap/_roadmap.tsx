@@ -551,11 +551,14 @@ function DecisionTray({
     ...(counts.old.length ? ([["Old milestones", counts.old.length]] as [string, number][]) : []),
   ];
   const kd = (c: Change) => (c.after.key_date ?? c.before.key_date) as { name?: string } | null | undefined;
-  const title = (c: Change) => (kd(c)?.name ? `Key date '${kd(c)!.name}'` : (byId.get(String(c.target.item_id))?.title ?? (typeof c.after.title === "string" ? c.after.title : "An item")));
+  // milestone-rights: a goal milestone's proposal names the milestone and says change or remove.
+  const ms = (c: Change) => c.op === "edit_goal_milestone" && typeof c.target.name === "string";
+  const title = (c: Change) => (ms(c) ? `Milestone '${String(c.target.name)}'` : kd(c)?.name ? `Key date '${kd(c)!.name}'` : (byId.get(String(c.target.item_id))?.title ?? (typeof c.after.title === "string" ? c.after.title : "An item")));
+  const asks = (c: Change) => (ms(c) ? ("milestone" in c.before && c.after.milestone === null ? "remove it" : "change it") : opWords(c.op).toLowerCase());
   const row = (c: Change) => (
     <li key={c.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-proposal">
       <span className="min-w-0 flex-1 text-[15px]">
-        {title(c)}: {opWords(c.op).toLowerCase()} · <span className="text-text2">{c.by_name}</span>
+        {title(c)}: {asks(c)} · <span className="text-text2">{c.by_name}</span>
         {c.from_meeting && <span className="block text-sm text-text2" data-testid="proposal-from-meeting">Asked for by the meeting {c.from_meeting.title}</span>}
       </span>
       <Button onClick={() => onDecide(c, "accept")}>Accept</Button>
@@ -1055,7 +1058,7 @@ export function SimpleRoadmap() {
     async (c: Change, how: "accept" | "decline") => {
       try {
         await decide(c.id, how);
-        toast({ message: how === "accept" ? "Accepted: it is in your working draft" : "Declined" });
+        toast({ message: how === "accept" ? (c.op === "edit_goal_milestone" ? "Accepted" : "Accepted: it is in your working draft") : "Declined" });
       } catch (e) {
         toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not decide it" });
       }
