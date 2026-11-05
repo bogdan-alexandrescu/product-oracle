@@ -224,3 +224,36 @@ async def test_many_runs_read_in_a_few_queries(client, owner, runtime):
     body = await _rebuilds(client, auth)
     assert len(body["rebuilds"]) == 7
     assert counts[1] == counts[0]
+
+
+async def test_a_run_writing_a_new_prd_is_listed_as_new_until_its_first_version(
+    client, owner, runtime
+):
+    """Ground Truth to PRD making a new PRD: no document yet (its slug only on the run), so
+    the sign says a new PRD is being written and links the run, not a page that is not
+    there yet; once its first version lands, it is the PRD's own."""
+    tenant_id, auth = owner
+    await _name_owner(tenant_id)
+    run = await started(client, auth, checkpoints={"eng_dates": False})
+    assert run["document_id"] is None
+    [rb] = (await _rebuilds(client, auth))["rebuilds"]
+    assert rb["run_id"] == run["id"] and rb["document_slug"] == "example-prd"
+    assert rb["new_document"] is True
+    await tick(client, auth)
+    [rb] = (await _rebuilds(client, auth))["rebuilds"]
+    assert rb["state"] == "waiting" and rb["new_document"] is True
+    for _ in range(5):
+        run = await decide(client, auth, await get(client, auth, run["id"]))
+        await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "succeeded"
+    [rb] = (await _rebuilds(client, auth))["rebuilds"]
+    assert rb["state"] == "done" and rb["new_document"] is False
+
+
+async def test_a_scheduled_run_for_a_new_prd_is_new(client, owner, runtime):
+    _, auth = owner
+    await create(client, auth, document="team-onboarding-example")
+    [rb] = (await _rebuilds(client, auth))["rebuilds"]
+    assert rb["state"] == "scheduled" and rb["new_document"] is True
+    assert rb["document_slug"] == "team-onboarding-example"

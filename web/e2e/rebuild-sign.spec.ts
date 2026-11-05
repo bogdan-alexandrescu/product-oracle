@@ -11,7 +11,8 @@ import { login } from "./helpers";
 // PRD page and Home. Each state is a run in the mock's store, as the API would list it.
 
 type State = "scheduled" | "running" | "waiting" | "failed" | "done";
-type Seed = { slug: string; state: State; step?: number; minutes?: number; startAt?: string; error?: string; flow?: string; source?: string };
+/** `title`: a run writing a new PRD (no document yet, its slug only on the run), so named. */
+type Seed = { slug: string; state: State; step?: number; minutes?: number; startAt?: string; error?: string; flow?: string; source?: string; title?: string };
 
 /**
  * Puts runs in the mock's store (a run the API lists), each cloned from a seeded run. With
@@ -35,6 +36,9 @@ async function write(page: Page, seeds: Seed[], clear: string[], only: boolean):
     const db = JSON.parse(localStorage.getItem(key)!);
     type Seg = Record<string, unknown> & { seq: number; status: string; checkpoint: string | null; checkpoint_on: boolean };
     const base = JSON.parse(JSON.stringify(db.runs.runs.find((r: { flow: string }) => r.flow === "baseline_to_prd")));
+    // Pinned clock: e2e/test.ts starts every context at MOCK_NOW (Oct 22, 2026, 12:00 PM UTC).
+    // A stopped run is listed for 7 days after it finished (FAILED_DAYS), so this moment must
+    // stay within those 7 days of MOCK_NOW; move it with MOCK_NOW.
     const at = "2026-10-22T18:20:00Z";
     // A clean scene: no other run on the documents seeded (the default seed has one on some).
     const slugs = new Set([...seeds.map((s) => s.slug), ...clear]);
@@ -42,8 +46,8 @@ async function write(page: Page, seeds: Seed[], clear: string[], only: boolean):
     const ids: string[] = [];
     const latest: Record<string, number> = {};
     for (const s of seeds) {
-      const doc = db.documents.find((d: { slug: string }) => d.slug === s.slug);
-      const versions = db.versions.filter((v: { document_id: string }) => v.document_id === doc.id);
+      const doc = s.title ? { id: null, slug: s.slug, title: s.title, kind: "prd" } : db.documents.find((d: { slug: string }) => d.slug === s.slug);
+      const versions = db.versions.filter((v: { document_id: string }) => doc.id && v.document_id === doc.id);
       const top = versions.length ? versions.reduce((a: { number: number }, b: { number: number }) => (b.number > a.number ? b : a)) : { number: 0 };
       const id = crypto.randomUUID();
       const run = JSON.parse(JSON.stringify(base));
@@ -58,6 +62,7 @@ async function write(page: Page, seeds: Seed[], clear: string[], only: boolean):
         ...(source ? { source: { document_id: source.id, slug: source.slug, title: source.title, kind: source.kind, version: sourceTop, version_id: crypto.randomUUID(), approved_at: at } } : {}),
         document_id: doc.id,
         document_slug: doc.slug,
+        document_title: s.title ?? run.document_title ?? null,
         status,
         segments: segs,
         knobs: { ...run.knobs, minutes_left: s.minutes ?? null, start_at: s.startAt ?? null },
@@ -180,16 +185,68 @@ test("the new version lands: 'ready: review it' until it is opened", async ({ pa
   await expect(row.getByTestId("rb-chip")).toHaveCount(0);
 });
 
-test("a page already showing the landed version says nothing of it, and viewing it ends 'ready'", async ({ page }) => {
+test("the one-pager and the Detailed page say 'ready: review it' while the new version waits for review; viewing it ends it elsewhere", async ({ page }) => {
+  // Frames a-one-pager-done and a-detailed-done: the document's own pages keep saying it
+  // until the version is approved, though they show it.
   await start(page);
   const { latest } = await seedRuns(page, [{ slug: "checkout-redesign", state: "done" }], { open: "/simple/one-pagers/checkout-redesign" });
   const v = latest["checkout-redesign"] + 1;
   await expect(page.getByText(`Version ${v}`).first()).toBeVisible();
-  await expect(page.getByTestId("rb-chip")).toHaveCount(0);
+  await expect(chip(page)).toHaveText(`v${v} ready: review it`);
+  await page.goto("/documents/checkout-redesign");
+  await expect(chip(page)).toHaveText(`v${v} ready: review it`);
+  await chip(page).click();
+  await expect(page.getByTestId("rb-popover").getByRole("link", { name: `Review v${v}` })).toBeVisible();
+  // Seen: the list and Home have nothing new for this person.
   await page.goto("/simple/one-pagers");
   const row = page.getByRole("listitem").filter({ hasText: "Checkout redesign PRD" });
   await expect(row).toBeVisible();
   await expect(row.getByTestId("rb-chip")).toHaveCount(0);
+});
+
+test("a new PRD being written: Home names it 'New PRD', links its run while no version of it exists", async ({ page }) => {
+  await start(page);
+  // The mock's own: Team onboarding at the baseline stop, Usage alerts v2 waiting for an owner's approval.
+  const runs = await page.evaluate(() => {
+    const db = JSON.parse(localStorage.getItem("po-mock-db-v2")!);
+    const id = (slug: string) => db.runs.runs.find((r: { document_slug: string; document_id: string | null }) => r.document_slug === slug && !r.document_id).id as string;
+    return { onboarding: id("team-onboarding"), alerts: id("usage-alerts-v2") };
+  });
+  await seedRuns(page, [{ slug: "billing-exports-example", title: "Billing exports", state: "running", step: 2, minutes: 40 }], { open: "/simple" });
+  const home = page.getByTestId("rb-home");
+  const onboarding = home.getByRole("listitem").filter({ hasText: "New PRD: Team onboarding" });
+  await expect(onboarding).toContainText(/being written · waiting on/i);
+  await expect(onboarding.getByRole("link", { name: "New PRD: Team onboarding" })).toHaveAttribute("href", `/runs/${runs.onboarding}`);
+  const alerts = home.getByRole("listitem").filter({ hasText: "New PRD: Usage alerts v2" });
+  await expect(alerts).toContainText(/being written · not started yet/i);
+  await expect(alerts.getByRole("link", { name: "New PRD: Usage alerts v2" })).toHaveAttribute("href", `/runs/${runs.alerts}`);
+  const exports = home.getByRole("listitem").filter({ hasText: "New PRD: Billing exports" });
+  await expect(exports).toContainText(/being written · step 2 of \d+ · about 40 min/i);
+  // The popover says what it writes, and opens the run.
+  await exports.getByTestId("rb-chip").click();
+  await expect(page.getByTestId("rb-popover")).toContainText("It writes a new PRD, Billing exports.");
+  await onboarding.getByRole("link", { name: "New PRD: Team onboarding" }).click();
+  await expect(page).toHaveURL(new RegExp(`/runs/${runs.onboarding}$`));
+});
+
+test("a run at a stop or not started re-reads once a minute, not every 5 s", async ({ page }) => {
+  await start(page);
+  const { ids } = await seedRuns(page, [{ slug: "checkout-redesign", state: "waiting", step: 3 }], { open: "/simple/one-pagers/checkout-redesign" });
+  await expect(chip(page)).toContainText("Waiting on");
+  // It moves on between two reads: the sign, at a stop, reads again only after a minute.
+  await page.evaluate((id) => {
+    const db = JSON.parse(localStorage.getItem("po-mock-db-v2")!);
+    const run = db.runs.runs.find((r: { id: string }) => r.id === id);
+    run.status = "running";
+    run.checkpoints = [];
+    run.waiting_on = null;
+    run.segments.find((g: { status: string }) => g.status === "pending").status = "running";
+    localStorage.setItem("po-mock-db-v2", JSON.stringify(db));
+  }, ids[0]);
+  await page.clock.runFor(30_000);
+  await expect(chip(page)).toContainText("Waiting on");
+  await page.clock.runFor(31_000);
+  await expect(chip(page)).toContainText("Rebuilding", { timeout: 3000 });
 });
 
 test("two runs on one PRD: the chip counts the other, the popover shows both", async ({ page }) => {
