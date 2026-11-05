@@ -805,12 +805,15 @@ export function canEditRoadmap(db: SimpleDb, roadmap: string, me: { id: string; 
   return [...tracks].some((t) => db.track_owners?.[t] === me.id) && RANK[me.role] >= RANK.approver;
 }
 
+/** simple-replaced-prds (service.load): an item of a replaced PRD is history, read in Detailed only. */
+export function ofReplacedPrd(db: SimpleDb, s: SeedItem): boolean {
+  const replaced = db.replaced_prds ?? [];
+  return !!replaced.length && (replaced.includes(ownPrd(s).id) || replaced.includes(ownPrd(s).slug));
+}
+
 function visibleItems(db: SimpleDb, role: Role): SeedItem[] {
   const restricted = role === "commenter" || role === "viewer";
-  // simple-replaced-prds (service.load): a replaced PRD's items are history, read in Detailed only.
-  const replaced = new Set(db.replaced_prds ?? []);
-  const live = (s: SeedItem) => !replaced.size || !(replaced.has(ownPrd(s).id) || replaced.has(ownPrd(s).slug));
-  return db.items.filter((s) => (!db.company_roadmap || s.roadmap === db.company_roadmap) && (!restricted || ROADMAPS[s.roadmap].visibility === "company") && live(s));
+  return db.items.filter((s) => (!db.company_roadmap || s.roadmap === db.company_roadmap) && (!restricted || ROADMAPS[s.roadmap].visibility === "company") && !ofReplacedPrd(db, s));
 }
 
 /** plan-model (suggestions._planned): the item's dated slices in its PRD's plan; none when the plan does not place it. */
@@ -1227,7 +1230,7 @@ function json(status: number, body: unknown): Response {
 export function matchesOf(db: SimpleDb, keys: string[]): Schemas["SimpleMatch"][] {
   return keys
     .map((k) => db.items.find((x) => x.key === k))
-    .filter((x): x is SeedItem => !!x && !closed(x))
+    .filter((x): x is SeedItem => !!x && !closed(x) && !ofReplacedPrd(db, x))
     .slice(0, 2)
     // Its display code (F-06) or none, never its key, as additions.reconcile.
     .map((x) => ({ kind: "item" as const, id: db.ids[x.key], code: prdCode(x.section) ?? "", title: x.title }));
@@ -1236,11 +1239,12 @@ export function matchesOf(db: SimpleDb, keys: string[]): Schemas["SimpleMatch"][
 const WORDS = (t: string): Set<string> => new Set(t.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4));
 
 /** S7, Oracle's duplicate check (simplified): live items of the roadmap sharing a word of four
- * letters or more with the title, most shared first. */
+ * letters or more with the title, most shared first; never a replaced PRD's (additions.reconcile
+ * reads service.load). */
 export function lookalikes(db: SimpleDb, title: string, roadmap: string | null, except?: string): string[] {
   const mine = WORDS(title);
   return db.items
-    .filter((x) => x.key !== except && !closed(x) && !x.draft && (!roadmap || x.roadmap === roadmap))
+    .filter((x) => x.key !== except && !closed(x) && !x.draft && (!roadmap || x.roadmap === roadmap) && !ofReplacedPrd(db, x))
     .map((x) => ({ k: x.key, n: [...WORDS(x.title)].filter((w) => mine.has(w)).length }))
     .filter((x) => x.n > 0)
     .sort((a, b) => b.n - a.n || a.k.localeCompare(b.k))

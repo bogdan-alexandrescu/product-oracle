@@ -40,6 +40,7 @@ import {
   itemDeciderId,
   itemOwnerId,
   lookalikes,
+  ofReplacedPrd,
   shiftPlan,
   ownDates,
   prdCode,
@@ -350,6 +351,14 @@ function itemLabel(db: SimpleDb, id: unknown): string | null {
   const key = id ? keyOf(db, id) : undefined;
   const s = key ? db.items.find((x) => x.key === key) : undefined;
   return s ? `${prdCode(s.section) ?? ""} ${s.title}`.trim() : null;
+}
+
+/** simple-replaced-prds (changes.listing): a proposal waiting on a replaced PRD's item leaves Simple with the item. */
+function onReplacedPrd(db: SimpleDb, c: Change): boolean {
+  if (c.status !== "proposed" || !c.target.item_id) return false;
+  const key = keyOf(db, c.target.item_id);
+  const s = key ? db.items.find((x) => x.key === key) : undefined;
+  return !!s && ofReplacedPrd(db, s);
 }
 
 function sees(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): boolean {
@@ -823,7 +832,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     const status = q.get("status");
     const rows = (db.changes ?? [])
       .filter((c) => (!q.get("session") || c.session_id === q.get("session")) && (!q.get("document") || c.document_id === q.get("document")) && (!status || c.status === status) && (q.get("mine") !== "true" || c.by === ctx.id))
-      .filter((c) => sees(db, ctx, c))
+      .filter((c) => sees(db, ctx, c) && !onReplacedPrd(db, c))
       .sort((a, b) => (a.at < b.at ? 1 : -1));
     return json(200, rows.map((c) => view(db, ctx, c)));
   }
