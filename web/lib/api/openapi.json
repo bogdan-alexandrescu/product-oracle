@@ -115031,6 +115031,30 @@
         "title": "ScopeItemPatch",
         "description": "One person's change to one scope row (C7); every field optional. ``revert`` puts\nthe row back to the agent's values. ``decision_reason`` of a left-out feature:\nno_goal | not_now | out_of_scope | duplicate | other:<text>."
       },
+      "ScopeOtherDependency": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "prd": {
+            "type": "string",
+            "title": "Prd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "prd"
+        ],
+        "title": "ScopeOtherDependency",
+        "description": "A dependency on another PRD's feature on the company roadmap: its name and PRD."
+      },
       "ScopeOut": {
         "properties": {
           "name": {
@@ -115427,6 +115451,14 @@
             "default": {
               "original": {}
             }
+          },
+          "other_prd_dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeOtherDependency"
+            },
+            "type": "array",
+            "title": "Other Prd Dependencies",
+            "default": []
           }
         },
         "type": "object",

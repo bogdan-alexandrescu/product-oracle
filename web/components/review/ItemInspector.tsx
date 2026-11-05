@@ -47,6 +47,7 @@ export function ItemInspector({
   milestoneAction,
   dependencyAction,
   removedDependencies = [],
+  dependencyTitles = {},
   priority: priorityIn,
   tabs,
 }: {
@@ -70,6 +71,8 @@ export function ItemInspector({
   milestoneAction?: ReactNode;
   dependencyAction?: (key: string) => ReactNode;
   removedDependencies?: readonly string[];
+  /** Names of dependencies outside the rows (another PRD's feature: "Account health ledger (Safety PRD)"). */
+  dependencyTitles?: Readonly<Record<string, string>>;
   priority?: ItemPriority;
   /** Tabs after "Item" (D1's History): each replaces the item's sections while picked. */
   tabs?: { value: string; label: string; content: ReactNode }[];
@@ -177,6 +180,8 @@ export function ItemInspector({
                           <span className={`min-w-0 flex-1 truncate ${removedDependencies.includes(k) ? "text-text2 line-through" : ""}`}>{dep.title}</span>
                           <HorizonChip horizon={dep.horizon} />
                         </>
+                      ) : dependencyTitles[k] ? (
+                        <span className={`min-w-0 flex-1 truncate ${removedDependencies.includes(k) ? "text-text2 line-through" : ""}`}>{dependencyTitles[k]}</span>
                       ) : (
                         <span className="font-mono text-sm">{k}</span>
                       )}

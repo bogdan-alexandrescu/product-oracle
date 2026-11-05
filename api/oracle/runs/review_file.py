@@ -20,6 +20,7 @@ from datetime import datetime
 from typing import Any, Protocol
 
 from oracle import company_time, safe_yaml
+from oracle.runs import reasons
 from oracle.runs.gate import OWNER_WAIVES
 from oracle.runs.schemas import ReviewAction
 
@@ -67,7 +68,7 @@ def _answers(action: ReviewAction, reason: dict[str, Any]) -> bool:
     if action.kind == "question":
         return False
     if action.answers:
-        return reason["code"] in action.answers
+        return reason["code"] in action.answers and reasons.is_its_fix(action, reason)
     return action.kind != "waive" or reason["code"] not in OWNER_WAIVES
 
 

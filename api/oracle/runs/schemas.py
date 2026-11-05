@@ -595,6 +595,15 @@ class ScopeEvidence(BaseModel):
     url: str | None = None
 
 
+class ScopeOtherDependency(BaseModel):
+    """A dependency on another PRD's feature on the company roadmap: its name and PRD."""
+
+    key: str
+    title: str
+    # "Trust PRD": the PRD that holds it.
+    prd: str
+
+
 class ScopeReviewFeature(ScopeFeatureOut):
     text: str | None = None
     position: int
@@ -608,6 +617,8 @@ class ScopeReviewFeature(ScopeFeatureOut):
     # Open reasons left (not answered): the row needs a person.
     needs_you: bool = False
     history: ScopeHistory = ScopeHistory()
+    # The dependencies another PRD on the company roadmap holds, named (not in this scope).
+    other_prd_dependencies: list[ScopeOtherDependency] = []
     requirements: list[ScopeReviewRequirement] = []  # type: ignore[assignment]
 
 

@@ -99,12 +99,13 @@ async def _scope(s, run: Run, doc: Document, features, excluded=()) -> PrdScope:
     return scope
 
 
-async def world(*, roadmap: bool = True) -> dict:
+async def world(*, roadmap: bool = True, tenant_id=None) -> dict:
     """The Safety PRD's approved scope holds account-health-ledger, and the company roadmap's
     version 1 its item; the Scale PRD's run's approved scope holds observability, which
-    depends on it."""
-    ctx = await make_ctx()
-    async with tenant_session(ctx.tenant_id) as s:
+    depends on it. ``tenant_id``: in that company (a new one by default)."""
+    if tenant_id is None:
+        tenant_id = (await make_ctx()).tenant_id
+    async with tenant_session(tenant_id) as s:
         for key, title in (("observability", "Observability"),
                            ("account-health-ledger", "Account health ledger"),
                            ("export-logs", "Export logs")):  # fmt: skip
@@ -127,7 +128,7 @@ async def world(*, roadmap: bool = True) -> dict:
                               horizon="next", position=0, prd_document_id=safety.id,
                               prd_version_id=sv.id))  # fmt: skip
         await s.commit()
-        return {"tenant": ctx.tenant_id, "run": run.id, "scale": scale.id, "safety": safety.id}
+        return {"tenant": tenant_id, "run": run.id, "scale": scale.id, "safety": safety.id}
 
 
 async def _summary(w: dict, dep: str = "account-health-ledger") -> dict:
@@ -272,6 +273,24 @@ def test_the_scope_review_row_reads_needs_x_from_its_prd_and_does_not_block():
     assert reason.waivable is False
 
 
+async def test_the_scope_read_names_another_prd_s_dependency_with_its_prd():
+    # protects=the feature set's panel shows another PRD's feature by its name and PRD, not
+    # its key marked Unknown; fails_when=the scope read carries only the dependency's key.
+    from oracle.auth.deps import Principal
+    from oracle.runs import scope_review
+
+    w = await world()
+    async with tenant_session(w["tenant"]) as s:
+        scope = await s.scalar(select(PrdScope).where(PrdScope.run_id == w["run"]))
+        who = Principal(tenant_id=w["tenant"], kind="user", role="owner")
+        out = await scope_review.read(s, who, scope.id)
+    (obs,) = out.features
+    assert obs.depends_on == ["account-health-ledger"]
+    assert [d.model_dump() for d in obs.other_prd_dependencies] == [
+        {"key": "account-health-ledger", "title": "Account health ledger", "prd": "Safety PRD"}
+    ]
+
+
 # --------------------------------------------------------------------------- review round 1
 
 
@@ -299,6 +318,14 @@ async def test_a_run_already_waiting_at_the_engineering_check_is_read_again():
         out = await service.read_run(s, w["run"], None)
     shown = next(c for c in out.checkpoints if c.id == cp_id)
     assert shown.payload[check.PAYLOAD_KEY]["problems"] == []
+    # A read writes nothing: the stored check stays as it was until the stop is decided.
+    async with tenant_session(w["tenant"]) as s:
+        cp = await s.get(Checkpoint, cp_id)
+        assert cp.payload[check.PAYLOAD_KEY] == old
+        # What decide_checkpoint does first: the check read again, then stored.
+        run = await s.get(Run, w["run"])
+        assert await check.refresh(s, run, await service._segments(s, run.id), [cp])
+        await s.commit()
     async with tenant_session(w["tenant"]) as s:
         cp = await s.get(Checkpoint, cp_id)
         stored = cp.payload[check.PAYLOAD_KEY]
@@ -312,6 +339,34 @@ async def test_a_run_already_waiting_at_the_engineering_check_is_read_again():
                                    value={"verdict": "feasible"})  # fmt: skip
         g = gate.approve_gate(cp, None, [verdict])
         assert g is not None and g.file_problems == 0 and g.open
+
+
+async def test_a_read_only_token_reading_a_waiting_run_writes_nothing(client):
+    # protects=GET /runs/{id} reads the Engineering check as the rules now are without
+    # storing it, so a read-only credential's read changes nothing; fails_when=the read
+    # commits the checked-again payload.
+    from oracle.runs.models import RunSegment
+    from tests.test_read_only_credentials import _admin, _bearer
+
+    auth = await _bearer(client, "oracle:read")
+    w = await world(tenant_id=(await _admin()).tenant_id)
+    text = BRIEFS.replace("DEP", "account-health-ledger")
+    old = check._summarize(text, frozenset({"observability"}), None)
+    async with tenant_session(w["tenant"]) as s:
+        s.add(RunSegment(run_id=w["run"], seq=3, name="eng_review", status="succeeded",
+                         artifacts={"files": {check.briefs.FILE: text}}))  # fmt: skip
+        payload = {"segment_seq": 3, check.PAYLOAD_KEY: old}
+        cp = await _add(s, Checkpoint(run_id=w["run"], kind=check.KIND, status="pending",
+                                      payload=payload))  # fmt: skip
+        await s.commit()
+        cp_id = cp.id
+    resp = await client.get(f"/v1/runs/{w['run']}", headers=auth)
+    assert resp.status_code == 200, resp.text
+    (shown,) = [c for c in resp.json()["checkpoints"] if c["id"] == str(cp_id)]
+    assert shown["payload"][check.PAYLOAD_KEY]["problems"] == []
+    async with tenant_session(w["tenant"]) as s:
+        cp = await s.get(Checkpoint, cp_id)
+        assert cp.payload == {"segment_seq": 3, check.PAYLOAD_KEY: old}
 
 
 async def _two_prds_on_the_roadmap(scale_items=(), safety_deps=("observability",)) -> dict:
@@ -372,6 +427,33 @@ async def test_a_cross_prd_dependency_in_a_later_horizon_is_reported():
     ]
     later = await _items_check(w, "later")
     assert "horizon_breaks_dependency" not in [p["code"] for p in later.problems]
+
+
+async def test_the_items_review_names_a_later_cross_prd_dependency_with_its_fixes():
+    # protects=the Roadmap items review's reason for an item waiting on another PRD's item
+    # in a later horizon names it with its PRD and offers its own fixes, beside the item's
+    # own dependency; fails_when=the two problems swap words and fixes, or one shows the
+    # check's raw line with no fix.
+    from oracle.runs import service
+
+    w = await world()
+    text = (
+        "version: 1\nprd: {document: scale, version: 1}\nitems:\n"
+        "  - {id: base, title: Local base, outcome: Ready, horizon: next}\n"
+        "  - {id: observability, title: Observability, outcome: Health is charted,\n"
+        "     horizon: now, depends_on: [account-health-ledger, base]}\n"
+    )
+    async with tenant_session(w["tenant"]) as s:
+        run = await s.get(Run, w["run"])
+        found = (await service.checked_items(s, run, text)).reasons
+    hbd = [r for r in found if r["code"] == "horizon_breaks_dependency"]
+    assert [(r["text"], [f["label"] for f in r["fixes"]]) for r in hbd] == [
+        ("Needs Account health ledger (Safety PRD), which is in Next. An item cannot ship "
+         "before what it depends on.", ["Move to Next", "Remove dependency"]),
+        ("Needs Local base, which is in Next. An item cannot ship before what it depends on.",
+         ["Move to Next", "Pull dependency to Now", "Remove dependency"]),
+    ]  # fmt: skip
+    assert "unknown_dependency" not in [r["code"] for r in found]
 
 
 async def _ledger_by_feature_key(w: dict) -> None:
