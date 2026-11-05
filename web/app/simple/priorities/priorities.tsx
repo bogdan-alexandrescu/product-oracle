@@ -609,9 +609,9 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
             )}
             {mayChange && !r.can_reorder && (
               <p className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12" data-testid="prio-locked">
-                {/* prio-company: never the owner's (an owner moves every row); someone who truly lacks the right. A feature on
-                    no roadmap waits for the owner to add it, which no access changes. */}
-                {r.on_roadmap ? "Only people with access to this feature's roadmap can move it. Ask the owner for access." : "Only the owner can add this to the roadmap."}
+                {/* prio-company: never the owner's (an owner moves every row); someone who truly lacks the right. A feature not
+                    on the company roadmap waits for the owner to add it, which no access changes. */}
+                {!r.on_roadmap && data.company_roadmap ? "Only the owner can add this to the roadmap." : "Only people with access to this feature's roadmap can move it. Ask the owner for access."}
               </p>
             )}
             {r.after && (
