@@ -20,7 +20,6 @@ import { formatDate } from "@/lib/format";
 import { goalNumbers } from "@/lib/goal-tree";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
-import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 import { QuickAdd } from "./_add";
 import { MsCard, MsKey, MsLayer, MsProvider, MsToast, useMilestones, type MsLane, type MsRow } from "./_milestones";
