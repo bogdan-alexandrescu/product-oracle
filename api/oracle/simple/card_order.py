@@ -18,6 +18,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle.discussions.models import DiscussionMessage
 from oracle.simple.models import SimpleChatCard
 
 REPLACED = "This card was replaced by a newer card in the chat: use the newest one"
@@ -78,11 +79,18 @@ async def replaced_in(db: AsyncSession, cards: list[SimpleChatCard]) -> dict[uui
     chats = {c.discussion_id for c in cards if c.discussion_id is not None}
     out: dict[uuid.UUID, uuid.UUID] = {}
     for chat_id in chats:
+        # In the chat's order (its lines', as the thread shows them), then the reply's own.
         rows = list(
             await db.scalars(
                 select(SimpleChatCard)
+                .outerjoin(DiscussionMessage, DiscussionMessage.id == SimpleChatCard.message_id)
                 .where(SimpleChatCard.discussion_id == chat_id)
-                .order_by(SimpleChatCard.created_at, SimpleChatCard.id)
+                .order_by(
+                    DiscussionMessage.created_at,
+                    DiscussionMessage.id,
+                    SimpleChatCard.created_at,
+                    SimpleChatCard.id,
+                )
             )
         )
         out.update(replaced(rows))
