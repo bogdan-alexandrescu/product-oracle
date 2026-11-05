@@ -1,4 +1,4 @@
-"use client";
+"use client"; // MOCK-HOOK
 // MOCK-HOOK: mk-edit-goals-prds mock-up variants (throwaway branch, never merged). Every line here is a MOCK-HOOK.
 
 import Link from "next/link"; // MOCK-HOOK
@@ -28,10 +28,11 @@ export function useMkStore(): Store { // MOCK-HOOK
   return useSyncExternalStore((s) => (subs.add(s), () => subs.delete(s)), () => store, () => store); // MOCK-HOOK
 } // MOCK-HOOK
 
-// MOCK-HOOK: who may act, through can() only: change (approver up), propose (commenter), else read.
-export function useGoalAccess(): "change" | "propose" | "read" { // MOCK-HOOK
+// MOCK-HOOK: who may act, through can() only: the decider changes (can accept a change, or the goal's own
+// MOCK-HOOK: can_decide says so); an approver who is not the decider, or a commenter, proposes; a viewer reads.
+export function useGoalAccess(canDecide?: boolean): "change" | "propose" | "read" { // MOCK-HOOK
   const { can } = useMe(); // MOCK-HOOK
-  return can("update_bucket_goal") ? "change" : can("create_simple_change") ? "propose" : "read"; // MOCK-HOOK
+  return can("update_bucket_goal") && can("accept_simple_change", canDecide) ? "change" : can("create_simple_change") ? "propose" : "read"; // MOCK-HOOK
 } // MOCK-HOOK
 export function usePrdAccess(): "change" | "propose" | "read" { // MOCK-HOOK
   const { can } = useMe(); // MOCK-HOOK
@@ -63,7 +64,7 @@ export function GoalOwner({ title, picker, access }: { title: string; picker: bo
               <span className="w-4">{p === owner ? "✓" : ""}</span>{p} {/* MOCK-HOOK */}
             </button> // MOCK-HOOK
           ))} {/* MOCK-HOOK */}
-          {access === "propose" && <p className="border-t border-line px-3 py-1.5 text-[13px] text-text2">Your pick goes to an approver.</p>} {/* MOCK-HOOK */}
+          {access === "propose" && <p className="border-t border-line px-3 py-1.5 text-[13px] text-text2">Asks the decider</p>} {/* MOCK-HOOK */}
         </div> // MOCK-HOOK
       )} {/* MOCK-HOOK */}
     </span> // MOCK-HOOK
@@ -122,7 +123,7 @@ export function GoalSheet({ goal, order, total, access, onClose, onSave, onArchi
 } // MOCK-HOOK
 
 // MOCK-HOOK: proposal a, the "Archived goals" fold at the end of the buckets, with Restore and Delete.
-export function ArchivedGoalsFold({ access, onRestore, open: start = false }: { access: "change" | "propose" | "read"; onRestore: (g: ArchivedGoal) => void; open?: boolean }) { // MOCK-HOOK
+export function ArchivedGoalsFold({ access, onRestore, onDeleted, open: start = false }: { access: "change" | "propose" | "read"; onRestore: (g: ArchivedGoal) => void; onDeleted: (g: ArchivedGoal) => void; open?: boolean }) { // MOCK-HOOK
   const s = useMkStore(); // MOCK-HOOK
   const [del, setDel] = useState<ArchivedGoal | null>(null); // MOCK-HOOK
   if (!s.archived.length) return null; // MOCK-HOOK
@@ -143,17 +144,25 @@ export function ArchivedGoalsFold({ access, onRestore, open: start = false }: { 
         </ul> {/* MOCK-HOOK */}
       </details> {/* MOCK-HOOK */}
       {del && ( // MOCK-HOOK
-        <Confirm title={`Delete ${del.title}?`} button="Delete goal" danger onClose={() => setDel(null)} onYes={() => { mkSet((x) => ({ ...x, archived: x.archived.filter((a) => a.id !== del.id) })); setDel(null); }}> {/* MOCK-HOOK */}
-          <p>It goes to Trash, where an owner can bring it back for 30 days. Its features already moved when it was archived.</p> {/* MOCK-HOOK */}
-        </Confirm> // MOCK-HOOK
+        <DeleteArchived goal={del} onClose={() => setDel(null)} onDeleted={onDeleted} /> // MOCK-HOOK
       )} {/* MOCK-HOOK */}
     </li> // MOCK-HOOK
   ); // MOCK-HOOK
 } // MOCK-HOOK
 
-// MOCK-HOOK: proposal b, archived goals in place: greyed buckets with Restore, behind "Show archived".
-export function ArchivedBuckets({ access, onRestore }: { access: "change" | "propose" | "read"; onRestore: (g: ArchivedGoal) => void }) { // MOCK-HOOK
+// MOCK-HOOK: Delete on an archived goal: one more confirm, then to Settings > Trash.
+function DeleteArchived({ goal, onClose, onDeleted }: { goal: ArchivedGoal; onClose: () => void; onDeleted: (g: ArchivedGoal) => void }) { // MOCK-HOOK
+  return ( // MOCK-HOOK
+    <Confirm title={`Delete ${goal.title}?`} button="Delete goal" danger onClose={onClose} onYes={() => { mkSet((x) => ({ ...x, archived: x.archived.filter((a) => a.id !== goal.id) })); onClose(); onDeleted(goal); }}> {/* MOCK-HOOK */}
+      <p>It goes to Settings &gt; Trash for 30 days.</p> {/* MOCK-HOOK */}
+    </Confirm> // MOCK-HOOK
+  ); // MOCK-HOOK
+} // MOCK-HOOK
+
+// MOCK-HOOK: proposal b, archived goals in place: greyed buckets with Restore and Delete, behind "Show archived".
+export function ArchivedBuckets({ access, onRestore, onDeleted }: { access: "change" | "propose" | "read"; onRestore: (g: ArchivedGoal) => void; onDeleted: (g: ArchivedGoal) => void }) { // MOCK-HOOK
   const s = useMkStore(); // MOCK-HOOK
+  const [del, setDel] = useState<ArchivedGoal | null>(null); // MOCK-HOOK
   return ( // MOCK-HOOK
     <> {/* MOCK-HOOK */}
       {s.archived.map((g) => ( // MOCK-HOOK
@@ -164,9 +173,15 @@ export function ArchivedBuckets({ access, onRestore }: { access: "change" | "pro
           </div> {/* MOCK-HOOK */}
           <p className="mt-0.5 text-[15px]">{g.measure}: <b className="font-[650]">{g.target}</b> · Owner: {g.owner}</p> {/* MOCK-HOOK */}
           <p className="mt-1 text-[14px]">{g.features ? `${g.features} ${g.features === 1 ? "feature" : "features"} moved out when archived` : "Held no features"}</p> {/* MOCK-HOOK */}
-          {access !== "read" && <div className="mt-3"><button type="button" className={BTN} onClick={() => onRestore(g)}>{access === "propose" ? "Ask to restore" : "Restore"}</button></div>} {/* MOCK-HOOK */}
+          {access !== "read" && ( // MOCK-HOOK
+            <div className="mt-3 flex gap-2"> {/* MOCK-HOOK */}
+              <button type="button" className={BTN} onClick={() => onRestore(g)}>{access === "propose" ? "Ask to restore" : "Restore"}</button> {/* MOCK-HOOK */}
+              {access === "change" && <button type="button" className={`${BTN} text-warn`} onClick={() => setDel(g)}>Delete</button>} {/* MOCK-HOOK */}
+            </div> // MOCK-HOOK
+          )} {/* MOCK-HOOK */}
         </li> // MOCK-HOOK
       ))} {/* MOCK-HOOK */}
+      {del && <DeleteArchived goal={del} onClose={() => setDel(null)} onDeleted={onDeleted} />} {/* MOCK-HOOK */}
     </> // MOCK-HOOK
   ); // MOCK-HOOK
 } // MOCK-HOOK
@@ -196,7 +211,7 @@ export function MoreMenu({ label, items, testId, phone, plain }: { label: string
   useEffect(() => { if (!open) return; const away = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false); document.addEventListener("mousedown", away); return () => document.removeEventListener("mousedown", away); }, [open]); // MOCK-HOOK
   if (!items.length) return null; // MOCK-HOOK
   return ( // MOCK-HOOK
-    <span ref={ref} className="relative z-[2] inline-flex" data-testid={testId}> {/* MOCK-HOOK */}
+    <span ref={ref} className="relative z-[2] inline-flex" data-testid={testId} data-mk-menu-open={open ? "" : undefined}> {/* MOCK-HOOK */}
       <button type="button" aria-label={label} aria-haspopup="menu" aria-expanded={open} className={plain ? `inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border text-[16px] text-text hover:border-line-strong hover:bg-surface2 ${open ? "border-line-strong bg-surface2" : "border-transparent"}` : `inline-flex ${phone ? "h-11 w-11" : "h-9 w-9"} items-center justify-center rounded-lg border border-line-strong bg-surface text-[18px] hover:bg-surface2 ${open ? "bg-surface2" : ""}`} onClick={(e) => { e.preventDefault(); setOpen((o) => !o); }}>⋯</button> {/* MOCK-HOOK */}
       {open && ( // MOCK-HOOK
         <div role="menu" className={`absolute ${phone ? "left-0" : "right-0"} top-10 z-30 w-60 rounded-lg border border-line bg-surface p-1 text-[15px] shadow-lg`}> {/* MOCK-HOOK */}
@@ -224,14 +239,12 @@ export function PrdConfirm({ titles, slugs, verb, access, onClose, onDone }: { t
   const V = verb === "archive" ? "Archive" : "Delete"; // MOCK-HOOK
   return ( // MOCK-HOOK
     <Confirm title={access === "propose" ? `Ask to ${verb} ${name}?` : `${V} ${name}?`} button={access === "propose" ? "Send to an owner" : `${V} ${titles.length === 1 ? "PRD" : `${titles.length} PRDs`}`} danger={verb === "delete" && access === "change"} disabled={feats.length > 0 && keep === null} onClose={onClose} onYes={() => onDone(!!keep)}> {/* MOCK-HOOK */}
-      <p className="text-text2">{verb === "archive" ? "It leaves the One-pagers list and can be restored any time." : "It goes to Trash, where an owner can bring it back for 30 days."}</p> {/* MOCK-HOOK */}
+      <p className="text-text2">{verb === "archive" ? "It leaves the One-pagers list and can be restored any time." : "It goes to Settings > Trash for 30 days."}</p> {/* MOCK-HOOK */}
       {feats.length > 0 ? ( // MOCK-HOOK
         <> {/* MOCK-HOOK */}
           <p className="font-[650]">{feats.length} {feats.length === 1 ? "feature is" : "features are"} on the roadmap, in {ms.join(", ")}:</p> {/* MOCK-HOOK */}
           <label className="flex items-start gap-2"><input type="radio" name="mk-keep" checked={keep === true} onChange={() => setKeep(true)} className="mt-1 h-4 w-4 accent-[var(--accent)]" /> <span>Keep them on the roadmap, with no PRD</span></label> {/* MOCK-HOOK */}
-          <label className="flex items-start gap-2"><input type="radio" name="mk-keep" checked={keep === false} onChange={() => setKeep(false)} className="mt-1 h-4 w-4 accent-[var(--accent)]" /> <span>Take them off the roadmap too {verb === "delete" ? "(to Trash with it)" : "(back when restored)"}</span></label> {/* MOCK-HOOK */}
-          {keep === false && <p className="rounded-lg bg-accent-soft px-3 py-2 text-accent-ink">{ms.length} {ms.length === 1 ? "milestone gets" : "milestones get"} {feats.length} fewer features; their dates are worked out again.</p>} {/* MOCK-HOOK */}
-          {access === "propose" && <p className="text-[14px] text-text2">An owner decides; nothing changes until then.</p>} {/* MOCK-HOOK */}
+          <label className="flex items-start gap-2"><input type="radio" name="mk-keep" checked={keep === false} onChange={() => setKeep(false)} className="mt-1 h-4 w-4 accent-[var(--accent)]" /> <span>Take them off the roadmap too {verb === "delete" ? "(to Trash with it)" : "(back when restored)"} <span title={`${ms.length} ${ms.length === 1 ? "milestone gets" : "milestones get"} ${feats.length} fewer features; their dates are worked out again.`} aria-label="What taking them off does to the milestones" className="cursor-help rounded-full border border-line-strong px-1.5 text-[12px] text-text2">i</span></span></label> {/* MOCK-HOOK */}
         </> // MOCK-HOOK
       ) : <p>It has no features on the roadmap.</p>} {/* MOCK-HOOK */}
     </Confirm> // MOCK-HOOK
@@ -280,9 +293,9 @@ export function PrdNote() { // MOCK-HOOK
 export function prdDoneWords(titles: string[], slugs: string[], verb: "archive" | "delete", keep: boolean, access: "change" | "propose"): string { // MOCK-HOOK
   const name = titles.length === 1 ? titles[0] : `${titles.length} PRDs`; // MOCK-HOOK
   const n = slugs.flatMap(prdFeatures).length; // MOCK-HOOK
-  if (access === "propose") return `Sent to an owner: ${verb} ${name}. Nothing changes until they say yes.`; // MOCK-HOOK
+  if (access === "propose") return `Sent to an owner: ${verb} ${name}.`; // MOCK-HOOK
   const feats = n ? (keep ? ` Its ${n} features stay on the roadmap with no PRD.` : ` Its ${n} features are off the roadmap.`) : ""; // MOCK-HOOK
-  return verb === "archive" ? `Archived ${name}.${feats}` : `Deleted ${name}: it is in Trash for 30 days.${feats}`; // MOCK-HOOK
+  return verb === "archive" ? `Archived ${name}.${feats}` : `Deleted ${name}: it is in Settings > Trash for 30 days.${feats}`; // MOCK-HOOK
 } // MOCK-HOOK
 
 // MOCK-HOOK: the one-pager header's ⋯ menu (proposals a and b) and the archived banner.

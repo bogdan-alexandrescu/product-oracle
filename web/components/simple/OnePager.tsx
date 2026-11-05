@@ -409,7 +409,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
     <span
       id="start-review-why"
       data-testid="start-review-why"
-      className={phone ? "basis-full text-[13px] leading-[17px] text-text2" : "absolute top-full right-0 z-[1] mt-1 w-max max-w-[240px] text-right text-[13px] leading-[17px] text-text2"}
+      className={`${phone ? "basis-full text-[13px] leading-[17px] text-text2" : "absolute top-full right-0 z-[1] mt-1 w-max max-w-[240px] text-right text-[13px] leading-[17px] text-text2"} [body:has([data-mk-menu-open])_&]:invisible` /* MOCK-HOOK: hidden while the ⋯ menu is open */}
     >
       {startWhy}
     </span>

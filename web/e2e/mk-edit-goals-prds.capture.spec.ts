@@ -129,7 +129,7 @@ test("eg1-a-roles", async ({ browser }) => { // MOCK-HOOK
   await toBucket(page, "Growth"); // MOCK-HOOK
   await menu(page, "Growth").click(); // MOCK-HOOK
   await frame(page, "eg1-a-phone", W.p); // MOCK-HOOK
-  page = await start(browser, W.d, "commenter"); // MOCK-HOOK
+  page = await start(browser, W.d, "approver"); // MOCK-HOOK
   await buckets(page, "a"); // MOCK-HOOK
   await toBucket(page, "Reliability"); // MOCK-HOOK
   await menu(page, "Growth").click(); // MOCK-HOOK
@@ -157,6 +157,12 @@ test("eg1-b", async ({ browser }) => { // MOCK-HOOK
   await page.getByTestId("mk-show-archived").locator("input").check(); // MOCK-HOOK
   await page.getByTestId("mk-archived-bucket").first().evaluate((e) => window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 300)); // MOCK-HOOK
   await frame(page, "eg1-b-result", W.d); // MOCK-HOOK
+  await page.getByTestId("mk-archived-bucket").nth(1).getByRole("button", { name: "Delete" }).click(); // MOCK-HOOK
+  await frame(page, "eg1-b-delete", W.d); // MOCK-HOOK
+  await dialog(page).getByRole("button", { name: "Delete goal" }).click(); // MOCK-HOOK
+  await expect(page.getByTestId("bucket-note")).toContainText("Settings > Trash"); // MOCK-HOOK
+  await page.getByTestId("bucket-note").evaluate((e) => window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 120)); // MOCK-HOOK
+  await frame(page, "eg1-b-deleted", W.d); // MOCK-HOOK
 }); // MOCK-HOOK
 
 test("eg1-b-hard", async ({ browser }) => { // MOCK-HOOK
@@ -179,7 +185,7 @@ test("eg1-b-roles", async ({ browser }) => { // MOCK-HOOK
   await toBucket(page, "Growth"); // MOCK-HOOK
   await bucket(page, "Growth").getByRole("button", { name: "Edit Growth" }).click(); // MOCK-HOOK
   await frame(page, "eg1-b-phone", W.p); // MOCK-HOOK
-  page = await start(browser, W.d, "commenter"); // MOCK-HOOK
+  page = await start(browser, W.d, "approver"); // MOCK-HOOK
   await buckets(page, "b"); // MOCK-HOOK
   await menu(page, "Growth").click(); // MOCK-HOOK
   await item(page, "Open goal").click(); // MOCK-HOOK
@@ -201,11 +207,13 @@ test("eg1-c", async ({ browser }) => { // MOCK-HOOK
   await frame(page, "eg1-c-open", W.d); // MOCK-HOOK
   await page.getByRole("menuitemradio", { name: "Hana Sato" }).click(); // MOCK-HOOK
   await menu(page, "Growth").click(); // MOCK-HOOK
-  await item(page, "Remove goal").click(); // MOCK-HOOK
+  await item(page, "Archive goal").click(); // MOCK-HOOK
   await dialog(page).getByLabel("Goal", { exact: true }).selectOption({ index: 1 }); // MOCK-HOOK
   await frame(page, "eg1-c-mid", W.d); // MOCK-HOOK
-  await dialog(page).getByRole("button", { name: "Remove goal" }).click(); // MOCK-HOOK
-  await expect(page.getByTestId("bucket-note")).toContainText("Removed Growth"); // MOCK-HOOK
+  await dialog(page).getByRole("button", { name: "Archive goal" }).click(); // MOCK-HOOK
+  await expect(page.getByTestId("bucket-note")).toContainText("Archived Growth"); // MOCK-HOOK
+  await page.getByTestId("mk-archived-goals").locator("summary").click(); // MOCK-HOOK
+  await toEnd(page, "mk-archived-goals"); // MOCK-HOOK
   await frame(page, "eg1-c-result", W.d); // MOCK-HOOK
 }); // MOCK-HOOK
 
@@ -216,7 +224,7 @@ test("eg1-c-hard", async ({ browser }) => { // MOCK-HOOK
     await page.goto(BUCKETS("c")); // MOCK-HOOK
     await expect(bucket(page, "Grow partner network")).toBeVisible(); // MOCK-HOOK
     await menu(page, "Grow partner network").click(); // MOCK-HOOK
-    await item(page, "Remove goal").click(); // MOCK-HOOK
+    await item(page, "Delete goal").click(); // MOCK-HOOK
     await frame(page, n, s); // MOCK-HOOK
   } // MOCK-HOOK
 }); // MOCK-HOOK
@@ -229,11 +237,16 @@ test("eg1-c-roles", async ({ browser }) => { // MOCK-HOOK
   await toBucket(page, "Growth"); // MOCK-HOOK
   await bucket(page, "Growth").getByRole("button", { name: "Sam Okafor" }).click(); // MOCK-HOOK
   await frame(page, "eg1-c-phone", W.p); // MOCK-HOOK
-  page = await start(browser, W.d, "commenter"); // MOCK-HOOK
+  page = await start(browser, W.d, "approver"); // MOCK-HOOK
   await buckets(page, "c"); // MOCK-HOOK
   await toBucket(page, "Reliability"); // MOCK-HOOK
   await bucket(page, "Growth").getByRole("button", { name: "Sam Okafor" }).click(); // MOCK-HOOK
   await frame(page, "eg1-c-propose", W.d); // MOCK-HOOK
+  page = await start(browser, W.d, "commenter"); // MOCK-HOOK
+  await buckets(page, "c"); // MOCK-HOOK
+  await toBucket(page, "Reliability"); // MOCK-HOOK
+  await menu(page, "Growth").click(); // MOCK-HOOK
+  await frame(page, "eg1-c-ask", W.d); // MOCK-HOOK
   page = await start(browser, W.d, "viewer"); // MOCK-HOOK
   await buckets(page, "c"); // MOCK-HOOK
   await toBucket(page, "Reliability"); // MOCK-HOOK
@@ -383,8 +396,9 @@ test("ep2-c-roles", async ({ browser }) => { // MOCK-HOOK
   page = await start(browser, W.p, "owner"); // MOCK-HOOK
   await list(page, "c"); // MOCK-HOOK
   await page.getByTestId("mk-select").click(); // MOCK-HOOK
-  await page.getByRole("checkbox", { name: "Select Guided setup" }).check(); // MOCK-HOOK
-  await page.getByRole("checkbox", { name: "Select Billing history page" }).check(); // MOCK-HOOK
+  await page.getByRole("checkbox", { name: "Select Single sign-on for larger teams" }).check(); // MOCK-HOOK
+  await page.getByRole("checkbox", { name: "Select Capture notes from a phone" }).check(); // MOCK-HOOK
+  await page.getByRole("checkbox", { name: "Select Single sign-on for larger teams" }).evaluate((e) => window.scrollTo(0, e.closest("li")!.getBoundingClientRect().top + window.scrollY - 150)); // MOCK-HOOK
   await frame(page, "ep2-c-phone", W.p); // MOCK-HOOK
   page = await start(browser, W.d, "commenter"); // MOCK-HOOK
   await list(page, "c"); // MOCK-HOOK
@@ -394,4 +408,7 @@ test("ep2-c-roles", async ({ browser }) => { // MOCK-HOOK
   page = await start(browser, W.d, "viewer"); // MOCK-HOOK
   await list(page, "c"); // MOCK-HOOK
   await frame(page, "ep2-c-readonly", W.d); // MOCK-HOOK
+  page = await start(browser, W.d, "owner"); // MOCK-HOOK
+  await paper(page, "c"); // MOCK-HOOK
+  await frame(page, "ep2-c-page", W.d); // MOCK-HOOK
 }); // MOCK-HOOK
