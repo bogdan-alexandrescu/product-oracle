@@ -20,7 +20,9 @@ while any is open, call c3): ``unreadable_yaml``, ``wrong_version`` and ``unknow
 1..N, each once), ``unknown_feature`` (not a non-rejected feature, nor one of the approved
 scope), ``not_in_scope`` and ``missing_feature`` (an approved PRD scope exists and the
 feature is not included in it, or is included and not ranked) and ``before_prerequisite``
-(ranked above a feature it depends on: decision O3, ordered by dependencies). Advisory:
+(ranked above a feature it depends on: decision O3, ordered by dependencies) and
+``new_feature_no_goal`` (a feature new in this PRD whose row and feature-set entry name no
+goal it serves: none joins the Ground Truth without its goal). Advisory:
 ``differs_from_live`` (its place among the ranked live features differs by more than
 ``LIVE_SLACK`` from the live ranking of the same method, restricted to the same features)
 and ``no_goal`` (the live ranking flags it ``no_confirmed_goal``).
@@ -107,6 +109,9 @@ class Known:
     depends_on: dict[str, set[str]] = field(default_factory=dict)
     # Method -> the live ranking (RankedFeature as JSON), in rank order.
     live: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    # A scope feature not in the baseline (new in this PRD) -> the goals its feature-set
+    # entry names: key and contribution (None: named by key alone).
+    new_goals: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
 
 @dataclass
@@ -263,6 +268,14 @@ def check_order(text: str, *, known: Known) -> OrderCheck:
             f"ranks run 1..{len(ranks)} once each; missing: {', '.join(map(str, gaps[:10]))}",
         )
     _check_features(out, rows, known)
+    for r in rows:
+        if r["key"] in known.new_goals and not _serves(r, known.new_goals[r["key"]]):
+            out.add(
+                "new_feature_no_goal",
+                f"{known.features.get(r['key']) or r['key']} is new and names no goal it "
+                "serves: the run must name one",
+                r["key"],
+            )
     live = known.live.get(out.method or "", [])
     live_rank = live_ranks([r["key"] for r in rows], live)
     by_key = {f["key"]: f for f in live}
@@ -314,6 +327,13 @@ def _check_features(out: OrderCheck, rows: list[dict[str, Any]], known: Known) -
                 )
 
 
+def _serves(row: dict[str, Any], goals: list[dict[str, Any]]) -> bool:
+    """A new feature names a goal it serves: its row's goal or its feature-set entry's, with
+    no contribution or one above 0 (0: does not serve)."""
+    named = [{"key": row.get("goal"), "contribution": row.get("contribution")}, *goals]
+    return any(g.get("key") and g.get("contribution") != 0 for g in named)
+
+
 async def check_order_async(text: str, **kwargs: Any) -> OrderCheck:
     """:func:`check_order` in a worker thread, at most ``PARSE_SECONDS``: a check that
     takes longer, or fails in any way, is a problem, never an exception."""
@@ -362,6 +382,8 @@ async def known_for_run(db: AsyncSession, run: Any) -> tuple[Known, uuid.UUID | 
     ]
     known.scope = [i.key for i in included]
     for i in included:
+        if i.key not in known.features:
+            known.new_goals[i.key] = list(i.goals or [])
         known.features.setdefault(i.key, i.title or i.key)
         known.depends_on.setdefault(i.key, set()).update(i.depends_on or [])
     return known, scope.id
@@ -402,6 +424,15 @@ def _goal_title(key: str | None, live_rows: list[dict[str, Any]]) -> str | None:
     return key
 
 
+def _goal_weight(key: str | None, live_rows: list[dict[str, Any]]) -> float | None:
+    """The goal's weight as the live ranking reads it (not assumed), or None."""
+    for f in live_rows:
+        for g in (f.get("explanation") or {}).get("goals") or []:
+            if g.get("goal") == key and not g.get("weight_assumed"):
+                return g.get("weight")
+    return None
+
+
 def _num(v: float) -> str:
     return f"{v:g}"
 
@@ -415,15 +446,21 @@ def new_feature(
 ) -> dict[str, Any]:
     """A feature new in this PRD as a ``RankedFeature``: goal weight × contribution ×
     confidence ÷ effort from the inputs the run set; the file's score when one is missing.
-    Its confidence is the run's, with no evidence yet. What it depends on, and what waits
-    on it, are the edges the baseline and the run's feature set give (``known``)."""
-    from oracle.priorities.scoring import FORMULAS
+    A goal named with no weight takes the goal's weight in the live ranking, with no
+    contribution the scorer's default: either then marked assumed, as the scorer marks a
+    link's. Its confidence is the run's, with no evidence yet. What it depends on, and what
+    waits on it, are the edges the baseline and the run's feature set give (``known``)."""
+    from oracle.priorities.scoring import DEFAULT_CONTRIBUTION, DEFAULT_WEIGHT, FORMULAS
 
-    goal, weight, contribution = r.get("goal"), r.get("weight"), r.get("contribution")
+    goal, given_weight, given = r.get("goal"), r.get("weight"), r.get("contribution")
     confidence, effort = r.get("confidence"), r.get("effort")
     goals, steps, missing = [], [], []
     score = r.get("score")
-    if goal is not None and weight is not None and contribution is not None:
+    if goal is not None:
+        # A goal named with no weight or contribution: the scorer's default, marked assumed.
+        live_weight = _goal_weight(goal, live_rows)
+        weight = next(w for w in (given_weight, live_weight, DEFAULT_WEIGHT) if w is not None)
+        contribution = given if given is not None else DEFAULT_CONTRIBUTION
         value = weight * contribution
         goal_title = _goal_title(goal, live_rows)
         goals.append(
@@ -431,9 +468,9 @@ def new_feature(
                 "goal": goal,
                 "title": goal_title,
                 "weight": weight,
-                "weight_assumed": False,
+                "weight_assumed": given_weight is None and live_weight is None,
                 "contribution": int(contribution),
-                "contribution_assumed": False,
+                "contribution_assumed": given is None,
                 "link_status": "proposed",
                 "term": value,
             }
@@ -691,25 +728,36 @@ def _contribution(value: Any) -> int | None:
     return int(value) if 0 <= value <= 3 else None
 
 
+# A supports link proposed for a goal named with no contribution: the scorer's default,
+# marked assumed on the link so a person sees it and sets the real one.
+ASSUMED_LINK = {"contribution": 1, "contribution_assumed": True}
+
+
 async def _propose_links(
     db: AsyncSession, run_id: uuid.UUID, key: str, row: dict[str, Any], item: Any
 ) -> None:
     """A new feature's supports links to the goals it serves (its ranking row's, then the
-    feature set's) and depends_on links to the features it needs, proposed by the run."""
+    feature set's) and depends_on links to the features it needs, proposed by the run. A
+    goal named with no usable contribution still gets its link, the contribution assumed
+    (``ASSUMED_LINK``) unless the other names one; one of 0 (does not serve) gets none."""
     from oracle.baseline.service import Writer, create_edge, find_edge, find_entity
 
     feature = await find_entity(db, "feature", key)
     if feature is None:
         return
     writer = Writer(None, "agent", run_id=run_id, reason="Proposed by the approved order")
-    goals: dict[str, int] = {}
+    goals: dict[str, dict[str, Any]] = {}
     terms = (row.get("explanation") or {}).get("goals") or []
     for g in [*terms, *[{**g, "goal": g.get("key")} for g in (item.goals if item else [])]]:
         contribution = _contribution(g.get("contribution"))
-        if g.get("goal") and contribution is not None:
-            goals.setdefault(str(g["goal"]), contribution)
+        if not g.get("goal") or contribution == 0:
+            continue
+        if contribution is None or g.get("contribution_assumed"):
+            goals.setdefault(str(g["goal"]), ASSUMED_LINK)
+        elif goals.get(str(g["goal"]), ASSUMED_LINK) is ASSUMED_LINK:
+            goals[str(g["goal"])] = {"contribution": contribution}
     links: list[tuple[str, str, str, dict[str, Any]]] = [
-        ("goal", goal, "supports", {"contribution": c}) for goal, c in goals.items()
+        ("goal", goal, "supports", dict(attrs)) for goal, attrs in goals.items()
     ]
     depends = {*(row.get("depends_on") or []), *(item.depends_on if item else [])}
     links += [("feature", d, "depends_on", {}) for d in sorted(depends) if d != key]

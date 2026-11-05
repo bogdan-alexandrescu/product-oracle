@@ -94,7 +94,7 @@ order:
   - key: bulk-edit
     rank: 3
     score: 0
-    explanation: "Serves no confirmed goal"
+    explanation: "New in this PRD; serves activation"
 """
 # saved-addresses ranked above the feature it depends on: one blocking problem.
 BLOCKING = (
@@ -103,6 +103,14 @@ BLOCKING = (
     .replace("rank: X\n", "rank: 2\n")
 )
 BLOCKED = "1 blocking problem left: fix or waive them, or send back to the agents"
+
+
+# The run's feature set, bulk-edit naming the goal it serves (none joins the Ground Truth
+# without its goal: review of PR 1244, round 2).
+SERVED = CLEAN.replace(
+    "    title: Bulk edit\n    goals: []\n",
+    "    title: Bulk edit\n    goals: [{key: activation, contribution: 1}]\n",
+)
 
 
 async def seed_baseline(tenant_id) -> None:
@@ -136,7 +144,7 @@ async def seed_baseline(tenant_id) -> None:
         await s.commit()
 
 
-async def at_priority(client, owner, runtime, text=ORDER, features=CLEAN, **knobs) -> dict:  # noqa: F811
+async def at_priority(client, owner, runtime, text=ORDER, features=SERVED, **knobs) -> dict:  # noqa: F811
     """A baseline_to_prd run past its approved feature set (``features``), its priority
     segment ended with ``text`` as priority.yaml."""
     tenant_id, auth = owner
@@ -1002,8 +1010,10 @@ async def test_a_goal_named_by_key_alone_is_proposed_with_an_assumed_contributio
 
 async def test_a_row_goal_with_no_contribution_is_proposed_as_assumed(client, owner, runtime):  # noqa: F811
     tenant_id, _ = owner
+    """goals: [] in the feature set, the row naming its goal with no contribution: the link
+    is proposed, its contribution assumed; a feature-set contribution would win over it."""
     row_goal = ORDER_NEW.replace("    weight: 3\n    contribution: 2\n", "")
-    run = await at_priority(client, owner, runtime, row_goal)
+    run = await at_priority(client, owner, runtime, row_goal, features=CLEAN)
     approver = await as_user(tenant_id, "approver")
     run = await decide(client, approver, run, note="Good order")
     _, links = await new_feature_graph(tenant_id)
