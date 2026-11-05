@@ -231,10 +231,10 @@ test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
 /**
  * Re-review round 6 (simple-plan): a feature added in Simple after the replace is filed under a
  * current PRD (the one that replaced its roadmap's), so it stays in Simple. protects = an
- * accepted suggested feature shows on the Roadmap and in Priorities' Ranked list; fails_when =
+ * accepted suggested feature shows on the Roadmap and on Priorities' Ranked tab (Not ranked yet); fails_when =
  * it is filed under a replaced PRD and left out of both; no_claim = where on the Roadmap it sits.
  */
-test("a feature added after a replace stays on the Roadmap and in Ranked", async ({ page }) => {
+test("a feature added after a replace stays on the Roadmap and the Ranked tab", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-plan"] as const);
   await login(page);
@@ -254,5 +254,6 @@ test("a feature added after a replace stays on the Roadmap and in Ranked", async
   await page.goto("/simple/priorities?tab=ranked");
   const ranked = page.getByRole("list", { name: "Ranked list" }).first();
   await expect(ranked.getByText("New plan tiers").first()).toBeVisible();
-  await expect(ranked.getByText("Quiet hours for alerts").first()).toBeVisible();
+  // A draft is not ranked yet (priorities.py _items): it sits under the Ranked list, by its name.
+  await expect(page.getByRole("region", { name: "Not ranked yet" }).getByText("Quiet hours for alerts").first()).toBeVisible();
 });
