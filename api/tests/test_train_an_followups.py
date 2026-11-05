@@ -141,3 +141,42 @@ async def test_run_imported_into_reads_its_index(db):  # noqa: F811
         )
     )
     assert "ix_audit_events_version_imported" in plan, plan
+
+
+# --- a send-back note answered point by point: every point addressed reads as done -----------
+
+ALL_ADDRESSED = """resolutions:
+  - id: note-1
+    kind: note
+    status: addressed
+    note: Shortened the summary to three lines
+  - id: note-2
+    kind: note
+    status: addressed
+    note: Named who gets the first alert
+"""
+
+
+async def test_a_note_answered_in_full_says_so_and_names_no_declined_point(client):
+    from tests.fixtures import draft, import_draft, seed_auth
+    from tests.test_send_back_note_import import _with_resolutions
+
+    _, auth = await seed_auth()
+    resp = await import_draft(client, auth, _with_resolutions(draft("prd_v1.md"), ALL_ADDRESSED))
+    assert resp.status_code == 201, resp.text
+    [answered] = [w for w in resp.json()["warnings"] if w["code"] == "note_answered"]
+    assert answered["message"] == (
+        "the draft answers every point of the send-back note: 2 points, all addressed"
+    )
+    assert answered["refs"]["declined"] == []
+
+
+async def test_a_note_with_a_declined_point_names_it(client):
+    from tests.fixtures import draft, import_draft, seed_auth
+    from tests.test_send_back_note_import import NOTE_ANSWERS, _with_resolutions
+
+    _, auth = await seed_auth()
+    resp = await import_draft(client, auth, _with_resolutions(draft("prd_v1.md"), NOTE_ANSWERS))
+    [answered] = [w for w in resp.json()["warnings"] if w["code"] == "note_answered"]
+    assert "(1 addressed, 1 declined)" in answered["message"]
+    assert answered["refs"]["declined"] == ["note-2"]
