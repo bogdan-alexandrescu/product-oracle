@@ -10,6 +10,11 @@ Test cards (protects / fails_when / no_claim):
 - test_dates_come_from_each_source: protects=typed, engineering (a verified basis of the
   item), tracker and estimated dates through the route, each naming its source;
   fails_when=a stored source is skipped or misnamed; no_claim=how F4 records a basis.
+- test_an_end_only_item_starts_its_feature_effort_before_its_end: protects=hotfix-effort-
+  start: an item dated only by its end starts its feature's effort (Priorities' effort,
+  tiers XS 0.5, S 1, M 2, L 4 weeks, x 7 days) before it, else 28 days, on the roadmap and
+  in the meeting draft; fails_when=it starts at its window's start, or the effort is not
+  read; no_claim=the web (web/e2e/simple-roadmap-effort-start.spec.ts).
 - test_estimated_windows_follow_the_company_day: protects=at 03:00 UTC on Jan 1 the
   company's day is Dec 31 (Pacific): a Now item's estimate is Q4 2026; fails_when=the
   server's day anchors it; no_claim=other time zones.
@@ -71,7 +76,7 @@ from oracle.roadmap.models import (
     TrackerRecord,
     TrackMilestone,
 )
-from oracle.simple import suggestions
+from oracle.simple import meeting_draft, suggestions
 from oracle.simple.models import RoadmapDateSuggestion
 from oracle.tenancy import tenant_session
 from oracle.v2.models import FeasibilityExperiment
@@ -254,7 +259,8 @@ async def test_dates_come_from_each_source(client):
         "source": "engineering",
         "estimated": False,
     }
-    assert items["eng"]["start"] == {"date": "2026-10-01", "source": "estimated", "estimated": True}
+    # hotfix-effort-start: no effort -> 28 days before its end, not the window's Oct 1.
+    assert items["eng"]["start"] == {"date": "2026-11-06", "source": "estimated", "estimated": True}
     assert (items["eng"]["source"], items["eng"]["estimated"]) == ("engineering", False)
     assert items["tracked"]["end"]["source"] == "tracker"
     assert items["tracked"]["status"] == "in_progress"
@@ -262,6 +268,37 @@ async def test_dates_come_from_each_source(client):
     assert (undated["source"], undated["estimated"]) == ("estimated", True)
     assert (undated["start"]["date"], undated["end"]["date"]) == ("2027-01-01", "2027-06-30")
     assert [p["key"] for p in undated["phases"]] == ["discover", "build", "beta", "launch"]
+
+
+async def test_an_end_only_item_starts_its_feature_effort_before_its_end(client):
+    """hotfix-effort-start: an S feature (1 week) dated only by its end starts 7 days before
+    it, on the roadmap and in the meeting draft's spans; an XS (0.5 week) 4 days; one with
+    effort_weeks 2, 14 days; one without effort, 28 days."""
+    ctx = await make_ctx()
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        _, pv, _, rv = await seed.roadmap("lanterns")
+        small = await seed.entity("feature", "small-lantern", effort="S")
+        tiny = await seed.entity("feature", "tiny-lantern", effort="XS")
+        weeks = await seed.entity("feature", "two-week-lantern", effort_weeks=2)
+        plain = await seed.entity("feature", "plain-lantern")
+        end = {"end_date": date(2026, 11, 30), "date_source": "typed"}
+        rows = [
+            await seed.item(rv, pv, "small", feature_id=small.id, **end),
+            await seed.item(rv, pv, "tiny", feature_id=tiny.id, **end),
+            await seed.item(rv, pv, "weeks", feature_id=weeks.id, **end),
+            await seed.item(rv, pv, "plain", feature_id=plain.id, **end),
+            await seed.item(rv, pv, "none", **end),
+        ]
+        await s.commit()
+        spans = await meeting_draft._spans(s, rows)
+    items = by_key(await get(client, ctx))
+    starts = {"small": "2026-11-23", "tiny": "2026-11-26", "weeks": "2026-11-16",
+              "plain": "2026-11-02", "none": "2026-11-02"}  # fmt: skip
+    for key, day in starts.items():
+        assert items[key]["start"] == {"date": day, "source": "estimated", "estimated": True}
+        assert items[key]["end"]["date"] == "2026-11-30"
+    assert {r.item_key: spans[r.id][0].isoformat() for r in rows} == starts
 
 
 async def test_estimated_windows_follow_the_company_day(client, clock):
