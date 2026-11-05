@@ -2145,7 +2145,13 @@ async def cards_out(
             ae = by_id.get(e.row.id)
             if ae is not None:
                 flags = [
-                    SimpleItemFlags(item_id=i, flags=service.flags_out(by_id[i]))
+                    SimpleItemFlags(
+                        item_id=i,
+                        flags=service.flags_out(
+                            by_id[i],
+                            lambda d, w=after.deciders: service.can_decide(principal, d, w),
+                        ),
+                    )
                     for i in (ae.row.id, *ae.needed_by)
                     if i in by_id and by_id[i].flags
                 ]

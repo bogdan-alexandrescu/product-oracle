@@ -13,7 +13,12 @@ import { expect, test, type Locator, type Page } from "./test";
  *   working draft with Undo, and is never listed as starting before what it depends on ends;
  * - every line of the draft's change list names its item;
  * - the draft banner says what happens next and who acts, with that person's button (Approve);
- * - a change asked of a PRD is its owner's to Approve / Decline on the chip and in Proposals.
+ * - a change asked of a PRD is its owner's to Approve / Decline on the chip and in Proposals;
+ * - review fix 1: under a filter a cut item offers Remove the dependency for every dependent,
+ *   one the filter hides too, and it applies when the dependent also waits on an item the
+ *   filter hides; the strip says "N here, M in all" with Clear filters, and Needs a decision
+ *   and the side menu count all M; the banner names the required reviewers still to come
+ *   before Approve and publish, and shows each working draft's own step.
  *
  * fails_when: a count stays, a prompt stays after acting, a fix is missing, a line has no
  * item, or the owner has no action; no_claim: the API's own rules
@@ -133,6 +138,65 @@ test("a cut item others depend on: Bring it back, or Remove the dependency, each
   await cut.getByRole("button", { name: "Bring it back" }).click();
   await expect(page.getByText("Brought back 'Alert rules engine'", { exact: false })).toBeVisible();
   await expect(cut).toHaveCount(0);
+});
+
+test("under a filter, every dependent of a cut item can drop it, and every count reads the whole roadmap", async ({ page }) => {
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "roadmap-talk-two-deps"] as const);
+  await login(page);
+  // The Grow retention goal: Alert SLA report shows, Reliability work (which it also waits on) and Uptime alerts do not.
+  await page.goto("/simple/roadmap?goal=grow-retention");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await expect(page.locator('[data-testid="timeline-row"][data-item="alert-sla"]')).toHaveCount(1);
+  await expect(page.locator('[data-testid="timeline-row"][data-item="uptime-alerts"]')).toHaveCount(0);
+  await cutKeepingDependents(page, "alert-rules");
+  const cut = strip(page).locator('[data-testid="conflict"][data-item="alert-rules"]');
+  await expect(cut).toContainText("Cut, but");
+  // Uptime alerts is out of this view, yet it depends on the cut item: its button is there.
+  await expect(cut.getByRole("button", { name: "Remove the dependency of ‘Uptime alerts’" })).toBeVisible();
+  await cut.getByRole("button", { name: "Remove the dependency of ‘Alert SLA report’" }).click();
+  await expect(page.getByText("Removed 'Alert SLA report''s dependency on 'Alert rules engine'", { exact: false })).toBeVisible();
+  await expect(cut.getByRole("button", { name: "Remove the dependency of ‘Alert SLA report’" })).toHaveCount(0);
+  await expect(cut.getByRole("button", { name: "Remove the dependency of ‘Uptime alerts’" })).toBeVisible();
+  // One number everywhere: the side menu, the strip's "in all" and Needs a decision count the whole roadmap.
+  const all = strip(page).getByTestId("conflicts-all");
+  await expect(all).toContainText(/\d+ in all/);
+  const whole = Number(/(\d+) in all/.exec(await all.innerText())![1]);
+  expect(whole).toBeGreaterThan(await stripCount(page));
+  await expect.poll(() => badgeLinks(page)).toBe(whole);
+  expect(await trayLinks(page)).toBe(whole);
+  await page.getByTestId("needs-decision").click();
+  await expect(tray(page).getByTestId("tray-links-here")).toContainText(`of the ${whole} broken links are in these filters`);
+  await tray(page).getByRole("button", { name: "Close" }).click();
+  await all.getByRole("button", { name: "Clear filters" }).click();
+  await expect(page.locator('[data-testid="timeline-row"][data-item="uptime-alerts"]')).toHaveCount(1);
+  await expect(strip(page).getByTestId("conflicts-all")).toHaveCount(0);
+  await expect.poll(() => stripCount(page)).toBe(whole);
+});
+
+test("Approve and publish names the required reviewers still to come before the click", async ({ page }) => {
+  await open(page, "roadmap-reviewers");
+  await strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Move the dependents" }).click();
+  const banner = page.getByTestId("draft-banner");
+  await expect(banner.getByTestId("draft-next")).toContainText("Next: you approve it, then Priya Raman reviews it. When they approve, version");
+  await banner.getByTestId("draft-publish").click();
+  await expect(page.getByText(/Approved: .* waits for 1 more reviewer/)).toBeVisible();
+  await expect(banner.getByTestId("draft-next")).toContainText("it waits for Priya Raman to approve");
+});
+
+test("with two working drafts, each shows its own step: Approve and publish, and Send for review", async ({ page }) => {
+  await open(page, "roadmap-two-drafts");
+  await strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Move the dependents" }).click();
+  await expect(page.getByText(/Moved what depends on 'Alert rules engine' in your working draft/)).toBeVisible();
+  // Guided setup's roadmap, which Priya Raman decides: the owner sends its draft for review.
+  await strip(page).locator('[data-testid="conflict"][data-item="setup-tour"]').getByRole("button", { name: "Bring it back" }).click();
+  await expect(page.getByText(/Brought back 'In-app tour'/)).toBeVisible();
+  const banner = page.getByTestId("draft-banner");
+  await expect(banner.getByTestId("draft-publish")).toBeVisible();
+  await expect(banner.getByRole("button", { name: "Send for review" })).toBeEnabled();
+  await banner.getByRole("button", { name: "Send for review" }).click();
+  await expect(page.getByText(/Sent for review/)).toBeVisible();
+  await banner.getByTestId("draft-publish").click();
+  await expect(page.getByText(/Approved: .* is published/)).toBeVisible();
 });
 
 test("a change asked of a PRD is its owner's to approve: on the chip and under Proposals", async ({ page }) => {

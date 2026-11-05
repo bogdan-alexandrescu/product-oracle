@@ -154,3 +154,5 @@ async def test_publish_waits_for_required_reviewers(client):
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "submitted" and r.json()["decider_approved"]
     assert r.json()["waiting_on"] == [str(w.ctx.users["approver"].id)]
+    # Review: the decider approved already: the draft waits on the reviewer, not on them.
+    assert r.json()["can_approve"] is False

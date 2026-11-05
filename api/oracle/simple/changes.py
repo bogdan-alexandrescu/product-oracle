@@ -899,9 +899,16 @@ async def _lock_change_items(db: AsyncSession, c: SimpleChange) -> None:
 
 
 async def _flags(
-    db: AsyncSession, c: SimpleChange, overlays: dict[uuid.UUID, dict[str, Any]]
+    db: AsyncSession,
+    c: SimpleChange,
+    overlays: dict[uuid.UUID, dict[str, Any]],
+    principal: Any = None,
 ) -> list[SimpleItemFlags]:
     read_ = await service.load(db, overlays)
+
+    def may(d: service.Entry) -> bool:
+        return service.can_decide(principal, d, read_.deciders)
+
     by_id = read_.by_id()
     ids: list[uuid.UUID] = []
     for k in sorted(_touched(c)):
@@ -914,7 +921,7 @@ async def _flags(
     return [
         SimpleItemFlags(
             item_id=i,
-            flags=service.flags_out(by_id[i]),
+            flags=service.flags_out(by_id[i], may),
         )
         for i in ids
     ]
@@ -1014,12 +1021,12 @@ async def create(
     )
     if applies:
         await _apply(db, c, after, principal, session)  # type: ignore[arg-type]
-        flags = await _flags(db, c, await drafts.overlays_for(db, principal))
+        flags = await _flags(db, c, await drafts.overlays_for(db, principal), principal)
         session.last_change_at = now  # type: ignore[union-attr]
     else:
         # As if applied, on what the proposer reads; nothing is written.
         rows = {str(e.row.id): e.row for e in read_.entries}
-        flags = await _flags(db, c, drafts.simulate(c, after, rows, seen, KEYED, write))
+        flags = await _flags(db, c, drafts.simulate(c, after, rows, seen, KEYED, write), principal)
     db.add(c)
     await db.flush()
     await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,
@@ -1090,7 +1097,7 @@ async def decide(
     c.status = "accepted" if action == "accept" else "declined"
     c.decided_by, c.decided_at, c.decision_reason = me, now, reason
     await db.flush()
-    flags = await _flags(db, c, await drafts.overlays_for(db, principal))
+    flags = await _flags(db, c, await drafts.overlays_for(db, principal), principal)
     await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,
                        data={"op": c.op, "target": c.target, "reason": reason})  # fmt: skip
     await db.commit()
@@ -1189,7 +1196,7 @@ async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> Simple
     db.add(u)
     session.last_change_at = now
     await db.flush()
-    flags = await _flags(db, c, await drafts.overlays_for(db, principal))
+    flags = await _flags(db, c, await drafts.overlays_for(db, principal), principal)
     await audit.record(db, principal, "simple_change.undone", "simple_change", u.id,
                        data={"op": c.op, "target": c.target, "undoes_id": str(c.id)})  # fmt: skip
     await db.commit()

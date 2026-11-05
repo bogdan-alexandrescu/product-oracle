@@ -3456,12 +3456,21 @@ function load(): Db {
                     }
                     return db;
                   }
+              : scenario === "roadmap-two-drafts"
+                ? () => {
+                    // roadmap-decide review: Priya Raman decides Guided setup's roadmap; the owner decides Alerts.
+                    const db = seed();
+                    const approver = db.members.find((m) => m.email === "approver@example.com")!;
+                    const rm = (db.simple_roadmap ??= seedSimpleRoadmap());
+                    rm.deciders = { ...rm.deciders, "onboarding-roadmap": approver.id };
+                    return db;
+                  }
               : scenario === "roadmap-reviewers"
                 ? () => {
                     // roadmap-decide review: Alerts roadmap has a required reviewer, approver@example.com.
                     const db = seed();
                     const approver = db.members.find((m) => m.email === "approver@example.com")!;
-                    if (db.simple_roadmap) db.simple_roadmap.reviewers = { "alerts-roadmap": [approver.id] };
+                    (db.simple_roadmap ??= seedSimpleRoadmap()).reviewers = { "alerts-roadmap": [approver.id] };
                     return db;
                   }
               : scenario === APPROVED_ROADMAP_SCENARIO

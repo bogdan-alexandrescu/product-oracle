@@ -422,7 +422,8 @@ function draftOut(db: SimpleDb, ctx: SimpleChangesCtx, d: MockDraft): Schemas["S
     ...d.out, changes: draftChanges(db, d.out.id), change_log: changeLog(db, d.out.id), from_prds: draftPrds(d),
     can_submit: d.out.status === "working" && edits,
     can_resume: d.out.status === "working" && (d.out.created_by === ctx.id || decider === ctx.id),
-    can_approve: d.out.status === "submitted" && edits,
+    // Review: a decider who approved already waits on the required reviewers, not on themself.
+    can_approve: d.out.status === "submitted" && ((edits && !d.out.decider_approved) || d.out.waiting_on.includes(ctx.id)),
     // roadmap-decide (drafts.outs): the decider's Approve and publish on a working draft (with no decider, an owner's).
     can_publish: d.out.status === "working" && edits && (decider ? decider === ctx.id : true),
     // roadmap-decide review: who still reviews a working draft after the decider's approval.

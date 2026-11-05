@@ -840,8 +840,12 @@ async def outs(
                 can_resume=d.status == "working"
                 and me is not None
                 and me in (d.created_by, w.deciders.get(d.document_id)),
+                # Review: a decider who approved already waits on the reviewers, not on themself.
                 can_approve=d.status == "submitted"
-                and (_approver_of(principal, d, w) or me in (d.waiting_on or [])),
+                and (
+                    (_approver_of(principal, d, w) and d.decider_approval is None)
+                    or me in (d.waiting_on or [])
+                ),
                 can_publish=can_publish(principal, d, w),
                 required_reviewers=[r for r in w.reviewers.get(d.document_id, []) if r != me]
                 if d.status == "working"
