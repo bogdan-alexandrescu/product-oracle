@@ -61,7 +61,7 @@ function seed(db: Db, ctx: RemovedCtx): Log {
   const ms = (db.goal_milestones ??= []) as MockMilestone[];
   const mid = stableUuid(`simple-milestone/removed-beta`);
   if (!ms.some((m) => m.id === mid))
-    ms.push({ id: mid, roadmap: "alerts-roadmap", code: "M9", name: REMOVED_MILESTONE, date: "2027-02-15", goal: "grow-retention", gates: [], counts_when: "all", progress: { done: 0, total: 0 } as never, deleted: true } as MockMilestone);
+    ms.push({ id: mid, roadmap: "alerts-roadmap", code: "", name: REMOVED_MILESTONE, date: "2027-02-15", goal: "grow-retention", gates: [], counts_when: "all", progress: { done: 0, total: 0 } as never, deleted: true } as MockMilestone);
   log[`milestone:${mid}`] = { at: daysAgo(16), by: owner };
   return (db.removed_log = log);
 }
