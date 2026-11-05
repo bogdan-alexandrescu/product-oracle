@@ -14,8 +14,32 @@ proposer withdraws it); a viewer reads.
 - test_viewer_is_refused: protects=a viewer's op is a 403 and the viewer reads the agenda.
 - test_chat_next_and_skip_still_work: protects=the chat's next and skip read on the rows
   alongside the sheet's edits; fails_when=either stops working after an edit.
+- test_two_editors_at_once_keep_every_change: protects=ops sent at the same moment by two
+  people all land; fails_when=the meeting row is read before its lock and one op's agenda
+  overwrites another's (4 adds, 2 saved).
+- test_undo_only_the_last_batch: protects=Undo of a batch someone else edited after is a
+  409 and keeps their work; fails_when=Undo restores the latest batch's snapshot whatever
+  batch it names.
+- test_decider_undoes_what_they_accepted: protects=the accept is the decider's batch, so
+  their Undo line shows and Undo puts the agenda back; fails_when=the accept's batch is one
+  the decider's sheet never named.
+- test_move_and_rename_read_as_one_clause: protects=the done line reads "moved X up and
+  renamed it"; fails_when=it reads two clauses about one item.
+- test_stale_proposal_op_is_dropped: protects=an approver's later op saves when an item
+  their earlier proposal named was removed, and the proposal says what it dropped;
+  fails_when=every later op is a 404.
+- test_feature_gone_from_the_prd_keeps_its_name: protects=a row whose feature left the PRD
+  reads its last known name; fails_when=it reads "Untitled".
+- test_other_company_cannot_edit: protects=tenant isolation; fails_when=an owner of another
+  company reads or changes this meeting's agenda.
 """
 
+import asyncio
+
+from sqlalchemy import delete, select
+
+from oracle.roadmap.models import RoadmapItem
+from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import clock as clock  # noqa: F401
 from tests.test_simple_chat_actions import apply, one_card
 from tests.test_simple_meetings_api import MEETINGS, get, start, uid, world
@@ -95,6 +119,8 @@ async def test_approver_not_decider_proposes(client):
     assert titles(r.json()) == first
     assert out["proposal"]["decider"]["name"] == w.ctx.users["decider"].name
     assert out["proposal"]["words"] == ["added Pricing page copy"]
+    assert out["decider"]["name"] == w.ctx.users["decider"].name
+    assert m["agenda"]["decider"]["name"] == w.ctx.users["decider"].name
 
     d = await get(client, w, mid, "decider")
     assert d["can"]["edit_agenda"] is True
@@ -143,3 +169,119 @@ async def test_chat_next_and_skip_still_work(client):
     assert row["state"] == "skipped"
     assert [x["title"] for x in m["agenda"]["skipped"]] == ["Cut A"]
     assert m["agenda"]["items"][0]["state"] in ("now", "skipped")
+
+
+async def test_two_editors_at_once_keep_every_change(client):
+    w = await world()
+    mid = await live(client, w)
+    first = titles(await get(client, w, mid))
+    sent = [("owner", "Owner one", "o1"), ("decider", "Decider one", "d1"),
+            ("owner", "Owner two", "o2"), ("decider", "Decider two", "d2")]  # fmt: skip
+    rs = await asyncio.gather(
+        *(op(client, w, who, mid, op="add", title=t, batch=b) for who, t, b in sent)
+    )
+    assert all(r.status_code == 200 for r in rs), [r.text for r in rs]
+    now = titles(await get(client, w, mid, "viewer"))
+    assert sorted(now[len(first) :]) == sorted(t for _, t, _ in sent)
+
+
+async def test_undo_only_the_last_batch(client):
+    w = await world()
+    mid = await live(client, w)
+    first = titles(await get(client, w, mid))
+    r = await op(client, w, "owner", mid, op="add", title="Owner topic", batch="ob")
+    assert r.status_code == 200, r.text
+    r = await op(client, w, "decider", mid, op="add", title="Decider topic", batch="db")
+    assert r.status_code == 200, r.text
+
+    r = await op(client, w, "owner", mid, op="undo", batch="ob")
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == "Someone changed the agenda since"
+    assert titles(await get(client, w, mid)) == [*first, "Owner topic", "Decider topic"]
+
+    r = await op(client, w, "decider", mid, op="undo", batch="db")
+    assert r.status_code == 200, r.text
+    assert titles(r.json()) == [*first, "Owner topic"]
+
+
+async def test_decider_undoes_what_they_accepted(client):
+    w = await world()
+    mid = await live(client, w)
+    first = titles(await get(client, w, mid))
+    r = await op(client, w, "approver", mid, op="add", title="Pricing page copy", batch="p1")
+    assert r.status_code == 200, r.text
+    r = await op(client, w, "decider", mid, op="accept", batch="acc1")
+    assert r.status_code == 200, r.text
+    out = r.json()["agenda"]
+    assert out["batch"] == "acc1" and out["words"] == ["added Pricing page copy"]
+    r = await op(client, w, "decider", mid, op="undo", batch="acc1")
+    assert r.status_code == 200, r.text
+    assert titles(r.json()) == first
+
+
+async def test_move_and_rename_read_as_one_clause(client):
+    w = await world()
+    mid = await live(client, w)
+    for t in ("Quiet hours", "Launch email"):
+        r = await op(client, w, "owner", mid, op="add", title=t, batch="s0")
+        assert r.status_code == 200, r.text
+    rows = r.json()["agenda"]["items"]
+    quiet = next(x["id"] for x in rows if x["title"] == "Quiet hours")
+    r = await op(client, w, "owner", mid, op="move", item_id=quiet, to=1, batch="s1")
+    assert r.status_code == 200, r.text
+    r = await op(client, w, "owner", mid, op="rename", item_id=quiet, title="Quiet time",
+                 batch="s1")  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert r.json()["agenda"]["words"] == ["moved Quiet hours up and renamed it"]
+    r = await op(client, w, "owner", mid, op="add", title="Help text", batch="s1")
+    assert r.json()["agenda"]["words"] == ["moved Quiet hours up and renamed it",
+                                           "added Help text"]  # fmt: skip
+
+
+async def test_stale_proposal_op_is_dropped(client):
+    w = await world()
+    mid = await live(client, w)
+    r = await op(client, w, "owner", mid, op="add", title="Quiet hours", batch="o1")
+    quiet = r.json()["agenda"]["items"][-1]["id"]
+    r = await op(client, w, "approver", mid, op="rename", item_id=quiet, title="Quiet time",
+                 batch="p1")  # fmt: skip
+    assert r.status_code == 200, r.text
+    r = await op(client, w, "owner", mid, op="remove", item_id=quiet, batch="o2")
+    assert r.status_code == 200, r.text
+
+    r = await op(client, w, "approver", mid, op="add", title="Help text", batch="p1")
+    assert r.status_code == 200, r.text
+    prop = r.json()["agenda"]["proposal"]
+    assert prop["words"] == ["added Help text"]
+    assert prop["dropped"] == ["renamed Quiet hours to Quiet time"]
+    r = await op(client, w, "decider", mid, op="accept", batch="a1")
+    assert r.status_code == 200, r.text
+    assert titles(r.json())[-1] == "Help text"
+
+
+async def test_feature_gone_from_the_prd_keeps_its_name(client):
+    w = await world()
+    mid = await live(client, w)
+    m = await get(client, w, mid)
+    gone = m["agenda"]["items"][-1]
+    assert gone["kind"] == "feature"
+    r = await op(client, w, "owner", mid, op="add", title="Help text", batch="o1")
+    assert r.status_code == 200, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        key = await s.scalar(select(RoadmapItem.item_key).where(RoadmapItem.id == gone["id"]))
+        await s.execute(delete(RoadmapItem).where(RoadmapItem.item_key == key))
+        await s.commit()
+    row = next(x for x in (await get(client, w, mid))["agenda"]["items"] if x["id"] == gone["id"])
+    assert row["title"] == gone["title"]
+
+
+async def test_other_company_cannot_edit(client):
+    w = await world()
+    other = await world()
+    mid = await live(client, w)
+    first = titles(await get(client, w, mid))
+    r = await op(client, other, "owner", mid, op="add", title="Not theirs", batch="x1")
+    assert r.status_code == 404, r.text
+    r = await client.get(f"{MEETINGS}/{mid}", headers=other.ctx.as_("owner"))
+    assert r.status_code == 404
+    assert titles(await get(client, w, mid)) == first
