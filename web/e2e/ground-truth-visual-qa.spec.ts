@@ -32,6 +32,90 @@ const PHONE = [
   { name: "390 dark", viewport: { width: 390, height: 844 }, colorScheme: "dark" },
 ] as const;
 
+type Narrowed = { ask?: boolean; drawer?: boolean };
+
+/**
+ * GT-1: on the "large" scenario's 30 goals the Feature column keeps its room, its header sits
+ * beside Delivery's, and the goals scroll sideways under the pinned Feature column, whose edge
+ * line shows where they slide under it. `ask` docks Ask, `drawer` opens the first feature's
+ * drawer first: the ledger's narrowest widths.
+ */
+async function gt1(page: Page, { phone, tag, ask, drawer }: { phone: boolean; tag: string } & Narrowed) {
+  await open(page, "?tab=graph", "large");
+  const ledger = page.getByRole("table", { name: "Feature × goal" });
+  await expect(ledger).toBeVisible();
+  const row = ledger.locator('tr[data-testid^="feature-"]').first();
+  const cell = row.locator("td").first();
+  const name = cell.getByRole("button").first();
+  await expect(name).toBeVisible();
+  if (ask) {
+    await page.getByTestId("hop-strip").click();
+    await expect(page.getByTestId("hop-panel").filter({ visible: true })).toBeVisible();
+    // Docked beside the page, not over it.
+    await expect(page.getByTestId("hop-backdrop")).toBeHidden();
+  }
+  if (drawer) {
+    await name.click();
+    await expect(page.getByRole("dialog", { name: await name.innerText() })).toBeVisible();
+  }
+  expect((await cell.boundingBox())!.width).toBeGreaterThan(phone ? 300 : 200);
+  if (phone) {
+    await shot(page, `gt1-graph-${tag}`);
+    return;
+  }
+  // The Feature and Delivery headers sit side by side, never on top of each other.
+  const feature = (await ledger.getByRole("columnheader", { name: "Feature" }).boundingBox())!;
+  const delivery = (await ledger.getByRole("columnheader", { name: "Delivery" }).boundingBox())!;
+  expect(feature.width).toBeGreaterThan(200);
+  expect(delivery.x).toBeGreaterThanOrEqual(feature.x + feature.width - 1);
+  await shot(page, `gt1-graph-${tag}`);
+
+  // The last goal is reached by scrolling sideways; the feature's name stays pinned on the left.
+  const scroller = page.getByTestId("ledger-scroll");
+  const before = (await name.boundingBox())!;
+  await scroller.evaluate((el) => el.scrollTo({ left: el.scrollWidth }));
+  const last = ledger.locator("thead tr").first().locator("th").last().getByRole("button");
+  await expect(last).toBeInViewport();
+  await last.hover();
+  const scrolled = (await scroller.evaluate((el) => el.scrollLeft)) as number;
+  expect(scrolled).toBeGreaterThan(1000);
+  const after = (await name.boundingBox())!;
+  expect(Math.abs(after.x - before.x)).toBeLessThan(2);
+  await expect(name).toBeInViewport();
+  // The pinned column's right edge is a line in the theme's line colour, on its header and cells.
+  for (const pinned of [ledger.getByRole("columnheader", { name: "Feature" }), cell]) {
+    const edge = await pinned.evaluate((el) => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--line)";
+      document.body.append(probe);
+      const line = getComputedStyle(probe).color;
+      probe.remove();
+      return { shadow: getComputedStyle(el).boxShadow, line };
+    });
+    expect(edge.shadow).toContain(`${edge.line} -1px 0px 0px 0px inset`);
+  }
+  await shot(page, `gt1-graph-scrolled-${tag}`);
+}
+
+/** GT-1 at the ledger's narrowest: Ask docked at 1680, and a feature's drawer open. */
+const NARROW = [
+  { name: "1680 Ask docked", viewport: { width: 1680, height: 900 }, colorScheme: "light", ask: true },
+  { name: "1680 dark Ask docked", viewport: { width: 1680, height: 900 }, colorScheme: "dark", ask: true },
+  { name: "1440 drawer open", viewport: { width: 1440, height: 900 }, colorScheme: "light", drawer: true },
+  { name: "1440 dark drawer open", viewport: { width: 1440, height: 900 }, colorScheme: "dark", drawer: true },
+  { name: "1680 Ask docked and drawer open", viewport: { width: 1680, height: 900 }, colorScheme: "light", ask: true, drawer: true },
+] as const;
+
+for (const view of NARROW) {
+  test.describe(view.name, () => {
+    test.use({ viewport: view.viewport, colorScheme: view.colorScheme });
+    test("GT-1: the 30-goal graph keeps feature names and scrolls to every goal", async ({ page }) => {
+      const narrowed: Narrowed = view;
+      await gt1(page, { phone: false, tag: view.name.replaceAll(" ", "-"), ...narrowed });
+    });
+  });
+}
+
 for (const view of [...DESKTOP, ...PHONE]) {
   test.describe(view.name, () => {
     test.use({ viewport: view.viewport, colorScheme: view.colorScheme });
@@ -40,38 +124,7 @@ for (const view of [...DESKTOP, ...PHONE]) {
 
     // GT-1: 30 goals squeezed the Feature column to nothing and cut off the goals past the 10th.
     test("GT-1: a 30-goal graph keeps feature names and scrolls sideways to every goal", async ({ page }) => {
-      await open(page, "?tab=graph", "large");
-      const ledger = page.getByRole("table", { name: "Feature × goal" });
-      await expect(ledger).toBeVisible();
-      const row = ledger.locator('tr[data-testid^="feature-"]').first();
-      const cell = row.locator("td").first();
-      const name = cell.getByRole("button").first();
-      await expect(name).toBeVisible();
-      expect((await cell.boundingBox())!.width).toBeGreaterThan(phone ? 300 : 200);
-      if (phone) {
-        await shot(page, `gt1-graph-${tag}`);
-        return;
-      }
-      // The Feature and Delivery headers sit side by side, never on top of each other.
-      const feature = (await ledger.getByRole("columnheader", { name: "Feature" }).boundingBox())!;
-      const delivery = (await ledger.getByRole("columnheader", { name: "Delivery" }).boundingBox())!;
-      expect(feature.width).toBeGreaterThan(200);
-      expect(delivery.x).toBeGreaterThanOrEqual(feature.x + feature.width - 1);
-      await shot(page, `gt1-graph-${tag}`);
-
-      // The last goal is reached by scrolling sideways; the feature's name stays pinned on the left.
-      const scroller = page.getByTestId("ledger-scroll");
-      const before = (await name.boundingBox())!;
-      await scroller.evaluate((el) => el.scrollTo({ left: el.scrollWidth }));
-      const last = ledger.locator("thead tr").first().locator("th").last().getByRole("button");
-      await expect(last).toBeInViewport();
-      await last.hover();
-      const scrolled = (await scroller.evaluate((el) => el.scrollLeft)) as number;
-      expect(scrolled).toBeGreaterThan(1000);
-      const after = (await name.boundingBox())!;
-      expect(Math.abs(after.x - before.x)).toBeLessThan(2);
-      await expect(name).toBeInViewport();
-      await shot(page, `gt1-graph-scrolled-${tag}`);
+      await gt1(page, { phone, tag });
     });
 
     // GT-2: the inspector's eyebrow showed the blocker's internal key in a code font.

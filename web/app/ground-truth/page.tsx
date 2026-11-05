@@ -402,13 +402,15 @@ export default function BaselinePage() {
 
   const openConflicts = conflicts.data?.filter((c) => c.status === "open").length;
   const view = runId ? fromRun.data : null;
-  // A review that could not load keeps its tab, which says so with Try again (visual QA B-03).
-  const fromRunFailed = !!runId && !view && !!fromRun.error;
+  // A review that could not load keeps its tab, which says so with Try again (visual QA B-03). A
+  // review kept from before (an earlier run, or this one before a failed reload) stays under the
+  // notice, dimmed and inert, without its decision bar: it is not the run asked for.
+  const fromRunFailed = !!runId && !!fromRun.error;
   // A stale ?tab=from-run link without its run opens Graph, not an empty panel (visual QA GT-3).
   const active: Tab = tab === "from-run" && !view && !fromRunFailed && !(runId && fromRun.loading) ? "graph" : tab;
   const tabs: TabItem<Tab>[] = [
     ...(view ? [{ id: "from-run" as const, label: "From this run", count: view.summary.need_you, kind: "crit" as const }] : []),
-    ...(fromRunFailed ? [{ id: "from-run" as const, label: "From this run" }] : []),
+    ...(!view && fromRunFailed ? [{ id: "from-run" as const, label: "From this run" }] : []),
     { id: "graph", label: "Graph" },
     { id: "items", label: "Items" },
     { id: "flagged", label: "Flagged", count: trace.data?.summary.flagged, kind: "crit" },
@@ -601,7 +603,14 @@ export default function BaselinePage() {
         <div role="tabpanel" id={`panel-${active}`} aria-labelledby={`tab-${active}`} className="flex min-w-0 flex-col gap-4">
           {active === "from-run" && fromRunFailed && <LoadError what="this run's review" error="" onRetry={() => void reloadFromRun()} />}
           {active === "from-run" && view && (
-            <FromRunTab view={view} entities={graph.data?.entities ?? []} busy={busy} selectedId={openId} act={act} onOpen={openItem} />
+            <div
+              data-testid="from-run-view"
+              data-current={!fromRunFailed}
+              inert={fromRunFailed}
+              className={fromRunFailed ? "min-w-0 opacity-60" : "min-w-0"}
+            >
+              <FromRunTab view={view} entities={graph.data?.entities ?? []} busy={busy} selectedId={openId} act={act} onOpen={openItem} />
+            </div>
           )}
           {active === "graph" && (
             <>
@@ -704,7 +713,7 @@ export default function BaselinePage() {
             </>
           )}
         </div>
-        {active === "from-run" && view && <BottomBar view={view} busy={busy} act={act} />}
+        {active === "from-run" && view && !fromRunFailed && <BottomBar view={view} busy={busy} act={act} />}
       </Split>
     </Page>
   );

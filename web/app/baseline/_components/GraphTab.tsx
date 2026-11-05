@@ -708,8 +708,9 @@ function Ledger({
 }) {
   const cols = 3 + goals.length;
   const th = "bg-surface2 px-2 text-[13px] leading-4 font-semibold text-text2";
-  // The Feature column stays in view while the goals scroll by; a phone stacks the row instead.
-  const pin = "sticky left-0 z-[1] max-[600px]:static";
+  // The Feature column stays in view while the goals scroll by, with a line at its edge so no goal
+  // slides under it unseen; a phone stacks the row instead.
+  const pin = "sticky left-0 z-[1] shadow-[inset_-1px_0_0_var(--line)] max-[600px]:static max-[600px]:shadow-none";
   return (
     // A container: beside an open drawer the columns narrow before the feature's name does (qa-plan-7).
     // Many goals (visual QA GT-1): the table keeps the Feature column's room and each goal's width,
@@ -884,11 +885,14 @@ function FeatureRow({
         selected ? "bg-accent-soft shadow-[inset_4px_0_0_var(--accent)] hover:bg-accent-soft" : ""
       }`}
     >
-      {/* Pinned while the goals scroll by (visual QA GT-1): it carries the row's own background. */}
+      {/* Pinned while the goals scroll by (visual QA GT-1): it carries the row's own background and
+          the column's edge line. */}
       <td
         role="cell"
         className={`sticky left-0 z-[1] px-2 py-1.5 pl-4 max-[600px]:static max-[600px]:block max-[600px]:basis-full max-[600px]:bg-transparent max-[600px]:p-0 ${
-          selected ? "bg-accent-soft shadow-[inset_4px_0_0_var(--accent)] max-[600px]:shadow-none" : "bg-surface group-hover:bg-surface2"
+          selected
+            ? "bg-accent-soft shadow-[inset_4px_0_0_var(--accent),inset_-1px_0_0_var(--line)] max-[600px]:shadow-none"
+            : "bg-surface shadow-[inset_-1px_0_0_var(--line)] group-hover:bg-surface2 max-[600px]:shadow-none"
         }`}
       >
         {/* The name keeps the room (qa-plan-7): it wraps whole words to two lines, and the lock,

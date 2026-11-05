@@ -83,9 +83,23 @@ for (const view of VIEWS) {
         expect(p.x + p.width).toBeLessThanOrEqual(barBox.x + barBox.width + 0.5);
       }
       if (!phone) {
-        // B-02: the bar stops where the Ask dock (its strip, or the open panel) starts.
+        // B-02: the bar stops where the Ask dock's column starts: its strip, or from 1600 px the
+        // open panel docked beside the page.
         const dock = await box(page.getByTestId("hop-dock"));
         expect(barBox.x + barBox.width).toBeLessThanOrEqual(dock.x + 0.5);
+        const approveBox = await box(approve);
+        const onTop = await page.evaluate(
+          ([x, y]) => document.elementFromPoint(x, y)?.closest("[data-testid]")?.getAttribute("data-testid") ?? null,
+          [approveBox.x + approveBox.width / 2, approveBox.y + approveBox.height / 2] as const,
+        );
+        // Below 1600 px the open panel lies over the page as a modal: its scrim covers the bar,
+        // as designed, until Ask is closed. Otherwise the bar's button is the one under a click.
+        if (view.ask && view.viewport.width < 1600) {
+          await expect(page.getByTestId("hop-backdrop")).toBeVisible();
+          expect(onTop).toBe("hop-backdrop");
+        } else {
+          expect(onTop).toBe("from-run-bar");
+        }
       } else {
         // On a phone it sits above the tab bar, not under it.
         const tabs = await box(page.getByTestId("tab-bar"));
@@ -121,6 +135,37 @@ for (const view of VIEWS) {
     });
   });
 }
+
+// B-03 again: with the last review kept on screen while the next loads, a switch to a run whose
+// review cannot load said nothing and left the earlier run's review looking current.
+test("B-03: switching to a run whose review cannot load says so above the earlier review, marked not current", async ({ page }) => {
+  await open(page, RUN);
+  await expect(page.getByTestId("from-run-row")).toHaveCount(4);
+  await expect(page.getByTestId("from-run-view")).toHaveAttribute("data-current", "true");
+  await expect(page.getByTestId("load-error")).toHaveCount(0);
+  // Another run in the Proposals tab's From select: one without a review of its own.
+  await page.getByRole("tab", { name: "Proposals" }).click();
+  const from = page.getByLabel("From", { exact: true });
+  const other = await from
+    .locator("option")
+    .evaluateAll((opts, run) => (opts as HTMLOptionElement[]).map((o) => o.value).find((v) => v && v !== "none" && v !== run), RUN);
+  expect(other).toBeTruthy();
+  await from.selectOption(other!);
+  await page.getByRole("tab", { name: /From this run/ }).click();
+  const panel = page.getByRole("tabpanel");
+  const err = panel.getByTestId("load-error");
+  await expect(err).toContainText("Couldn't load this run's review.");
+  await expect(err.getByRole("button", { name: "Try again" })).toBeVisible();
+  // The earlier review stays below the notice, marked as not the one asked for, with no decision bar.
+  const kept = page.getByTestId("from-run-view");
+  await expect(kept).toHaveAttribute("data-current", "false");
+  await expect(kept).toHaveAttribute("inert", "");
+  expect((await box(err)).y).toBeLessThan((await box(kept)).y);
+  await expect(bar(page)).toHaveCount(0);
+  await err.getByRole("button", { name: "Try again" }).click();
+  await expect(err).toContainText("Couldn't load this run's review.");
+  await shot(page, "b03-kept-review-failed");
+});
 
 test("the blocker's gate reason names it by its statement, never its key", async ({ page }) => {
   await login(page);
