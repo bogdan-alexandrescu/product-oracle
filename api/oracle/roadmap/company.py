@@ -156,11 +156,17 @@ def _slug_words(slug: Any) -> str | None:
     return str(slug).replace("-", " ").replace("_", " ").capitalize() if slug else None
 
 
+# The run statuses whose approved scope is not on the company roadmap: the run stopped
+# before its PRD was written.
+STOPPED_RUNS = ("cancelled", "failed")
+
+
 async def features_on_roadmap(db: AsyncSession) -> dict[str, OnRoadmap]:
     """The features the company roadmap knows, by key (the owner, Nov 4: a PRD's feature may
     depend on one that lives in another area PRD): the included features of every PRD's
-    latest approved scope (a new PRD's too, before its import names its document, and
-    before the company roadmap exists; a replaced PRD feeds nothing) and the items of the
+    latest approved scope of a run not cancelled or failed (a new PRD's too, before its
+    import names its document, and before the company roadmap exists; a replaced PRD feeds
+    nothing) and the items of the
     roadmap's latest version with items (an item's key and its feature's key, with its
     horizon and dependencies). One read: a check calls this once."""
     from oracle.runs.models import Run
@@ -189,12 +195,14 @@ async def features_on_roadmap(db: AsyncSession) -> dict[str, OnRoadmap]:
         .limit(1)
         .scalar_subquery()
     )
-    # Each PRD's latest approved scope (a new PRD's: its run's).
+    # Each PRD's latest approved scope (a new PRD's: its run's) of a run still live or done:
+    # a cancelled or failed run's scope feeds nothing (an earlier finished run's still does).
     prd = func.coalesce(PrdScope.document_id, PrdScope.run_id)
     latest_scopes = (
         select(PrdScope.id)
         .ext(distinct_on(prd))
-        .where(PrdScope.status == "approved")
+        .join(Run, Run.id == PrdScope.run_id)
+        .where(PrdScope.status == "approved", Run.status.not_in(STOPPED_RUNS))
         .order_by(prd, PrdScope.approved_at.desc().nulls_last(), PrdScope.created_at.desc())
     )
     scopes = (

@@ -35,8 +35,11 @@ reads on the checkpoint (``payload["briefs_check"]``, :func:`summarize`):
   scope stays the product approvers' call.
 """
 
+import copy
+import hashlib
 import re
 import uuid
+from collections import OrderedDict
 from collections.abc import Collection, Iterable, Mapping
 from typing import Any, Protocol
 
@@ -116,16 +119,26 @@ def _summarize(
     code_map: Collection[str] | None,
     mapped_repos: Collection[str] = (),
     elsewhere: Mapping[str, str] | None = None,
+    no_prd: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-    elsewhere = elsewhere or {}
+    elsewhere, no_prd = elsewhere or {}, no_prd or {}
     if text is None:
         return {"features": [], "problems": [MISSING], "code_map_used": False,
                 "unmapped_repos": [], "unnamed_repo": False, "elsewhere": {}}  # fmt: skip
-    problems = briefs.check(text, feature_keys, code_map, elsewhere)
+    problems = briefs.check(text, feature_keys, code_map, {**no_prd, **elsewhere})
     try:
         parsed = briefs.parse(text)
     except briefs.BriefsInvalid:
         parsed = None
+    # A Ground Truth feature no PRD holds, named here rather than first refused at the
+    # roadmap items stop (cross-PRD follow-ups).
+    problems += [
+        briefs.Problem(code="dependency_in_no_prd", feature=b.feature,
+                       message=f"{no_prd[d]} is in no PRD yet: {b.title} depends on it")
+        for b in (parsed.features if parsed else [])
+        for d in b.depends_on
+        if d not in feature_keys and d not in elsewhere and d in no_prd
+    ]  # fmt: skip
     features = [
         {
             "key": b.feature,
@@ -172,13 +185,15 @@ async def summarize(
     code_map: Collection[str] | None,
     mapped_repos: Collection[str] = (),
     elsewhere: Mapping[str, str] | None = None,
+    no_prd: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """What the stop reads, from the segment's file (None: it left none). Untrusted text:
     parsed on the parse pool. ``elsewhere``: the keys outside the feature set a brief may
-    depend on, with their names (:func:`elsewhere`)."""
+    depend on, with their names (:func:`elsewhere`); ``no_prd``: the Ground Truth features
+    no PRD holds, with their names (:func:`in_no_prd`), each a problem a brief depends on."""
     return await safe_yaml.run_parse_within(
         _summarize, text, frozenset(feature_keys), code_map, frozenset(mapped_repos),
-        dict(elsewhere or {}), name=briefs.FILE,
+        dict(elsewhere or {}), dict(no_prd or {}), name=briefs.FILE,
     )  # fmt: skip
 
 
@@ -207,24 +222,16 @@ async def elsewhere(db: AsyncSession, run: Run) -> dict[str, str]:
     """The keys outside the run's feature set a brief may depend on, each with its name (the
     owner, Nov 4: every PRD feeds ONE company roadmap, so a link to another area PRD's
     feature is real): the features the company roadmap knows (one read,
-    :func:`oracle.roadmap.company.features_on_roadmap`), named with their PRD, the Ground
-    Truth's features (as the feature set stop, ``Known.features``), and the
-    dependencies waived at this run's feature set stop (a staged waiver of a feature's
-    ``depends_on_excluded``: the excluded features it depends on)."""
+    :func:`oracle.roadmap.company.features_on_roadmap`: the area PRDs drafted side by side
+    see each other's approved scopes), named with their PRD, and the dependencies waived
+    at this run's feature set stop (a staged waiver of a feature's ``depends_on_excluded``:
+    the excluded features it depends on). A Ground Truth feature in no PRD is not among
+    them (:func:`in_no_prd`)."""
     from oracle.roadmap import company
     from oracle.runs import feature_set
     from oracle.runs.models import CheckpointAction
 
     out = {k: f.label for k, f in (await company.features_on_roadmap(db)).items()}
-    # The Ground Truth features (not rejected), as the feature set stop accepts them: the
-    # area PRDs drafted side by side, none on the company roadmap yet, depend on each
-    # other's features.
-    for key, title in await db.execute(
-        select(Entity.key, Entity.title).where(
-            Entity.type == "feature", Entity.status != "rejected"
-        )
-    ):
-        out.setdefault(key, title or key)
     scope = await feature_set.approved_scope(db, run_id=run.id)
     if scope is None or scope.checkpoint_id is None:
         return out
@@ -251,19 +258,58 @@ async def elsewhere(db: AsyncSession, run: Run) -> dict[str, str]:
     return out
 
 
-async def check_segment(db: AsyncSession, run: Run, text: str | None) -> dict[str, Any]:
+async def in_no_prd(db: AsyncSession, known: Collection[str]) -> dict[str, str]:
+    """The Ground Truth features (not rejected) outside ``known`` (the run's feature set and
+    :func:`elsewhere`), each with its name: a brief depending on one is told it is in no PRD
+    yet (the feature set stop lets it pass; the roadmap items stop would refuse it)."""
+    return {
+        key: title or key
+        for key, title in await db.execute(
+            select(Entity.key, Entity.title).where(
+                Entity.type == "feature", Entity.status != "rejected"
+            )
+        )
+        if key not in known
+    }
+
+
+# A stop's briefs checked again (:func:`refresh`), by what the check reads: the same briefs
+# against the same feature set, code maps and known features are not parsed again on each
+# read while a key stays unknown. New briefs (another hash) or a key now known is a new entry.
+_REREAD: OrderedDict[tuple, dict[str, Any]] = OrderedDict()
+REREAD_SIZE = 256
+
+
+async def check_segment(
+    db: AsyncSession, run: Run, text: str | None, *, reread: bool = False
+) -> dict[str, Any]:
+    """The check of a segment's briefs (``reread``: a stop read again, :data:`_REREAD`)."""
     from oracle.engineering import codemaps
 
     maps = [m for m in await codemaps.recorded(db, run) if m.content]
     ids = frozenset(i for m in maps for i in codemap.ids(m.content or {})) if maps else None
-    return await summarize(
-        text, await feature_keys(db, run), ids, [m.repo for m in maps], await elsewhere(db, run)
-    )
+    keys = await feature_keys(db, run)
+    known = await elsewhere(db, run)
+    no_prd = await in_no_prd(db, {*keys, *known})
+    repos = [m.repo for m in maps]
+    if not reread or text is None:
+        return await summarize(text, keys, ids, repos, known, no_prd)
+    key = (
+        hashlib.sha256(text.encode()).hexdigest(), frozenset(keys), ids, frozenset(repos),
+        frozenset(known.items()), frozenset(no_prd.items()),
+    )  # fmt: skip
+    if (hit := _REREAD.get(key)) is None:
+        hit = await summarize(text, keys, ids, repos, known, no_prd)
+        _REREAD[key] = hit
+        while len(_REREAD) > REREAD_SIZE:
+            _REREAD.popitem(last=False)
+    _REREAD.move_to_end(key)
+    return copy.deepcopy(hit)
 
 
 # The problems a later rule may answer (the owner, Nov 4: a dependency on another PRD's
 # feature is real): a stored check with one is checked again when its stop is read.
-STALE = frozenset({"unknown_dependency"})
+STALE = frozenset({"unknown_dependency", "dependency_in_no_prd"})
 
 
 async def refresh(
@@ -292,7 +338,7 @@ async def refresh(
         text = (((segment.artifacts or {}) if segment else {}).get("files") or {}).get(briefs.FILE)
         if text is None:
             continue
-        fresh = await check_segment(db, run, text)
+        fresh = await check_segment(db, run, text, reread=True)
         if fresh != stored:
             # A new object: the column is not mutation-tracked.
             payload = {**(cp.payload or {}), PAYLOAD_KEY: fresh}
