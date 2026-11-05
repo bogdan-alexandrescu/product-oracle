@@ -175,7 +175,7 @@ async def test_goal_waiting_and_confirm(client):
     item = find(await waiting(client, ctx, "approver"), "goal", gid)
     assert item is not None, "a proposed goal waits on who confirms goals"
     assert item["title"] == "Cut early churn" and item["action"] == "Confirm"
-    # Its row reads "Proposed goal · Cut early churn", as Home's does: no second line saying it again.
+    # Its row reads "Proposed goal · Cut early churn", as on Home: no second line repeats it.
     assert item["detail"] == ""
     assert find(await waiting(client, ctx, "approver"), "goal", kept_id) is None
     assert find(await waiting(client, ctx, "commenter"), "goal", gid) is None

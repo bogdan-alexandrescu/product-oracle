@@ -299,11 +299,14 @@ async def queue(
 
 def _milestone_name(milestone: Any) -> str | None:
     """The name of an item's milestone (stored as {name, ...}; a run's file may name it
-    alone)."""
+    alone), as text: a name the run's YAML reads as a number (2026) is read with the items
+    file's own text helper, as the import reads it."""
+    from oracle.runs.roadmap import _text
+
     if isinstance(milestone, str):
         return milestone.strip() or None
-    if isinstance(milestone, dict) and isinstance(milestone.get("name"), str):
-        return milestone["name"].strip() or None
+    if isinstance(milestone, dict):
+        return _text(milestone.get("name")) or None
     return None
 
 
