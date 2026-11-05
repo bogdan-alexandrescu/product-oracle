@@ -355,9 +355,7 @@ async def test_accepting_an_outdated_edit_is_refused(client):
     assert _row(await _page(client, ctx), d["id"])["title"] == "Newer idea"
 
 
-async def test_added_question_with_no_decider_is_not_accepted_by_its_proposer(
-    client, monkeypatch
-):
+async def test_added_question_with_no_decider_is_not_accepted_by_its_proposer(client, monkeypatch):
     ctx = await make_ctx()
     ids = await seed(ctx)
 

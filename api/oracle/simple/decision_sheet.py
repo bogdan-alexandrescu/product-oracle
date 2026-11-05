@@ -326,7 +326,7 @@ async def _ask(
     db: AsyncSession, principal: Any, body: SimpleChangeIn, me: uuid.UUID, now: datetime
 ) -> SimpleChangeResult:
     """A question added to the PRD: by an owner or the PRD's decider at once, else proposed
-    to that decider."""
+    to that decider (with none, left open for an owner: never its proposer's own to accept)."""
     from oracle.simple import changes
 
     doc = await _prd(db, principal, body.target)
@@ -339,7 +339,7 @@ async def _ask(
                      op="add_question", target=target, before={}, after=after,
                      status="applied" if applies else "proposed", by=me, at=now,
                      reason=body.reason,
-                     routed_to=[] if applies else [decider or me])  # fmt: skip
+                     routed_to=[] if applies or decider is None else [decider])  # fmt: skip
     if applies:
         d = await add_question(db, doc, after, decider or me, me)
         c.target = {**target, "decision_id": str(d.id)}
@@ -390,7 +390,7 @@ def may_decide_change(principal: Any, c: SimpleChange, found: dict) -> bool:
         return True
     me = getattr(principal, "user_id", None)
     if c.op == "add_question":
-        return me is not None and me in (c.routed_to or [])
+        return me is not None and me != c.by and me in (c.routed_to or [])
     d = found.get(str(c.target.get("decision_id")))
     return d is not None and me == d.approver_id
 
@@ -419,6 +419,11 @@ async def decide(
             assert d is not None
             if d.status != "proposed":
                 raise ChangeError(409, f"outdated: {name_of(d)} is {d.status}")
+            now_ = fields(d)
+            current = {k: now_[k] for k in c.after}
+            if c.op in EDITS and current != {k: c.before.get(k) for k in c.after}:
+                raise ChangeError(409, {"message": "outdated: changed since it was proposed",
+                                        "current": current})  # fmt: skip
             _write(d, c.op, c.after, c.by)
     c.status = "accepted" if action == "accept" else "declined"
     c.decided_by, c.decided_at, c.decision_reason = me, company_time.now(), reason
