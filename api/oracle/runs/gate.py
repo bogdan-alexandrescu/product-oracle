@@ -94,13 +94,18 @@ _KEY = re.compile(r"(?<![\w-])[a-z0-9]+(?:[-_][a-z0-9]+)+(?![\w-])")
 
 
 def _titled(message: str | None, titles: dict[str, str]) -> str | None:
-    """A C6 problem's message as people read it: each feature's key as its title, as the
-    review screen words it. Only a feature's key is replaced: another word with a hyphen
-    ("follow-up", a requirement's ref) stays as written."""
+    """A C6 problem's message as people read it: each feature's key as its title (a key
+    with none in words), as the review screen words it."""
     if not message or not titles:
         return message
-    text = _KEY.sub(lambda m: titles.get(m.group(0)) or m.group(0), message)
+    text = _KEY.sub(lambda m: titles.get(m.group(0)) or _words(m.group(0)), message)
     return text[:1].upper() + text[1:]
+
+
+def _words(key: str) -> str:
+    """A key in words ("address-sharing" is "Address sharing"), as the web's keyWords."""
+    words = re.sub(r"[-_]+", " ", key).strip()
+    return words[:1].upper() + words[1:]
 
 
 def _problems(check: Any, file_codes: Iterable[str] = ()) -> tuple[list[dict[str, Any]], int]:

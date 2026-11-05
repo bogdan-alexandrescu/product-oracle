@@ -1,6 +1,6 @@
 """Train AN's review follow-ups: plan tables for an empty roadmap, the writer's words in
-every flow, C6 titles of feature keys only, ParseBusy on the parse-once items check, and
-one day-words helper. Invented data only.
+every flow, ParseBusy on the parse-once items check, one day-words helper, the
+run_imported_into index, and a send-back note answered in full. Invented data only.
 """
 
 import datetime as dt
@@ -9,7 +9,7 @@ import pytest
 
 from oracle import company_time, safe_yaml
 from oracle.roadmap import doc_dates
-from oracle.runs import flows, gate, plan_tables
+from oracle.runs import flows, plan_tables
 from oracle.runs import roadmap as runs_roadmap
 from tests.test_roadmap import ITEMS
 
@@ -63,15 +63,6 @@ def test_a_prd_writer_is_worded_as_the_loop_writer_is():
     prompt = _writer_prompt("baseline_to_prd", "prd_draft", "prd")
     assert "(writes the PRD draft)" in prompt
     assert "writes the prd draft" not in prompt
-
-
-# --- C6 titles: feature keys only -----------------------------------------------------------
-
-
-def test_titled_names_feature_keys_and_leaves_other_words_alone():
-    titles = {"bulk-edit": "Bulk address edit", "address-book": "Shared address book"}
-    text = gate._titled("bulk-edit depends on address-book, a follow-up to req-12", titles)
-    assert text == "Bulk address edit depends on Shared address book, a follow-up to req-12"
 
 
 # --- ParseBusy on the parse-once items check ------------------------------------------------

@@ -122,10 +122,14 @@ export function problemRef(p: { code: string; feature?: string | null; requireme
   for (let i = 0; i < about.length; i++) h = Math.imul(h ^ about.charCodeAt(i), 0x01000193) >>> 0;
   return `${p.code}${REF_MARK}${h.toString(16).padStart(8, "0")}`;
 }
-/** As oracle.runs.gate._titled: a problem's message with each feature's key as its title; another hyphenated word stays as written. */
+const keyWords = (key: string) => {
+  const words = key.replace(/[-_]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+/** As oracle.runs.gate._titled: a problem's message with each feature's key as its title (a key with none in plain words). */
 export function titled(message: string, titles: Record<string, string> | undefined): string {
   if (!message || !titles || !Object.keys(titles).length) return message;
-  const text = message.replace(/(?<![\w-])[a-z0-9]+(?:[-_][a-z0-9]+)+(?![\w-])/g, (k) => titles[k] || k);
+  const text = message.replace(/(?<![\w-])[a-z0-9]+(?:[-_][a-z0-9]+)+(?![\w-])/g, (k) => titles[k] || keyWords(k));
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 /** As oracle.runs.gate.answer_code: the code a waiver's answer names. */
