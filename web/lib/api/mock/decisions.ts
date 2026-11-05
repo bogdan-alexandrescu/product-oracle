@@ -23,7 +23,14 @@ type RunLike = {
 };
 
 /** A stored decision: the API's record without what is derived on the way out. */
-type Row = Omit<DecisionOut, "state" | "ref" | "outcome_status" | "outcome_check_due" | "entities" | "evidence" | "approver_email" | "decided_by_email" | "withdrawn_by_email" | "reviews" | "revisit_id" | "superseded_by_id" | "can_edit" | "can_decide" | "can_withdraw" | "can_review" | "can_reassign">;
+type Row = Omit<DecisionOut, "state" | "ref" | "outcome_status" | "outcome_check_due" | "entities" | "evidence" | "approver_email" | "decided_by_email" | "withdrawn_by_email" | "reviews" | "revisit_id" | "superseded_by_id" | "can_edit" | "can_decide" | "can_withdraw" | "can_review" | "can_reassign"> & {
+  /** edit-decisions: deleted from Simple's decision sheet (in Settings › Trash): hidden everywhere until restored. */
+  trashed?: boolean;
+  /** edit-decisions: its last edit from Simple's decision sheet (the sheet's "edited by"). */
+  sheet_edited?: { at: string; by: string } | null;
+};
+/** A decision-log row, as Simple's decision sheet reads and writes it (one decisions table in the API). */
+export type DecisionLogRow = Row;
 type ReviewRow = Schemas["DecisionReviewOut"] & { decision_id: string };
 
 export interface DecisionsDb {
@@ -453,6 +460,7 @@ function outOf(ctx: DecisionsContext, db: DecisionsDb, d: Row): DecisionOut {
  * approval of one of its versions, a stop of a run on it, or a subject naming it or a version.
  */
 function hidden(ctx: DecisionsContext, d: Row): boolean {
+  if (d.trashed) return true;
   const run = d.run_id ? ctx.runs.find((r) => r.id === d.run_id) : undefined;
   if (run?.document_slug && ctx.hiddenDocument(run.document_slug)) return true;
   if ((d.source?.kind === "document_version" || d.source?.kind === "pricing_memo_version") && ctx.hiddenDocument(d.source.id)) return true;

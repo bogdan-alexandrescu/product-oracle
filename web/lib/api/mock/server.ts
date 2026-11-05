@@ -163,7 +163,7 @@ import {
 import { routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith } from "./goal-buckets";
 import { featureKeyOf } from "./simple-priorities";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
-import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, sheetDecisionMade, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
+import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, sheetDecisionMade, sheetProposals, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
 import { rebuildsOut } from "./rebuilds";
@@ -6655,15 +6655,25 @@ async function route(db: Db, req: Request): Promise<Response> {
       ensureDecisions(db, ctx);
       return decisionInbox(ctx, db.decisions!, null).filter((d) => d.counts && d.reason === "needs_decision").length;
     };
-    meetingsCtx.logCall = async (id) => {
+    meetingsCtx.logRow = async (id) => {
       const ctx = decisionsContext(db, me);
       ensureDecisions(db, ctx);
       const found = db.decisions!.decisions.find((d) => d.id === id);
-      if (!found) return null;
+      if (!found || found.trashed) return found ?? null;
       const r = await routeDecisions(ctx, db.decisions!, new Request(`http://mock/v1/decisions/${found.number}`), ["v1", "decisions", String(found.number)], new URLSearchParams());
-      return r?.ok ? ((await r.json()) as Schemas["DecisionOut"]) : null;
+      return r?.ok ? found : null;
     };
     const meetingsDb = ensureMeetings(db, meetingsCtx);
+    // edit-decisions: the decision sheet's suggestions are Simple changes too (one changes table in the API).
+    if (req.method === "GET" && p[2] === "changes" && p.length === 3 && !q.get("session") && !q.get("document")) {
+      const engineRes = await simpleRoute(req);
+      if (engineRes?.ok) {
+        const rows = (await engineRes.json()) as Schemas["SimpleChangeOut"][];
+        const sheet = (await sheetProposals(meetingsDb, meetingsCtx, q.get("status"))).filter((c) => q.get("mine") !== "true" || c.by === me.id);
+        return json(200, [...rows, ...sheet].sort((a, b) => (a.at < b.at ? 1 : -1)));
+      }
+      if (engineRes) return engineRes;
+    }
     const meetingsRes =
       (await routeMeetingQuestions(meetingsDb, meetingsCtx, req, p)) ??
       (await routeSimpleMeetings(meetingsDb, meetingsCtx, req, p, q)) ?? (await withMeeting(meetingsDb, meetingsCtx, req, p, simpleRoute));

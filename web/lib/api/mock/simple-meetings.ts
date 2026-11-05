@@ -44,6 +44,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { agendaOut, decidedOutsideRows, findQuestion, questionsCounts, questionsOfMeeting, questionsOut, questionsPrdReplaced, routeQuestionChanges, seedQuestions, trashQuestion, waitingOut, type QuestionsDb } from "./simple-questions";
+import type { DecisionLogRow } from "./decisions";
 import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
 import { plainFlow } from "./simple-visuals";
 import { proposeOffAgenda, seedSimpleProposal } from "./simple-changes";
@@ -83,8 +84,12 @@ export interface MeetingsCtx {
   chatLines?: (meetingId: string) => string[];
   /** prd-questions: the person's remembered Decisions view (preferences.simple_decisions_view). */
   view?: () => "list" | "board" | "meetings" | null;
-  /** edit-decisions: a decision-log call by id (GET /v1/decisions/{number}), for the sheet's GET /v1/simple/decisions/{id} (one decisions table in the API). */
-  logCall?: (id: string) => Promise<Schemas["DecisionOut"] | null>;
+  /**
+   * edit-decisions: a decision-log call by id, the log's own row when the reader may read it
+   * (GET /v1/decisions/{number}), or one in Trash: the sheet reads and writes it there, never a copy (one
+   * decisions table in the API, one number per decision).
+   */
+  logRow?: (id: string) => Promise<DecisionLogRow | null>;
   /** prd-questions: the decision log's judgement calls waiting for this person (not run approvals). */
   othersWaiting?: () => number;
   /** home-honest-loading: every document of this kind is in Trash (and there is one). */
@@ -1466,14 +1471,7 @@ async function routeDecisionSheet(db: MeetingsDb, ctx: MeetingsCtx, req: Request
   const now = iso(mockNowMs());
   // GET /v1/simple/decisions/{id} (meetings_router.get_simple_decision): one decision as its Decisions row.
   if (req.method === "GET" && p[1] === "simple" && p[2] === "decisions" && p.length === 4 && p[3] !== "waiting") {
-    let d = db.decisions.find((x) => x.id === p[3] && !x.trashed && product(x));
-    if (!d && !db.decisions.some((x) => x.id === p[3])) {
-      const logged = await ctx.logCall?.(p[3]);
-      if (logged && logged.status === "proposed") {
-        sheetDecisionMade(db, logged, logged.created_by ?? ctx.me.id, logged.number);
-        d = db.decisions.find((x) => x.id === p[3]);
-      }
-    }
+    const { d } = await sheetDecision(db, ctx, p[3]);
     return d ? json(200, row(ctx, d)) : json(404, { detail: "No such decision" });
   }
   if (p[1] === "simple" && p[2] === "decisions" && p.length >= 4 && p[3] !== "waiting") {
@@ -1485,13 +1483,13 @@ async function routeDecisionSheet(db: MeetingsDb, ctx: MeetingsCtx, req: Request
       const entry = trash.entries.find((e) => (e.out.root.type === "decision" || e.out.root.type === "question") && e.out.root.id === id);
       if (!entry) return json(404, { detail: "No such decision in Trash" });
       if (!mayRestore(entry, ctx.me)) return json(403, { detail: "Only an owner, or whoever deleted it, restores this" });
-      return json(200, restoreFromTrash(trash, entry, now, { items: [], sheet: [...db.decisions, ...(db.questions?.questions ?? [])] }));
+      return json(200, restoreFromTrash(trash, entry, now, { items: [], sheet: [...db.decisions, ...(db.questions?.questions ?? []), ...[await ctx.logRow?.(id)].filter((r) => !!r)] }));
     }
     if (req.method !== "DELETE" || p.length !== 4) return null;
     const reason = new URL(req.url, "http://mock").searchParams.get("reason");
     let root: Schemas["TrashEntryOut"]["root"];
     const q = findQuestion(qdb(ctx, db), id);
-    const d = db.decisions.find((x) => x.id === id && !x.trashed);
+    const { d, log } = await sheetDecision(db, ctx, id);
     if (q && !q.trashed) {
       const r = trashQuestion(ctx, q);
       if (r instanceof Response) return r;
@@ -1500,6 +1498,7 @@ async function routeDecisionSheet(db: MeetingsDb, ctx: MeetingsCtx, req: Request
       if (d.status !== "proposed") return json(409, { detail: `D-${d.number} ${d.title} is ${d.status}; only an open one goes to Trash` });
       if (!maySheet(ctx, d)) return json(403, { detail: "Only its decider, whoever made it or an owner deletes it" });
       d.trashed = true;
+      if (log) toLog(log, d, now, ctx.me.id);
       root = { type: "decision", id: d.id, slug: null, title: d.title, kind: "decision", code: `D-${d.number}` };
     } else return json(404, { detail: "No such decision" });
     const row: TrashEntryRow = {
@@ -1514,6 +1513,11 @@ async function routeDecisionSheet(db: MeetingsDb, ctx: MeetingsCtx, req: Request
   }
   if (p[1] !== "simple" || p[2] !== "changes" || req.method !== "POST") return null;
   const held = (db.sheet_changes ??= []);
+  const decided = held.find((x) => x.change.id === p[3]);
+  if (decided && p.length === 5 && (p[4] === "accept" || p[4] === "decline")) {
+    const why = ((await req.clone().json().catch(() => ({}))) ?? {}) as { reason?: string | null };
+    return decideSheetChange(db, ctx, decided, p[4], why.reason ?? null, now);
+  }
   if (p.length === 5 && p[4] === "undo") {
     const h = held.find((x) => x.change.id === p[3]);
     if (!h) return null;
@@ -1521,6 +1525,8 @@ async function routeDecisionSheet(db: MeetingsDb, ctx: MeetingsCtx, req: Request
     if (h.change.undone) return json(409, { detail: "Already undone" });
     const at = db.decisions.findIndex((x) => x.id === h.was.id);
     if (at >= 0) db.decisions[at] = { ...structuredClone(h.was), approver_id: db.decisions[at].approver_id };
+    const log = await ctx.logRow?.(h.was.id);
+    if (log) toLog(log, { ...structuredClone(h.was), approver_id: log.approver_id }, now, ctx.me.id);
     h.change.undone = true;
     h.change.can_undo = false;
     return json(200, { change: { ...h.change, id: crypto.randomUUID(), status: "undone", undoes_id: h.change.id, undone: false, at: now }, flags: [] });
@@ -1529,8 +1535,8 @@ async function routeDecisionSheet(db: MeetingsDb, ctx: MeetingsCtx, req: Request
   const b = ((await req.clone().json().catch(() => ({}))) ?? {}) as Schemas["SimpleChangeIn"];
   if (b.op !== "edit_decision" && b.op !== "withdraw_decision") return null;
   if (RANK[ctx.me.role] < RANK.commenter) return json(403, { detail: "Viewers read decisions; they do not change them" });
-  const d = db.decisions.find((x) => x.id === b.target?.decision_id && !x.trashed);
-  if (!d || !product(d)) return json(404, { detail: "No such decision" });
+  const { d, log } = await sheetDecision(db, ctx, String(b.target?.decision_id ?? ""));
+  if (!d) return json(404, { detail: "No such decision" });
   if (d.status !== "proposed") return json(409, { detail: `D-${d.number} ${d.title} is ${d.status}; only an open one is changed` });
   const applies = maySheet(ctx, d);
   let before: Record<string, unknown>;
@@ -1555,15 +1561,100 @@ async function routeDecisionSheet(db: MeetingsDb, ctx: MeetingsCtx, req: Request
   };
   held.push({ change, was: structuredClone(d) });
   if (applies && b.op === "withdraw_decision") d.status = "withdrawn";
-  else if (applies) {
-    if ("title" in after) d.title = String(after.title);
-    if ("question" in after) d.ask = (after.question as string | null) ?? null;
-    if ("context" in after) d.context = (after.context as string | null) ?? null;
-    if ("options" in after) d.options = withOptions(d.options ?? [], after.options as string[]);
-    if ("review_at" in after) d.review_at = (after.review_at as string | null) ?? null;
-    d.edited = { at: now, by: ctx.me.id };
-  }
+  else if (applies) writeEdit(d, after, now, ctx.me.id);
+  if (applies && log) toLog(log, d, now, ctx.me.id);
   return json(201, { change, flags: [] });
+}
+
+/** decision_sheet._write for edit_decision: the fields as asked, and who edited it last. */
+function writeEdit(d: Decision, after: Record<string, unknown>, now: string, by: string): void {
+  if ("title" in after) d.title = String(after.title);
+  if ("question" in after) d.ask = (after.question as string | null) ?? null;
+  if ("context" in after) d.context = (after.context as string | null) ?? null;
+  if ("options" in after) d.options = withOptions(d.options ?? [], after.options as string[]);
+  if ("review_at" in after) d.review_at = (after.review_at as string | null) ?? null;
+  d.edited = { at: now, by };
+}
+
+/**
+ * edit-decisions (as decision_sheet.may_decide_change): the decision sheet's suggestions waiting
+ * for this reader (an owner or the decision's decider), for GET /v1/simple/changes beside the
+ * change engine's (one changes table in the API: Home's and Waiting for you's Accept).
+ */
+export async function sheetProposals(db: MeetingsDb, ctx: MeetingsCtx, status: string | null): Promise<Change[]> {
+  const out: Change[] = [];
+  for (const h of db.sheet_changes ?? []) {
+    if (status && h.change.status !== status) continue;
+    const { d } = await sheetDecision(db, ctx, String(h.change.target.decision_id ?? ""));
+    const decides = ctx.me.role === "owner" || (!!d && d.approver_id === ctx.me.id);
+    if (!decides && h.change.by !== ctx.me.id) continue;
+    out.push({ ...h.change, can_decide: h.change.status === "proposed" && decides });
+  }
+  return out;
+}
+
+/**
+ * edit-decisions (as decision_sheet.decide): Accept (applied as asked, unless the decision is no
+ * longer open or changed since: 409 "outdated") or Decline of a sheet suggestion, by its decider
+ * or an owner. null: not a sheet suggestion.
+ */
+async function decideSheetChange(db: MeetingsDb, ctx: MeetingsCtx, h: { change: Change; was: Decision }, action: "accept" | "decline", reason: string | null, now: string): Promise<Response> {
+  const c = h.change;
+  const { d, log } = await sheetDecision(db, ctx, String(c.target.decision_id ?? ""));
+  if (!(ctx.me.role === "owner" || (!!d && d.approver_id === ctx.me.id))) return json(403, { detail: "Only an owner or its decider decides this proposal" });
+  if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
+  if (action === "accept") {
+    if (!d) return json(404, { detail: "No such decision" });
+    if (d.status !== "proposed") return json(409, { detail: `outdated: D-${d.number} ${d.title} is ${d.status}` });
+    const after = c.after as Record<string, unknown>;
+    if (c.op === "edit_decision") {
+      const now_ = sheetFields(d);
+      const current = Object.fromEntries(Object.keys(after).map((k) => [k, now_[k]]));
+      const asked = Object.fromEntries(Object.keys(after).map((k) => [k, (c.before as Record<string, unknown>)[k]]));
+      if (JSON.stringify(current) !== JSON.stringify(asked)) return json(409, { detail: { message: "outdated: changed since it was proposed", current } });
+      writeEdit(d, after, now, c.by);
+    } else d.status = "withdrawn";
+    if (log) toLog(log, d, now, c.by);
+  }
+  Object.assign(c, { status: action === "accept" ? "accepted" : "declined", decided_by: ctx.me.id, decided_at: now, decision_reason: reason, can_decide: false });
+  return json(200, { change: c, flags: [] });
+}
+
+/**
+ * edit-decisions: the open product decision the sheet acts on, by id: Simple's own, else the
+ * decision log's call itself (`log`, read as a sheet decision and written back by toLog; never
+ * copied into Simple's store, so it keeps its one number).
+ */
+async function sheetDecision(db: MeetingsDb, ctx: MeetingsCtx, id: string): Promise<{ d: Decision | null; log: DecisionLogRow | null }> {
+  const log = (await ctx.logRow?.(id)) ?? null;
+  const own = db.decisions.find((x) => x.id === id && !x.trashed && product(x));
+  if (own) return { d: own, log };
+  if (!log || log.trashed || log.origin === "checkpoint" || db.decisions.some((x) => x.id === id)) return { d: null, log: null };
+  return { d: fromLog(log), log };
+}
+
+/** A decision-log call as the sheet reads it (its own number, fields and last sheet edit). */
+function fromLog(r: DecisionLogRow): Decision {
+  return {
+    id: r.id, number: r.number, title: r.title, origin: r.origin, status: r.status === "proposed" || r.status === "decided" ? r.status : "withdrawn",
+    approver_id: r.approver_id ?? null, at: r.created_at, subjects: (r.subjects ?? []).map((s) => ({ kind: String(s.kind), id: String(s.id) })), meeting_id: null, change_ids: [],
+    ask: r.question ?? null, context: r.context ?? null, options: (r.options ?? []).map((o) => ({ key: o.key, label: o.label })), review_at: r.review_at ?? null,
+    created_by: r.created_by ?? null, edited: r.sheet_edited ?? null, trashed: !!r.trashed,
+  };
+}
+
+/** Writes the sheet's change back to the decision-log call: its fields, a withdrawal (or its undo), Trash. */
+function toLog(r: DecisionLogRow, d: Decision, now: string, by: string): void {
+  r.title = d.title;
+  r.question = d.ask ?? null;
+  r.context = d.context ?? null;
+  r.options = (d.options ?? []).map((o) => r.options.find((x) => x.key === o.key && x.label === o.label) ?? { key: o.key, label: o.label, summary: null, pros: [], cons: [], evidence_ids: [], cost_if_wrong: null, recommended: false });
+  r.review_at = d.review_at ?? null;
+  if (d.status === "withdrawn" && r.status === "proposed") Object.assign(r, { status: "withdrawn", withdrawn_at: now, withdrawn_by: by, withdrawn_reason: null });
+  else if (d.status === "proposed" && r.status === "withdrawn") Object.assign(r, { status: "proposed", withdrawn_at: null, withdrawn_by: null, withdrawn_reason: null });
+  r.sheet_edited = d.edited ?? null;
+  r.trashed = !!d.trashed;
+  r.updated_at = now;
 }
 
 /** edit-decisions: a decision made in Simple (POST /v1/decisions) is listed on its Decisions page too, with every field. */
