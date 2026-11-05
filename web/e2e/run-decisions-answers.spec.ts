@@ -84,8 +84,8 @@ test("a card answered at the feature set shows under that stop with the feature'
   const bulk = page.getByTestId("scope-row").filter({ has: page.getByTestId("feature-title").filter({ hasText: "Bulk edit" }) });
   await bulk.getByRole("button", { name: "Include dependency" }).click();
   await bar(page).getByRole("button", { name: "Approve with 1 edit" }).click();
-  const confirm = page.getByRole("alertdialog", { name: "Approve with 1 edit" });
-  if (await confirm.isVisible().catch(() => false)) await confirm.getByRole("button", { name: "Approve with 1 edit" }).click();
+  // Rows still under Needs you: Approve says so first.
+  await page.getByRole("alertdialog", { name: "Approve with 1 edit" }).getByRole("button", { name: "Approve with 1 edit" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
 
   const section = page.getByRole("complementary", { name: "Run" }).filter({ visible: true }).getByTestId("run-decisions");
