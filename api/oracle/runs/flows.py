@@ -138,7 +138,7 @@ READ_DECISIONS_FIRST = (
 # word a person sees, text Oracle writes included), as the job prompts say it.
 GROUND_TRUTH_LINE = (
     'Call the company\'s graph of goals, products and features "the Ground Truth" in any '
-    'text you write, never "baseline" (except a goal\'s or key result\'s starting value).'
+    "text you write, never \"baseline\" (except a goal's or key result's starting value)."
 )
 
 # Segment tasks that can change the Ground Truth say this (H11 Autonomy).
