@@ -195,14 +195,19 @@ async def features_on_roadmap(db: AsyncSession) -> dict[str, OnRoadmap]:
         .limit(1)
         .scalar_subquery()
     )
-    # Each PRD's latest approved scope (a new PRD's: its run's) of a run still live or done:
-    # a cancelled or failed run's scope feeds nothing (an earlier finished run's still does).
+    # Each PRD's latest scope ever approved (a new PRD's: its run's) of a run still live or
+    # done: a cancelled or failed run's scope feeds nothing, and the scope its approval
+    # superseded (an earlier finished run's) counts again.
     prd = func.coalesce(PrdScope.document_id, PrdScope.run_id)
     latest_scopes = (
         select(PrdScope.id)
         .ext(distinct_on(prd))
         .join(Run, Run.id == PrdScope.run_id)
-        .where(PrdScope.status == "approved", Run.status.not_in(STOPPED_RUNS))
+        .where(
+            PrdScope.status.in_(("approved", "superseded")),
+            PrdScope.approved_at.is_not(None),
+            Run.status.not_in(STOPPED_RUNS),
+        )
         .order_by(prd, PrdScope.approved_at.desc().nulls_last(), PrdScope.created_at.desc())
     )
     scopes = (

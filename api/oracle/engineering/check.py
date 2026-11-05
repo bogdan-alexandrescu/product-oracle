@@ -263,7 +263,7 @@ async def in_no_prd(db: AsyncSession, known: Collection[str]) -> dict[str, str]:
     :func:`elsewhere`), each with its name: a brief depending on one is told it is in no PRD
     yet (the feature set stop lets it pass; the roadmap items stop would refuse it)."""
     return {
-        key: title or key
+        key: title.strip() or f"{key.replace('-', ' ').replace('_', ' ').capitalize()} ({key})"
         for key, title in await db.execute(
             select(Entity.key, Entity.title).where(
                 Entity.type == "feature", Entity.status != "rejected"
