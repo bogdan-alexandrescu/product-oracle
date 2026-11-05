@@ -407,7 +407,7 @@ export default function SimpleHome() {
       key={c.id}
       testId="home-proposal"
       lead={<Avatar name={c.by_name} />}
-      title={`${opWords(c.op)}: ${itemTitle(c.target.item_id)}${typeof c.after.title === "string" && NEW_FLOW_OPS.has(c.op) ? ` · ${c.after.title}` : ""}`}
+      title={`${opWords(c.op)}: ${typeof c.target.goal_id === "string" && typeof c.target.title === "string" ? c.target.title : itemTitle(c.target.item_id)}${typeof c.after.title === "string" && NEW_FLOW_OPS.has(c.op) ? ` · ${c.after.title}` : ""}`}
       meta={`${c.by === myId ? "You" : c.by_name} · ${formatInZone(c.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${c.reason ? ` · ${c.reason}` : ""}`}
       change={NEW_FLOW_OPS.has(c.op) ? null : beforeAfter(c)}
       thumb={NEW_FLOW_OPS.has(c.op)}

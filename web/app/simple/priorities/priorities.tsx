@@ -1944,7 +1944,7 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
                 {b.codes.map((c) => {
                   const r = rowOf.get(c);
                   return (
-                    <li key={c} data-code={c} className="flex items-center gap-1.5">
+                    <li key={c} data-code={r?.short_code || c} className="flex items-center gap-1.5">
                       {r && <CodeChip r={r} />}
                       <span>{r?.title ?? c}</span>
                     </li>

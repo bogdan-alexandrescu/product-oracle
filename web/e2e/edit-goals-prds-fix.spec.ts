@@ -27,7 +27,7 @@ import { expect, test, type Page } from "./test";
  * Card eg1-approver: protects = an approver's ⋯ reads Edit goal, Archive goal and Delete goal and
  * the Archived goals fold offers Restore and Delete, with and without a dated plan; fails_when =
  * any is missing or asks instead.
- * Card eg1-accept-restore: protects = an owner accepts a commenter's Ask to restore in Decisions,
+ * Card eg1-accept-restore: protects = an owner accepts a commenter's Ask to restore on Home,
  * and the goal is back in the buckets; fails_when = no ask to accept, or the goal stays archived.
  */
 
@@ -87,17 +87,19 @@ for (const look of LOOKS) {
     for (const view of VIEWS) {
       test(`${view.name}: Delete goal names Settings > Trash, and Undo brings the goal and its links back`, async ({ page }) => {
         await open(page, look, view);
-        await expect(bucket(page, view, "Activation").locator('[data-code="F-01"]')).toBeVisible();
+        // Without a dated plan a bucket lists this quarter's features (F-07 is Activation's).
+        const code = view.card === "plan-goal" ? "F-01" : "F-07";
+        await expect(bucket(page, view, "Activation").locator(`[data-code="${code}"]`)).toBeVisible();
         await deleteGoal(page, view, "Activation");
         await expect(note(page)).toContainText("Deleted Activation.");
         await expect(note(page)).toContainText("It is in Settings > Trash for 30 days.");
-        await expect(bucket(page, view, "Reliability").locator('[data-code="F-01"]')).toBeVisible();
-        if (view.card === "plan-goal") await expect(bucket(page, view, "Activation")).toHaveCount(0);
+        if (view.card === "plan-goal") await expect(bucket(page, view, "Reliability").locator('[data-code="F-01"]')).toBeVisible();
+        await expect(bucket(page, view, "Activation")).toHaveCount(0);
         await shot(page, `goal-undo-note-${slug(view.name)}-${slug(look.name)}`);
         await note(page).getByRole("button", { name: "Undo" }).click();
         await expect(note(page)).toContainText("Undone: Activation and its links are back.");
-        await expect(bucket(page, view, "Activation").locator('[data-code="F-01"]')).toBeVisible();
-        await expect(bucket(page, view, "Reliability").locator('[data-code="F-01"]')).toHaveCount(0);
+        await expect(bucket(page, view, "Activation").locator(`[data-code="${code}"]`)).toBeVisible();
+        await expect(bucket(page, view, "Reliability").locator(`[data-code="${code}"]`)).toHaveCount(0);
         await expect(bucket(page, view, "Activation").getByRole("button", { name: "More for Activation" })).toBeVisible();
       });
 
@@ -159,21 +161,21 @@ test.describe("fix round 2", () => {
     test(`no dated plan, ${phone.name}: a deleted goal's bucket is gone, also after a reload; Undo brings it back with its features`, async ({ page }) => {
       const view = VIEWS[1];
       await open(page, phone, view);
-      await expect(bucket(page, view, "Activation").locator('[data-code="F-01"]')).toBeVisible();
+      await expect(bucket(page, view, "Activation").locator('[data-code="F-07"]')).toBeVisible();
       await deleteGoal(page, view, "Activation");
       await expect(note(page)).toContainText("Deleted Activation.");
       await expect(bucket(page, view, "Activation")).toHaveCount(0);
       await shot(page, `no-plan-deleted-${slug(phone.name)}`);
       await note(page).getByRole("button", { name: "Undo" }).click();
       await expect(note(page)).toContainText("Undone: Activation and its links are back.");
-      await expect(bucket(page, view, "Activation").locator('[data-code="F-01"]')).toBeVisible();
+      await expect(bucket(page, view, "Activation").locator('[data-code="F-07"]')).toBeVisible();
       await expect(bucket(page, view, "Activation").getByRole("button", { name: "More for Activation" })).toBeVisible();
       await expect(bucket(page, view, "Activation").getByTestId("goal-owner")).toBeVisible();
 
       await deleteGoal(page, view, "Activation");
       await expect(bucket(page, view, "Activation")).toHaveCount(0);
       await page.reload();
-      await expect(bucket(page, view, "Reliability").locator('[data-code="F-01"]')).toBeVisible();
+      await expect(bucket(page, view, "Reliability")).toBeVisible();
       await expect(bucket(page, view, "Activation")).toHaveCount(0);
     });
   }
@@ -198,7 +200,7 @@ test.describe("fix round 2", () => {
       await expect(row("Launch in two new regions")).toHaveCount(0);
     });
 
-    test(`${view.name}: the owner accepts a commenter's Ask to restore in Decisions, and the goal is back`, async ({ page }) => {
+    test(`${view.name}: the owner accepts a commenter's Ask to restore on Home, and the goal is back`, async ({ page }) => {
       await open(page, look, view, "commenter@example.com");
       await fold(page).locator("summary").click();
       await fold(page).getByTestId("archived-goal").filter({ hasText: "Cut support tickets in half" }).getByRole("button", { name: "Ask to restore" }).click();
@@ -206,8 +208,9 @@ test.describe("fix round 2", () => {
 
       await signOut(page);
       await login(page, ADMIN.email);
-      await page.goto("/simple/decisions");
-      const ask = page.getByTestId("questions-mine").getByTestId("waiting-item").filter({ hasText: "proposed: restore the goal “Cut support tickets in half”" });
+      // On this branch an owner decides the asks on Home, with the other proposals waiting on them.
+      await page.goto("/simple");
+      const ask = page.getByTestId("home-proposal").filter({ hasText: "Restore the goal: Cut support tickets in half" });
       await ask.getByRole("button", { name: "Accept" }).click();
       await expect(ask).toHaveCount(0);
 

@@ -165,6 +165,8 @@ interface SimpleDb {
   decided_in?: Record<string, Schemas["SimpleDecidedRef"][]>;
   /** The plan-model lane (./simple-plan.ts): Guided setup's plan, in the "simple-plan" scenario. */
   plan?: PlanDb;
+  /** "goal-buckets-undated": the plan's roadmap has no approved version yet, so Priorities reads no dated plan. */
+  plan_undated?: boolean;
   /** roadmap-keydates: each PRD's dated milestones as its latest approved version has them
    * (PRD slug -> milestones), read by the server before every request (prdMilestonesOf). */
   prd_milestones?: Record<string, PrdMilestone[]>;

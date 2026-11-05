@@ -48,6 +48,11 @@ const FEATURES: Record<string, { value: number; effort: number; code?: string }>
 const PLAN_EXISTING: Record<string, string> = { "setup-checklist": "F-01", "setup-import": "F-02" };
 
 /** An item's code in the plan (plan-f-07: F-07; an existing item the plan names: its code), with a plan. */
+/** The baseline feature key of an item: its plan code, else its own code, else its key (as Priorities reads it). */
+export function featureKeyOf(db: SimpleDb, key: string): string {
+  return planCode(db, key) ?? FEATURES[key]?.code ?? key;
+}
+
 function planCode(db: SimpleDb, key: string): string | null {
   if (!db.plan) return null;
   const m = /^plan-f-(\d+)$/.exec(key);
@@ -419,6 +424,6 @@ export function prioritiesOut(
 /** priorities.plan_in_play: the plan PRD's plan as the API's priorities carry it (no version, no re-read). */
 function planOf(db: SimpleDb, read: Schemas["SimpleRoadmapOut"], role: Role): Schemas["SimplePlanOut"] | null {
   const prd = read.items.find((i) => i.prd?.slug === PLAN_PRD_SLUG)?.prd;
-  if (!db.plan || !prd) return null;
+  if (!db.plan || !prd || db.plan_undated) return null;
   return { ...planOut(db.plan, { id: prd.id, slug: prd.slug, title: prd.title }, role), version: null, can_read_again: false, read_at: null };
 }
