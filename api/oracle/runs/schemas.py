@@ -924,6 +924,21 @@ class CheckpointOut(BaseModel):
     vague_goals: int | None = None
 
 
+class RunDecisionAnswer(BaseModel):
+    """A question answered at a decided stop: the architect's at an approved Engineering
+    check, or the agents' on the Questions from the agents cards of a stop approved or sent
+    back (``oracle.runs.stop_answers``)."""
+
+    question: str
+    answer: str
+    # The feature it is about, when the question names one: its key, and its name from the
+    # briefs or the run's feature set (None when neither names it). A person reads the name.
+    feature_key: str | None = None
+    feature_title: str | None = None
+    answered_by_name: str | None = None
+    answered_at: datetime | None = None
+
+
 class RunDecision(BaseModel):
     """A decided checkpoint of a run, as its agents read it (``get_checkpoint_review``):
     who decided (the person's name beside their role), when, and what. A console
@@ -954,6 +969,8 @@ class RunDecision(BaseModel):
     # The decision in one line, as the run page shows it:
     # "Feature set · approved by Ana Example, an approver · note: Keep bulk import out of v1".
     summary: str
+    # The questions answered at the stop, so a person sees what was decided there.
+    answers: list[RunDecisionAnswer] = []
 
 
 class RunProgress(BaseModel):

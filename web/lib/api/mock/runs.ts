@@ -2560,6 +2560,7 @@ function decisionsOf(ctx: RunsContext, r: RunOut): RunDecision[] {
         edits: extra.edits ?? null,
         review: extra.review ?? null,
         delivered: !c.delivery,
+        answers: stopAnswers(ctx, c, people),
       };
       return { ...d, summary: decisionSummary(d) };
     });
@@ -3803,19 +3804,59 @@ function engInvalid(cp: CheckpointOut, a: Schemas["ActionIn"]): string | null {
   return "edit takes the field verdict, size or answer:<question id>";
 }
 
+/** An answer to an architect's question as the approved check records it (who answered and when). */
+type EngAnswer = { question_id: string; question: string; answer: unknown; by: string | null; at: string };
+
+/**
+ * As oracle.runs.stop_answers: the questions answered at a decided stop, the architect's at the
+ * Engineering check and the agents' on the Questions from the agents cards, each with who and when.
+ */
+function stopAnswers(ctx: RunsContext, c: CheckpointOut, people: Map<string, string>): RunDecision["answers"] {
+  // A stop sent back keeps its answered cards (carried into the next attempt); only an approved
+  // check decides the architect's questions.
+  if (c.status !== "approved" && c.status !== "changes_requested") return [];
+  const out: NonNullable<RunDecision["answers"]> = [];
+  const check = c.status === "approved" ? briefsOf(c) : null;
+  const recorded = (c.payload.briefs as { answers?: Record<string, EngAnswer[]> } | undefined)?.answers ?? {};
+  for (const [key, listed] of Object.entries(check ? recorded : {})) {
+    const title = check?.features.find((f) => f.key === key)?.title;
+    for (const a of listed) {
+      // As the API: a non-text answer is dropped, a text one stripped.
+      const answer = typeof a.answer === "string" ? a.answer.trim() : "";
+      if (!a.question || !answer) continue;
+      const by = a.by ?? c.decided_by ?? null;
+      out.push({ question: a.question, answer, feature_key: key, feature_title: title && title !== key ? title : null, answered_by_name: (by && people.get(by)) || null, answered_at: a.at ?? c.decided_at ?? null });
+    }
+  }
+  // A card names its feature by key: its name is the run's feature set's (the latest scope listing it).
+  const titled = (key: string) => [...(ctx.db.scopes?.[c.run_id] ?? [])].reverse().flatMap((s) => s.features).find((f) => f.key === key)?.title;
+  for (const q of ctx.db.agent_questions?.[c.id] ?? []) {
+    if (!q.answer) continue;
+    const label = q.options.find((o) => o.key === q.answer!.option)?.label ?? q.answer.option;
+    const title = q.feature ? titled(q.feature) : undefined;
+    out.push({ question: q.question, answer: q.answer.note ? `${label}. Note: ${q.answer.note}` : label, feature_key: q.feature ?? null, feature_title: title && title !== q.feature ? title : null, answered_by_name: q.answer.by?.name ?? null, answered_at: q.answer.at });
+  }
+  return out;
+}
+
 /** As oracle.engineering.check.on_approved: the choices recorded, each changed size a person's locked effort. */
 function approveEngCheck(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged: DraftActionRow[]) {
   const check = briefsOf(cp);
   if (!check) return;
   const verdicts: Record<string, unknown> = {};
   const sizes: Record<string, string> = {};
+  const answers: Record<string, EngAnswer[]> = {};
   for (const f of check.features) {
     const v = stagedEdit(staged, f.key, "verdict");
     if (v) verdicts[f.key] = { value: (v.value as { verdict: string }).verdict, note: (v.value as { note?: string | null }).note ?? null };
     sizes[f.key] = (stagedEdit(staged, f.key, "size")?.value as string | undefined) ?? f.size;
     ctx.setEffort?.(f.key, sizes[f.key], r.id);
+    for (const q of f.questions) {
+      const a = stagedEdit(staged, f.key, `answer:${q.id}`);
+      if (a) (answers[f.key] ??= []).push({ question_id: q.id, question: q.question, answer: a.value, by: a.updated_by ?? a.created_by, at: a.updated_at ?? ctx.now() });
+    }
   }
-  cp.payload = { ...cp.payload, briefs: { verdicts, sizes } };
+  cp.payload = { ...cp.payload, briefs: { verdicts, sizes, answers } };
 }
 
 // ---------------------------------------------------------------- F4 lane B Engineering dates

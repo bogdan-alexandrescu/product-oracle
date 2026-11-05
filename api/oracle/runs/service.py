@@ -184,6 +184,7 @@ from oracle.runs import (
     review_link,
     review_text,
     roadmap,
+    stop_answers,
     waits,
     workflow,
 )
@@ -224,6 +225,7 @@ from oracle.runs.schemas import (
     QueueWait,
     RunCreate,
     RunDecision,
+    RunDecisionAnswer,
     RunNoteRefs,
     RunOut,
     RunPatch,
@@ -1333,6 +1335,7 @@ async def decisions_of_runs(
             )
     by = {cp.id: _decider_of(cp) for cp in decided}
     people = await _people_named(db, {i for i in by.values() if i})
+    answered = await stop_answers.of_checkpoints(db, {r.id: r for r in runs}, decided)
     out: dict[uuid.UUID, list[RunDecision]] = {i: [] for i in flows_of}
     for cp in decided:
         flow = flows_of[cp.run_id]
@@ -1368,6 +1371,17 @@ async def decisions_of_runs(
                 review=cp.review or extra.get("review"),
                 delivered=delivered,
                 summary=decision_summary(cp.kind, cp.status, role, via, cp.note, delivered, who),
+                answers=[
+                    RunDecisionAnswer(
+                        question=a.question,
+                        answer=a.answer,
+                        feature_key=a.feature_key,
+                        feature_title=a.feature_title,
+                        answered_by_name=a.by_name,
+                        answered_at=a.at,
+                    )
+                    for a in answered.get(cp.id, [])
+                ],  # fmt: skip
             )
         )
     far = datetime.max.replace(tzinfo=UTC)
@@ -2922,11 +2936,14 @@ async def _prompt_context(
     # of a member-view run's prompt (reviewer notes, the change request, the Regenerate
     # note; discussions: oracle.discussions.agent_view.for_member_run).
     hidden = await member_hidden(db, run)
+    # A PRD writer reads each stop's note in its decided block, with the stop's name, who
+    # decided and the decision record (stop_answers.prompt_lines).
     notes = [
         f"{c.kind}: {c.note}"
         for c in await _checkpoints(db, [run.id])
         if c.status == "approved" and c.note and not (hidden and hidden.names(c.note))
-    ]
+        and segment.name not in stop_answers.WRITERS
+    ]  # fmt: skip
     if change_request and hidden and hidden.names(change_request):
         change_request = WITHHELD_NOTE
     feedback: list[dict[str, Any]] = []
@@ -2999,6 +3016,7 @@ async def _prompt_context(
         extra_lines=[
             *await extensions.prompt_lines(db, run),
             *await eng_check.prompt_lines(db, run.id, segment.name),
+            *await stop_answers.prompt_lines(db, run, segment.name, segment.seq, hidden),
             *(
                 await eng_check.run_architect_lines(db, run, mcp_reachable=mcp_reachable)
                 if flows.BRIEFS_FILE in _flow(run).segment(segment.name).outputs
@@ -4907,6 +4925,12 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
         # Simple, or with other items or dates than the run's, goes back to the writer;
         # every roadmap draft, the feedback loop's too (the owner, Nov 4).
         problems = await _plan_table_problems(db, run, markdown, source_id)
+        if problems:
+            return rejection.refused(name, problems)
+    if kind == "prd":
+        # A question a person answered at a stop is decided: a draft that still lists it
+        # under Decisions needed or Open questions goes back to the writer.
+        problems = await stop_answers.open_problems(db, run, markdown)
         if problems:
             return rejection.refused(name, problems)
     async with tenant_session(tenant_id) as s:
@@ -7837,6 +7861,7 @@ async def _take_answer(
     }
     cp.status = "approved" if approved else "changes_requested"
     cp.decided_at = record.answered_at or _now()
+    await stop_answers.record(db, run, cp)
     cp.note = applied
     if not ours:
         _record_decider(
@@ -8561,6 +8586,9 @@ async def decide_checkpoint(
     cp.decided_by = principal.id
     cp.decided_at = _now()
     cp.note = note
+    # The stop's answered cards, kept as it is decided: a send-back reruns the segment,
+    # whose next files replace the questions.
+    await stop_answers.record(db, run, cp)
     if document_review is not None:
         cp.review = document_review
     elif send_back:
