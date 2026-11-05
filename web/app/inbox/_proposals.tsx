@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { Button, Chip, LinkButton } from "@/components/ds";
+import { Button, Chip, InfoTip, LinkButton } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay } from "@/lib/dates";
 import { formatDateRange, formatDateTime } from "@/lib/format";
@@ -133,6 +133,7 @@ export function proposalRows(proposals: Proposal[], busy: string | null, act: Ac
  * B-15: the planning horizon's last day, by the owner's rule (no roadmap states its own end).
  * A suggested date after it is a long guess: it carries a Far out chip.
  */
+// A roadmap's own horizon end replaces this once the API carries one.
 export const PLANNING_HORIZON_END = "2027-02-28";
 
 export function dateSuggestionRows(rows: DateSuggestion[], seenBefore: string | null | undefined): StatedNeed[] {
@@ -148,14 +149,12 @@ export function dateSuggestionRows(rows: DateSuggestion[], seenBefore: string | 
           {s.end_date > PLANNING_HORIZON_END && (
             <>
               {" "}
-              <Chip
-                kind="warn"
-                className="align-middle"
-                title={`Low confidence, after the planning horizon (${calendarDay(PLANNING_HORIZON_END, { month: "short", day: "numeric", year: "numeric" })})`}
-                data-testid="date-suggestion-far-out"
-              >
+              <Chip kind="warn" className="align-middle" data-testid="date-suggestion-far-out">
                 Far out
-              </Chip>
+              </Chip>{" "}
+              <InfoTip label="Far out" align="start" testId="date-suggestion-far-out-tip">
+                Low confidence, after the planning horizon ({calendarDay(PLANNING_HORIZON_END, { month: "short", day: "numeric", year: "numeric" })})
+              </InfoTip>
             </>
           )}
         </span>

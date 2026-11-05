@@ -1323,9 +1323,10 @@ function baselineLabel(title: string, summary: { need_you: number; blocking: num
 /**
  * B-22: three or more runs of one flow waiting at the same stop read as one row, "Confirm the
  * baseline · 11 runs", each run under it with its own action. A row with its own rows under it
- * (a Roadmap items review) stays as it is.
+ * (a Roadmap items review) stays as it is. The group is New while any of its runs is new: its
+ * new runs show under New, its seen runs under Seen, each tab counting the runs it lists.
  */
-function groupCheckpoints(rows: InboxOut["checkpoints"], needs: Need[]): Need[] {
+function groupCheckpoints(rows: InboxOut["checkpoints"], needs: Need[], seenBefore: string | null | undefined): Need[] {
   const keyOf = (c: InboxOut["checkpoints"][number]) => [c.kind, c.flow, c.can_decide].join("|");
   const byKey = new Map<string, Need[]>();
   needs.forEach((n, i) => {
@@ -1340,15 +1341,19 @@ function groupCheckpoints(rows: InboxOut["checkpoints"], needs: Need[]): Need[] 
     if (done.has(same[0].key)) return [];
     done.add(same[0].key);
     const c = rows[i];
-    const members = rows.filter((r) => same.some((x) => x.key === r.id));
-    const docs = new Set(members.map((r) => r.document_title ?? r.document_slug));
-    const where = docs.size === 1 && c.document_title ? `${c.flow_title} · ${c.document_title}` : c.flow_title;
-    const title = `${CHECKPOINT_LABEL[c.kind]} · ${plural(same.length, "run")}`;
-    const latest = same.map((x) => x.at ?? "").sort().at(-1) || null;
-    return [
-      {
+    const parts = [
+      { state: "new", runs: same.filter((x) => isNew(x.at, seenBefore)) },
+      { state: "open", runs: same.filter((x) => !isNew(x.at, seenBefore)) },
+    ].filter((p) => p.runs.length > 0);
+    return parts.map(({ state, runs }) => {
+      const members = rows.filter((r) => runs.some((x) => x.key === r.id));
+      const docs = new Set(members.map((r) => r.document_title ?? r.document_slug));
+      const where = docs.size === 1 && members[0].document_title ? `${c.flow_title} · ${members[0].document_title}` : c.flow_title;
+      const title = `${CHECKPOINT_LABEL[c.kind]} · ${plural(runs.length, "run")}`;
+      const latest = runs.map((x) => x.at ?? "").sort().at(-1) || null;
+      return {
         ...n,
-        key: `checkpoint-group-${same[0].key}`,
+        key: `checkpoint-group-${same[0].key}-${state}`,
         item: (
           <span className="truncate" data-testid="checkpoint-group" title={title}>
             {title}
@@ -1362,12 +1367,13 @@ function groupCheckpoints(rows: InboxOut["checkpoints"], needs: Need[]): Need[] 
         at: latest,
         left: null,
         action: null,
-        size: same.length,
+        state,
+        size: runs.length,
         folded: true,
         // Each run keeps its own line and Open; its context names the run.
-        children: same,
-      },
-    ];
+        children: runs.map((x) => ({ ...x, state })),
+      };
+    });
   });
 }
 
@@ -1375,7 +1381,17 @@ function groupCheckpoints(rows: InboxOut["checkpoints"], needs: Need[]): Need[] 
  * The Inbox's rows, each with its action. `compact` (Home) gives an overrun, a stuck run and
  * a failed import one action that opens the run, where the rest are.
  */
-export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compact = false, fixed?: FixedHere, perms: Perms = ALL, onActed?: OnActed) {
+export function inboxNeeds(
+  inbox: InboxOut,
+  busy: string | null,
+  act: Act,
+  compact = false,
+  fixed?: FixedHere,
+  perms: Perms = ALL,
+  onActed?: OnActed,
+  /** When I last saw the Inbox: a group of checkpoints splits into its new and seen runs. */
+  seenBefore?: string | null,
+) {
   // What the signed-in person may do on a run (qa-company-3): its starter may manage it too.
   const may = (op: Operation, r: { created_by?: string | null }) => perms.can(op, !!perms.userId && r.created_by === perms.userId);
   // D3: a console approval held while blocking problems are open waits for a review.
@@ -1787,7 +1803,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     action: openRun(r),
   }));
 
-  return { checkpoints: compact ? checkpoints : groupCheckpoints(inbox.checkpoints, checkpoints), deliveries, approvals, overruns, lookups, imports, noDocuments, searches, revising };
+  return { checkpoints: compact ? checkpoints : groupCheckpoints(inbox.checkpoints, checkpoints, seenBefore), deliveries, approvals, overruns, lookups, imports, noDocuments, searches, revising };
 }
 
 /**
@@ -2144,7 +2160,7 @@ export function allNeeds(
   /** What the signed-in person may do (usePerms): rows draw only those actions. */
   perms: Perms = ALL,
 ): StatedNeed[] {
-  const n = inboxNeeds(inbox, busy, act, compact, fixed, perms, onActed);
+  const n = inboxNeeds(inbox, busy, act, compact, fixed, perms, onActed, seenBefore);
   // A row may carry its own state and count (a question answered in place: ./_questions).
   const launches = launchNeeds(inbox);
   const requests = requestNeeds(inbox, busy, act);

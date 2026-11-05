@@ -12,13 +12,59 @@ import { login, seedRun } from "./helpers";
  * B-16 the PRD review line takes the full width on a phone, Open review below it;
  * B-17 a viewer's runs list says who a waiting review waits on;
  * B-21 the runs list filters by state and by words;
- * B-15 an Inbox date suggestion after the planning horizon carries a Far out chip;
- * B-22 three or more runs of one flow waiting at the same stop read as one Inbox row;
+ * B-15 an Inbox date suggestion after the planning horizon carries a Far out chip, its reason
+ *      in the (i) beside it, read by touch on a phone, light and dark;
+ * B-22 three or more runs of one flow waiting at the same stop read as one Inbox row, its new
+ *      runs under New and its seen runs under Seen, light and dark;
  * B-19 Priorities follows the scenario: none for a new company, many for a large one.
  */
 
 const scenario = (page: Page, name: string) => page.addInitScript(([k, s]) => localStorage.setItem(k, s), [MOCK_SCENARIO_KEY, name] as const);
 const rows = (page: Page) => page.getByTestId("run-row");
+const theme = (page: Page, t: "light" | "dark") => page.addInitScript((t) => localStorage.setItem("oracle-theme", t), t);
+const FAR_OUT_TIP = "Low confidence, after the planning horizon (Feb 28, 2027)";
+
+/** The contrast of an element's text on the first background behind it that is not clear. */
+async function textContrast(el: ReturnType<Page["locator"]>): Promise<number> {
+  return el.evaluate((node) => {
+    const rgb = (c: string) => (c.match(/[\d.]+/g) ?? []).map(Number);
+    const lum = ([r, g, b]: number[]) => {
+      const f = (v: number) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    };
+    let bg = [255, 255, 255];
+    for (let n: Element | null = node; n; n = n.parentElement) {
+      const c = rgb(getComputedStyle(n).backgroundColor);
+      if (c.length >= 3 && (c.length < 4 || c[3] > 0.5)) {
+        bg = c;
+        break;
+      }
+    }
+    const [a, b] = [lum(rgb(getComputedStyle(node).color)), lum(bg)].sort((x, y) => y - x);
+    return (a + 0.05) / (b + 0.05);
+  });
+}
+
+/**
+ * Seeds two of the large company's grouped runs as arrived after my last visit, the rest
+ * before it, so the group's runs split between New and Seen.
+ */
+async function seedGroupSeen(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const write = (globalThis as { __poMockWrite?: (change: (db: any) => string) => Promise<string> }).__poMockWrite;
+    if (!write) throw new Error("The mock API is not loaded: sign in before seeding");
+    return write((db) => {
+      type C = { status: string; created_at: string };
+      const runs: { document_slug: string; checkpoints: C[] }[] = db.runs.runs;
+      for (const r of runs) for (const c of r.checkpoints) if (c.status === "pending") c.created_at = "2026-10-01T09:00:00Z";
+      const copies = runs.filter((r) => /-\d+$/.test(r.document_slug) && r.checkpoints.some((c) => c.status === "pending"));
+      for (const r of copies.slice(0, 2)) for (const c of r.checkpoints) if (c.status === "pending") c.created_at = "2026-10-01T12:00:00Z";
+      db.inbox_seen = Object.fromEntries((db.members as { id: string }[]).map((m) => [m.id, "2026-10-01T10:00:00Z"]));
+      return "seeded";
+    });
+  });
+}
 
 test.describe("desktop", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
@@ -96,7 +142,10 @@ test.describe("desktop", () => {
     await expect(far.first()).toBeVisible();
     const chip = far.first().getByTestId("date-suggestion-far-out");
     await expect(chip).toHaveText("Far out");
-    await expect(chip).toHaveAttribute("title", "Low confidence, after the planning horizon (Feb 28, 2027)");
+    // Its reason is in the (i) beside it, not a native title.
+    await expect(chip).not.toHaveAttribute("title");
+    await far.first().getByTestId("date-suggestion-far-out-tip").hover();
+    await expect(far.first().getByRole("tooltip")).toHaveText(FAR_OUT_TIP);
     // Only a suggestion that ends after Feb 28, 2027 carries it.
     for (const t of await contexts.allTextContents()) {
       const year = Number(/(\d{4})(?!.*\d{4})/.exec(t)?.[1]);
@@ -129,6 +178,74 @@ test.describe("desktop", () => {
     await expect(under).toHaveCount(0);
   });
 
+  test("B-22: a group is New while any of its runs is new; its seen runs are under Seen, each tab counting what it lists", async ({ page }) => {
+    await scenario(page, "large");
+    await login(page);
+    await seedGroupSeen(page);
+    await page.goto("/inbox");
+    const tabs = page.getByTestId("inbox-state-tabs");
+    const tabCount = async (name: string) => Number(/(\d+)$/.exec((await tabs.getByRole("tab", { name: new RegExp(`^${name}`) }).textContent())!.trim())?.[1] ?? 0);
+    const listed = async () => {
+      const groups = page.getByTestId("checkpoint-group");
+      let n = (await page.locator("[role=tabpanel] tr[data-need]:not([data-child-of])").count()) - (await groups.count());
+      for (const g of await groups.all()) n += Number(/(\d+) runs?$/.exec((await g.textContent())!)![1]);
+      return n;
+    };
+    const open = async (runs: number) => {
+      const group = page.getByTestId("checkpoint-group");
+      await expect(group).toHaveCount(1);
+      await expect(group).toHaveText(new RegExp(` · ${runs} runs?$`));
+      await page.getByRole("row").filter({ has: group }).getByRole("button", { name: "Show runs" }).click();
+      await expect(page.locator("tr[data-child-of]").filter({ has: page.getByTestId("checkpoint-label") })).toHaveCount(runs);
+    };
+    await expect(page.getByTestId("inbox-tab-new")).toBeVisible();
+    await open(2);
+    expect(await listed()).toBe(await tabCount("New"));
+    await tabs.getByRole("tab", { name: /^Seen/ }).click();
+    await expect(page.getByTestId("inbox-tab-open")).toBeVisible();
+    const seen = Number(/(\d+) runs$/.exec((await page.getByTestId("checkpoint-group").textContent())!)![1]);
+    expect(seen).toBeGreaterThan(3);
+    await open(seen);
+    expect(await listed()).toBe(await tabCount("Seen"));
+    const waiting = (await page.getByTestId("nav-inbox-badge").first().textContent())!.trim();
+    expect((await tabCount("New")) + (await tabCount("Seen"))).toBe(Number(waiting));
+  });
+
+  test("B-15 dark: the Far out chip and its reason read in dark", async ({ page }) => {
+    await theme(page, "dark");
+    await scenario(page, "inbox-reviewer");
+    await login(page);
+    await page.goto("/simple/roadmap");
+    await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+    await page.goto("/inbox");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    const chip = page.getByTestId("date-suggestion-far-out").first();
+    await expect(chip).toHaveText("Far out");
+    expect(await textContrast(chip)).toBeGreaterThanOrEqual(4.5);
+    const tip = page.getByTestId("date-suggestion-context").filter({ has: chip }).first();
+    await tip.getByTestId("date-suggestion-far-out-tip").hover();
+    await expect(tip.getByRole("tooltip")).toHaveText(FAR_OUT_TIP);
+    expect(await textContrast(tip.getByRole("tooltip"))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  test("B-22 dark: the grouped checkpoints and their runs read in dark", async ({ page }) => {
+    await theme(page, "dark");
+    await scenario(page, "large");
+    await login(page);
+    await page.goto("/inbox");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    const group = page.getByTestId("checkpoint-group").first();
+    await expect(group).toHaveText(/ · \d+ runs$/);
+    expect(await textContrast(group)).toBeGreaterThanOrEqual(4.5);
+    const groupRow = page.getByRole("row").filter({ has: group });
+    const toggle = groupRow.getByRole("button", { name: "Show runs" });
+    expect(await textContrast(toggle)).toBeGreaterThanOrEqual(4.5);
+    await toggle.click();
+    const label = page.locator("tr[data-child-of]").getByTestId("checkpoint-label").first();
+    await expect(label).toBeVisible();
+    expect(await textContrast(label)).toBeGreaterThanOrEqual(4.5);
+  });
+
   test("B-19: Priorities follows the scenario: none for a new company, many for a large one", async ({ browser }) => {
     for (const [name, check] of [
       ["empty", (n: number) => expect(n).toBe(0)],
@@ -147,7 +264,28 @@ test.describe("desktop", () => {
 });
 
 test.describe("phone", () => {
-  test.use({ viewport: { width: 390, height: 844 } });
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+
+  for (const t of ["light", "dark"] as const) {
+    test(`B-15: the Far out reason opens by touch on a phone, ${t}`, async ({ page }) => {
+      await theme(page, t);
+      await scenario(page, "inbox-reviewer");
+      await login(page);
+      await page.goto("/simple/roadmap");
+      await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+      await page.goto("/inbox");
+      await expect(page.locator("html")).toHaveAttribute("data-theme", t);
+      const far = page.getByTestId("date-suggestion-context").filter({ has: page.getByTestId("date-suggestion-far-out") }).first();
+      await expect(far).toBeVisible();
+      await far.getByTestId("date-suggestion-far-out-tip").tap();
+      const tip = far.getByRole("tooltip");
+      await expect(tip).toHaveText(FAR_OUT_TIP);
+      const box = (await tip.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(390);
+      expect(await textContrast(tip)).toBeGreaterThanOrEqual(4.5);
+    });
+  }
 
   test("B-16: the PRD review line takes the full width on a phone, Open review below it", async ({ page }) => {
     await scenario(page, "run-review");
