@@ -15,7 +15,7 @@ import { leftOut } from "./decision-notes";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, seeded, stableUuid } from "./ids";
-import { milestoneOut, routeMilestones, type MockMilestone } from "./simple-milestones";
+import { milestoneOut, oldMilestonesOut, routeMilestones, type MockMilestone, type OldCtx } from "./simple-milestones";
 import { betSubject, flowFor, type VisualsDb } from "./simple-visuals";
 import type { OnePagerDb } from "./simple-one-pager";
 import { appliedMilestones, type AppliedRecord } from "./approved-roadmap";
@@ -1169,6 +1169,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     ],
     // build-milestones-on-roadmap: the shown roadmaps' milestones per goal (a PRD's among them).
     goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, x.prd ? role !== "viewer" : role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)))),
+    old_milestones: oldMilestonesOut(db.goal_milestones ?? [], role, oldCtx(db)),
     span: db.plan ? planSpan() : null,
     // A working draft belongs to one roadmap: a chosen roadmap's read carries its own only.
     changes_in_review: chosen ? (reader.hiddenBy[roadmapId(chosen)] ?? 0) : reader.hidden,
@@ -1236,6 +1237,14 @@ export function appliedVersionOf(db: SimpleDb, slug: string, me: Who): Schemas["
 }
 
 const roadmapTitle = (db: SimpleDb, slug: string): string => db.titles?.[slug] ?? ROADMAPS[slug].title;
+
+/** old-milestones: the company roadmap and its items, for the older roadmaps' milestones (./simple-milestones.ts). */
+const oldCtx = (db: SimpleDb): OldCtx => ({
+  company: db.company_roadmap,
+  companyItems: new Map(db.items.filter((s) => s.roadmap === db.company_roadmap).map((s) => [s.key, s.title])),
+  roadmapTitle: (slug) => roadmapTitle(db, slug),
+  goalTitle: (key) => GOALS[key] ?? null,
+});
 
 /** Roadmap-plus: the shown roadmaps' key dates (the draft's to who sees it) and who may change them. */
 function keyDatesOut(db: SimpleDb, full: SimpleDb, shown: string[], me: { id: string; role: Role }): Pick<Schemas["SimpleRoadmapOut"], "key_dates" | "key_date_roadmaps"> {
@@ -1367,7 +1376,7 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
     return out ? json(200, out) : json(422, { detail: "group: goal, track or prd" });
   }
   const slugOf = (id: string) => Object.keys(ROADMAPS).find((r) => roadmapId(r) === id) ?? null;
-  const ms = await routeMilestones(db, me, req, p, slugOf, (r) => canEditRoadmap(db, r, me), (r) => !!db.company_roadmap && r !== db.company_roadmap);
+  const ms = await routeMilestones(db, me, req, p, slugOf, (r) => canEditRoadmap(db, r, me), (r) => !!db.company_roadmap && r !== db.company_roadmap, oldCtx(db));
   if (ms) return ms;
   if (p[3] !== "date-suggestions") return null;
   if (!p[4] && m === "GET") {

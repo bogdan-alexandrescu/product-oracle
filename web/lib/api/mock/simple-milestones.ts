@@ -24,6 +24,62 @@ export interface MockMilestone {
   prd?: { slug: string; title: string; owner: string } | null;
   pending?: Schemas["SimpleMilestonePending"] | null;
   deleted?: boolean;
+  /** old-milestones: carried onto the company roadmap (its copy's id), or dropped by an owner. */
+  carried_to?: string;
+  dropped?: boolean;
+}
+
+/** What the old-milestones read and routes need of the roadmap db (./simple-roadmap.ts). */
+export interface OldCtx {
+  company: string | undefined;
+  /** The company roadmap's items (key -> title), as Simple shows them. */
+  companyItems: Map<string, string>;
+  roadmapTitle: (slug: string) => string;
+  goalTitle: (key: string) => string | null;
+}
+
+/** old-milestones (api/oracle/simple/old_milestones.py): the older roadmaps' own goal milestones not on the company roadmap yet. */
+const stillOld = (list: MockMilestone[], ctx: OldCtx) => (ctx.company ? list.filter((m) => m.roadmap !== ctx.company && !m.prd && !m.deleted && !m.carried_to && !m.dropped) : []);
+const leftOn = (m: MockMilestone, ctx: OldCtx) => m.gates.filter((k) => ctx.companyItems.has(k));
+const needsCall = (m: MockMilestone, ctx: OldCtx) => m.gates.length > 0 && leftOn(m, ctx).length === 0;
+
+/** SimpleRoadmapOut.old_milestones: an owner's alone (anyone else reads nothing to act on). */
+export function oldMilestonesOut(list: MockMilestone[], role: string, ctx: OldCtx): Schemas["SimpleOldMilestones"] {
+  if (role !== "owner") return { can_act: false, moves: [], needs_call: [] };
+  const rows = stillOld(list, ctx).sort((a, b) => ((a.date ?? "9999") < (b.date ?? "9999") ? -1 : (a.date ?? "9999") > (b.date ?? "9999") ? 1 : a.name.localeCompare(b.name)));
+  const out = (m: MockMilestone): Schemas["SimpleOldMilestone"] => ({
+    id: m.id,
+    name: m.name,
+    date: m.date,
+    goal_id: m.goal ? stableUuid(`simple-goal/${m.goal}`) : null,
+    goal_title: m.goal ? ctx.goalTitle(m.goal) : null,
+    from_roadmap: { id: stableUuid(`simple-doc/${m.roadmap}`), slug: m.roadmap, title: ctx.roadmapTitle(m.roadmap) },
+    items: leftOn(m, ctx).map((k) => ctx.companyItems.get(k)!),
+  });
+  return { can_act: true, moves: rows.filter((m) => !needsCall(m, ctx)).map(out), needs_call: rows.filter((m) => needsCall(m, ctx)).map(out) };
+}
+
+/** POST /v1/simple/roadmap/milestones/carry-over and /{id}/keep|drop (owner only). */
+function routeOld(list: MockMilestone[], me: { role: string }, req: Request, p: string[], ctx: OldCtx): Response | null {
+  const carry = p[4] === "carry-over" && !p[5];
+  const decide = !!p[4] && (p[5] === "keep" || p[5] === "drop");
+  if (req.method !== "POST" || !(carry || decide)) return null;
+  if (me.role !== "owner") return json(403, { detail: "Requires the owner role" });
+  const copy = (m: MockMilestone, gates: string[]): string => {
+    const n = list.filter((x) => x.roadmap === ctx.company && x.goal === m.goal && !x.prd && !x.deleted).reduce((a, x) => Math.max(a, Number(x.code.slice(1)) || 0), 0);
+    const id = stableUuid(`simple-gm-carried/${m.id}`);
+    list.push({ id, roadmap: ctx.company!, code: `M${n + 1}`, name: m.name, date: m.date, goal: m.goal, gates, counts_when: m.counts_when, progress: m.progress });
+    m.carried_to = id;
+    return id;
+  };
+  const done = (carried: string[]) => json(200, { carried, old_milestones: oldMilestonesOut(list, me.role, ctx) });
+  if (carry) return done(stillOld(list, ctx).filter((m) => !needsCall(m, ctx)).map((m) => copy(m, leftOn(m, ctx))));
+  const m = stillOld(list, ctx).find((x) => x.id === p[4]);
+  if (!m) return list.some((x) => x.id === p[4]) ? json(409, { detail: "That milestone is not waiting on a call" }) : json(404, { detail: "No such milestone" });
+  if (!needsCall(m, ctx)) return json(409, { detail: "That milestone still has items: bring it over with the rest" });
+  if (p[5] === "keep") return done([copy(m, [])]);
+  m.dropped = true;
+  return done([]);
 }
 
 
@@ -46,6 +102,20 @@ export function seedPrdMilestones(): MockMilestone[] {
     { id: stableUuid("simple-gm/p3"), roadmap: "alerts-roadmap", code: "M3", name: "Push on phones", date: "2027-01-12", goal: "grow-retention", gates: ["alert-mobile"], counts_when: "Live on both phone apps", progress: "not_started", prd },
     { id: stableUuid("simple-gm/p4"), roadmap: "alerts-roadmap", code: "M4", name: "Routing by team", date: "2027-03-01", goal: "grow-retention", gates: ["alert-sso"], counts_when: "Used by 20 teams", progress: "not_started", prd },
     { id: stableUuid("simple-gm/p5"), roadmap: "alerts-roadmap", code: "M5", name: "Alerts in the admin app", date: null, goal: "grow-retention", gates: [], counts_when: "", progress: "not_started", prd },
+  ];
+}
+
+/**
+ * old-milestones ("old-milestones" scenario, on top of "one-roadmap"): the older Trust plan
+ * roadmap's own goal milestones, not on the company roadmap yet. Two still have items there
+ * (one only part of them); "Seller badge pilot" waits on the badge alone, which is not.
+ */
+export function seedOldMilestones(oldRoadmap: string): MockMilestone[] {
+  const at = (n: string, code: string, name: string, date: string, goal: string, gates: string[]): MockMilestone => ({ id: stableUuid(`simple-gm/old/${n}`), roadmap: oldRoadmap, code, name, date, goal, gates, counts_when: "Holds 7 days in a row", progress: "not_started" });
+  return [
+    at("safety", "M1", "Safety tools in beta", "2026-11-27", "grow-retention", ["report-button", "block-list"]),
+    at("scale", "M2", "Ready for twice the load", "2026-12-11", "grow-retention", ["read-replicas", "trusted-badge"]),
+    at("badge", "M1", "Seller badge pilot", "2026-11-20", "faster-activation", ["trusted-badge"]),
   ];
 }
 
@@ -78,9 +148,12 @@ export async function routeMilestones(
   slugOf: (id: string) => string | null,
   canEdit: (roadmap: string) => boolean,
   isHistory: (roadmap: string) => boolean = () => false,
+  old?: OldCtx,
 ): Promise<Response | null> {
   if (p[3] !== "milestones") return null;
   const list = (db.goal_milestones ??= []);
+  const carried = old ? routeOld(list, me, req, p, old) : null;
+  if (carried) return carried;
   const keyOf = (id: string) => Object.keys(db.ids).find((k) => db.ids[k] === id);
   const goalKey = (id: string | null | undefined, goals: string[]) => (id ? (goals.find((g) => stableUuid(`simple-goal/${g}`) === id) ?? null) : null);
   const GOAL_KEYS = ["grow-retention", "faster-activation", "quiet-alerts"];

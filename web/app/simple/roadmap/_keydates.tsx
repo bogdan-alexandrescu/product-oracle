@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ds";
 
 import type { Act } from "./_card";
+import { OldMilestones } from "./_old_milestones";
 import { shortDay, type KeyDate, type Roadmap } from "./_lib";
 
 type Draft = { name: string; date: string; note: string };
@@ -25,7 +26,7 @@ const dayWords = (day: string, today: string) => (day.slice(0, 4) === today.slic
  * names it, target.roadmap_id); all roadmaps, it lists the key dates per roadmap and adding
  * one asks which roadmap.
  */
-export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data: Roadmap; act: Act; mayChange: boolean; phone: boolean; onClose: () => void }) {
+export function KeyDatesEditor({ data, act, mayChange, phone, onClose, onOld }: { data: Roadmap; act: Act; mayChange: boolean; phone: boolean; onClose: () => void; onOld: () => Promise<void> | void }) {
   const chosen = data.roadmap ?? null;
   // The roadmaps listed: the chosen one, else every roadmap the person may read.
   const roadmaps = data.key_date_roadmaps ?? [];
@@ -204,6 +205,8 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
           </ul>
         </section>
       ))}
+      {/* old-milestones: an owner brings the older roadmaps' goal milestones over. */}
+      <OldMilestones old={data.old_milestones} today={data.today} onDone={onOld} />
       {can && (
         <form
           className="mt-3 space-y-2 border-t border-line pt-3"
