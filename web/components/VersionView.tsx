@@ -1420,7 +1420,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                 the body names, in one short line, the sections they point to. */}
             {warnedSections.length > 0 && (
               <p role="status" data-testid="warned-sections" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text2">
-                <Icon name="alert" size={14} className="text-warn" />
+                <Icon name="alert" size={16} className="text-warn" />
                 <span>Still open in</span>
                 {warnedSections.map((k, i) => (
                   <span key={k}>
