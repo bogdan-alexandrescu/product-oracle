@@ -20,7 +20,7 @@ import { calendarDay, displayZone, todayIn } from "@/lib/dates";
 import { useQuery } from "@/lib/use-query";
 
 import type { Act } from "@/app/simple/roadmap/_card";
-import { confidenceWord, statusWord, storedDates, yearSpan, type Item } from "@/app/simple/roadmap/_lib";
+import { confidenceWord, datesFrom, statusWord, storedDates, yearSpan, type Item } from "@/app/simple/roadmap/_lib";
 
 const DAY = 86_400_000;
 const ms = (d: string) => Date.parse(`${d}T00:00:00Z`);
@@ -497,7 +497,8 @@ function Dates({ c, late, lateMilestone, added }: { c: Ctx; late: Item[]; lateMi
     await act(`Moved '${item.title}' to ${span(start, end)}`, { op: "move_dates", target: { item_id: item.id }, before: storedDates(item), after: { start_date: start, end_date: end } }, { words });
     return null;
   };
-  const from = (which: "start" | "end") => (item.estimated ? "Oracle's estimate from its horizon" : which === "end" || !item.start.source ? sourceWords(item.end.source ?? item.source) : sourceWords(item.start.source));
+  // An item's own date basis (an approved roadmap's "founder commitment") reads as the Gantt says it.
+  const from = (which: "start" | "end") => (item.estimated ? "Oracle's estimate from its horizon" : item.date_basis?.trim() ? datesFrom(item) : which === "end" || !item.start.source ? sourceWords(item.end.source ?? item.source) : sourceWords(item.start.source));
   return (
     <div>
       <dl>
@@ -548,6 +549,12 @@ function DepList({ c, title, deps, add, onRemove, onRestore, onAdd, adding }: { 
       <h4 className="text-sm text-text2">
         {title} <span className="tnum">({deps.filter((d) => !d.removed).length})</span>
       </h4>
+      {/* An empty list says so in words, as the old card did (qa4-42). */}
+      {deps.every((d) => d.removed) && (
+        <p className="text-sm text-text2" data-testid="fp-empty">
+          {title === "Depends on" ? "Nothing" : "None"}
+        </p>
+      )}
       <ul>
         {/* build-feature-panel review 3: as the frames list them, the live links first, then Oracle's removed ones. */}
         {[...deps].sort((a, b) => Number(a.removed) - Number(b.removed)).map((d) => (
@@ -707,8 +714,10 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
     return () => removeEventListener("keydown", k);
   }, [onClose]);
   const c: Ctx = { item, items, act, edit: canChange };
-  const late = useMemo(() => lateLinks(item, items), [item, items]);
-  const lateMilestone = item.flags.some((f) => f.kind === "outside_milestone" && f.state === "red");
+  // A cut item sits below the line: its date clash and the fixes for it no longer apply (qa4-13).
+  const cut = item.status === "cut";
+  const late = useMemo(() => (cut ? [] : lateLinks(item, items)), [cut, item, items]);
+  const lateMilestone = !cut && item.flags.some((f) => f.kind === "outside_milestone" && f.state === "red");
   const addedItem = added && late.some((d) => d.id === added) ? (items.get(added) ?? null) : null;
   const clash = late.length > 0 || lateMilestone;
   const head = (
@@ -784,7 +793,19 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
       {talk}
     </div>
   );
-  const backdrop = <div aria-hidden data-testid="feature-panel-backdrop" onClick={onClose} className="fixed inset-0 z-[55] bg-black/30" />;
+  // The rail stays usable under the dimmed page: a click on one of its links closes the panel and goes there (fix4).
+  const backdrop = (
+    <div
+      aria-hidden
+      data-testid="feature-panel-backdrop"
+      onClick={(e) => {
+        const link = document.elementsFromPoint(e.clientX, e.clientY).map((el) => el.closest<HTMLAnchorElement>('nav[aria-label="Simple"] a[href]')).find(Boolean);
+        onClose();
+        link?.click();
+      }}
+      className="fixed inset-0 z-[55] bg-black/30"
+    />
+  );
   const base = "fixed z-[60] flex flex-col overflow-hidden border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip outline-none";
   if (phone)
     return (
