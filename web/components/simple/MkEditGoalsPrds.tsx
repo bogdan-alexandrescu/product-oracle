@@ -190,16 +190,16 @@ export function Confirm({ title, button, danger, onClose, onYes, children, disab
 } // MOCK-HOOK
 
 // MOCK-HOOK: a small ⋯ menu.
-export function MoreMenu({ label, items, testId, phone }: { label: string; items: { label: string; onClick: () => void; warn?: boolean }[]; testId?: string; phone?: boolean }) { // MOCK-HOOK
+export function MoreMenu({ label, items, testId, phone, plain }: { label: string; items: { label: string; onClick: () => void; warn?: boolean }[]; testId?: string; phone?: boolean; plain?: boolean }) { // MOCK-HOOK
   const [open, setOpen] = useState(false); // MOCK-HOOK
   const ref = useRef<HTMLSpanElement>(null); // MOCK-HOOK
   useEffect(() => { if (!open) return; const away = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false); document.addEventListener("mousedown", away); return () => document.removeEventListener("mousedown", away); }, [open]); // MOCK-HOOK
   if (!items.length) return null; // MOCK-HOOK
   return ( // MOCK-HOOK
     <span ref={ref} className="relative z-[2] inline-flex" data-testid={testId}> {/* MOCK-HOOK */}
-      <button type="button" aria-label={label} aria-haspopup="menu" aria-expanded={open} className={`inline-flex ${phone ? "h-11 w-11" : "h-9 w-9"} items-center justify-center rounded-lg border border-line-strong bg-surface text-[18px] hover:bg-surface2 ${open ? "bg-surface2" : ""}`} onClick={(e) => { e.preventDefault(); setOpen((o) => !o); }}>⋯</button> {/* MOCK-HOOK */}
+      <button type="button" aria-label={label} aria-haspopup="menu" aria-expanded={open} className={plain ? `inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border text-[16px] text-text hover:border-line-strong hover:bg-surface2 ${open ? "border-line-strong bg-surface2" : "border-transparent"}` : `inline-flex ${phone ? "h-11 w-11" : "h-9 w-9"} items-center justify-center rounded-lg border border-line-strong bg-surface text-[18px] hover:bg-surface2 ${open ? "bg-surface2" : ""}`} onClick={(e) => { e.preventDefault(); setOpen((o) => !o); }}>⋯</button> {/* MOCK-HOOK */}
       {open && ( // MOCK-HOOK
-        <div role="menu" className="absolute right-0 top-10 z-30 w-60 rounded-lg border border-line bg-surface p-1 text-[15px] shadow-lg"> {/* MOCK-HOOK */}
+        <div role="menu" className={`absolute ${phone ? "left-0" : "right-0"} top-10 z-30 w-60 rounded-lg border border-line bg-surface p-1 text-[15px] shadow-lg`}> {/* MOCK-HOOK */}
           {items.map((it) => <button key={it.label} type="button" role="menuitem" className={`${ITEM} ${it.warn ? "text-warn" : ""}`} onClick={(e) => { e.preventDefault(); setOpen(false); it.onClick(); }}>{it.label}</button>)} {/* MOCK-HOOK */}
         </div> // MOCK-HOOK
       )} {/* MOCK-HOOK */}

@@ -256,7 +256,6 @@ async function paper(page: Page, ep: string) { // MOCK-HOOK
   await expect(page.getByTestId("one-pager")).toBeVisible(); // MOCK-HOOK
   await page.waitForTimeout(800); // MOCK-HOOK
 } // MOCK-HOOK
-const row = (page: Page, t: string) => page.getByTestId("one-pager-row").filter({ hasText: t }); // MOCK-HOOK
 
 test("ep2-a", async ({ browser }) => { // MOCK-HOOK
   let page: Page; // MOCK-HOOK

@@ -1,0 +1,316 @@
+{
+ "title": "Goals and PRDs: every field, add, archive and delete in Simple",
+ "subtitle": "Pick how a goal's owner is set and how goals and PRDs are archived, restored and deleted in Simple. Deleting always goes to Trash.",
+ "decisions": [
+  {
+   "code": "EG1",
+   "name": "Goal owner, archive, restore and delete",
+   "question": "How are a goal's owner and other fields edited, and how do archive, restore and delete look on Goal buckets?",
+   "common": "Every proposal shows each goal's owner under its measure, keeps the archive question that asks where the goal's features go, sends a delete to Trash for 30 days with Undo, and gates every control through can(): approvers and owners change, a commenter asks an approver, a viewer only reads.",
+   "proposals": [
+    {
+     "letter": "a",
+     "name": "Owner in the form",
+     "recommended": true,
+     "what": "The pencil keeps opening the goal's own form in place, now with an Owner field. The goal's ⋯ menu has Edit goal, Archive goal and Delete goal. Archived goals collect in an 'Archived goals' fold at the end of the buckets, each with Restore and Delete.",
+     "why": "It keeps the picked bucket design and the in-place form people already use, adds the one missing field where the others are, and makes an archived goal findable again with one small fold that stays shut until needed.",
+     "plus": "Smallest change to the page; archive and delete sit side by side in one menu; Restore is one click from where the goal was.",
+     "cost": "The fold adds a row at the end of the grid; deleting from the fold needs a second confirm; the form grows by one field.",
+     "frames": [
+      {
+       "file": "frames/eg1-a-rest.html",
+       "caption": "At rest: each goal names its owner under its measure."
+      },
+      {
+       "file": "frames/eg1-a-owner.html",
+       "caption": "The pencil opens the form in place with the new Owner field; Hana Sato picked for Growth."
+      },
+      {
+       "file": "frames/eg1-a-open.html",
+       "caption": "Saved, with Undo. The ⋯ menu on Growth: Edit goal, Archive goal, Delete goal."
+      },
+      {
+       "file": "frames/eg1-a-mid.html",
+       "caption": "Archive Growth asks first; its 4 other features will move to Reliability."
+      },
+      {
+       "file": "frames/eg1-a-result.html",
+       "caption": "Done: Growth leaves the buckets and tops the opened 'Archived goals' fold, with Restore and Delete."
+      },
+      {
+       "file": "frames/eg1-a-delete.html",
+       "caption": "Delete on an archived goal asks once more and says it goes to Trash for 30 days."
+      },
+      {
+       "file": "frames/eg1-a-hard.html",
+       "caption": "Hard case: deleting a goal of 15 features with 11 other goals to pick from (1440)."
+      },
+      {
+       "file": "frames/eg1-a-hard-1512.html",
+       "caption": "The same delete at 1512, the owner's window."
+      },
+      {
+       "file": "frames/eg1-a-phone.html",
+       "caption": "Phone: the ⋯ menu on Growth opens under its button."
+      },
+      {
+       "file": "frames/eg1-a-propose.html",
+       "caption": "A commenter's menu reads Ask to archive and Ask to delete; an approver decides."
+      },
+      {
+       "file": "frames/eg1-a-readonly.html",
+       "caption": "A viewer reads owners and the archived list, with no menu, Restore or Delete."
+      }
+     ]
+    },
+    {
+     "letter": "b",
+     "name": "One goal sheet",
+     "recommended": false,
+     "what": "The pencil opens a goal sheet at the side with every field: goal, measure, target, date and owner, and the order as a note behind an (i). Archive and Delete sit at the sheet's foot. A 'Show archived goals' box puts archived goals back in the grid as greyed buckets with Restore.",
+     "plus": "One place for every field, ready for more fields later; archived goals are seen in full, where they used to sit.",
+     "cost": "Replaces the in-place form people picked (GB1 a); the sheet covers the buckets while editing; with the box on, archived goals push live ones and the No goal bucket further down.",
+     "frames": [
+      {
+       "file": "frames/eg1-b-rest.html",
+       "caption": "At rest: owners under each goal and a 'Show archived goals (3)' box above the buckets."
+      },
+      {
+       "file": "frames/eg1-b-open.html",
+       "caption": "The pencil on Growth opens the goal sheet with every field and Archive and Delete at its foot."
+      },
+      {
+       "file": "frames/eg1-b-mid.html",
+       "caption": "Archive from the sheet asks where Growth's features go; Reliability picked."
+      },
+      {
+       "file": "frames/eg1-b-result.html",
+       "caption": "Done, with Undo; with the box on, Growth shows greyed with the other archived goals and Restore."
+      },
+      {
+       "file": "frames/eg1-b-hard.html",
+       "caption": "Hard case: 'Show archived' on with 5 live goals; the archived ones sit below a long bucket (1440)."
+      },
+      {
+       "file": "frames/eg1-b-hard-1512.html",
+       "caption": "The same at 1512."
+      },
+      {
+       "file": "frames/eg1-b-phone.html",
+       "caption": "Phone: the goal sheet takes the whole screen."
+      },
+      {
+       "file": "frames/eg1-b-propose.html",
+       "caption": "A commenter's sheet: Send for approval, Ask to archive, Ask to delete."
+      },
+      {
+       "file": "frames/eg1-b-readonly.html",
+       "caption": "A viewer sees archived goals greyed with no Restore and no pencil or menu."
+      }
+     ]
+    },
+    {
+     "letter": "c",
+     "name": "Owner chip, Remove",
+     "recommended": false,
+     "what": "Each goal's owner is a chip that opens a people picker right on the bucket. Archive and delete become one 'Remove goal', which asks where the features go and sends the goal to Trash. There is no archived list in Simple: Undo, or Trash in Detailed, brings it back.",
+     "plus": "Fewest words and choices: one way out, one way back; changing the owner is a single click.",
+     "cost": "No way to park a goal and see it later in Simple; a removed goal is restored only from Detailed's Trash after the Undo note goes; a chip on every bucket adds weight to each header.",
+     "frames": [
+      {
+       "file": "frames/eg1-c-rest.html",
+       "caption": "At rest: each goal's owner is a chip with a small arrow."
+      },
+      {
+       "file": "frames/eg1-c-open.html",
+       "caption": "The chip on Growth opens the people picker, Sam Okafor ticked."
+      },
+      {
+       "file": "frames/eg1-c-mid.html",
+       "caption": "After picking Hana Sato, Remove Growth asks where its features go and says it goes to Trash."
+      },
+      {
+       "file": "frames/eg1-c-result.html",
+       "caption": "Done: Growth is gone and the note says it is in Trash for 30 days, with Undo."
+      },
+      {
+       "file": "frames/eg1-c-hard.html",
+       "caption": "Hard case: removing a goal of 15 features; Remove stays off until a goal is picked (1440)."
+      },
+      {
+       "file": "frames/eg1-c-hard-1512.html",
+       "caption": "The same at 1512."
+      },
+      {
+       "file": "frames/eg1-c-phone.html",
+       "caption": "Phone: the owner picker opens from the chip."
+      },
+      {
+       "file": "frames/eg1-c-propose.html",
+       "caption": "A commenter's picker: the pick goes to an approver."
+      },
+      {
+       "file": "frames/eg1-c-readonly.html",
+       "caption": "A viewer sees each owner as plain text, no chip or menu."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "EP2",
+   "name": "Archive and delete a PRD",
+   "question": "Where is a PRD archived or deleted in Simple, and how does its confirm read?",
+   "common": "Every proposal asks before acting, says how many of the PRD's features are on the roadmap and in which milestones, and lets the person keep them on the roadmap with no PRD or take them off too. Delete goes to Trash for 30 days; archive can be restored. Only those can('delete_document') allows act; a commenter sends the ask to an owner; a viewer sees no control.",
+   "proposals": [
+    {
+     "letter": "a",
+     "name": "Menus on both",
+     "recommended": true,
+     "what": "A ⋯ menu on each One-pagers row and on the one-pager's header, each with Archive PRD and Delete PRD. Archived PRDs collect in an 'Archived' fold under the list with Restore.",
+     "why": "People find it where they look, on the list and on the page, and it matches how goals are archived (the fold at the end), so one pattern serves both.",
+     "plus": "Found from the list or the page; archived PRDs stay one click away; each confirm is about one PRD, so the feature choice is clear.",
+     "cost": "A ⋯ on every row adds a column to the list; two places to keep in step.",
+     "frames": [
+      {
+       "file": "frames/ep2-a-rest.html",
+       "caption": "At rest: the One-pagers list, a ⋯ on each row, the Archived fold shut below."
+      },
+      {
+       "file": "frames/ep2-a-open.html",
+       "caption": "The ⋯ on Guided setup: Archive PRD, Delete PRD."
+      },
+      {
+       "file": "frames/ep2-a-mid.html",
+       "caption": "Archive asks about its 20 features in M1, M2 and M3; 'Keep them on the roadmap, with no PRD' picked."
+      },
+      {
+       "file": "frames/ep2-a-result.html",
+       "caption": "Done, with Undo: the row is gone and the opened Archived fold lists it with Restore."
+      },
+      {
+       "file": "frames/ep2-a-delete.html",
+       "caption": "Delete on another PRD: it goes to Trash; taking its features off says the milestones' dates are worked out again."
+      },
+      {
+       "file": "frames/ep2-a-hard.html",
+       "caption": "Hard case: the same menu on the one-pager's crowded header (1440)."
+      },
+      {
+       "file": "frames/ep2-a-hard-1512.html",
+       "caption": "The same header menu at 1512."
+      },
+      {
+       "file": "frames/ep2-a-phone.html",
+       "caption": "Phone: the delete confirm rises from the bottom; Delete stays off until a choice is made."
+      },
+      {
+       "file": "frames/ep2-a-propose.html",
+       "caption": "A commenter's ask: Send to an owner; nothing changes until then."
+      },
+      {
+       "file": "frames/ep2-a-readonly.html",
+       "caption": "A viewer's list: no ⋯ on any row."
+      }
+     ]
+    },
+    {
+     "letter": "b",
+     "name": "On the page only",
+     "recommended": false,
+     "what": "Only the one-pager's header has the ⋯ menu. An archived PRD's page shows a one-line 'Archived Nov 5' banner with Restore; the list hides archived PRDs behind a 'Show archived' box.",
+     "plus": "The list stays as picked, with no new column; acting from the page means the person has the PRD in front of them.",
+     "cost": "Archiving many PRDs means opening each one; from the list, an archived PRD is two steps away.",
+     "frames": [
+      {
+       "file": "frames/ep2-b-rest.html",
+       "caption": "At rest: the Guided setup one-pager, a ⋯ beside Open in Detailed."
+      },
+      {
+       "file": "frames/ep2-b-open.html",
+       "caption": "The ⋯ opened: Archive PRD, Delete PRD."
+      },
+      {
+       "file": "frames/ep2-b-mid.html",
+       "caption": "Archive asks; 'Take them off the roadmap too' picked, and says what that does to the milestones."
+      },
+      {
+       "file": "frames/ep2-b-result.html",
+       "caption": "Done: the page shows the Archived banner with Restore, and the note with Undo."
+      },
+      {
+       "file": "frames/ep2-b-list.html",
+       "caption": "Back on the list: 'Show archived' ticked shows it with the older archived PRDs and Restore."
+      },
+      {
+       "file": "frames/ep2-b-hard.html",
+       "caption": "Hard case: Delete over the long one-pager, its 20 features to take off (1440)."
+      },
+      {
+       "file": "frames/ep2-b-hard-1512.html",
+       "caption": "The same at 1512."
+      },
+      {
+       "file": "frames/ep2-b-phone.html",
+       "caption": "Phone: the ⋯ sits on its own line under the header's buttons."
+      },
+      {
+       "file": "frames/ep2-b-propose.html",
+       "caption": "A commenter's menu: Ask to archive, Ask to delete."
+      },
+      {
+       "file": "frames/ep2-b-readonly.html",
+       "caption": "A viewer's one-pager: no ⋯."
+      }
+     ]
+    },
+    {
+     "letter": "c",
+     "name": "Select on the list",
+     "recommended": false,
+     "what": "A Select button on the One-pagers list turns on a box per row and a bar with Archive and Delete for all picked PRDs at once. One confirm totals their features. The one-pager itself has no menu.",
+     "plus": "Clears out many old PRDs in one go; the rows stay clean until Select is pressed.",
+     "cost": "Hidden behind a mode: a person on the one-pager cannot archive it there; with many PRDs picked, one feature choice covers all of them.",
+     "frames": [
+      {
+       "file": "frames/ep2-c-rest.html",
+       "caption": "At rest: the list with a Select button beside New PRD."
+      },
+      {
+       "file": "frames/ep2-c-open.html",
+       "caption": "Select on: three PRDs ticked, the bar reads 3 selected with Archive and Delete."
+      },
+      {
+       "file": "frames/ep2-c-mid.html",
+       "caption": "Archive 3 PRDs asks once for all their features."
+      },
+      {
+       "file": "frames/ep2-c-result.html",
+       "caption": "Done, with Undo: the three rows leave, the Archived fold lists them."
+      },
+      {
+       "file": "frames/ep2-c-hard.html",
+       "caption": "Hard case: every PRD picked; one Delete covers 16 PRDs and all their features (1440)."
+      },
+      {
+       "file": "frames/ep2-c-hard-1512.html",
+       "caption": "The same at 1512."
+      },
+      {
+       "file": "frames/ep2-c-phone.html",
+       "caption": "Phone: Select on, two PRDs ticked."
+      },
+      {
+       "file": "frames/ep2-c-propose.html",
+       "caption": "A commenter's bar: Ask to archive, Ask to delete."
+      },
+      {
+       "file": "frames/ep2-c-readonly.html",
+       "caption": "A viewer's list: no Select."
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

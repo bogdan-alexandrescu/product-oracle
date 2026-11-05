@@ -2430,6 +2430,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
                       <MoreMenu // MOCK-HOOK
                         label={`More for ${g}`} // MOCK-HOOK
                         testId="mk-goal-menu" // MOCK-HOOK
+                        plain // MOCK-HOOK
                         items={ // MOCK-HOOK
                           access === "propose" // MOCK-HOOK
                             ? eg === "b" // MOCK-HOOK
