@@ -6,7 +6,7 @@
    "code": "EG1",
    "name": "Goal owner, archive, restore and delete",
    "question": "How are a goal's owner and other fields edited, and how do archive, restore and delete look on Goal buckets?",
-   "common": "Every proposal shows each goal's owner under its measure, keeps the archive question that asks where the goal's features go, and sends a delete to Settings > Trash for 30 days, where it can be restored. The decider changes; an approver who is not the decider, or a commenter, asks the decider; a viewer only reads.",
+   "common": "Every proposal shows each goal's owner under its measure, keeps the archive question that asks where the goal's features go, and sends a delete to Settings > Trash for 30 days, where it can be restored. The decider changes; an approver who is not the decider proposes, and so does a commenter, for the decider to accept; a viewer only reads.",
    "proposals": [
     {
      "letter": "a",
@@ -55,7 +55,7 @@
       },
       {
        "file": "frames/eg1-a-propose.html",
-       "caption": "An approver who is not the decider, like a commenter, gets Ask to archive and Ask to delete; the ask goes to the decider."
+       "caption": "An approver who is not the decider proposes: Ask to archive and Ask to delete, sent to the decider."
       },
       {
        "file": "frames/eg1-a-readonly.html",
@@ -109,7 +109,7 @@
       },
       {
        "file": "frames/eg1-b-propose.html",
-       "caption": "An approver who is not the decider, like a commenter, gets Send for approval, Ask to archive and Ask to delete."
+       "caption": "An approver who is not the decider proposes: Send for approval, Ask to archive and Ask to delete."
       },
       {
        "file": "frames/eg1-b-readonly.html",
@@ -155,7 +155,7 @@
       },
       {
        "file": "frames/eg1-c-propose.html",
-       "caption": "An approver who is not the decider: the picker's pick asks the decider."
+       "caption": "An approver who is not the decider proposes: the picker's pick goes to the decider."
       },
       {
        "file": "frames/eg1-c-ask.html",
