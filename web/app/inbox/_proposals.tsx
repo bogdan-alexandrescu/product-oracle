@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 
-import { Button, LinkButton } from "@/components/ds";
+import { Button, Chip, LinkButton } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { calendarDay } from "@/lib/dates";
 import { formatDateRange, formatDateTime } from "@/lib/format";
 
 import { isNew, type Act, type StatedNeed } from "./_needs";
@@ -128,6 +129,12 @@ export function proposalRows(proposals: Proposal[], busy: string | null, act: Ac
  * dates and why; Open goes to the item on its roadmap with the suggestion open, where it is
  * accepted, edited or dismissed.
  */
+/**
+ * B-15: the planning horizon's last day, by the owner's rule (no roadmap states its own end).
+ * A suggested date after it is a long guess: it carries a Far out chip.
+ */
+export const PLANNING_HORIZON_END = "2027-02-28";
+
 export function dateSuggestionRows(rows: DateSuggestion[], seenBefore: string | null | undefined): StatedNeed[] {
   return rows.map((s) => ({
     key: `date-suggestion-${s.id}`,
@@ -138,6 +145,19 @@ export function dateSuggestionRows(rows: DateSuggestion[], seenBefore: string | 
         <FeatureName name={s.item_title} itemId={s.item_id} documentId={s.document_id} />
         <span className="block basis-full text-sm break-words whitespace-normal text-text2" data-testid="date-suggestion-context">
           Oracle suggests {formatDateRange(s.start_date, s.end_date)}
+          {s.end_date > PLANNING_HORIZON_END && (
+            <>
+              {" "}
+              <Chip
+                kind="warn"
+                className="align-middle"
+                title={`Low confidence, after the planning horizon (${calendarDay(PLANNING_HORIZON_END, { month: "short", day: "numeric", year: "numeric" })})`}
+                data-testid="date-suggestion-far-out"
+              >
+                Far out
+              </Chip>
+            </>
+          )}
         </span>
       </>
     ),

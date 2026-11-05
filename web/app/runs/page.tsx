@@ -9,6 +9,7 @@ import {
   Chip,
   DataTable,
   Empty,
+  FilterChips,
   InfoTip,
   Inspector,
   InspectorRow,
@@ -20,7 +21,7 @@ import {
   type Column,
 } from "@/components/ds";
 import { usePhone } from "@/components/ds/page-info";
-import { LoadError } from "@/components/ui";
+import { INPUT_INLINE, LoadError } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDateTime, formatShortDate, plural } from "@/lib/format";
 import { docLabel } from "@/lib/labels";
@@ -49,6 +50,10 @@ import { QueueWaitNote } from "./_queue-wait";
 
 type DocNamed = Parameters<typeof docLabel>[0];
 
+/** B-21: the list's filters: every run, the runs this person decides, in flight, finished. */
+type RunFilter = "all" | "mine" | "running" | "done";
+const DONE_STATUSES: RunSummary["status"][] = ["succeeded", "failed", "cancelled"];
+
 /**
  * What a run is for, by name (qa-shell-32), never its slug or short id: its document's title
  * ("Usage alerts PRD"), else the run's document in words (runName).
@@ -68,10 +73,11 @@ export default function RunsPage() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
+  const [filter, setFilter] = useState<RunFilter>("all");
+  const [search, setSearch] = useState("");
   const runs = (q.data ?? []).filter((r) => r.status !== "draft");
   // A run delivering a decision recorded at its checkpoint waits on no one.
   const waiting = runs.filter((r) => WAITING_STATUSES.includes(r.status) && !isDelivering(r));
-  const selected = runs.find((r) => r.id === picked) ?? waiting[0] ?? runs[0];
   const phone = usePhone();
 
   /**
@@ -108,12 +114,31 @@ export default function RunsPage() {
   const rowWaitsOn = (r: RunSummary): string | null => {
     if (r.status === "awaiting_approval") return `Owner approves ${usd(r.estimate_usd)}`;
     if (r.status === "paused_overrun") return "Owner resumes";
+    // B-17: a checkpoint this person cannot decide waits on its approvers.
+    if (r.status === "awaiting_checkpoint" && !isDelivering(r)) return "Approvers review";
     return null;
   };
 
   // qa-work-10: the badge counts only the runs this person can act on; the rest wait on others.
   const mine = waiting.filter((r) => rowAction(r) !== null);
   const others = waiting.length - mine.length;
+
+  // B-21: a long list is narrowed by state and by words (over the loaded list).
+  const inFilter: Record<RunFilter, (r: RunSummary) => boolean> = {
+    all: () => true,
+    mine: (r) => mine.includes(r),
+    running: (r) => r.status === "running" || isDelivering(r),
+    done: (r) => DONE_STATUSES.includes(r.status),
+  };
+  const words = search.trim().toLowerCase();
+  const matches = (r: RunSummary) =>
+    !words ||
+    [runTitle(r, docs), r.flow_title, runStatusLabel(r), r.waiting_on ? CHECKPOINT_LABEL[r.waiting_on] : "", r.document_slug ?? ""]
+      .join(" ")
+      .toLowerCase()
+      .includes(words);
+  const shown = runs.filter((r) => inFilter[filter](r) && matches(r));
+  const selected = shown.find((r) => r.id === picked) ?? shown.find((r) => waiting.includes(r)) ?? shown[0];
 
   const columns: Column<RunSummary>[] = [
     {
@@ -283,8 +308,34 @@ export default function RunsPage() {
         >
           <Panel
             title="Runs"
-            count={q.data ? runs.length : undefined}
+            count={q.data ? (shown.length === runs.length ? runs.length : `${shown.length} of ${runs.length}`) : undefined}
           >
+            {runs.length > 0 && (
+              <div
+                className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5 max-[600px]:flex-col max-[600px]:items-stretch max-[600px]:px-3"
+                data-testid="runs-filters"
+              >
+                <FilterChips<RunFilter>
+                  label="Show runs"
+                  value={filter}
+                  onChange={setFilter}
+                  items={[
+                    { value: "all", label: "All", count: runs.length },
+                    { value: "mine", label: "Waiting on me", count: mine.length },
+                    { value: "running", label: "Running", count: runs.filter(inFilter.running).length },
+                    { value: "done", label: "Done", count: runs.filter(inFilter.done).length },
+                  ]}
+                />
+                <input
+                  type="search"
+                  aria-label="Search runs"
+                  placeholder="Search runs"
+                  className={`${INPUT_INLINE} ml-auto min-w-0 basis-56 max-[600px]:ml-0 max-[600px]:min-h-11 max-[600px]:basis-auto`}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+            )}
             {q.data && runs.length === 0 ? (
               <Empty testId="runs-empty">
                 No runs yet.{" "}
@@ -294,6 +345,8 @@ export default function RunsPage() {
                   writes a cited draft for review.
                 </InfoTip>
               </Empty>
+            ) : q.data && shown.length === 0 ? (
+              <Empty testId="runs-none-match">No runs match. Pick All or clear the search to see every run.</Empty>
             ) : (
               // qa-work-25: on a phone a tap on a row (not its link or button) opens the run.
               <div
@@ -310,7 +363,7 @@ export default function RunsPage() {
                   label="Runs"
                   testId="runs-table"
                   columns={columns}
-                  rows={q.data ? runs : undefined}
+                  rows={q.data ? shown : undefined}
                   loading={q.loading}
                   rowKey={(r) => r.id}
                   selected={selected?.id ?? null}

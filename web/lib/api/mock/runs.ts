@@ -3464,7 +3464,7 @@ function reviewReasons(): ItemReason[] {
   });
   const base = "roadmap v1";
   return [
-    r("slack-alerts", "Slack alerts", "unverified_date", "blocking", "Date unverified", "No verified estimate, capacity or commitment supports 2026-11-30.", [fix("Remove date", "edit", "slack-alerts", "milestone_date")], { date: "2026-11-30" }),
+    r("slack-alerts", "Slack alerts", "unverified_date", "blocking", "Date unverified", "No verified estimate, capacity or commitment supports Nov 30, 2026.", [fix("Remove date", "edit", "slack-alerts", "milestone_date")], { date: "2026-11-30" }),
     r("anomaly-detection", "Anomaly detection", "low_confidence", "confirm", "Low confidence", "Confidence low, under the company's low threshold (0.4).", [accept("anomaly-detection"), drop("anomaly-detection")], { confidence: "low", low: 0.4 }),
     r(
       "budget-caps",

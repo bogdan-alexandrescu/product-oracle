@@ -80,6 +80,8 @@ export type Need = {
   children?: Need[];
   /** The parent's key, on a child row. */
   childOf?: string;
+  /** B-22: how many items the row stands for (a group of checkpoints counts each of its runs). */
+  size?: number;
 };
 
 /**
@@ -1300,6 +1302,53 @@ function baselineLabel(title: string, summary: { need_you: number; blocking: num
 }
 
 /**
+ * B-22: runs waiting at the same stop of the same document read as one row, "Feature set and
+ * dependencies · 10 runs", each run under it with its own Open. A row with its own rows under
+ * it (a Roadmap items review) stays as it is.
+ */
+function groupCheckpoints(rows: InboxOut["checkpoints"], needs: Need[]): Need[] {
+  const keyOf = (c: InboxOut["checkpoints"][number]) => [c.kind, c.flow, c.document_title ?? c.document_slug ?? "", c.can_decide].join("|");
+  const byKey = new Map<string, Need[]>();
+  needs.forEach((n, i) => {
+    if (n.children?.length) return;
+    const key = keyOf(rows[i]);
+    byKey.set(key, [...(byKey.get(key) ?? []), n]);
+  });
+  const done = new Set<string>();
+  return needs.flatMap((n, i) => {
+    const same = n.children?.length ? [] : byKey.get(keyOf(rows[i]))!;
+    if (same.length < 2) return [n];
+    if (done.has(same[0].key)) return [];
+    done.add(same[0].key);
+    const c = rows[i];
+    const title = `${CHECKPOINT_LABEL[c.kind]} · ${plural(same.length, "run")}`;
+    const latest = same.map((x) => x.at ?? "").sort().at(-1) || null;
+    return [
+      {
+        ...n,
+        key: `checkpoint-group-${same[0].key}`,
+        item: (
+          <span className="truncate" data-testid="checkpoint-group" title={title}>
+            {title}
+          </span>
+        ),
+        context: (
+          <span className="block truncate" title={c.document_title ?? c.flow_title}>
+            {c.document_title ?? c.flow_title}
+          </span>
+        ),
+        at: latest,
+        left: null,
+        action: null,
+        size: same.length,
+        // Each run keeps its own line and Open; its context names the run.
+        children: same,
+      },
+    ];
+  });
+}
+
+/**
  * The Inbox's rows, each with its action. `compact` (Home) gives an overrun, a stuck run and
  * a failed import one action that opens the run, where the rest are.
  */
@@ -1715,7 +1764,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     action: openRun(r),
   }));
 
-  return { checkpoints, deliveries, approvals, overruns, lookups, imports, noDocuments, searches, revising };
+  return { checkpoints: compact ? checkpoints : groupCheckpoints(inbox.checkpoints, checkpoints), deliveries, approvals, overruns, lookups, imports, noDocuments, searches, revising };
 }
 
 /**
@@ -2185,6 +2234,8 @@ export function decisionNeeds(inbox: InboxOut, busy: string | null, act: Act, se
 
 /** What the rail badge counts: the new and open items. */
 export const waitingNeeds = (rows: StatedNeed[]) => rows.filter((r) => r.counted && (r.state === "new" || r.state === "open"));
+/** B-22: how many items wait, a group of checkpoints counting each of its runs. */
+export const waitingCount = (rows: StatedNeed[]) => waitingNeeds(rows).reduce((n, r) => n + (r.size ?? 1), 0);
 
 // --- F2 Track health: one row per track, its open alerts under it -----------------------
 

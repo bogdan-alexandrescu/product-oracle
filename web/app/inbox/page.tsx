@@ -11,7 +11,7 @@ import { invalidateWaiting, loadInbox, loadMyQuestions, markInboxSeen, waitingCh
 
 import { useAccessRequestRows } from "./_access";
 import { useActed } from "./_actions";
-import { allNeeds, NeedTable, SOURCE_COLUMNS, sourceNeeds, STATE_TABS, useFixedHere, usePerms, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
+import { allNeeds, NeedTable, SOURCE_COLUMNS, sourceNeeds, STATE_TABS, useFixedHere, usePerms, waitingCount, type InboxState, type NeedGroup } from "./_needs";
 import { useQuestionRows } from "./_questions";
 import { minutesRows } from "./_minutes";
 import { approvalRows, dateSuggestionRows, goalSuggestionRows, proposalRows } from "./_proposals";
@@ -106,7 +106,7 @@ export default function InboxPage() {
   // Remind on a one-pager: a PRD's owner or decider nudged me to review its draft.
   const reminderRows = useReminderRows(seenBefore);
   const rows = inbox ? [...allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed, requests.rows, perms), ...webhookRows, ...reminderRows, ...proposalRows(inbox.simple_proposals ?? [], busy, act, seenBefore), ...approvalRows(inbox.simple_approvals ?? [], seenBefore), ...dateSuggestionRows(inbox.simple_date_suggestions ?? [], seenBefore), ...goalSuggestionRows(inbox.simple_goal_suggestions ?? [], seenBefore), ...minutesRows(inbox.simple_minutes ?? [])] : null;
-  const waiting = rows ? waitingNeeds(rows).length : undefined;
+  const waiting = rows ? waitingCount(rows) : undefined;
 
   return (
     <Page>
@@ -238,7 +238,7 @@ function InboxTabs({
   /** The tab changed: what was settled in place moves on. */
   onTabChange: () => void;
 }) {
-  const count = (st: InboxState) => rows.filter((r) => r.counted && r.state === st).length;
+  const count = (st: InboxState) => rows.filter((r) => r.counted && r.state === st).reduce((n, r) => n + (r.size ?? 1), 0);
   // qa-company-2: the Inbox opens on the tab that holds what waits: New when it has items,
   // else Seen (what I have seen and not handled yet), so "11 waiting" never opens on "Nothing new".
   const [chosen, setTab] = useState<InboxState>(() => (count("new") === 0 && count("open") > 0 ? "open" : "new"));

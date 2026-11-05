@@ -38,6 +38,7 @@ import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { named, namedText } from "@/lib/codes";
 import { failedAt, formatDateTime, formatDay, formatTime, plural } from "@/lib/format";
+import { datesInWords } from "@/lib/dates";
 import { useMe, type Operation } from "@/lib/me";
 
 import { NewRunDialog, type RunStart } from "./_new-run-dialog";
@@ -1463,7 +1464,7 @@ function RunReviewSummary({ cp, anchor }: { cp: CheckpointOut; anchor?: boolean 
     >
       <Icon name="flag" size={16} className="text-accent-ink" />
       <span className="font-semibold">{CHECKPOINT_LABEL[cp.kind]}</span>
-      <span className="min-w-0 flex-1 text-text2" data-testid="run-review-summary">
+      <span className="min-w-0 flex-1 text-text2 max-[600px]:basis-full" data-testid="run-review-summary">
         Waiting for review of v{n}
         {sections && (
           <>
@@ -1850,7 +1851,8 @@ function ItemsCheckLine({
                       {r.label}
                     </Chip>
                     <span className="break-words" data-testid="reason-text">
-                      {r.text}
+                      {/* A reason stored before the API wrote days month first reads month first too. */}
+                      {datesInWords(r.text)}
                     </span>
                     {fixText(r) && (
                       <span className="break-words text-text2" data-testid="reason-fixes">

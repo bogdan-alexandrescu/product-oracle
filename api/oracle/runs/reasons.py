@@ -26,6 +26,7 @@ from typing import Any, NamedTuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import company_time
 from oracle.baseline import trace as baseline_trace
 from oracle.baseline.models import Entity
 from oracle.blockers.service import UNRESOLVED
@@ -166,10 +167,21 @@ def _sentence(message: str) -> str:
 
 
 def _day(value: Any) -> str:
+    """A milestone's day as data: the machine's ISO day (a fix or an edit reads it)."""
     if isinstance(value, datetime):
         return value.date().isoformat()
     if isinstance(value, date):
         return value.isoformat()
+    return str(value)
+
+
+def _day_in_words(value: Any) -> str:
+    """A milestone's day as a person reads it, month first ("Nov 30, 2026"); a value that is
+    not a day stays as written."""
+    if isinstance(value, datetime):
+        value = value.date()
+    if isinstance(value, date):
+        return company_time.calendar_day_with_year(value)
     return str(value)
 
 
@@ -189,9 +201,11 @@ def _plain(value: Any) -> Any:
     return str(value)
 
 
-def _milestone_date(item: dict[str, Any]) -> str:
+def _milestone_date(item: dict[str, Any], words: bool = False) -> str:
     milestone = item.get("milestone")
-    return _day(milestone.get("date")) if isinstance(milestone, dict) else ""
+    if not isinstance(milestone, dict):
+        return ""
+    return (_day_in_words if words else _day)(milestone.get("date"))
 
 
 def _prd(ctx: ReasonContext) -> str:
@@ -425,7 +439,8 @@ def _blocking(
     horizon = item.get("horizon")
     if code == "unverified_date":
         when = _milestone_date(item)
-        return r(CATALOGUE[code].sentence.format(date=when), [remove_date(key)], {"date": when})
+        sentence = CATALOGUE[code].sentence.format(date=_milestone_date(item, words=True))
+        return r(sentence, [remove_date(key)], {"date": when})
     if code == "date_outside_now":
         return r(
             CATALOGUE[code].sentence.format(horizon=_h(horizon)),
