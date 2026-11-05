@@ -1387,24 +1387,24 @@ export function SimpleRoadmap() {
       onUndo={(id) =>
         void undo(id).then(
           () => {
-            toast({ message: "Undone" });
+            toast({ place: "top", message: "Undone" });
             return reloadAfter();
           },
-          (e) => toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not undo it" }),
+          (e) => toast({ place: "top", message: e instanceof ChangeFailed ? e.message : "Oracle could not undo it" }),
         )
       }
       onSubmit={async (ds) => {
         for (const d of ds) {
           const r = await api.POST("/v1/simple/drafts/{draft_id}/submit", { params: { path: { draft_id: d.id } } });
-          if (!r.data) toast({ message: `${d.document.title} could not be sent for review` });
+          if (!r.data) toast({ place: "top", message: `${d.document.title} could not be sent for review` });
         }
-        toast({ message: ds.every((d) => d.published) ? "Sent for review: the approved roadmap stays published until it passes" : "Sent for review: the roadmap is published once it passes" });
+        toast({ place: "top", message: ds.every((d) => d.published) ? "Sent for review: the approved roadmap stays published until it passes" : "Sent for review: the roadmap is published once it passes" });
         // A version sent for review waits on its reviewers and decider, the sender among them when they decide.
         await reloadAfter();
       }}
       onApprove={async (d) => {
         const r = await api.POST("/v1/simple/drafts/{draft_id}/approve", { params: { path: { draft_id: d.id } } });
-        toast({ message: !r.data ? `${d.document.title} could not be approved` : r.data.status === "approved" ? `Approved: ${d.document.title} is published` : "Approved: it waits for the other approvals" });
+        toast({ place: "top", message: !r.data ? `${d.document.title} could not be approved` : r.data.status === "approved" ? `Approved: ${d.document.title} is published` : "Approved: it waits for the other approvals" });
         // The rail's and More's counts read again at once (the approval leaves the Inbox).
         await reloadAfter();
       }}

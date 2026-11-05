@@ -299,8 +299,9 @@ for (const phone of [false, true]) {
       await login(page);
       // The owner changes the Alerts roadmap and sends it for review (on a desktop, by the keyboard).
       const size = page.viewportSize()!;
-      await page.goto("/simple/roadmap");
-      await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+      // Read once first: Oracle's dates and goal suggestions, made as it is first read, are in the counts.
+      await readRoadmap(page);
+      await readRoadmap(page);
       // On a phone, the Roadmap tab's count (Weekly alert digest's proposal waits there).
       if (phone) await expect.poll(() => shownCount(page, true)).toBeGreaterThan(0);
       const phoneBefore = phone ? await shownCount(page, true) : 0;
