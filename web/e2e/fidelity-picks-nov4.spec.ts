@@ -149,15 +149,16 @@ test.describe("RP1 a: the run's priority order", () => {
     await expect(page.locator("main").getByText("Address book per account").first()).toBeVisible();
     await expect(page.locator("main").getByText("Import addresses from a spreadsheet, with a preview before saving").first()).toBeVisible();
 
-    // The Ground Truth: proposed, serving the goal the order scored it on.
+    // The Ground Truth: proposed, serving the goal the order scored it on; locked, as the
+    // approver's own accepted create (the API's decide_proposal for a person).
     await page.goto("/baseline");
-    const added = page.locator("main").getByRole("row", { name: /^Address book per account Proposed/ }).filter({ visible: true });
+    const added = page.locator("main").getByRole("row", { name: /^Address book per account Locked Proposed/ }).filter({ visible: true });
     await expect(added).toHaveCount(1);
     await expect(added).not.toContainText("Serves no goal");
-    await expect(page.locator("main").getByRole("row", { name: /^Address labels and notes Proposed/ }).filter({ visible: true })).toHaveCount(1);
+    await expect(page.locator("main").getByRole("row", { name: /^Address labels and notes Locked Proposed/ }).filter({ visible: true })).toHaveCount(1);
 
     // The goal it serves and what it needs come as Oracle's proposed links, for a person to confirm.
-    const delivery = page.locator("main").getByRole("row", { name: /^Default delivery address Proposed/ }).filter({ visible: true });
+    const delivery = page.locator("main").getByRole("row", { name: /^Default delivery address Locked Proposed/ }).filter({ visible: true });
     await delivery.getByRole("button", { name: "Default delivery address" }).first().click();
     const supports = page.getByRole("list", { name: "Supports" });
     await expect(supports.getByRole("listitem")).toHaveCount(1);
