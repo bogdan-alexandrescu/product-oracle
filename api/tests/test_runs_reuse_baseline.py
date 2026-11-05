@@ -248,7 +248,7 @@ async def test_an_intake_run_reuses_a_reusable_baseline(client, runtime):
     assert spec.labels["segment"] == "feature_set"
     prompt = spec.steps[0].prompt
     assert (
-        f"The baseline was reviewed and approved on {oct_date(at)}; read it with get_baseline"
+        f"The Ground Truth was reviewed and approved on {oct_date(at)}; read it with get_baseline"
         in prompt
     )
     async with tenant_session(ctx.tenant_id) as s:

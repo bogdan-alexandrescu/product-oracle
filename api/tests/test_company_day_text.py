@@ -107,7 +107,7 @@ async def test_the_reuse_note_and_banner_name_the_company_day(client, runtime, m
     started = resp.json()
     assert started["segments"][0]["note"] == "Reused the Ground Truth approved Oct 13"
     [spec] = runtime.submitted
-    assert "The baseline was reviewed and approved on Oct 13;" in spec.steps[0].prompt
+    assert "The Ground Truth was reviewed and approved on Oct 13;" in spec.steps[0].prompt
     # The knob keeps the machine moment in UTC.
     assert started["segments"][0]["reused"]["approved_at"].startswith("2026-10-12T20:00")
 
