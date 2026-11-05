@@ -185,8 +185,8 @@ def test_suggestion_falls_back_to_28_days():
 
 
 def test_suggestion_end_is_clipped_to_the_window():
-    s = dates.suggest(WINDOW, [("Ledger", date(2026, 12, 1))], [], None, "now")
-    assert (s.start, s.end) == (date(2026, 12, 2), date(2026, 12, 31))
+    s = dates.suggest(WINDOW, [("Ledger", date(2026, 12, 10))], [], None, "now")
+    assert (s.start, s.end) == (date(2026, 12, 11), date(2026, 12, 31))
     assert "window" in s.basis
 
 
