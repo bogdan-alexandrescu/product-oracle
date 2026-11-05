@@ -156,9 +156,12 @@ def check_items(
     prd_version: int | None = None,
     prd_sections: set[str] | None = None,
     date_bases: list[Basis] | None = None,
+    elsewhere: frozenset[str] | None = None,
 ) -> ItemsCheck:
     """Parse and check ``roadmap_items.yaml`` against the source PRD version (and, with
-    ``date_bases``, every date against the verified schedule bases)."""
+    ``date_bases``, every date against the verified schedule bases). ``elsewhere``: the
+    keys of other PRDs' features and items on the company roadmap, which an item may depend
+    on (the owner, Nov 4)."""
     out = ItemsCheck()
     try:
         data = load_items_yaml(text)
@@ -242,6 +245,8 @@ def check_items(
     index = {i["id"]: n for n, i in enumerate(out.items)}
     for n, item in enumerate(out.items):
         for dep in item["depends_on"]:
+            if dep not in index and dep in (elsewhere or ()):
+                continue  # another PRD's, on the company roadmap: the queue orders by it
             if dep not in index:
                 out.add(
                     "unknown_dependency",

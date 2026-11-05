@@ -28,7 +28,10 @@ refused while any is open, call c3): ``unreadable_yaml``, ``wrong_version``,
 wrong shape: a contribution outside 0-3, a confidence outside 0-1, a list that is not
 one), ``duplicate_key``, ``unknown_feature``, ``unknown_requirement``, ``unknown_goal``
 (only confirmed goals count), ``unknown_dependency``, ``depends_on_excluded``,
-``dependency_cycle`` and ``unknown_blocker``. Advisory flags, per included feature:
+``dependency_cycle`` and ``unknown_blocker``. A dependency on a feature another PRD on the
+company roadmap holds is information, not a problem (the owner, Nov 4: every PRD feeds ONE
+company roadmap): ``needs_other_prd``, "X needs <feature> from <PRD>", never blocking.
+Advisory flags, per included feature:
 ``serves_no_goal``, ``low_confidence`` (below the company's low threshold),
 ``linked_blocker`` (a listed blocker that is open and gates publishing), ``new_feature``
 (a proposal of this run, not in the baseline yet) and ``duplicate_of_existing`` (its
@@ -169,6 +172,9 @@ class Known:
     low: float = 0.4
     # The run's target goals (#260), key to title.
     targets: dict[str, str] = field(default_factory=dict)
+    # The features other PRDs on the company roadmap hold (the owner, Nov 4), by key: the
+    # title and the PRD (oracle.roadmap.company.OnRoadmap).
+    elsewhere: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -477,7 +483,15 @@ def _check_sets(
             if g["key"] not in known.goals:
                 out.add("unknown_goal", f"{key}: goal {g['key']} is not a confirmed goal", key)
         for dep in f["depends_on"]:
-            if dep in left_set:
+            if dep not in included_set and (other := known.elsewhere.get(dep)) is not None:
+                # Another PRD on the company roadmap holds it: a real link, not a problem.
+                out.add(
+                    "needs_other_prd",
+                    f"{key} needs {other.title} from {other.prd_name}",
+                    key,
+                    blocking=False,
+                )
+            elif dep in left_set:
                 out.add("depends_on_excluded", f"{key} depends on {dep}, which is excluded", key)
             elif dep not in included_set and dep not in known.features:
                 out.add(
@@ -752,6 +766,14 @@ async def known_for_run(db: AsyncSession, run_id: uuid.UUID) -> Known:
         )
         if key and target is not None and key not in target:
             target[key] = Ref(proposal_id=p.id, title=title)
+    from oracle.roadmap import company
+
+    own = run.document_id if run is not None else None
+    known.elsewhere = {
+        k: f
+        for k, f in (await company.features_on_roadmap(db)).items()
+        if f.prd_id is not None and f.prd_id != own
+    }
     return known
 
 

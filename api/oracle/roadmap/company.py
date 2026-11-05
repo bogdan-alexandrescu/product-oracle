@@ -16,7 +16,8 @@ Many PRDs (one per area of focus) feed it; links between features stay within it
   one capacity queue: team size x focus (the ``team_capacity`` setting) person-weeks a week;
   items in milestone order (Now before Next before Later, then the milestone's first place
   on the roadmap), then the company goal order (goal positions), then priority (highest
-  first). An item's effort is its declared ``effort_weeks`` (else 1 week).
+  first); an item never before the items it depends on, in any PRD.
+  An item's effort is its declared ``effort_weeks`` (else 1 week).
 - **A replaced PRD** (:func:`replace`): ``replaced_by`` names the PRDs that replace it; it is
   read-only (oracle.docs.service refuses a new version), its items no longer feed the
   roadmap, and its verified schedule bases follow their item to the PRD the item now sits
@@ -119,6 +120,87 @@ async def refs(db: AsyncSession, ids: list[uuid.UUID]) -> list[dict[str, Any]]:
         )
     }
     return [{"id": i, "slug": found[i].slug, "title": found[i].title} for i in ids if i in found]
+
+
+@dataclass(frozen=True)
+class OnRoadmap:
+    """A feature the company roadmap knows: its title and the PRD it lives in."""
+
+    title: str
+    prd: str | None
+    prd_id: uuid.UUID | None = None
+
+    @property
+    def prd_name(self) -> str:
+        """``Safety PRD``: the PRD's title, with PRD after it when it does not say so."""
+        if not self.prd:
+            return "another PRD"
+        return self.prd if self.prd.lower().endswith("prd") else f"{self.prd} PRD"
+
+    @property
+    def label(self) -> str:
+        """``Account health ledger (Safety PRD)``: the title with its PRD named."""
+        return f"{self.title} ({self.prd_name})" if self.prd else self.title
+
+
+async def features_on_roadmap(db: AsyncSession) -> dict[str, OnRoadmap]:
+    """The features the company roadmap knows, by key (the owner, Nov 4: a PRD's feature may
+    depend on one that lives in another area PRD): the included features of every PRD
+    feeding it (each PRD's approved scope; a replaced PRD feeds nothing) and the items of its
+    latest version with items (an item's key and its feature's key). Empty with no company
+    roadmap. A check reads this once."""
+    from oracle.runs.scope_models import PrdScope, PrdScopeItem
+
+    found = await active(db)
+    if found is None:
+        return {}
+    out: dict[str, OnRoadmap] = {}
+    rows = await db.execute(
+        select(PrdScopeItem.key, PrdScopeItem.title, Document.title, Document.id)
+        .join(PrdScope, PrdScope.id == PrdScopeItem.scope_id)
+        .join(Document, Document.id == PrdScope.document_id)
+        .where(
+            PrdScope.status == "approved",
+            PrdScopeItem.kind == "feature",
+            PrdScopeItem.decision == "include",
+            Document.kind == "prd",
+            Document.deleted_at.is_(None),
+            Document.replaced_by == [],
+        )
+        .order_by(PrdScope.approved_at.desc().nulls_last())
+    )
+    for key, title, prd, prd_id in rows:
+        out.setdefault(key, OnRoadmap(title, prd, prd_id))
+    version = await _items_version(db, found.id)
+    if version is not None:
+        items = await db.execute(
+            select(
+                RoadmapItem.item_key,
+                RoadmapItem.title,
+                Entity.key,
+                Entity.title,
+                Document.title,
+                RoadmapItem.prd_document_id,
+            )
+            .outerjoin(Entity, Entity.id == RoadmapItem.feature_id)
+            .outerjoin(Document, Document.id == RoadmapItem.prd_document_id)
+            .where(RoadmapItem.roadmap_version_id == version.id)
+            .order_by(RoadmapItem.position)
+        )
+        for item_key, item_title, feature_key, feature_title, prd, prd_id in items:
+            if feature_key:
+                out.setdefault(feature_key, OnRoadmap(feature_title or item_title, prd, prd_id))
+            out.setdefault(item_key, OnRoadmap(item_title, prd, prd_id))
+    return out
+
+
+async def keys_of_other_prds(db: AsyncSession, prd_id: uuid.UUID | None) -> frozenset[str]:
+    """The keys of the features and items other PRDs than ``prd_id`` hold on the company
+    roadmap (:func:`features_on_roadmap`): what a PRD's roadmap item may depend on beyond
+    its own items."""
+    return frozenset(
+        k for k, f in (await features_on_roadmap(db)).items() if f.prd_id and f.prd_id != prd_id
+    )
 
 
 async def _latest_version(db: AsyncSession, document_id: uuid.UUID) -> DocumentVersion | None:
@@ -304,11 +386,38 @@ async def queue(
     per_week = _per_week(cap)
     today = await company_time.company_today(db)
     out: list[Queued] = []
-    ordered = sorted(rows, key=order)
+    ordered = _after_dependencies(sorted(rows, key=order))
     for r, (start, end) in zip(ordered, _dates([_effort(r) for r in ordered], per_week, today),
                                strict=True):  # fmt: skip
         out.append(Queued(r, prds.get(r.prd_document_id), _effort(r), start, end, order(r)))
     return cap, out
+
+
+def _after_dependencies(ordered: list[RoadmapItem]) -> list[RoadmapItem]:
+    """``ordered`` with each item after the items it depends on (by item key), whichever PRD
+    they are in (the owner, Nov 4: a link between PRDs is real); else as ordered. A cycle
+    keeps the order it has."""
+    at: dict[str, RoadmapItem] = {}
+    for r in ordered:
+        at.setdefault(r.item_key, r)
+    out: list[RoadmapItem] = []
+    placed: set[uuid.UUID] = set()
+    visiting: set[uuid.UUID] = set()
+
+    def place(r: RoadmapItem) -> None:
+        if r.id in placed or r.id in visiting:
+            return
+        visiting.add(r.id)
+        for dep in r.depends_on or []:
+            if dep in at:
+                place(at[dep])
+        visiting.discard(r.id)
+        placed.add(r.id)
+        out.append(r)
+
+    for r in ordered:
+        place(r)
+    return out
 
 
 def _per_week(cap: dict[str, Any]) -> float:

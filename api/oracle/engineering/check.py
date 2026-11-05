@@ -8,13 +8,16 @@ reads on the checkpoint (``payload["briefs_check"]``, :func:`summarize`):
     {"features": [{key, title, approach, size, depends_on, questions: [{id, question,
                    blocking}]}],
      "problems": [<F5-1 problem>], "code_map_used": bool, "unmapped_repos": [<repo>],
-     "unnamed_repo": bool}
+     "unnamed_repo": bool, "elsewhere": {<key>: <name with its PRD>}}
 
   ``problems`` lists an unknown code map id once, with the ``features`` citing it and
   where each cites it; ``unmapped_repos`` are the repositories the file names that no map
   of the run covers (names compared as owner/name: a URL, an ssh address or ``.git``
   match the map's); ``unnamed_repo`` is true when ids are unknown but the file names no
-  such repository (the feature set has no repository to name it from).
+  such repository (the feature set has no repository to name it from); ``elsewhere`` names
+  each dependency outside the feature set the check accepted (the owner, Nov 4: a feature
+  of another PRD on the company roadmap, or one waived at the feature set stop,
+  :func:`elsewhere`) as ``Account health ledger (Safety PRD)``.
 
 - **Vocabulary** (D8, :func:`validate`): ``edit`` with field ``verdict``
   (``{"verdict": feasible | feasible_with_changes | not_feasible, "note"}``, a note
@@ -34,7 +37,7 @@ reads on the checkpoint (``payload["briefs_check"]``, :func:`summarize`):
 
 import re
 import uuid
-from collections.abc import Collection, Iterable
+from collections.abc import Collection, Iterable, Mapping
 from typing import Any, Protocol
 
 from sqlalchemy import select
@@ -111,11 +114,13 @@ def _summarize(
     feature_keys: Collection[str],
     code_map: Collection[str] | None,
     mapped_repos: Collection[str] = (),
+    elsewhere: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
+    elsewhere = elsewhere or {}
     if text is None:
         return {"features": [], "problems": [MISSING], "code_map_used": False,
-                "unmapped_repos": [], "unnamed_repo": False}  # fmt: skip
-    problems = briefs.check(text, feature_keys, code_map)
+                "unmapped_repos": [], "unnamed_repo": False, "elsewhere": {}}  # fmt: skip
+    problems = briefs.check(text, feature_keys, code_map, elsewhere)
     try:
         parsed = briefs.parse(text)
     except briefs.BriefsInvalid:
@@ -141,6 +146,7 @@ def _summarize(
             if repo.strip() and _repo_key(repo) not in mapped and repo not in unmapped:
                 unmapped.append(repo)
     grouped = _grouped(problems)
+    wanted = set(feature_keys)
     return {
         "features": features,
         "problems": grouped,
@@ -148,6 +154,14 @@ def _summarize(
         "unmapped_repos": unmapped,
         # Unknown ids from a repository the file does not name.
         "unnamed_repo": not unmapped and any(p["code"] == "unknown_ref" for p in grouped),
+        # The dependencies outside the feature set the check accepted, each named with its
+        # PRD ("Account health ledger (Safety PRD)").
+        "elsewhere": {
+            d: elsewhere[d]
+            for f in features
+            for d in f["depends_on"]
+            if d not in wanted and d in elsewhere
+        },
     }
 
 
@@ -156,12 +170,14 @@ async def summarize(
     feature_keys: Collection[str],
     code_map: Collection[str] | None,
     mapped_repos: Collection[str] = (),
+    elsewhere: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """What the stop reads, from the segment's file (None: it left none). Untrusted text:
-    parsed on the parse pool."""
+    parsed on the parse pool. ``elsewhere``: the keys outside the feature set a brief may
+    depend on, with their names (:func:`elsewhere`)."""
     return await safe_yaml.run_parse_within(
         _summarize, text, frozenset(feature_keys), code_map, frozenset(mapped_repos),
-        name=briefs.FILE,
+        dict(elsewhere or {}), name=briefs.FILE,
     )  # fmt: skip
 
 
@@ -186,12 +202,52 @@ async def feature_keys(db: AsyncSession, run: Run) -> list[str]:
     )
 
 
+async def elsewhere(db: AsyncSession, run: Run) -> dict[str, str]:
+    """The keys outside the run's feature set a brief may depend on, each with its name (the
+    owner, Nov 4: every PRD feeds ONE company roadmap, so a link to another area PRD's
+    feature is real): the features the company roadmap knows (one read,
+    :func:`oracle.roadmap.company.features_on_roadmap`), named with their PRD, and the
+    dependencies waived at this run's feature set stop (a staged waiver of a feature's
+    ``depends_on_excluded``: the excluded features it depends on)."""
+    from oracle.roadmap import company
+    from oracle.runs import feature_set
+    from oracle.runs.models import CheckpointAction
+
+    out = {k: f.label for k, f in (await company.features_on_roadmap(db)).items()}
+    scope = await feature_set.approved_scope(db, run_id=run.id)
+    if scope is None or scope.checkpoint_id is None:
+        return out
+    waived = {
+        a.item_key
+        for a in await db.scalars(
+            select(CheckpointAction).where(
+                CheckpointAction.checkpoint_id == scope.checkpoint_id,
+                CheckpointAction.kind == "waive",
+                CheckpointAction.state == "staged",
+            )
+        )
+        if not a.answers or "depends_on_excluded" in a.answers
+    }
+    if not waived:
+        return out
+    items = await feature_set.scope_items(db, scope.id)
+    left_out = {i.key: i.title for i in items if i.kind == "feature" and i.decision != "include"}
+    for i in items:
+        if i.kind == "feature" and i.decision == "include" and i.key in waived:
+            for dep in i.depends_on or []:
+                if dep in left_out:
+                    out.setdefault(dep, left_out[dep] or dep)
+    return out
+
+
 async def check_segment(db: AsyncSession, run: Run, text: str | None) -> dict[str, Any]:
     from oracle.engineering import codemaps
 
     maps = [m for m in await codemaps.recorded(db, run) if m.content]
     ids = frozenset(i for m in maps for i in codemap.ids(m.content or {})) if maps else None
-    return await summarize(text, await feature_keys(db, run), ids, [m.repo for m in maps])
+    return await summarize(
+        text, await feature_keys(db, run), ids, [m.repo for m in maps], await elsewhere(db, run)
+    )
 
 
 def architect_lines(
@@ -472,4 +528,26 @@ async def prompt_lines(db: AsyncSession, run_id: uuid.UUID, segment: str) -> lis
                 f"decisions with the lead's reason: {', '.join(blocked)}."
             )
         lines.append("Treat each Feasible with changes note as a constraint.")
+    lines += elsewhere_lines(cp, segment)
     return lines
+
+
+def elsewhere_lines(cp: Checkpoint, segment: str) -> list[str]:
+    """The briefs' dependencies on features of other PRDs (the stored check's
+    ``elsewhere``), each named with its PRD: the PRD draft and its plan keep each link, so
+    the company roadmap orders by it."""
+    named = ((cp.payload or {}).get(PAYLOAD_KEY) or {}).get("elsewhere") or {}
+    links = [
+        f"- {f['key']} ({f.get('title') or f['key']}) depends on {dep}: {named[dep]}"
+        for f in _features(cp)
+        for dep in f.get("depends_on") or []
+        if dep in named
+    ]
+    if not links or segment not in ("priority", "prd_draft"):
+        return []
+    return [
+        "These features depend on features outside this feature set, most of them in another "
+        "PRD on the company roadmap. The link is real: keep it in the PRD (name the feature "
+        "with its PRD) and in its plan, as a dependency, never as an open problem:",
+        *links,
+    ]

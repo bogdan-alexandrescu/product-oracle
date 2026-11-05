@@ -5915,8 +5915,17 @@ async def _checked(
     # CR-11: a date only with a verified estimate, capacity or commitment behind it.
     bases = await once(("date_bases", prd_id), lambda: schedule.verified_bases(db, prd_id))
     # In a worker thread with a time cap: agent output never holds the event loop.
+    # The owner, Nov 4: an item may depend on another PRD's feature on the company roadmap.
+    elsewhere = await once(
+        ("on_roadmap", prd_id), lambda: roadmap_company.keys_of_other_prds(db, prd_id)
+    )
     check = await roadmap.check_items_async(
-        text, prd_slug=slug, prd_version=version, prd_sections=keys, date_bases=bases
+        text,
+        prd_slug=slug,
+        prd_version=version,
+        prd_sections=keys,
+        date_bases=bases,
+        elsewhere=elsewhere,
     )
     return check, slug, version, keys
 

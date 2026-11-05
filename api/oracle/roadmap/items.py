@@ -475,6 +475,8 @@ async def import_items(
                 select(Section.section_key).where(Section.version_id == prd_version.id)
             )
         )
+    from oracle.roadmap import company
+
     bases = await schedule.verified_bases(db, prd_doc.id if prd_doc else None)
     # Kept by oracle.runs.roadmap: a run's file checked at its checkpoint is not parsed again.
     check = await items_file.check_items_async(
@@ -483,6 +485,8 @@ async def import_items(
         prd_version=prd_version.number if prd_version else None,
         prd_sections=keys,
         date_bases=bases,
+        # The owner, Nov 4: an item may depend on another PRD's feature on the company roadmap.
+        elsewhere=await company.keys_of_other_prds(db, prd_doc.id if prd_doc else None),
     )
     result.problems = check.problems
     if strict and check.problems:
