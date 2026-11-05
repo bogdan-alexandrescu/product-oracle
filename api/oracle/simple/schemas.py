@@ -520,6 +520,39 @@ class SimpleGoalMilestonePatch(BaseModel):
     counts_when: str | None = None
 
 
+class SimpleOldMilestone(BaseModel):
+    """old-milestones (owner, Nov 4): a goal milestone still on an older per-PRD roadmap
+    (history) that is not on the company roadmap yet. ``items``: the titles of the items
+    it gates that are on the company roadmap (it would gate those there); none left: it
+    waits on an owner's Keep or Drop."""
+
+    id: uuid.UUID
+    name: str
+    date: dt.date | None = None
+    goal_id: uuid.UUID | None = None
+    goal_title: str | None = None
+    from_roadmap: "SimpleDocRef"
+    items: list[str] = []
+
+
+class SimpleOldMilestones(BaseModel):
+    """What "Bring old milestones over" would do: ``moves`` are copied (items re-pointed),
+    ``needs_call`` have no items left and wait on Keep or Drop. An owner's alone: anyone
+    else reads both empty and ``can_act`` false."""
+
+    can_act: bool = False
+    moves: list[SimpleOldMilestone] = []
+    needs_call: list[SimpleOldMilestone] = []
+
+
+class SimpleOldMilestonesResult(BaseModel):
+    """After a carry-over, Keep or Drop: the ids of the company roadmap's new milestones
+    and what is left."""
+
+    carried: list[uuid.UUID] = []
+    old_milestones: SimpleOldMilestones
+
+
 class SimpleRoadmapOut(BaseModel):
     today: dt.date
     group: RoadmapGroup
@@ -530,6 +563,8 @@ class SimpleRoadmapOut(BaseModel):
     # build-milestones-on-roadmap: each shown roadmap's milestones per goal (its own, and
     # those read from the PRDs its items come from).
     goal_milestones: list[SimpleGoalMilestone] = []
+    # old-milestones: the older roadmaps' goal milestones an owner may bring over.
+    old_milestones: SimpleOldMilestones = SimpleOldMilestones()
     # S3b: changes waiting in working drafts and proposals of roadmaps whose drafts the
     # reader may not see (the banner's count, no details: they read the published version).
     changes_in_review: int = 0
