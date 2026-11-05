@@ -64,6 +64,7 @@ test.describe("at 390 px", () => {
     await expect(tip).toContainText("2 feedback items stay open");
     await page.keyboard.press("Escape");
     await expect(tip).toHaveCount(0);
+    await chip.blur();
     await chip.focus();
     await expect(chip).toBeFocused();
     await expect(tip).toContainText("names a source item Oracle no longer has");

@@ -2186,6 +2186,22 @@ export function inboxTracks(ctx: RoadmapContext, db: RoadmapDb, seen: string | n
  * worded as api/oracle/roadmap/doc_dates.py problem_message and api/oracle/wording.py
  * unknown_source_item and feedback_left_open write them; the ids in refs.
  */
+/** A send-back note with a declined point, worded as api/oracle/docs/service.py does: a warning, amber. */
+export const DECLINED_NOTE: Schemas["VersionWarning"] = {
+  code: "note_answered",
+  message: "the draft answers the send-back note: 2 points (1 addressed, 1 declined)",
+  section_keys: [],
+  refs: { note_points: ["note-1", "note-2"], declined: ["note-2"] },
+};
+
+/** A note answered in full as an older version stored it: no ``declined`` in its refs, "0 declined" in its words. Done. */
+export const OLDER_ANSWERED_NOTE: Schemas["VersionWarning"] = {
+  code: "note_answered",
+  message: "the draft answers the send-back note: 2 points (2 addressed, 0 declined)",
+  section_keys: [],
+  refs: { note_points: ["note-1", "note-2"] },
+};
+
 export function versionWarnings(prdTitle: string, prdSlug: string): Schemas["VersionWarning"][] {
   return [
     {
