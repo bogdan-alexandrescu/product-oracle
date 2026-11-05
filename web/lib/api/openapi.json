@@ -42748,6 +42748,146 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/simple/roadmap/milestones/carry-over": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Carry Over Old Milestones",
+        "description": "Bring old milestones over: copy every goal milestone of the older per-PRD roadmaps\n(history while the company roadmap exists) onto the company roadmap, same name, date\nand goal, its items re-pointed to the company roadmap's (same feature, else same item\nkey), each old one linked to its copy. One none of whose items are left is not copied:\nit stays in ``old_milestones.needs_call`` for Keep or Drop. Run once by an owner (a\nsecond run copies nothing), never on a read or a deploy.",
+        "operationId": "carry_over_old_milestones",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOldMilestonesResult"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "owner",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/roadmap/milestones/{milestone_id}/keep": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Keep Old Milestone",
+        "description": "Keep an old milestone with no items left: copied onto the company roadmap with no\nitems, linked. One not waiting on a call is 409.",
+        "operationId": "keep_old_milestone",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "milestone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Milestone Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOldMilestonesResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/roadmap/milestones/{milestone_id}/drop": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Drop Old Milestone",
+        "description": "Drop an old milestone with no items left: it stays behind on its old roadmap and\nleaves the list. One not waiting on a call is 409.",
+        "operationId": "drop_old_milestone",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "milestone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Milestone Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOldMilestonesResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner",
+        "x-per-item": "owner"
+      }
+    },
     "/v1/simple/roadmap/milestones/{milestone_id}": {
       "patch": {
         "tags": [
@@ -120491,6 +120631,123 @@
         "title": "SimpleNotApproved",
         "description": "A roadmap a meeting's session worked on that the caller does not approve."
       },
+      "SimpleOldMilestone": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "goal_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Title"
+          },
+          "from_roadmap": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "from_roadmap"
+        ],
+        "title": "SimpleOldMilestone",
+        "description": "old-milestones (owner, Nov 4): a goal milestone still on an older per-PRD roadmap\n(history) that is not on the company roadmap yet. ``items``: the titles of the items\nit gates that are on the company roadmap (it would gate those there); none left: it\nwaits on an owner's Keep or Drop."
+      },
+      "SimpleOldMilestones": {
+        "properties": {
+          "can_act": {
+            "type": "boolean",
+            "title": "Can Act",
+            "default": false
+          },
+          "moves": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleOldMilestone"
+            },
+            "type": "array",
+            "title": "Moves",
+            "default": []
+          },
+          "needs_call": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleOldMilestone"
+            },
+            "type": "array",
+            "title": "Needs Call",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "SimpleOldMilestones",
+        "description": "What \"Bring old milestones over\" would do: ``moves`` are copied (items re-pointed),\n``needs_call`` have no items left and wait on Keep or Drop. An owner's alone: anyone\nelse reads both empty and ``can_act`` false."
+      },
+      "SimpleOldMilestonesResult": {
+        "properties": {
+          "carried": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Carried",
+            "default": []
+          },
+          "old_milestones": {
+            "$ref": "#/components/schemas/SimpleOldMilestones"
+          }
+        },
+        "type": "object",
+        "required": [
+          "old_milestones"
+        ],
+        "title": "SimpleOldMilestonesResult",
+        "description": "After a carry-over, Keep or Drop: the ids of the company roadmap's new milestones\nand what is left."
+      },
       "SimpleOpenDecision": {
         "properties": {
           "id": {
@@ -122693,6 +122950,14 @@
             "type": "array",
             "title": "Goal Milestones",
             "default": []
+          },
+          "old_milestones": {
+            "$ref": "#/components/schemas/SimpleOldMilestones",
+            "default": {
+              "can_act": false,
+              "moves": [],
+              "needs_call": []
+            }
           },
           "changes_in_review": {
             "type": "integer",
