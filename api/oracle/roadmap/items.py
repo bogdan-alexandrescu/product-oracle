@@ -486,7 +486,8 @@ async def import_items(
         prd_sections=keys,
         date_bases=bases,
         # The owner, Nov 4: an item may depend on another PRD's feature on the company roadmap.
-        elsewhere=await company.keys_of_other_prds(db, prd_doc.id if prd_doc else None),
+        elsewhere=await company.other_prds(db, prd_doc.id if prd_doc else None),
+        prd_name=company.OnRoadmap("", prd_doc.title).prd_name if prd_doc else None,
     )
     result.problems = check.problems
     if strict and check.problems:

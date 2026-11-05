@@ -254,6 +254,8 @@ CATALOGUE: dict[str, Entry] = {
     "order_breaks_dependency": Entry(
         BLOCKING, "Listed before what it needs", "It is listed before {dep_title}.", "Fix order"
     ),
+    # The owner, Nov 4: a cycle through another PRD's feature, worded by the check.
+    "dependency_cycle": Entry(BLOCKING, "Waits on itself", "{message}", "Remove dependency"),
     "later_slice": Entry(
         BLOCKING,
         "Waits on a later slice",
@@ -686,11 +688,22 @@ def reasons_for(
     # duplicate's problems on the later one).
     events = _dependency_events(items)
     dep_problems = [p for p in problems if p.get("item") and p["code"] in DEPENDENCY_CODES]
-    deps = (
-        [e[2] for e in events]
-        if [(e[0], e[1]) for e in events] == [(p["item"], p["code"]) for p in dep_problems]
-        else [None] * len(dep_problems)
-    )
+    deps: list[str | None] = []
+    at = 0
+    for p in dep_problems:
+        # An unknown dependency the check accepted (another PRD's, on the company roadmap)
+        # has no problem: passed over.
+        while (
+            at < len(events)
+            and events[at][:2] != (p["item"], p["code"])
+            and events[at][1] == "unknown_dependency"
+        ):
+            at += 1
+        if at < len(events) and events[at][:2] == (p["item"], p["code"]):
+            deps.append(events[at][2])
+            at += 1
+        else:
+            deps.append(None)
     dep_of = {id(p): d for p, d in zip(dep_problems, deps, strict=True)}
     # Where each id first appears, so a problem's item is found without a scan per problem.
     first_index: dict[str, int] = {}

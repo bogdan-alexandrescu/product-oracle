@@ -772,7 +772,7 @@ async def known_for_run(db: AsyncSession, run_id: uuid.UUID) -> Known:
     known.elsewhere = {
         k: f
         for k, f in (await company.features_on_roadmap(db)).items()
-        if f.prd_id is not None and f.prd_id != own
+        if f.other_than(own, run_id)
     }
     return known
 

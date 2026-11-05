@@ -1393,6 +1393,10 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     run = await _get_run(db, run_id)
     segments = await _segments(db, run.id)
     checkpoints = await _checkpoints(db, [run.id])
+    # A run already waiting at the Engineering check reads as the rules now are: its
+    # briefs checked again (kept in its segment), no rerun.
+    if await eng_check.refresh(db, run, segments, checkpoints):
+        await db.commit()
     names = await _decider_names(db, checkpoints)
     leads = await engineering_leads(db)
     staged = await _staged_actions(db, checkpoints)
@@ -5902,13 +5906,14 @@ async def items_check(db: AsyncSession, run: Run, text: str) -> roadmap.ItemsChe
 async def _checked(
     db: AsyncSession, run: Run, text: str
 ) -> tuple[roadmap.ItemsCheck, str | None, int | None, set[str] | None]:
-    slug = version = prd_id = None
+    slug = version = prd_id = title = None
     keys: set[str] | None = None
     source_id = _source_id(run)
     if source_id is not None:
         source = await _version_source(db, source_id)
         if source is not None:
             slug, version, prd_id = source.slug, source.version, source.document_id
+            title = source.title
             keys = set(
                 await once(("section_keys", source_id), lambda: _section_keys(db, source_id))
             )
@@ -5916,9 +5921,9 @@ async def _checked(
     bases = await once(("date_bases", prd_id), lambda: schedule.verified_bases(db, prd_id))
     # In a worker thread with a time cap: agent output never holds the event loop.
     # The owner, Nov 4: an item may depend on another PRD's feature on the company roadmap.
-    elsewhere = await once(
-        ("on_roadmap", prd_id), lambda: roadmap_company.keys_of_other_prds(db, prd_id)
-    )
+    # Checked for the horizon and for a cycle through them.
+    on_roadmap = await once(("on_roadmap",), lambda: roadmap_company.features_on_roadmap(db))
+    elsewhere = roadmap_company.others_of(on_roadmap, prd_id, run.id)
     check = await roadmap.check_items_async(
         text,
         prd_slug=slug,
@@ -5926,6 +5931,7 @@ async def _checked(
         prd_sections=keys,
         date_bases=bases,
         elsewhere=elsewhere,
+        prd_name=roadmap_company.OnRoadmap("", title).prd_name if title else None,
     )
     return check, slug, version, keys
 
@@ -8313,6 +8319,8 @@ async def decide_checkpoint(
         from oracle.runs import actions
 
         raise await actions.review_changed(db, cp, expected_revision)
+    # A run already waiting at the Engineering check is decided as the rules now are.
+    await eng_check.refresh(db, run, await _segments(db, run.id), [cp])
     # The note defaults to the shared draft's (D8).
     note = (note if note is not None else cp.draft_note or "").strip() or None
     # D4: an Inbox send-back delivers a structured review of the shared draft (a console

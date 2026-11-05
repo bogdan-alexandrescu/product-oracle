@@ -55,7 +55,7 @@ import json
 import re
 import threading
 from collections import OrderedDict
-from collections.abc import Hashable
+from collections.abc import Collection, Hashable
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any
@@ -83,6 +83,19 @@ DOC_LINK = re.compile(
     r"\]\((/documents/(?P<slug>[A-Za-z0-9][A-Za-z0-9_.-]*)/v/(?P<version>\d+)"
     r"(?:#(?P<section>[A-Za-z0-9][A-Za-z0-9_.:-]*))?)\)"
 )
+
+
+@dataclass(frozen=True)
+class Elsewhere:
+    """A feature or item of another PRD on the company roadmap an item may depend on (the
+    owner, Nov 4), as oracle.roadmap.company.other_prds reads it: its key, its name with its
+    PRD ("Account health ledger (Safety PRD)"), its horizon (an item's; None for a feature
+    with no item yet) and the keys it depends on."""
+
+    key: str
+    label: str
+    horizon: str | None = None
+    depends_on: tuple[str, ...] = ()
 
 
 @dataclass
@@ -156,12 +169,14 @@ def check_items(
     prd_version: int | None = None,
     prd_sections: set[str] | None = None,
     date_bases: list[Basis] | None = None,
-    elsewhere: frozenset[str] | None = None,
+    elsewhere: Collection[str | Elsewhere] | None = None,
+    prd_name: str | None = None,
 ) -> ItemsCheck:
     """Parse and check ``roadmap_items.yaml`` against the source PRD version (and, with
-    ``date_bases``, every date against the verified schedule bases). ``elsewhere``: the
-    keys of other PRDs' features and items on the company roadmap, which an item may depend
-    on (the owner, Nov 4)."""
+    ``date_bases``, every date against the verified schedule bases). ``elsewhere``: other
+    PRDs' features and items on the company roadmap, which an item may depend on (the owner,
+    Nov 4; a bare key has no horizon and no dependencies), checked for the horizon and for a
+    cycle through them; ``prd_name`` names this PRD in a cycle ("Scale PRD")."""
     out = ItemsCheck()
     try:
         data = load_items_yaml(text)
@@ -243,10 +258,16 @@ def check_items(
 
     # Dependencies: known ids, listed earlier, never in a later horizon than the item.
     index = {i["id"]: n for n, i in enumerate(out.items)}
+    others = {
+        e.key: e
+        for e in (x if isinstance(x, Elsewhere) else Elsewhere(x, x) for x in elsewhere or ())
+    }
     for n, item in enumerate(out.items):
         for dep in item["depends_on"]:
-            if dep not in index and dep in (elsewhere or ()):
-                continue  # another PRD's, on the company roadmap: the queue orders by it
+            if dep not in index and dep in others:
+                # Another PRD's, on the company roadmap: the queue orders by it.
+                _check_other(out, item, others[dep])
+                continue
             if dep not in index:
                 out.add(
                     "unknown_dependency",
@@ -271,8 +292,75 @@ def check_items(
                     f"item {item['id']} is in {mine} but depends on {dep} in {theirs}",
                     item["id"],
                 )
+    _check_cycles(out, index, others, prd_name)
     _check_slices(out)
     return out
+
+
+def _check_other(out: ItemsCheck, item: dict[str, Any], other: Elsewhere) -> None:
+    """An item never in an earlier horizon than another PRD's item it waits on."""
+    mine, theirs = item.get("horizon"), other.horizon
+    if mine in HORIZONS and theirs in HORIZONS and HORIZONS.index(theirs) > HORIZONS.index(mine):
+        title = _text(item.get("title")) or item["id"]
+        out.add(
+            "horizon_breaks_dependency",
+            f"{title} is in {str(mine).capitalize()} but waits on {other.label} in "
+            f"{str(theirs).capitalize()}",
+            item["id"],
+        )
+
+
+def _check_cycles(
+    out: ItemsCheck,
+    index: dict[str, int],
+    others: dict[str, Elsewhere],
+    prd_name: str | None,
+) -> None:
+    """``dependency_cycle`` for each item that waits, through another PRD's feature or item,
+    on itself (this PRD's items wait on each other in list order, checked above): it and the
+    other PRD's feature are named, each with its PRD."""
+    if not others:
+        return
+    # An item is named by its id, or by its feature's key.
+    mine: dict[str, str] = {}
+    for i in out.items:
+        mine.setdefault(i["id"], i["id"])
+        if feature := _text(i.get("feature")):
+            mine.setdefault(feature, i["id"])
+
+    def deps(node: str) -> list[str]:
+        if node in index:
+            return out.items[index[node]]["depends_on"]
+        return list(others[node].depends_on) if node in others else []
+
+    for item in out.items:
+        start = item["id"]
+        for first in item["depends_on"]:
+            if first in index or first not in others:
+                continue
+            seen: set[str] = set()
+            stack = [first]
+            found = False
+            while stack and not found:
+                node = stack.pop()
+                if node in seen:
+                    continue
+                seen.add(node)
+                for d in deps(node):
+                    d = d if d in index else mine.get(d, d)
+                    if d == start:
+                        found = True
+                        break
+                    stack.append(d)
+            if found:
+                title = _text(item.get("title")) or start
+                out.add(
+                    "dependency_cycle",
+                    f"{title} ({prd_name or 'this PRD'}) and {others[first].label} wait on "
+                    "each other",
+                    start,
+                )
+                break
 
 
 def _names(text: str, item: dict[str, Any]) -> bool:

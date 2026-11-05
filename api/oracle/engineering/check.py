@@ -206,7 +206,8 @@ async def elsewhere(db: AsyncSession, run: Run) -> dict[str, str]:
     """The keys outside the run's feature set a brief may depend on, each with its name (the
     owner, Nov 4: every PRD feeds ONE company roadmap, so a link to another area PRD's
     feature is real): the features the company roadmap knows (one read,
-    :func:`oracle.roadmap.company.features_on_roadmap`), named with their PRD, and the
+    :func:`oracle.roadmap.company.features_on_roadmap`), named with their PRD, the Ground
+    Truth's features (as the feature set stop, ``Known.features``), and the
     dependencies waived at this run's feature set stop (a staged waiver of a feature's
     ``depends_on_excluded``: the excluded features it depends on)."""
     from oracle.roadmap import company
@@ -214,6 +215,15 @@ async def elsewhere(db: AsyncSession, run: Run) -> dict[str, str]:
     from oracle.runs.models import CheckpointAction
 
     out = {k: f.label for k, f in (await company.features_on_roadmap(db)).items()}
+    # The Ground Truth features (not rejected), as the feature set stop accepts them: the
+    # area PRDs drafted side by side, none on the company roadmap yet, depend on each
+    # other's features.
+    for key, title in await db.execute(
+        select(Entity.key, Entity.title).where(
+            Entity.type == "feature", Entity.status != "rejected"
+        )
+    ):
+        out.setdefault(key, title or key)
     scope = await feature_set.approved_scope(db, run_id=run.id)
     if scope is None or scope.checkpoint_id is None:
         return out
@@ -248,6 +258,40 @@ async def check_segment(db: AsyncSession, run: Run, text: str | None) -> dict[st
     return await summarize(
         text, await feature_keys(db, run), ids, [m.repo for m in maps], await elsewhere(db, run)
     )
+
+
+# The problems a later rule may answer (the owner, Nov 4: a dependency on another PRD's
+# feature is real): a stored check with one is checked again when its stop is read.
+STALE = frozenset({"unknown_dependency"})
+
+
+async def refresh(
+    db: AsyncSession, run: Run, segments: Iterable[Any], checkpoints: Iterable[Checkpoint]
+) -> bool:
+    """Check again the briefs of each pending Engineering check whose stored check holds a
+    problem a later rule may answer (:data:`STALE`), from the file its segment kept, and
+    store the new check when it differs: a run already waiting reads as the rules now are,
+    with no rerun. True when one changed (flushed, for the caller to commit)."""
+    by_seq = {s.seq: s for s in segments}
+    changed = False
+    for cp in checkpoints:
+        stored = (cp.payload or {}).get(PAYLOAD_KEY)
+        if cp.kind != KIND or cp.status != "pending" or not isinstance(stored, dict):
+            continue
+        if not any(p.get("code") in STALE for p in stored.get("problems") or []):
+            continue
+        segment = by_seq.get((cp.payload or {}).get("segment_seq"))
+        text = (((segment.artifacts or {}) if segment else {}).get("files") or {}).get(briefs.FILE)
+        if text is None:
+            continue
+        fresh = await check_segment(db, run, text)
+        if fresh != stored:
+            # A new object: the column is not mutation-tracked.
+            cp.payload = {**(cp.payload or {}), PAYLOAD_KEY: fresh}
+            changed = True
+    if changed:
+        await db.flush()
+    return changed
 
 
 def architect_lines(

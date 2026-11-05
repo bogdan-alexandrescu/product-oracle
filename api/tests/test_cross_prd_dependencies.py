@@ -290,8 +290,9 @@ async def test_a_run_already_waiting_at_the_engineering_check_is_read_again():
         assert [p["code"] for p in old["problems"]] == ["unknown_dependency"]
         s.add(RunSegment(run_id=w["run"], seq=3, name="eng_review", status="succeeded",
                          artifacts={"files": {check.briefs.FILE: text}}))  # fmt: skip
+        payload = {"segment_seq": 3, check.PAYLOAD_KEY: old}
         cp = await _add(s, Checkpoint(run_id=w["run"], kind=check.KIND, status="pending",
-                                      payload={"segment_seq": 3, check.PAYLOAD_KEY: old}))  # fmt: skip
+                                      payload=payload))  # fmt: skip
         await s.commit()
         cp_id = cp.id
     async with tenant_session(w["tenant"]) as s:
