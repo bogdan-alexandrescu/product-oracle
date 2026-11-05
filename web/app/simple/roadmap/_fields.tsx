@@ -5,6 +5,8 @@
 
 import { useState } from "react";
 
+import { Icon } from "@/components/ds/Icon";
+
 import { api, unwrap } from "@/lib/api/client";
 import { useQuery } from "@/lib/use-query";
 
@@ -49,12 +51,12 @@ function Field({
   return (
     <>
       <dt className="text-text2">{label}</dt>
-      <dd data-testid={testId} className="min-w-0 [overflow-wrap:anywhere]">
+      <dd className="min-w-0 [overflow-wrap:anywhere]">
         {open ? (
-          editor(() => setOpen(false))
+          <div data-testid={`${testId}-edit`}>{editor(() => setOpen(false))}</div>
         ) : (
           <span className="flex flex-wrap items-baseline gap-x-2">
-            <span className="min-w-0">{value}</span>
+            <span data-testid={testId} className="min-w-0">{value}</span>
             {canChange && (
               <button
                 type="button"
@@ -479,7 +481,8 @@ export function PanelFields({
         )}
       />
       <dt className="text-text2">Depends on</dt>
-      <dd data-testid="card-depends" className="min-w-0">
+      <dd className="min-w-0">
+        <div data-testid="card-depends">
         {deps.length + loose.length === 0 && (
           <span className="text-text2">Nothing</span>
         )}
@@ -509,7 +512,7 @@ export function PanelFields({
                     )
                   }
                 >
-                  Remove
+                  <Icon name="x" size={16} />
                 </button>
               )}
             </li>
@@ -535,12 +538,13 @@ export function PanelFields({
                     )
                   }
                 >
-                  Remove
+                  <Icon name="x" size={16} />
                 </button>
               )}
             </li>
           ))}
         </ul>
+        </div>
         {canChange && (
           <AddDependency
             item={item}

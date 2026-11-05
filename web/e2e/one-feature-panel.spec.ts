@@ -31,11 +31,11 @@ async function rename(page: Page, to: string) {
 /** Moves the end a week later; returns the new end as typed (YYYY-MM-DD). */
 async function laterEnd(page: Page): Promise<string> {
   await tap(panel(page).getByRole("button", { name: "Change the dates" }));
-  const end = panel(page).getByTestId("card-dates").getByLabel("End", { exact: true });
+  const end = panel(page).getByTestId("card-dates-edit").getByLabel("End", { exact: true });
   const was = await end.inputValue();
   const next = new Date(Date.parse(`${was}T00:00:00Z`) + 7 * 86_400_000).toISOString().slice(0, 10);
   await end.fill(next);
-  await tap(panel(page).getByTestId("card-dates").getByRole("button", { name: "Save" }));
+  await tap(panel(page).getByTestId("card-dates-edit").getByRole("button", { name: "Save" }));
   return next;
 }
 
@@ -63,11 +63,11 @@ for (const size of SIZES) {
       // Add a dependency from the picker (code and name), then remove it.
       const deps = panel(page).getByTestId("card-depends");
       await expect(deps).toContainText("Alert rules engine");
-      await tap(deps.getByRole("button", { name: "Add a dependency" }));
-      await deps.getByLabel("Feature it depends on").selectOption({ label: "Alert history export" });
-      await tap(deps.getByRole("button", { name: "Save" }));
+      await tap(panel(page).getByRole("button", { name: "Add a dependency" }));
+      await panel(page).getByLabel("Feature it depends on").selectOption({ label: "Alert history export" });
+      await tap(panel(page).getByRole("button", { name: "Save" }));
       await expect(deps.getByTestId("card-depends-row").filter({ hasText: "Alert history export" })).toBeVisible();
-      await tap(deps.getByRole("button", { name: "Remove Alert history export from what it depends on" }));
+      await tap(panel(page).getByRole("button", { name: "Remove Alert history export from what it depends on" }));
       await expect(deps.getByTestId("card-depends-row").filter({ hasText: "Alert history export" })).toHaveCount(0);
       await expect(deps).toContainText("Alert rules engine");
 
@@ -75,11 +75,11 @@ for (const size of SIZES) {
       const goal = panel(page).getByTestId("card-goal");
       await expect(goal).toContainText("Grow retention");
       await tap(panel(page).getByRole("button", { name: "Change the goal" }));
-      const pick = goal.getByLabel("Goal");
+      const pick = panel(page).getByTestId("card-goal-edit").getByLabel("Goal");
       const faster = (await pick.locator("option").allTextContents()).find((t) => t.startsWith("Faster activation"));
       expect(faster).toBeTruthy();
       await pick.selectOption({ label: faster! });
-      await tap(goal.getByRole("button", { name: "Save" }));
+      await tap(panel(page).getByTestId("card-goal-edit").getByRole("button", { name: "Save" }));
       await expect(goal).toContainText("Faster activation");
       await tap(page.getByRole("button", { name: "Undo" }).last());
       await expect(goal).toContainText("Grow retention");

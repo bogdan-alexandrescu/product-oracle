@@ -15,7 +15,7 @@ import { formatDay } from "@/lib/format";
 import { useScreenSubject } from "@/lib/screen-subject";
 
 import { HORIZONS, type Horizon } from "./_board";
-import { NameEdit, Named, PanelFields } from "./_fields";
+import { NameEdit, PanelFields } from "./_fields";
 import {
   milestoneInk,
   shortDay,
@@ -698,17 +698,27 @@ export function FloatingCard({
   const [menu, setMenu] = useState(false);
   const head = (
     <div className="flex items-start gap-2">
-      <h2 className="min-w-0 flex-1 text-[18px] leading-6 font-semibold break-words" data-testid="card-name">
-        {renaming ? <NameEdit item={item} act={act} done={() => setRenaming(false)} /> : <Named item={item} />}
-        {item.draft && item.status !== "merged" && (
-          <span
-            className="ml-2 inline-block rounded-full bg-na-bg px-2 align-middle text-xs font-normal text-na"
-            data-testid="draft-tag"
-          >
-            Draft
-          </span>
+      {/* BGD (Nov 4): the code chip before the name; the heading itself is the name. */}
+      <div className="min-w-0 flex-1 text-[18px] leading-6 font-semibold break-words" data-testid="card-name">
+        {renaming ? (
+          <NameEdit item={item} act={act} done={() => setRenaming(false)} />
+        ) : (
+          <>
+            {item.code && <span className="simple-code mr-1.5">{item.code}</span>}
+            <h2 className="inline">
+              {item.title}
+              {item.draft && item.status !== "merged" && (
+                <span
+                  className="ml-2 inline-block rounded-full bg-na-bg px-2 align-middle text-xs font-normal text-na"
+                  data-testid="draft-tag"
+                >
+                  Draft
+                </span>
+              )}
+            </h2>
+          </>
         )}
-      </h2>
+      </div>
       {beside && (
         <button
           type="button"
