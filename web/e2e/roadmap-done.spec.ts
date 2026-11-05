@@ -63,7 +63,9 @@ test("an item marked done leaves every view, its broken links and every count, a
 
   await openRoadmapItem(page, "alert-rules");
   const card = page.getByTestId("floating-card");
-  await card.getByRole("button", { name: "Talk to Oracle" }).click();
+  // The feature panel: a desktop's talk is beside the details, a phone's behind its tab.
+  const talkTab = card.getByRole("tab", { name: "Talk to Oracle" });
+  if (await talkTab.isVisible()) await talkTab.click();
   const talk = card.getByTestId("item-talk");
   await talk.getByRole("textbox", { name: "Message Oracle" }).fill("This is completed, it has shipped already");
   await talk.getByRole("button", { name: "Send" }).click();

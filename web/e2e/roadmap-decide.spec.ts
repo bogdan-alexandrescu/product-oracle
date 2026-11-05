@@ -110,7 +110,9 @@ test("the draft's change list names the item on every line, and the banner says 
 async function cutKeepingDependents(page: Page, key: string) {
   await openRoadmapItem(page, key);
   const card = page.getByTestId("floating-card");
-  await card.getByRole("button", { name: "Talk to Oracle" }).click();
+  // The feature panel: a desktop's talk is beside the details, a phone's behind its tab.
+  const talkTab = card.getByRole("tab", { name: "Talk to Oracle" });
+  if (await talkTab.isVisible()) await talkTab.click();
   const talk = card.getByTestId("item-talk");
   await talk.getByRole("textbox", { name: "Message Oracle" }).fill("cut it");
   await talk.getByRole("button", { name: "Send" }).click();
