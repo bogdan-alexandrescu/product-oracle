@@ -18,6 +18,11 @@ const VIEWER = "viewer@example.com";
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
 const M1 = "M1 Alerts live for 50 teams";
+// The built states, for a look: MR_SHOTS=<dir>.
+const SHOTS = process.env.MR_SHOTS;
+const shot = async (page: Page, name: string, size: string, scheme: string) => {
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}-${size}-${scheme}.png` });
+};
 
 async function open(page: Page, scheme: "light" | "dark", email?: string) {
   await page.context().addInitScript(
@@ -84,12 +89,14 @@ for (const [size, device] of [
         await expect(card(page).getByTestId("ms-save")).toHaveCount(0);
         await expect(card(page).getByTestId("ms-remove")).toHaveCount(0);
         await expect(card(page).getByTestId("ms-propose-remove")).toHaveText("Propose removing it");
+        await shot(page, "propose-card", size, scheme);
         await card(page).getByLabel("Name").fill("Alerts live for 60 teams");
         // A refusal shows on the card in one line, and what was typed stays.
         await page.evaluate(([key]) => localStorage.setItem(key, "POST /v1/simple/changes"), [MOCK_FAIL_ONCE_KEY] as const);
         await card(page).getByTestId("ms-propose").click();
         await expect(card(page).getByTestId("ms-error")).toBeVisible();
         await expect(card(page).getByLabel("Name")).toHaveValue("Alerts live for 60 teams");
+        await shot(page, "refused-card", size, scheme);
         await card(page).getByTestId("ms-propose").click();
         await expect(toast(page)).toContainText("Proposed a change to M1 Alerts live for 50 teams");
         await expect(card(page)).toHaveCount(0);
@@ -104,6 +111,8 @@ for (const [size, device] of [
         const tray = page.getByTestId("decision-tray");
         const row = tray.getByTestId("tray-proposal").filter({ hasText: "Milestone 'Alerts live for 50 teams': change it" });
         await expect(row).toBeVisible();
+        await row.scrollIntoViewIfNeeded();
+        await shot(page, "owner-tray", size, scheme);
         await row.getByRole("button", { name: "Accept" }).click();
         await expect(row).toHaveCount(0);
         await tray.getByRole("button", { name: "Close" }).click();
@@ -116,6 +125,7 @@ for (const [size, device] of [
         await expect(card(page)).toHaveAttribute("data-rights", "read");
         for (const id of ["ms-save", "ms-remove", "ms-propose", "ms-propose-remove"]) await expect(card(page).getByTestId(id)).toHaveCount(0);
         await expect(card(page).getByLabel("Name")).toBeDisabled();
+        await shot(page, "viewer-card", size, scheme);
         await card(page).getByRole("button", { name: "Close" }).click();
         await expect(card(page)).toHaveCount(0);
       });
