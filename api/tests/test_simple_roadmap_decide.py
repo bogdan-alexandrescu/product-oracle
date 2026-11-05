@@ -21,6 +21,10 @@ Test cards (protects / fails_when / no_claim):
 - test_waiting_count_reads_the_whole_roadmap: protects=GET /v1/simple/roadmap/waiting counts
   the broken links of the whole roadmap as the reader sees it, the same number as the
   unfiltered read; fails_when=the route is missing or counts another number; no_claim=the web.
+- test_waiting_count_holds_the_dates_to_confirm: protects=GET /v1/simple/roadmap/waiting
+  also counts the dates the reader may confirm in the whole roadmap (Needs a decision's
+  Dates to confirm), so the side menu's Roadmap count equals Needs a decision;
+  fails_when=the field is missing or counts dates the reader may not decide; no_claim=the web.
 - test_draft_change_list_names_the_item: protects=each line of the working draft's change
   list carries the item's name, fixes included; fails_when=a line has no name;
   no_claim=the web's wording.
@@ -185,17 +189,33 @@ async def test_waiting_count_reads_the_whole_roadmap(client):
     r = await client.get(f"{ROADMAP}/waiting", headers=ctx.as_("decider"))
     assert r.status_code == 200, r.text
     # The dependent starts before its dependency ends: one order link.
-    assert r.json() == {"broken_links": 1} == {"broken_links": await _links_in_read(
-        client, ctx, "decider")}  # fmt: skip
+    assert r.json()["broken_links"] == 1 == await _links_in_read(client, ctx, "decider")
     r = await w.post(client, "decider", "cut")
     assert r.status_code == 201, r.text
     # Cut, the item has a dependent instead; a filter hiding the dependent changes nothing.
     r = await client.get(f"{ROADMAP}/waiting", headers=ctx.as_("decider"))
-    assert r.json() == {"broken_links": await _links_in_read(client, ctx, "decider")}
+    assert r.json()["broken_links"] == await _links_in_read(client, ctx, "decider")
     assert await _links_in_read(client, ctx, "decider", to="2026-11-05") == 1
     r = await client.get(f"{ROADMAP}/waiting", headers=ctx.as_("viewer"))
     assert r.status_code == 200, r.text
-    assert r.json() == {"broken_links": await _links_in_read(client, ctx, "viewer")}
+    assert r.json()["broken_links"] == await _links_in_read(client, ctx, "viewer")
+
+
+async def _dates_in_read(client, ctx, who: str) -> int:
+    r = await client.get(ROADMAP, headers=ctx.as_(who))
+    assert r.status_code == 200, r.text
+    return len([i for i in r.json()["items"] if (i.get("suggestion") or {}).get("can_decide")])
+
+
+async def test_waiting_count_holds_the_dates_to_confirm(client):
+    ctx = await make_people()
+    await World(ctx).build(decider=True, ops=["cut", "move_dates"])
+    r = await client.get(f"{ROADMAP}/waiting", headers=ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    # Each op's undated item has an open date suggestion the decider confirms.
+    assert r.json()["dates_to_confirm"] == 2 == await _dates_in_read(client, ctx, "decider")
+    r = await client.get(f"{ROADMAP}/waiting", headers=ctx.as_("viewer"))
+    assert r.json()["dates_to_confirm"] == 0 == await _dates_in_read(client, ctx, "viewer")
 
 
 async def test_draft_change_list_names_the_item(client):

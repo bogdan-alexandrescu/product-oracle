@@ -130,7 +130,7 @@ test("a cut item others depend on: Bring it back, or Remove the dependency, each
   const n = await removes.count();
   expect(n).toBeGreaterThan(0);
   await removes.first().click();
-  await expect(page.getByText(/Removed '.*'s dependency on 'Alert rules engine'/)).toBeVisible();
+  await expect(page.getByText(/Removed the dependency of ‘.*’ on ‘Alert rules engine’/)).toBeVisible();
   if (n === 1) await expect(cut).toHaveCount(0);
   else await expect(cut.getByRole("button", { name: /^Remove the dependency/ })).toHaveCount(n - 1);
   await page.getByRole("button", { name: "Undo" }).first().click();
@@ -154,7 +154,7 @@ test("under a filter, every dependent of a cut item can drop it, and every count
   // Uptime alerts is out of this view, yet it depends on the cut item: its button is there.
   await expect(cut.getByRole("button", { name: "Remove the dependency of ‘Uptime alerts’" })).toBeVisible();
   await cut.getByRole("button", { name: "Remove the dependency of ‘Alert SLA report’" }).click();
-  await expect(page.getByText("Removed 'Alert SLA report''s dependency on 'Alert rules engine'", { exact: false })).toBeVisible();
+  await expect(page.getByText("Removed the dependency of ‘Alert SLA report’ on ‘Alert rules engine’", { exact: false })).toBeVisible();
   await expect(cut.getByRole("button", { name: "Remove the dependency of ‘Alert SLA report’" })).toHaveCount(0);
   await expect(cut.getByRole("button", { name: "Remove the dependency of ‘Uptime alerts’" })).toBeVisible();
   // One number everywhere: the side menu, the strip's "in all" and Needs a decision count the whole roadmap.
@@ -183,7 +183,7 @@ test("Approve and publish names the required reviewers still to come before the 
   await expect(banner.getByTestId("draft-next")).toContainText("it waits for Priya Raman to approve");
 });
 
-test("with two working drafts, each shows its own step: Approve and publish, and Send for review", async ({ page }) => {
+test("with two working drafts, the banner has a line per draft: its roadmap, its own next step, its own button", async ({ page }) => {
   await open(page, "roadmap-two-drafts");
   await strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Move the dependents" }).click();
   await expect(page.getByText(/Moved what depends on 'Alert rules engine' in your working draft/)).toBeVisible();
@@ -191,12 +191,37 @@ test("with two working drafts, each shows its own step: Approve and publish, and
   await strip(page).locator('[data-testid="conflict"][data-item="setup-tour"]').getByRole("button", { name: "Bring it back" }).click();
   await expect(page.getByText(/Brought back 'In-app tour'/)).toBeVisible();
   const banner = page.getByTestId("draft-banner");
-  await expect(banner.getByTestId("draft-publish")).toBeVisible();
-  await expect(banner.getByRole("button", { name: "Send for review" })).toBeEnabled();
-  await banner.getByRole("button", { name: "Send for review" }).click();
-  await expect(page.getByText(/Sent for review/)).toBeVisible();
-  await banner.getByTestId("draft-publish").click();
-  await expect(page.getByText(/Approved: .* is published/)).toBeVisible();
+  const lines = banner.getByTestId("draft-line");
+  await expect(lines).toHaveCount(2);
+  const alerts = lines.filter({ hasText: "Alerts roadmap" });
+  const onboarding = lines.filter({ hasText: "Onboarding roadmap" });
+  await expect(alerts.getByTestId("draft-next")).toContainText("Next: you approve it");
+  await expect(alerts.getByRole("button", { name: "Approve and publish" })).toBeVisible();
+  await expect(alerts.getByRole("button", { name: "Send for review" })).toHaveCount(0);
+  await expect(onboarding.getByTestId("draft-next")).toContainText("Next: you send it for review. When Priya Raman approves");
+  await expect(onboarding.getByRole("button", { name: "Approve and publish" })).toHaveCount(0);
+  await onboarding.getByRole("button", { name: "Send for review" }).click();
+  await expect(page.getByText(/Sent for review/).first()).toBeVisible();
+  // Sent, it waits on Priya Raman: no Send for review is left, disabled or not, beside the owner's Approve.
+  await expect(onboarding.getByTestId("draft-next")).toContainText("it waits for Priya Raman to approve");
+  await expect(banner.getByRole("button", { name: "Send for review" })).toHaveCount(0);
+  await alerts.getByRole("button", { name: "Approve and publish" }).click();
+  await expect(page.getByText(/Approved: Alerts roadmap is published/)).toBeVisible();
+});
+
+test("Home's Open draft to approve opens the Roadmap on that draft", async ({ page }) => {
+  await open(page, "roadmap-two-drafts");
+  await strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Move the dependents" }).click();
+  await expect(page.getByText(/Moved what depends on 'Alert rules engine' in your working draft/)).toBeVisible();
+  await strip(page).locator('[data-testid="conflict"][data-item="setup-tour"]').getByRole("button", { name: "Bring it back" }).click();
+  await expect(page.getByText(/Brought back 'In-app tour'/)).toBeVisible();
+  await page.goto("/simple");
+  await page.getByTestId("home-draft").filter({ hasText: "Alerts roadmap" }).getByRole("link", { name: "Open draft to approve" }).click();
+  await expect(page).toHaveURL(/\/simple\/roadmap\?draft=/);
+  const focused = page.getByTestId("draft-banner").locator('[data-testid="draft-line"][data-focused="true"]');
+  await expect(focused).toHaveCount(1);
+  await expect(focused).toContainText("Alerts roadmap");
+  await expect(focused.getByRole("button", { name: "Approve and publish" })).toBeFocused();
 });
 
 test("a change asked of a PRD is its owner's to approve: on the chip and under Proposals", async ({ page }) => {
@@ -255,4 +280,94 @@ test("an item with no dates of its own says so beside its bar when the bar has n
   const row = (key: string) => page.locator(`[data-testid="timeline-row"][data-item="${key}"]`);
   await expect(row("setup-video").getByTestId("bar-no-dates")).toHaveText("No dates yet");
   await expect(row("alert-rules").getByTestId("bar-no-dates")).toHaveCount(0);
+});
+
+/** How many lines a cut flag's sentence takes. */
+async function sentenceLines(row: Locator): Promise<number> {
+  return row.locator("button").first().evaluate((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)));
+}
+
+test("a cut flag with many fixes keeps its sentence to two lines, its fixes on their own line under it, at 1440 and 390", async ({ page }) => {
+  await open(page, "roadmap-talk-two-deps");
+  await cutKeepingDependents(page, "alert-rules");
+  const cut = strip(page).locator('[data-testid="conflict"][data-item="alert-rules"]');
+  await expect(cut).toContainText("Cut, but");
+  // Bring it back, a Remove the dependency per dependent (four) and Accept as risk.
+  await expect(cut.getByRole("button", { name: /^Remove the dependency of/ })).toHaveCount(4);
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: width > 1000 ? 900 : 844 });
+    await expect.poll(() => sentenceLines(cut)).toBeLessThanOrEqual(2);
+    // The fixes sit under the sentence, not beside it.
+    const words = (await cut.locator("button").first().boundingBox())!;
+    const fixes = (await cut.getByTestId("fixes").boundingBox())!;
+    expect(fixes.y).toBeGreaterThanOrEqual(words.y + words.height - 1);
+    // Every fix stays inside the strip.
+    const box = (await strip(page).boundingBox())!;
+    for (const b of await cut.getByTestId("fixes").getByRole("button").all()) {
+      const r = (await b.boundingBox())!;
+      expect(r.x + r.width).toBeLessThanOrEqual(box.x + box.width + 1);
+    }
+  }
+});
+
+test("an approver's proposed Remove the dependency says who it waits for and is not offered again", async ({ page }) => {
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "roadmap-talk-own-decider"] as const);
+  await login(page, "approver@example.com");
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await cutKeepingDependents(page, "alert-rules");
+  const cut = strip(page).locator('[data-testid="conflict"][data-item="alert-rules"]');
+  await expect(cut).toContainText("Cut, but");
+  const propose = cut.getByRole("button", { name: /^Propose: remove the dependency/ }).first();
+  const label = (await propose.innerText()).trim();
+  await propose.click();
+  await expect(page.getByText(/proposed: it waits for/).first()).toBeVisible();
+  await expect(cut.getByRole("button", { name: label, exact: true })).toHaveCount(0);
+  await expect(cut.getByTestId("fix-proposed").first()).toContainText("Proposed: waits for Avery Stone");
+});
+
+test("under a filter, Needs a decision says N here, M in all on one basis, and 1 of N is", async ({ page }) => {
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "roadmap-talk-two-deps"] as const);
+  await login(page);
+  await page.goto("/simple/roadmap?goal=grow-retention");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await cutKeepingDependents(page, "alert-rules");
+  await expect(strip(page).getByTestId("conflicts-all")).toBeVisible();
+  const button = Number(/· (\d+)/.exec(await page.getByTestId("needs-decision").innerText())![1]);
+  await page.getByTestId("needs-decision").click();
+  const scope = tray(page).getByTestId("tray-scope");
+  const m = /^(\d+) here, (\d+) in all to decide/.exec(await scope.innerText());
+  expect(m).not.toBeNull();
+  const tiles = await tray(page).getByTestId("tray-counter").locator("b").allInnerTexts();
+  // The tiles count the whole roadmap, as the "in all" does and the button does.
+  expect(tiles.reduce((n, t) => n + Number(t), 0)).toBe(Number(m![2]));
+  expect(button).toBe(Number(m![2]));
+  expect(Number(m![1])).toBeLessThan(Number(m![2]));
+  const here = await tray(page).getByTestId("tray-links-here").innerText();
+  const k = Number(/^(\d+) of/.exec(here.trim())![1]);
+  expect(here).toContain(k === 1 ? " is in these filters" : " are in these filters");
+});
+
+test("the side menu's Roadmap count holds the dates to confirm: it equals Needs a decision", async ({ page }) => {
+  await open(page);
+  const waiting = Number(/· (\d+)/.exec(await page.getByTestId("needs-decision").innerText())![1]);
+  await page.getByTestId("needs-decision").click();
+  const dates = Number(await tray(page).getByTestId("tray-counter").filter({ hasText: "Dates to confirm" }).locator("b").innerText());
+  await tray(page).getByRole("button", { name: "Close" }).click();
+  expect(dates).toBeGreaterThan(0);
+  await expect.poll(async () => Number(await badge(page).innerText())).toBe(waiting);
+  await expect(badge(page)).toHaveAttribute("aria-label", new RegExp(`${dates} dates? to confirm`));
+});
+
+test("the strip's M in all shows only when a filter hides some broken links", async ({ page }) => {
+  await open(page);
+  // The Weekly alert digest's link fixed, the one left (Welcome video's) is under Faster activation.
+  await strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Move the dependents" }).click();
+  await expect.poll(() => stripCount(page)).toBe(1);
+  await page.goto("/simple/roadmap?goal=faster-activation");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await expect(strip(page).locator('[data-testid="conflict"]')).toHaveCount(1);
+  // The filter hides none of them: no "here", no "in all", no Clear filters.
+  await expect(strip(page).getByTestId("conflicts-all")).toHaveCount(0);
+  await expect(strip(page)).not.toContainText("here,");
 });
