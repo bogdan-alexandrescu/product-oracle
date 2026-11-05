@@ -72,7 +72,7 @@ function Meter({ date, target, was, pw, n, milestone }: { date: string; target: 
             Was {day(was)}.
           </>
         )}
-        {` ${pw} person-weeks off the milestone, ${plural(n, "change")} picked.`}
+        {` ${plural(pw, "person-week")} off the milestone, ${plural(n, "change")} picked.`}
       </p>
     </div>
   );
@@ -99,7 +99,7 @@ function Locked({ a, hard = false }: { a: Answer; hard?: boolean }) {
       <ul className="flex flex-col gap-1.5">
         {a.locked.map((l) => (
           <li key={l.item} className="simple-small">
-            <span className="font-medium text-text">{l.item}</span> ({l.pw} person-weeks). {l.why}
+            <span className="font-medium text-text">{l.item}</span> ({plural(l.pw, "person-week")}). {l.why}
             {hard && l.would_reach && <span className="font-semibold text-crit"> Cutting it would reach {day(a.target)}; Oracle will not offer it.</span>}
           </li>
         ))}
@@ -161,11 +161,11 @@ function RankedList({ a, picks, setPicks, live }: { a: Answer; picks: string[]; 
                       )}
                       {i + 1}. {c.item}
                     </span>
-                    <span className="tnum text-[14px] font-semibold text-pass">{c.days} days sooner</span>
+                    <span className="tnum text-[14px] font-semibold text-pass">{plural(c.days, "day")} sooner</span>
                   </span>
                   <span className="simple-small">
                     <span className="font-medium text-text">{c.title}.</span> {c.effect}.
-                    {c.pw_saved > 0 && ` Saves ${c.pw_saved} ${c.pw_saved === 1 ? "person-week" : "person-weeks"}.`}
+                    {c.pw_saved > 0 && ` Saves ${plural(c.pw_saved, "person-week")}.`}
                   </span>
                   <span className="simple-small flex flex-wrap items-center gap-2">
                     <CostTag c={c} /> {c.cost}
