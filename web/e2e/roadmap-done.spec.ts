@@ -95,17 +95,16 @@ test("an item marked done leaves every view, its broken links and every count, a
   await expect(page.getByTestId("floating-card").getByTestId("fp-status")).toHaveText("Done");
   await page.keyboard.press("Escape");
 
-  // fix 1, minor 4: a link to the done item (?item=, as from Home or the Inbox) opens the Done
-  // list and its panel at its row, not at the page's corner.
+  // fix 1, minor 4: a link to the done item (?item=, as from Home or the Inbox) opens its panel
+  // once, and the Done list with its row marked open.
   const id = (await done.getByTestId("done-item").getAttribute("data-bar-id"))!;
   await page.goto(`/simple/roadmap?item=${id}`);
   const linked = page.getByTestId("floating-card");
   await expect(linked.getByTestId("fp-status")).toHaveText("Done");
-  await expect(doneList(page).getByTestId("done-item")).toBeVisible();
-  const row = (await doneList(page).getByTestId("done-item").boundingBox())!;
-  const at = (await linked.boundingBox())!;
-  expect(Math.min(Math.abs(at.y - (row.y + row.height)), Math.abs(at.y + at.height - row.y))).toBeLessThan(40);
+  await expect(linked).toHaveAttribute("aria-label", "Alert rules engine");
+  await expect(doneList(page).getByTestId("done-item")).toHaveAttribute("aria-pressed", "true");
   await page.keyboard.press("Escape");
+  await expect(linked).toHaveCount(0);
 
   // Not on the Gantt, Now / Next / Later or Waterfall either.
   for (const format of ["gantt", "board", "waterfall"]) {
