@@ -257,7 +257,12 @@ export default function SimpleHome() {
   const reads = !proposes;
   const myId = me?.user_id ?? "";
 
-  const toDecide = useMemo(() => (changes.data ?? []).filter((c) => c.status === "proposed" && c.can_decide), [changes.data]);
+  // A goal's ask (Ask to archive, delete or restore) names no roadmap item, so the roadmap's
+  // proposals tray behind "more" cannot list it: it comes first here.
+  const toDecide = useMemo(() => {
+    const rows = (changes.data ?? []).filter((c) => c.status === "proposed" && c.can_decide);
+    return [...rows.filter((c) => typeof c.target.goal_id === "string"), ...rows.filter((c) => typeof c.target.goal_id !== "string")];
+  }, [changes.data]);
   const mine = useMemo(() => (changes.data ?? []).filter((c) => c.status === "proposed" && c.by === myId), [changes.data, myId]);
   const broken = useMemo(() => brokenLinks(roadmap.data), [roadmap.data]);
   const waitingItems = useMemo(() => {
@@ -406,7 +411,7 @@ export default function SimpleHome() {
       key={c.id}
       testId="home-proposal"
       lead={<Avatar name={c.by_name} />}
-      title={`${opWords(c.op)}: ${itemTitle(c.target.item_id)}${typeof c.after.title === "string" && NEW_FLOW_OPS.has(c.op) ? ` · ${c.after.title}` : ""}`}
+      title={`${opWords(c.op)}: ${typeof c.target.goal_id === "string" && typeof c.target.title === "string" ? c.target.title : itemTitle(c.target.item_id)}${typeof c.after.title === "string" && NEW_FLOW_OPS.has(c.op) ? ` · ${c.after.title}` : ""}`}
       meta={`${c.by === myId ? "You" : c.by_name} · ${formatInZone(c.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${c.reason ? ` · ${c.reason}` : ""}`}
       change={NEW_FLOW_OPS.has(c.op) ? null : beforeAfter(c)}
       thumb={NEW_FLOW_OPS.has(c.op)}

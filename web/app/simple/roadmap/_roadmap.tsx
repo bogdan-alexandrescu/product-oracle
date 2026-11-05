@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent } from "react";
 
 import { Button, clearToast, Notice, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
 import { GoalPanel, goalRows, SuggestionCard, useGoalSuggestions, type GoalBrief, type GoalPanelStart, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
@@ -23,6 +23,7 @@ import { QuickAdd } from "./_add";
 import { MsCard, MsKey, MsLayer, MsProvider, MsToast, useMilestones, type MsLane, type MsRow } from "./_milestones";
 import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, MARK_WORDS, PM_LANE, type Horizon, type LegendEntry } from "./_board";
 import { useKeyBurst } from "./_burst";
+import { FeatureContextMenu, useFeatureDelete } from "@/components/simple/FeatureDelete";
 import { changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
 import { boardPicture, chartPicture, exportView, type Brand } from "./_export";
 import { KeyDatesEditor } from "./_keydates";
@@ -954,6 +955,20 @@ export function SimpleRoadmap() {
     },
     [run],
   );
+  // trash-features-goals: a Gantt or Timeline row's context menu (a right-click, or the menu
+  // key on a focused bar) offers Delete feature to who decides on it (its own can_decide).
+  const [rowMenu, setRowMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const removeFeature = useFeatureDelete(reload, toast);
+  const onRowMenu = (e: ReactMouseEvent) => {
+    const el = (e.target as Element).closest("[data-bar-id],[data-item-id]");
+    const it = el ? byId.get(el.getAttribute("data-bar-id") ?? el.getAttribute("data-item-id") ?? "") : undefined;
+    if (!el || !it?.can_decide) return;
+    e.preventDefault();
+    const r = el.getBoundingClientRect();
+    // The menu key fires it with no pointer: the menu opens under the row.
+    setRowMenu(e.clientX || e.clientY ? { id: it.id, x: e.clientX, y: e.clientY } : { id: it.id, x: r.left, y: r.bottom });
+  };
+  const rowMenuItem = rowMenu ? byId.get(rowMenu.id) : undefined;
 
   // A move (a drag, or the keyboard's burst) is one change; what is stored after it is the
   // next burst's `before` (#723 S4 re-review: no 409 on one's own earlier move).
@@ -1457,7 +1472,18 @@ export function SimpleRoadmap() {
           )}
         </p>
       )}
-      <div ref={wrap} className={blank ? "hidden" : "relative"}>
+      <div ref={wrap} className={blank ? "hidden" : "relative"} onContextMenu={onRowMenu}>
+        {rowMenu && rowMenuItem && (
+          <FeatureContextMenu
+            at={rowMenu}
+            title={rowMenuItem.title}
+            onClose={() => setRowMenu(null)}
+            onDelete={() => {
+              if (card?.id === rowMenuItem.id) setCard(null);
+              void removeFeature(rowMenuItem);
+            }}
+          />
+        )}
         {linked.length ? (
           <div data-testid="filters-gone" className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-line-strong bg-surface px-4 py-3">
             <p className="text-[15px] font-semibold">

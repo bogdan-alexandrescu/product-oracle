@@ -287,7 +287,9 @@ def fold(row: RoadmapItem, copy: RoadmapItem, overlay: dict[str, Any]) -> Roadma
 
 async def drop_added(db: AsyncSession, d: SimpleDraft) -> None:
     """S7: an approved draft's added items live on in its version: their draft rows go,
-    their date suggestions move to the published copies (same key, the draft's version)."""
+    their date suggestions move to the published copies (same key, the draft's version).
+    A row in Trash is left as it is: Restore puts it in the roadmap's open draft
+    (oracle.simple.trash_items._onto_current); only the purge deletes it."""
     added = {
         r.item_key: r.id
         for r in await db.scalars(
@@ -312,7 +314,9 @@ async def drop_added(db: AsyncSession, d: SimpleDraft) -> None:
             )
     await db.execute(
         delete(RoadmapItem).where(
-            RoadmapItem.simple_draft_id == d.id, RoadmapItem.roadmap_version_id.is_(None)
+            RoadmapItem.simple_draft_id == d.id,
+            RoadmapItem.roadmap_version_id.is_(None),
+            RoadmapItem.deleted_at.is_(None),
         )
     )
 

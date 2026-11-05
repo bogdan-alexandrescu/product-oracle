@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.auth.deps import Principal
+from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion
 from oracle.runs.models import Run
 from oracle.runs.service import creator_only_visible
@@ -83,6 +84,13 @@ class Resolved:
 
 
 def describe(row: Any) -> dict[str, Any]:
+    from oracle.baseline.models import Entity
+    from oracle.roadmap.models import RoadmapItem
+
+    if isinstance(row, (RoadmapItem, Entity)):
+        from oracle.simple import trash_items
+
+        return trash_items.describe(row)
     if isinstance(row, Document):
         return {
             "type": "document",
@@ -183,6 +191,12 @@ async def find_root(db: AsyncSession, root_type: str, ref: str, *, trashed: bool
         stmt: Any = select(Document).where(column == (uuid.UUID(ref) if is_uuid(ref) else ref))
     elif not is_uuid(ref):
         raise NotFound(f"{root_type} '{ref}' not found")
+    elif root_type in ("feature", "goal"):
+        # trash-features-goals (oracle.simple.trash_items): a roadmap feature or a goal.
+        kind = _feature_goal_models()[root_type]
+        stmt = select(kind).where(kind.id == uuid.UUID(ref))  # type: ignore[attr-defined]
+        if root_type == "goal":
+            stmt = stmt.where(kind.type == "goal")  # type: ignore[attr-defined]
     elif root_type == "intake":
         stmt = select(ProductIntake).where(ProductIntake.id == uuid.UUID(ref))
     else:
@@ -348,8 +362,15 @@ async def trashed_documents(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.
     return {d.id: d for d in rows}
 
 
+def _feature_goal_models() -> dict[str, type]:
+    from oracle.baseline.models import Entity
+    from oracle.roadmap.models import RoadmapItem
+
+    return {"feature": RoadmapItem, "goal": Entity}
+
+
 def _models() -> tuple[type, ...]:
-    return (Document, ProductIntake, Run)
+    return (Document, ProductIntake, Run, *_feature_goal_models().values())
 
 
 async def get_entry(db: AsyncSession, entry_id: uuid.UUID) -> TrashEntry:
@@ -420,12 +441,30 @@ async def _not_restored(db: AsyncSession, entry: TrashEntry) -> list[dict[str, A
     return out
 
 
+# trash-features-goals (owner's answer, Nov 5): whoever deleted a feature or a goal restores
+# it too; everything else in Trash is the owners' alone.
+OWN_RESTORE = frozenset({"feature", "goal"})
+
+
+def may_restore(principal: Any, entry: TrashEntry) -> bool:
+    """An owner restores anything; whoever deleted a feature or a goal restores it too."""
+    if has_role(principal.role, "owner"):
+        return True
+    mine = entry.deleted_by is not None and entry.deleted_by == getattr(principal, "id", None)
+    return mine and entry.root_type in OWN_RESTORE
+
+
 async def restore_entry(
     db: AsyncSession, principal: Principal, entry_id: uuid.UUID
 ) -> tuple[TrashEntry, list[dict[str, Any]]]:
     """Bring the entry's root and everything that went with it back; with what could not
-    come back with it (:func:`_not_restored`)."""
+    come back with it (:func:`_not_restored`). Refused unless :func:`may_restore`."""
     entry = await get_entry(db, entry_id)
+    if not may_restore(principal, entry):
+        raise Forbidden("Only an owner, or whoever deleted it, restores this")
+    from oracle.simple import trash_items
+
+    await trash_items.before_restore(db, entry)
     for model in _models():
         await db.execute(
             update(model)
@@ -435,13 +474,14 @@ async def restore_entry(
         )
     from oracle.roadmap import alerts
 
+    dropped = await trash_items.after_restore(db, entry, principal)
     await alerts.reopen_after_trash(db, entry.root.get("closed_alerts") or [])
     from oracle.requests import service as requests_service
 
     await requests_service.relink_documents(
         db, principal, entry.root.get("released_requests") or []
     )
-    not_restored = await _not_restored(db, entry)
+    not_restored = [*dropped, *await _not_restored(db, entry)]
     await audit.record(
         db,
         principal,
@@ -473,8 +513,12 @@ async def restore_root(
 async def purge_entry(
     db: AsyncSession, principal: Principal | str | None, entry: TrashEntry
 ) -> None:
-    """Delete the entry's rows for good (what hangs off them goes by cascade)."""
-    for model in (Run, Document, ProductIntake):
+    """Delete the entry's rows for good (what hangs off them goes by cascade; a feature's
+    milestones and dependents drop it first)."""
+    from oracle.simple import trash_items
+
+    await trash_items.before_purge(db, entry)
+    for model in (Run, Document, ProductIntake, *_feature_goal_models().values()):
         await db.execute(
             delete(model)
             .where(model.trash_entry_id == entry.id, model.deleted_at.is_not(None))
@@ -521,8 +565,14 @@ def days_left(entry: TrashEntry) -> int:
     return max(0, math.ceil(seconds / 86400))
 
 
-async def list_entries(db: AsyncSession) -> list[TrashEntry]:
+async def list_entries(db: AsyncSession, principal: Any = None) -> list[TrashEntry]:
+    """Everything in Trash, newest first; for ``principal`` below owner, only the features
+    and goals they deleted (:func:`may_restore`)."""
     stmt = select(TrashEntry).order_by(TrashEntry.created_at.desc(), TrashEntry.id)
+    if principal is not None and not has_role(principal.role, "owner"):
+        stmt = stmt.where(
+            TrashEntry.deleted_by == principal.id, TrashEntry.root_type.in_(OWN_RESTORE)
+        )
     entries = list(await db.scalars(stmt))
     hidden = await _hidden_runs(db, entries)
     return [e for e in entries if e.root_id not in hidden]

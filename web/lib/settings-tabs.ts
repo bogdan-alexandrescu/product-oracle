@@ -23,7 +23,7 @@ export const SETTINGS_TABS: { label: string; href: string; testId: string; read:
   { label: "Templates", href: "/settings/templates", testId: "nav-templates", read: "list_templates" },
   { label: "Themes", href: "/settings/themes", testId: "nav-themes", read: "list_themes" },
   { label: "Autonomy", href: "/settings/autonomy", testId: "nav-autonomy", read: "get_autonomy" },
-  // #482: owners alone delete and restore, so only they see Trash (#370).
+  // #482: owners see Trash (#370); commenters and up, the features and goals they deleted.
   { label: "Trash", href: "/settings/trash", testId: "nav-trash", read: "list_trash" },
 ];
 

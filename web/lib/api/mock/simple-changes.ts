@@ -28,6 +28,7 @@ import { draftDecisionNotes } from "./decision-notes";
 import { stableUuid } from "./ids";
 import { changeSentence } from "./simple-change-words";
 import { priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
+import { archiveGoal, goalBucketsDb, trashGoal, unarchiveGoal, type GoalBucketsTrash } from "./goal-buckets";
 import {
   canDecideItem,
   canEditRoadmap,
@@ -35,6 +36,7 @@ import {
   companyToday,
   deciderIds,
   draftChanges,
+  openDraft,
   GOALS,
   goalId,
   itemDeciderId,
@@ -61,6 +63,7 @@ import {
   type SimpleDb,
 } from "./simple-roadmap";
 import { routeGoalSuggestions } from "./simple-suggestions";
+import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
 
 type Change = Schemas["SimpleChangeOut"];
 type Session = Schemas["SimpleSessionOut"];
@@ -78,6 +81,58 @@ export interface SimpleChangesCtx {
   roles?: Record<string, Role>;
   /** The company's confirmed goals (the baseline's), as the API lists them for suggestions (qa4-simple-home-4). */
   companyGoals?: { id: string; key: string; title: string }[];
+  /** trash-features-goals: Settings › Trash (./trash.ts), shared with documents, intakes and runs. */
+  trash?: TrashDb;
+  /** edit-goals-prds: the goal buckets' Trash, writer and members (an accepted Ask to delete a goal). */
+  goalBin?: GoalBucketsTrash;
+}
+
+/** edit-goals-prds (oracle.simple.goal_asks): a goal archived or restored, asked by who may not
+ * (a goal's delete is trash_items', decided by approvers and owners). */
+const GOAL_ASK_OPS = ["archive_goal", "unarchive_goal"];
+const approves = (ctx: Pick<SimpleChangesCtx, "role">) => ctx.role === "owner" || ctx.role === "approver";
+
+/** Applies a goal ask: Archive (its features to `to_goal_id`), the goal to Trash, or Restore. */
+function applyGoalAsk(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target" | "reason">): Response | null {
+  const gb = goalBucketsDb(db, ctx.goalBin?.people);
+  const id = String(c.target.goal_id ?? "");
+  const to = (c.target.to_goal_id as string | null | undefined) ?? null;
+  if (c.op === "archive_goal") {
+    const undo = archiveGoal(gb, id, to, iso(mockNowMs()));
+    return undo instanceof Response ? undo : null;
+  }
+  if (c.op === "unarchive_goal") {
+    const done = unarchiveGoal(gb, id);
+    return done instanceof Response ? done : null;
+  }
+  const bin = ctx.goalBin ?? { trash: (ctx.trash ??= { entries: [], estimates: {} }), id: ctx.id, name: ctx.names[ctx.id] ?? null, now: () => iso(mockNowMs()) };
+  const row = trashGoal(gb, bin, id, to, c.reason ?? null, db);
+  return row instanceof Response ? row : null;
+}
+
+/** POST /v1/simple/changes op `archive_goal` / `delete_goal`: an approver's applies, a commenter's goes to the company's owners. */
+function createGoalAsk(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"]): Response {
+  const gb = goalBucketsDb(db, ctx.goalBin?.people);
+  const g = gb.goals.find((x) => x.id === body.target.goal_id && !x.trashed);
+  if (!g) return json(404, { detail: "No such goal" });
+  if (body.op === "archive_goal" && g.archived) return json(409, { detail: `${g.title} is archived already` });
+  if (body.op === "unarchive_goal" && !g.archived) return json(409, { detail: `${g.title} is not archived` });
+  const applies = approves(ctx);
+  if (!applies && (db.changes ?? []).some((c) => c.op === body.op && c.status === "proposed" && c.target.goal_id === g.id)) return json(409, { detail: "This is asked already" });
+  const target = { goal_id: g.id, title: g.title, to_goal_id: (body.target.to_goal_id as string | null | undefined) ?? null };
+  const change: Change = {
+    id: crypto.randomUUID(), session_id: null, document_id: null, draft_ids: [],
+    op: body.op, target, before: {}, after: {}, status: applies ? "applied" : "proposed",
+    by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
+    decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null,
+    routed_to: applies ? [] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
+  };
+  if (applies) {
+    const err = applyGoalAsk(db, ctx, change);
+    if (err) return err;
+  }
+  (db.changes ??= []).push(change);
+  return json(201, { change: view(db, ctx, change), flags: [] });
 }
 
 const IDLE_MS = 30 * 60_000;
@@ -179,11 +234,14 @@ const slugOf = (id: unknown): string | undefined => ROADMAP_SLUGS().find((r) => 
 function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target"> & Partial<Pick<Change, "routed_to" | "after">>): boolean {
   // Review major (changes.decides_all): a cut with its dependents needs rights on every item it cuts.
   if (c.op === CUT_ALL && c.after) return Object.keys(c.after).every((id) => decides(db, ctx, id));
+  // A goal ask is decided by the owners it is sent to (goal_asks.may_decide).
+  if (GOAL_ASK_OPS.includes(c.op)) return ctx.role === "owner";
   if (KEY_DATE_OPS.includes(c.op)) {
     const rm = roadmapOfDoc(db, c.target.document_id);
     return ctx.role === "owner" || (c.routed_to ?? []).includes(ctx.id) || (!!rm && canEditRoadmap(db, rm, ctx));
   }
   if (c.op === "add_item" && !keyOf(db, c.target.item_id)) return canEditRoadmap(db, slugOf(c.target.roadmap_id) ?? "", ctx);
+  if (c.op === "delete_goal") return ctx.role === "owner" || ctx.role === "approver";
   return decides(db, ctx, c.target.item_id);
 }
 
@@ -340,15 +398,25 @@ function view(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): Change {
     undone,
     can_decide: c.status === "proposed" && decidesChange(db, ctx, c),
     can_undo: c.status === "applied" && c.by === ctx.id && !undone && !!s && !s.closed_at && !idle(s),
-    words: changeSentence(c, c.by_name, itemLabel(db, c.target.item_id), undone),
+    words: changeSentence(c, c.by_name, c.op === "delete_goal" ? goalLabel(db, c.target.goal_id) : itemLabel(db, c.target.item_id), undone),
   };
 }
 
-/** The walk (H2): "F-08 Billing page", the item's code and name as the change's words name it. */
+/** The walk (H2): "F-08 Billing page", the item's code and name as the change's words name
+ * it; trash-features-goals: once it is in Trash, its name with "(deleted)" (changes.deleted_names). */
 function itemLabel(db: SimpleDb, id: unknown): string | null {
   const key = id ? keyOf(db, id) : undefined;
   const s = key ? db.items.find((x) => x.key === key) : undefined;
-  return s ? `${prdCode(s.section) ?? ""} ${s.title}`.trim() : null;
+  if (!s) return null;
+  return s.trashed ? `${s.title} (deleted)` : `${prdCode(s.section) ?? ""} ${s.title}`.trim();
+}
+
+/** trash-features-goals: a `delete_goal` change names the goal with "(deleted)" once it is
+ * in Trash (changes.deleted_names); still live (a proposal waiting), the sentence's own
+ * fallback (target.title) names it instead. */
+function goalLabel(db: SimpleDb, id: unknown): string | null {
+  const g = (db.goal_buckets?.goals ?? []).find((x) => x.id === id);
+  return g?.trashed ? `${g.title} (deleted)` : null;
 }
 
 function sees(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): boolean {
@@ -371,18 +439,7 @@ function intoDrafts(db: SimpleDb, c: Change, session: Session, undo = false): st
     } else if (!d) {
       const waiting = drafts.find((x) => x.roadmap === rm && x.out.status === "submitted");
       if (waiting) return json(409, { detail: `This roadmap's draft is in review as version ${waiting.out.version}: changes wait until it is approved` });
-      const items = db.items.filter((x) => x.roadmap === rm);
-      const keys = new Set(items.map((x) => x.key));
-      d = {
-        roadmap: rm,
-        published: structuredClone({ items, own: Object.fromEntries(Object.entries(db.own).filter(([k]) => keys.has(k))), key_dates: db.key_dates?.[rm] ?? [] }),
-        out: {
-          id: crypto.randomUUID(), document: { id: stableUuid(`simple-doc/${rm}`), slug: rm, title: rm.replace(/-/g, " ").replace(/^./, (x) => x.toUpperCase()) },
-          status: "working", base_version: 1, version: null, created_by: session.started_by, created_at: iso(mockNowMs()), participant_ids: [session.started_by],
-          submitted_at: null, submitted_by: null, decider_approved: false, waiting_on: [], approved_at: null, blocked_by: [], decision_notes: [],
-        },
-      };
-      drafts.push(d);
+      d = openDraft(db, rm, session.started_by);
     }
     if (!d.out.participant_ids.includes(session.started_by)) d.out.participant_ids.push(session.started_by);
     out.push(d.out.id);
@@ -435,14 +492,23 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
     if (!canEditRoadmap(db, d.roadmap, ctx)) return json(403, { detail: "Only an owner or the roadmap's decider (with none, its owner) submits" });
     if (d.out.status !== "working") return json(409, { detail: `This draft is ${d.out.status} already` });
     if (!draftChanges(db, d.out.id) && !draftPrds(d).length) return json(422, { detail: "Nothing to submit: the draft has no changes" });
-    Object.assign(d.out, { status: "submitted", version: (d.out.base_version ?? 1) + 1, submitted_at: now, submitted_by: ctx.id });
+    // drafts._submit_roadmap: it waits on the roadmap's required reviewers.
+    Object.assign(d.out, { status: "submitted", version: (d.out.base_version ?? 1) + 1, submitted_at: now, submitted_by: ctx.id, waiting_on: [...(db.reviewers?.[d.roadmap] ?? [])] });
     return json(200, draftOut(db, ctx, d));
   }
   if (p[4] === "approve") {
     if (d.out.status !== "submitted") return json(409, { detail: `This draft is ${d.out.status}: only a submitted draft is approved` });
-    if (!canEditRoadmap(db, d.roadmap, ctx)) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
-    // No required reviewers in the mock: the approval publishes the version.
-    Object.assign(d.out, { decider_approved: true, status: "approved", approved_at: now });
+    const waited = d.out.waiting_on.includes(ctx.id);
+    if (!canEditRoadmap(db, d.roadmap, ctx) && !waited) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
+    // drafts._approve: a required reviewer's approval, the decider's (an editor's here); the
+    // version is approved once the decider's is in and no reviewer is still waited on.
+    d.out.waiting_on = d.out.waiting_on.filter((i) => i !== ctx.id);
+    if (canEditRoadmap(db, d.roadmap, ctx)) d.out.decider_approved = true;
+    if (!d.out.decider_approved || d.out.waiting_on.length) return json(200, draftOut(db, ctx, d));
+    Object.assign(d.out, { status: "approved", approved_at: now });
+    // trash-features-goals review 4: the version is made without the features in Trash.
+    const without = db.items.filter((s) => s.trashed && s.roadmap === d.roadmap).map((s) => s.key);
+    (db.versions ??= []).push({ roadmap: d.roadmap, number: d.out.version ?? (d.out.base_version ?? 1) + 1, without });
     return json(200, draftOut(db, ctx, d));
   }
   if (p[4] === "withdraw") {
@@ -579,6 +645,112 @@ function writeKeyDate(db: SimpleDb, c: Change, value: unknown): void {
   db.key_dates[rm] = v ? [...list.filter((k) => k.id !== id), { id, name: String(v.name), date: String(v.date), note: (v.note as string | null) ?? null }] : list.filter((k) => k.id !== id);
 }
 
+/**
+ * trash-features-goals (oracle.simple.trash_items): DELETE .../roadmap/items/{id} moves the
+ * feature to Settings › Trash; who may not decide on it proposes it instead, as a
+ * `delete_item` change (routed, accepted or declined like any other). Restore brings it back
+ * with its links, goal and milestone, which were never touched.
+ */
+function trashFeature(db: SimpleDb, ctx: SimpleChangesCtx, key: string, reason: string | null, now: string): TrashEntryRow {
+  const s = seed(db, key);
+  s.trashed = true;
+  closeProposals(db, ctx, "delete_item", "item_id", db.ids[key], now);
+  const row: TrashEntryRow = {
+    out: {
+      id: crypto.randomUUID(),
+      root: { type: "feature", id: db.ids[key], slug: key, title: s.title, kind: "feature", code: prdCode(s.section) },
+      items: [], deleted_by: ctx.id, deleted_by_name: ctx.names[ctx.id] ?? "someone", deleted_at: now,
+      reason, published: false, purge_after: new Date(Date.parse(now) + 30 * DAY).toISOString(),
+    },
+    documents: [], versions: [], runs: [], intakes: [], roadmap: s.roadmap,
+  };
+  const trash = (ctx.trash ??= { entries: [], estimates: {} });
+  trash.entries.push(row);
+  return row;
+}
+
+/** trash_items._close_proposals: a proposal to delete what just went to Trash is closed, "Already in Trash". */
+export function closeProposals(db: { changes?: Change[] }, ctx: { id: string }, op: string, ref: string, id: string, now: string) {
+  for (const c of db.changes ?? []) {
+    if (c.op === op && c.status === "proposed" && c.target[ref] === id) {
+      Object.assign(c, { status: "declined", decided_by: ctx.id, decided_at: now, decision_reason: ALREADY });
+    }
+  }
+}
+
+const ALREADY = "Already in Trash";
+
+/** trash_items._propose_goal: a commenter's goal delete, proposed to the company's owners (an
+ * approver or up decides it). */
+export function proposeGoalDelete(db: SimpleDb, ctx: SimpleChangesCtx, goal: { id: string; title: string }, to: string | null, reason: string | null): Change | Response {
+  if ((db.changes ?? []).some((c) => c.op === "delete_goal" && c.status === "proposed" && c.target.goal_id === goal.id)) {
+    return json(409, { detail: "Moving this to Trash is proposed already" });
+  }
+  const change: Change = {
+    id: crypto.randomUUID(), session_id: null, document_id: null, draft_ids: [],
+    op: "delete_goal", target: { goal_id: goal.id, title: goal.title, to_goal_id: to }, before: { deleted: false }, after: { deleted: true },
+    status: "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
+    decided_by: null, decided_at: null, reason, decision_reason: null, routed_to: ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
+  };
+  (db.changes ??= []).push(change);
+  return view(db, ctx, change);
+}
+
+/** trash_items._propose: a `delete_item` already waits on this item (409). */
+function openDelete(db: SimpleDb, itemId: unknown): boolean {
+  return (db.changes ?? []).some((c) => c.op === "delete_item" && c.status === "proposed" && c.target.item_id === itemId);
+}
+
+/** Applies (the decider) or proposes (everyone else) a feature's delete, shared by the
+ * `delete_item` change and the DELETE route. */
+function doDeleteItem(db: SimpleDb, ctx: SimpleChangesCtx, itemId: string, reason: string | null): { change: Change; row: TrashEntryRow | null } | Response {
+  const key = keyOf(db, itemId);
+  if (!key || seed(db, key).trashed) return json(404, { detail: "No such roadmap item" });
+  const applies = decides(db, ctx, itemId);
+  if (!applies && openDelete(db, itemId)) return json(409, { detail: "Moving this to Trash is proposed already" });
+  const now = iso(mockNowMs());
+  const s = seed(db, key);
+  const name = `${prdCode(s.section) ?? ""} ${s.title}`.trim();
+  const change: Change = {
+    id: crypto.randomUUID(), session_id: null, document_id: stableUuid(`simple-doc/${s.roadmap}`), draft_ids: [],
+    op: "delete_item", target: { item_id: itemId, title: s.title, name }, before: { deleted: false }, after: { deleted: true },
+    status: applies ? "applied" : "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: now,
+    decided_by: null, decided_at: null, reason, decision_reason: null, routed_to: [], undoes_id: null, undone: false, can_decide: false, can_undo: false,
+  };
+  const row = applies ? trashFeature(db, ctx, key, reason, now) : null;
+  if (!applies) change.routed_to = route(db, ctx, change);
+  (db.changes ??= []).push(change);
+  return { change, row };
+}
+
+/** POST /v1/simple/changes op `delete_item` (target.item_id): the same as the DELETE route, as a change. */
+function createDeleteItem(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"]): Response {
+  const res = doDeleteItem(db, ctx, String(body.target.item_id ?? ""), body.reason ?? null);
+  if (res instanceof Response) return res;
+  return json(201, { change: view(db, ctx, res.change), flags: [] });
+}
+
+/** DELETE /v1/simple/roadmap/items/{id}: a `TrashedOut` (the entry, or the change proposed). */
+function deleteItemRoute(db: SimpleDb, ctx: SimpleChangesCtx, itemId: string, reason: string | null): Response {
+  const res = doDeleteItem(db, ctx, itemId, reason);
+  if (res instanceof Response) return res;
+  return json(200, {
+    entry: res.row ? entryOut(res.row, iso(mockNowMs()), true) : null,
+    change: res.row ? null : view(db, ctx, res.change),
+    // Whoever deleted it restores it too (mayRestore); a proposal waits, so only an owner.
+    can_restore: res.row ? true : ctx.role === "owner",
+  });
+}
+
+/** POST /v1/simple/roadmap/items/{id}/restore (an owner, or whoever deleted it): puts the feature back from Trash. */
+function restoreItemRoute(db: SimpleDb, ctx: SimpleChangesCtx, itemId: string): Response {
+  if (ctx.role === "viewer") return json(403, { detail: "Requires the commenter role" });
+  const entry = ctx.trash?.entries.find((e) => e.out.root.type === "feature" && e.out.root.id === itemId);
+  if (!entry) return json(404, { detail: "No such roadmap item" });
+  if (!mayRestore(entry, ctx)) return json(403, { detail: "Only an owner, or whoever deleted it, restores this" });
+  return json(200, restoreFromTrash(ctx.trash!, entry, iso(mockNowMs()), db));
+}
+
 /** add_key_date / edit_key_date / remove_key_date (key_dates.create). */
 function createKeyDate(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"], session: Session | undefined, applies: boolean): Response {
   const now = iso(mockNowMs());
@@ -619,6 +791,8 @@ function createKeyDate(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simpl
 
 async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"]): Promise<Response> {
   if (S7_OPS.includes(body.op)) return createS7(db, ctx, body);
+  if (body.op === "delete_item") return createDeleteItem(db, ctx, body);
+  if (GOAL_ASK_OPS.includes(body.op) || body.op === "delete_goal") return createGoalAsk(db, ctx, body);
   const now = iso(mockNowMs());
   if (KEY_DATE_OPS.includes(body.op)) {
     // The Roadmap filter names the roadmap as roadmap_id (as add_item does); either works.
@@ -789,6 +963,12 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     return json(200, prioritiesOut(db, ctx, (c) => route(db, ctx, c), (itemId) => decides(db, ctx, itemId), q.get("line")));
   }
   const now = iso(mockNowMs());
+  // trash-features-goals: DELETE .../roadmap/items/{id} and its restore (oracle.simple.trash_items).
+  if (p[2] === "roadmap" && p[3] === "items" && p[4] && !p[5] && m === "DELETE") {
+    if (ctx.role === "viewer") return json(403, { detail: "Requires the commenter role" });
+    return deleteItemRoute(db, ctx, p[4], q.get("reason"));
+  }
+  if (p[2] === "roadmap" && p[3] === "items" && p[4] && p[5] === "restore" && m === "POST") return restoreItemRoute(db, ctx, p[4]);
   const accepting = p[2] === "roadmap" && p[3] === "date-suggestions" && m === "POST" && ["accept", "edit"].includes(p[5] ?? "");
   if (p[2] === "roadmap" && !accepting) return null;
   if (m === "POST" && ctx.role === "viewer") return json(403, { detail: "Requires the commenter role" });
@@ -894,7 +1074,23 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     session.last_change_at = now;
     applyS7(db, c);
   } else if (p[4] === "decline" && c.op === "add_item") reopenSuggestion(db, c);
-  else if (p[4] === "accept") {
+  else if (p[4] === "accept" && GOAL_ASK_OPS.includes(c.op)) {
+    const err = applyGoalAsk(db, ctx, c);
+    if (err) return err;
+  } else if (p[4] === "accept" && c.op === "delete_item") {
+    const key = keyOf(db, c.target.item_id);
+    if (!key) return json(404, { detail: "The feature is gone" });
+    if (seed(db, key).trashed) return alreadyInTrash(db, ctx, c, now);
+    trashFeature(db, ctx, key, c.reason ?? null, now);
+  } else if (p[4] === "accept" && c.op === "delete_goal") {
+    const gb = goalBucketsDb(db, ctx.goalBin?.people);
+    const g = gb.goals.find((x) => x.id === c.target.goal_id);
+    if (!g) return json(404, { detail: "The goal is gone" });
+    if (g.trashed) return alreadyInTrash(db, ctx, c, now);
+    const to = typeof c.target.to_goal_id === "string" ? c.target.to_goal_id : null;
+    const bin = { trash: (ctx.trash ??= { entries: [], estimates: {} }), id: ctx.id, name: ctx.names[ctx.id] ?? null, now: () => now };
+    trashGoal(gb, bin, g.id, to, c.reason ?? null, db);
+  } else if (p[4] === "accept") {
     const now_ = current(db, c, c.before);
     if (!same(now_, c.before)) return conflict(db, ctx, now_, touched(c), "outdated");
     // Into the decider's working draft (their editing session's).
@@ -907,6 +1103,12 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   }
   Object.assign(c, { status: p[4] === "accept" ? "accepted" : "declined", decided_by: ctx.id, decided_at: now, decision_reason: body.reason ?? null });
   return json(200, { change: view(db, ctx, c), flags: TARGETS[c.op] || KEY_DATE_OPS.includes(c.op) ? [] : flagsFor(db, touched(c)) });
+}
+
+/** A proposal whose feature or goal went to Trash meanwhile: closed, not left open. */
+function alreadyInTrash(db: SimpleDb, ctx: SimpleChangesCtx, c: Change, now: string): Response {
+  Object.assign(c, { status: "declined", decided_by: ctx.id, decided_at: now, decision_reason: ALREADY });
+  return json(200, { change: view(db, ctx, c), flags: [] });
 }
 
 /**
@@ -975,8 +1177,10 @@ export function simpleInboxRows(
     simple_decisions: changes
       .filter((c) => c.by === me && (c.status === "accepted" || c.status === "declined"))
       .map((c) => row(c, c.decided_at, !seen || (c.decided_at ?? "") > seen ? undefined : "done")),
-    // S3b: the mock's roadmaps name no required reviewers, so no draft waits on anyone.
-    simple_approvals: [],
+    // S3b (drafts.inbox_rows): the drafts in review waiting on me.
+    simple_approvals: (db?.drafts ?? [])
+      .filter((d) => d.out.status === "submitted" && d.out.waiting_on.includes(me))
+      .map((d) => ({ draft_id: d.out.id, document: { id: d.out.document.id, slug: d.out.document.slug, title: d.out.document.title }, version: d.out.version ?? null, submitted_by: d.out.submitted_by ?? null, submitted_at: d.out.submitted_at ?? null, decider_approved: !!d.out.decider_approved, state: !seen || (d.out.submitted_at ?? "") > seen ? ("new" as const) : ("open" as const) })),
   };
 }
 

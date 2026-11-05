@@ -918,7 +918,16 @@ async def create(
 ) -> SimpleChangeResult:
     """``meeting_id``: the meeting the change is made in when its session is not given (its
     session closed): it still changes only what the meeting reviews (oracle.simple.agenda)."""
-    from oracle.simple import additions, agenda, key_dates, one_pager, questions, targets
+    from oracle.simple import (
+        additions,
+        agenda,
+        goal_asks,
+        key_dates,
+        one_pager,
+        questions,
+        targets,
+        trash_items,
+    )
 
     ag = await agenda.for_session(db, body.session_id) or await agenda.for_meeting(db, meeting_id)
     if body.op in targets.OPS:
@@ -931,6 +940,10 @@ async def create(
         return await key_dates.create(db, principal, body)
     if body.op in one_pager.OPS:
         return await one_pager.create(db, principal, body)
+    if body.op in trash_items.OPS:
+        return await trash_items.create_change(db, principal, body)
+    if body.op in goal_asks.OPS:
+        return await goal_asks.create_change(db, principal, body)
     me, now = _me(principal), company_time.now()
     ids = [_uuid(body.target.get("item_id"), "item_id")]
     if body.op in FIXES and body.target.get("subject"):
@@ -1036,7 +1049,16 @@ async def decide(
     session_id: uuid.UUID | None = None,
 ) -> SimpleChangeResult:
     """Accept (apply the proposal, unless outdated) or decline it."""
-    from oracle.simple import additions, goal_milestones, key_dates, one_pager, questions, targets
+    from oracle.simple import (
+        additions,
+        goal_asks,
+        goal_milestones,
+        key_dates,
+        one_pager,
+        questions,
+        targets,
+        trash_items,
+    )
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
@@ -1053,6 +1075,10 @@ async def decide(
         return await one_pager.decide(db, principal, c, action, reason, session_id)
     if c.op in goal_milestones.OPS:
         return await goal_milestones.decide(db, principal, c, action, reason)
+    if c.op in trash_items.OPS:
+        return await trash_items.decide(db, principal, c, action, reason)
+    if c.op in goal_asks.OPS:
+        return await goal_asks.decide(db, principal, c, action, reason)
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     entry = read_.by_id().get(uuid.UUID(c.target["item_id"]))
     if entry is None:
@@ -1230,6 +1256,8 @@ class _View:
         self.questions: dict[str, Any] = {}
         # meeting-changes-only-its-agenda: each meeting session's agenda, by session id.
         self.agendas: dict[uuid.UUID, Any] = {}
+        # trash-features-goals: the items in Trash its changes are on, "<name> (deleted)".
+        self.deleted: dict[str, str] = {}
 
     def meeting(self, c: SimpleChange) -> tuple[SimpleChangeMeeting | None, bool | None]:
         """(the meeting it was made in, whether its item is off that meeting's agenda)."""
@@ -1254,6 +1282,7 @@ class _View:
     def may_decide(self, c: SimpleChange) -> bool:
         from oracle.simple import (
             additions,
+            goal_asks,
             goal_milestones,
             key_dates,
             one_pager,
@@ -1275,6 +1304,12 @@ class _View:
             return has_role(self.principal.role, "owner") or self.me in self.owners.get(
                 c.document_id, set()
             )
+        if c.op == "delete_goal":
+            from oracle.simple import trash_items
+
+            return trash_items.may_decide_goal(self.principal)
+        if c.op in goal_asks.OPS:
+            return goal_asks.may_decide(self.principal)
         if c.op == CUT_ALL:
             return decides_all(self.principal, cut_entries(c, self.by_id), self.deciders)
         e = self.entry(c)
@@ -1335,6 +1370,10 @@ def _words(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> str:
 
     e = v.entry(c) if c.target.get("item_id") else None
     item = f"{e.code or ''} {e.row.title}".strip() if e is not None else None
+    if item is None and c.target.get("item_id"):
+        item = v.deleted.get(str(c.target["item_id"]))
+    if c.op == "delete_goal":
+        item = v.deleted.get(str(c.target.get("goal_id")))
     return change_words.sentence(c.op, c.target, c.before, c.after,
                                  who=names.get(c.by, "someone"), item=item,
                                  status=c.status, undone=c.id in v.undone)  # fmt: skip
@@ -1372,7 +1411,24 @@ async def _view(db: AsyncSession, principal: Any, changes: list[SimpleChange]) -
     v = _View(principal, read_, await _reviewers(db), sessions, undone, people, company)
     v.questions = await _questions(db, changes)
     v.agendas = await _agendas(db, sids)
+    v.deleted = await _deleted(db, changes, v)
     return v
+
+
+async def _deleted(db: AsyncSession, changes: list[SimpleChange], v: _View) -> dict[str, str]:
+    """trash-features-goals: history keeps naming an item in Trash, with "(deleted)"."""
+    from oracle.simple import trash_items
+
+    ids = set()
+    for c in changes:
+        try:
+            ref = c.target.get("goal_id" if c.op == "delete_goal" else "item_id")
+            item = uuid.UUID(str(ref))
+        except ValueError:
+            continue
+        if item not in v.by_id:
+            ids.add(item)
+    return {str(i): n for i, n in (await trash_items.deleted_names(db, ids)).items()}
 
 
 async def _agendas(db: AsyncSession, session_ids: set) -> dict[uuid.UUID, Any]:

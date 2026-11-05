@@ -27,6 +27,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
+from oracle.trash.models import Trashable, trashed_index
 
 # v2 (§7, migration 0013) adds outcome, acceptance_criterion, assumption and risk, and the
 # edges derived_from, verifies, affects and mitigates, so traceability stays in this one
@@ -81,7 +82,7 @@ def _run_fk() -> Mapped[uuid.UUID | None]:
     return mapped_column(Uuid, ForeignKey("runs.id", ondelete="SET NULL"), index=True)
 
 
-class Entity(TenantScoped, Base):
+class Entity(Trashable, TenantScoped, Base):
     __tablename__ = "entities"
     __table_args__ = (
         UniqueConstraint("tenant_id", "type", "key"),
@@ -90,6 +91,8 @@ class Entity(TenantScoped, Base):
         CheckConstraint(_in("origin", ORIGINS), name="origin"),
         CheckConstraint(CONFIDENCE_RANGE, name="confidence"),
         CheckConstraint("parent_id IS NULL OR parent_id <> id", name="not_own_parent"),
+        # trash-features-goals: a goal deleted to Trash (oracle.simple.trash_items).
+        trashed_index("entities"),
     )
 
     type: Mapped[str] = mapped_column(Text, nullable=False)

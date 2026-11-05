@@ -214,6 +214,11 @@ NOT_PER_ITEM = {
     "reject_schedule_basis",
     "verify_schedule_basis",
     "withdraw_schedule_basis",
+    # trash-features-goals: Trash's restore lets whoever deleted a feature or goal through
+    # (may_restore); these routes are an owner's already, so it never refuses them.
+    "restore_document",
+    "restore_intake",
+    "restore_run",
 }
 
 
@@ -460,3 +465,22 @@ async def test_company_source_coverage_is_the_owners_alone(client, role):
     assert allowed is (role == "owner"), role
     resp = await client.get("/v1/sources/coverage/company", headers=headers)
     assert resp.status_code == (200 if role == "owner" else 403), resp.text
+
+
+@pytest.mark.parametrize("role", ["commenter", "approver"])
+async def test_a_commenters_goal_delete_reads_as_an_ask(client, role):
+    """protects=trash-features-goals: below approver DELETE .../goal-buckets/goals/{id}
+    proposes (trash_items._may_delete_goal), so the capabilities carry delete_bucket_goal
+    per item at approver and a commenter's goal menu reads Ask to delete; fails_when=the
+    per-item role is missing, so can() lets a commenter's menu read Delete goal;
+    no_claim=the delete itself (tests/test_trash_features_goals.py)."""
+    from oracle.authz import has_role
+    from tests.fixtures import seed_auth
+    from tests.review_v2_helpers import person
+
+    tenant_id, _ = await seed_auth()
+    body = await _caps(client, (await person(tenant_id, role)).headers)
+    op = "delete_bucket_goal"
+    assert body["operations"][op]
+    assert body["per_item"].get(op, "missing") == "approver"
+    assert has_role(role, body["per_item"][op]) is (role == "approver")
