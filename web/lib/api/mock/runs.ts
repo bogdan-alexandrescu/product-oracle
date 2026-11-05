@@ -1446,6 +1446,36 @@ function decideOrder(ctx: Pick<RunsContext, "db" | "now" | "documents" | "accept
   }
 }
 
+/**
+ * As oracle.priorities.run_order.stale_goals at approval: each goal an order's new feature serves
+ * that is no goal of the Ground Truth now is a blocking unknown_goal, added to the order's check.
+ */
+function recheckOrderGoals(ctx: Pick<RunsContext, "db" | "goalKeys">, cp: CheckpointOut): PriorityCheck["problems"] {
+  const goals = goalSet(ctx);
+  const snap = (ctx.db.priority_snapshots ?? []).find((x) => x.id === cp.payload.priority_snapshot_id && x.status === "proposed");
+  if (!goals || !snap) return [];
+  const check = snap.check_result ?? { method: snap.method, features: snap.ranking.length, problems: [], order: [] };
+  const said = new Set(check.problems.map((x) => x.message));
+  const stale: PriorityCheck["problems"] = [];
+  for (const row of snap.ranking.filter((x) => x.new)) {
+    for (const g of row.explanation.goals ?? []) {
+      if (goals.has(String(g.goal)) || g.contribution === 0) continue;
+      const message =
+        g.title && g.title !== g.goal
+          ? `${row.title} serves the goal ${g.title}, which was rejected after the order was checked: the run must name a goal of the Ground Truth`
+          : `${row.title} names the goal ${g.goal}, which is not a goal in the Ground Truth: the run must name one that is`;
+      if (said.has(message)) continue;
+      said.add(message);
+      stale.push({ code: "unknown_goal", blocking: true, feature: row.key, message });
+    }
+  }
+  if (stale.length) {
+    snap.check_result = { ...check, problems: [...check.problems, ...stale] };
+    cp.payload = { ...cp.payload, priority_check: snap.check_result };
+  }
+  return stale;
+}
+
 /** The priority stop's note when Oracle saved the order itself (H11 ``priorities`` at Act). */
 const ORDER_SAVED_BY_ORACLE = "Oracle saved this order: Order priorities is set to Act within limits.";
 
@@ -2326,6 +2356,12 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const changedBy = ctx.reviewChange?.();
     if (changedBy) bump(draft, displayName(changedBy));
     if (expected_revision != null && expected_revision !== draft.revision) return json(409, { detail: reviewChanged(draft, expected_revision) });
+    // As the API (_recheck_order_goals): a goal a new feature serves, rejected since the order was checked, refuses Approve, named.
+    const stale = decision === "approved" && cp.kind === "priority_order" ? recheckOrderGoals(ctx, cp) : [];
+    if (stale.length) {
+      const gate = gateNow(ctx, cp, draft.actions, true);
+      return json(409, { detail: { code: "blocking_open", message: stale.map((x) => x.message).join("; "), left: gate?.left ?? [] } });
+    }
     const blocked = cannotApprove(cp);
     if (decision === "approved" && blocked) return fail(409, blocked);
     // D7: split, merge and open questions need the agents; Approve waits until they are removed.

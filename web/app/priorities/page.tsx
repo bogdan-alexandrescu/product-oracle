@@ -138,23 +138,62 @@ const PROBLEMS: Record<string, string> = {
   unknown_goal: "Unknown goal",
 };
 
-function ProblemChip({ p }: { p: PriorityProblem }) {
+/** A goal the Ground Truth does not have: its key is all the run gave, so it has no name. */
+const isUnknownGoal = (g: { goal: string; title?: string | null }) => !g.title || g.title === g.goal;
+
+/** A goal with no name: "Unknown goal", its key only in the tooltip. */
+function UnknownGoal({ goal }: { goal: string }) {
   return (
-    <Chip kind={p.blocking ? "crit" : "warn"} title={p.message} data-testid={`problem-${p.code}`}>
-      {PROBLEMS[p.code] ?? p.code.replace(/_/g, " ")}
-      <span className="sr-only">: {p.message}</span>
+    <Chip kind="crit" title={`${goal} is not a goal in the Ground Truth`} data-testid="unknown-goal">
+      Unknown goal
     </Chip>
   );
 }
 
-/** Each of a run row's problems: its chip, then its sentence in full (never only a tooltip). */
+/** "names the goal g.no-such-goal, which is not a goal": the API's unknown_goal sentence (run_order._check_new_goals). */
+const UNKNOWN_GOAL_TEXT = /^(.*? names )the goal (\S+), (which is not a goal in the Ground Truth.*)$/;
+
+/** A problem's sentence in words: a goal key with no name reads "an unknown goal". */
+function problemWords(p: PriorityProblem): string {
+  const m = p.code === "unknown_goal" ? p.message.match(UNKNOWN_GOAL_TEXT) : null;
+  return m ? `${m[1]}an unknown goal, ${m[3]}` : p.message;
+}
+
+/** A problem's sentence as shown: as problemWords, the unknown goal's key in its tooltip. */
+function ProblemSentence({ p }: { p: PriorityProblem }) {
+  const m = p.code === "unknown_goal" ? p.message.match(UNKNOWN_GOAL_TEXT) : null;
+  if (!m) return <>{p.message}</>;
+  return (
+    <>
+      {m[1]}
+      <span title={m[2]} className="underline decoration-dotted underline-offset-2">
+        an unknown goal
+      </span>
+      , {m[3]}
+    </>
+  );
+}
+
+/** A problem's chip; `said`: its sentence is shown beside it, so the chip carries no second copy. */
+function ProblemChip({ p, said = false }: { p: PriorityProblem; said?: boolean }) {
+  return (
+    <Chip kind={p.blocking ? "crit" : "warn"} title={problemWords(p)} data-testid={`problem-${p.code}`}>
+      {PROBLEMS[p.code] ?? p.code.replace(/_/g, " ")}
+      {!said && <span className="sr-only">: {problemWords(p)}</span>}
+    </Chip>
+  );
+}
+
+/** Each of a run row's problems: its chip, then its sentence in full (never only a tooltip), read once. */
 function ProblemList({ problems }: { problems: PriorityProblem[] }) {
   return (
     <ul className="mt-2 space-y-1 text-sm">
       {problems.map((p, i) => (
         <li key={i} className="flex flex-col items-start gap-1">
-          <ProblemChip p={p} />
-          <span className="break-words">{p.message}</span>
+          <ProblemChip p={p} said />
+          <span className="break-words">
+            <ProblemSentence p={p} />
+          </span>
         </li>
       ))}
     </ul>
@@ -203,7 +242,7 @@ const fmt = (n: number | null | undefined) => (n == null ? "—" : String(Math.r
 const pct = (n: number | null | undefined) => (n == null ? null : Math.round(n * 100));
 
 /** A goal as words: its code and name ("G-B Growth"), never its key. */
-const goalText = (key: string, title: string) => namedText(named(title, key));
+const goalText = (key: string, title: string) => (isUnknownGoal({ goal: key, title }) ? "Unknown goal" : namedText(named(title, key)));
 
 /** A feature key as words: the ranked feature's name only, never its code (qa-plan-17). */
 function featureText(features: RankedFeature[], key: string): string {
@@ -688,7 +727,7 @@ function FeatureInspector({
                 {e.goals.map((g) => (
                   <li key={g.goal} className="min-w-0">
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <CodeChip kind="goal" entityKey={g.goal} title={g.title} wrap />
+                      {isUnknownGoal(g) ? <UnknownGoal goal={g.goal} /> : <CodeChip kind="goal" entityKey={g.goal} title={g.title} wrap />}
                     </div>
                     {g.parent && (
                       <div className="mt-0.5 text-[13px] text-text2" data-testid="goal-via-parent">
@@ -740,7 +779,8 @@ type GoalRow = { id: string; title: string; count: number; top: number };
 function byGoal(features: RankedFeature[], names?: Names): GoalRow[] {
   const m = new Map<string, GoalRow>();
   for (const f of features) {
-    for (const g of f.explanation.goals) {
+    // A goal the Ground Truth does not have is no goal to list.
+    for (const g of f.explanation.goals.filter((x) => !isUnknownGoal(x))) {
       const row = m.get(g.goal) ?? { id: g.goal, title: g.title, count: 0, top: f.rank };
       row.count += 1;
       row.top = Math.min(row.top, f.rank);
@@ -872,8 +912,20 @@ function NewFeaturesNote({ c }: { c: CompareOut }) {
   );
 }
 
-/** The order's blocking problems, each once, in row order. */
-const blockingOf = (c: CompareOut) => c.rows.flatMap((r) => r.problems.filter((p) => p.blocking));
+/**
+ * The order's blocking problems, each once, in the check's order: its stored check holds every
+ * problem, one of no ranked row too (missing_feature, rank_gap, wrong_version, unknown_method).
+ */
+function blockingOf(c: CompareOut): PriorityProblem[] {
+  const all = c.snapshot.check_result?.problems ?? c.rows.flatMap((r) => r.problems);
+  const seen = new Set<string>();
+  return all.filter((p) => {
+    const id = `${p.code}|${p.feature ?? ""}|${p.message}`;
+    if (!p.blocking || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
 
 /** Problems that ask the run for a goal: sending the order back is what fixes them. */
 const GOAL_PROBLEMS = new Set(["new_feature_no_goal", "unknown_goal"]);
@@ -969,7 +1021,7 @@ function SnapshotBand({ c, onDecided }: { c: CompareOut; onDecided: () => void }
             <ul aria-label="Blocking problems" className="mt-1.5 list-disc space-y-1 pl-5 text-sm">
               {problems.map((p, i) => (
                 <li key={i} className="break-words">
-                  {p.message}
+                  <ProblemSentence p={p} />
                 </li>
               ))}
             </ul>
@@ -1265,7 +1317,11 @@ function Priorities() {
         ) : (
           <span className="flex min-w-0 flex-col items-start gap-1 py-0.5 max-[600px]:flex-row max-[600px]:flex-wrap" data-testid="row-goals">
             {f.explanation.goals.map((g) => (
-              <CodeChip key={g.goal} kind="goal" entityKey={g.goal} title={g.title} wrap whole room={fonts ? goalCol - CELL_PAD : undefined} />
+              isUnknownGoal(g) ? (
+                <UnknownGoal key={g.goal} goal={g.goal} />
+              ) : (
+                <CodeChip key={g.goal} kind="goal" entityKey={g.goal} title={g.title} wrap whole room={fonts ? goalCol - CELL_PAD : undefined} />
+              )
             ))}
           </span>
         ),

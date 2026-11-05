@@ -1189,7 +1189,9 @@ async def test_approve_rechecks_the_goals_of_its_new_features(client, owner, run
     (snap,) = await snapshots(tenant_id, run["id"])
     assert snap.status == "proposed"
     assert [
-        (p["code"], p["feature"], p["message"]) for p in snap.check_result["problems"] if p["blocking"]
+        (p["code"], p["feature"], p["message"])
+        for p in snap.check_result["problems"]
+        if p["blocking"]
     ] == [("unknown_goal", "bulk-edit", STALE_GOAL)]
     entity, _ = await new_feature_graph(tenant_id)
     assert entity is None

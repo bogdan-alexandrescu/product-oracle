@@ -253,7 +253,8 @@ def check_order(text: str, *, known: Known) -> OrderCheck:
         rows.append(row)
     for key, times in seen.items():
         if times > 1:
-            out.add("duplicate_key", f"feature {key} is ranked {times} times", key)
+            title = known.features.get(key) or key
+            out.add("duplicate_key", f"{title} is ranked {times} times", key)
     rows.sort(key=lambda r: r["rank"])
     ranks: dict[int, str] = {}
     for r in rows:
@@ -314,7 +315,8 @@ def _check_features(out: OrderCheck, rows: list[dict[str, Any]], known: Known) -
             out.add("not_in_scope", f"{key} is not included in the approved PRD scope", key)
     for key in known.scope or []:
         if key not in ranked:
-            out.add("missing_feature", f"{key} is in the approved PRD scope and not ranked", key)
+            title = known.features.get(key) or key
+            out.add("missing_feature", f"{title} is in the approved PRD scope and not ranked", key)
     for r in rows:
         for dep in sorted(known.depends_on.get(r["key"], ())):
             if dep in ranked and ranked[dep] > r["rank"]:
@@ -655,6 +657,52 @@ def approve(snapshot: PrioritySnapshot, by: uuid.UUID | None, document_id: uuid.
     snapshot.decided_at = datetime.now(UTC)
     if document_id is not None:
         snapshot.document_id = document_id
+
+
+async def stale_goals(db: AsyncSession, snapshot: PrioritySnapshot) -> list[dict[str, Any]]:
+    """The goals the order's new features serve that the Ground Truth rejected (or lost)
+    since the order was checked, as blocking ``unknown_goal`` problems its check does not
+    have yet: approving would add the feature with no supports link (review of PR 1244,
+    round 4). The goals read as :func:`_propose_links` reads them."""
+    from oracle.baseline.models import Entity
+
+    rows = [r for r in snapshot.ranking or [] if r.get("new")]
+    if not rows:
+        return []
+    items = await _scope_features(db, snapshot.scope_id)
+    goals = {g.key: g for g in await db.scalars(select(Entity).where(Entity.type == "goal"))}
+    known = {p.get("message") for p in (snapshot.check_result or {}).get("problems") or []}
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        key = row["key"]
+        item = items.get(key)
+        terms = (row.get("explanation") or {}).get("goals") or []
+        named = [*terms, *[{**g, "goal": g.get("key")} for g in (item.goals if item else [])]]
+        # A 0 from either source: the feature does not serve that goal, so it needs no link.
+        zero = {str(g["goal"]) for g in named if g.get("goal") and g.get("contribution") == 0}
+        for goal in dict.fromkeys(str(g["goal"]) for g in named if g.get("goal")):
+            if goal in zero:
+                continue
+            found = goals.get(goal)
+            if found is not None and found.status != "rejected":
+                continue
+            if found is None:
+                message = (
+                    f"{row.get('title') or key} names the goal {goal}, which is not a goal in "
+                    "the Ground Truth: the run must name one that is"
+                )
+            else:
+                message = (
+                    f"{row.get('title') or key} serves the goal {found.title}, which was "
+                    "rejected after the order was checked: the run must name a goal of the "
+                    "Ground Truth"
+                )
+            if message not in known:
+                known.add(message)
+                out.append(
+                    {"code": "unknown_goal", "blocking": True, "feature": key, "message": message}
+                )
+    return out
 
 
 async def accept_new(db: AsyncSession, snapshot: PrioritySnapshot, principal: Any) -> int:
