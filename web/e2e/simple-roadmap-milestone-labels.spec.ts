@@ -97,9 +97,9 @@ for (const scheme of ["light", "dark"] as const)
   test.describe(`desktop, ${scheme}`, () => {
     test.use(DESKTOP);
 
-    test(`${scheme}: five milestones in two weeks: every name reachable at 3 months, 1 year and All`, async ({ page }) => {
+    test(`${scheme}: five milestones in two weeks: every name reachable at 3 months, 6 months, 1 year and All`, async ({ page }) => {
       await open(page, scheme);
-      for (const z of ["3m", "1y", "all"]) {
+      for (const z of ["3m", "6m", "1y", "all"]) {
         await zoom(page, z);
         if (z !== "all") await toJanuary(page);
         await apart(page, z);
@@ -131,6 +131,7 @@ for (const scheme of ["light", "dark"] as const)
       await expect(card).toContainText("20 groups plan a hike with it");
       await page.keyboard.press("Escape");
       await expect(card).toHaveCount(0);
+      await expect(chip, "Escape gives the focus back to the chip the entry came from").toBeFocused();
       // The label opens its own milestone.
       await first.click();
       await expect(card).toContainText("Trail beta");
@@ -181,8 +182,50 @@ for (const scheme of ["light", "dark"] as const)
       await page.keyboard.press("Tab");
       expect(await page.evaluate(() => document.activeElement?.getAttribute("data-testid"))).toBe("timeline-milestone-entry");
       await page.keyboard.press("Enter");
-      await expect(page.getByTestId("timeline-milestone-card")).toBeVisible();
+      const card = page.getByTestId("timeline-milestone-card");
+      await expect(card).toBeVisible();
+      await expect(card).toBeFocused();
       await page.screenshot({ path: test.info().outputPath(`keyboard-${scheme}.png`) });
+      // Escape closes it and gives the focus back to the chip; Tab goes on from there.
+      const chipEl = page.getByTestId("timeline-milestone-more").filter({ visible: true }).first();
+      await page.keyboard.press("Escape");
+      await expect(card).toHaveCount(0);
+      await expect(chipEl).toBeFocused();
+      // A label: Enter opens its card, × closes it and the label has the focus again.
+      await page.keyboard.press("Shift+Tab");
+      const label = page.locator('[data-testid="timeline-milestone"]:focus');
+      await expect(label).toHaveCount(1);
+      await page.keyboard.press("Enter");
+      await expect(card).toBeFocused();
+      await card.getByRole("button", { name: "Close" }).focus();
+      await page.keyboard.press("Enter");
+      await expect(card).toHaveCount(0);
+      await expect(label).toHaveCount(1);
+      // Each milestone is one Tab stop: no line takes the focus along the row.
+      for (let n = 0; n < 8; n++) {
+        await page.keyboard.press("Tab");
+        expect(await page.evaluate(() => document.activeElement?.getAttribute("data-testid"))).not.toBe("timeline-milestone-line");
+      }
+    });
+
+    test(`${scheme}: a card taller than the chart keeps the month header and label row in sight`, async ({ page }) => {
+      await open(page, scheme);
+      await zoom(page, "3m");
+      await toJanuary(page);
+      // Trail launch waits on two items: its card runs past the chart's foot.
+      const view = page.getByTestId("timeline-scroll");
+      await expect.poll(() => view.evaluate((el) => el.scrollTop)).toBe(0);
+      const line = page.locator('[data-testid="timeline-milestone-line"][data-day="2027-01-29"]');
+      const b = (await line.boundingBox())!;
+      await page.mouse.click(b.x + 2, b.y + 40);
+      const card = page.getByTestId("timeline-milestone-card");
+      await expect(card).toBeFocused();
+      await expect(card).toContainText("Trail launch");
+      expect(await view.evaluate((el) => el.scrollTop), "the card's focus scrolled the chart").toBe(0);
+      const vb = (await view.boundingBox())!;
+      const cb = (await card.boundingBox())!;
+      expect(cb.y + cb.height, "the card is not taller than the chart").toBeGreaterThan(vb.y + vb.height);
+      await page.screenshot({ path: test.info().outputPath(`tall-card-${scheme}.png`) });
     });
 
     test(`${scheme}: a milestone's line shows its name and opens it, never the + Milestone hint`, async ({ page }) => {

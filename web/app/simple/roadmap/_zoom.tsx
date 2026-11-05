@@ -484,29 +484,58 @@ function DayChart(props: TimelineProps) {
   const [msTip, setMsTip] = useState<{ id: string; left: number; top: number } | null>(null);
   const [msList, setMsList] = useState<string | null>(null);
   const [msCard, setMsCard] = useState<string | null>(null);
+  // The control that opened the card (a list entry's "+N" chip, as the list closes) takes the
+  // focus back when the card closes by Escape or ×, so Tab goes on from where it was.
+  const msBack = useRef<HTMLElement | null>(null);
+  const closeMs = () => {
+    setMsCard(null);
+    setMsList(null);
+    const back = msBack.current;
+    msBack.current = null;
+    if (back?.isConnected) back.focus();
+  };
   useEffect(() => {
     if (!msCard && !msList) return;
     const esc = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      setMsCard(null);
-      setMsList(null);
+      if (msCard) closeMs();
+      else setMsList(null);
     };
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
-  }, [msCard, msList]);
-  // The card takes the focus as it opens (a chip's list it came from closes).
+  });
+  // The card takes the focus as it opens (a chip's list it came from closes), without scrolling
+  // the chart: a tall card on a short chart would slide the month header out of sight.
   const msCardRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (msCard) msCardRef.current?.focus();
+    if (msCard) msCardRef.current?.focus({ preventScroll: true });
   }, [msCard]);
+  // A line's tip follows the pointer down the line, once a frame at most.
+  const tipNext = useRef<{ id: string; left: number; top: number } | null>(null);
+  const tipFrame = useRef(0);
+  const moveTip = (tip: { id: string; left: number; top: number }) => {
+    tipNext.current = tip;
+    if (tipFrame.current) return;
+    tipFrame.current = requestAnimationFrame(() => {
+      tipFrame.current = 0;
+      setMsTip(tipNext.current);
+    });
+  };
+  const leaveTip = () => {
+    cancelAnimationFrame(tipFrame.current);
+    tipFrame.current = 0;
+    setMsTip(null);
+  };
+  useEffect(() => () => cancelAnimationFrame(tipFrame.current), []);
   const msWords = (m: (typeof marks)[number]["m"]) =>
     `${m.name}, ${fullDay(m.date as string)}${m.done_when.length ? ` · counts when ${m.done_when.join("; ")}` : ""}`;
   // A tip or a card stays inside the chart's view, right of the names column.
   const inView = (l: number, width: number) => Math.max(labelW + sl + 6, Math.min(l, sl + w - width - 6));
-  const openMs = (id: string) => {
+  const openMs = (id: string, from: HTMLElement | null) => {
+    msBack.current = msCard === id ? null : from;
     setMsList(null);
     setMsTip(null);
-    setMsCard((c) => (c === id ? null : id));
+    setMsCard(msCard === id ? null : id);
   };
   // roadmap-r2: the Gantt's moves. A drag past DRAG_PX moves the bar by whole days (an end
   // grabbed near the bar's edge, grabAt, moves only that end); a shorter one is a click. A
@@ -793,12 +822,14 @@ function DayChart(props: TimelineProps) {
                 data-testid="timeline-milestone-line"
                 data-day={m.date}
                 aria-label={msWords(m)}
-                onPointerEnter={(e) => setMsTip({ id: m.id, left: labelW + at + 8, top: e.clientY - e.currentTarget.getBoundingClientRect().top + 44 + 12 })}
-                onPointerMove={(e) => setMsTip({ id: m.id, left: labelW + at + 8, top: e.clientY - e.currentTarget.getBoundingClientRect().top + 44 + 12 })}
-                onPointerLeave={() => setMsTip(null)}
+                // The label (or its chip) is the milestone's one Tab stop; the line keeps the pointer.
+                tabIndex={-1}
+                onPointerEnter={(e) => moveTip({ id: m.id, left: labelW + at + 8, top: e.clientY - e.currentTarget.getBoundingClientRect().top + 44 + 12 })}
+                onPointerMove={(e) => moveTip({ id: m.id, left: labelW + at + 8, top: e.clientY - e.currentTarget.getBoundingClientRect().top + 44 + 12 })}
+                onPointerLeave={leaveTip}
                 onFocus={() => setMsTip({ id: m.id, left: labelW + at + 8, top: 48 })}
-                onBlur={() => setMsTip(null)}
-                onClick={() => openMs(m.id)}
+                onBlur={leaveTip}
+                onClick={(e) => openMs(m.id, e.currentTarget)}
                 className="absolute top-11 bottom-0 z-10 w-[6px] cursor-pointer border-l-2 border-dashed border-text2 focus-visible:outline-2 focus-visible:outline-accent"
                 style={{ left: labelW + at }}
               />
@@ -819,7 +850,7 @@ function DayChart(props: TimelineProps) {
                 onPointerLeave={() => setMsTip(null)}
                 onFocus={() => setMsTip({ id: m.id, left: labelW + left + 4, top: 42 })}
                 onBlur={() => setMsTip(null)}
-                onClick={() => openMs(m.id)}
+                onClick={(e) => openMs(m.id, e.currentTarget)}
                 className="min-w-0 cursor-pointer overflow-hidden rounded-full border border-line bg-surface px-2 text-xs leading-4 text-ellipsis whitespace-nowrap text-text hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
                 style={{ maxWidth: room < Infinity ? room : undefined }}
               >
@@ -850,7 +881,9 @@ function DayChart(props: TimelineProps) {
                             type="button"
                             data-testid="timeline-milestone-entry"
                             aria-label={msWords(k.m)}
-                            onClick={() => openMs(k.m.id)}
+                            onClick={(e) =>
+                              openMs(k.m.id, e.currentTarget.closest(".group")?.querySelector<HTMLElement>('[data-testid="timeline-milestone-more"]') ?? null)
+                            }
                             className="block w-full px-3 py-1 text-left text-xs whitespace-nowrap text-text hover:bg-surface2 focus-visible:bg-surface2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
                           >
                             {k.words}
@@ -893,7 +926,7 @@ function DayChart(props: TimelineProps) {
                     <button
                       type="button"
                       aria-label="Close"
-                      onClick={() => setMsCard(null)}
+                      onClick={closeMs}
                       className="h-6 w-6 flex-none rounded text-text2 hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-accent"
                     >
                       ×
@@ -909,6 +942,7 @@ function DayChart(props: TimelineProps) {
                           key={i.id}
                           type="button"
                           onClick={() => {
+                            msBack.current = null;
                             setMsCard(null);
                             onOpen(i.key);
                           }}
