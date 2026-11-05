@@ -352,11 +352,11 @@
       },
       {
        "file": "frames/pm3-a-propose.html",
-       "caption": "An approver: features and goals only, each with Propose a restore"
+       "caption": "An approver: features and goals only, each with Propose a restore, and who decides"
       },
       {
        "file": "frames/pm3-a-viewer.html",
-       "caption": "A viewer: the same list, read only"
+       "caption": "A viewer: features and goals, read only"
       },
       {
        "file": "frames/pm3-a-rest-390.html",
@@ -391,11 +391,11 @@
       },
       {
        "file": "frames/pm3-b-propose.html",
-       "caption": "An approver: features and goals only, each with Propose a restore"
+       "caption": "An approver: features and goals only, each with Propose a restore, and who decides"
       },
       {
        "file": "frames/pm3-b-viewer.html",
-       "caption": "A viewer: the same list, read only"
+       "caption": "A viewer: features and goals, read only"
       },
       {
        "file": "frames/pm3-b-rest-390.html",
@@ -433,11 +433,11 @@
       },
       {
        "file": "frames/pm3-c-propose.html",
-       "caption": "An approver: features and goals only, each with Propose a restore"
+       "caption": "An approver: features and goals only, each with Propose a restore, and who decides"
       },
       {
        "file": "frames/pm3-c-viewer.html",
-       "caption": "A viewer: the same list, read only"
+       "caption": "A viewer: features and goals, read only"
       },
       {
        "file": "frames/pm3-c-rest-390.html",

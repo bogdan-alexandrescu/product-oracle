@@ -17,6 +17,9 @@ export type MkTrash = {
 
 const KEY = "mk-trash"; // MOCK-HOOK
 
+/** The mock company's owner, who decides a restore an approver proposes (invented). */
+export const MK_OWNER = "Avery Stone"; // MOCK-HOOK
+
 const SEED: MkTrash[] = [ // MOCK-HOOK
   { id: "t-f1", kind: "Feature", title: "Saved filters for alerts", where: "Usage alerts", by: "Priya Shah", at: "2026-11-04T16:20:00Z", days_left: 29, back: ["Dates Nov 16 – Dec 18", "2 links", "Milestone: Beta", "Goal: Grow retention"] },
   { id: "t-g1", kind: "Goal", title: "Cut support tickets by a fifth", where: "Goals", by: "Ana Ortiz", at: "2026-11-03T10:05:00Z", days_left: 28, back: ["Its measure: tickets a week", "3 features linked to it again"] },

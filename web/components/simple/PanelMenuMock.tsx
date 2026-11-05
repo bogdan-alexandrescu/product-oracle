@@ -12,7 +12,7 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button, Chip, InfoTip, toast } from "@/components/ds";
-import { mkCutBy, mkSaveTrash, mkSetCutBy, mkTrash, type MkTrash } from "@/lib/api/mock/panel-trash";
+import { MK_OWNER, mkCutBy, mkSaveTrash, mkSetCutBy, mkTrash, type MkTrash } from "@/lib/api/mock/panel-trash";
 import { sendCardChanged } from "@/lib/api/simple-chat";
 import { calendarDay } from "@/lib/dates";
 import { formatDateTime } from "@/lib/format";
@@ -347,7 +347,7 @@ export function MkTrashList({ docs, owner, proposes }: { docs: { kind: string; t
   useEffect(() => setRows(mkTrash()), []);
   const approver = proposes;
   const restore = (t: MkTrash) => {
-    if (!owner) return toast({ message: `Proposed: restore ${t.title} · waiting for the company's owners` });
+    if (!owner) return toast({ message: `Proposed: restore ${t.title} · waiting for ${MK_OWNER}` });
     mkSaveTrash(mkTrash().filter((x) => x.id !== t.id));
     setRows(mkTrash());
     sendCardChanged();
@@ -368,7 +368,7 @@ export function MkTrashList({ docs, owner, proposes }: { docs: { kind: string; t
       </div>
       <div className="flex flex-none items-center gap-2">
         <Chip kind={t.days_left <= 3 ? "warn" : "line"}>{plural(t.days_left, "day")} left</Chip>
-        <InfoTip label={`What Restore puts back for ${t.title}`}>
+        <InfoTip label={`What Restore puts back for ${t.title}`} side="bottom">
           <span className="block">{t.back.map((b) => <span key={b} className="block">{b}</span>)}</span>
         </InfoTip>
         {(owner || approver) && (
@@ -387,6 +387,7 @@ export function MkTrashList({ docs, owner, proposes }: { docs: { kind: string; t
     <section key={title} className="rounded-xl border border-line bg-surface" data-testid="mk-trash-group">
       <h2 className="flex items-baseline gap-2 border-b border-line px-4 py-2.5 font-semibold">
         {title} <span className="text-sm font-normal text-text2">{list.length}</span>
+        {approver && <span className="ml-auto text-sm font-normal text-text2">{MK_OWNER} decides</span>}
       </h2>
       {list.length ? <ul className="divide-y divide-line">{list.map((x) => x.el(chip))}</ul> : <p className="px-4 py-3 text-text2">Nothing here.</p>}
     </section>
