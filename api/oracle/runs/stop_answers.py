@@ -570,14 +570,154 @@ _NEGATIONS = frozenset({"not", "no", "never", "nor", "without", "dont", "doesnt"
                         "cant", "cannot", "wont", "shouldnt", "arent", "didnt", "t"})  # fmt: skip
 
 
+# Words that name one thing two ways: a question with one in the place of the other is the
+# same question. A plural of one ("dbs", "databases") is read as the word (see _variants).
+_SYNONYMS = (
+    frozenset({"database", "datastore", "db"}),
+    frozenset({"app", "application"}),
+    frozenset({"repo", "repository"}),
+    frozenset({"config", "configuration"}),
+    frozenset({"env", "environment"}),
+    frozenset({"prod", "production"}),
+    frozenset({"info", "information"}),
+    frozenset({"docs", "documentation"}),
+    # British and American spellings no ending rule covers.
+    frozenset({"grey", "gray"}),
+    frozenset({"enrol", "enroll"}),
+    frozenset({"enrolment", "enrollment"}),
+    frozenset({"fulfil", "fulfill"}),
+    frozenset({"fulfilment", "fulfillment"}),
+    frozenset({"instalment", "installment"}),
+    frozenset({"skilful", "skillful"}),
+    frozenset({"programme", "program"}),
+    frozenset({"judgement", "judgment"}),
+    frozenset({"ageing", "aging"}),
+    frozenset({"jewellery", "jewelry"}),
+    frozenset({"aluminium", "aluminum"}),
+    frozenset({"odour", "odor"}),
+)
+
+# Common abbreviations, each beside the word it stands for (plurals as for _SYNONYMS). Only
+# these stand for a longer word: a real word is never read as one ("end" is not "extend",
+# "its" not "items"), so an abbreviation that is not listed is a new word.
+_ABBREVIATIONS = (
+    frozenset({"yr", "year"}),
+    frozenset({"hr", "hour"}),
+    frozenset({"min", "minute"}),
+    frozenset({"sec", "second"}),
+    frozenset({"wk", "week"}),
+    frozenset({"mth", "month"}),
+    frozenset({"mgmt", "management"}),
+    frozenset({"mgr", "manager"}),
+    frozenset({"mkt", "market"}),
+    frozenset({"mkt", "marketing"}),
+    frozenset({"std", "standard"}),
+    frozenset({"stg", "staging"}),
+    frozenset({"pmt", "payment"}),
+    frozenset({"rpt", "report"}),
+    frozenset({"dept", "department"}),
+    frozenset({"acct", "account"}),
+    frozenset({"msg", "message"}),
+    frozenset({"req", "request"}),
+    frozenset({"req", "requirement"}),
+    frozenset({"txn", "transaction"}),
+    frozenset({"pw", "pwd", "password"}),
+    frozenset({"qty", "quantity"}),
+    frozenset({"amt", "amount"}),
+    frozenset({"avg", "average"}),
+    frozenset({"approx", "approximately"}),
+    frozenset({"eng", "engineering"}),
+    frozenset({"eng", "engineer"}),
+    frozenset({"ops", "operations"}),
+    frozenset({"admin", "administrator"}),
+    frozenset({"admin", "administration"}),
+    frozenset({"perf", "performance"}),
+    frozenset({"auth", "authentication"}),
+    frozenset({"auth", "authorization"}),
+    frozenset({"govt", "government"}),
+    frozenset({"intl", "international"}),
+    frozenset({"ppl", "people"}),
+)
+
+# A word and the word with -s or -es that is a different word ("news" is not more "new").
+_NOT_PLURALS = frozenset({("new", "news"), ("good", "goods"), ("custom", "customs"),
+                          ("us", "uses"), ("mean", "means"), ("manner", "manners"),
+                          ("damage", "damages"), ("saving", "savings"), ("arm", "arms"),
+                          ("her", "hers"), ("our", "ours"), ("his", "hiss")})  # fmt: skip
+# Endings that take -es for a plural ("boxes"); after any other, -es is another word ("states").
+_TAKES_ES = ("s", "x", "z", "ch", "sh", "o")
+
+# British endings and their American spelling, from five letters ("four" is not "for").
+_SPELLINGS = (
+    (re.compile(r"^([a-z]{2,}[aeiou])ll(ed|ing|ers?)$"), r"\1l\2"),  # cancelled, travelling
+    # centre, metre, theatre, fibre, litre, calibre (not timbre, acre or genre)
+    (
+        re.compile(r"(cent|met|theat|fib|lit|mit|nit|calib|sab|somb|spect|lust|meag|och)re(s?)$"),
+        r"\1er\2",
+    ),
+    (re.compile(r"ogue$"), "og"),  # catalogue
+    (re.compile(r"ence$"), "ense"),  # licence
+    # colour, honour, behaviour, labour and their endings (not fourth, mourning or pouring)
+    (
+        re.compile(
+            r"^([a-z]{3,})our(s|ed|ing|ite|ites|ful|able|ably|less|er|ers|ist|ists|hood|hoods)?$"
+        ),
+        r"\1or\2",
+    ),
+    (re.compile(r"is(e|ed|es|ing|ation|ations)$"), r"iz\1"),  # organise, organisation
+    (re.compile(r"ys(e|ed|es|ing)$"), r"yz\1"),  # analyse
+)
+
+
+def _american(word: str) -> str:
+    if len(word) < 5:
+        return word
+    for pattern, spelt in _SPELLINGS:
+        word = pattern.sub(spelt, word)
+    return word
+
+
+def _variants(x: str, y: str) -> bool:
+    """``x`` and ``y`` are one word spelt two ways: a known synonym ("datastore",
+    "database"), a listed abbreviation ("yrs", "years"; "pw", "password"; "mgmt",
+    "management"), a plural ("export", "exports"; "box", "boxes") or a British or American
+    spelling ("colour", "color"; "organise", "organize"; "licence", "license"; "centre",
+    "center"; "catalogue", "catalog"; "cancelled", "canceled"). Two different words
+    ("Safari", "Firefox"; "fast", "slow"; "export", "expert"; "new", "news"; "stat",
+    "states"; "fourth", "forth"; "timbre", "timber"), a word that is not a listed
+    abbreviation of the other ("end", "extend"; "its", "items"; "us", "users"; "ms",
+    "months") or an acronym ("SMS", "systems") are not."""
+    if x == y:
+        return True
+    short, long = sorted((x, y), key=len)
+    if not short.isalpha() or not long.isalpha():
+        return False
+    # "dbs" and "databases" are "db" and "database"; "licences" and "licenses" one spelling.
+    forms = [(x, y)]
+    if x.endswith("s") and y.endswith("s") and len(short) > 2:
+        forms.append((x[:-1], y[:-1]))
+    for a, b in forms:
+        if any(a in s and b in s for s in (*_SYNONYMS, *_ABBREVIATIONS)):
+            return True
+        if len(max(a, b, key=len)) >= 5 and _american(a) == _american(b):
+            return True
+    # "boxes", "classes", "matches", "potatoes"; not "states" for "stat" or "planes" for "plan".
+    if len(short) >= 3 and (
+        long == short + "s" or (long == short + "es" and short.endswith(_TAKES_ES))
+    ):
+        return (short, long) not in _NOT_PLURALS
+    return False
+
+
 def same_question(asked: str, listed: str) -> bool:
     """``listed`` is the answered question ``asked`` (both as words), compared word by word
     in order: the same words, or, for questions of at least five words, the same number of
-    words with at most one position holding a different word ("database" for "datastore"),
-    and the same negations
-    ("should" and "should not" are two questions). A question one word longer or shorter,
-    a longer one that contains it, or the same words in another order ("A replace B" and
-    "B replace A") is a new question."""
+    words with at most one position holding the same word spelt another way ("database" for
+    "datastore", "yrs" for "years": :func:`_variants`), and the same negations ("should" and
+    "should not" are two questions). A different word there ("Firefox" for "Safari", "slow"
+    for "fast", "backups" for "exports") is the content of the question, so a new question;
+    so is a question one word longer or shorter, a longer one that contains it, or the same
+    words in another order ("A replace B" and "B replace A")."""
     if asked == listed:
         return True
     a, b = asked.split(), listed.split()
@@ -585,7 +725,8 @@ def same_question(asked: str, listed: str) -> bool:
         return False
     if [w for w in a if w in _NEGATIONS] != [w for w in b if w in _NEGATIONS]:
         return False
-    return sum(x != y for x, y in zip(a, b, strict=True)) <= 1
+    apart = [(x, y) for x, y in zip(a, b, strict=True) if x != y]
+    return len(apart) == 1 and _variants(*apart[0])
 
 
 def listed_open(answers: list[Answered], markdown: str) -> list[ImportProblem]:

@@ -4,8 +4,9 @@
 with its plain words; each stays inside Oracle and carries no secret. Ask Oracle does what a
 person can (owner, Nov 5): a write that sends a Slack message (``PINGS``: a question asked
 of someone or reassigned, a decision requested of its approver) is offered, and its card
-names each person messaged, by name, and what the message does ("Sends a Slack message to
-<name> asking for a decision"); no name, no card. Apply sends exactly that: whom, as the
+names each person messaged, by name, and truly whether Slack sends it ("<name> gets a
+Slack message asking for a decision and sees it in their Inbox", else "<name> sees it in
+their Inbox" and why not); no name, no card. Apply sends exactly that: whom, as the
 route decides then, must be whom the card names (else 409). Such a card has no Undo (a
 message sent is not taken back). tests/test_ask_oracle_actions.py walks each allowed
 route's calls: one reaching a Slack ping, the Slack outbox or the mailer must be in
@@ -165,6 +166,8 @@ OWN_WHY = "only you read your own sources, so not in a meeting's chat."
 APPLYING = "This card was applied already"
 # A body field's words on a card (its "_id" dropped).
 FIELD_WORDS = {"src": "from", "dst": "to", "prd_version": "PRD version"}
+# A body field whose value is a code, not words (a record's key, slug, id): never on a card.
+CODE_FIELDS = ("key", "slug", "id", "code", "external_id")
 # What the reader is offered of each action (the model's budget).
 SUMMARY_MAX = 90
 RESULT_MAX = 6000
@@ -588,11 +591,16 @@ def _field(key: str) -> str:
     return FIELD_WORDS.get(stem, stem).replace("_", " ")
 
 
+def _code(key: str) -> bool:
+    return key in CODE_FIELDS or key.endswith(("_key", "_slug"))
+
+
 def _words(value: Any, names: dict[str, str] | None = None) -> str:
     names = names or {}
     if isinstance(value, dict):
         return ", ".join(f"{_field(k)} {_words(v, names)}" for k, v in value.items()
-                         if v is not None and (not _is_id(v) or str(v) in names))  # fmt: skip
+                         if v is not None and not _code(k)
+                         and (not _is_id(v) or str(v) in names))  # fmt: skip
     if isinstance(value, list):
         return ", ".join(_words(v, names) for v in value if not _is_id(v) or str(v) in names)
     if isinstance(value, str) and value in names:
@@ -619,20 +627,45 @@ def _secret(value: Any) -> bool:
     return False
 
 
+async def slack_reach(db: AsyncSession, pinged: list[str]) -> dict[str, str]:
+    """Whether each person pinged gets the Slack message, as pings.queue decides it: "on",
+    "off" (they turned review-requested pings off) or "none" (Slack is not connected)."""
+    from oracle.integrations import slack_oauth
+    from oracle.slack import pings
+
+    if not pinged:
+        return {}
+    install = await slack_oauth.installed(db)
+    if install is None or install.status != "active":
+        return dict.fromkeys(pinged, "none")
+    chosen = await pings._chosen(db, [uuid.UUID(p) for p in pinged])
+    return {p: "on" if chosen[uuid.UUID(p)]["review_requested"] else "off" for p in pinged}
+
+
+def _ping_words(action: Action, name: str, reach: str) -> str:
+    if reach == "on":
+        return f"{name} gets a Slack message {PINGS[action.name][1]} and sees it in their Inbox."
+    if reach == "off":
+        return f"{name} sees it in their Inbox; they turned these Slack messages off."
+    return f"{name} sees it in their Inbox; Slack is not connected."
+
+
 def summary(
     action: Action, args: dict[str, Any], names: list[str], how: str | None,
     ids: dict[str, str] | None = None, pinged: list[str] | None = None,
+    reach: dict[str, str] | None = None,
 ) -> str:  # fmt: skip
     """The card's line in plain words: what it does, to which named record, with what (each
-    record an id points to by its name); whom it sends a Slack message, by name; and before
-    Apply, when it cannot be undone. Kept under 500 characters, the message's words whole."""
+    record an id points to by its name); whom it messages, by name, and truly whether Slack
+    sends it (``reach``: slack_reach); and before Apply, when it cannot be undone. Kept
+    under 500 characters, the message's words whole."""
     line = action.summary + "".join(f" “{n}”" for n in names)
     said = _words(_sent(action, args), ids)
     line = f"{line}: {said}" if said else line
-    tail = ""
-    if pinged:
-        who = " and ".join((ids or {})[p] for p in pinged)
-        tail = f" Sends a Slack message to {who} {PINGS[action.name][1]}."
+    tail = "".join(
+        f" {_ping_words(action, (ids or {})[p], (reach or {}).get(p, 'none'))}"
+        for p in pinged or []
+    )
     tail += "" if how else f" {CANNOT_UNDO}"
     return f"{line[: 499 - len(tail)]}.{tail}"
 
@@ -648,7 +681,9 @@ async def card(db: AsyncSession, principal: Any, action: Action, args: dict[str,
         raise Refusal(NO_NAME)
     # A message sent cannot be taken back: a card that sends one promises no Undo.
     how = None if action.name in PINGS else inverse(action, args, record)
-    return {"summary": summary(action, args, names, how, ids, pinged), "op": OP, "item_id": None,
+    reach = await slack_reach(db, pinged)
+    said = summary(action, args, names, how, ids, pinged, reach)
+    return {"summary": said, "op": OP, "item_id": None,
             "target": {"action": action.name, "args": args, "names": names, "ids": ids,
                        "pinged": pinged},
             "before": {}, "after": {"undo": how}}  # fmt: skip

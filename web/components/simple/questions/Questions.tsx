@@ -319,6 +319,7 @@ export function QuestionRow({
   testId = "question-row",
   plain = false,
   forOthers = false,
+  linked = false,
 }: {
   q: Question;
   mode: Mode;
@@ -329,6 +330,8 @@ export function QuestionRow({
   testId?: string;
   /** Listed under "Waiting for others": an owner's Decide is an override for the decider. */
   forOthers?: boolean;
+  /** The question a link opened (Decisions' ?question=, from the Inbox): marked as an anchor is. */
+  linked?: boolean;
 }) {
   const zone = useCompanyZone();
   const { me } = useMe();
@@ -431,7 +434,7 @@ export function QuestionRow({
     );
   }
   return (
-    <Tag data-testid={testId} data-code={q.code} aria-label={`${q.code} ${q.title}`} className="simple-row">
+    <Tag data-testid={testId} data-code={q.code} data-question-id={q.id} data-linked={linked ? "true" : undefined} aria-label={`${q.code} ${q.title}`} className={`simple-row${linked ? " bg-[var(--simple-edited)]" : ""}`}>
       <span aria-hidden className={`simple-ico ${done ? "simple-ico-done" : ""}`}>
         <Icon name={done ? "check" : "flag"} size={20} stroke={1.7} />
       </span>

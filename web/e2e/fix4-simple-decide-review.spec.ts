@@ -107,6 +107,9 @@ test.describe("keyboard", () => {
     const seen: { where: string; y: number }[] = [];
     for (let i = 0; i < 60; i++) {
       await page.keyboard.press("Tab");
+      // Past the page's last stop the browser wraps round to its top: one pass down is read.
+      // (The page now has fewer than 60 stops, so 60 Tabs came round to the meetings again.)
+      if (await page.evaluate(() => document.activeElement === document.body)) break;
       const at = await page.evaluate(() => {
         const el = document.activeElement as HTMLElement | null;
         const g = el?.closest('[data-testid="meeting-group"], section[aria-label="Outside meetings"]');

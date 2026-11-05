@@ -295,8 +295,8 @@ test.describe("RP1 a: the run's priority order", () => {
 // with what to do (order problems are never waived), at 1440 and on a phone.
 const NO_GOAL = "Gift notes at checkout is new and names no goal it serves: the run must name one";
 const STALE_GOAL = "Gift box sizes serves the goal Cut early churn, which was rejected after the order was checked: the run must name a goal of the Ground Truth";
-// The goal's key is no name: the sentence says "an unknown goal", the key in its tooltip.
-const UNKNOWN_GOAL = "Gift wrap choice names an unknown goal, which is not a goal in the Ground Truth: the run must name one that is";
+// The goal's key is no name, and none is known: the sentence says a goal that was deleted, never the key.
+const UNKNOWN_GOAL = "Gift wrap choice names a goal that was deleted: the run must name a goal of the Ground Truth";
 
 async function openNoGoalOrder(page: Page) {
   await withScenario(page, "priority-order");

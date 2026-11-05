@@ -495,6 +495,14 @@ async def compare(db: AsyncSession, snapshot_id: uuid.UUID, principal: Principal
     from oracle.priorities import run_order
 
     s = await _snapshot(db, snapshot_id, "all")
+    if s.status == "proposed" and s.checkpoint_id:
+        # The band reads the order's stale-goal problems as of now (gone once the goal is back).
+        from oracle.runs.models import Checkpoint
+        from oracle.runs.service import _recheck_order_goals
+
+        cp = await db.get(Checkpoint, s.checkpoint_id)
+        if cp is not None:
+            await _recheck_order_goals(db, cp, add=False)
     live = await compute(db, s.method)
     stored = {r["key"]: r for r in s.ranking or []}
     check = s.check_result or {}

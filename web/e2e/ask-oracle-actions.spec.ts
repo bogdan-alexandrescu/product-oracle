@@ -22,9 +22,9 @@ async function tap(l: Locator) {
   await l.click();
 }
 
-async function signIn(page: Page, to: string) {
+async function signIn(page: Page, to: string, email: string = ADMIN.email) {
   await page.goto("/login");
-  await page.getByLabel("Email").fill(ADMIN.email);
+  await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(ADMIN.password);
   await tap(page.getByRole("button", { name: "Sign in" }));
   await expect(page).not.toHaveURL(/\/login/);
@@ -140,7 +140,7 @@ async function apiActions(box: Locator) {
   const made = last(box).getByTestId("chat-card");
   await expect(made).toHaveCount(1);
   await expect(made.getByTestId("chat-card-summary")).toHaveText(
-    "Add a product record: type “assumption”, key “night-shift-nurse”, title “Night shift nurse”.",
+    "Add a product record: type “assumption”, title “Night shift nurse”.",
   );
   await tap(made.getByRole("button", { name: "Apply", exact: true }));
   await expect(made).toHaveAttribute("data-status", "applied");
@@ -179,6 +179,26 @@ test("the Ask Oracle panel applies an action of the API, with Undo, and one that
   const ask = page.getByTestId("ask-chat").filter({ visible: true });
   await expect(ask).toBeVisible();
   await apiActions(ask);
+});
+
+/**
+ * Card ask-actions-api-approver: protects = an approver's "add the assumption …" card offers
+ * Apply (the API's rule: the action's route needs the approver role, so they decide it), never
+ * Propose, and Apply adds it; fails_when = the card shows Propose, or Apply does not apply it;
+ * no_claim = a commenter's card (the route refuses them).
+ */
+test("an approver's card for an action of the API offers Apply, not Propose", async ({ page }) => {
+  await signIn(page, "/simple/roadmap", "approver@example.com");
+  await tap(page.getByTestId("simple-ask").filter({ visible: true }).first());
+  const ask = page.getByTestId("ask-chat").filter({ visible: true });
+  await expect(ask).toBeVisible();
+  await say(ask, "add the assumption Night shift nurse");
+  const card = last(ask).getByTestId("chat-card");
+  await expect(card).toHaveCount(1);
+  await expect(card.getByRole("button", { name: "Propose", exact: true })).toHaveCount(0);
+  await tap(card.getByRole("button", { name: "Apply", exact: true }));
+  await expect(card).toHaveAttribute("data-status", "applied");
+  await expect(card.getByTestId("chat-card-outcome")).toContainText("Applied by you");
 });
 
 /** Card ask-actions-api-meeting: the same from a meeting's chat. */

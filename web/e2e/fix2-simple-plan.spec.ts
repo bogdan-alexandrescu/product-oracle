@@ -294,10 +294,12 @@ test.describe("QA pass 2: simple-plan, Goal buckets", () => {
       await expect(card.getByTestId("goal-ask-oracle")).toHaveCount(1);
     }
     const revenue = page.locator('[data-testid="plan-goal"]').filter({ has: page.getByRole("heading", { name: "Revenue" }) });
-    const code = (await revenue.getByTestId("plan-feature").first().getAttribute("data-code"))!;
+    // prio-company (train AN): the ranked list's rows carry no code chip, so a feature is found
+    // by its name (the buckets' code chip names it).
+    const name = (await revenue.getByTestId("plan-feature").first().getByTestId("prio-code").getAttribute("title"))!;
     await page.getByRole("tab", { name: "Ranked list" }).click();
     await expect(page.getByTestId("prio-subtitle")).toContainText("Nov 2 – Feb 12");
-    const r = page.getByTestId("prio-row").filter({ has: page.getByTestId("prio-code").getByText(code, { exact: true }) });
+    const r = page.getByTestId("prio-row").filter({ has: page.getByTestId("prio-title").getByRole("button", { name, exact: true }) });
     await expect(r.getByTestId("prio-goal")).toHaveText("Revenue");
     await expect(page.getByTestId("prio-part-head").first()).not.toContainText("(Now)");
   });

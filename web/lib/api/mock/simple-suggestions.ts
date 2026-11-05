@@ -16,7 +16,7 @@ import type { Schemas } from "@/lib/api/client";
 import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { newCompany, stableUuid } from "./ids";
-import { canEditRoadmap, closed, GOALS, goalId, goalPositionOf, goalRank, knowTalkGoals, lookalikes, matchesOf, TALK_GOALS, type GoalSuggestionRow, type SimpleDb } from "./simple-roadmap";
+import { canEditRoadmap, closed, GOALS, goalId, goalPositionOf, goalRank, knowTalkGoals, roadmapId, lookalikes, matchesOf, TALK_GOALS, type GoalSuggestionRow, type SimpleDb } from "./simple-roadmap";
 
 type Role = Schemas["Me"]["role"];
 
@@ -93,6 +93,12 @@ export function seedGoalSuggestions(): GoalSuggestionRow[] {
     row("quiet-alerts", POOL["quiet-alerts"][1], "auto", at, "seed"),
     row("grow-retention", POOL["grow-retention"][0], "on_demand", at, "seed"),
   ];
+}
+
+/** A person's suggestion for `goal`, filed by `by` a day ago (a scenario's, as the drawer's form files one). */
+export function seedPersonGoalSuggestion(goal: string, title: string, outcome: string, by: string): GoalSuggestionRow {
+  const at = new Date(mockNowMs() - 86_400_000).toISOString();
+  return { ...row(goal, { title, outcome, why: "", evidence: [] }, "person", at, `person/${by}`), proposed_by: by, flow: null };
 }
 
 /** Oracle's suggestion that failed its checks twice (its goal not named): owners only. */
@@ -195,12 +201,31 @@ function out(db: SimpleDb, s: GoalSuggestionRow, ctx: Ctx): Schemas["SimpleGoalS
     id: s.id, goal: { id: idOf(ctx, s.goal), key: s.goal, title: titleOf(ctx, s.goal) }, title: s.title, outcome: s.outcome, why: s.why, evidence: s.evidence,
     status: s.status, reason: s.reason, origin: s.origin, created_at: s.created_at, decided_by_name: s.decided_by_name, decided_at: s.decided_at,
     change_id: s.change_id, item_id: s.item_id, looks_like: open ? matchesOf(db, lookalikes(db, s.title, null)) : [], flow: s.flow,
-    proposed_by_name: s.proposed_by ? (ctx.names[s.proposed_by] ?? "someone") : null,
+    proposed_by_name: s.proposed_by ? (ctx.names[s.proposed_by] ?? null) : null,
     can_accept: open && decides,
     can_reject: open && decides,
     // oracle.simple.quality: a suggestion that failed its checks twice is the owners' to look at.
     needs_look: ctx.role === "owner" ? [...(s.checks ?? [])] : [],
   };
+}
+
+/**
+ * inbox-meeting-proposals fix (additions.inbox_rows): the open suggestions of the goals whose
+ * suggestions I decide, oldest first (a held one only to owners). The mock seeds goal
+ * suggestions when a page first lists them, so the Inbox lists them from then on.
+ */
+export function goalSuggestionInboxRows(db: SimpleDb | undefined, ctx: Ctx, seen: string | null): Schemas["InboxSimpleGoalSuggestion"][] {
+  return (db?.goal_suggestions ?? [])
+    .filter((s) => s.status === "open" && (ctx.role === "owner" || !s.checks?.length) && goalDecider(db!, s.goal, ctx).mine)
+    .sort((a, b) => (a.created_at < b.created_at ? -1 : 1))
+    .map((s) => {
+      const rm = roadmapOf(db!, s.goal);
+      return {
+        id: s.id, goal: { id: idOf(ctx, s.goal), key: s.goal, title: titleOf(ctx, s.goal) }, title: s.title, outcome: s.outcome,
+        from_oracle: s.origin !== "person", proposed_by_name: s.proposed_by ? (ctx.names[s.proposed_by] ?? null) : null,
+        document_id: rm ? roadmapId(rm) : null, at: s.created_at, state: !seen || s.created_at > seen ? "new" : "open",
+      };
+    });
 }
 
 function json(status: number, body: unknown): Response {

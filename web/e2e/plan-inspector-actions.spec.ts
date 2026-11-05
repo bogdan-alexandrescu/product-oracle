@@ -8,13 +8,13 @@ import { login, signOut } from "./helpers";
  * The Plan inspector's owed pieces, driven through the UI on the mock layer
  * (NEXT_PUBLIC_API_MOCKS=1): F2's Ask, Discuss, Open blocker and Link to item on the alert
  * cards, F1 §8's tracker events in the item's history, and H1's Record a decision from a Plan
- * item. The "track-alerts" scenario seeds ENG-405's slip on "Daily alert digest email"; the
+ * item. The "track-alerts" scenario seeds ENG-405's slip on "Weekly alert digest"; the
  * "track-alerts-actions" scenario adds a blocker on "Alerts in the team chat" and a GitHub
  * issue on the track that no item names. Which actions the API offers whom is proven by
  * api/tests/test_track_alerts.py.
  */
 
-const SLIP = "Daily alert digest email";
+const SLIP = "Weekly alert digest";
 
 async function scenario(page: Page, name: string, role?: "viewer" | "commenter" | "approver") {
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, name] as const);

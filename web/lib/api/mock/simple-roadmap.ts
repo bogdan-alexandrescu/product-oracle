@@ -121,6 +121,9 @@ interface SimpleDb {
   /** walkc-meeting (./simple-changes.ts markMeetingProposal): the ids of proposals made in a
    * meeting, which stay with the meeting's deciders (changes.current_route). */
   meeting_proposals?: string[];
+  /** inbox-meeting-proposals owner (changes.inbox_rows from_ask): the ids of proposals asked
+   * through Ask Oracle (a card applied outside a meeting). */
+  ask_proposals?: string[];
   /** Simple S3b (./simple-changes.ts): working drafts, each with its roadmap's published items. */
   drafts?: MockDraft[];
   /** walkb-roadmap review 5a: roadmaps built from a PRD with no approved version yet (their drafts' `published` is false). */
@@ -129,7 +132,9 @@ interface SimpleDb {
   targets?: Record<string, Record<string, unknown>>;
   /** D-a (#730 review): each roadmap's designated decider (roadmap slug -> person id). */
   deciders?: Record<string, string>;
-  /** roadmap-decide review: each roadmap's required reviewers (its review policy's mandatory_reviewer_ids). */
+  /** Each roadmap's required reviewers (roadmap slug -> person ids: its review policy's
+   * DocumentReviewPolicy.mandatory_reviewer_ids; roadmap-decide and inbox-meeting-proposals reviews):
+   * a submitted draft waits on them after its decider. */
   reviewers?: Record<string, string[]>;
   /** D-a: each track's owner (track key -> person id); their role (Who.roles) says whether they decide. */
   track_owners?: Record<string, string>;
@@ -246,6 +251,12 @@ const ROADMAPS: Record<string, { title: string; visibility: "company" | "approve
   "onboarding-roadmap": { title: "Onboarding roadmap", visibility: "company", prd: "Guided setup", draft: 2 },
   "pricing-roadmap": { title: "Pricing roadmap", visibility: "approvers", prd: "Plan changes", draft: 3 },
 };
+/**
+ * plan-open-from-simple: an item's roadmap as the API names it, by its document's slug, the one
+ * the Plan's rows carry (the Alerts roadmap is the usage-alerts-roadmap document); the picker
+ * keeps the mock's own key.
+ */
+const ROADMAP_DOC_SLUG: Record<string, string> = { "alerts-roadmap": "usage-alerts-roadmap" };
 /** S7 adds Keep alerts quiet, a goal with no items yet (Oracle suggested features for it on its own). */
 export const GOALS: Record<string, string> = { "grow-retention": "Grow retention", "faster-activation": "Faster activation", "quiet-alerts": "Keep alerts quiet" };
 /** roadmap-talk's goals (the "roadmap-talk" scenario's items name them); known once such an item is seeded. */
@@ -1021,9 +1032,16 @@ export function draftChanges(db: SimpleDb, id: string): number {
   return cs.filter((c) => ["applied", "accepted"].includes(c.status) && (c.draft_ids ?? []).includes(id) && !cs.some((u) => u.undoes_id === c.id)).length;
 }
 
-/** Who sees a draft in the mock (no required reviewers): owners, its people and the roadmap's decider. */
+/** Who sees a draft in the mock: owners, its people, the roadmap's decider and its required reviewers. */
 export function seesDraft(d: MockDraft, me: { id: string; role: Role }, db?: SimpleDb): boolean {
-  return me.role === "owner" || d.out.created_by === me.id || d.out.participant_ids.includes(me.id) || db?.deciders?.[d.roadmap] === me.id;
+  return (
+    me.role === "owner" ||
+    d.out.created_by === me.id ||
+    d.out.participant_ids.includes(me.id) ||
+    db?.deciders?.[d.roadmap] === me.id ||
+    // inbox-meeting-proposals fix: a required reviewer sees the roadmap's draft.
+    !!db?.reviewers?.[d.roadmap]?.includes(me.id)
+  );
 }
 
 /** The roadmap as one reader reads it: hidden drafts' roadmaps at their published items. */
@@ -1090,7 +1108,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     return {
       id: db.ids[s.key], key: s.key, title: s.title, outcome: s.outcome ?? null, horizon: s.horizon,
       code: prdCode(s.section),
-      roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
+      roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: ROADMAP_DOC_SLUG[s.roadmap] ?? s.roadmap, title: rm.title },
       prd: ownPrd(s),
       goal: goalOfSeed(s) ? { id: stableUuid(`simple-goal/${goalOfSeed(s)}`), key: goalOfSeed(s)!, title: GOALS[goalOfSeed(s)!] ?? PLAN_GOALS[goalOfSeed(s)!], metric: METRICS[goalOfSeed(s)!] ?? null, position: goalPositionOf(goalOfSeed(s)!), ...READINGS[goalOfSeed(s)!] } : null,
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
@@ -1168,7 +1186,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const shown = items.filter(
     (i) =>
       (q.get("draft_roadmap") === "1" || !onDraft.has(i.id)) &&
-      (!q.get("roadmap") || i.roadmap.slug === chosen) &&
+      (!q.get("roadmap") || i.roadmap.slug === (ROADMAP_DOC_SLUG[chosen ?? ""] ?? chosen)) &&
       (!prd || i.prd?.slug === prd || i.prd?.id === prd) &&
       (!goal || i.goal?.key === goal || i.goal?.id === goal) &&
       (!track || i.track?.id === track) &&
@@ -1424,6 +1442,29 @@ export function settleDrafting(db: SimpleDb): void {
       status: "open", created_at: new Date(now).toISOString(), decided_by: null, decided_at: null, can_decide: false,
     });
   }
+}
+
+/**
+ * inbox-meeting-proposals fix (suggestions.inbox_rows): the open date suggestions I may decide,
+ * one row per item (its slices' span), newest first. The mock makes suggestions when the
+ * roadmap is first read, so the Inbox lists them from then on.
+ */
+export function dateSuggestionInboxRows(db: SimpleDb | undefined, me: { id: string; role: Role }, seen: string | null): Schemas["InboxSimpleDateSuggestion"][] {
+  if (!db) return [];
+  const seeds = new Map(visibleItems(db, me.role).map((s) => [db.ids[s.key], s]));
+  const out: Schemas["InboxSimpleDateSuggestion"][] = [];
+  const done = new Set<string>();
+  for (const x of [...db.suggestions].filter((y) => y.status === "open").sort((a, b) => (a.created_at < b.created_at ? 1 : -1))) {
+    const s = seeds.get(x.item_id);
+    if (done.has(x.item_id) || !s || !canDecideItem(db, s, me)) continue;
+    done.add(x.item_id);
+    const span = itemSuggestion(db, x.item_id) ?? x;
+    out.push({
+      id: span.id, item_id: x.item_id, item_title: s.title, document_id: roadmapId(s.roadmap), start_date: span.start_date, end_date: span.end_date,
+      basis: span.basis, at: x.created_at, state: !seen || x.created_at > seen ? "new" : "open",
+    });
+  }
+  return out;
 }
 
 /** /v1/simple/roadmap and its date suggestions (api/oracle/simple/router.py). */

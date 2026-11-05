@@ -194,6 +194,10 @@ export function ChatCard({
     });
 
   const open = card.status === "open";
+  // chat-latest-card: a newer card in the chat replaced this one: an open card no longer acts
+  // (no Apply, no Discard); an applied one keeps its Undo.
+  const replacedBy = card.replaced_by ?? null;
+  const live = open && !replacedBy;
   const label = card.may === "propose" ? "Propose" : "Apply";
   const action = isActionPreview(card.preview) ? card.preview : null;
   const correct = card.correct ?? null;
@@ -231,7 +235,7 @@ export function ChatCard({
   const mine = !!me?.name && card.decided_by_name === me.name;
 
   return (
-    <div data-testid="chat-card" data-status={card.status} data-card-id={card.id} className="flex min-w-0 flex-col gap-2 rounded-xl border border-line bg-surface p-3 text-text">
+    <div id={`chat-card-${card.id}`} tabIndex={-1} data-testid="chat-card" data-status={card.status} data-card-id={card.id} data-replaced={replacedBy ? "true" : undefined} className={`flex min-w-0 flex-col gap-2 rounded-xl border border-line p-3 text-text ${replacedBy && open ? "bg-surface2" : "bg-surface"}`}>
       {!actionsOnly && (
         <p className="font-semibold" data-testid="chat-card-summary">
           {card.summary}
@@ -296,7 +300,7 @@ export function ChatCard({
           {ghost}
         </p>
       )}
-      {open && fixes.length > 0 && (
+      {live && fixes.length > 0 && (
         <div className="flex min-w-0 flex-wrap gap-2" role="group" aria-label="Fixes">
           {fixes.map((f) => (
             <button key={f.n} type="button" className="simple-button simple-button-wrap" disabled={busy || !card.may} onClick={() => void apply(f.n)} data-testid="chat-card-fix">
@@ -305,7 +309,7 @@ export function ChatCard({
           ))}
         </div>
       )}
-      {open && fields && (
+      {live && fields && (
         <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2" role="group" aria-label="Correct the change" data-testid="chat-card-correct">
           {shown.map((f) => (
             <label key={f} className="flex min-w-0 flex-col gap-1 simple-small text-text2">
@@ -343,7 +347,7 @@ export function ChatCard({
             : `Cutting it with its dependents asks ${listWords(card.asks_with_dependents ?? [])} to decide.`}
         </p>
       )}
-      {open ? (
+      {live ? (
         // qa-simple-roadmap-45: on a phone this row can hold four buttons (Preview, Apply,
         // Discard, Correct); a plain wrap leaves the last one alone on its own row, so narrow
         // widths lay them out as a balanced 2-column grid, wide widths keep the flex row.
@@ -404,7 +408,7 @@ export function ChatCard({
             </button>
           )}
         </div>
-      ) : (
+      ) : open ? null : (
         <div className="flex flex-wrap items-center gap-2" data-testid="chat-card-outcome">
           <span className="simple-small">
             {/* fix4 qa-simple-roadmap-27: the reader's own change says "you". */}
@@ -431,7 +435,25 @@ export function ChatCard({
           )}
         </div>
       )}
-      {open && !card.may && card.why_not && (
+      {replacedBy && (
+        <p className="simple-small text-text2" data-testid="chat-card-replaced">
+          Replaced by a newer card.{" "}
+          <a
+            href={`#chat-card-${replacedBy}`}
+            className="text-accent-ink underline"
+            onClick={(e) => {
+              const newer = document.getElementById(`chat-card-${replacedBy}`);
+              if (!newer) return;
+              e.preventDefault();
+              newer.scrollIntoView({ block: "center" });
+              newer.focus({ preventScroll: true });
+            }}
+          >
+            Go to the newer card
+          </a>
+        </p>
+      )}
+      {live && !card.may && card.why_not && (
         <p className="simple-small text-text2" data-testid="chat-card-why-not">
           {card.why_not}
         </p>
