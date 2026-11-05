@@ -1001,6 +1001,20 @@ function seedInboxReviewerScenario(): Db {
 }
 
 /**
+ * roadmap-decide "inbox-two-reviewers" scenario: "inbox-reviewer" with a second required reviewer
+ * of the Alerts roadmap (commenter@example.com), so a version the decider approved still waits on
+ * the other reviewer after approver@example.com's approval.
+ */
+export const INBOX_TWO_REVIEWERS_SCENARIO = "inbox-two-reviewers";
+function seedInboxTwoReviewersScenario(): Db {
+  const db = seedInboxReviewerScenario();
+  const approver = db.members.find((m) => m.email === "approver@example.com")!;
+  const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+  db.simple_roadmap!.reviewers = { "alerts-roadmap": [approver.id, commenter.id] };
+  return db;
+}
+
+/**
  * inbox-meeting-proposals fix "inbox-unknown-proposer" scenario: "inbox-reviewer" plus a
  * feature suggested for Keep alerts quiet by someone whose account is no longer there (no
  * member has their id), so the API sends no name for them. Invented data.
@@ -3514,6 +3528,8 @@ function load(): Db {
                 ? seedMeetingAgendaScenario
               : scenario === "inbox-reviewer"
                 ? seedInboxReviewerScenario
+              : scenario === INBOX_TWO_REVIEWERS_SCENARIO
+                ? seedInboxTwoReviewersScenario
               : scenario === INBOX_UNKNOWN_PROPOSER_SCENARIO
                 ? seedInboxUnknownProposerScenario
               : scenario === "meeting-agenda-owner"

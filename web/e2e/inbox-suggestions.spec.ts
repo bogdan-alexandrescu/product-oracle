@@ -33,19 +33,20 @@ import { expect, test, type Locator, type Page } from "./test";
  * at once, with no navigation or reload;
  * fails_when = the count stays until a reload.
  *
- * Card inbox-simple-approval: protects = a roadmap version sent for review waits in its required
- * reviewer's Inbox, reached from Simple's rail whose count equals "N waiting": the roadmap by
- * name, the version, who sent it and when (month first); Open goes to the roadmap, where Approve
- * takes the row away and the counts drop at once, without publishing it; the decider (the owner)
- * has it in their Inbox until they approve it too, which publishes it; fails_when = no row for
- * either, the counts differ or wait for a reload, the reviewer's approval publishes it, or
- * Approve is not there. Desktop and phone.
+ * Card inbox-simple-approval: protects = roadmap-decide's review order: the decider (the owner)
+ * approves a changed roadmap first (Approve and publish), and the version then waits in its
+ * required reviewer's Inbox, reached from Simple's rail whose count equals "N waiting" (on a
+ * phone the approval is read on the Roadmap tab, More counting the rest): the roadmap by name,
+ * the version, who sent it and when (month first); Open goes to the roadmap, where its one
+ * Approve, the last approval, publishes it, takes the row away and the counts drop at once;
+ * fails_when = no row, the counts differ or wait for a reload, the decider's approval publishes
+ * it or leaves it in their own Inbox, or there is no Approve or a second one.
  *
- * Card inbox-send-counts-at-once: protects = the owner, who decides the roadmap, sends a version
- * for review and the rail's Inbox count (on a phone, the Roadmap tab's) goes up by one at once;
- * fails_when = it stays until a reload.
+ * Card inbox-send-counts-at-once: protects = the owner, who decides the roadmap, approves a
+ * version and it waits on its reviewer, not on them: the rail's Inbox count (on a phone, the
+ * Roadmap tab's) stays as it was; fails_when = it goes up.
  *
- * Card roadmap-toast-clear: protects = the "Sent for review" message covers no bar of the
+ * Card roadmap-toast-clear: protects = the decider's "Approved" message covers no bar of the
  * chart on a desktop; fails_when = it sits over a bar.
  *
  * Card inbox-ask-not-in-tray: protects = a feature ask on no roadmap sits in no roadmap's Needs a
@@ -72,7 +73,7 @@ async function waiting(page: Page): Promise<number> {
   return Number((await chip.textContent())!.split(" ")[0]);
 }
 
-/** Simple's rail (More on a phone) to the Inbox, by a click; returns the count it showed. */
+/** Simple's rail (More on a phone) to the Inbox, by a click; returns the count it showed (0 when none). */
 async function openInboxFromRail(page: Page, phone: boolean): Promise<number> {
   await page.goto("/simple");
   let link: Locator;
@@ -87,8 +88,10 @@ async function openInboxFromRail(page: Page, phone: boolean): Promise<number> {
     link = rail.getByRole("link", { name: "Inbox", exact: true });
     count = rail.getByTestId("simple-nav-inbox-count");
   }
-  await expect(count).toBeVisible();
-  const n = Number((await count.textContent())!.trim());
+  if (!phone) await expect(count).toBeVisible();
+  // On a phone the More count is what the tabs do not count already (it may be none).
+  const t = await count.allTextContents();
+  const n = t.length ? Number(t[0].trim()) : 0;
   await tap(link);
   await expect(page).toHaveURL(/\/inbox$/);
   return n;
@@ -104,6 +107,9 @@ async function shownCount(page: Page, phone: boolean): Promise<number> {
   const t = await count.allTextContents();
   return t.length ? Number(t[0].trim()) : 0;
 }
+
+/** Where a version waiting for my approval counts: the rail's Inbox; on a phone, the Roadmap tab (its asks). */
+const approvalCount = (page: Page, phone: boolean) => (phone ? inboxCount(page, true, "roadmap") : shownCount(page, false));
 
 /**
  * The count of what waits in the Inbox as shown now, read without leaving the page (or
@@ -297,17 +303,15 @@ for (const phone of [false, true]) {
     });
 
     // card: inbox-simple-approval
-    test(`a version sent for review waits on its required reviewer, who approves it from the Inbox (${where})`, async ({ page }) => {
+    test(`a version the decider approved waits on its required reviewer, whose approval from the Inbox publishes it (${where})`, async ({ page }) => {
       test.setTimeout(120_000);
       await login(page);
-      // The owner changes the Alerts roadmap and sends it for review (on a desktop, by the keyboard).
+      // The owner, who decides the Alerts roadmap, changes it and approves it (on a desktop, by the keyboard).
       const size = page.viewportSize()!;
       // Read once first: Oracle's dates and goal suggestions, made as it is first read, are in the counts.
       await readRoadmap(page);
       await readRoadmap(page);
-      // On a phone, the More tab's count (the Inbox beyond what the tabs count waits there).
-      if (phone) await expect.poll(() => shownCount(page, true)).toBeGreaterThan(0);
-      const phoneBefore = phone ? await shownCount(page, true) : 0;
+      const phoneBefore = phone ? await inboxCount(page, true, "roadmap") : 0;
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.getByTestId("filter-roadmap").selectOption({ label: "Alerts roadmap" });
       const bar = page.locator('[data-testid="timeline-row"][data-item="alert-export"] [data-testid="timeline-bar"]').first();
@@ -317,11 +321,14 @@ for (const phone of [false, true]) {
       await bar.focus();
       await page.keyboard.press("ArrowRight");
       await expect(page.getByTestId("draft-count")).toHaveText("1");
-      await page.getByTestId("draft-banner").getByRole("button", { name: "Send for review" }).click();
-      const sent = page.getByRole("status").filter({ hasText: "Sent for review" });
+      // The decider approves first: no Send for review, and it is not published yet.
+      await expect(page.getByTestId("draft-banner").getByRole("button", { name: "Send for review" })).toHaveCount(0);
+      await page.getByTestId("draft-banner").getByRole("button", { name: "Approve and publish" }).click();
+      const sent = page.getByRole("status").filter({ hasText: "Approved: Alerts roadmap waits for 1 more reviewer" });
       await expect(sent).toBeVisible();
-      // card: inbox-send-counts-at-once: the owner decides the roadmap: the version now waits on them too, and the rail counts it at once.
-      await expect.poll(() => shownCount(page, false)).toBe(railBefore + 1);
+      // card: inbox-send-counts-at-once: it waits on its reviewer, not on the owner who approved it.
+      await expect(page.getByTestId("draft-banner").getByTestId("draft-approve")).toHaveCount(0);
+      await expect.poll(() => shownCount(page, false)).toBe(railBefore);
       // card: roadmap-toast-clear: the toast covers no bar of the chart.
       const box = (await sent.boundingBox())!;
       const bars = await page.getByTestId("timeline-bar").evaluateAll((els) =>
@@ -330,9 +337,13 @@ for (const phone of [false, true]) {
       const covered = bars.filter((b) => b.x < box.x + box.width && box.x < b.x + b.width && b.y < box.y + box.height && box.y < b.y + b.height);
       expect(covered).toEqual([]);
       await page.setViewportSize(size);
-      if (phone) await expect.poll(() => shownCount(page, true)).toBe(phoneBefore + 1);
+      if (phone) await expect.poll(() => inboxCount(page, true, "roadmap")).toBe(phoneBefore);
 
       await switchTo(page, "approver@example.com");
+      await page.goto("/simple");
+      // On a phone the approval is read on the Roadmap tab (its Needs a decision's asks), not More.
+      if (phone) await expect.poll(() => inboxCount(page, true, "roadmap")).toBeGreaterThan(0);
+      const roadmapTab = phone ? await inboxCount(page, true, "roadmap") : 0;
       const railCount = await openInboxFromRail(page, phone);
       const row = page.getByRole("row").filter({ has: page.getByTestId("simple-approval-context") });
       await expect(row).toHaveCount(1);
@@ -342,8 +353,8 @@ for (const phone of [false, true]) {
       await expect(row).toContainText(/Alerts roadmap version \d+/);
       await expect(row.getByTestId("simple-approval-context")).toContainText(/^Sent for review by \S.* on /);
       await expect(row.getByTestId("simple-approval-context")).toContainText(MONTH_FIRST);
-      // The rail's count is the page's "N waiting", the approval among them.
-      expect(await waiting(page)).toBe(railCount);
+      // The rail's count is the page's "N waiting", the approval among them (on a phone, More and the Roadmap tab together).
+      expect(await waiting(page)).toBe(railCount + roadmapTab);
       // Home counts it under Approvals, not Proposals.
       await page.goto("/home");
       await expect(page.getByTestId("home-needs").getByTestId("home-count-approvals")).toBeVisible();
@@ -355,13 +366,15 @@ for (const phone of [false, true]) {
       await expect(page).toHaveURL(/\/simple\/roadmap\?roadmap=/);
       const approval = page.getByTestId("draft-approval");
       await expect(approval).toContainText(/Alerts roadmap version \d+ is waiting for your approval/);
-      await expect.poll(() => shownCount(page, phone)).toBeGreaterThan(0);
-      const shown = await shownCount(page, phone);
-      // The reviewer's approval alone does not publish it: the decider's is still to come.
+      // One Approve, on the line that says what waits.
+      await expect(page.getByTestId("draft-banner").getByRole("button", { name: "Approve", exact: true })).toHaveCount(1);
+      await expect.poll(() => approvalCount(page, phone)).toBeGreaterThan(0);
+      const shown = await approvalCount(page, phone);
+      // The reviewer's is the last approval: it publishes the version.
       await tap(approval.getByRole("button", { name: "Approve" }));
-      await expect(page.getByText("Approved: it waits for the other approvals")).toBeVisible();
+      await expect(page.getByText("Approved: Alerts roadmap is published")).toBeVisible();
       // The counts drop at once, on the page where it was approved.
-      await expect.poll(() => shownCount(page, phone)).toBe(shown - 1);
+      await expect.poll(() => approvalCount(page, phone)).toBe(shown - 1);
 
       await page.goto("/inbox");
       await expect(page.getByTestId("inbox-needs")).toBeVisible();
@@ -370,27 +383,11 @@ for (const phone of [false, true]) {
       await expect(page.getByTestId("home-needs")).toBeVisible();
       await expect.poll(() => homeCounts(page)).toEqual({ approvals: before.approvals - 1, proposals: before.proposals });
 
-      // The decider (the owner, who sent it) has it waiting in their Inbox too.
+      // The decider approved it first: nothing of it waits in their Inbox.
       await switchTo(page, ADMIN.email);
-      const ownerCount = await openInboxFromRail(page, phone);
-      const mine = page.getByRole("row").filter({ has: page.getByTestId("simple-approval-context") });
-      await expect(mine).toHaveCount(1);
-      await expect(mine).toContainText(/Alerts roadmap version \d+/);
-      expect(await waiting(page)).toBe(ownerCount);
-      await tap(mine.getByRole("link", { name: /^Open Alerts roadmap version \d+ to approve it$/ }));
-      await expect(page).toHaveURL(/\/simple\/roadmap\?roadmap=.*approve=/);
-      const decide = page.getByTestId("draft-approval");
-      await expect(decide).toContainText(/Alerts roadmap version \d+ is waiting for your approval/);
-      await expect.poll(() => shownCount(page, phone)).toBeGreaterThan(0);
-      const ownerShown = await shownCount(page, phone);
-      await tap(decide.getByRole("button", { name: "Approve" }));
-      await expect(page.getByText("Approved: Alerts roadmap is published")).toBeVisible();
-      await expect.poll(() => shownCount(page, phone)).toBe(ownerShown - 1);
-
       await page.goto("/inbox");
       await expect(page.getByTestId("inbox-needs")).toBeVisible();
       await expect(page.getByRole("row").filter({ has: page.getByTestId("simple-approval-context") })).toHaveCount(0);
-      await expect.poll(() => waiting(page).catch(() => 0)).toBe(ownerCount - 1);
     });
   });
 }
