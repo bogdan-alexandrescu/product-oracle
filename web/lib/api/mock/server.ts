@@ -552,6 +552,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * duplicate, both kept by one older call that answers the two;
  * "scope-review-questions" as "scope-review" with the agents asking eleven questions at the
  * first run's feature set (AQ1's hard case, ./agent-questions.ts);
+ * "scope-review-other-prd" as "scope-review" with the first run's Address lookup needing
+ * another PRD's feature on the company roadmap (needs_other_prd, to confirm);
  * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
  * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting);
  * "unknown-work" as "before-drafting" with its critical Blockers question still asked of the
@@ -1931,9 +1933,9 @@ function seedSimpleWaits(): Db {
 }
 
 /** C7 "scope-review": the default seed plus three runs at their feature set (./runs.ts seedScopeReviewRuns). */
-function seedScopeReview(kept = false, manyQuestions = false): Db {
+function seedScopeReview(kept = false, manyQuestions = false, otherPrd = false): Db {
   const db = seed();
-  seeded("scope-review", () => seedScopeReviewRuns(db.runs!, runsContext(db), kept, manyQuestions));
+  seeded("scope-review", () => seedScopeReviewRuns(db.runs!, runsContext(db), kept, manyQuestions, otherPrd));
   return db;
 }
 
@@ -3311,8 +3313,8 @@ function load(): Db {
             ? () => seedBaselineReview(scenario === "baseline-review-console")
           : scenario === "simple-waits"
             ? seedSimpleWaits
-          : scenario === "scope-review" || scenario === "scope-review-kept" || scenario === "scope-review-questions"
-            ? () => seedScopeReview(scenario === "scope-review-kept", scenario === "scope-review-questions")
+          : scenario === "scope-review" || scenario === "scope-review-kept" || scenario === "scope-review-questions" || scenario === "scope-review-other-prd"
+            ? () => seedScopeReview(scenario === "scope-review-kept", scenario === "scope-review-questions", scenario === "scope-review-other-prd")
           : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO || scenario === SHARED_DATE_SCENARIO || scenario === NOT_CLAIMS_SCENARIO || scenario === TWO_WAY_DATES_SCENARIO
             ? seedEngReview
           : scenario === "eng-check"

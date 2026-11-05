@@ -4864,9 +4864,15 @@ function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug
  * blocking row is open, so the approval is held). With `kept`, that row is also new and a likely
  * duplicate, both kept by one call staged before each reason had its own.
  */
-export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">, kept = false, manyQuestions = false) {
+export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">, kept = false, manyQuestions = false, otherPrd = false) {
   // Pick address in one step is new as well as low in confidence: one feature, two calls.
   const first = seedScopeRun(db, ctx, SCOPE_REVIEW_RUN, "saved-addresses", "2026-10-17T09:00:00Z", SCOPE_REVIEW_SET, 1, { "pick-address": ["new_feature"] });
+  if (otherPrd) {
+    // The owner, Nov 4: Address lookup needs Address verification, the Trust PRD's feature on the company roadmap.
+    first.scope.elsewhere = { "address-verification": "Address verification from Trust PRD" };
+    first.scope.features.find((f) => f.key === "address-lookup")!.depends_on = ["address-verification"];
+    recheckScope(db, first.scope);
+  }
   // AQ1: the analyst's and architect's questions at this stop; the hard case asks eleven.
   (db.agent_questions ??= {})[first.cp.id] = seedAgentQuestions(manyQuestions);
   const commenter = (ctx.members ?? []).find((x) => x.email === "commenter@example.com");
