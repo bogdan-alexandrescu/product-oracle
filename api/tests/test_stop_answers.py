@@ -605,10 +605,10 @@ def test_only_an_owner_or_due_tail_is_stripped_not_a_due_in_the_question():
 def test_a_short_question_one_word_apart_is_the_answered_one_but_not_reordered():
     # protects=a short answered question listed again with one word swapped is refused, a
     # question with its words in another order or one word longer imports; fails_when=
-    # "Which datastore should hold the audit trail?" or "... seven months?" imports after
-    # "Which database ..." / "... seven years?" were answered, or "Should B replace A in
-    # checkout flow?" is refused after "Should A replace B in checkout flow?"; no_claim=
-    # paraphrases.
+    # "Which datastore should hold the audit trail?" or "... seven yrs?" imports after
+    # "Which database ..." / "... seven years?" were answered, or "... seven months?" (another
+    # span) or "Should B replace A in checkout flow?" is refused after "... seven years?" /
+    # "Should A replace B in checkout flow?"; no_claim=paraphrases.
     answers = [
         _answered("Which database should hold the audit trail?"),
         _answered("Should we keep exports for seven years?"),
@@ -755,3 +755,55 @@ def test_same_question_reads_variants_both_ways():
     assert same("keep exports for seven yrs", "keep exports for seven years")
     assert same("keep exports for seven years", "keep exports for seven yrs")
     assert not same("keep exports for seven years", "keep exports for seven yards")
+
+
+# ------------------------------------------------------------------ review round 6
+
+
+def test_a_short_word_or_acronym_is_not_read_as_an_abbreviation():
+    # protects=a two-letter word or a real acronym is its own word, so a question one such
+    # word apart is a new question; fails_when="Should we email users about the outage?" is
+    # refused because "Should we email us about the outage?" was answered, or PM/platform,
+    # ms/mins, ms/months, SMS/systems, MRR/mirror, new/news, good/goods, custom/customs,
+    # us/uses; no_claim=paraphrases.
+    pairs = (
+        ("Should we email us about the outage?", "Should we email users about the outage?"),
+        ("Who should own the PM roadmap?", "Who should own the platform roadmap?"),
+        ("Is a wait of ten ms fine?", "Is a wait of ten mins fine?"),
+        ("Should we keep logs for two ms?", "Should we keep logs for two months?"),
+        ("Should we alert the team by SMS?", "Should we alert the team by systems?"),
+        ("Should the dashboard show the MRR?", "Should the dashboard show the mirror?"),
+        ("Should the home page show new items?", "Should the home page show news items?"),
+        ("Should the shop list good returns?", "Should the shop list goods returns?"),
+        ("Who reviews the custom forms weekly?", "Who reviews the customs forms weekly?"),
+        ("Which team sees us in reports?", "Which team sees uses in reports?"),
+    )
+    for asked, listed in pairs:
+        assert listed_open([_answered(asked)], _prd(f"- {listed}")) == [], listed
+        assert listed_open([_answered(listed)], _prd(f"- {asked}")) == [], asked
+
+
+def test_british_and_american_spellings_and_listed_abbreviations_are_one_word():
+    # protects=one word spelt the British or American way, or by a common abbreviation, is
+    # the answered question; fails_when="Should we cancel canceled orders at once?" imports
+    # after "... cancelled orders ..." was answered, or licence/license, centre/center,
+    # catalogue/catalog, travelling/traveling, grey/gray, enrol/enroll, mins/minutes,
+    # hrs/hours, wks/weeks, pw/password; no_claim=paraphrases.
+    refused = (
+        ("Should we refund cancelled orders at once?", "Should we refund canceled orders at once?"),
+        ("Who renews the licence for the team?", "Who renews the license for the team?"),
+        ("Which data centre should host the backups?", "Which data center should host the backups?"),
+        ("Who owns the product catalogue this year?", "Who owns the product catalog this year?"),
+        ("Should travelling staff get the new laptops?", "Should traveling staff get the new laptops?"),
+        ("Should the banner use a grey border?", "Should the banner use a gray border?"),
+        ("Can members enrol in the beta program?", "Can members enroll in the beta program?"),
+        ("Is a wait of ten mins fine?", "Is a wait of ten minutes fine?"),
+        ("Should we keep logs for two hrs?", "Should we keep logs for two hours?"),
+        ("Should we keep logs for two wks?", "Should we keep logs for two weeks?"),
+        ("Should we keep logs for two mths?", "Should we keep logs for two months?"),
+        ("Should the reset email include the pw?", "Should the reset email include the password?"),
+        ("Who reads the management report weekly?", "Who reads the mgmt report weekly?"),
+    )
+    for asked, listed in refused:
+        assert len(listed_open([_answered(asked)], _prd(f"- {listed}"))) == 1, listed
+        assert len(listed_open([_answered(listed)], _prd(f"- {asked}"))) == 1, asked
