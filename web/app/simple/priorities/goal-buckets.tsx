@@ -110,7 +110,7 @@ function Field({ label, children, error }: { label: string; children: ReactNode;
 type Fields = { title: string; measure: string; target: string; due: string };
 
 /** GB1 a: the goal's header turned into a small form, right where it sits. */
-export function GoalForm({ start, order, title, year, onSave, onCancel, mkOwner }: { start: Fields; order: number; title: string; year: string; onSave: (f: Fields & { day: string }) => Promise<void>; onCancel: () => void; mkOwner?: string }) {
+export function GoalForm({ start, order, title, year, onSave, onCancel, mkOwner }: { start: Fields; order: number; title: string; year: string; onSave: (f: Fields & { day: string }) => Promise<void>; onCancel: () => void; mkOwner?: string }) { // MOCK-HOOK
   const [f, setF] = useState<Fields>(start);
   const mkStore = useMkStore(); // MOCK-HOOK
   const [owner, setOwner] = useState(mkOwner !== undefined ? (mkStore.owners[mkOwner] ?? "") : ""); // MOCK-HOOK
@@ -326,7 +326,7 @@ export function FeatureRows({
 /** A goal's features as ArchiveDialog counts them: the plan's, or with no dated plan the bucket's. */
 export type GoalFeatures = (goal: string) => { code: string; name: string; slices: Plan["slices"] }[];
 
-export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive, verb, propose }: { goal: Goal; plan: Plan | null; featuresOf?: GoalFeatures; gb: Buckets; onClose: () => void; onArchive: (to: string | null) => Promise<void>; verb?: "Archive" | "Delete" | "Remove"; propose?: boolean }) {
+export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive, verb, propose }: { goal: Goal; plan: Plan | null; featuresOf?: GoalFeatures; gb: Buckets; onClose: () => void; onArchive: (to: string | null) => Promise<void>; verb?: "Archive" | "Delete"; propose?: boolean }) { // MOCK-HOOK
   const V = verb ?? "Archive"; // MOCK-HOOK
   const [mode, setMode] = useState<"move" | "none">("move");
   const [to, setTo] = useState("");
@@ -353,7 +353,7 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive, 
     <div data-backdrop="" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
       <div ref={ref} role="dialog" aria-modal="true" aria-label={`Archive ${goal.title}`} className="flex max-h-[88vh] w-full max-w-lg flex-col rounded-t-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg sm:rounded-[var(--simple-card-radius)]" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">{propose ? `Ask to ${V.toLowerCase()}` : V} {goal.title}?</h2> {/* MOCK-HOOK */}
-        {V !== "Archive" && <p className="mt-1 text-[15px] font-[650]">It goes to Trash, where an owner can bring it back for 30 days.</p>} {/* MOCK-HOOK */}
+        {V !== "Archive" && <p className="mt-1 text-[15px] font-[650]">It goes to Settings &gt; Trash for 30 days.</p>} {/* MOCK-HOOK */}
         <p className="mt-1 text-[15px] text-text2">
           {!plan
             ? list.length
@@ -419,7 +419,7 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive, 
               }
             }}
           >
-            {propose ? "Send to an approver" : `${V} goal`} {/* MOCK-HOOK */}
+            {propose ? "Send to the decider" : `${V} goal`} {/* MOCK-HOOK */}
           </button>
           <button type="button" className={BTN} onClick={onClose}>
             Cancel

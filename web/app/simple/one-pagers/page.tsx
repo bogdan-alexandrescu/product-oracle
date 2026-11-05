@@ -62,10 +62,10 @@ export default function OnePagers() {
           // qa-simple-prd-42: the status sits beside its title, rows are ruled, each says when it changed.
           // qa-simple-prd-p3-29: the whole row opens the one-pager, as its hover says: the title's
           // link stretches over the row (one link still, its name the title).
-          <>
+          <> {/* MOCK-HOOK */}
           <PrdNote /> {/* MOCK-HOOK */}
           {picked && ( // MOCK-HOOK
-            <div data-testid="mk-select-bar" className="sticky top-2 z-20 mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-accent bg-accent-soft px-3 py-2 text-[15px]"> {/* MOCK-HOOK */}
+            <div data-testid="mk-select-bar" className="sticky top-2 z-20 max-[600px]:top-[calc(var(--phone-top-bar)+8px)] mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-accent bg-accent-soft px-3 py-2 text-[15px]"> {/* MOCK-HOOK */}
               <strong className="mr-auto">{picked.length ? `${picked.length} selected` : "Pick PRDs"}</strong> {/* MOCK-HOOK */}
               <button type="button" disabled={!picked.length} className="inline-flex h-8 items-center rounded-lg border border-line-strong bg-surface px-3 font-semibold disabled:opacity-50" onClick={() => setAsk({ slugs: picked, titles: picked.map((x) => rows.find((r) => r.slug === x)?.title ?? x), verb: "archive" })}>{access === "propose" ? "Ask to archive" : "Archive"}</button> {/* MOCK-HOOK */}
               <button type="button" disabled={!picked.length} className="inline-flex h-8 items-center rounded-lg border border-line-strong bg-surface px-3 font-semibold text-warn disabled:opacity-50" onClick={() => setAsk({ slugs: picked, titles: picked.map((x) => rows.find((r) => r.slug === x)?.title ?? x), verb: "delete" })}>{access === "propose" ? "Ask to delete" : "Delete"}</button> {/* MOCK-HOOK */}
@@ -89,7 +89,7 @@ export default function OnePagers() {
             ))}
           </ul>
           {ep && <ArchivedPrds access={access} fold={ep !== "b"} />} {/* MOCK-HOOK */}
-          </>
+          </> // MOCK-HOOK
         )}
       </SimpleSection>
       {ask && access !== "read" && ( // MOCK-HOOK

@@ -1,12 +1,12 @@
 {
  "title": "Goals and PRDs: every field, add, archive and delete in Simple",
- "subtitle": "Pick how a goal's owner is set and how goals and PRDs are archived, restored and deleted in Simple. Deleting always goes to Trash.",
+ "subtitle": "Pick how a goal's owner is set and how goals and PRDs are archived, restored and deleted in Simple. Deleting always goes to Settings > Trash.",
  "decisions": [
   {
    "code": "EG1",
    "name": "Goal owner, archive, restore and delete",
    "question": "How are a goal's owner and other fields edited, and how do archive, restore and delete look on Goal buckets?",
-   "common": "Every proposal shows each goal's owner under its measure, keeps the archive question that asks where the goal's features go, sends a delete to Trash for 30 days with Undo, and gates every control through can(): approvers and owners change, a commenter asks an approver, a viewer only reads.",
+   "common": "Every proposal shows each goal's owner under its measure, keeps the archive question that asks where the goal's features go, and sends a delete to Settings > Trash for 30 days, where it can be restored. The decider changes; an approver who is not the decider, or a commenter, asks the decider; a viewer only reads.",
    "proposals": [
     {
      "letter": "a",
@@ -39,7 +39,7 @@
       },
       {
        "file": "frames/eg1-a-delete.html",
-       "caption": "Delete on an archived goal asks once more and says it goes to Trash for 30 days."
+       "caption": "Delete on an archived goal asks once more and says it goes to Settings > Trash for 30 days."
       },
       {
        "file": "frames/eg1-a-hard.html",
@@ -55,7 +55,7 @@
       },
       {
        "file": "frames/eg1-a-propose.html",
-       "caption": "A commenter's menu reads Ask to archive and Ask to delete; an approver decides."
+       "caption": "An approver who is not the decider, like a commenter, gets Ask to archive and Ask to delete; the ask goes to the decider."
       },
       {
        "file": "frames/eg1-a-readonly.html",
@@ -67,9 +67,9 @@
      "letter": "b",
      "name": "One goal sheet",
      "recommended": false,
-     "what": "The pencil opens a goal sheet at the side with every field: goal, measure, target, date and owner, and the order as a note behind an (i). Archive and Delete sit at the sheet's foot. A 'Show archived goals' box puts archived goals back in the grid as greyed buckets with Restore.",
+     "what": "The pencil opens a goal sheet at the side with every field: goal, measure, target, date and owner, and the order as a note behind an (i). Archive and Delete sit at the sheet's foot. A 'Show archived goals' box puts archived goals back in the grid as greyed buckets with Restore and Delete.",
      "plus": "One place for every field, ready for more fields later; archived goals are seen in full, where they used to sit.",
-     "cost": "Replaces the in-place form people picked (GB1 a); the sheet covers the buckets while editing; with the box on, archived goals push live ones and the No goal bucket further down.",
+     "cost": "Replaces the in-place goal form people picked for Goal buckets; the sheet covers the buckets while editing; with the box on, archived goals push live ones and the No goal bucket further down.",
      "frames": [
       {
        "file": "frames/eg1-b-rest.html",
@@ -85,7 +85,15 @@
       },
       {
        "file": "frames/eg1-b-result.html",
-       "caption": "Done, with Undo; with the box on, Growth shows greyed with the other archived goals and Restore."
+       "caption": "Done, with Undo; with the box on, Growth shows greyed with the other archived goals, each with Restore and Delete."
+      },
+      {
+       "file": "frames/eg1-b-delete.html",
+       "caption": "Delete on an archived goal asks once more: it goes to Settings > Trash for 30 days."
+      },
+      {
+       "file": "frames/eg1-b-deleted.html",
+       "caption": "Done: the note says it is in Settings > Trash for 30 days."
       },
       {
        "file": "frames/eg1-b-hard.html",
@@ -101,7 +109,7 @@
       },
       {
        "file": "frames/eg1-b-propose.html",
-       "caption": "A commenter's sheet: Send for approval, Ask to archive, Ask to delete."
+       "caption": "An approver who is not the decider, like a commenter, gets Send for approval, Ask to archive and Ask to delete."
       },
       {
        "file": "frames/eg1-b-readonly.html",
@@ -111,11 +119,11 @@
     },
     {
      "letter": "c",
-     "name": "Owner chip, Remove",
+     "name": "Owner chip",
      "recommended": false,
-     "what": "Each goal's owner is a chip that opens a people picker right on the bucket. Archive and delete become one 'Remove goal', which asks where the features go and sends the goal to Trash. There is no archived list in Simple: Undo, or Trash in Detailed, brings it back.",
-     "plus": "Fewest words and choices: one way out, one way back; changing the owner is a single click.",
-     "cost": "No way to park a goal and see it later in Simple; a removed goal is restored only from Detailed's Trash after the Undo note goes; a chip on every bucket adds weight to each header.",
+     "what": "Each goal's owner is a chip that opens a people picker right on the bucket. The rest is as in a: the ⋯ menu has Edit goal, Archive goal and Delete goal, and archived goals collect in the 'Archived goals' fold with Restore and Delete.",
+     "plus": "Changing the owner is a single click, with no form to open; archive, restore and delete work as in a.",
+     "cost": "A chip on every bucket adds weight to each header; the owner is set apart from the goal's other fields, which stay in the form.",
      "frames": [
       {
        "file": "frames/eg1-c-rest.html",
@@ -127,15 +135,15 @@
       },
       {
        "file": "frames/eg1-c-mid.html",
-       "caption": "After picking Hana Sato, Remove Growth asks where its features go and says it goes to Trash."
+       "caption": "After picking Hana Sato, Archive Growth from its ⋯ menu asks where its features go, as in a."
       },
       {
        "file": "frames/eg1-c-result.html",
-       "caption": "Done: Growth is gone and the note says it is in Trash for 30 days, with Undo."
+       "caption": "Done, with Undo: Growth tops the opened 'Archived goals' fold, with Restore and Delete."
       },
       {
        "file": "frames/eg1-c-hard.html",
-       "caption": "Hard case: removing a goal of 15 features; Remove stays off until a goal is picked (1440)."
+       "caption": "Hard case: deleting a goal of 15 features; Delete stays off until a goal is picked (1440)."
       },
       {
        "file": "frames/eg1-c-hard-1512.html",
@@ -147,7 +155,11 @@
       },
       {
        "file": "frames/eg1-c-propose.html",
-       "caption": "A commenter's picker: the pick goes to an approver."
+       "caption": "An approver who is not the decider: the picker's pick asks the decider."
+      },
+      {
+       "file": "frames/eg1-c-ask.html",
+       "caption": "A commenter's ⋯ menu: Ask to archive and Ask to delete, sent to the decider."
       },
       {
        "file": "frames/eg1-c-readonly.html",
@@ -161,7 +173,7 @@
    "code": "EP2",
    "name": "Archive and delete a PRD",
    "question": "Where is a PRD archived or deleted in Simple, and how does its confirm read?",
-   "common": "Every proposal asks before acting, says how many of the PRD's features are on the roadmap and in which milestones, and lets the person keep them on the roadmap with no PRD or take them off too. Delete goes to Trash for 30 days; archive can be restored. Only those can('delete_document') allows act; a commenter sends the ask to an owner; a viewer sees no control.",
+   "common": "Every proposal asks before acting, says how many of the PRD's features are on the roadmap and in which milestones, and lets the person keep them on the roadmap with no PRD or take them off too. Delete goes to Settings > Trash for 30 days; archive can be restored. Only people allowed to delete PRDs can act; a commenter sends the ask to an owner; a viewer sees no control.",
    "proposals": [
     {
      "letter": "a",
@@ -190,7 +202,7 @@
       },
       {
        "file": "frames/ep2-a-delete.html",
-       "caption": "Delete on another PRD: it goes to Trash; taking its features off says the milestones' dates are worked out again."
+       "caption": "Delete on another PRD: it goes to Settings > Trash; the (i) beside taking its features off says the milestones' dates are worked out again."
       },
       {
        "file": "frames/ep2-a-hard.html",
@@ -206,7 +218,7 @@
       },
       {
        "file": "frames/ep2-a-propose.html",
-       "caption": "A commenter's ask: Send to an owner; nothing changes until then."
+       "caption": "A commenter's ask: Send to an owner."
       },
       {
        "file": "frames/ep2-a-readonly.html",
@@ -232,7 +244,7 @@
       },
       {
        "file": "frames/ep2-b-mid.html",
-       "caption": "Archive asks; 'Take them off the roadmap too' picked, and says what that does to the milestones."
+       "caption": "Archive asks; 'Take them off the roadmap too' picked, with an (i) for what that does to the milestones."
       },
       {
        "file": "frames/ep2-b-result.html",
@@ -256,7 +268,7 @@
       },
       {
        "file": "frames/ep2-b-propose.html",
-       "caption": "A commenter's menu: Ask to archive, Ask to delete."
+       "caption": "A commenter's menu: Ask to archive, Ask to delete; the hint under Start a review meeting steps aside while it is open."
       },
       {
        "file": "frames/ep2-b-readonly.html",
@@ -298,7 +310,7 @@
       },
       {
        "file": "frames/ep2-c-phone.html",
-       "caption": "Phone: Select on, two PRDs ticked."
+       "caption": "Phone: Select on, two PRDs ticked; the bar sticks under the top bar."
       },
       {
        "file": "frames/ep2-c-propose.html",
@@ -307,6 +319,10 @@
       {
        "file": "frames/ep2-c-readonly.html",
        "caption": "A viewer's list: no Select."
+      },
+      {
+       "file": "frames/ep2-c-page.html",
+       "caption": "The cost: on the one-pager itself there is no ⋯, so it cannot be archived or deleted there."
       }
      ]
     }
