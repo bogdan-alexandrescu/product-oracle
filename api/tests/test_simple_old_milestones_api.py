@@ -244,3 +244,98 @@ async def test_a_prd_milestone_moves_only_when_its_prd_is_off_the_company_roadma
             assert (await s.get(TrackMilestone, i)).carried_to_id == copies[0].id
     names = {r.name for r in await company_rows(ctx, ids["company"])}
     assert "Read from its plan" not in names
+
+
+async def test_a_twin_is_kept_through_its_first_copy(client):
+    """The same PRD milestone on a second older roadmap, none of its items left: Keep or Drop
+    by either copy's id answers both (the web may send either)."""
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        sd = Seed(s)
+        gone = await sd.doc("paper-maps-prd")
+        other = await sd.doc("paper-maps", "roadmap")
+        rows = [
+            TrackMilestone(track_id=None, roadmap_id=rid, origin_prd_id=gone.id, code="M1",
+                           name="Posters out", target_date=date(2026, 12, 11),
+                           item_ids=[uuid.uuid4()])
+            for rid in (ids["old"], other.id)
+        ]  # fmt: skip
+        s.add_all(rows)
+        await s.commit()
+        first, twin = sorted((r.id for r in rows), key=str)
+    listed = [m["id"] for m in (await read(client, ctx))["old_milestones"]["needs_call"]]
+    waiting = next(i for i in (first, twin) if str(i) in listed)
+    other_id = twin if waiting == first else first
+    r = await client.post(f"{ROADMAP}/milestones/{other_id}/keep", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert "Posters out" not in [m["name"] for m in r.json()["old_milestones"]["needs_call"]]
+    copies = [r for r in await company_rows(ctx, ids["company"]) if r.name == "Posters out"]
+    assert len(copies) == 1
+    async with tenant_session(ctx.tenant_id) as s:
+        for i in (first, twin):
+            assert (await s.get(TrackMilestone, i)).carried_to_id == copies[0].id
+
+
+class _Reads:
+    """Counts the statements run while it is open."""
+
+    def __enter__(self):
+        from sqlalchemy import event
+        from sqlalchemy.engine import Engine
+
+        self.n = 0
+        self._event, self._engine = event, Engine
+        event.listen(Engine, "before_cursor_execute", self._count)
+        return self
+
+    def _count(self, *args, **kwargs):
+        self.n += 1
+
+    def __exit__(self, *exc):
+        self._event.remove(self._engine, "before_cursor_execute", self._count)
+
+
+async def test_the_preview_is_a_bounded_read(client):
+    """The roadmap read previews old milestones in a few statements however many there are,
+    and in fewer once nothing is left to bring (a feeding PRD's milestone, read from its
+    plan, never is)."""
+    from types import SimpleNamespace
+
+    from oracle.simple import old_milestones
+
+    owner = SimpleNamespace(role="owner", user_id=None)
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        with _Reads() as few:
+            await old_milestones.preview(s, owner)
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add_all(
+            TrackMilestone(track_id=None, roadmap_id=ids["old"], goal_id=ids["goal"],
+                           code=f"M{9 + n}", name=f"Extra {n}", target_date=date(2026, 12, 20),
+                           item_ids=[uuid.uuid4()])
+            for n in range(5)
+        )  # fmt: skip
+        await s.commit()
+    async with tenant_session(ctx.tenant_id) as s:
+        with _Reads() as many:
+            view = await old_milestones.preview(s, owner)
+    assert len(view.needs_call) == 6
+    assert many.n == few.n <= 8, (few.n, many.n)
+
+    async with tenant_session(ctx.tenant_id) as s:
+        feeding = await s.scalar(select(Document).where(Document.slug == "trail-app-prd"))
+        s.add(TrackMilestone(track_id=None, roadmap_id=ids["old"], origin_prd_id=feeding.id,
+                             code="M1", name="Read from its plan", target_date=date(2026, 12, 1)))  # fmt: skip
+        await s.commit()
+    r = await client.post(CARRY, headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    for m in r.json()["old_milestones"]["needs_call"]:
+        r = await client.post(f"{ROADMAP}/milestones/{m['id']}/drop", headers=ctx.as_("owner"))
+        assert r.status_code == 200, r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        with _Reads() as none_left:
+            view = await old_milestones.preview(s, owner)
+    assert view.moves == [] and view.needs_call == []
+    assert none_left.n <= 3, none_left.n
