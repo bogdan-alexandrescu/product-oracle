@@ -356,6 +356,9 @@ test("an approver's proposed Remove the dependency says who it waits for and is 
   await expect(name).toHaveCSS("color", accent);
   await name.click();
   await expect(page.getByTestId("floating-card")).toContainText(dependent);
+  // The feature panel closes (Escape) before the account menu is used: its backdrop covers the rail.
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("feature-panel-backdrop")).toHaveCount(0);
   // The person it waits for reads "waits for you", on the strip and in Needs a decision.
   await signOut(page);
   await login(page);
