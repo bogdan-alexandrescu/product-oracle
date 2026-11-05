@@ -1,5 +1,8 @@
 "use client";
 
+import { TracksMk } from "@/components/simple/mk/TracksMk"; // MOCK-HOOK
+import { MoveDone, mkMoved } from "@/components/simple/mk/MoveMk"; // MOCK-HOOK
+import { mk, useMkMode } from "@/components/simple/mk/mk"; // MOCK-HOOK
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -721,8 +724,9 @@ export function SimpleRoadmap() {
   // A link may open the roadmap filtered to one PRD (the plan strip's rows: ?prd=<slug>)
   // or to one roadmap (?roadmap=<id or slug>).
   const params = useSearchParams();
-  const [f, setF] = useState<Filters>(() => ({ ...NO_FILTERS, prd: params.get("prd") ?? "", roadmap: params.get("roadmap") ?? "", goal: params.get("goal") ?? "" }));
-  const [format, setFormat] = useState<Format>("timeline");
+  const [f, setF] = useState<Filters>(() => ({ ...NO_FILTERS, ...(mk("et") || mk("em") === "c" ? { group: "track" as Lane } : {}), prd: params.get("prd") ?? "", roadmap: params.get("roadmap") ?? "", goal: params.get("goal") ?? "" })); // MOCK-HOOK (group by track)
+  const [format, setFormat] = useState<Format>(mk("et") || mk("em") === "c" ? "gantt" : "timeline"); // MOCK-HOOK
+  const mkMode = useMkMode(); // MOCK-HOOK
   const [unit, setUnit] = useState<GanttUnit>("week");
   const [card, setCard] = useState<{ id: string; left: number; top: number } | null>(null);
   const [pop, setPop] = useState<{ id: string; left: number; top: number; above: number } | null>(null);
@@ -908,7 +912,7 @@ export function SimpleRoadmap() {
   };
 
   // The filters' choices: every PRD, goal and track seen, so narrowing keeps the others.
-  const data = roadmap.data;
+  const data = mkMoved(roadmap.data, mkMode); // MOCK-HOOK
   // roadmap-gantt: the rows' lanes, and the plans' no-work weeks (each PRD with planned items).
   const laned = useMemo(() => (data ? oneLane(lanes(data, f.group), f.group) : null), [data, f.group]);
   // The Timeline always draws goal lanes, the same groups the goal cards count.
@@ -1326,6 +1330,8 @@ export function SimpleRoadmap() {
           {pickers}
         </div>
       )}
+      {mk("et") && <TracksMk mode={mkMode} phone={phone} />} {/* MOCK-HOOK */}
+      <MoveDone /> {/* MOCK-HOOK */}
       {/* The Timeline always draws its rows under their goal (rowsOf), so it offers no Group by. */}
       {format !== "timeline" && (
       <span className="flex max-w-full min-w-0 flex-wrap items-center gap-1.5 text-sm text-text2">

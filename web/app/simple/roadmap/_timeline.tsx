@@ -1,5 +1,7 @@
 "use client";
 
+import { mkTrackTitle, TrackAddHook, TrackLaneHook } from "@/components/simple/mk/TracksMk"; // MOCK-HOOK
+import { TrackDropHook } from "@/components/simple/mk/MoveMk"; // MOCK-HOOK
 import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
 import { memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
@@ -661,6 +663,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
         {/* fix4 qa-simple-roadmap-34: the grouping as the Group by names it ("PRD", "Goal"), not in capitals. */}
         <div style={{ height: l.top }} className="flex items-end px-3 pb-1.5 text-xs font-semibold text-text2">
           {LANE_WORDS[lane]}
+          {lane === "track" && <TrackAddHook />} {/* MOCK-HOOK */}
         </div>
         {l.rows.map((r, n) =>
           r.kind === "group" ? (
@@ -670,8 +673,9 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               data-add-where={dropTargets && lane === "goal" && !r.below && goalLane(r.key) ? whereAttr("goal", r.key) : undefined}
               data-add-label={r.title}
               style={{ height: l.hs[n] }}
-              className={`flex min-w-0 flex-col justify-center bg-surface2 px-3 ${r.below ? "text-text2" : ""}`}
+              className={`relative flex min-w-0 flex-col justify-center bg-surface2 px-3 ${r.below ? "text-text2" : ""}`} // MOCK-HOOK (relative)
             >
+              {lane === "track" && !r.below && <TrackLaneHook title={r.title} />} {/* MOCK-HOOK */}
               {gantt ? (
                 // D: the goal's name and, under it, its metric. The row's height must fit both
                 // lines (finding 6): a phone's tighter leading keeps the subtitle from being
@@ -679,7 +683,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                 <>
                   <span className={`truncate font-semibold ${compact ? "text-sm leading-[16px]" : "text-[15px] leading-[18px]"}`} title={r.title}>
                     <GoalNum n={laneNum(r)} />
-                    {r.title}
+                    {lane === "track" ? mkTrackTitle(r.title) : r.title} {/* MOCK-HOOK */}
                   </span>
                   {r.metric && (
                     <span className={`truncate text-text2 ${compact ? "text-[11px] leading-[13px]" : "text-xs leading-[15px]"}`} data-testid="group-metric" title={r.metric}>
@@ -692,7 +696,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                   <span className={`flex min-w-0 items-baseline ${wrapRows ? "flex-wrap gap-x-2" : "gap-2"}`}>
                     <span className={`${wrapRows ? "min-w-0 break-words" : "truncate"} font-semibold ${compact ? "text-sm leading-[16px]" : "text-[15px] leading-tight"}`} title={r.title}>
                       <GoalNum n={laneNum(r)} />
-                      {r.title}
+                      {lane === "track" ? mkTrackTitle(r.title) : r.title} {/* MOCK-HOOK */}
                     </span>
                     {r.count != null && !r.below && (
                       <span className="tnum flex-none text-xs text-text2" data-testid="lane-count">
@@ -754,6 +758,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
             </div>
           ),
         )}
+        {lane === "track" && <TrackDropHook />} {/* MOCK-HOOK */}
       </div>
       <div ref={box} className="relative min-w-0 flex-1 overflow-x-auto" data-testid="chart-scroll">
         <div className="relative" style={{ width: chartW, height: l.height }}>

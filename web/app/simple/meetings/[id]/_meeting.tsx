@@ -23,6 +23,8 @@ import { DeliveryLine, emailWords, slackWords } from "../_delivery";
 import { DecidedItem, LINK, momentWords } from "../_flow";
 import { DraftDates } from "./_draft";
 import { SimpleSelect } from "@/components/simple/meetings/SimpleSelect";
+import { AgendaMk } from "@/components/simple/mk/AgendaMk"; // MOCK-HOOK
+import { mk, useMkMode } from "@/components/simple/mk/mk"; // MOCK-HOOK
 
 // Chat actions (notes, open questions, the agenda's next and skipped items): optional until schema.d.ts carries them.
 type Meeting = Schemas["SimpleMeetingOut"] & { notes?: MeetingNote[]; agenda?: MeetingAgenda };
@@ -183,6 +185,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const name = namer(m);
   const { me, can } = useMe();
   const phone = usePhone();
+  const mkMode = useMkMode(); // MOCK-HOOK
   // walkc-meeting r2 (5a): an invited attendee has not joined until they press Join.
   const joined = m.attendees.some((a) => a.id === me?.user_id && a.joined);
   // qa-simple-decide-2: Approve says what it approves (the one-pager's edits in this meeting); none: no button.
@@ -368,7 +371,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
           )}
         </div>
       )}
-      <AgendaStrip agenda={m.agenda} />
+      {mk("ea") ? <AgendaMk mode={m.can.change ? mkMode : "read"} phone={phone} /> : <AgendaStrip agenda={m.agenda} />} {/* MOCK-HOOK */}
       <div className="grid flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         {/* qa-simple-decide-49: the app has the one <main>; the stage is a section. */}
         <section aria-label="Stage" className="min-w-0">

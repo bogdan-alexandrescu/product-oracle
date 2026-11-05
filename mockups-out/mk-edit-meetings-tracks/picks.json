@@ -1,0 +1,411 @@
+{
+ "title": "Meeting agenda items, tracks, and moving a feature to another roadmap",
+ "subtitle": "Three decisions so every agenda item, track and a feature's PRD and track can be changed in Simple",
+ "decisions": [
+  {
+   "code": "ea",
+   "name": "Meeting agenda items",
+   "question": "How does a person add, rename, reorder and remove agenda items in a live review meeting?",
+   "common": "Items are the PRD's features or a typed topic; done and current items stay fixed; a removed item goes to Trash with Undo; owners, approvers and the presenter change it, a commenter proposes (it waits for the presenter), a viewer reads; 'next' and 'skip' in the chat still work.",
+   "proposals": [
+    {
+     "letter": "a",
+     "name": "Edit the strip in place",
+     "recommended": false,
+     "what": "Edit agenda turns the strip under the attendees into an editable row: each item gets a drag handle and ×, a click on its name renames it, and + Add joins the end. Done closes it.",
+     "plus": "Nothing opens; the change happens where people already look.",
+     "cost": "A long agenda wraps into rows that push the stage down; small handles on a phone; no way to reorder by keyboard or set minutes.",
+     "frames": [
+      {
+       "file": "frames/ea-a-rest.html",
+       "caption": "At rest: the agenda strip lists every item in order, with Edit agenda at its end."
+      },
+      {
+       "file": "frames/ea-a-open.html",
+       "caption": "Edit agenda pressed: each item not yet done gets a drag handle and ×, and + Add joins the end."
+      },
+      {
+       "file": "frames/ea-a-mid.html",
+       "caption": "Mid-drag: Quiet hours for muted teams lifted and held before Mobile alert push; the blue line shows where it lands."
+      },
+      {
+       "file": "frames/ea-a-result.html",
+       "caption": "Done: Quiet hours is 3rd and renamed, Beta date sign-off added, Alert history export in Trash; one line says so, with Undo and Open Trash."
+      },
+      {
+       "file": "frames/ea-a-hard-1512.html",
+       "caption": "At 1512 with 13 items: the strip wraps to three rows and pushes the one-pager down; long names take a row each."
+      },
+      {
+       "file": "frames/ea-a-viewer.html",
+       "caption": "A viewer: the same strip with no Edit agenda; View only at its end."
+      },
+      {
+       "file": "frames/ea-a-propose.html",
+       "caption": "A commenter's same changes: the line says they wait for the presenter."
+      },
+      {
+       "file": "frames/ea-a-open-390.html",
+       "caption": "Phone 390, editing: the chips wrap down the screen; handles are small to hit."
+      }
+     ]
+    },
+    {
+     "letter": "b",
+     "name": "An agenda sheet",
+     "recommended": true,
+     "what": "The strip says Now, Next and Item 2 of 5, with Edit agenda. It opens the Agenda sheet: numbered rows with minutes, up and down arrows (and dragging), Rename in place, ×, and an Add box for a feature or a typed topic. On a phone it is a bottom sheet.",
+     "why": "It holds a long agenda without pushing the stage down, works the same on a phone, gives arrows for those who cannot drag, and has room for minutes and who added a topic.",
+     "plus": "Same sheet pattern as elsewhere; scales to many items.",
+     "cost": "One more step: the agenda is one click away instead of on the strip.",
+     "frames": [
+      {
+       "file": "frames/ea-b-rest.html",
+       "caption": "At rest: the strip says Now, Next and Item 2 of 5, with Edit agenda at its end."
+      },
+      {
+       "file": "frames/ea-b-open.html",
+       "caption": "Edit agenda opens the Agenda sheet: every item numbered, with its minutes, arrows, Rename and ×; done and current items are fixed."
+      },
+      {
+       "file": "frames/ea-b-mid.html",
+       "caption": "Mid-rename: item 4 renamed to Quiet hours by default in place, with Save and Cancel."
+      },
+      {
+       "file": "frames/ea-b-result.html",
+       "caption": "Done: the strip reads on; one line says Quiet hours moved up and renamed, Beta date sign-off added, Alert history export in Trash, with Undo and Open Trash."
+      },
+      {
+       "file": "frames/ea-b-hard-1512.html",
+       "caption": "At 1512 with 13 items: the sheet scrolls; the strip stays one line."
+      },
+      {
+       "file": "frames/ea-b-viewer.html",
+       "caption": "A viewer: See agenda opens the same sheet with no controls; View only in its head."
+      },
+      {
+       "file": "frames/ea-b-propose.html",
+       "caption": "A commenter's same changes: the line says they wait for the presenter."
+      },
+      {
+       "file": "frames/ea-b-open-390.html",
+       "caption": "Phone 390: the sheet rises from the bottom; arrows give a way to reorder without dragging."
+      }
+     ]
+    },
+    {
+     "letter": "c",
+     "name": "By chat only",
+     "recommended": false,
+     "what": "The strip lists the whole agenda; people change it by typing add, rename, move or remove in the meeting chat, and Oracle reads it back on a card to confirm.",
+     "plus": "No new controls; extends the 'next' and 'skip' people already use.",
+     "cost": "Each change needs the item's name typed right; hard to see how to do it; slow for several changes.",
+     "frames": [
+      {
+       "file": "frames/ea-c-rest.html",
+       "caption": "At rest: the strip lists the whole agenda; Change it in the chat, with an (i) that names the words to type."
+      },
+      {
+       "file": "frames/ea-c-open.html",
+       "caption": "Oracle's card under the strip, after one move typed in the chat: Do it or Cancel."
+      },
+      {
+       "file": "frames/ea-c-mid.html",
+       "caption": "Several changes typed at once: Oracle reads back the rename, the add and the removal to confirm."
+      },
+      {
+       "file": "frames/ea-c-result.html",
+       "caption": "Done: the agenda in its new order; one line says what changed, with Undo and Open Trash."
+      },
+      {
+       "file": "frames/ea-c-hard-1512.html",
+       "caption": "At 1512 with 13 items: the strip wraps to three rows; every change still needs the item's name typed right."
+      },
+      {
+       "file": "frames/ea-c-viewer.html",
+       "caption": "A viewer: the same strip, View only, no card."
+      },
+      {
+       "file": "frames/ea-c-propose.html",
+       "caption": "A commenter's same changes: the line says they wait for the presenter."
+      },
+      {
+       "file": "frames/ea-c-open-390.html",
+       "caption": "Phone 390: the strip wraps and the confirm card sits under it, far from the chat box below."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "et",
+   "name": "Tracks",
+   "question": "Where in Simple are tracks added, renamed, given an owner, paused, closed and moved to Trash?",
+   "common": "A track has a name, an owner, a state (active, paused, closed) and its PRD; Move to Trash is restorable with Undo; owners and approvers change, a commenter proposes (it waits for an approver), a viewer reads; Detailed's /plan track panel stays as is.",
+   "proposals": [
+    {
+     "letter": "a",
+     "name": "Menu on lane header",
+     "recommended": false,
+     "what": "On the Gantt grouped by track, each lane header has a ⋯ menu: Rename, Owner, Pause, Close, Move to Trash. + Add track sits at the head of the Track column.",
+     "plus": "Right where the track is drawn.",
+     "cost": "Only on the Gantt by track; paused, closed and empty tracks have no lane, so they cannot be reached; long names do not fit the 186-pixel header.",
+     "frames": [
+      {
+       "file": "frames/et-a-rest.html",
+       "caption": "At rest: the Gantt grouped by track; each lane header has a ⋯ and the Track column has + Add track."
+      },
+      {
+       "file": "frames/et-a-open.html",
+       "caption": "⋯ on Guided setup track: Rename, Owner, Pause, Close, Move to Trash."
+      },
+      {
+       "file": "frames/et-a-mid.html",
+       "caption": "Rename picked: the name becomes a field on the lane header, with Save and Cancel."
+      },
+      {
+       "file": "frames/et-a-result.html",
+       "caption": "Done: the lane reads Setup and onboarding; a note at the bottom says so, with Undo."
+      },
+      {
+       "file": "frames/et-a-hard-1512.html",
+       "caption": "At 1512, a long name: the 186-pixel lane header cannot show 'Admin console and team settings for large accounts'; paused, closed and empty tracks have no lane at all, so they cannot be reached here."
+      },
+      {
+       "file": "frames/et-a-viewer.html",
+       "caption": "A viewer: no ⋯ and no + Add track."
+      },
+      {
+       "file": "frames/et-a-propose.html",
+       "caption": "A commenter's rename: the note says it waits for an approver; the lane keeps its name."
+      },
+      {
+       "file": "frames/et-a-open-390.html",
+       "caption": "Phone 390: the Gantt's narrow lanes; the ⋯ sits on each lane header."
+      }
+     ]
+    },
+    {
+     "letter": "b",
+     "name": "A Tracks sheet",
+     "recommended": true,
+     "what": "A Tracks · N button with the roadmap's filters opens a sheet listing every track, paused, closed and empty ones too, with owner, state and feature count. A row opens to Name, Owner, State and Move to Trash; + Add track is in its head.",
+     "why": "Every track is reachable from any view, whatever is drawn, and the same sheet works on a phone.",
+     "plus": "One place for all tracks; long names wrap.",
+     "cost": "The change is made away from the lane it changes.",
+     "frames": [
+      {
+       "file": "frames/et-b-rest.html",
+       "caption": "At rest: a Tracks · 3 button sits with the roadmap's filters."
+      },
+      {
+       "file": "frames/et-b-open.html",
+       "caption": "The Tracks sheet: every track with its owner, features and state, paused ones too; Guided setup track open to change."
+      },
+      {
+       "file": "frames/et-b-mid.html",
+       "caption": "Mid-rename in the sheet: Setup and onboarding typed, with Save and Cancel; owner, state and Move to Trash under it."
+      },
+      {
+       "file": "frames/et-b-result.html",
+       "caption": "Done: the sheet and the lane read Setup and onboarding; a note says so, with Undo."
+      },
+      {
+       "file": "frames/et-b-hard-1512.html",
+       "caption": "At 1512 with 11 tracks: the sheet lists all of them, closed and empty ones too, and scrolls."
+      },
+      {
+       "file": "frames/et-b-viewer.html",
+       "caption": "A viewer: the same list, View only, no Change or + Add track."
+      },
+      {
+       "file": "frames/et-b-propose.html",
+       "caption": "A commenter's rename: the note says it waits for an approver."
+      },
+      {
+       "file": "frames/et-b-open-390.html",
+       "caption": "Phone 390: the Tracks sheet rises from the bottom; the same rows."
+      }
+     ]
+    },
+    {
+     "letter": "c",
+     "name": "A track panel",
+     "recommended": false,
+     "what": "A click on a lane header opens a track panel, like the feature panel: name, owner, state, PRD and its features, each changed in place, with Move to Trash. + Track sits with the filters.",
+     "plus": "Mirrors the one feature panel; lists the track's features.",
+     "cost": "Opened only from a lane that exists, so paused, closed and empty tracks cannot be opened; a panel for four fields.",
+     "frames": [
+      {
+       "file": "frames/et-c-rest.html",
+       "caption": "At rest: the Gantt grouped by track; a lane header is a button and + Track sits with the filters."
+      },
+      {
+       "file": "frames/et-c-open.html",
+       "caption": "Guided setup track clicked: its track panel with name, owner, state, PRD, its features and Move to Trash."
+      },
+      {
+       "file": "frames/et-c-mid.html",
+       "caption": "Mid-rename in the panel: Setup and onboarding typed, with Save and Cancel."
+      },
+      {
+       "file": "frames/et-c-result.html",
+       "caption": "Done: the lane reads Setup and onboarding; a note says so, with Undo."
+      },
+      {
+       "file": "frames/et-c-hard-1512.html",
+       "caption": "At 1512 with many tracks: the panel is the same, but only tracks with a lane can be opened; paused, closed and empty ones cannot."
+      },
+      {
+       "file": "frames/et-c-viewer.html",
+       "caption": "A viewer: the panel reads only, with one line saying who can change it."
+      },
+      {
+       "file": "frames/et-c-propose.html",
+       "caption": "A commenter's rename: the note says it waits for an approver."
+      },
+      {
+       "file": "frames/et-c-open-390.html",
+       "caption": "Phone 390: the track panel fills the screen."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "em",
+   "name": "Moving a feature",
+   "question": "How does a person move a feature to another PRD or track of the same roadmap?",
+   "common": "Links stay within the one roadmap; the feature keeps its dates, links and goal; owners and approvers move it, a commenter proposes (it waits for an approver), a viewer reads; Undo after a move.",
+   "proposals": [
+    {
+     "letter": "a",
+     "name": "Fields in the panel",
+     "recommended": true,
+     "what": "The feature panel's Details gets PRD and Track rows, changed in place like every other field: pick a PRD, then one of its tracks, then Save or Propose.",
+     "why": "It follows the rule that every field is changed in the one feature panel, so it works from every page that opens a feature, on a phone and by keyboard.",
+     "plus": "No new pattern to learn; read-only and propose states come free.",
+     "cost": "Two fields in an already long panel; the move is not seen on the chart until it is saved.",
+     "frames": [
+      {
+       "file": "frames/em-a-rest.html",
+       "caption": "At rest: Welcome video's panel; Details has PRD and Track rows like every other field."
+      },
+      {
+       "file": "frames/em-a-open.html",
+       "caption": "Track clicked: the PRD's tracks to pick from, the current one marked."
+      },
+      {
+       "file": "frames/em-a-mid.html",
+       "caption": "Welcome media track picked: Save or Cancel; one line says its dates, links and goal stay."
+      },
+      {
+       "file": "frames/em-a-result.html",
+       "caption": "Done: Track reads Welcome media track; a note says so, with Undo."
+      },
+      {
+       "file": "frames/em-a-hard-1512.html",
+       "caption": "At 1512, to another PRD: PRD set to Usage alerts lists that PRD's tracks only."
+      },
+      {
+       "file": "frames/em-a-viewer.html",
+       "caption": "A viewer: PRD and Track read as text; the panel says who can change it."
+      },
+      {
+       "file": "frames/em-a-propose.html",
+       "caption": "A commenter's move: the field says it waits for an approver; the note says Proposed."
+      },
+      {
+       "file": "frames/em-a-open-390.html",
+       "caption": "Phone 390: the full-screen panel; PRD and Track sit in Details like every field."
+      }
+     ]
+    },
+    {
+     "letter": "b",
+     "name": "A 'Move to' picker",
+     "recommended": false,
+     "what": "The panel's head names the PRD and track and has a Move to… button: a picker of every PRD with its tracks, then a confirm button.",
+     "plus": "The move reads as one clear action; all places in one list.",
+     "cost": "A second way to change a field the panel already shows; the picker grows with every PRD.",
+     "frames": [
+      {
+       "file": "frames/em-b-rest.html",
+       "caption": "At rest: the panel's head adds the PRD and track line and a Move to… button."
+      },
+      {
+       "file": "frames/em-b-open.html",
+       "caption": "Move to… opened: every PRD with its tracks, the current one marked now."
+      },
+      {
+       "file": "frames/em-b-mid.html",
+       "caption": "Welcome media track picked: one line says what stays, then Move to Welcome media track."
+      },
+      {
+       "file": "frames/em-b-result.html",
+       "caption": "Done: the head reads Guided setup · Welcome media track; a note says so, with Undo."
+      },
+      {
+       "file": "frames/em-b-hard-1512.html",
+       "caption": "At 1512 with five PRDs and their tracks: the picker scrolls."
+      },
+      {
+       "file": "frames/em-b-viewer.html",
+       "caption": "A viewer: no Move to…; the head still names the PRD and track."
+      },
+      {
+       "file": "frames/em-b-propose.html",
+       "caption": "A commenter's move: the note says it waits for an approver."
+      },
+      {
+       "file": "frames/em-b-open-390.html",
+       "caption": "Phone 390: the panel full screen; Move to… sits in its head."
+      }
+     ]
+    },
+    {
+     "letter": "c",
+     "name": "Drag between lanes",
+     "recommended": false,
+     "what": "On the Gantt grouped by track, a row is lifted and dropped on another lane; while dragging, every track, empty ones too, becomes a drop place.",
+     "plus": "Direct and quick on a big screen.",
+     "cost": "Only on the Gantt by track; no phone and no keyboard; a long drag on a tall chart; easy to drop by mistake.",
+     "frames": [
+      {
+       "file": "frames/em-c-rest.html",
+       "caption": "At rest: the Gantt grouped by track; rows can be lifted."
+      },
+      {
+       "file": "frames/em-c-open.html",
+       "caption": "Row lifted: the lanes take it, and the empty Welcome media track appears as a drop place under them."
+      },
+      {
+       "file": "frames/em-c-mid.html",
+       "caption": "Held over Welcome media track: it lights up; Let go to move."
+      },
+      {
+       "file": "frames/em-c-result.html",
+       "caption": "Done: Welcome video sits in its own Welcome media track lane; a note says so, with Undo."
+      },
+      {
+       "file": "frames/em-c-hard-1512.html",
+       "caption": "At 1512 the drop places sit below every lane: a long drag down the page, past the chart's end."
+      },
+      {
+       "file": "frames/em-c-viewer.html",
+       "caption": "A viewer: rows do not lift; there is nothing to drop on."
+      },
+      {
+       "file": "frames/em-c-propose.html",
+       "caption": "A commenter's drop: the note says it waits for an approver; the row stays."
+      },
+      {
+       "file": "frames/em-c-open-390.html",
+       "caption": "Phone 390: no dragging on a phone, so a feature cannot be moved here at all."
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -12,6 +12,7 @@
  * the other pages through FeaturePanelHost).
  */
 
+import { MoveRows, MoveTo, TrackLine } from "@/components/simple/mk/MoveMk"; // MOCK-HOOK
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ds";
@@ -728,6 +729,8 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
         {item.owner && item.confidence && <span aria-hidden>·</span>}
         {item.confidence && <span data-testid="fp-confidence">{confidenceWord(item.confidence)} confidence</span>}
         {clash && <span className="rounded-full bg-crit-bg px-2 py-px font-medium text-crit" data-testid="fp-clash-flag">Dates clash</span>}
+        <TrackLine item={item} /> {/* MOCK-HOOK */}
+        <MoveTo item={item} /> {/* MOCK-HOOK */}
       </p>
       {!canChange && (
         <p className="mt-2 rounded-lg bg-surface2 px-3 py-2 text-sm text-text2" data-testid="fp-read-only">
@@ -762,6 +765,7 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
           <Row label="Outcome">
             <Field label="Outcome" value={item.outcome ?? ""} shown={item.outcome ?? <span className="text-text2">Not written yet</span>} edit={canChange} multiline onSave={async (v) => (await act(`Changed the outcome of '${item.title}'`, { op: "edit_outcome", target: { item_id: item.id }, before: { outcome: item.outcome ?? null }, after: { outcome: v.trim() || null } }), null)} testId="fp-outcome" />
           </Row>
+          <MoveRows item={item} /> {/* MOCK-HOOK */}
           <Row label="Status">{statusWord(item.status)}</Row>
           <Row label="Owner">
             <Owner c={c} />
