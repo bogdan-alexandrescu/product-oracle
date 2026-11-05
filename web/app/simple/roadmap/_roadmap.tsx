@@ -1390,10 +1390,10 @@ export function SimpleRoadmap() {
       {phone && canChange && addable.length > 0 && <QuickAdd phone options={addOptions} verb={addVerb} onAdd={onAdd} target={target?.title ?? null} roadmaps={askRoadmap ? addable.map((r) => r.roadmap) : []} />}
       {decides && !blank && (
         // roadmap-decide: broken links (the same ones Home and the side menu count), dates to
-        // confirm, proposals and items pulled in, in this roadmap's working draft.
+        // confirm, proposals and items pulled in, in the chosen roadmap's working draft (else every roadmap's).
         <Button
           data-testid="needs-decision"
-          title="Broken links, dates to confirm, proposals and items pulled in, in this roadmap's working draft"
+          title={`Broken links, dates to confirm, proposals and items pulled in, ${f.roadmap ? "in this roadmap's working draft" : "in your roadmaps' working drafts"}`}
           onClick={() => setTray(true)}
           data-zero={waiting ? undefined : "true"}
           // fix4 qa-simple-roadmap-38: at 0 the button is muted (nothing waits), still opens the tray.
