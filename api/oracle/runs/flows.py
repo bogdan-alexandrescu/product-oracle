@@ -1665,8 +1665,8 @@ class PromptContext:
     # prd_to_roadmap: the approved PRD version the roadmap is built from.
     source: SourceContext | None = None
     # roadmap-plan-tables for any other roadmap draft (the feedback loop): what its plan
-    # tables are built from, (the items file's items, verified bases, the company queue, the items
-    # an approved version took off the plan)
+    # tables are built from, (the roadmap's latest items as an items file's, verified bases,
+    # the company queue, the items an approved version took off the plan)
     # (oracle.runs.service._loop_plan_inputs).
     loop_plan: (
         tuple[
@@ -1786,8 +1786,9 @@ def step_prompt(
     """The prompt of one agent step (``first``: the step that starts the attempt)."""
     r = ROLES[role]
     does = r.description.lower()
-    if role == "writer" and ctx.kind != "prd" and ctx.kind in KIND_NAMES:
-        # The feedback loop's writer of a roadmap (or another kind) writes that draft.
+    if role == "writer" and ctx.kind in KIND_NAMES:
+        # The writer writes the draft of the run's kind, named as people read it ("PRD",
+        # "roadmap"), in every flow.
         does = f"writes the {KIND_NAMES[ctx.kind]} draft"
     lines = [
         f"You are the {r.title.lower()} ({does}) in Product Oracle's "

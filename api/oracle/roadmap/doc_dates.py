@@ -1916,9 +1916,9 @@ def _where(mark: Mark, heading: str | None) -> str:
     return f"the heading {section}" if mark.line == 0 else f"{section}, line {mark.line}"
 
 
-def shown_day(day: date) -> str:
-    """A day as people read it (qa-docs-34): "Dec 15, 2026", never "2026-12-15"."""
-    return f"{day:%b} {day.day}, {day.year}"
+# A day as people read it (qa-docs-34): "Dec 15, 2026", never "2026-12-15"; the one
+# day-words helper.
+shown_day = company_time.calendar_day_with_year
 
 
 def shown(mark: Mark) -> str:

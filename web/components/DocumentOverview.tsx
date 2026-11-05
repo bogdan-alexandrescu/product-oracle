@@ -17,6 +17,7 @@ import {
   Chip,
   DataTable,
   Inspector,
+  Icon,
   InspectorRow,
   InspectorSection,
   LinkButton,
@@ -40,6 +41,7 @@ import { useScreenSubject } from "@/lib/screen-subject";
 import { NAMES_FAILED, useTemplateNames } from "@/lib/template-names";
 import { useQuery, type Query } from "@/lib/use-query";
 import { versionHref } from "@/lib/version-href";
+import { isDoneNotice, realWarnings, warningSentence } from "@/lib/warnings";
 import { RebuildSign } from "@/components/RebuildSign";
 
 /** A template or theme beside the title, by its name: a small hairline pill. */
@@ -76,11 +78,12 @@ type Warning = VersionSummary["warnings"][number];
  */
 export function warningText(w: Warning, headings: Map<string, string>): string {
   const keys = w.section_keys ?? [];
-  if (w.code !== "locked_section_changed" || keys.length === 0) return w.message;
+  const message = warningSentence(w.message);
+  if (w.code !== "locked_section_changed" || keys.length === 0) return message;
   const named = keys.flatMap((k) => headings.get(k) ?? []);
   const other = keys.length - named.length;
   const parts = other ? [...named, plural(other, named.length ? "other section" : "section")] : named;
-  return `${w.message} ${parts.join(", ")}`;
+  return `${message} ${parts.join(", ")}`;
 }
 
 function versionColumns(
@@ -112,9 +115,9 @@ function versionColumns(
             </Chip>
           )}
           {v.number === latest && <Chip kind="now">Latest</Chip>}
-          {v.warnings.length > 0 && (
-            <Chip kind="warn" title={v.warnings.map((w) => warningText(w, headings)).join("\n")}>
-              {plural(v.warnings.length, "warning")}
+          {realWarnings(v.warnings).length > 0 && (
+            <Chip kind="warn" title={realWarnings(v.warnings).map((w) => warningText(w, headings)).join("\n")}>
+              {plural(realWarnings(v.warnings).length, "warning")}
             </Chip>
           )}
         </span>
@@ -199,7 +202,7 @@ function VersionInspector({
         <InspectorRow value={<span data-testid="version-approved">{v.approved_at ? formatDateTime(v.approved_at) : "Not approved"}</span>}>
           Approved
         </InspectorRow>
-        <InspectorRow value={v.warnings.length ? plural(v.warnings.length, "warning") : "None"}>Warnings</InspectorRow>
+        <InspectorRow value={realWarnings(v.warnings).length ? plural(realWarnings(v.warnings).length, "warning") : "None"}>Warnings</InspectorRow>
         <InspectorRow value={formatDateTime(v.created_at)}>{made.date}</InspectorRow>
         {byName && (
           <InspectorRow
@@ -223,10 +226,18 @@ function VersionInspector({
         </InspectorSection>
       )}
       {v.warnings.length > 0 && (
+        // As the version page shows them: a note answered in full is done (green, with a check),
+        // and the amber cards are the warnings the Details row counts.
         <InspectorSection label="Warnings">
           <ul className="flex flex-col gap-2">
-            {v.warnings.map((w, i) => (
-              <li key={i} className="rounded-button bg-warn-bg px-3 py-2 text-sm text-warn">
+            {v.warnings.filter(isDoneNotice).map((w, i) => (
+              <li key={`done-${i}`} data-warning={w.code} data-state="done" className="flex items-center gap-x-2 rounded-button bg-pass-bg px-3 py-2 text-sm font-medium text-pass">
+                <Icon name="check" size={16} />
+                {warningText(w, headings)}
+              </li>
+            ))}
+            {realWarnings(v.warnings).map((w, i) => (
+              <li key={i} data-warning={w.code} className="rounded-button bg-warn-bg px-3 py-2 text-sm text-warn">
                 {warningText(w, headings)}
               </li>
             ))}

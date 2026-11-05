@@ -118,8 +118,9 @@ def engineering_plan(
     others: Iterable[dict[str, Any]] = (),
     kept: Iterable[dict[str, Any]] = (),
 ) -> EngineeringPlan:
-    """The run's engineering dates for each item of the items file and its milestones.
-    ``items``: the file's items as its check read them (``ItemsCheck.items``, from
+    """The run's engineering dates for each item and its milestones: the items file's, or
+    on the feedback loop the roadmap's latest items (as an items file's). ``items``: the
+    file's items as its check read them (``ItemsCheck.items``, from
     oracle.runs.roadmap.check_items_async, kept per text: the file is parsed once per step,
     never here); an unreadable or missing items file: no items. ``others``
     (one-roadmap-many-prds): the shared queue with this run's items in it

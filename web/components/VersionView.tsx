@@ -60,6 +60,7 @@ import { keyFromHash, sectionHref } from "@/lib/section-link";
 import { useLiveRefresh } from "@/lib/use-live-refresh";
 import { useQuery } from "@/lib/use-query";
 import { useViewportFit } from "@/lib/use-viewport-fit";
+import { isDoneNotice, realWarnings, warningSentence } from "@/lib/warnings";
 
 type Selection = { sectionKey: string; anchor: TextQuoteSelector; rect: PageRect };
 
@@ -925,7 +926,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   // date-warnings-honest: one date warning per date and item that lacks a basis (the API
   // counts them so); the header names how many dates and opens Plan › Dates filtered to them.
   const dateWarnings = warnings.filter((w) => w.code === "unverified_date");
-  const otherWarnings = warnings.length - dateWarnings.length;
+  // A send-back note answered in full is done, not a warning: the header does not count it.
+  const otherWarnings = realWarnings(warnings).filter((w) => w.code !== "unverified_date");
   const lackingDays = [...new Set(dateWarnings.map(warningDay).filter((d): d is string => !!d))];
   // The header counts dates, not date-and-item pairs: one date written for two items is one.
   const lackingCount = new Set(dateWarnings.map((w) => warningDay(w) ?? w.message)).size;
@@ -1206,10 +1208,26 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                 </span>
               )}
               {latest != null && n !== latest && <Chip kind="na">Earlier version</Chip>}
-              {otherWarnings > 0 && (
-                <Chip kind="warn">
-                  {otherWarnings} warning{otherWarnings === 1 ? "" : "s"}
-                </Chip>
+              {otherWarnings.length > 0 && (
+                // A button that opens its warnings on hover, a tap or the keyboard (a title opens nothing on a phone).
+                <InfoTip
+                  label="warnings"
+                  align="start"
+                  side="bottom"
+                  testId="version-warnings-chip"
+                  trigger={
+                    <Chip kind="warn">
+                      {otherWarnings.length} warning{otherWarnings.length === 1 ? "" : "s"}
+                    </Chip>
+                  }
+                >
+                  {/* Spans: the header's status sits in a <p>. */}
+                  <span className="flex flex-col gap-1.5">
+                    {otherWarnings.map((w, i) => (
+                      <span key={i}>{warningSentence(w.message)}</span>
+                    ))}
+                  </span>
+                </InfoTip>
               )}
               {dateWarnings.length > 0 && (
                 <Link href={datesHref(lackingDays)} data-testid="dates-lacking" className="inline-flex">
@@ -1389,10 +1407,16 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                 </Link>
               </p>
             )}
-            {warnings.map((w, i) => (
+            {warnings.filter(isDoneNotice).map((w, i) => (
+              <p key={i} role="status" data-warning={w.code} data-state="done" className="flex items-center gap-x-3 rounded-button bg-pass-bg px-3 py-2 text-sm font-medium text-pass">
+                <Icon name="check" size={16} />
+                {warningSentence(w.message)}
+              </p>
+            ))}
+            {realWarnings(warnings).map((w, i) => (
               <div key={i} role="status" data-warning={w.code} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn">
                 <Icon name="alert" size={16} />
-                <p className="min-w-0 flex-1 font-medium">{w.message}</p>
+                <p className="min-w-0 flex-1 font-medium">{warningSentence(w.message)}</p>
                 {/* #396: a date warning says to record a date basis on Plan › Dates (F3). */}
                 {w.code === "unverified_date" && (
                   <Link href={datesHref([warningDay(w)].filter((d): d is string => !!d))} className="font-medium underline underline-offset-2">
