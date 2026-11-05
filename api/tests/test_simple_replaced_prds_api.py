@@ -229,3 +229,39 @@ async def test_proposal_on_a_replaced_prds_item_leaves_simple_with_the_item(clie
     assert made[("read-replicas", "accepted")] in shown
     waiting = await _get(client, ctx, "/v1/simple/changes?status=proposed")
     assert [c["id"] for c in waiting] == [made[("report-button", "proposed")]]
+
+
+@pytest.mark.parametrize("own_track", [True, False])
+async def test_a_feature_added_after_a_replace_is_filed_under_a_current_prd(client, own_track):
+    """Re-review round 6: a feature added in Simple (add item, an accepted suggestion, the
+    chat's "Suggest a feature") took the roadmap's first track's PRD; once that PRD was
+    replaced the new item was filed under it and service.load left it out. It is filed under
+    the roadmap's first track of a current PRD, else the PRD that replaced the first one."""
+    from sqlalchemy import select
+
+    from oracle.roadmap.models import ProductTrack, RoadmapItem
+    from tests.test_one_roadmap_many_prds_api import world as company_world
+
+    ctx, ids = await company_world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(ProductTrack(prd_document_id=ids["scale"], current_version_id=ids["cv"],
+                           roadmap_document_id=ids["company"], title="Scale",
+                           created_at=datetime(2026, 10, 1, tzinfo=UTC)))  # fmt: skip
+        if own_track:
+            s.add(ProductTrack(prd_document_id=ids["safety"], current_version_id=ids["sv"],
+                               roadmap_document_id=ids["company"], title="User Safety",
+                               created_at=datetime(2026, 10, 2, tzinfo=UTC)))  # fmt: skip
+        await s.commit()
+    r = await client.post("/v1/documents/scale/replaced-by", headers=ctx.as_("owner"),
+                          json={"prds": ["user-safety"]})  # fmt: skip
+    assert r.status_code == 200, r.text
+    r = await client.post("/v1/simple/changes", headers=ctx.as_("owner"), json={
+        "op": "add_item", "target": {"where": {"kind": "horizon", "value": "now"}},
+        "before": {}, "after": {"title": "Quiet hours digest"}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.scalar(select(RoadmapItem).where(RoadmapItem.title == "Quiet hours digest"))
+        assert row is not None
+        assert (row.prd_document_id, row.prd_version_id) == (ids["safety"], ids["sv"])
+    titles = {i["title"] for i in (await _get(client, ctx, "/v1/simple/roadmap"))["items"]}
+    assert "Quiet hours digest" in titles

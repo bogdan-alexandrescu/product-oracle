@@ -124,6 +124,20 @@ for (const [name, viewport] of [["desktop", { width: 1440, height: 900 }], ["pho
   });
 }
 
+/** simple-plan: Usage alerts and Guided setup marked replaced by Team workspaces PRD, in Detailed. */
+async function replaceInDetailed(page: Page) {
+  for (const [slug, title] of [["usage-alerts", "Usage alerts"], ["guided-setup", "Guided setup"]]) {
+    await page.goto(`/documents/${slug}`);
+    await expect(page.getByRole("heading", { level: 1 }).filter({ visible: true })).toContainText(title);
+    await page.getByRole("button", { name: "Replaced by" }).click();
+    const dialog = page.getByTestId("replaced-by-dialog");
+    await dialog.getByLabel("Team workspaces PRD").check();
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByTestId("replaced-by").filter({ visible: true })).toContainText("Replaced by Team workspaces PRD");
+  }
+}
+
 /**
  * Re-review round 3 (the mock's "simple-plan" invented data): once Usage alerts and Guided setup are
  * marked replaced by Team workspaces, their history stays on Decisions. The Meetings page's
@@ -141,16 +155,7 @@ test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
   // The "simple-plan" scenario: the default data with Guided setup's own PRD document.
   await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-plan"] as const);
   await login(page);
-  for (const [slug, title] of [["usage-alerts", "Usage alerts"], ["guided-setup", "Guided setup"]]) {
-    await page.goto(`/documents/${slug}`);
-    await expect(page.getByRole("heading", { level: 1 }).filter({ visible: true })).toContainText(title);
-    await page.getByRole("button", { name: "Replaced by" }).click();
-    const dialog = page.getByTestId("replaced-by-dialog");
-    await dialog.getByLabel("Team workspaces PRD").check();
-    await dialog.getByRole("button", { name: "Save" }).click();
-    await expect(dialog).toHaveCount(0);
-    await expect(page.getByTestId("replaced-by").filter({ visible: true })).toContainText("Replaced by Team workspaces PRD");
-  }
+  await replaceInDetailed(page);
 
   // Round 4: Roadmap and Priorities' Goal buckets leave out the replaced PRDs' items (service.load).
   await page.goto("/simple/roadmap");
@@ -221,4 +226,33 @@ test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
   await expect(filter.locator("option", { hasText: "Team workspaces" })).toHaveCount(1);
   const filters = await optionTexts(filter);
   expect(filters.filter((t) => /Usage alerts|Guided setup/.test(t))).toEqual([]);
+});
+
+/**
+ * Re-review round 6 (simple-plan): a feature added in Simple after the replace is filed under a
+ * current PRD (the one that replaced its roadmap's), so it stays in Simple. protects = an
+ * accepted suggested feature shows on the Roadmap and in Priorities' Ranked list; fails_when =
+ * it is filed under a replaced PRD and left out of both; no_claim = where on the Roadmap it sits.
+ */
+test("a feature added after a replace stays on the Roadmap and in Ranked", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-plan"] as const);
+  await login(page);
+  await replaceInDetailed(page);
+
+  await page.goto("/simple/roadmap");
+  await expect(page.getByText("New plan tiers").filter({ visible: true }).first()).toBeVisible();
+  await page.getByTestId("needs-decision").filter({ visible: true }).click();
+  const tray = page.getByTestId("decision-tray");
+  const quiet = tray.getByTestId("tray-suggested").getByTestId("goal-suggestion").filter({ hasText: "Quiet hours for alerts" }).first();
+  await quiet.getByRole("button", { name: "Accept", exact: true }).click();
+  await expect(page.getByText("Added Quiet hours for alerts as a draft")).toBeVisible();
+  await tray.getByRole("button", { name: "Close" }).click();
+  await expect(tray).toHaveCount(0);
+  await expect(page.getByText("Quiet hours for alerts", { exact: true }).filter({ visible: true }).first()).toBeVisible();
+
+  await page.goto("/simple/priorities?tab=ranked");
+  const ranked = page.getByRole("list", { name: "Ranked list" }).first();
+  await expect(ranked.getByText("New plan tiers").first()).toBeVisible();
+  await expect(ranked.getByText("Quiet hours for alerts").first()).toBeVisible();
 });
