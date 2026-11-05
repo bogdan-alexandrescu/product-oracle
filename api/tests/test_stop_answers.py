@@ -597,3 +597,66 @@ def test_only_an_owner_or_due_tail_is_stripped_not_a_due_in_the_question():
         "Should the owner see it? Owner: Rae Example",
     ):
         assert len(listed_open(answers, _prd(f"- {listed}"))) == 1, listed
+
+
+# ------------------------------------------------------------------ review round 3
+
+
+def test_a_short_question_one_word_apart_is_the_answered_one_but_not_reordered():
+    # protects=a short answered question listed again with one word swapped is refused, a
+    # question with its words in another order or one word longer imports; fails_when=
+    # "Which datastore should hold the audit trail?" or "... seven months?" imports after
+    # "Which database ..." / "... seven years?" were answered, or "Should B replace A in
+    # checkout flow?" is refused after "Should A replace B in checkout flow?"; no_claim=
+    # paraphrases.
+    answers = [
+        _answered("Which database should hold the audit trail?"),
+        _answered("Should we keep exports for seven years?"),
+        _answered("Should Alpha replace Beta in checkout flow?"),
+    ]
+    for listed in (
+        "Which datastore should hold the audit trail?",
+        "Should we keep exports for seven months?",
+    ):
+        assert len(listed_open(answers, _prd(f"- {listed}"))) == 1, listed
+    for listed in (
+        "Should Beta replace Alpha in checkout flow?",
+        "Which database should hold the old audit trail?",
+        "Should we keep exports for seven years or more?",
+    ):
+        assert listed_open(answers, _prd(f"- {listed}")) == [], listed
+
+
+def test_a_needed_by_or_owned_by_mid_sentence_is_part_of_the_question():
+    # protects="owned by", "needed by" and "decide by" are stripped only as a tail after a
+    # comma, dash, parenthesis or the question's end; fails_when="Is the report needed by
+    # finance each week?" is read as "Is the report" and refused because "Is the report?"
+    # was answered; no_claim=other tail wordings.
+    answers = [_answered("Is the report?")]
+    for listed in (
+        "Is the report needed by finance each week?",
+        "Is the report owned by finance today?",
+    ):
+        assert listed_open(answers, _prd(f"- {listed}")) == [], listed
+    for listed in (
+        "Is the report, needed by Nov 30",
+        "Is the report - owned by Rae Example",
+        "Is the report (decide by Nov 30)",
+        "Is the report? Needed by Nov 30.",
+    ):
+        assert len(listed_open(answers, _prd(f"- {listed}"))) == 1, listed
+
+
+def test_the_decision_record_names_a_feature_by_its_title_never_its_key():
+    # protects=a stop's decision record names an answer's feature by its title, or "a
+    # feature in this run" when it has none; fails_when=the record shows the raw key
+    # "price-early"; no_claim=the writer's prompt (it cites the key, apart).
+    def one(title: str | None) -> str:
+        a = _answered("Which database?", "Postgres.")
+        a.feature_key, a.feature_title = "price-early", title
+        return stop_answers.decision_lines([a])[1]
+
+    assert one("Show the price early").startswith('- Show the price early: "Which database?"')
+    untitled = one(None)
+    assert "price-early" not in untitled, untitled
+    assert untitled.startswith('- A feature in this run: "Which database?"'), untitled
