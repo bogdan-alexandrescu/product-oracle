@@ -273,11 +273,12 @@ for (const phone of [false, true]) {
       await openFromInbox(/^Open Oracle's dates for /);
       const pop = page.getByTestId("suggestion-popover");
       await expect(pop).toContainText("Oracle suggests");
-      await expect.poll(() => inboxCount(page, phone)).toBeGreaterThan(0);
-      const n0 = await inboxCount(page, phone);
+      // A phone counts Oracle's dates once, on its Roadmap tab (its dates to confirm), not again under More.
+      await expect.poll(() => inboxCount(page, phone, "roadmap")).toBeGreaterThan(0);
+      const n0 = await inboxCount(page, phone, "roadmap");
       await tap(pop.getByRole("button", { name: "Accept" }));
       await expect(page.getByText("Dates accepted in your working draft")).toBeVisible();
-      await expect.poll(() => inboxCount(page, phone)).toBe(n0 - 1);
+      await expect.poll(() => inboxCount(page, phone, "roadmap")).toBe(n0 - 1);
 
       // A goal's suggested feature, accepted on its card.
       await openFromInbox("Open the suggestions for Keep alerts quiet");
