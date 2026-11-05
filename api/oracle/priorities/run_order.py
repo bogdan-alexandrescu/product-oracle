@@ -21,9 +21,9 @@ while any is open, call c3): ``unreadable_yaml``, ``wrong_version`` and ``unknow
 scope), ``not_in_scope`` and ``missing_feature`` (an approved PRD scope exists and the
 feature is not included in it, or is included and not ranked) and ``before_prerequisite``
 (ranked above a feature it depends on: decision O3, ordered by dependencies). Advisory:
-``differs_from_live`` (its rank differs by more than ``LIVE_SLACK`` from the live ranking
-of the same method, restricted to the same features) and ``no_goal`` (the live ranking
-flags it ``no_confirmed_goal``).
+``differs_from_live`` (its place among the ranked live features differs by more than
+``LIVE_SLACK`` from the live ranking of the same method, restricted to the same features)
+and ``no_goal`` (the live ranking flags it ``no_confirmed_goal``).
 
 The file is agent output, read the way ``roadmap_items.yaml`` is (oracle.runs.roadmap):
 through the one safe loader (:func:`oracle.safe_yaml.load`), at most ``MAX_STORED_BYTES``
@@ -268,7 +268,12 @@ def check_order(text: str, *, known: Known) -> OrderCheck:
     by_key = {f["key"]: f for f in live}
     for r in rows:
         r["live_rank"] = live_rank.get(r["key"])
-        if r["live_rank"] is not None and abs(r["live_rank"] - r["rank"]) > LIVE_SLACK:
+    # Where each sits among the live features the run ranks, as outside_limits reads it: new
+    # features ranked above a feature do not move it (review of PR 1244, RP1 a).
+    in_live = sorted((r for r in rows if r["live_rank"] is not None), key=lambda r: r["rank"])
+    position = {r["key"]: i for i, r in enumerate(in_live, start=1)}
+    for r in rows:
+        if r["live_rank"] is not None and abs(r["live_rank"] - position[r["key"]]) > LIVE_SLACK:
             out.add(
                 "differs_from_live",
                 f"{r['key']} is ranked {r['rank']} here and {r['live_rank']} in the live ranking",
