@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select, true
+from sqlalchemy import DateTime, String, literal, select, true, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -148,18 +148,48 @@ async def features_on_roadmap(db: AsyncSession) -> dict[str, OnRoadmap]:
     depend on one that lives in another area PRD): the included features of every PRD
     feeding it (each PRD's approved scope; a replaced PRD feeds nothing) and the items of its
     latest version with items (an item's key and its feature's key). Empty with no company
-    roadmap. A check reads this once."""
+    roadmap. One read: a check calls this once."""
     from oracle.runs.scope_models import PrdScope, PrdScopeItem
 
-    found = await active(db)
-    if found is None:
-        return {}
-    out: dict[str, OnRoadmap] = {}
-    rows = await db.execute(
-        select(PrdScopeItem.key, PrdScopeItem.title, Document.title, Document.id)
+    company = (
+        select(Document.id)
+        .where(
+            Document.company_roadmap.is_(True),
+            Document.kind == "roadmap",
+            Document.deleted_at.is_(None),
+        )
+        .scalar_subquery()
+    )
+    latest = (
+        select(DocumentVersion.id)
+        .where(
+            DocumentVersion.document_id == company,
+            DocumentVersion.id.in_(
+                select(RoadmapItem.roadmap_version_id).where(
+                    RoadmapItem.roadmap_document_id == company
+                )
+            ),
+        )
+        .order_by(DocumentVersion.number.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    scopes = (
+        select(
+            literal(0).label("src"),
+            PrdScopeItem.key.label("key"),
+            literal(None, String).label("feature_key"),
+            PrdScopeItem.title.label("title"),
+            literal(None, String).label("feature_title"),
+            Document.title.label("prd"),
+            Document.id.label("prd_id"),
+            literal(0).label("place"),
+            PrdScope.approved_at.label("at"),
+        )
         .join(PrdScope, PrdScope.id == PrdScopeItem.scope_id)
         .join(Document, Document.id == PrdScope.document_id)
         .where(
+            company.is_not(None),
             PrdScope.status == "approved",
             PrdScopeItem.kind == "feature",
             PrdScopeItem.decision == "include",
@@ -167,30 +197,32 @@ async def features_on_roadmap(db: AsyncSession) -> dict[str, OnRoadmap]:
             Document.deleted_at.is_(None),
             Document.replaced_by == [],
         )
-        .order_by(PrdScope.approved_at.desc().nulls_last())
     )
-    for key, title, prd, prd_id in rows:
-        out.setdefault(key, OnRoadmap(title, prd, prd_id))
-    version = await _items_version(db, found.id)
-    if version is not None:
-        items = await db.execute(
-            select(
-                RoadmapItem.item_key,
-                RoadmapItem.title,
-                Entity.key,
-                Entity.title,
-                Document.title,
-                RoadmapItem.prd_document_id,
-            )
-            .outerjoin(Entity, Entity.id == RoadmapItem.feature_id)
-            .outerjoin(Document, Document.id == RoadmapItem.prd_document_id)
-            .where(RoadmapItem.roadmap_version_id == version.id)
-            .order_by(RoadmapItem.position)
+    items = (
+        select(
+            literal(1).label("src"),
+            RoadmapItem.item_key,
+            Entity.key,
+            RoadmapItem.title,
+            Entity.title,
+            Document.title,
+            RoadmapItem.prd_document_id,
+            RoadmapItem.position,
+            literal(None, DateTime(timezone=True)),
         )
-        for item_key, item_title, feature_key, feature_title, prd, prd_id in items:
-            if feature_key:
-                out.setdefault(feature_key, OnRoadmap(feature_title or item_title, prd, prd_id))
-            out.setdefault(item_key, OnRoadmap(item_title, prd, prd_id))
+        .outerjoin(Entity, Entity.id == RoadmapItem.feature_id)
+        .outerjoin(Document, Document.id == RoadmapItem.prd_document_id)
+        .where(RoadmapItem.roadmap_version_id == latest)
+    )
+    both = union_all(scopes, items).subquery()
+    rows = await db.execute(
+        select(both).order_by(both.c.src, both.c.at.desc().nulls_last(), both.c.place)
+    )
+    out: dict[str, OnRoadmap] = {}
+    for _, key, feature_key, title, feature_title, prd, prd_id, _, _ in rows:
+        if feature_key:
+            out.setdefault(feature_key, OnRoadmap(feature_title or title, prd, prd_id))
+        out.setdefault(key, OnRoadmap(title, prd, prd_id))
     return out
 
 
