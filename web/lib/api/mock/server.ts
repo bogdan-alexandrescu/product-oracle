@@ -659,7 +659,9 @@ function withMockRole<T extends { role: Schemas["Me"]["role"] }>(member: T): T {
   if (as === "owner") localStorage.removeItem(MOCK_ROLE_KEY); // MOCK-HOOK
   else if (as) localStorage.setItem(MOCK_ROLE_KEY, as); // MOCK-HOOK
   const role = localStorage.getItem(MOCK_ROLE_KEY) as Schemas["Me"]["role"] | null;
-  return role && ROLES.includes(role) ? { ...member, role } : member;
+  // MOCK-HOOK (mk-panel-menu): in its frames the approver and the viewer are other people than the owner who decides.
+  const mkName = typeof location !== "undefined" && /[?&]pm[123]=/.test(location.search) ? ({ approver: "Jordan Lee", viewer: "Sam Rivera" } as Record<string, string>)[role ?? ""] : undefined;
+  return role && ROLES.includes(role) ? { ...member, role, ...(mkName && "name" in member ? { name: mkName } : {}) } : member;
 }
 const LATENCY_MS = 60;
 

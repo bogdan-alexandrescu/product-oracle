@@ -57,7 +57,7 @@ function useAway(open: boolean, close: () => void) {
 
 function Modal({ label, children, onClose }: { label: string; children: ReactNode; onClose: () => void }) {
   return (
-    <div data-backdrop="" className="fixed inset-0 z-[90] flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
+    <div data-backdrop="" className="fixed inset-0 z-[90] flex items-end justify-center bg-hero/50 sm:items-center sm:p-4" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label={label} data-testid="mk-confirm" className="relative flex w-full max-w-lg flex-col rounded-t-[var(--simple-card-radius)] border border-line bg-surface p-4 text-[15px] leading-[22px] shadow-lg sm:rounded-[var(--simple-card-radius)]" onClick={(e) => e.stopPropagation()}>
         {children}
       </div>

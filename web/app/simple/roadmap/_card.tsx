@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { Button, SegmentedControl } from "@/components/ds";
+import { Button, InfoTip, SegmentedControl } from "@/components/ds"; // MOCK-HOOK: InfoTip
 import { FlowDetail, FlowThumb as FlowPicture } from "@/components/simple/Flow";
 import { FlowPanel, type FlowSubject } from "@/components/simple/FlowVisual";
 import { flagKey } from "@/components/simple/chat/ChatCard";
@@ -773,8 +773,9 @@ export function FloatingCard({
         </p>
       )}
       {cut && (
-        <p className="mt-1 text-sm text-text2" data-testid="item-cut">
-          Cut: it sits below the line, out of the plan
+        <p className="mt-1 flex items-center gap-1.5 text-sm text-text2" data-testid="item-cut">
+          Below the line {/* MOCK-HOOK: the reason behind an (i) */}
+          <InfoTip label="Below the line" align="start">A cut feature sits below the line, out of the plan.</InfoTip>
         </p>
       )}
       {item.merged_into && (

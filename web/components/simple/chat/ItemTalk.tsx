@@ -128,7 +128,7 @@ export function ItemTalk({
         <ChatComposer
           send={async (text) => setThread(await askSay(text, page))}
           placeholder={changes ? "Ask about this feature, or ask for a change…" : "Ask about this feature…"}
-          hint={changes ? undefined : "You can ask questions; changes need a commenter or above."}
+          hint={changes ? undefined : "Questions only" /* MOCK-HOOK: short words; was "You can ask questions; changes need a commenter or above." */}
         />
         <p className="flex items-center gap-1.5 text-[14px] leading-5 text-text2" data-testid="chat-note">
           <Icon d={ICONS.lock} size={14} width={1.7} />

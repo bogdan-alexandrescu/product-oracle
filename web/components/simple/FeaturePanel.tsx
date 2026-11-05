@@ -14,7 +14,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { Button } from "@/components/ds";
+import { Button, InfoTip } from "@/components/ds"; // MOCK-HOOK: InfoTip
 import { api, unwrap } from "@/lib/api/client";
 import { calendarDay, displayZone, todayIn } from "@/lib/dates";
 import { useQuery } from "@/lib/use-query";
@@ -736,8 +736,9 @@ export function FeaturePanel({ item, items, act, canChange, phone, onClose, talk
       {mk.strip /* MOCK-HOOK */}
       {mk.dialog /* MOCK-HOOK */}
       {!canChange && (
-        <p className="mt-2 rounded-lg bg-surface2 px-3 py-2 text-sm text-text2" data-testid="fp-read-only">
-          You can read this feature. Its owner and approvers can change it.{" "}
+        <p className="mt-2 flex items-center gap-2 rounded-lg bg-surface2 px-3 py-2 text-sm text-text2" data-testid="fp-read-only">
+          Read only {/* MOCK-HOOK: the reason behind an (i) */}
+          <InfoTip label="Read only" align="start">Its owner and approvers can change it.</InfoTip>{" "}
           <button type="button" onClick={() => (setTab("talk"), onSuggest?.())} className="font-medium text-accent-ink underline">
             Suggest a change
           </button>
