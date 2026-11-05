@@ -12,15 +12,15 @@ test("stuck runs and failed imports are rows of the Inbox, counted alike by the 
   await login(page);
   const overrunId = await seedStuckRuns(page);
 
-  // 18 waiting in the seed, two questions, the pending access request (A5) and Oracle's 7 Simple
-  // date and goal suggestions among them; a stuck lookup, an overrun and a failed import add 3.
+  // 11 waiting in the seed, two questions and the pending access request (A5) among them; a
+  // stuck lookup, an overrun and a failed import add 3.
   // Looking for an earlier submission is shown, never counted.
   await page.goto("/inbox");
   const badge = page.getByTestId("nav-inbox-badge");
   const tabs = page.getByTestId("inbox-state-tabs");
-  await expect(page.getByText("21 waiting").filter({ visible: true })).toBeVisible();
-  await expect(badge).toHaveText("21");
-  await expect(tabs.getByRole("tab", { name: /^New/ })).toHaveText("New21");
+  await expect(page.getByText("14 waiting").filter({ visible: true })).toBeVisible();
+  await expect(badge).toHaveText("14");
+  await expect(tabs.getByRole("tab", { name: /^New/ })).toHaveText("New14");
   const lookups = page.getByTestId("inbox-lookups");
   await expect(lookups.locator("tr[data-row]")).toHaveCount(2);
   await expect(page.getByTestId("inbox-imports")).toContainText("DataError");
@@ -31,13 +31,12 @@ test("stuck runs and failed imports are rows of the Inbox, counted alike by the 
   await expect(page.getByTestId("inbox-searches")).toContainText("still looks for submission seg-1-a1");
   await expect(tabs.getByRole("tab", { name: /^Seen/ })).toHaveText("Seen");
 
-  // Home draws the same rows and the same count; its chips add up to it. Its Needs you lists the
-  // company's items, not Simple's 7 suggestions (they wait in the Inbox, as the badge counts).
+  // Home draws the same rows and the same count; its chips add up to it.
   await page.goto("/home");
   const needs = page.getByTestId("home-needs");
   await expect(needs.getByTestId("panel-count")).toHaveText("14");
   await expect(page.getByText("14 waiting").filter({ visible: true })).toBeVisible();
-  await expect(badge).toHaveText("21");
+  await expect(badge).toHaveText("14");
   // Runs counts the two stuck runs and the failed import; six lines and '+8 more in Inbox'.
   await expect(needs.getByText("Runs 3")).toBeVisible();
   await expect(needs.getByText("Questions 2")).toBeVisible();
@@ -60,9 +59,9 @@ test("stuck runs and failed imports are rows of the Inbox, counted alike by the 
   await expect(lookups.locator("tr[data-row]")).toHaveCount(1);
   await page.getByTestId("inbox-imports").getByRole("button", { name: "Retry" }).click();
   await expect(page.getByTestId("inbox-imports")).toHaveCount(0);
-  await expect(page.getByText("19 waiting").filter({ visible: true })).toBeVisible();
-  await expect(badge).toHaveText("19");
-  await expect(tabs.getByRole("tab", { name: /^Seen/ })).toHaveText("Seen19");
+  await expect(page.getByText("12 waiting").filter({ visible: true })).toBeVisible();
+  await expect(badge).toHaveText("12");
+  await expect(tabs.getByRole("tab", { name: /^Seen/ })).toHaveText("Seen12");
   // Back first: nothing is cancelled.
   await lookups.getByRole("button", { name: "Cancel again" }).click();
   const again = page.getByRole("alertdialog", { name: "Cancel again" });

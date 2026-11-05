@@ -43,13 +43,13 @@ test("Cancel run on an overrun asks first; Back keeps the run", async ({ page })
 test("a second visit opens on Seen, where the waiting items are, never on 'Nothing new'", async ({ page }) => {
   await openInbox(page);
   await expect(tab(page, "New")).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByText("18 waiting")).toBeVisible();
+  await expect(page.getByText("11 waiting")).toBeVisible();
   // The visit is recorded; the next one finds every item seen.
   await expect
     .poll(() => page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem("po-mock-db-v2") ?? "{}").inbox_seen ?? {}).length))
     .toBeGreaterThan(0);
   await page.goto("/inbox");
-  await expect(page.getByText("18 waiting")).toBeVisible();
+  await expect(page.getByText("11 waiting")).toBeVisible();
   // The tab is "Seen", not "Open" (Open is each row's action).
   await expect(tabs(page).getByRole("tab", { name: /^Open/ })).toHaveCount(0);
   await expect(tab(page, "Seen")).toHaveAttribute("aria-selected", "true");

@@ -1251,8 +1251,8 @@ export function settleDrafting(db: SimpleDb): void {
 
 /**
  * inbox-meeting-proposals fix (suggestions.inbox_rows): the open date suggestions I may decide,
- * one row per item (its slices' span), newest first. The Inbox's read makes them first when no
- * roadmap read has (ensureDateSuggestions).
+ * one row per item (its slices' span), newest first. The mock makes suggestions when the
+ * roadmap is first read, so the Inbox lists them from then on.
  */
 export function dateSuggestionInboxRows(db: SimpleDb | undefined, me: { id: string; role: Role }, seen: string | null): Schemas["InboxSimpleDateSuggestion"][] {
   if (!db) return [];
@@ -1272,20 +1272,12 @@ export function dateSuggestionInboxRows(db: SimpleDb | undefined, me: { id: stri
   return out;
 }
 
-/**
- * The date suggestions the API's daily run has made: the mock makes them on the first read
- * that needs them, the roadmap's or the Inbox's (fix 4: so the rail's first count has them).
- */
-export function ensureDateSuggestions(db: SimpleDb): void {
-  if (!db.suggestions.length && !Object.keys(db.own).length) regenerate(db, companyToday());
-}
-
 /** /v1/simple/roadmap and its date suggestions (api/oracle/simple/router.py). */
 export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] !== "simple" || p[2] !== "roadmap") return null;
   const m = req.method;
   const today = companyToday();
-  ensureDateSuggestions(db);
+  if (!db.suggestions.length && !Object.keys(db.own).length) regenerate(db, today);
   settleDrafting(db);
   if (!p[3] && m === "GET") {
     if (q.get("roadmap") && !readableRoadmap(q.get("roadmap"), me.role)) return json(404, { detail: "No such roadmap" });
