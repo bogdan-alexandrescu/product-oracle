@@ -84,9 +84,8 @@ const go = (n: string) => !ONLY || n.startsWith(ONLY); // MOCK-HOOK
 
 // ---------------- Decision 1: goals ---------------- MOCK-HOOK
 test("eg1-a", async ({ browser }) => { // MOCK-HOOK
-  let page: Page; // MOCK-HOOK
   test.skip(!go("eg1-a")); // MOCK-HOOK
-  page = await start(browser, W.d, "owner"); // MOCK-HOOK
+  const page = await start(browser, W.d, "owner"); // MOCK-HOOK
   await buckets(page, "a"); // MOCK-HOOK
   await toBucket(page, "Reliability"); // MOCK-HOOK
   await frame(page, "eg1-a-rest", W.d); // MOCK-HOOK
@@ -110,10 +109,9 @@ test("eg1-a", async ({ browser }) => { // MOCK-HOOK
 }); // MOCK-HOOK
 
 test("eg1-a-hard", async ({ browser }) => { // MOCK-HOOK
-  let page: Page; // MOCK-HOOK
   test.skip(!go("eg1-a")); // MOCK-HOOK
   for (const [s, n] of [[W.d, "eg1-a-hard"], [W.h, "eg1-a-hard-1512"]] as const) { // MOCK-HOOK
-    page = await start(browser, s, "owner", "goal-buckets-hard"); // MOCK-HOOK
+    const page = await start(browser, s, "owner", "goal-buckets-hard"); // MOCK-HOOK
     await page.goto(BUCKETS("a")); // MOCK-HOOK
     await expect(bucket(page, "Grow partner network")).toBeVisible(); // MOCK-HOOK
     await menu(page, "Grow partner network").click(); // MOCK-HOOK
@@ -144,9 +142,8 @@ test("eg1-a-roles", async ({ browser }) => { // MOCK-HOOK
 }); // MOCK-HOOK
 
 test("eg1-b", async ({ browser }) => { // MOCK-HOOK
-  let page: Page; // MOCK-HOOK
   test.skip(!go("eg1-b")); // MOCK-HOOK
-  page = await start(browser, W.d, "owner"); // MOCK-HOOK
+  const page = await start(browser, W.d, "owner"); // MOCK-HOOK
   await buckets(page, "b"); // MOCK-HOOK
   await frame(page, "eg1-b-rest", W.d); // MOCK-HOOK
   await bucket(page, "Growth").getByRole("button", { name: "Edit Growth" }).click(); // MOCK-HOOK
@@ -163,10 +160,9 @@ test("eg1-b", async ({ browser }) => { // MOCK-HOOK
 }); // MOCK-HOOK
 
 test("eg1-b-hard", async ({ browser }) => { // MOCK-HOOK
-  let page: Page; // MOCK-HOOK
   test.skip(!go("eg1-b")); // MOCK-HOOK
   for (const [s, n] of [[W.d, "eg1-b-hard"], [W.h, "eg1-b-hard-1512"]] as const) { // MOCK-HOOK
-    page = await start(browser, s, "owner", "goal-buckets-hard"); // MOCK-HOOK
+    const page = await start(browser, s, "owner", "goal-buckets-hard"); // MOCK-HOOK
     await page.goto(BUCKETS("b")); // MOCK-HOOK
     await expect(bucket(page, "Grow partner network")).toBeVisible(); // MOCK-HOOK
     await page.getByTestId("mk-show-archived").locator("input").check(); // MOCK-HOOK
@@ -196,9 +192,8 @@ test("eg1-b-roles", async ({ browser }) => { // MOCK-HOOK
 }); // MOCK-HOOK
 
 test("eg1-c", async ({ browser }) => { // MOCK-HOOK
-  let page: Page; // MOCK-HOOK
   test.skip(!go("eg1-c")); // MOCK-HOOK
-  page = await start(browser, W.d, "owner"); // MOCK-HOOK
+  const page = await start(browser, W.d, "owner"); // MOCK-HOOK
   await buckets(page, "c"); // MOCK-HOOK
   await toBucket(page, "Reliability"); // MOCK-HOOK
   await frame(page, "eg1-c-rest", W.d); // MOCK-HOOK
@@ -215,10 +210,9 @@ test("eg1-c", async ({ browser }) => { // MOCK-HOOK
 }); // MOCK-HOOK
 
 test("eg1-c-hard", async ({ browser }) => { // MOCK-HOOK
-  let page: Page; // MOCK-HOOK
   test.skip(!go("eg1-c")); // MOCK-HOOK
   for (const [s, n] of [[W.d, "eg1-c-hard"], [W.h, "eg1-c-hard-1512"]] as const) { // MOCK-HOOK
-    page = await start(browser, s, "owner", "goal-buckets-hard"); // MOCK-HOOK
+    const page = await start(browser, s, "owner", "goal-buckets-hard"); // MOCK-HOOK
     await page.goto(BUCKETS("c")); // MOCK-HOOK
     await expect(bucket(page, "Grow partner network")).toBeVisible(); // MOCK-HOOK
     await menu(page, "Grow partner network").click(); // MOCK-HOOK
@@ -258,9 +252,8 @@ async function paper(page: Page, ep: string) { // MOCK-HOOK
 } // MOCK-HOOK
 
 test("ep2-a", async ({ browser }) => { // MOCK-HOOK
-  let page: Page; // MOCK-HOOK
   test.skip(!go("ep2-a")); // MOCK-HOOK
-  page = await start(browser, W.d, "owner"); // MOCK-HOOK
+  const page = await start(browser, W.d, "owner"); // MOCK-HOOK
   await list(page, "a"); // MOCK-HOOK
   await frame(page, "ep2-a-rest", W.d); // MOCK-HOOK
   await page.getByRole("button", { name: "More for Guided setup" }).click(); // MOCK-HOOK
@@ -278,10 +271,9 @@ test("ep2-a", async ({ browser }) => { // MOCK-HOOK
 }); // MOCK-HOOK
 
 test("ep2-a-hard", async ({ browser }) => { // MOCK-HOOK
-  let page: Page; // MOCK-HOOK
   test.skip(!go("ep2-a")); // MOCK-HOOK
   for (const [s, n] of [[W.d, "ep2-a-hard"], [W.h, "ep2-a-hard-1512"]] as const) { // MOCK-HOOK
-    page = await start(browser, s, "owner"); // MOCK-HOOK
+    const page = await start(browser, s, "owner"); // MOCK-HOOK
     await paper(page, "a"); // MOCK-HOOK
     await page.getByRole("button", { name: "More for Guided setup" }).click(); // MOCK-HOOK
     await frame(page, n, s); // MOCK-HOOK
@@ -308,9 +300,8 @@ test("ep2-a-roles", async ({ browser }) => { // MOCK-HOOK
 }); // MOCK-HOOK
 
 test("ep2-b", async ({ browser }) => { // MOCK-HOOK
-  let page: Page; // MOCK-HOOK
   test.skip(!go("ep2-b")); // MOCK-HOOK
-  page = await start(browser, W.d, "owner"); // MOCK-HOOK
+  const page = await start(browser, W.d, "owner"); // MOCK-HOOK
   await paper(page, "b"); // MOCK-HOOK
   await frame(page, "ep2-b-rest", W.d); // MOCK-HOOK
   await page.getByRole("button", { name: "More for Guided setup" }).click(); // MOCK-HOOK
@@ -329,10 +320,9 @@ test("ep2-b", async ({ browser }) => { // MOCK-HOOK
 }); // MOCK-HOOK
 
 test("ep2-b-hard", async ({ browser }) => { // MOCK-HOOK
-  let page: Page; // MOCK-HOOK
   test.skip(!go("ep2-b")); // MOCK-HOOK
   for (const [s, n] of [[W.d, "ep2-b-hard"], [W.h, "ep2-b-hard-1512"]] as const) { // MOCK-HOOK
-    page = await start(browser, s, "owner"); // MOCK-HOOK
+    const page = await start(browser, s, "owner"); // MOCK-HOOK
     await paper(page, "b"); // MOCK-HOOK
     await page.getByRole("button", { name: "More for Guided setup" }).click(); // MOCK-HOOK
     await item(page, "Delete PRD").click(); // MOCK-HOOK
@@ -358,9 +348,8 @@ test("ep2-b-roles", async ({ browser }) => { // MOCK-HOOK
 }); // MOCK-HOOK
 
 test("ep2-c", async ({ browser }) => { // MOCK-HOOK
-  let page: Page; // MOCK-HOOK
   test.skip(!go("ep2-c")); // MOCK-HOOK
-  page = await start(browser, W.d, "owner"); // MOCK-HOOK
+  const page = await start(browser, W.d, "owner"); // MOCK-HOOK
   await list(page, "c"); // MOCK-HOOK
   await frame(page, "ep2-c-rest", W.d); // MOCK-HOOK
   await page.getByTestId("mk-select").click(); // MOCK-HOOK
@@ -375,10 +364,9 @@ test("ep2-c", async ({ browser }) => { // MOCK-HOOK
 }); // MOCK-HOOK
 
 test("ep2-c-hard", async ({ browser }) => { // MOCK-HOOK
-  let page: Page; // MOCK-HOOK
   test.skip(!go("ep2-c")); // MOCK-HOOK
   for (const [s, n] of [[W.d, "ep2-c-hard"], [W.h, "ep2-c-hard-1512"]] as const) { // MOCK-HOOK
-    page = await start(browser, s, "owner"); // MOCK-HOOK
+    const page = await start(browser, s, "owner"); // MOCK-HOOK
     await list(page, "c"); // MOCK-HOOK
     await page.getByTestId("mk-select").click(); // MOCK-HOOK
     const boxes = page.getByRole("checkbox", { name: /^Select / }); // MOCK-HOOK
