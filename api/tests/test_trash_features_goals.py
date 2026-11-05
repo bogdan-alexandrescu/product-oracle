@@ -479,7 +479,10 @@ async def test_a_purged_feature_leaves_no_milestone_or_dependency_on_it(client):
         assert m.item_ids == []
         assert (await s.get(RoadmapItem, uuid.UUID(b))).depends_on == []
 
-    # A purged goal leaves the items' goal_ids.
+    # A purged goal leaves the goal_ids of the items still on the roadmap.
+    async with tenant_session(w.ctx.tenant_id) as s:
+        (await s.get(RoadmapItem, uuid.UUID(b))).goal_ids = [uuid.UUID(w.goal_id)]
+        await s.commit()
     r = await client.delete(f"{BUCKETS}/goals/{w.goal_id}", headers=w.ctx.as_("owner"))
     assert r.status_code == 200, r.text
     async with tenant_session(w.ctx.tenant_id) as s:
@@ -487,5 +490,109 @@ async def test_a_purged_feature_leaves_no_milestone_or_dependency_on_it(client):
             await trash_service.purge_entry(s, None, entry)
         await s.commit()
     async with tenant_session(w.ctx.tenant_id) as s:
+        assert (await s.get(RoadmapItem, uuid.UUID(b))).goal_ids == []
         rows = await s.scalars(select(RoadmapItem).execution_options(**ALL))
         assert all(uuid.UUID(w.goal_id) not in (r.goal_ids or []) for r in rows)
+
+
+async def _publish(client, w: World) -> None:
+    """The open draft submitted and approved: the roadmap's next version is published."""
+    from tests import test_simple_drafts_api as D
+
+    d = await D.the_draft(client, w)
+    r = await client.post(f"{D.DRAFTS}/{d['id']}/submit", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    if r.json()["status"] != "approved":
+        r = await client.post(f"{D.DRAFTS}/{d['id']}/approve", headers=w.ctx.as_("decider"))
+        assert r.status_code == 200 and r.json()["status"] == "approved", r.text
+
+
+async def _detailed(client, w: World) -> set[str]:
+    from tests import test_simple_drafts_api as D
+
+    r = await client.get(f"/v1/roadmaps/{await D.slug(w)}/items", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    return {i["item_key"] for i in r.json()["items"]}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("then", ["published", "working_draft", "in_review"])
+async def test_restore_after_a_new_version_puts_the_feature_on_the_current_roadmap(client, then):
+    """protects=(review round 3) a feature deleted before a new version is published comes
+    back on the roadmap's current version (Simple and Detailed), and on the open draft's
+    or the version in review's when one is open, with its dependencies and milestone; a
+    dependency on what is no longer on the roadmap is dropped and the answer says which;
+    fails_when=Restore answers 200 and the feature stays on the old version only;
+    no_claim=the Trash screen."""
+    from tests import test_simple_drafts_api as D
+
+    w = await D.world()
+    victim = w.ids["move_dates-b"]
+    async with tenant_session(w.ctx.tenant_id) as s:
+        row = await s.get(RoadmapItem, uuid.UUID(victim))
+        row.depends_on = ["move_dates-a", "gone-feature"]
+        s.add(TrackMilestone(roadmap_id=uuid.UUID(w.roadmap_id), name="Pilot",
+                             item_ids=[row.id], code="M1"))  # fmt: skip
+        await s.commit()
+    r = await client.delete(f"{ITEMS}/{victim}", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    assert (await D.edit_title(client, w, "decider")).status_code == 201
+    await _publish(client, w)
+    assert "move_dates-b" not in await _items(client, w)
+    if then != "published":
+        a = (await _items(client, w, "decider"))["move_dates-a"]
+        r = await w.post(client, "decider", "move_dates", target={"item_id": a["id"]})
+        assert r.status_code == 201, r.text
+    if then == "in_review":
+        d = await D.the_draft(client, w)
+        r = await client.post(f"{D.DRAFTS}/{d['id']}/submit", headers=w.ctx.as_("decider"))
+        assert r.status_code == 200, r.text
+
+    r = await client.post(f"{ITEMS}/{victim}/restore", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    [gone] = r.json()["not_restored"]
+    assert gone["item"]["slug"] == "move_dates-b" and "gone-feature" in gone["reason"]
+    if then == "published":
+        items = await _items(client, w)
+        assert "move_dates-b" in items and "move_dates-b" in await _detailed(client, w)
+        assert items["move_dates-b"]["depends_on"] == [items["move_dates-a"]["id"]]
+    else:
+        assert "move_dates-b" in await _items(client, w, "decider")
+        if then == "working_draft":
+            await _publish(client, w)
+        else:
+            d = await D.the_draft(client, w)
+            r = await client.post(f"{D.DRAFTS}/{d['id']}/approve", headers=w.ctx.as_("decider"))
+            assert r.status_code == 200 and r.json()["status"] == "approved", r.text
+        items = await _items(client, w)
+        assert "move_dates-b" in items and "move_dates-b" in await _detailed(client, w)
+    async with tenant_session(w.ctx.tenant_id) as s:
+        live = {
+            r.id: r.depends_on
+            for r in await s.scalars(
+                select(RoadmapItem).where(RoadmapItem.item_key == "move_dates-b")
+            )
+        }
+        m = await s.scalar(select(TrackMilestone).where(TrackMilestone.name == "Pilot"))
+    shown = uuid.UUID(items["move_dates-b"]["id"])
+    assert live[shown] == ["move_dates-a"] and shown in m.item_ids
+
+
+@pytest.mark.asyncio
+async def test_restore_after_a_new_version_still_refuses_a_key_clash(client):
+    from tests import test_simple_drafts_api as D
+
+    w = await D.world()
+    victim = w.ids["move_dates-b"]
+    assert (
+        await client.delete(f"{ITEMS}/{victim}", headers=w.ctx.as_("decider"))
+    ).status_code == 200
+    assert (await D.edit_title(client, w, "decider")).status_code == 201
+    await _publish(client, w)
+    shown = (await _items(client, w))["move_dates-u"]["id"]
+    async with tenant_session(w.ctx.tenant_id) as s:
+        (await s.get(RoadmapItem, uuid.UUID(shown))).item_key = "move_dates-b"
+        await s.commit()
+    r = await client.post(f"{ITEMS}/{victim}/restore", headers=w.ctx.as_("owner"))
+    assert r.status_code == 409, r.text
+    assert len((await client.get("/v1/trash", headers=w.ctx.as_("owner"))).json()) == 1

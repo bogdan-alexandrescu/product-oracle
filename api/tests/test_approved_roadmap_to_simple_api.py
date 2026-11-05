@@ -368,3 +368,30 @@ async def test_a_persons_milestone_of_the_same_name_is_left_alone(client):
             select(TrackMilestone).where(TrackMilestone.track_id == ids["track"])
         )]  # fmt: skip
     assert sorted(names) == ["Beta", "Launch"]
+
+
+async def test_an_added_item_never_takes_a_trashed_features_key(client):
+    """protects=(trash-features-goals review) the plan's new item does not take the key of
+    a feature in Trash, so Restore brings that feature back beside it; fails_when=the new
+    item takes the key and Restore refuses (409)."""
+    ctx, ids = await world()
+    async with tenant_session(ctx.tenant_id) as s:
+        for v in await s.scalars(
+            select(DocumentVersion).where(DocumentVersion.document_id == ids["roadmap"])
+        ):
+            s.add(RoadmapItem(roadmap_document_id=ids["roadmap"], roadmap_version_id=v.id,
+                              track_id=ids["track"], item_key="keep-improving",
+                              title="Keep improving", horizon="later", position=9,
+                              prd_document_id=ids["prd"]))  # fmt: skip
+        await s.commit()
+    old = by_key(await read(client, ctx))["keep-improving"]["id"]
+    r = await client.delete(f"/v1/simple/roadmap/items/{old}", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    await approve(client, ctx)
+    added = by_key(await read(client, ctx))
+    new = next(i for i in added.values() if i["title"] == "Keep improving trail maps")
+    assert new["key"] != "keep-improving"
+    r = await client.post(f"/v1/simple/roadmap/items/{old}/restore", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    items = by_key(await read(client, ctx))
+    assert items["keep-improving"]["title"] == "Keep improving" and new["key"] in items
