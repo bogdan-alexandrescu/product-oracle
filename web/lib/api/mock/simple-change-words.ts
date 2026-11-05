@@ -95,6 +95,10 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
       return name ? `changed the milestone ${name}` : "changed a milestone";
     }
     case "name_decider": return `named who decides ${x}`;
+    // edit-decisions (decision_sheet, change_words.py): the sheet's changes.
+    case "edit_decision":
+    case "edit_question": return `changed ${quoted(target.name) ?? x}`;
+    case "withdraw_decision": return `withdrew ${quoted(target.name) ?? x}`;
     // trash-features-goals: a feature moved to Trash (its name reads "(deleted)" once it is gone).
     case "delete_item": return `moved ${x} to Trash`;
   }

@@ -48,6 +48,7 @@ import type { DecisionLogRow } from "./decisions";
 import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
 import { plainFlow } from "./simple-visuals";
 import { proposeOffAgenda, seedSimpleProposal } from "./simple-changes";
+import { changeSentence } from "./simple-change-words";
 import { mockNowMs } from "./clock";
 import { companyDateInWords } from "./connections";
 import { stableUuid } from "./ids";
@@ -90,6 +91,10 @@ export interface MeetingsCtx {
    * decisions table in the API, one number per decision).
    */
   logRow?: (id: string) => Promise<DecisionLogRow | null>;
+  /** edit-decisions: the decision log's calls this reader may read (not in Trash): Decisions lists the open ones outside meetings (as meetings.decisions_page). */
+  logCalls?: () => DecisionLogRow[];
+  /** edit-decisions: every number the decision log holds, seeded first (one decisions table, one number sequence in the API). */
+  logNumbers?: () => number[];
   /** prd-questions: the decision log's judgement calls waiting for this person (not run approvals). */
   othersWaiting?: () => number;
   /** home-honest-loading: every document of this kind is in Trash (and there is one). */
@@ -104,7 +109,7 @@ export interface MeetingsCtx {
   /** edit-decisions: Settings › Trash, where Delete on the sheet sends a decision or a question. */
   trash?: () => TrashDb;
   /** runplan-r2: a meeting decision is a row of the decision log too (Company > Decisions), as the API's one decisions row. */
-  logDecision?: (d: { id: string; title: string; at: string; approver_id: string; subjects: { kind: string; id: string; ref?: string }[]; chosen: string; meeting_title: string }) => void;
+  logDecision?: (d: { id: string; number: number; title: string; at: string; approver_id: string; subjects: { kind: string; id: string; ref?: string }[]; chosen: string; meeting_title: string }) => void;
 }
 
 interface Meeting {
@@ -306,8 +311,10 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
   const startedAt = iso(now - 7 * day + 3 * 3_600_000);
   const digest = item("alert-digest");
   const checklist = item("setup-checklist");
+  // edit-decisions: numbered after the decision log's seeded calls (one number sequence in the API).
+  const base = Math.max(0, ...(ctx.logNumbers?.() ?? []));
   const d = (n: number, title: string, extra: Partial<Decision>): Decision => ({
-    id: stableUuid(`simple-meeting-decision/${n}`), number: n, title, origin: "manual", status: "decided", approver_id: owner ?? null,
+    id: stableUuid(`simple-meeting-decision/${n}`), number: base + n, title, origin: "manual", status: "decided", approver_id: owner ?? null,
     at: iso(now - (10 - n) * day), subjects: [], meeting_id: null, change_ids: [], ...extra,
   });
   const db: MeetingsDb = {
@@ -333,7 +340,7 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
       minutes: {
         // qa-simple-decide-6: a short prose count, never the decision's own title or a note's text.
         summary: "1 decision taken.",
-        open_questions: ["D-3: Should muted teams still get the weekly digest?"],
+        open_questions: [`D-${base + 3}: Should muted teams still get the weekly digest?`],
         action_items: commenter ? [{ title: "Draft the quiet hours copy", owner_id: commenter.id, owner_name: nameOf(ctx, commenter.id), due_date: iso(now + 7 * day).slice(0, 10) }] : [],
         // walkc-meeting r2 (5j): as meetings._waits, the wait names whom it is on.
         waits: [{ what: "Usage alerts: the working draft is not approved yet", on: approversOf(ctx, alerts).map((i) => ref(ctx, i)) }],
@@ -755,14 +762,19 @@ function approvedHere(db: MeetingsDb, m: Meeting, prdIds: string[]): number | nu
   return d ? Number(d.chosen!.slice(APPROVED_KEY.length + 1)) : null;
 }
 
+/** edit-decisions: the next decision number, after both stores' (one number sequence in the API). */
+function nextNumber(db: MeetingsDb, ctx: MeetingsCtx): number {
+  return Math.max(0, ...db.decisions.map((d) => d.number), ...(ctx.logNumbers?.() ?? [])) + 1;
+}
+
 function record(db: MeetingsDb, ctx: MeetingsCtx, m: Meeting, title: string, subjects: Decision["subjects"], changeIds: string[], itemIds: string[] = [], chosen = "decided"): Decision {
-  const number = Math.max(0, ...db.decisions.map((d) => d.number)) + 1;
+  const number = nextNumber(db, ctx);
   const d: Decision = {
     id: crypto.randomUUID(), number, title, origin: "meeting", status: "decided", approver_id: ctx.me.id, at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
     subjects, meeting_id: m.id, change_ids: changeIds, item_ids: itemIds, chosen,
   };
   db.decisions.push(d);
-  ctx.logDecision?.({ id: d.id, title, at: d.at, approver_id: ctx.me.id, subjects, chosen, meeting_title: m.title });
+  ctx.logDecision?.({ id: d.id, number: d.number, title, at: d.at, approver_id: ctx.me.id, subjects, chosen, meeting_title: m.title });
   // The items and lines it names link to it (decided_in, a line's decisions), newest first.
   for (const s of subjects) {
     const row = { id: d.id, number: d.number, title: d.title };
@@ -963,7 +975,7 @@ export function chatMeetings(open: () => { db: MeetingsDb; ctx: MeetingsCtx }): 
         d.approver_id = deciderId;
         return d.id;
       }
-      const number = Math.max(0, ...db.decisions.map((d) => d.number)) + 1;
+      const number = nextNumber(db, ctx);
       const d: Decision = {
         id: crypto.randomUUID(), number, title, origin: "chat", status: "decided", approver_id: deciderId, at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
         subjects: documentId ? [{ kind: "document", id: documentId }] : [], meeting_id: null, change_ids: [],
@@ -988,9 +1000,10 @@ export function chatMeetings(open: () => { db: MeetingsDb; ctx: MeetingsCtx }): 
       const to = ids.map(may).find((x) => !!x);
       return to ? { id: to.id, name: to.name } : null;
     },
-    propose(title, deciderId, documentId, id) {
-      const { db } = open();
-      const number = Math.max(0, ...db.decisions.map((d) => d.number)) + 1;
+    propose(title, deciderId, documentId, id, logNumber) {
+      const { db, ctx } = open();
+      // The decision log's number when it is the log's call (one number per decision).
+      const number = logNumber ?? nextNumber(db, ctx);
       const d: Decision = {
         // The decision log's id: its Decide or Decline (withdraw) shows here too (server.ts).
         id: id ?? crypto.randomUUID(), number, title, origin: "chat", status: "proposed", approver_id: deciderId, at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
@@ -1114,7 +1127,9 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
   }
   // qa-simple-decide-20 (as decisions_page): an open decision a shown meeting lists as its open question ("D-3: ...") is not listed again.
   const asked = new Set(shown.flatMap((m) => (m.minutes?.open_questions ?? []).map((x) => /^D-(\d+):/.exec(x)?.[1]).filter(Boolean)));
-  const others = meetingQ ? [] : db.decisions.filter((d) => !d.meeting_id && !d.trashed && product(d) && keep(d) && !(d.status !== "decided" && asked.has(String(d.number)))).sort((a, b) => b.number - a.number);
+  // edit-decisions (as decisions_page, one decisions table): the decision log's open product calls are listed here too.
+  const logOpen = (ctx.logCalls?.() ?? []).filter((r) => r.status === "proposed" && r.origin !== "prd" && !db.decisions.some((x) => x.id === r.id)).map(fromLog);
+  const others = meetingQ ? [] : [...db.decisions, ...logOpen].filter((d) => !d.meeting_id && !d.trashed && product(d) && keep(d) && !(d.status !== "decided" && asked.has(String(d.number)))).sort((a, b) => b.number - a.number);
   const out: Schemas["SimpleDecisionsOut"] = {
     meetings: shown.map((m) => {
       const whole = !!prd && !goal && m.prd === prd.slug;
@@ -1588,7 +1603,10 @@ export async function sheetProposals(db: MeetingsDb, ctx: MeetingsCtx, status: s
     const { d } = await sheetDecision(db, ctx, String(h.change.target.decision_id ?? ""));
     const decides = ctx.me.role === "owner" || (!!d && d.approver_id === ctx.me.id);
     if (!decides && h.change.by !== ctx.me.id) continue;
-    out.push({ ...h.change, can_decide: h.change.status === "proposed" && decides });
+    // As changes._target: one still waiting names its decision as it is now; its words say so (change_words).
+    const target = h.change.status === "proposed" && d ? { ...h.change.target, name: `D-${d.number} ${d.title}` } : h.change.target;
+    const c = { ...h.change, target, can_decide: h.change.status === "proposed" && decides };
+    out.push({ ...c, words: changeSentence(c, c.by_name, null, c.undone) });
   }
   return out;
 }
@@ -1627,6 +1645,9 @@ async function decideSheetChange(db: MeetingsDb, ctx: MeetingsCtx, h: { change: 
  */
 async function sheetDecision(db: MeetingsDb, ctx: MeetingsCtx, id: string): Promise<{ d: Decision | null; log: DecisionLogRow | null }> {
   const log = (await ctx.logRow?.(id)) ?? null;
+  // A call in both (made or asked in Simple) reads as the log has it now: one row in the API.
+  const copy = db.decisions.find((x) => x.id === id);
+  if (copy && log) Object.assign(copy, fromLog(log), { origin: copy.origin, at: copy.at, subjects: copy.subjects, meeting_id: copy.meeting_id, change_ids: copy.change_ids });
   const own = db.decisions.find((x) => x.id === id && !x.trashed && product(x));
   if (own) return { d: own, log };
   if (!log || log.trashed || log.origin === "checkpoint" || db.decisions.some((x) => x.id === id)) return { d: null, log: null };
@@ -1658,10 +1679,11 @@ function toLog(r: DecisionLogRow, d: Decision, now: string, by: string): void {
 }
 
 /** edit-decisions: a decision made in Simple (POST /v1/decisions) is listed on its Decisions page too, with every field. */
-export function sheetDecisionMade(db: MeetingsDb, made: Schemas["DecisionOut"], by: string, number?: number): void {
+export function sheetDecisionMade(db: MeetingsDb, made: Schemas["DecisionOut"], by: string): void {
   if (db.decisions.some((x) => x.id === made.id)) return;
   db.decisions.push({
-    id: made.id, number: number ?? Math.max(0, ...db.decisions.map((x) => x.number)) + 1, title: made.title, origin: "manual", status: "proposed", approver_id: made.approver_id,
+    // The decision log's number (one decisions table in the API, one number per decision).
+    id: made.id, number: made.number, title: made.title, origin: "manual", status: "proposed", approver_id: made.approver_id,
     at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))), subjects: [], meeting_id: null, change_ids: [],
     ask: made.question ?? null, context: made.context ?? null, options: (made.options ?? []).map((o) => ({ key: o.key, label: o.label })), review_at: made.review_at ?? null, created_by: by,
   });

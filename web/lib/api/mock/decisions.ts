@@ -53,6 +53,8 @@ export interface DecisionsContext {
   visible?: (d: { origin: string; run_id?: string | null }) => boolean;
   uuid: () => string;
   now: () => string;
+  /** edit-decisions: the numbers Simple's decisions page holds (one decisions table, one number sequence in the API). */
+  otherNumbers?: () => number[];
   /** A baseline item, for entity_ids (absent: unknown, or hidden from the reader). */
   entity?: (id: string) => Schemas["DecisionEntityRef"] | null;
   /** A baseline evidence row, for evidence_ids (absent: unknown, or on an item hidden from the reader). */
@@ -129,7 +131,7 @@ function blank(ctx: DecisionsContext, db: DecisionsDb, fields: Partial<Row> & Pi
   const at = fields.created_at ?? ctx.now();
   return {
     id: ctx.uuid(),
-    number: Math.max(0, ...db.decisions.map((d) => d.number)) + 1,
+    number: Math.max(0, ...db.decisions.map((d) => d.number), ...(ctx.otherNumbers?.() ?? [])) + 1,
     status: "proposed",
     class: classOf(fields),
     reversibility: "reversible",
@@ -460,7 +462,15 @@ function outOf(ctx: DecisionsContext, db: DecisionsDb, d: Row): DecisionOut {
  * approval of one of its versions, a stop of a run on it, or a subject naming it or a version.
  */
 function hidden(ctx: DecisionsContext, d: Row): boolean {
-  if (d.trashed) return true;
+  return !!d.trashed || !logReadable(ctx, d);
+}
+
+/** edit-decisions: whether the reader may read this decision (H8, H9), in Trash or not (Simple's sheet restores it). */
+export function logReadable(ctx: DecisionsContext, d: Row): boolean {
+  return !unreadable(ctx, d);
+}
+
+function unreadable(ctx: DecisionsContext, d: Row): boolean {
   const run = d.run_id ? ctx.runs.find((r) => r.id === d.run_id) : undefined;
   if (run?.document_slug && ctx.hiddenDocument(run.document_slug)) return true;
   if ((d.source?.kind === "document_version" || d.source?.kind === "pricing_memo_version") && ctx.hiddenDocument(d.source.id)) return true;
@@ -519,7 +529,7 @@ function activeApprover(ctx: DecisionsContext, id: string): Member | undefined {
 export function logMeetingDecision(
   ctx: DecisionsContext,
   db: DecisionsDb,
-  d: { id: string; title: string; at: string; approver_id: string; subjects: Row["subjects"]; chosen: string; meeting_title: string },
+  d: { id: string; number: number; title: string; at: string; approver_id: string; subjects: Row["subjects"]; chosen: string; meeting_title: string },
 ): void {
   if (db.decisions.some((x) => x.id === d.id)) return;
   db.decisions.push({
@@ -530,7 +540,9 @@ export function logMeetingDecision(
       decided_by: d.approver_id, decided_actor: "user", decided_at: d.at, created_by: d.approver_id, created_at: d.at,
       source: { kind: "simple_meeting_decision", id: ctx.uuid() } as Row["source"], subjects: d.subjects,
     }),
+    // The meeting's own number (one decisions table in the API).
     id: d.id,
+    number: d.number,
   });
 }
 

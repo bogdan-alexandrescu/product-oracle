@@ -210,8 +210,9 @@ function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => draftOf(target));
   const [decider, setDecider] = useState<Person | null>(draftOf(target).decider);
-  // An Accept refused as out of date elsewhere (Home, Waiting for you) says so here, over the decision as it is now.
-  const [error, setError] = useState<string | null>(target.kind === "decision" ? (target.notice ?? null) : null);
+  const [error, setError] = useState<string | null>(null);
+  // An Accept refused as out of date elsewhere (Home, Waiting for you) says so at the top, over the decision as it is now.
+  const notice = target.kind === "decision" ? (target.notice ?? null) : null;
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const id = target.kind === "decision" ? target.row.id : target.kind === "question" ? target.q.id : null;
   const name = target.kind === "decision" ? `${target.row.code ?? `D-${target.row.number}`}` : target.kind === "question" ? target.q.code : "";
@@ -402,6 +403,11 @@ function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
 
   return (
     <div className="flex flex-col gap-3 p-1" data-testid="decision-sheet-body">
+      {notice && (
+        <p className="simple-meta rounded-lg border border-crit/40 bg-crit-bg px-3 py-2 text-crit" role="alert" data-testid="decision-sheet-notice">
+          {notice}
+        </p>
+      )}
       {editing ? (
         <EditFields draft={draft} set={set} question={question} target={target} />
       ) : target.kind === "decision" ? (
