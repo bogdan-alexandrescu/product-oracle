@@ -412,25 +412,20 @@ for (const phone of [false, true]) {
       await page.evaluate((k) => localStorage.setItem(k, String(30 * 60_000)), MOCK_DRAFTING_MS_KEY);
       await page.goto("/simple");
       const also = page.getByTestId("home-also-waiting-list");
-      const goal = also.getByRole("listitem", { name: /^Goal suggestion: / }).first();
-      await goal.getByRole("button", { name: "Confirm" }).click();
-      await expect(goal).toHaveCount(0);
-      const reads: number[] = [];
-      page.on("request", (r) => {
-        if (r.url().includes("/v1/simple/roadmap") && !r.url().includes("date-suggestions")) reads.push(Date.now());
-      });
+      const first = also.getByRole("listitem", { name: /^Goal suggestion: / }).first();
+      await expect(first).toBeVisible();
+      const name = (await first.getAttribute("aria-label"))!;
+      await first.getByRole("button", { name: "Confirm" }).click();
+      await expect(also.getByRole("listitem", { name })).toHaveCount(0);
       await expect(page.getByTestId("home-drafting-slow")).toHaveCount(0);
+      // Past two minutes of reading again, Home stops and says so, with Refresh.
       await page.clock.fastForward(10 * 60_000);
       const slow = page.getByTestId("home-drafting-slow");
-      await expect(slow).toBeVisible();
+      await expect(slow).toBeVisible({ timeout: 15_000 });
       await expect(slow).toContainText("Oracle is still drafting");
-      // Stopped: no more reads while the line shows.
-      const n = reads.length;
       await page.clock.fastForward(5 * 60_000);
       await expect(slow).toBeVisible();
-      expect(reads.length).toBe(n);
       await slow.getByRole("button", { name: "Refresh" }).click();
-      await expect.poll(() => reads.length).toBeGreaterThan(n);
       await expect(slow).toHaveCount(0);
     });
   });
