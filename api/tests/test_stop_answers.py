@@ -751,6 +751,7 @@ def test_a_question_one_content_word_apart_is_a_new_question():
 def test_same_question_reads_variants_both_ways():
     # protects=a variant pair is the same either way round; fails_when="yrs" answered lets
     # "years" import; no_claim=variants of two words or more.
-    assert stop_answers.same_question("keep exports for seven yrs", "keep exports for seven years")
-    assert stop_answers.same_question("keep exports for seven years", "keep exports for seven yrs")
-    assert not stop_answers.same_question("keep exports for seven years", "keep exports for seven yards")
+    same = stop_answers.same_question
+    assert same("keep exports for seven yrs", "keep exports for seven years")
+    assert same("keep exports for seven years", "keep exports for seven yrs")
+    assert not same("keep exports for seven years", "keep exports for seven yards")

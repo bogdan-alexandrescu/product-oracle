@@ -570,14 +570,54 @@ _NEGATIONS = frozenset({"not", "no", "never", "nor", "without", "dont", "doesnt"
                         "cant", "cannot", "wont", "shouldnt", "arent", "didnt", "t"})  # fmt: skip
 
 
+# Words that name one thing two ways: a question with one in the place of the other is the
+# same question. Other abbreviations are read by their letters (see _variants).
+_SYNONYMS = (
+    frozenset({"database", "datastore", "db"}),
+    frozenset({"app", "application"}),
+    frozenset({"repo", "repository"}),
+    frozenset({"config", "configuration"}),
+    frozenset({"env", "environment"}),
+    frozenset({"prod", "production"}),
+    frozenset({"info", "information"}),
+    frozenset({"docs", "documentation"}),
+)
+_VOWELS = frozenset("aeiou")
+
+
+def _variants(x: str, y: str) -> bool:
+    """``x`` and ``y`` are one word spelt two ways: a known synonym ("datastore",
+    "database"), an abbreviation by its consonants ("yrs", "years"; "mgmt", "management"),
+    a plural ("export", "exports") or a British or American spelling ("colour", "color";
+    "organise", "organize"). Two different words ("Safari", "Firefox"; "fast", "slow";
+    "export", "expert") are not."""
+    if any(x in s and y in s for s in _SYNONYMS):
+        return True
+    short, long = sorted((x, y), key=len)
+    if not short.isalpha() or not long.isalpha():
+        return False
+    if long in (short + "s", short + "es"):
+        return True
+    if len(short) >= 2 and short[0] == long[0] and short[-1] == long[-1] and short != long:
+        rest = iter(long)
+        if not _VOWELS & set(short[1:]) and all(c in rest for c in short):
+            return True
+    # "four" is not "for": a spelling only from five letters.
+    return len(long) >= 5 and any(
+        a in x + y and x.replace(a, b) == y.replace(a, b)
+        for a, b in (("our", "or"), ("ise", "ize"), ("isation", "ization"), ("yse", "yze"))
+    )
+
+
 def same_question(asked: str, listed: str) -> bool:
     """``listed`` is the answered question ``asked`` (both as words), compared word by word
     in order: the same words, or, for questions of at least five words, the same number of
-    words with at most one position holding a different word ("database" for "datastore"),
-    and the same negations
-    ("should" and "should not" are two questions). A question one word longer or shorter,
-    a longer one that contains it, or the same words in another order ("A replace B" and
-    "B replace A") is a new question."""
+    words with at most one position holding the same word spelt another way ("database" for
+    "datastore", "yrs" for "years": :func:`_variants`), and the same negations ("should" and
+    "should not" are two questions). A different word there ("Firefox" for "Safari", "slow"
+    for "fast", "backups" for "exports") is the content of the question, so a new question;
+    so is a question one word longer or shorter, a longer one that contains it, or the same
+    words in another order ("A replace B" and "B replace A")."""
     if asked == listed:
         return True
     a, b = asked.split(), listed.split()
@@ -585,7 +625,8 @@ def same_question(asked: str, listed: str) -> bool:
         return False
     if [w for w in a if w in _NEGATIONS] != [w for w in b if w in _NEGATIONS]:
         return False
-    return sum(x != y for x, y in zip(a, b, strict=True)) <= 1
+    apart = [(x, y) for x, y in zip(a, b, strict=True) if x != y]
+    return len(apart) == 1 and _variants(*apart[0])
 
 
 def listed_open(answers: list[Answered], markdown: str) -> list[ImportProblem]:
