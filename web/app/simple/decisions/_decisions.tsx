@@ -6,12 +6,14 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { Icon } from "@/components/ds/Icon";
 import { toast } from "@/components/ds/Toast";
+import { DecisionSheetHost, editedWords, useDecisionSheet } from "@/components/simple/questions/DecisionSheet";
 import { QuestionRow, useQuestionActions, useSourceLine, type Question } from "@/components/simple/questions/Questions";
 import { SimpleEmpty, SimplePage } from "@/components/simple/SimplePage";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay, useCompanyZone } from "@/lib/dates";
 import { zoneName } from "@/lib/format";
+import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 import { useWaitingList, WaitingRow } from "@/components/simple/WaitingItems";
 
@@ -101,6 +103,7 @@ export function SimpleDecisions() {
   const zone = useCompanyZone();
   return (
     <SimplePage title="Decisions" lead={`${LEADS[view]} Dates are in ${zoneName(zone)}.`}>
+      <DecisionSheetHost onChanged={() => q.reload()}>
       <div className="flex flex-wrap items-end justify-between gap-3">
         {/* qa4-simple-decide-35: the filters wrap among themselves, so the view switch keeps its place beside them when Ask Oracle narrows the page. */}
         <div className="flex min-w-0 flex-1 flex-wrap gap-3 max-[600px]:w-full" role="group" aria-label="Filters">
@@ -110,6 +113,7 @@ export function SimpleDecisions() {
         </div>
         <ViewSwitch value={view} onChange={pick} />
       </div>
+      {d && <NewDecision />}
       {q.loading && !d && <Loading />}
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
       {d && view === "list" && <QuestionList d={d} actions={actions} filtered={filtered} onClear={clear} />}
@@ -158,7 +162,37 @@ export function SimpleDecisions() {
           </span>
         </p>
       )}
+      </DecisionSheetHost>
     </SimplePage>
+  );
+}
+
+/** ec1 b: + New decision opens the decision sheet, empty, with Pick for who decides. */
+function NewDecision() {
+  const { can } = useMe();
+  const sheet = useDecisionSheet();
+  if (!sheet || !can("create_decision")) return null;
+  return (
+    <div>
+      <button type="button" className="simple-button simple-button-primary" data-testid="decisions-new" onClick={() => sheet.open({ kind: "new-decision" })}>
+        + New decision
+      </button>
+    </div>
+  );
+}
+
+/** eq2 b: + Ask a question, at the top of Waiting for you: the sheet, with its PRD to pick. */
+function AskQuestion({ questions }: { questions: Question[] }) {
+  const { can } = useMe();
+  const sheet = useDecisionSheet();
+  const prds = [...new Map(questions.map((x) => [x.prd.id, { id: x.prd.id, title: x.prd.title }])).values()];
+  if (!sheet || !prds.length || !can("create_simple_change")) return null;
+  return (
+    <div>
+      <button type="button" className="simple-button" data-testid="questions-ask" onClick={() => sheet.open({ kind: "new-question", prds })}>
+        + Ask a question
+      </button>
+    </div>
   );
 }
 
@@ -223,19 +257,22 @@ function QuestionCard({ label, testId, questions, count, source, children }: { l
 function QuestionList({ d, actions, filtered, onClear }: { d: Schemas["SimpleDecisionsOut"]; actions: Actions; filtered: boolean; onClear: () => void }) {
   const [all, setAll] = useState(false);
   const open = d.questions.filter((x) => x.column !== "decided");
+  // eq2 b: one withdrawn here just now keeps its place, struck through, with Undo.
+  const gone = useDecisionSheet()?.withdrawn ?? {};
   // qa-simple-decide-15: only what the person can act on waits for them (a viewer: nothing).
-  const mine = open.filter((x) => x.waiting_for_me && x.status === "proposed" && (x.can.decide || x.can.propose));
-  const others = open.filter((x) => !mine.includes(x));
+  const mine = open.filter((x) => (x.waiting_for_me && x.status === "proposed" && (x.can.decide || x.can.propose)) || (x.status === "withdrawn" && !!gone[x.id]));
+  const others = open.filter((x) => !mine.includes(x) && x.status !== "withdrawn");
   const shown = all ? mine : mine.slice(0, FIRST);
   // home-waiting-one-list: and everything else that waits on me, from the one list Home reads
   // (run stops, broken links, dates, drafts, proposals, goal suggestions), each with its action;
   // the filters narrow the PRDs' questions only, so these show unfiltered.
   const waiting = useWaitingList();
   const extra = filtered ? [] : (waiting.data?.items ?? []).filter((i) => i.kind !== "question");
-  const count = Math.min(d.waiting_count, mine.length) + extra.length;
+  const count = Math.min(d.waiting_count, mine.filter((x) => x.status === "proposed").length) + extra.length;
   return (
     <>
       <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={count} source>
+        <AskQuestion questions={d.questions} />
         {mine.length === 0 && extra.length === 0 ? (
           !filtered && !waiting.data && !waiting.error ? (
             <p className="simple-meta" role="status">
@@ -518,6 +555,8 @@ function StopRow({ run, s }: { run: RunGroup; s: RunGroup["stops"][number] }) {
 /** Decisions taken: the round check (an open one, the flag), "<code> <title>" (a PRD's question keeps its code), then its answer, who decides and the day and time. */
 function Rows({ rows }: { rows: Row[] }) {
   const zone = useCompanyZone();
+  const { me } = useMe();
+  const sheet = useDecisionSheet();
   return (
     <ul>
       {rows.map((r) => {
@@ -529,6 +568,10 @@ function Rows({ rows }: { rows: Row[] }) {
         // build-feature-panel review 7: a decision about one roadmap item ("Moved Weekly alert digest
         // to Next") opens that item's one feature panel.
         const item = r.subjects.find((x) => x.kind === "roadmap_item" && typeof x.id === "string");
+        // ec1 b: an open decision's title opens its sheet; one withdrawn here just now stays, struck through, with Undo.
+        const opens = !!sheet && r.status === "proposed" && !!r.can;
+        const gone = r.status === "withdrawn" ? sheet?.withdrawn[r.id] : undefined;
+        const edited = editedWords(r.edited_at, r.edited_by, me?.user_id ?? undefined);
         return (
           <DecidedItem
             key={r.id}
@@ -538,12 +581,20 @@ function Rows({ rows }: { rows: Row[] }) {
             className="!items-start !gap-[14px] border-t border-line py-[14px] first:border-t-0 first:pt-0 last:pb-0 target:bg-[var(--simple-edited)]"
           >
             <span aria-hidden className={`simple-ico ${done ? "simple-ico-done" : ""}`}>
-              <Icon name={done ? "check" : "flag"} size={20} stroke={1.7} />
+              <Icon name={done ? "check" : gone ? "x" : "flag"} size={20} stroke={1.7} />
             </span>
             <span className="simple-rb flex-1">
               <span className="break-words">
                 <span className="simple-code">{code}</span>{" "}
-                {item ? (
+                {gone ? (
+                  <s className="font-[650] text-text2" data-testid="decision-withdrawn">
+                    {title}
+                  </s>
+                ) : opens ? (
+                  <button type="button" data-testid="decision-open" className="text-left font-[650] underline decoration-1 underline-offset-4 hover:text-accent-ink" onClick={() => sheet!.open({ kind: "decision", row: r })}>
+                    {title}
+                  </button>
+                ) : item ? (
                   <button type="button" data-feature={String(item.id)} className="text-left font-[650] hover:underline">
                     {title}
                   </button>
@@ -552,11 +603,18 @@ function Rows({ rows }: { rows: Row[] }) {
                 )}
               </span>
               <span className="simple-meta">
-                {[chosen, r.approver?.name ?? "No approver", momentWords(r.decided_at ?? r.created_at, zone), done ? null : STATUS_WORDS[r.status] ?? "open"]
-                  .filter(Boolean)
-                  .join(" · ")}
+                {gone
+                  ? "Withdrawn by you just now · kept in the history"
+                  : [chosen, r.approver?.name ?? "No approver", momentWords(r.decided_at ?? r.created_at, zone), done ? null : STATUS_WORDS[r.status] ?? "open", edited].filter(Boolean).join(" · ")}
               </span>
             </span>
+            {gone && (
+              <span className="simple-actions min-[601px]:w-[232px]">
+                <button type="button" className="simple-button" disabled={gone.undoing} onClick={() => sheet!.undoWithdraw(r.id)}>
+                  Undo
+                </button>
+              </span>
+            )}
           </DecidedItem>
         );
       })}
