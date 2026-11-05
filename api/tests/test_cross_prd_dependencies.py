@@ -504,3 +504,32 @@ async def test_the_prd_draft_prompt_names_the_other_feature_with_its_prd():
         pctx = await runs_service._prompt_context(s, run, seg, segments, 1, None, FakeRuntime())
         prompt = flows.build_steps(flow, flow.segment("prd_draft"), flows.Knobs(), pctx)[-1][2]
     assert "Account health ledger (Safety PRD)" in prompt
+
+
+async def test_a_typed_start_before_another_prd_s_dependency_ends_is_warned_in_simple():
+    # protects=in Simple, an item typed to start before the other PRD's feature it waits on
+    # ends gets a plain warning line naming that feature with its PRD; fails_when=the
+    # cross-PRD link is dropped, or the line leaves out which PRD holds it.
+    from datetime import date
+
+    from oracle.simple import service as simple
+
+    w = await world()
+    await _ledger_by_feature_key(w)
+    async with tenant_session(w["tenant"]) as s:
+        rows = {r.item_key: r for r in await s.scalars(select(RoadmapItem))}
+        rows["ahl-1"].start_date, rows["ahl-1"].end_date = date(2026, 11, 2), date(2026, 12, 1)
+        rows["observability"].start_date = date(2026, 11, 16)
+        rows["observability"].end_date = date(2026, 12, 18)
+        for r in rows.values():
+            r.date_source = "typed"
+        await s.commit()
+        read = await simple.load(s)
+    obs = next(e for e in read.entries if e.row.item_key == "observability")
+    assert [(f.kind, f.reason) for f in obs.flags] == [
+        (
+            "dependency_order",
+            "‘Observability’ starts Nov 16, but ‘Account health ledger’ (Safety PRD), which it "
+            "depends on, ends Dec 1",
+        )
+    ]
