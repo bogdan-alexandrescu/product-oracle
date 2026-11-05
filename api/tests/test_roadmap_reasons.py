@@ -729,3 +729,39 @@ def test_only_a_cross_prd_dependency_reads_in_plain_words_with_its_fixes():
     )
     assert [f["label"] for f in hbd["fixes"]] == ["Move to Later", "Remove dependency"]
     assert "unknown_dependency" not in codes(out)
+
+
+def test_a_fix_answers_only_its_own_reason_of_two_with_one_code():
+    # protects=of an item's two dependency reasons (another PRD's and its own), staging one's
+    # fix clears that one only, in the review's counts and in the file sent back;
+    # fails_when=an action naming the code answers both reasons.
+    from datetime import UTC, datetime
+
+    from oracle.runs import actions, review_file
+    from oracle.runs.schemas import ReviewAction
+
+    body = """\
+  - {id: base, title: Local base, outcome: o, horizon: next, prd_section: s-1}
+  - {id: obs, title: Observability, outcome: o, horizon: now, prd_section: s-1,
+     depends_on: [account-health-ledger, base]}
+"""
+    items, problems = check(FILE.format(items=body), elsewhere=[LEDGER])
+    cross, local = reasons_for(items, problems, None, elsewhere=[LEDGER])
+
+    def staged(fix: dict, answers: list[str]) -> ReviewAction:
+        a = fix["action"]
+        return ReviewAction(id=uuid.uuid4(), item_key=a["item"], kind=a["kind"], field=a["field"],
+                            value=a["value"], answers=answers, state="staged",
+                            updated_at=datetime.now(UTC))  # fmt: skip
+
+    remove_ledger = staged(cross["fixes"][1], [cross["code"]])
+    move_local = staged(local["fixes"][0], [local["code"]])
+    for answers in (actions._answers, review_file._answers):
+        assert answers(remove_ledger, cross) and not answers(remove_ledger, local)
+        assert answers(move_local, local) and not answers(move_local, cross)
+    # A waiver naming the code still answers both; an edit naming none, every reason.
+    waiver = staged({"action": {"item": "obs", "kind": "waive", "field": None, "value": None}},
+                    [cross["code"]])  # fmt: skip
+    assert actions._answers(waiver, cross) and actions._answers(waiver, local)
+    bare = staged(cross["fixes"][1], [])
+    assert actions._answers(bare, cross) and actions._answers(bare, local)
