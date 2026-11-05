@@ -109040,7 +109040,7 @@
             "type": "string",
             "title": "Answer"
           },
-          "feature": {
+          "feature_key": {
             "anyOf": [
               {
                 "type": "string"
@@ -109049,7 +109049,18 @@
                 "type": "null"
               }
             ],
-            "title": "Feature"
+            "title": "Feature Key"
+          },
+          "feature_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Title"
           },
           "answered_by_name": {
             "anyOf": [

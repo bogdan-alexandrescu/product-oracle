@@ -923,8 +923,10 @@ class RunDecisionAnswer(BaseModel):
 
     question: str
     answer: str
-    # The feature it is about, "<key> <title>", when the question names one.
-    feature: str | None = None
+    # The feature it is about, when the question names one: its key, and its name from the
+    # briefs or the run's feature set (None when neither names it). A person reads the name.
+    feature_key: str | None = None
+    feature_title: str | None = None
     answered_by_name: str | None = None
     answered_at: datetime | None = None
 

@@ -36006,8 +36006,10 @@ export interface components {
             question: string;
             /** Answer */
             answer: string;
-            /** Feature */
-            feature?: string | null;
+            /** Feature Key */
+            feature_key?: string | null;
+            /** Feature Title */
+            feature_title?: string | null;
             /** Answered By Name */
             answered_by_name?: string | null;
             /** Answered At */

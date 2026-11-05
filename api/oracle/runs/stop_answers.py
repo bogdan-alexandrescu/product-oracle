@@ -65,7 +65,9 @@ class Answered:
     kind: str
     question: str
     answer: str
-    feature: str | None = None
+    # The feature it is about: its key (for citing) and its name (what a person reads).
+    feature_key: str | None = None
+    feature_title: str | None = None
     by: uuid.UUID | None = None
     by_name: str | None = None
     at: datetime | None = None
@@ -103,7 +105,6 @@ def _engineering(cp: Checkpoint, recorded: dict[str, Any]) -> list[Answered]:
         feature = features.get(key) or {}
         asked = {q.get("id"): q.get("question") for q in feature.get("questions") or []}
         title = feature.get("title")
-        name = f"{key} {title}" if title and title != key else key
         for a in listed:
             if not isinstance(a, dict) or not isinstance(a.get("answer"), str):
                 continue  # a non-text answer is dropped, as at registration
@@ -114,7 +115,8 @@ def _engineering(cp: Checkpoint, recorded: dict[str, Any]) -> list[Answered]:
             out.append(
                 Answered(
                     checkpoint_id=cp.id, kind=cp.kind, question=str(question), answer=answer,
-                    feature=name, by=_uuid(a.get("by")) or cp.decided_by,
+                    feature_key=key, feature_title=title if title and title != key else None,
+                    by=_uuid(a.get("by")) or cp.decided_by,
                     at=_when(a.get("at")) or cp.decided_at,
                 )
             )  # fmt: skip
@@ -142,7 +144,7 @@ def _card(cp: Checkpoint, q: Any, option: str, note: str | None, by: Any, at: An
     label = {o.key: o.label for o in q.options}.get(option, option)
     return Answered(
         checkpoint_id=cp.id, kind=cp.kind, question=q.question,
-        answer=f"{label}. Note: {note}" if note else label, feature=q.feature,
+        answer=f"{label}. Note: {note}" if note else label, feature_key=q.feature,
         by=_uuid(by), at=_when(at),
     )  # fmt: skip
 
@@ -154,7 +156,7 @@ def _recorded_cards(cp: Checkpoint) -> list[Answered]:
             out.append(
                 Answered(
                     checkpoint_id=cp.id, kind=cp.kind, question=str(a["question"]),
-                    answer=a["answer"], feature=a.get("feature"), by=_uuid(a.get("by")),
+                    answer=a["answer"], feature_key=a.get("feature"), by=_uuid(a.get("by")),
                     at=_when(a.get("at")),
                 )
             )  # fmt: skip
@@ -173,7 +175,7 @@ async def record(db: AsyncSession, run: Run, cp: Checkpoint) -> None:
         by = q.answer.by.id if q.answer.by else None
         a = _card(cp, q, q.answer.option, q.answer.note, by, q.answer.at)
         out.append(
-            {"question": a.question, "answer": a.answer, "feature": a.feature,
+            {"question": a.question, "answer": a.answer, "feature": a.feature_key,
              "by": str(a.by) if a.by else None, "at": a.at.isoformat() if a.at else None}
         )  # fmt: skip
     cp.payload = {**(cp.payload or {}), RECORD: out}
@@ -244,8 +246,36 @@ async def _read(
                 a = rows[c.id].get(q.id)
                 if a is not None and a.option in {o.key for o in q.options}:
                     out[c.id].append(_card(c, q, a.option, a.note, a.answered_by, a.answered_at))
+    await _titled(db, {c.id: c.run_id for c in cps}, out)
     await named(db, [a for listed in out.values() for a in listed])
     return out
+
+
+async def _titled(
+    db: AsyncSession, run_of: dict[uuid.UUID, uuid.UUID], out: dict[uuid.UUID, list[Answered]]
+) -> None:
+    """A card names its feature by key only: its name is the run's feature set's (its
+    latest scope that lists the key), in one read."""
+    from oracle.runs.scope_models import PrdScope, PrdScopeItem
+
+    bare = [a for listed in out.values() for a in listed if a.feature_key and not a.feature_title]
+    if not bare:
+        return
+    rows = await db.execute(
+        select(PrdScope.run_id, PrdScopeItem.key, PrdScopeItem.title)
+        .join(PrdScope, PrdScope.id == PrdScopeItem.scope_id)
+        .where(
+            PrdScope.run_id.in_({run_of[a.checkpoint_id] for a in bare}),
+            PrdScopeItem.kind == "feature",
+            PrdScopeItem.key.in_({a.feature_key for a in bare}),
+        )
+        .order_by(PrdScope.segment_seq, PrdScope.attempt)
+    )
+    titles = {(run_id, key): title for run_id, key, title in rows.all() if title}
+    for a in bare:
+        title = titles.get((run_of[a.checkpoint_id], a.feature_key))
+        if title and title != a.feature_key:
+            a.feature_title = title
 
 
 async def of_checkpoint(db: AsyncSession, run: Run, cp: Checkpoint) -> list[Answered]:
@@ -363,6 +393,8 @@ async def prompt_lines(
 
     lines = [
         "Decided at this run's stops: a person answered each question below at the stop, "
+        "about the feature named before it (its key in parentheses is for citing only, never "
+        "a name to write), "
         "and each note below is the call of the person who approved or sent back the stop, "
         "so each is a decision, never an open question. State each answer as decided in "
         "the body where it belongs (Approach, Requirements, Rules and the feature's own "
@@ -381,12 +413,20 @@ async def prompt_lines(
         who = f"answered by {a.by_name}" if a.by_name else "answered"
         if a.at is not None:
             who += f" on {company_time.day_in_words(a.at, zone)}"
-        about = f"{a.feature}: " if a.feature else ""
         lines.append(
-            f'- {where(a.checkpoint_id, a.kind)}, {who}: {about}"{a.question}" '
+            f'- {where(a.checkpoint_id, a.kind)}, {who}: {_about(a)}"{a.question}" '
             f'Decided: "{a.answer}"'
         )
     return lines
+
+
+def _about(a: Answered) -> str:
+    """The feature an answer is about, for a writer: its name, and its key apart."""
+    if a.feature_title and a.feature_key:
+        return f"{a.feature_title} (feature key {a.feature_key}, for citing only): "
+    if a.feature_key:
+        return f"Feature key {a.feature_key} (for citing only): "
+    return ""
 
 
 def decision_lines(answers: list[Answered]) -> list[str]:
@@ -395,7 +435,7 @@ def decision_lines(answers: list[Answered]) -> list[str]:
         return []
     lines = ["Answers to the architect's questions (decided):"]
     for a in answers:
-        about = f"{a.feature}: " if a.feature else ""
+        about = f"{a.feature_title or a.feature_key}: " if a.feature_key else ""
         by = f" (answered by {a.by_name})" if a.by_name else ""
         lines.append(f'- {about}"{a.question}" → "{a.answer}"{by}')
     return lines
@@ -411,9 +451,12 @@ _MARKER = re.compile(
     r"(?:(?:open\s+)?(?:question|decision)s?\s*:\s*)?",
     re.IGNORECASE,
 )
-# The owner and due day an open question is listed with: "Owner: Rae, needed by Nov 30".
+# The owner and due day an open question is listed with, only in their listed forms:
+# "… Owner: Rae", "…, needed by Nov 30", "… (due Nov 30)" or "… (owner: Rae)"; a "due" or
+# "owner" inside the question itself ("Is the invoice due on delivery?") stays.
 _TAIL = re.compile(
-    r"[\s(\[,;:.\-–—]+\b(?:owners?|owned by|needed by|decide by|due by|due)\b.*$",
+    r"(?:[?.!,;:]\s*|\s[-–—]\s*|\s+)(?:owners?\s*:|owned by\b|needed by\b|decide by\b)"
+    r".*$|\s*[(\[]\s*(?:due|owners?|owned by|needed by)\b.*$",
     re.IGNORECASE,
 )
 _RULE = re.compile(r"^:?-{3,}:?$")
@@ -506,15 +549,25 @@ def _forms(item: str) -> set[str]:
     return {w for w in (_words(bare), _words(_TAIL.sub("", bare))) if w}
 
 
+# Words that turn a question around ("t" is the n't of "don't" as words): a question with
+# one and its copy without are two.
+_NEGATIONS = frozenset({"not", "no", "never", "nor", "without", "dont", "doesnt", "isnt",
+                        "cant", "cannot", "wont", "shouldnt", "arent", "didnt", "t"})  # fmt: skip
+
+
 def same_question(asked: str, listed: str) -> bool:
-    """``listed`` is the answered question ``asked`` (both as words): equal, or the same
-    words but for one, at near-equal length. A longer question that contains it is not."""
+    """``listed`` is the answered question ``asked`` (both as words): the same words, or,
+    at the same number of words, all but one (at least 90% of their distinct words shared)
+    with the same negations ("should" and "should not" are two questions). A question one
+    word longer or shorter, or a longer one that contains it, is a new question."""
     if asked == listed:
         return True
     a, b = asked.split(), listed.split()
-    if abs(len(a) - len(b)) > 1:
+    if len(a) != len(b):
         return False
     sa, sb = set(a), set(b)
+    if sa & _NEGATIONS != sb & _NEGATIONS:
+        return False
     return len(sa & sb) / len(sa | sb) >= 0.9
 
 

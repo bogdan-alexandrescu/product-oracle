@@ -1373,7 +1373,8 @@ async def decisions_of_runs(
                     RunDecisionAnswer(
                         question=a.question,
                         answer=a.answer,
-                        feature=a.feature,
+                        feature_key=a.feature_key,
+                        feature_title=a.feature_title,
                         answered_by_name=a.by_name,
                         answered_at=a.at,
                     )
