@@ -101,6 +101,12 @@ excluded:
     reason: Serves no confirmed goal
 """
 BLOCKING = CLEAN.replace("depends_on: [address-lookup]", "depends_on: [address-sharing]")
+# CLEAN with bulk-edit naming the goal it serves: a run past its order stop needs it, as a new
+# feature naming no goal blocks Approve order (fidelity-nov4, run_order.new_feature_no_goal).
+SERVED = CLEAN.replace(
+    "    title: Bulk edit\n    goals: []\n",
+    "    title: Bulk edit\n    goals: [{key: activation, contribution: 1}]\n",
+)
 BULK = """\
   - key: bulk-edit
     title: Bulk edit
@@ -506,7 +512,7 @@ async def test_stop_off_fails_the_run_on_a_blocking_problem(client, owner, runti
 
 async def test_draft_reads_scope(client, owner, runtime):  # noqa: F811
     tenant_id, auth = owner
-    run = await at_feature_set(client, owner, runtime)
+    run = await at_feature_set(client, owner, runtime, SERVED)
     run = await decide(client, auth, run)
     # The Engineering check (on by default): verdicts staged, approved.
     await tick(client, auth)
@@ -631,7 +637,7 @@ async def test_get_prd_scope_reads_the_tokens_run_and_refuses_people(client, own
 
 async def test_get_prd_scope_falls_back_to_the_documents_approved_scope(client, owner, runtime):  # noqa: F811
     tenant_id, auth = owner
-    run = await at_feature_set(client, owner, runtime)
+    run = await at_feature_set(client, owner, runtime, SERVED)
     run = await decide(client, auth, run)
     # The Engineering check (on by default), then the priority order.
     for _ in range(2):
