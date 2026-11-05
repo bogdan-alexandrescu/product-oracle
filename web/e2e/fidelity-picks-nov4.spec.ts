@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { PRIORITY_NO_GOAL_RUN, PRIORITY_RUN } from "../lib/api/mock/runs";
+import { PRIORITY_DUPLICATE_RUN, PRIORITY_NO_GOAL_RUN, PRIORITY_ROWLESS_RUN, PRIORITY_RUN } from "../lib/api/mock/runs";
 import { login } from "./helpers";
 
 /**
@@ -27,6 +27,11 @@ import { login } from "./helpers";
  *   feature's panel, with what to do (request changes: order problems are never waived), at
  *   1440 and 390; fails_when=the sentence sits only in a tooltip, the band says "waive", the
  *   info line promises the order adds the features, or the unknown goal is let through.
+ * - RP1 a, round 4: protects=the band counts and says every blocking problem of the order once,
+ *   one on no row (missing_feature) too, and a key ranked twice once; a goal key with no name
+ *   reads "Unknown goal", the key only in its tooltip, and is not a goal of By goal; a new
+ *   feature's panel reads each problem once; fails_when=a row-less problem is left out, a
+ *   duplicate is said twice, the raw key shows, or the panel repeats the sentence.
  * - RP2 c (mk-runplan): protects=Approve these 6 dates brings its ask into view; the decision
  *   stamp keeps its zone ("Avery Stone · Wed Nov 4, 4:41 PM PST"); fails_when=the ask opens out of
  *   view, or the stamp drops the zone.
@@ -209,13 +214,61 @@ test.describe("RP1 a: the run's priority order", () => {
     const problems = page.getByTestId("priority-inspector").getByTestId("run-problems");
     await expect(problems).toBeVisible();
     await expect(problems.getByText(NO_GOAL, { exact: true })).toBeVisible();
+    // Read once, for screen readers and sight alike: the chip carries no second copy.
+    await expect(problems.getByText(NO_GOAL)).toHaveCount(1);
+  });
+
+  test("a goal key with no name reads Unknown goal, the key only in its tooltip", async ({ page }) => {
+    await openNoGoalOrder(page);
+    const row = page.getByTestId("priority-row-N-8");
+    await expect(row).not.toContainText("g.no-such-goal");
+    const goal = row.getByTestId("unknown-goal");
+    await expect(goal).toHaveText("Unknown goal");
+    await expect(goal).toHaveAttribute("title", /g\.no-such-goal/);
+    await expect(page.getByTestId("snapshot-band")).not.toContainText("g.no-such-goal");
+    await expect(page.locator("main")).not.toContainText("g.no-such-goal");
+    // By goal lists the goals of the Ground Truth only.
+    await expect(page.getByRole("table", { name: "By goal" })).not.toContainText("Unknown goal");
+    await row.getByRole("button", { name: /Gift wrap choice/ }).click();
+    const panel = page.getByTestId("priority-inspector");
+    await expect(panel.getByTestId("unknown-goal").first()).toHaveText("Unknown goal");
+    await expect(panel).not.toContainText("g.no-such-goal");
+    await expect(panel.getByText(UNKNOWN_GOAL)).toHaveCount(1);
+  });
+
+  test("a blocking problem on no row is counted and said on the band too", async ({ page }) => {
+    await withScenario(page, "priority-order");
+    await login(page, "approver@example.com");
+    await page.goto(`/runs/${PRIORITY_ROWLESS_RUN}`);
+    await page.getByTestId("checkpoint-priority_order").getByRole("link", { name: "Review the order" }).click();
+    const band = page.getByTestId("snapshot-band");
+    await expect(band.getByRole("button", { name: "Approve order" })).toBeDisabled();
+    // Not only goal problems: the run fixes them, not only names the goal.
+    await expect(band.getByTestId("cannot-approve")).toHaveText("2 blocking problems left. Order problems cannot be waived: request changes so the run fixes them.");
+    const list = band.getByRole("list", { name: "Blocking problems" });
+    await expect(list.getByRole("listitem")).toHaveCount(2);
+    await expect(list.getByText(UNKNOWN_GOAL)).toBeVisible();
+    await expect(list.getByText("Gift receipt by email is in the approved PRD scope and not ranked")).toBeVisible();
+  });
+
+  test("a feature ranked twice is one problem, said once", async ({ page }) => {
+    await withScenario(page, "priority-order");
+    await login(page, "approver@example.com");
+    await page.goto(`/runs/${PRIORITY_DUPLICATE_RUN}`);
+    await page.getByTestId("checkpoint-priority_order").getByRole("link", { name: "Review the order" }).click();
+    const band = page.getByTestId("snapshot-band");
+    await expect(band.getByTestId("cannot-approve")).toHaveText("1 blocking problem left. Order problems cannot be waived: request changes so the run fixes it.");
+    const list = band.getByRole("list", { name: "Blocking problems" });
+    await expect(list.getByRole("listitem")).toHaveCount(1);
+    await expect(list.getByRole("listitem")).toHaveText("Saved addresses at checkout is ranked 2 times");
   });
 });
 
 // Review of PR 1244, round 3: an order's blocking problems are said in full under the band,
 // with what to do (order problems are never waived), at 1440 and on a phone.
 const NO_GOAL = "Gift notes at checkout is new and names no goal it serves: the run must name one";
-const UNKNOWN_GOAL = "Gift wrap choice names the goal g.no-such-goal, which is not a goal in the Ground Truth: the run must name one that is";
+// The goal's key is no name: the sentence says "an unknown goal", the key in its tooltip.
+const UNKNOWN_GOAL = "Gift wrap choice names an unknown goal, which is not a goal in the Ground Truth: the run must name one that is";
 
 async function openNoGoalOrder(page: Page) {
   await withScenario(page, "priority-order");

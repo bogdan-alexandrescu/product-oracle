@@ -1260,8 +1260,13 @@ const goalSet = (ctx: Pick<RunsContext, "goalKeys">) => (ctx.goalKeys ? new Set(
  * new_feature_no_goal, unknown_goal (blocking); differs_from_live, no_goal (advisory). The live ranking is the mock's
  * (./lane-f.ts), restricted to the ranked features.
  */
-function checkOrder(spec: OrderSpec, scope: PrdScopeOut["features"] | null, goals: Set<string> | null): PriorityCheck {
-  const live = ranking(spec.method).features;
+function checkOrder(given: OrderSpec, scope: PrdScopeOut["features"] | null, goals: Set<string> | null): PriorityCheck {
+  const live = ranking(given.method).features;
+  const titleOf = (k: string) => live.find((f) => f.key === k)?.title ?? (scope ?? []).find((f) => f.key === k)?.title ?? given.order.find((o) => o.key === k && o.title)?.title ?? k;
+  // A key ranked twice is checked once, at its first entry (api: duplicate_key).
+  const times = new Map<string, number>();
+  for (const o of given.order) times.set(o.key, (times.get(o.key) ?? 0) + 1);
+  const spec: OrderSpec = { ...given, order: given.order.filter((o, i) => given.order.findIndex((x) => x.key === o.key) === i) };
   const keys = spec.order.map((o) => o.key);
   const restricted = live.filter((f) => keys.includes(f.key)).map((f) => f.key);
   const rank = Object.fromEntries(keys.map((k, i) => [k, i + 1]));
@@ -1272,12 +1277,13 @@ function checkOrder(spec: OrderSpec, scope: PrdScopeOut["features"] | null, goal
   for (const o of spec.order) if (o.title) deps[o.key] = [...(o.depends_on ?? [])];
   const problems: PriorityCheck["problems"] = [];
   const add = (code: string, feature: string, message: string, blocking = true) => problems.push({ code, blocking, feature, message });
+  for (const [k, n] of times) if (n > 1) add("duplicate_key", k, `${titleOf(k)} is ranked ${n} times`);
   const inScope = new Set((scope ?? []).map((f) => f.key));
   for (const k of keys) {
     if (!live.some((f) => f.key === k) && !inScope.has(k) && !proposed.has(k)) add("unknown_feature", k, `${k} is not a feature of the baseline or the scope`);
     else if (scope && !inScope.has(k)) add("not_in_scope", k, `${k} is not included in the approved PRD scope`);
   }
-  for (const f of scope ?? []) if (!(f.key in rank)) add("missing_feature", f.key, `${f.key} is in the approved PRD scope and not ranked`);
+  for (const f of scope ?? []) if (!(f.key in rank)) add("missing_feature", f.key, `${f.title || f.key} is in the approved PRD scope and not ranked`);
   // A feature new in this PRD names a goal it serves, in its row or its feature-set entry: a goal
   // of the baseline (not rejected), 0 from either source meaning it does not serve (api _check_new_goals).
   for (const o of spec.order) {
@@ -3078,6 +3084,8 @@ export function fromRunCheckpoint(ctx: RunsContext, runId: string): { run: Schem
 export const PRIORITY_RUN = "7a11c0de-0000-4000-8000-0000000000c8";
 export const PRIORITY_BLOCKED_RUN = "7a11c0de-0000-4000-8000-0000000000c9";
 export const PRIORITY_NO_GOAL_RUN = "7a11c0de-0000-4000-8000-0000000000ca";
+export const PRIORITY_ROWLESS_RUN = "7a11c0de-0000-4000-8000-0000000000cb";
+export const PRIORITY_DUPLICATE_RUN = "7a11c0de-0000-4000-8000-0000000000cc";
 
 /**
  * Saved addresses: one feature ranked well above the live ranking (differs_from_live,
@@ -3122,8 +3130,33 @@ const GIFT_NOTES_ORDER: OrderSpec = {
   ],
 };
 
+/** Gift receipts: a new feature naming a goal the baseline lacks (unknown_goal, on its row) and a feature of the approved scope left unranked (missing_feature, on no row). */
+const GIFT_RECEIPTS_ORDER: OrderSpec = {
+  method: "goal_weighted",
+  order: [
+    { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
+    { key: "N-8", title: "Gift wrap choice", goal: "g.no-such-goal", weight: 1, contribution: 2, confidence: 0.5, effort: 1, score: 1, explanation: "New in this PRD. Buyers pick a wrap." },
+  ],
+};
+
+/** The approved feature set the Gift receipts order is checked against: Gift receipt by email is in it and not ranked. */
+const scopeFeature = (key: string, title: string): PrdScopeOut["features"][number] => ({
+  id: `scope-${key}`, key, title, decision: "include", origin: "agent", goals: [], depends_on: [], blocker_keys: [], flags: [], requirements: [],
+});
+const GIFT_RECEIPTS_SCOPE = [scopeFeature("F-1", "Saved addresses at checkout"), scopeFeature("N-8", "Gift wrap choice"), scopeFeature("N-9", "Gift receipt by email")];
+
+/** Gift cards: Saved addresses at checkout ranked twice (duplicate_key): one problem, said once. */
+const GIFT_CARDS_ORDER: OrderSpec = {
+  method: "goal_weighted",
+  order: [
+    { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
+    { key: "F-5", score: 1.8, explanation: "G1 weight 3 x contribution 1 x 0.6 / 3" },
+    { key: "F-1", score: 2.25, explanation: "Ranked again by mistake" },
+  ],
+};
+
 /** A Baseline to PRD run for `document`, its baseline and feature set approved, waiting at the priority stop with `spec`. */
-function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, document: string, created_at: string, spec: OrderSpec, briefTitle?: string): RunOut {
+function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, document: string, created_at: string, spec: OrderSpec, briefTitle?: string, scope?: PrdScopeOut["features"]): RunOut {
   const { from, now } = seedClock();
   // Its own runs list, so the ticks below move this run only.
   const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}), priority_snapshots: (db.priority_snapshots ??= []) };
@@ -3140,11 +3173,11 @@ function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, do
     Object.assign(cp, { status: "approved", decided_by: ctx.userId, decided_at: now() });
     next(full, r, r.segments[seq - 1]);
   }
-  // Its feature set came from an earlier scope: the order is not checked against one here.
+  // Its feature set came from an earlier scope: the order is checked against `scope` when given.
   own.scopes![r.id] = [];
   tick(full);
   const priority = r.segments.find((s) => s.name === "priority")!;
-  const check = checkOrder(spec, null, goalSet(ctx));
+  const check = checkOrder(spec, scope ?? null, goalSet(ctx));
   priority.priority_check = check;
   db.artifacts[`${r.id}|${priority.seq}|priority.yaml`] = priorityYaml(spec, priority.name, 1);
   const snap = proposeOrder(full, r, priority.seq, 1, spec, check);
@@ -3167,6 +3200,8 @@ export function seedPriorityRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
   // Its PRD is not imported yet (no document has the slug): the order names it by the brief's title.
   seedAtPriority(db, ctx, PRIORITY_BLOCKED_RUN, "usage-alerts-pilot", "2026-10-18T10:00:00Z", USAGE_ALERTS_ORDER, "Example Co · Usage alerts");
   seedAtPriority(db, ctx, PRIORITY_NO_GOAL_RUN, "gift-notes", "2026-10-18T08:00:00Z", GIFT_NOTES_ORDER, "Gift notes");
+  seedAtPriority(db, ctx, PRIORITY_ROWLESS_RUN, "gift-receipts", "2026-10-18T07:00:00Z", GIFT_RECEIPTS_ORDER, "Gift receipts", GIFT_RECEIPTS_SCOPE);
+  seedAtPriority(db, ctx, PRIORITY_DUPLICATE_RUN, "gift-cards", "2026-10-18T06:00:00Z", GIFT_CARDS_ORDER, "Gift cards");
   const checkout = ctx.documents.find((d) => d.slug === "checkout-redesign");
   const earlier = db.runs.find((r) => r.document_slug === "checkout-redesign") ?? db.runs[0];
   const spec: OrderSpec = { method: "goal_weighted", order: ranking("goal_weighted").features.slice(0, 4).map((f) => ({ key: f.key, score: f.score ?? 0, explanation: "As the live ranking" })) };

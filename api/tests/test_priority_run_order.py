@@ -1145,3 +1145,54 @@ async def test_a_rejected_goal_does_not_count(client, owner, runtime):  # noqa: 
     assert [(p["code"], p["feature"]) for p in snap.check_result["problems"] if p["blocking"]] == [
         ("unknown_goal", "bulk-edit")
     ]
+
+
+def test_check_missing_and_duplicate_name_the_feature():
+    """Review of PR 1244, round 4: a problem of no ranked row is said on the band in full, so
+    it names the feature by its name, never its key alone."""
+    k = known(("gift-notes", "gift-wrap", "gift-receipt"), scope=("gift-notes", "gift-receipt"))
+    k.features.update({"gift-notes": "Gift notes", "gift-receipt": "Gift receipt"})
+    text = order(("gift-notes", 1), ("gift-notes", 2))
+    out = run_order.check_order(text, known=k)
+    by_code = {p["code"]: p["message"] for p in out.problems}
+    assert by_code["duplicate_key"] == "Gift notes is ranked 2 times"
+    assert by_code["missing_feature"] == "Gift receipt is in the approved PRD scope and not ranked"
+
+
+# A goal a new feature serves, rejected between the order's check and Approve.
+STALE_GOAL = (
+    "Bulk edit serves the goal Activation, which was rejected after the order was checked: "
+    "the run must name a goal of the Ground Truth"
+)
+
+
+async def test_approve_rechecks_the_goals_of_its_new_features(client, owner, runtime):  # noqa: F811
+    """Review of PR 1244, round 4: the goal a new feature serves is rejected after the order
+    was checked. Approve order re-checks the goals and is refused with the problem named;
+    the order keeps the problem, nothing joins the Ground Truth without its goal."""
+    tenant_id, _ = owner
+    run = await at_priority(client, owner, runtime, ORDER_NEW, features=CLEAN)
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert [p for p in snap.check_result["problems"] if p["blocking"]] == []
+    async with tenant_session(tenant_id) as s:
+        goal = await s.scalar(select(Entity).where(Entity.key == "activation"))
+        goal.status = "rejected"
+        await s.commit()
+    cp = pending(run)
+    resp = await client.post(
+        f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/decide",
+        json={"decision": "approved"},
+        headers=await as_user(tenant_id, "approver"),
+    )
+    assert resp.status_code == 409, resp.text
+    assert STALE_GOAL in resp.json()["detail"]["message"]
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert snap.status == "proposed"
+    assert [
+        (p["code"], p["feature"], p["message"]) for p in snap.check_result["problems"] if p["blocking"]
+    ] == [("unknown_goal", "bulk-edit", STALE_GOAL)]
+    entity, _ = await new_feature_graph(tenant_id)
+    assert entity is None
+    # The run page and the Inbox say it too, and a second try is refused the same way.
+    run = await get(client, (await as_user(tenant_id, "approver")), run["id"])
+    assert pending(run)["cannot_approve"] == BLOCKED
