@@ -435,7 +435,8 @@ def decision_lines(answers: list[Answered]) -> list[str]:
         return []
     lines = ["Answers to the architect's questions (decided):"]
     for a in answers:
-        about = f"{a.feature_title or a.feature_key}: " if a.feature_key else ""
+        # A person reads this record: the feature's name, never its key.
+        about = f"{a.feature_title or 'A feature in this run'}: " if a.feature_key else ""
         by = f" (answered by {a.by_name})" if a.by_name else ""
         lines.append(f'- {about}"{a.question}" → "{a.answer}"{by}')
     return lines
@@ -452,11 +453,14 @@ _MARKER = re.compile(
     re.IGNORECASE,
 )
 # The owner and due day an open question is listed with, only in their listed forms:
-# "… Owner: Rae", "…, needed by Nov 30", "… (due Nov 30)" or "… (owner: Rae)"; a "due" or
-# "owner" inside the question itself ("Is the invoice due on delivery?") stays.
+# "… Owner: Rae", "…, needed by Nov 30", "… - owned by Rae", "…? Decide by Nov 30" or
+# "… (due Nov 30)"; "owned by", "needed by" and "decide by" only as a tail after a comma,
+# a dash, a parenthesis or the question's end, so a "due", "owner" or "needed by" inside
+# the question itself ("Is the report needed by finance each week?") stays.
 _TAIL = re.compile(
-    r"(?:[?.!,;:]\s*|\s[-–—]\s*|\s+)(?:owners?\s*:|owned by\b|needed by\b|decide by\b)"
-    r".*$|\s*[(\[]\s*(?:due|owners?|owned by|needed by)\b.*$",
+    r"(?:[?.!,;:]\s*|\s[-–—]\s*|\s+)owners?\s*:.*$"
+    r"|(?:[?.!,;]\s*|\s[-–—]\s*|[–—]\s*)(?:owned|needed|decide)\s+by\b.*$"
+    r"|\s*[(\[]\s*(?:due|owners?|(?:owned|needed|decide)\s+by)\b.*$",
     re.IGNORECASE,
 )
 _RULE = re.compile(r"^:?-{3,}:?$")
@@ -556,19 +560,20 @@ _NEGATIONS = frozenset({"not", "no", "never", "nor", "without", "dont", "doesnt"
 
 
 def same_question(asked: str, listed: str) -> bool:
-    """``listed`` is the answered question ``asked`` (both as words): the same words, or,
-    at the same number of words, all but one (at least 90% of their distinct words shared)
-    with the same negations ("should" and "should not" are two questions). A question one
-    word longer or shorter, or a longer one that contains it, is a new question."""
+    """``listed`` is the answered question ``asked`` (both as words), compared word by word
+    in order: the same words, or the same number of words with at most one position
+    holding a different word ("database" for "datastore"), and the same negations
+    ("should" and "should not" are two questions). A question one word longer or shorter,
+    a longer one that contains it, or the same words in another order ("A replace B" and
+    "B replace A") is a new question."""
     if asked == listed:
         return True
     a, b = asked.split(), listed.split()
     if len(a) != len(b):
         return False
-    sa, sb = set(a), set(b)
-    if sa & _NEGATIONS != sb & _NEGATIONS:
+    if [w for w in a if w in _NEGATIONS] != [w for w in b if w in _NEGATIONS]:
         return False
-    return len(sa & sb) / len(sa | sb) >= 0.9
+    return sum(x != y for x, y in zip(a, b, strict=True)) <= 1
 
 
 def listed_open(answers: list[Answered], markdown: str) -> list[ImportProblem]:
