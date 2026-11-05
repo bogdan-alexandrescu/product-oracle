@@ -137,11 +137,11 @@ for (const [phone, dark] of [
     });
 
     test(`"next:" and "skip" change the agenda strip; Undo restores it (${where})`, async ({ page }) => {
-      // protects: "next: Setup checklist" restates as "Take Setup checklist next" (Preview: "Setup checklist is taken next") and Apply shows "Next: Setup checklist" on the meeting screen; "skip Team invite nudges" ("Skip Team invite nudges", Preview "… is skipped") shows "Skipped: Team invite nudges"; skipping the next item clears Next; Undo puts the agenda back as it was
-      // fails_when: the strip does not show, does not follow Apply or Undo, or a card has no Preview description
-      // no_claim: the order of the PRD's agenda beyond next and skipped (the contract has none)
+      // protects: "next: Setup checklist" restates as "Take Setup checklist next" (Preview: "Setup checklist is taken next") and Apply shows "Next: Setup checklist" on the meeting screen; "skip Team invite nudges" ("Skip Team invite nudges", Preview "… is skipped") marks it skipped in the Agenda sheet; skipping the next item moves Next on; Undo puts the agenda back as it was
+      // fails_when: the strip does not follow Apply or Undo, or a card has no Preview description
+      // no_claim: the sheet's own edits (meeting-agenda-edit.spec.ts)
       await startReview(page);
-      await expect(page.getByTestId("agenda-strip")).toHaveCount(0);
+      await expect(page.getByTestId("agenda-strip")).toContainText("Item 1 of");
 
       const next = await understood(chat(page), "next: Setup checklist", "Take Setup checklist next");
       await preview(next, "Setup checklist is taken next");
@@ -151,18 +151,18 @@ for (const [phone, dark] of [
       const skip = await understood(chat(page), "skip Team invite nudges", "Skip Team invite nudges");
       await preview(skip, "Team invite nudges is skipped");
       await apply(skip);
-      await expect(page.getByTestId("agenda-skipped")).toHaveText("Skipped: Team invite nudges");
+      expect(await skippedInSheet(page)).toEqual(["Team invite nudges"]);
       await expect(page.getByTestId("agenda-next")).toHaveText("Next: Setup checklist");
 
       const skipNext = await understood(chat(page), "skip Setup checklist", "Skip Setup checklist");
       await apply(skipNext);
-      await expect(page.getByTestId("agenda-next")).toHaveCount(0);
-      await expect(page.getByTestId("agenda-skipped")).toHaveText("Skipped: Team invite nudges, Setup checklist");
+      await expect(page.getByTestId("agenda-next")).not.toHaveText("Next: Setup checklist");
+      expect((await skippedInSheet(page)).sort()).toEqual(["Setup checklist", "Team invite nudges"]);
 
       await tap(skipNext.getByRole("button", { name: "Undo" }));
       await expect(skipNext.getByTestId("chat-card-outcome")).toContainText("Undone");
       await expect(page.getByTestId("agenda-next")).toHaveText("Next: Setup checklist");
-      await expect(page.getByTestId("agenda-skipped")).toHaveText("Skipped: Team invite nudges");
+      expect(await skippedInSheet(page)).toEqual(["Team invite nudges"]);
     });
 
     test(`a decision and a new owner and decider from the meeting chat (${where})`, async ({ page }) => {
@@ -271,12 +271,24 @@ for (const [phone, dark] of [
   });
 }
 
+/** agenda-sheet: the names the Agenda sheet marks skipped (it opens the sheet and closes it again). */
+async function skippedInSheet(page: Page): Promise<string[]> {
+  await tap(page.getByTestId("agenda-open"));
+  const sheet = page.getByRole("dialog", { name: "Agenda" });
+  const rows = sheet.locator('[data-testid="agenda-row"][data-state="skipped"] button[data-feature]');
+  await expect(sheet.getByTestId("agenda-row").first()).toBeVisible();
+  const names = await rows.allInnerTexts();
+  await sheet.getByRole("button", { name: "Close Agenda" }).click();
+  await expect(sheet).toBeHidden();
+  return names;
+}
+
 /** The "simple-chat" scenario (S9's invented meeting, Weekly plan review, which the viewer attends). */
 async function chatScenario(page: Page) {
   await page.context().addInitScript((key) => localStorage.setItem(key, "simple-chat"), MOCK_SCENARIO_KEY);
 }
 
-/* build-feature-panel review 5: the agenda strip's Next and Skipped names open the one feature panel. */
+/* build-feature-panel review 5: the agenda strip's Next and the Agenda sheet's skipped names open the one feature panel. */
 test("the agenda strip's Next and Skipped names open the feature panel", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await startReview(page);
@@ -287,6 +299,7 @@ test("the agenda strip's Next and Skipped names open the feature panel", async (
   await expect(next.getByTestId("fp-details")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(next).toBeHidden();
-  await tap(page.getByTestId("agenda-skipped").getByRole("button", { name: "Team invite nudges" }));
+  await tap(page.getByTestId("agenda-open"));
+  await tap(page.getByRole("dialog", { name: "Agenda" }).locator('[data-testid="agenda-row"][data-state="skipped"]').getByRole("button", { name: "Team invite nudges", exact: true }));
   await expect(page.getByRole("dialog", { name: "Team invite nudges" }).getByTestId("fp-details")).toBeVisible();
 });

@@ -12,6 +12,7 @@
 import { useRef, useState } from "react";
 
 import { InfoTip, Sheet, toast } from "@/components/ds";
+import { openFeaturePanel } from "@/components/simple/FeaturePanelHost";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage } from "@/lib/use-query";
 
@@ -34,10 +35,23 @@ export function agendaSentence(words: string[]): string {
   return `${s[0]!.toUpperCase()}${s.slice(1)}.`;
 }
 
-/** A feature's name opens the one feature panel (data-feature); a topic is plain text. */
-function Name({ x }: { x: Row }) {
+/** A feature's name opens the one feature panel (data-feature on the strip; in the sheet, a
+ * dialog, it closes the sheet first: `onOpen`); a topic is plain text. */
+function Name({ x, onOpen }: { x: Row; onOpen?: () => void }) {
   return x.feature_id ? (
-    <button type="button" data-feature={x.feature_id} className="text-left hover:underline">
+    <button
+      type="button"
+      data-feature={x.feature_id}
+      className="text-left hover:underline"
+      onClick={
+        onOpen
+          ? () => {
+              onOpen();
+              openFeaturePanel(x.feature_id!);
+            }
+          : undefined
+      }
+    >
       {x.title}
     </button>
   ) : (
@@ -194,7 +208,7 @@ export function AgendaSheet({ meetingId, agenda, can, phone, reload }: { meeting
                     ) : (
                       <>
                         <p className={`break-words ${x.state === "done" ? "text-text2" : ""}`}>
-                          <Name x={x} /> <Mark s={x.state} />
+                          <Name x={x} onOpen={() => setOpen(false)} /> <Mark s={x.state} />
                         </p>
                         <p className="text-sm text-text-faint">
                           {x.mins} min{x.kind === "topic" ? " · topic" : ""}
