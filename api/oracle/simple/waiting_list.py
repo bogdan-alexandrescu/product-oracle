@@ -167,7 +167,8 @@ async def _goals(db: AsyncSession, principal: Any) -> list[SimpleWaitingItem]:
             key=f"goal:{g.id}",
             ref_id=str(g.id),
             title=g.title,
-            detail="A proposed goal",
+            # Its row reads "Proposed goal · <name>", as Home's does; no second line repeats it.
+            detail="",
             action="Confirm",
             href="/simple",
             at=g.created_at,

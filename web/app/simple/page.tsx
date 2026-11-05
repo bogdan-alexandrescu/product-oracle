@@ -43,7 +43,7 @@ import {
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, loadWaiting, onWaitingChanged, waitingChanged } from "@/lib/waiting";
 import { RebuildHome } from "@/components/RebuildSign";
-import { WaitingRow } from "@/components/simple/WaitingItems";
+import { WAITING_KIND, WaitingRow } from "@/components/simple/WaitingItems";
 
 type Change = Schemas["SimpleChangeOut"];
 type Decision = Schemas["DecisionOut"];
@@ -233,20 +233,25 @@ export default function SimpleHome() {
   // cards and the rail read again (until it is done).
   // It backs off (1 s, 2 s, 4 s, then every 8 s) and stops after two minutes: a short line then
   // offers Refresh, which starts it again.
-  const drafting = !!roadmap.data?.items.some((i) => i.drafting);
-  const draftReads = useRef<{ since: number; tries: number } | null>(null);
-  const [draftStalled, setDraftStalled] = useState(false);
+  // The stop holds only for the items that were drafting when it came: once they are drafted, a
+  // later item (another goal suggestion confirmed) is read again by itself, with no Refresh.
+  const draftingIds = (roadmap.data?.items ?? []).filter((i) => i.drafting).map((i) => i.id).sort().join(" ");
+  const drafting = !!draftingIds;
+  const draftReads = useRef<{ ids: string; since: number; tries: number } | null>(null);
+  const [stalledOn, setStalledOn] = useState<string | null>(null);
+  const draftStalled = drafting && stalledOn === draftingIds;
   useEffect(() => {
     if (!drafting) {
       draftReads.current = null;
       return;
     }
     if (draftStalled) return;
-    const r = (draftReads.current ??= { since: Date.now(), tries: 0 });
+    if (draftReads.current?.ids !== draftingIds) draftReads.current = { ids: draftingIds, since: Date.now(), tries: 0 };
+    const r = draftReads.current;
     const t = window.setTimeout(
       () => {
         if (Date.now() - r.since >= DRAFT_READS_FOR_MS) {
-          setDraftStalled(true);
+          setStalledOn(r.ids);
           return;
         }
         r.tries += 1;
@@ -256,10 +261,10 @@ export default function SimpleHome() {
       DRAFT_READ_DELAYS_MS[Math.min(r.tries, DRAFT_READ_DELAYS_MS.length - 1)],
     );
     return () => window.clearTimeout(t);
-  }, [drafting, draftStalled, roadmap.data]);
+  }, [drafting, draftingIds, draftStalled, roadmap.data]);
   const refreshDrafting = () => {
     draftReads.current = null;
-    setDraftStalled(false);
+    setStalledOn(null);
     reloadAll();
   };
   const goals = useQuery(k("goals"), () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })), { keepPrevious: true });
@@ -789,8 +794,12 @@ export default function SimpleHome() {
             {/* home-waiting-one-list: each proposed goal, with Confirm / Not this for who confirms goals. */}
             <ul className="mt-1" aria-label="Proposed goals">
               {proposedGoals.map((g) => (
-                <li key={g.id} data-testid="home-goal-proposed" className="flex flex-wrap items-center gap-2 border-t border-line py-2 first:border-t-0">
-                  <span className="min-w-0 flex-1 break-words">{g.title}</span>
+                // Read as Decisions reads it (WaitingRow): "Proposed goal · <name>", Confirm and Not this.
+                <li key={g.id} data-testid="home-goal-proposed" aria-label={`${WAITING_KIND.goal}: ${g.title}`} className="flex flex-wrap items-center gap-2 border-t border-line py-2 first:border-t-0">
+                  <span className="min-w-0 flex-1 break-words">
+                    <span className="text-text2">{WAITING_KIND.goal} · </span>
+                    {g.title}
+                  </span>
                   {can("confirm_entity") && (
                     <span className="flex gap-2">
                       <button type="button" className="simple-button simple-button-primary" onClick={() => void act(() => unwrap(api.POST("/v1/baseline/entities/{entity_id}/confirm", { params: { path: { entity_id: g.id } } })), `${g.title} confirmed`)}>

@@ -107,7 +107,7 @@ export async function waitingItems(get: (path: string) => Promise<unknown>, meId
   }
   const proposed = (entities ?? []).filter((g) => g.type === "goal" && g.status === "proposed").sort((a, b) => a.created_at.localeCompare(b.created_at));
   for (const g of proposed) {
-    out.push({ kind: "goal", key: `goal:${g.id}`, ref_id: g.id, title: g.title, detail: "A proposed goal", action: "Confirm", href: "/simple", at: g.created_at, op: null });
+    out.push({ kind: "goal", key: `goal:${g.id}`, ref_id: g.id, title: g.title, detail: "", action: "Confirm", href: "/simple", at: g.created_at, op: null });
   }
   return out;
 }

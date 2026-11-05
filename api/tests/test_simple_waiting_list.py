@@ -32,7 +32,8 @@ Test cards (protects / fails_when / no_claim):
 - test_goal_waiting_and_confirm: protects=a proposed goal waits for whoever may confirm
   goals (the approver role confirm_entity needs) and leaves once confirmed; a confirmed or
   rejected goal never waits; fails_when=a commenter sees it, a confirmed goal is listed, or
-  it survives confirm; no_claim=reject's own flow (covered by the baseline tests).
+  it survives confirm, or it carries a second line repeating "A proposed goal";
+  no_claim=reject's own flow (covered by the baseline tests).
 - test_run_stop_waiting_and_decide: protects=a pending checkpoint waits for whoever holds
   its approver role; deciding it drops it; fails_when=a commenter sees it or it survives
   the decision; no_claim=engineering stops routed to leads (A3, its own tests).
@@ -174,6 +175,8 @@ async def test_goal_waiting_and_confirm(client):
     item = find(await waiting(client, ctx, "approver"), "goal", gid)
     assert item is not None, "a proposed goal waits on who confirms goals"
     assert item["title"] == "Cut early churn" and item["action"] == "Confirm"
+    # Its row reads "Proposed goal · Cut early churn", as on Home: no second line repeats it.
+    assert item["detail"] == ""
     assert find(await waiting(client, ctx, "approver"), "goal", kept_id) is None
     assert find(await waiting(client, ctx, "commenter"), "goal", gid) is None
     r = await client.post(f"/v1/baseline/entities/{gid}/confirm", headers=ctx.as_("approver"))
