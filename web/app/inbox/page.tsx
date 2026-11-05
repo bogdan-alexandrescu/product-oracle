@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 
 import { Chip, Empty, InfoTip, Page, PageHeader, Panel } from "@/components/ds";
 import { TabBar } from "@/components/review/parts";
 import { ErrorNote, LoadError, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
-import { invalidateWaiting, loadInbox, loadMyQuestions, markInboxSeen, waitingChanged } from "@/lib/waiting";
+import { asNeedKind, invalidateWaiting, loadInbox, loadMyQuestions, markInboxSeen, NEED_KINDS, needKind, waitingChanged } from "@/lib/waiting";
 
 import { useAccessRequestRows } from "./_access";
 import { useActed } from "./_actions";
@@ -46,6 +48,16 @@ function actedMessage(key: string): string | null {
 }
 
 export default function InboxPage() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <Inbox />
+    </Suspense>
+  );
+}
+
+function Inbox() {
+  // QA pass D-2: ?kind= (Home's Needs you chips) shows that kind only.
+  const kind = NEED_KINDS.find((k) => k.id === asNeedKind(useSearchParams().get("kind")));
   const q = useQuery("inbox", loadInbox);
   // Questions asked of me (I3): their own group, counted with the rest as the rail badge counts.
   const questionsQ = useQuery("inbox|questions", loadMyQuestions);
@@ -98,6 +110,7 @@ export default function InboxPage() {
   const reminderRows = useReminderRows(seenBefore);
   const rows = inbox ? [...allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed, requests.rows, perms), ...webhookRows, ...reminderRows, ...minutesRows(inbox.simple_minutes ?? [])] : null;
   const waiting = rows ? waitingNeeds(rows).length : undefined;
+  const kindRows = rows && kind ? rows.filter((r) => needKind(r.group) === kind.id) : rows;
 
   return (
     <Page>
@@ -110,14 +123,24 @@ export default function InboxPage() {
           <ErrorNote>{error}</ErrorNote>
         </div>
       )}
-      {inbox && rows && (
+      {kind && (
+        <p data-testid="inbox-kind" className="mb-3 flex flex-wrap items-center gap-x-2.5 text-[15px] text-text2">
+          <span>
+            Showing <b className="font-semibold text-text">{kind.label}</b>
+          </span>
+          <Link href="/inbox" className="font-semibold text-accent-ink hover:underline">
+            Show all
+          </Link>
+        </p>
+      )}
+      {inbox && kindRows && (
         <InboxTabs
           // qa-company-17: Next keeps this page while I am elsewhere and shows it again, its
           // reads run again; each visit's own arrival starts the tabs afresh (a tab picked on the
           // last visit does not hold an emptied New open).
-          key={arrived ? (arrivalQ.data ?? "first") : "arriving"}
-          rows={rows}
-          waiting={waiting ?? 0} questionsError={questionsQ.error} notice={notice} onTabChange={() => {
+          key={`${arrived ? (arrivalQ.data ?? "first") : "arriving"}|${kind?.id ?? "all"}`}
+          rows={kindRows}
+          waiting={waitingNeeds(kindRows).length} questionsError={questionsQ.error} notice={notice} onTabChange={() => {
             asked.moveSettled();
           }}
         />

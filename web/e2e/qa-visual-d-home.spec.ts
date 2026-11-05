@@ -126,7 +126,7 @@ test.describe("at 1440", () => {
 
   test("D-5: each blocker of the selected PRD opens the blocker, Resolve for an owner", async ({ page }) => {
     await openHome(page);
-    const blocker = page.getByTestId("home-inspector").getByTestId("inspector-blocker").first();
+    const blocker = page.getByTestId("home-inspector").getByTestId("inspector-blocker-row").first();
     await expect(blocker).toBeVisible();
     const resolve = blocker.getByRole("link", { name: /^Resolve/ });
     await expect(resolve).toHaveAttribute("href", /^\/baseline\?tab=blockers&blocker=/);
@@ -136,7 +136,7 @@ test.describe("at 1440", () => {
 
   test("D-5: a viewer's blocker row says Open", async ({ page }) => {
     await openHome(page, "viewer");
-    const blocker = page.getByTestId("home-inspector").getByTestId("inspector-blocker").first();
+    const blocker = page.getByTestId("home-inspector").getByTestId("inspector-blocker-row").first();
     await expect(blocker).toBeVisible();
     await expect(blocker.getByRole("link", { name: /^Resolve/ })).toHaveCount(0);
     await expect(blocker.getByRole("link", { name: /^Open/ })).toHaveAttribute("href", /^\/baseline\?tab=blockers&blocker=/);

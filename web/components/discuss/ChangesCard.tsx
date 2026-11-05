@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { Button, Chip, type ChipKind } from "@/components/ds";
 import { FIELD_LABEL, InlineError, SELECT, TEXTAREA } from "@/components/review/parts";
@@ -191,6 +191,9 @@ function ChangeRow({ c, d, onDone }: { c: ChangeOut; d: Discussion; onDone: () =
   // (Record: F3's date rights, which the change's action carries).
   const op = action ? VERB_OP[action.verb] : undefined;
   const allowed = !!action?.allowed && (!op || can(op, action.allowed));
+  // QA pass D-4: why the action is off, as a line under the buttons a phone can read (no tooltip only).
+  const whyNot = action && !allowed ? action.why_not : null;
+  const whyId = useId();
 
   const run = async (call: () => Promise<unknown>) => {
     setBusy(true);
@@ -259,7 +262,7 @@ function ChangeRow({ c, d, onDone }: { c: ChangeOut; d: Discussion; onDone: () =
       {buttons && mode === null && (
         <span className="flex flex-wrap gap-1" data-testid="change-actions">
           {action && (
-            <Button variant="solid" disabled={busy || !allowed} title={allowed ? undefined : (action.why_not ?? undefined)} onClick={act}>
+            <Button variant="solid" disabled={busy || !allowed} aria-describedby={whyNot ? whyId : undefined} onClick={act}>
               {action.verb}
             </Button>
           )}
@@ -284,6 +287,11 @@ function ChangeRow({ c, d, onDone }: { c: ChangeOut; d: Discussion; onDone: () =
             </Button>
           )}
         </span>
+      )}
+      {buttons && mode === null && whyNot && (
+        <p id={whyId} className="text-sm text-text2" data-testid="change-why-not">
+          {whyNot}
+        </p>
       )}
       {mode === "stage" && (
         <StageForm c={c} subject={d.subject_label} busy={busy} onStage={(extra) => void run(() => actOnChange(c, "stage", extra))} onCancel={() => setMode(null)} />

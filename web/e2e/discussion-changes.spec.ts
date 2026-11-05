@@ -85,7 +85,8 @@ test("a commenter cannot stage, sees why, and suggests the change", async ({ pag
   const row = change(page, EDIT);
   const stage = row.getByRole("button", { name: "Stage" });
   await expect(stage).toBeDisabled();
-  await expect(stage).toHaveAttribute("title", STAGE_WHY_NOT);
+  // QA pass D-4: the reason is a visible line, not only a tooltip.
+  await expect(row.getByTestId("change-why-not")).toHaveText(STAGE_WHY_NOT);
   await expect(row.getByRole("button", { name: "Edit" })).toBeVisible();
   await row.getByRole("button", { name: "Suggest" }).click();
   await expect(row.getByTestId("change-by")).toHaveText("Suggested by Theo Brandt");
