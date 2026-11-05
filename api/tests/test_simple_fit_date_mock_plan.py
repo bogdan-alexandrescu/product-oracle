@@ -23,7 +23,7 @@ import pytest
 from oracle.simple import fit_date as fd
 from oracle.simple.fit_date_router import FitBaselineGoalOut, _scale
 
-FIXTURE = Path(__file__).resolve().parents[2] / "web" / "lib" / "api" / "mock" / "fit-date-plan.json"
+FIXTURE = Path(__file__).resolve().parents[2] / "web/lib/api/mock/fit-date-plan.json"
 
 
 def _plan(raw: dict, goal_target: float, hard: bool = False) -> fd.Plan:
@@ -50,9 +50,10 @@ def _plan(raw: dict, goal_target: float, hard: bool = False) -> fd.Plan:
             )
         )  # fmt: skip
     milestones = tuple(
-        fd.Milestone(m["code"], m["name"], m.get("wait_days", 0), m.get("wait_name"), m.get("wait_cost"))
+        fd.Milestone(m["code"], m["name"], m.get("wait_days", 0), m.get("wait_name"),
+                     m.get("wait_cost"))
         for m in raw["milestones"]
-    )
+    )  # fmt: skip
     return fd.Plan(
         dt.date.fromisoformat(raw["start"]), raw["engineers"], raw["focus"], milestones,
         tuple(items), raw["milestone"],
@@ -73,7 +74,15 @@ def _measured(p: fd.Plan) -> dict:
     }
 
 
-CASES = ["fit-date@40", "fit-date@37", "fit-date@25", "fit-date-hard@40", "fit-date-hard@30", "fit-date-hard@25", "fit-date-hard@21"]
+CASES = [
+    "fit-date@40",
+    "fit-date@37",
+    "fit-date@25",
+    "fit-date-hard@40",
+    "fit-date-hard@30",
+    "fit-date-hard@25",
+    "fit-date-hard@21",
+]
 
 
 @pytest.mark.parametrize("case", CASES)

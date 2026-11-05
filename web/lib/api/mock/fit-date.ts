@@ -7,7 +7,10 @@
 // the company roadmap (Product roadmap) exists next to the PRD's older Help desk roadmap, so the
 // answer and the re-plan read and write the company roadmap, as the API's _roadmap_id). The goal is a Baseline
 // goal (fitDateGoal); lowering its target shrinks the goal's own unlocked work, as the API's _scale
-// and build_plan: never a guardrail, safety or must-include item.
+// and build_plan: never a guardrail, safety or must-include item. Every day, person-week, move, rank,
+// pick and date comes from the API's capacity queue (./fit-date-engine, a port of oracle.simple.fit_date)
+// run on ./fit-date-plan.json, the plan api/tests/test_simple_fit_date_mock_plan.py runs through the real
+// engine; no number here is set by hand.
 
 import type { Schemas } from "@/lib/api/client";
 import { MOCK_NOW } from "./clock";
