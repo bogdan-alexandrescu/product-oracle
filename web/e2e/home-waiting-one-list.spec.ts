@@ -29,9 +29,25 @@ import { expect, test, type Page } from "./test";
  *
  * Card proposed-goals: protects = Home lists each proposed goal with Confirm and Not this;
  * confirming one puts it in the goal band; fails_when = the line only counts them.
+ *
+ * Card act-on-home: protects = confirming dates in Home's "Also waiting for you" takes the row
+ * off Home and the rail's count down at once, with no navigation; fails_when = the row stays on
+ * Home with greyed buttons while only the count drops.
+ *
+ * Card decision-calls: protects = a decision-log call proposed to the approver is in the one
+ * list: Home's tile, Decisions' "Waiting for you" and the rail count it alike, and Decide on
+ * Decisions decides it in place and drops every count; fails_when = Home counts a call that
+ * Decisions and the rail leave out.
+ *
+ * Card broken-tile: protects = Home's broken-links tile counts only links on items the person
+ * decides, as the list does (Decisions' "Broken link" rows); a commenter, who only proposes fixes,
+ * has no such tile; each broken-link row on Decisions names its own flag; fails_when = the tile
+ * counts every broken link on the roadmap or two rows read alike.
  */
 
 const nav = (page: Page, name: string) => page.getByRole("navigation", { name: "Simple" }).getByRole("link", { name, exact: true }).filter({ visible: true });
+const APPROVER = "approver@example.com";
+const COMMENTER = "commenter@example.com";
 const decisionsCount = (page: Page) => page.locator("[data-testid='simple-nav-decisions-count'], [data-testid='simple-tab-decisions-count']").filter({ visible: true });
 
 for (const phone of [false, true]) {
@@ -63,6 +79,60 @@ for (const phone of [false, true]) {
       await nav(page, "Home").click();
       await expect(page).toHaveURL(/\/simple$/);
       await expect(page.getByRole("listitem", { name: "Dates to confirm: Alert routing by team" })).toHaveCount(0);
+    });
+
+    test("Acting on Home's 'Also waiting for you' takes the row off Home and the count down at once", async ({ page }) => {
+      await login(page);
+      await page.goto("/simple");
+      const also = page.getByTestId("home-also-waiting");
+      const dates = also.getByRole("listitem", { name: "Dates to confirm: Alert routing by team" });
+      await expect(dates).toBeVisible();
+      await expect(decisionsCount(page)).toHaveText(/^\d+$/);
+      const before = Number(await decisionsCount(page).textContent());
+      await dates.getByRole("button", { name: "Confirm" }).click();
+      await expect(dates).toHaveCount(0);
+      await expect(decisionsCount(page)).toHaveText(String(before - 1));
+      await expect(page).toHaveURL(/\/simple$/);
+    });
+
+    test("A decision-log call waiting on the approver is counted alike on Home, Decisions and the rail, and decided in place", async ({ page }) => {
+      await login(page, APPROVER);
+      await page.goto("/simple");
+      const tile = page.getByTestId("home-summary-decisions").locator(".simple-number");
+      await expect(tile).toHaveText(/^\d+$/);
+      const n = (await tile.textContent())!;
+      await expect(decisionsCount(page)).toHaveText(n);
+      await expect(page.getByTestId("home-decisions").getByTestId("home-decision").filter({ hasText: "Ship usage caps before anomaly detection" })).toBeVisible();
+
+      await nav(page, "Decisions").click();
+      await expect(page).toHaveURL(/\/simple\/decisions/);
+      const mine = page.getByTestId("questions-mine");
+      await expect(page.getByTestId("questions-mine-count")).toHaveText(n);
+      const call = mine.getByRole("listitem", { name: "Decision: Ship usage caps before anomaly detection" });
+      await expect(call).toBeVisible();
+      await call.getByRole("button", { name: "Decide: Caps first" }).click();
+      await expect(call).toHaveCount(0);
+      await expect(page.getByTestId("questions-mine-count")).toHaveText(String(Number(n) - 1));
+      await expect(decisionsCount(page)).toHaveText(String(Number(n) - 1));
+    });
+
+    test("Home's broken-links tile counts only the links on items you decide", async ({ page }) => {
+      await login(page);
+      await page.goto("/simple/decisions");
+      const rows = page.getByTestId("questions-mine").getByRole("listitem", { name: /^Broken link: / });
+      await expect(rows.first()).toBeVisible();
+      const names = await rows.evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
+      // Each row names its own flag, even when one item has two.
+      expect(new Set(names).size).toBe(names.length);
+      await nav(page, "Home").click();
+      await expect(page.getByTestId("home-summary-broken-links").locator(".simple-number")).toHaveText(String(names.length));
+
+      await page.context().clearCookies();
+      await login(page, COMMENTER);
+      await page.goto("/simple");
+      await expect(page.getByTestId("home-broken").first()).toBeVisible();
+      await expect(page.getByTestId("home-summary")).toBeVisible();
+      await expect(page.getByTestId("home-summary-broken-links")).toHaveCount(0);
     });
 
     test("Home's tiles say they are loading until the waiting list is read, never a 0", async ({ page }) => {
@@ -141,4 +211,6 @@ test("A review meeting next year says its year on Home", async ({ page }) => {
   const next = page.getByTestId("home-meeting-next");
   await expect(next).toBeVisible();
   await expect(next).toContainText(/Jan \d{1,2}, 2027/);
+  // The date tile itself says the year too.
+  await expect(next.locator(".simple-date-tile")).toContainText("2027");
 });

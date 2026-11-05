@@ -35,15 +35,18 @@ Test cards (protects / fails_when / no_claim):
 """
 
 import uuid
+from datetime import UTC, date, datetime
 
 import pytest
 from sqlalchemy import select
 
 from oracle import company_time
 from oracle.runs.models import Checkpoint, Run, RunSegment
+from oracle.simple import waiting_list
 from oracle.simple.models import SimpleGoalSuggestion
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
+from tests.decision_helpers import decide, propose
 from tests.test_simple_additions_api import World as AdditionsWorld
 from tests.test_simple_changes_api import CHANGES, A, B, World, make_people
 from tests.test_simple_drafts_api import DRAFTS, edit_title, the_draft
@@ -175,3 +178,28 @@ async def test_run_stop_waiting_and_decide(client):
     async with tenant_session(ctx.tenant_id) as s:
         status = await s.scalar(select(Checkpoint.status).where(Checkpoint.id == uuid.UUID(cp_id)))
         assert status == "approved"
+
+
+async def test_decision_log_call_waiting_and_decide(client):
+    ctx = await make_ctx()
+    d = await propose(client, ctx, "commenter", title="Ship the example export first")
+    ref = str(d["number"])
+    r = await client.get(WAITING, headers=ctx.as_("approver"))
+    assert r.status_code == 200, r.text
+    body = r.json()
+    item = find(body["items"], "decision", ref)
+    assert item is not None, body["items"]
+    assert item["action"] == "Decide" and item["title"] == "Ship the example export first"
+    # The list holds every call the decisions count does (Home's tile, Decisions, the rail).
+    assert len([i for i in body["items"] if i["kind"] == "decision"]) == body["others"] == 1
+    assert find(await waiting(client, ctx, "owner"), "decision", ref) is None
+    await decide(client, ctx, ref, "approver")
+    assert find(await waiting(client, ctx, "approver"), "decision", ref) is None
+
+
+def test_day_reads_this_year_in_the_company_zone(monkeypatch):
+    # 07:30 UTC on Jan 1, 2027 is still Dec 31, 2026 in the company's zone (Los Angeles).
+    monkeypatch.setattr(company_time, "now", lambda: datetime(2027, 1, 1, 7, 30, tzinfo=UTC))
+    today = company_time.today()
+    assert waiting_list._day(date(2026, 12, 30), today) == "Dec 30"
+    assert waiting_list._day(date(2027, 1, 8), today) == "Jan 8, 2027"
