@@ -39,9 +39,11 @@ import {
   goalId,
   itemDeciderId,
   itemOwnerId,
+  namedOn,
   lookalikes,
   shiftPlan,
   ownDates,
+  ownPrd,
   prdCode,
   ROADMAP_SLUGS,
   readerDb,
@@ -94,6 +96,13 @@ const FIELDS: Record<string, string[]> = {
   accept_risk: ["risk"],
   // S6: a draft item confirmed (changes.py confirm_item).
   confirm_item: ["draft"],
+  // one-feature-panel (changes.py SHOWN): before is what the read shows.
+  set_confidence: ["confidence"],
+  set_track: ["track_id"],
+  set_prd: ["prd_document_id"],
+  set_goal: ["goal_id"],
+  set_depends: ["depends_on"],
+  set_status: ["status"],
 };
 const FIXES = ["shift_dependents", "move_dependency"];
 /** fix5-cut-dependents: the item and everything waiting on it, cut as one change (changes.py CUT_ALL). */
@@ -268,6 +277,12 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "title") out[f] = s.title;
     else if (f === "outcome") out[f] = s.outcome ?? null;
     else if (f === "draft") out[f] = !!s.draft;
+    else if (f === "confidence") out[f] = s.confidence ?? null;
+    else if (f === "track_id") out[f] = s.track ? stableUuid(`simple-track/${s.track}`) : null;
+    else if (f === "goal_id") out[f] = s.goal ? stableUuid(`simple-goal/${s.goal}`) : null;
+    else if (f === "prd_document_id") out[f] = ownPrd(s).id;
+    else if (f === "depends_on") out[f] = [...(s.depends ?? [])];
+    else if (f === "status") out[f] = s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned");
     else if (f === "risk") out[f] = (s.risks ?? []).find((r) => r.flag === target.flag && (r.subject ?? null) === (target.subject ?? null)) ?? null;
   }
   return out;
@@ -285,6 +300,17 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   if ("title" in values) s.title = String(values.title);
   if ("draft" in values) s.draft = !!values.draft;
   if ("outcome" in values) s.outcome = (values.outcome as string | null) ?? null;
+  // one-feature-panel: a track, goal or PRD is one another item of the roadmap read has (as the API's are rows).
+  const like = (f: (x: typeof s) => unknown, v: unknown) => db.items.find((x) => f(x) === v);
+  if ("confidence" in values) s.confidence = (values.confidence as typeof s.confidence) ?? undefined;
+  if ("track_id" in values) s.track = values.track_id ? like((x) => x.track && stableUuid(`simple-track/${x.track}`), values.track_id)?.track : undefined;
+  if ("goal_id" in values) s.goal = values.goal_id ? (Object.keys(GOALS).find((k) => goalId(k) === values.goal_id) ?? like((x) => x.goal && goalId(x.goal), values.goal_id)?.goal) : undefined;
+  if ("prd_document_id" in values) {
+    const x = like((x) => ownPrd(x).id, values.prd_document_id);
+    if (x) s.prd_doc = ownPrd(x);
+  }
+  if ("depends_on" in values) s.depends = [...((values.depends_on as string[]) ?? [])];
+  if ("status" in values) s.status = values.status as typeof s.status;
   if ("risk" in values) {
     const kept = (s.risks ?? []).filter((r) => !(r.flag === target.flag && (r.subject ?? null) === (target.subject ?? null)));
     const risk = values.risk as { flag: never; note: string; subject?: string | null } | null;
@@ -487,7 +513,8 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   const before: Values = ranking
     ? priorityBefore(db, keyOf(db, target.item_id)!, body.op, id)
     : (body.op as string) === "set_owner"
-      ? { owner_id: itemOwnerId(db, keyOf(db, target.item_id)!) }
+      ? // one-feature-panel: the API's before is the item's own owner (null: its track's shown); the chat sends the shown one.
+        { owner_id: body.before.owner_id === (namedOn(db, keyOf(db, target.item_id)!, "owner_id") ?? null) ? (body.before.owner_id ?? null) : itemOwnerId(db, keyOf(db, target.item_id)!) }
       : (body.op as string) === "set_decider"
         ? { decider_id: itemDeciderId(db, keyOf(db, target.item_id)!, ctx.roles) }
         : spec.adds ? {} : Object.fromEntries(Object.keys(body.before).map((k) => [k, stored[k] ?? null]));
@@ -741,6 +768,25 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       if (!title) return json(422, { detail: "after.title: 1 to 200 characters" });
       after = { title };
     } else if (body.op === "edit_outcome") after = { outcome: a.outcome ?? null };
+    else if (body.op === "set_confidence") {
+      if (a.confidence != null && !["low", "medium", "high"].includes(String(a.confidence))) return json(422, { detail: "after.confidence: low, medium, high or null" });
+      after = { confidence: a.confidence ?? null };
+    } else if (body.op === "set_track" || body.op === "set_prd" || body.op === "set_goal") {
+      const f = fields[0];
+      const v = a[f] ?? null;
+      const known = (x: (typeof seen.items)[number]) => read(seen, x.key, [f], target)[f];
+      if (v !== null && !seen.items.some((x) => known(x) === v) && !(f === "goal_id" && Object.keys(GOALS).some((k) => goalId(k) === v))) return json(422, { detail: `after.${f}: ${{ track_id: "a product track", prd_document_id: "a PRD", goal_id: "a goal" }[f]}` });
+      after = { [f]: v };
+    } else if (body.op === "set_depends") {
+      const keys = a.depends_on;
+      if (!Array.isArray(keys) || keys.length > 50) return json(422, { detail: "after.depends_on: a list of at most 50 keys" });
+      const clean = [...new Set(keys.map((k) => String(k ?? "").trim()))];
+      if (clean.some((k) => !k) || clean.includes(key)) return json(422, { detail: "after.depends_on: item or feature keys, never the item's own" });
+      after = { depends_on: clean };
+    } else if (body.op === "set_status") {
+      if (!["planned", "done", "cut"].includes(String(a.status))) return json(422, { detail: "after.status: planned, done or cut" });
+      after = { status: a.status };
+    }
     else {
       const note = String((a.risk as Values | undefined)?.note ?? "").trim();
       if (!note) return json(422, { detail: "after.risk.note: 1 to 500 characters" });

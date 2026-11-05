@@ -755,7 +755,7 @@ function itemPrd(s: SeedItem): Schemas["SimpleDocRef"] {
 }
 
 /** The PRD an item reads as its own: the one it was added from, else its roadmap's (the API's item.prd). */
-function ownPrd(s: SeedItem): Schemas["SimpleDocRef"] {
+export function ownPrd(s: SeedItem): Schemas["SimpleDocRef"] {
   if (s.prd_doc) return s.prd_doc;
   if (s.from_prd) return { id: stableUuid(`simple-prd/${s.from_prd.slug}`), slug: s.from_prd.slug, title: s.from_prd.title };
   return itemPrd(s);
@@ -891,7 +891,7 @@ function ownerOf(db: SimpleDb, s: SeedItem): Item["owner"] {
 }
 
 /** A chat card's set_owner / set_decider (the targets kept by item id), if any: the item's own owner or decider. */
-const namedOn = (db: SimpleDb, key: string, field: "owner_id" | "decider_id"): string | null | undefined => {
+export const namedOn = (db: SimpleDb, key: string, field: "owner_id" | "decider_id"): string | null | undefined => {
   const t = db.targets?.[db.ids[key]];
   return t && field in t ? ((t[field] as string | null) ?? null) : undefined;
 };
@@ -1146,6 +1146,9 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       needed_by: seeds.filter((x) => x.depends?.includes(s.key)).map((x) => db.ids[x.key]),
       flags: flagsOf(s, r, all, w[s.horizon]),
       owner: ownerOf(db, s),
+      // one-feature-panel: the item's own owner (set_owner's before) and its stored dependency keys.
+      own_owner_id: namedOn(db, s.key, "owner_id") ?? null,
+      depends_keys: s.depends ?? [],
       can_decide: decides(s),
       deciders: deciders(s),
       reasons: [
