@@ -30,8 +30,6 @@ from oracle.runs.scope_models import PrdScope, PrdScopeItem
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
 
-pytestmark = pytest.mark.asyncio
-
 NOW = datetime(2026, 11, 4, 9, 0, tzinfo=UTC)
 
 BRIEFS = """\
@@ -251,3 +249,22 @@ async def test_the_feature_set_stop_shows_another_prd_s_feature_as_information()
         FEATURE_SET.replace("DEP", "export-logs"), document="scale", known=known
     )
     assert [(p["code"], p["blocking"]) for p in out.problems] == [("depends_on_excluded", True)]
+
+
+def test_the_scope_review_row_reads_needs_x_from_its_prd_and_does_not_block():
+    # protects=the feature set stop's row says what is needed and from which PRD, and asks
+    # for no waiver; fails_when=it reads as a blocking problem or shows the raw key.
+    from oracle.runs import scope_review
+
+    problem = {
+        "code": "needs_other_prd",
+        "blocking": False,
+        "feature": "observability",
+        "requirement": None,
+        "message": "observability needs Account health ledger from Safety PRD",
+    }
+    scope = PrdScope(check_result={"problems": [problem]})
+    (reason,) = scope_review.reasons_of(scope, [], [])["observability"]
+    assert reason.label == "Needs Account health ledger from Safety PRD"
+    assert reason.severity == "to_confirm"
+    assert reason.waivable is False
