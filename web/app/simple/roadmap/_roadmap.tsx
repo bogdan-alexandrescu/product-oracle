@@ -890,12 +890,13 @@ export function SimpleRoadmap() {
   const [restored, setRestored] = useState(false);
   const [cleaned, setCleaned] = useState<Schemas["SimpleFilters"] | null>(null);
   const known = roadmap.data?.roadmaps;
-  if (!restored && known && (prefs.data || prefs.error)) {
+  if (!restored && known && (prefs.data || prefs.error) && (draftPrds.data || draftPrds.error)) {
     setRestored(true);
     const pick = prefs.data?.simple_roadmap;
     const saved = prefs.data?.simple_filters;
     const here = !f.prd && !f.goal && !f.track ? picksOf(roadmap.data!.items) : null;
-    const kept = saved && here ? without(saved, (k, v) => !here[k].has(v)) : saved;
+    // RP2: a saved pick of a draft PRD stays (it has nothing on the roadmap yet).
+    const kept = saved && here ? without(saved, (k, v) => !here[k].has(v) && !(k === "prd" && draftPrds.data?.some((d) => d.prd.slug === v))) : saved;
     if (saved && kept && PICKS.some((k) => kept[k] !== (saved[k] ?? ""))) setCleaned(kept);
     const next = { ...f, goal: params.get("goal") || kept?.goal || f.goal, track: kept?.track || f.track };
     if (!params.get("prd")) next.prd = kept?.prd || f.prd;
@@ -927,7 +928,9 @@ export function SimpleRoadmap() {
   const wide = useQuery(`simple-roadmap-picks:${emptied ? JSON.stringify(wideQs) : ""}`, () =>
     emptied ? unwrap(api.GET("/v1/simple/roadmap", { params: { query: wideQs as never } })).then((d) => picksOf(d.items)) : Promise.resolve(null),
   );
-  const gone = emptied && wide.data && !wide.loading ? PICKS.filter((k) => f[k] && !wide.data![k].has(f[k])) : [];
+  // RP2: a draft PRD has nothing on the roadmap yet; its pick stays (the draft layer shows it).
+  const isDraftPrd = (k: string, v: string) => k === "prd" && !!draftPrds.data?.some((d) => d.prd.slug === v);
+  const gone = emptied && wide.data && !wide.loading && draftPrds.data ? PICKS.filter((k) => f[k] && !wide.data![k].has(f[k]) && !isDraftPrd(k, f[k])) : [];
   const linked = gone.filter((k) => k !== "track" && params.get(k) === f[k]);
   const dropped = gone.filter((k) => !linked.includes(k));
   // roadmap-stale-filters review: Clear takes the link's picks out of the address too (Next
