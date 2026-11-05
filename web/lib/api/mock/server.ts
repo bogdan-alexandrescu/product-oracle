@@ -179,7 +179,7 @@ import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStray
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
-import { appliedVersionOf, approvedPrdToDraft, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, seedFitDateRoadmap } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
 import { routeGoalMap, type GoalMap } from "./goal-map";
@@ -971,6 +971,13 @@ function seedMeetingAgendaScenario(): Db {
 function seedSimpleCrossPrdDates(): Db {
   const db = seedSimpleHomeScenario();
   dependOnOtherPrd(db.simple_roadmap!, "setup-checklist", "alert-rules");
+  return db;
+}
+
+/** hotfix-2 "simple-dated-move": "simple-home" with Alert replay engine, dated only by engineering's end. */
+function seedSimpleDatedMove(): Db {
+  const db = seedSimpleHomeScenario();
+  dateSourceItem(db.simple_roadmap!);
   return db;
 }
 
@@ -3400,6 +3407,8 @@ function load(): Db {
                 ? seedMeetingAgendaScenario
               : scenario === "simple-cross-prd-dates"
                 ? seedSimpleCrossPrdDates
+              : scenario === "simple-dated-move"
+                ? seedSimpleDatedMove
               : scenario === "simple-home"
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-move"

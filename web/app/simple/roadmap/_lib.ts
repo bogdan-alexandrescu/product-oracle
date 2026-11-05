@@ -174,6 +174,11 @@ export function storedDates(i: Item): { start_date: string | null; end_date: str
   return { start_date: own(i.start), end_date: own(i.end) };
 }
 
+/** hotfix-2: the dates the roadmap shows (a date source's, an estimated start's too): a move's `before`. */
+export function shownDates(i: Item): { start_date: string | null; end_date: string | null } {
+  return { start_date: i.start.date, end_date: i.end.date };
+}
+
 /** The flags drawn red (not accepted as a risk). */
 export const broken = (i: Item): Flag[] => i.flags.filter((f) => f.state === "red");
 

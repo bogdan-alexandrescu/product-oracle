@@ -457,6 +457,8 @@ export function storedDates(db: SimpleDb, key: string): { start: string | null; 
   const own = db.own[key];
   if (own) return { start: own.start, end: own.end };
   const s = db.items.find((x) => x.key === key)!;
+  // hotfix-2: a PRD's item stores the dates the PRD gave it (an engineering end-only one too).
+  if (s.dates) return { start: s.dates.start, end: s.dates.end };
   if (s.source !== "typed" && s.source !== "accepted") return { start: null, end: null };
   const w = simpleWindows(companyToday())[s.horizon];
   return { start: s.start !== undefined ? addDays(w[0], s.start) : null, end: s.end !== undefined ? addDays(w[0], s.end) : null };
@@ -684,6 +686,15 @@ export function shownDates(db: SimpleDb, key: string): { start: string; end: str
   return { start: r.start.date, end: r.end.date };
 }
 
+/** hotfix-2: the dates the roadmap shows for an item (after what it depends on), a move's `before`. */
+export function readDates(db: SimpleDb, key: string): { start: string; end: string } {
+  const w = simpleWindows(companyToday());
+  const all = new Map(db.items.map((s) => [s.key, { s, r: resolve(db, s, w[s.horizon]) }]));
+  afterDependencies(all);
+  const r = all.get(key)!.r;
+  return { start: r.start.date, end: r.end.date };
+}
+
 /**
  * oracle.simple.dates.after_dependencies (walkb-roadmap): an item dated only by its end starts
  * the day after what it depends on ends (the end itself when that is later); a fully estimated
@@ -721,6 +732,14 @@ export const homeRoadmapOf = (prdSlug: string): string | undefined =>
 export function itemOfOtherPrd(db: SimpleDb, key: string, roadmap: string): void {
   const s = db.items.find((x) => x.key === key);
   if (s) s.prd_doc = itemPrd({ ...s, roadmap });
+}
+
+/** hotfix-2 ("simple-dated-move"): an Alerts PRD item dated only by its date source (engineering's
+ * end, no start), as approving the PRD stores it on the draft; its start is estimated. */
+export function dateSourceItem(db: SimpleDb): void {
+  const end = "2027-04-02";
+  db.items.push({ key: "alert-replay", title: "Alert replay engine", horizon: horizonOf(end), roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", from_prd: { slug: "usage-alerts", title: "Usage alerts" }, dates: { start: null, end, source: "engineering" } });
+  db.ids["alert-replay"] = stableUuid("simple-item/alert-replay");
 }
 
 /** cross-prd-deps ("simple-cross-prd-dates"): ``key`` also depends on ``dep``, an item of another PRD. */

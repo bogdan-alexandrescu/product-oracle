@@ -36,6 +36,8 @@ const FEATURES: Record<string, { value: number; effort: number; code?: string }>
   "alert-digest": { value: 5, effort: 2 },
   "alert-mobile": { value: 4, effort: 3 },
   "alert-export": { value: 0, effort: 1 },
+  // hotfix-2 ("simple-dated-move"): a 4-week feature dated only by engineering's end.
+  "alert-replay": { value: 3, effort: 4 },
   "alert-sso": { value: 3, effort: 2 },
   "setup-checklist": { value: 4, effort: 2 },
   "setup-import": { value: 6, effort: 3, code: "F-12" },

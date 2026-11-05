@@ -48,6 +48,7 @@ import {
   resultWords,
   shortDay,
   spanWords,
+  shownDates,
   storedDates,
   suggestion,
   undo,
@@ -963,7 +964,7 @@ export function SimpleRoadmap() {
     const r = await run(`Moved '${item.title}' to ${shortDay(after.start_date!)} – ${shortDay(after.end_date!)}`, { op: "move_dates", target: { item_id: id }, before, after });
     if (!r) {
       const now = fetched.current?.get(id);
-      return now ? storedDates(now) : null;
+      return now ? shownDates(now) : null;
     }
     return r.change.status === "applied" ? after : before;
   }, sameDates);
@@ -981,7 +982,7 @@ export function SimpleRoadmap() {
   const stored = (item: Item) => latest.current.get(item.id) ?? item;
   const onKeyMove = (item: Item, start: string, end: string) => {
     setCard(null);
-    dates.press(item.id, storedDates(stored(item)), { start_date: start, end_date: end });
+    dates.press(item.id, shownDates(stored(item)), { start_date: start, end_date: end });
     setSaid(`${item.title}: ${shortDay(start)} – ${shortDay(end)}, not sent yet. Pause to send it; Escape cancels.`);
   };
   const onKeyHorizon = (item: Item, horizon: Horizon) => {
@@ -997,7 +998,7 @@ export function SimpleRoadmap() {
   const onMove = useCallback(
     (item: Item, start: string, end: string) => {
       setCard(null);
-      dates.press(item.id, storedDates(latest.current.get(item.id) ?? item), { start_date: start, end_date: end });
+      dates.press(item.id, shownDates(latest.current.get(item.id) ?? item), { start_date: start, end_date: end });
       dates.flush(item.id);
     },
     [dates],
