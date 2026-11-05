@@ -8,7 +8,7 @@ import { expect, test, type Page } from "./test";
  * the days left), and Restore puts each back where it was. The screens that delete them are still
  * being drawn, so the delete is made through the mock API's own routes (as the API would get it);
  * Settings › Trash, and every other step a screen offers, is driven as a person would.
- * No Delete (Move to Trash) control exists yet: the queued feature-panel lane (feature panel Delete) adds it.
+ * A row's Delete feature (Gantt, Timeline, Priorities) is driven in trash-feature-rows.spec.ts; the feature panel's own Delete comes later.
  *
  * Card tfg-list-restore: protects = Settings › Trash lists "Feature <name>" and "Goal <name>"
  * with "Deleted by" and "30 days left"; Restore on each takes it out of Trash and the roadmap and

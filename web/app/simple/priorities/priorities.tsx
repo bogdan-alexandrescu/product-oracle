@@ -17,6 +17,7 @@ import { useSetParams } from "@/lib/use-set-params";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { FeaturePanel } from "../roadmap/_panel";
+import { FeatureMenu, useFeatureDelete } from "@/components/simple/FeatureDelete";
 import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
 import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan } from "./plan-buckets";
@@ -160,6 +161,7 @@ export function Priorities() {
   const mayChange = capsReady && can("create_simple_change") && !!data?.can_change;
   // S7: Oracle's suggested features under each goal bucket (an accept adds a draft here).
   const suggestions = useGoalSuggestions(() => q.reload());
+  const removeFeature = useFeatureDelete(q.reload);
   // The item just moved (dragged, re-estimated or moved with the keys) and its rank before, kept
   // until the next move or leaving the page: highlighted with "moved #a → #b".
   const [moved, setMoved] = useState<Moved | null>(null);
@@ -300,7 +302,7 @@ export function Priorities() {
       )}
       {data && !blank && tab === "ranked" && (
         <FeatureMarks.Provider value={marks}>
-          <Ranked data={shownData ?? data} phone={phone} compare={compare} mayChange={mayChange} changed={changed} moved={moved} />
+          <Ranked data={shownData ?? data} phone={phone} compare={compare} mayChange={mayChange} changed={changed} moved={moved} onDelete={removeFeature} />
         </FeatureMarks.Provider>
       )}
       {data && !blank && tab === "value-effort" && <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} moved={moved} />}
@@ -371,7 +373,7 @@ const SHOW_NOTE: Record<ShowKind, (n: number) => string> = {
   exists: (n) => `${n} features that run today.`,
 };
 
-function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out; phone: boolean; compare: boolean; mayChange: boolean; changed: Changed; moved: Moved | null }) {
+function Ranked({ data, phone, compare, mayChange, changed, moved, onDelete }: { data: Out; phone: boolean; compare: boolean; mayChange: boolean; changed: Changed; moved: Moved | null; onDelete: (f: { id: string; title: string }) => void }) {
   const [side, setSide] = useState<"yours" | "oracle">("yours");
   // A goal's list (from a Home goal card) leaves out the features not ranked yet.
   const goalOn = !!useSearchParams().get("goal");
@@ -380,7 +382,7 @@ function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out
   const backToHandle = (featureId: string) =>
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-handle="${featureId}"]`)?.focus());
   // qa4-simple-plan-6: beside Oracle's order (half the width) each card's details take a line of their own.
-  const list = <YourList data={data} half={compare && !phone} mayChange={mayChange} onMove={(row, position) => setMove({ row, position })} changed={changed} moved={moved} />;
+  const list = <YourList data={data} half={compare && !phone} mayChange={mayChange} onMove={(row, position) => setMove({ row, position })} changed={changed} moved={moved} onDelete={onDelete} />;
   return (
     <>
       {compare && phone && (
@@ -431,7 +433,7 @@ function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out
   );
 }
 
-function YourList({ data, half = false, mayChange, onMove, changed, moved }: { data: Out; half?: boolean; mayChange: boolean; onMove: (row: Row, position: number) => void; changed: Changed; moved: Moved | null }) {
+function YourList({ data, half = false, mayChange, onMove, changed, moved, onDelete }: { data: Out; half?: boolean; mayChange: boolean; onMove: (row: Row, position: number) => void; changed: Changed; moved: Moved | null; onDelete: (f: { id: string; title: string }) => void }) {
   // A Home goal card opens the list for its goal (?goal=<its key>&name=<its name>): a row's own goal
   // by key, so two goals with one name keep apart; a row known only from the plan, by name.
   const params = useSearchParams();
@@ -612,6 +614,8 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
                 {/* qa-simple-plan-3: value · confidence · weeks · score, in the order of the score's formula; no bar. */}
                 <Numbers r={r} />
               </span>
+              {/* trash-features-goals: Delete feature (to Trash, Undo) for who decides on it. */}
+              {mayChange && r.applies && r.item_id && <FeatureMenu title={nameOf(r)} onDelete={() => onDelete({ id: r.item_id!, title: r.title })} />}
             </div>
             {/* qa4-simple-plan-25: Oracle's rank and the move sit in a slot of their own under the row, so the row keeps its layout. */}
             {((r.oracle_rank != null && r.oracle_rank !== r.rank) || words) && (
