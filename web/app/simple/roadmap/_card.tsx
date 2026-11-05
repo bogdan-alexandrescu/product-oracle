@@ -397,6 +397,7 @@ const OP_WORDS: Record<string, string> = {
   keep_both: "Keep both",
   confirm_item: "Confirm the draft",
   cut_with_dependents: "Cut it and its dependents",
+  set_goals: "Move it to another goal",
   // build-feature-panel review 7: the panel's own changes, in plain words.
   edit_note: "Change the notes",
   set_owner: "Change the owner",

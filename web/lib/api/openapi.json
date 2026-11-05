@@ -60403,6 +60403,7 @@
                   "keep_both",
                   "set_milestone",
                   "add_feature_ask",
+                  "set_goals",
                   "set_owner",
                   "set_decider",
                   "decide_question",
@@ -60802,6 +60803,7 @@
               "keep_both",
               "set_milestone",
               "add_feature_ask",
+              "set_goals",
               "set_owner",
               "set_decider",
               "decide_question",
@@ -82271,6 +82273,7 @@
               "keep_both",
               "set_milestone",
               "add_feature_ask",
+              "set_goals",
               "set_owner",
               "set_decider",
               "decide_question",
@@ -115989,6 +115992,7 @@
               "keep_both",
               "set_milestone",
               "add_feature_ask",
+              "set_goals",
               "set_owner",
               "set_decider",
               "decide_question",
@@ -116135,6 +116139,7 @@
               "keep_both",
               "set_milestone",
               "add_feature_ask",
+              "set_goals",
               "set_owner",
               "set_decider",
               "decide_question",
@@ -120965,6 +120970,16 @@
             "title": "Lines",
             "default": []
           },
+          "company_roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "plan": {
             "anyOf": [
               {
@@ -121296,6 +121311,17 @@
             "title": "Short Code",
             "default": ""
           },
+          "own_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Own Key"
+          },
           "title": {
             "type": "string",
             "title": "Title"
@@ -121449,6 +121475,11 @@
           "can_reorder": {
             "type": "boolean",
             "title": "Can Reorder",
+            "default": false
+          },
+          "on_roadmap": {
+            "type": "boolean",
+            "title": "On Roadmap",
             "default": false
           },
           "applies": {

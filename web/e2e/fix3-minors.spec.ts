@@ -25,7 +25,7 @@ async function open(page: Page, width: number, height: number): Promise<void> {
   await expect(rows(page).first()).toBeVisible();
 }
 
-/** The rows as listed: rank, whether each makes the line, title, and code chip. */
+/** The rows as listed: rank, whether each makes the line, title, and own key (when it has one). */
 async function listed(
   page: Page,
 ): Promise<{ rank: number; above: boolean; title: string; code: string }[]> {
@@ -34,12 +34,12 @@ async function listed(
       rank: Number(e.querySelector('[data-testid="prio-rank"]')!.textContent),
       above: e.getAttribute("data-above") === "true",
       title: e.querySelector('[data-testid="prio-title"]')!.textContent ?? "",
-      code: e.querySelector('[data-testid="prio-code"]')!.textContent ?? "",
+      code: e.querySelector('[data-testid="prio-own-key"]')?.textContent ?? "",
     })),
   );
 }
 
-/** A row named as the move dialog's heading names it: its title, then its short code. */
+/** A row named as the move dialog's heading names it: its title, then its own key when it has one. */
 const named = (r: { title: string; code: string }): string => (r.code && r.code !== r.title ? `${r.title} (${r.code})` : r.title);
 
 /** Drags row `from`'s handle to just past the middle of row `to`, as a person would. */

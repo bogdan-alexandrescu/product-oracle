@@ -881,6 +881,7 @@ OP_WORDS = {
     "merge_item": "Merged",
     "keep_both": "Kept beside its look-alikes:",
     "cut_with_dependents": "Cut with its dependents:",
+    "set_goals": "Moved to another goal:",
 }
 
 

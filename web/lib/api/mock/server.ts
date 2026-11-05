@@ -160,7 +160,8 @@ import {
   type PricingContext,
   type PricingDb,
 } from "./pricing";
-import { routeGoalBuckets, seedGoalBucketsHard } from "./goal-buckets";
+import { routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith } from "./goal-buckets";
+import { featureKeyOf } from "./simple-priorities";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
@@ -175,7 +176,7 @@ import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADM
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { appliedVersionOf, approvedPrdToDraft, betLineItemIds, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
-import { shownDates, storedDates } from "./simple-roadmap";
+import { closed, GOALS, shownDates, storedDates } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -1004,7 +1005,7 @@ function seedSimpleHomeOnePrdScenario(): Db {
     // An undated item would be estimated into this quarter: dated after it instead.
     if (i.start == null || i.end == null) Object.assign(i, { start: 180, end: 220, source: "typed" });
     else Object.assign(i, { start: i.start + 180, end: i.end + 180 });
-    if (i.milestone) i.milestone.day += 180;
+    if (i.milestone?.day != null) i.milestone.day += 180;
   }
   return db;
 }
@@ -1235,6 +1236,36 @@ function seedGoalBucketsHardScenario(): Db {
   const rm = db.simple_roadmap!;
   rm.plan = { ...rm.plan!, big_goal: true };
   rm.goal_buckets = seedGoalBucketsHard();
+  return db;
+}
+
+/**
+ * Goal buckets you can fully edit (the owner, Nov 4), "goal-buckets-undated": "simple-plan" whose
+ * roadmap has no approved version yet, so Priorities reads no dated plan and falls back to the
+ * goal cards; each plan item names its plan goal on the roadmap, and the goal buckets hold the
+ * roadmap's own goals and features too (Grow retention, Faster activation), as the API's do.
+ * Invented data.
+ */
+export const GOAL_BUCKETS_UNDATED_SCENARIO = "goal-buckets-undated";
+
+function seedGoalBucketsUndatedScenario(): Db {
+  const db = seedSimplePlanScenario(true);
+  const rm = db.simple_roadmap!;
+  rm.plan_undated = true;
+  const goalOf = new Map(planSlices().map((x) => [x.feature_code.toLowerCase(), x.goal]));
+  for (const s of rm.items) {
+    const goal = s.section ? goalOf.get(s.section) : undefined;
+    if (goal && !s.goal) s.goal = goal.toLowerCase();
+  }
+  // As the API's goal buckets: every live goal (here, each goal an item serves) and every feature an
+  // item has, so each Priorities bucket is a goal you add tasks to and move them between.
+  const name = (k: string) => GOALS[k] ?? k;
+  const items = rm.items.filter((s) => !s.draft && !closed(s));
+  rm.goal_buckets = seedGoalBucketsWith(
+    seedGoalBuckets(),
+    [...new Set(items.flatMap((s) => [...(s.goal ? [s.goal] : []), ...(s.goals ?? [])]).map(name))],
+    items.map((s) => ({ key: featureKeyOf(rm, s.key), title: s.title, goals: [...(s.goal ? [s.goal] : []), ...(s.goals ?? [])].map(name) })),
+  );
   return db;
 }
 
@@ -3397,6 +3428,8 @@ function load(): Db {
                 ? seedRoadmapMilestonesHardScenario
               : scenario === GOAL_BUCKETS_HARD_SCENARIO
                 ? seedGoalBucketsHardScenario
+              : scenario === GOAL_BUCKETS_UNDATED_SCENARIO
+                ? seedGoalBucketsUndatedScenario
               : scenario === "simple-plan"
                 ? () => seedSimplePlanScenario()
               : scenario === "roadmap-keydates"
