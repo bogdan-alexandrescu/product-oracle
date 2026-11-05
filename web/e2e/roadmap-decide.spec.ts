@@ -202,8 +202,10 @@ test("with two working drafts, the banner has a line per draft: its roadmap, its
   await expect(onboarding.getByRole("button", { name: "Approve and publish" })).toHaveCount(0);
   await onboarding.getByRole("button", { name: "Send for review" }).click();
   await expect(page.getByText(/Sent for review/).first()).toBeVisible();
-  // Sent, it waits on Priya Raman: no Send for review is left, disabled or not, beside the owner's Approve.
-  await expect(onboarding.getByTestId("draft-next")).toContainText("it waits for Priya Raman to approve");
+  // Sent, the line says so with its own step (an owner may approve it too): no Send for review is
+  // left, disabled or not.
+  await expect(onboarding.getByTestId("draft-next")).toContainText("Sent for review: it waits for your approval");
+  await expect(onboarding.getByRole("button", { name: "Approve", exact: true })).toBeVisible();
   await expect(banner.getByRole("button", { name: "Send for review" })).toHaveCount(0);
   await alerts.getByRole("button", { name: "Approve and publish" }).click();
   await expect(page.getByText(/Approved: Alerts roadmap is published/)).toBeVisible();
