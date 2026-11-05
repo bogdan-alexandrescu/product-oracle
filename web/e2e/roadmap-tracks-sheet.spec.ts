@@ -95,8 +95,9 @@ test.describe("Tracks sheet", () => {
     await open(page);
     await page.getByRole("radio", { name: "Gantt" }).or(page.getByRole("button", { name: "Gantt", exact: true })).first().click();
     await page.getByTestId("group-track").click();
-    const chart = page.getByTestId("simple-roadmap");
-    await expect(chart.getByText("Usage alerts track", { exact: true })).not.toHaveCount(0);
+    // A lane's name on the Gantt (the Track filter's options are left out).
+    const lane = (name: string) => page.getByTestId("simple-roadmap").getByText(name, { exact: true }).and(page.locator(":not(option)"));
+    await expect(lane("Usage alerts track")).toHaveCount(1);
     await page.getByTestId("tracks-open").click();
     const r = row(page, "Usage alerts track");
     await sheet(page).getByRole("button", { name: "Change Usage alerts track" }).click();
@@ -113,10 +114,10 @@ test.describe("Tracks sheet", () => {
     await expect(row(page, "Usage alerts track")).toHaveCount(0);
     await page.getByRole("button", { name: "Close" }).first().click();
     // Its features now sit under No track on the Gantt.
-    await expect(chart.getByText("Usage alerts track", { exact: true })).toHaveCount(0);
-    await expect(chart.getByText("No track", { exact: true }).first()).toBeVisible();
+    await expect(lane("Usage alerts track")).toHaveCount(0);
+    await expect(lane("No track")).toBeVisible();
     await toasts(page).getByRole("button", { name: "Undo" }).click();
-    await expect(chart.getByText("Usage alerts track", { exact: true })).not.toHaveCount(0);
+    await expect(lane("Usage alerts track")).toHaveCount(1);
     await page.getByTestId("tracks-open").click();
     await expect(row(page, "Usage alerts track")).toContainText("5 features");
   });
