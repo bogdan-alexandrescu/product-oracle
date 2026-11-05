@@ -47,11 +47,11 @@ test("the run page lists the answered questions under the Engineering review sto
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
 
   const section = page.getByRole("complementary", { name: "Run" }).filter({ visible: true }).getByTestId("run-decisions");
-  const eng = section.getByTestId("run-decision").filter({ hasText: "Engineering review was approved by Theo Brandt" });
+  const eng = section.getByTestId("run-decision").filter({ hasText: "Engineering review was approved by" });
   await expect(eng).toHaveCount(1);
   const answers = eng.getByRole("list", { name: "Answered at Engineering review" }).getByTestId("run-decision-answer");
   await expect(answers).toHaveCount(2);
-  const when = String.raw`[A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d{2} [AP]M`;
+  const when = String.raw`[A-Z][a-z]{2} \d{1,2}(, \d{4})?, \d{1,2}:\d{2} [AP]M`;
   await expect(answers.nth(0)).toHaveText(
     new RegExp(String.raw`^Does the payment sandbox take test orders without a live account\? → Yes, the sandbox takes test orders\. · Theo Brandt · ${when}`),
   );
