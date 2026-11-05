@@ -319,6 +319,23 @@ async def _apply(db: AsyncSession, principal: Any, c: SimpleChange) -> None:
         c.after = {**(c.after or {}), "trash_entry_id": str(entry.id)}
 
 
+async def _holds_anything(db: AsyncSession, track_id: uuid.UUID) -> bool:
+    """A track holds a milestone, a tracker link or a feature (one in Trash too)."""
+    from oracle.roadmap.models import RoadmapItem, TrackerRecord
+    from oracle.trash.filter import INCLUDE_TRASHED
+
+    for model in (TrackMilestone, TrackerRecord, RoadmapItem):
+        found = await db.scalar(
+            select(model.id)
+            .where(model.track_id == track_id)
+            .limit(1)
+            .execution_options(**{INCLUDE_TRASHED: True})
+        )
+        if found is not None:
+            return True
+    return False
+
+
 def _write_track(t: ProductTrack, values: dict[str, Any]) -> None:
     for k, v in values.items():
         setattr(t, k, uuid.UUID(v) if k == "owner_id" and v else v)
@@ -361,10 +378,16 @@ async def undo(db: AsyncSession, principal: Any, c: SimpleChange) -> Any:
         raise _err(403, "Only the person who made a change undoes it")
     if await db.scalar(select(SimpleChange.id).where(SimpleChange.undoes_id == c.id)):
         raise _err(409, "This change is undone already")
+    undone_after: dict[str, Any] = {}
     if c.op == "unarchive_goal":
         g = await _goal(db, uuid.UUID(c.target["goal_id"]))
-        if g.status == "rejected":
-            raise _err(409, "Changed since: the goal is archived again")
+        if g.status != c.after["status"]:
+            raise _err(
+                409,
+                "Changed since: the goal is archived again"
+                if g.status == "rejected"
+                else "Changed since: the goal's state changed",
+            )
         g.status = "rejected"
         g.archived_at = (datetime.fromisoformat(c.before["archived_at"])
                          if c.before.get("archived_at") else now)  # fmt: skip
@@ -381,7 +404,12 @@ async def undo(db: AsyncSession, principal: Any, c: SimpleChange) -> Any:
         )
         if t is None:
             raise _err(409, "Changed since: the track is gone")
-        await db.delete(t)
+        if await _holds_anything(db, t.id):
+            # Never hard-deleted once it holds anything: it goes to Trash, restorable.
+            entry = await trash.delete_track(db, principal, t)
+            undone_after = {"in_trash": True, "trash_entry_id": str(entry.id)}
+        else:
+            await db.delete(t)
     elif c.op == "edit_track":
         t = await _track(db, uuid.UUID(c.target["track_id"]))
         current = _track_value(t)
@@ -397,7 +425,8 @@ async def undo(db: AsyncSession, principal: Any, c: SimpleChange) -> Any:
             raise _err(409, "Changed since: the track is no longer in Trash")
         await trash.restore_entry(db, principal, entry_id)
     u = SimpleChange(session_id=c.session_id, document_id=c.document_id, op=c.op,
-                     target=c.target, before=c.after, after=c.before, status="undone", by=me,
+                     target=c.target, before=c.after, after={**c.before, **undone_after},
+                     status="undone", by=me,
                      at=now, undoes_id=c.id, routed_to=[])  # fmt: skip
     db.add(u)
     await db.flush()

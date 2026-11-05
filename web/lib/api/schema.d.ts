@@ -41795,6 +41795,11 @@ export interface components {
             can_decide: boolean;
             /** Decider Name */
             decider_name?: string | null;
+            /**
+             * Feature Count
+             * @default 0
+             */
+            feature_count: number;
         };
         /** SimpleTracks */
         SimpleTracks: {

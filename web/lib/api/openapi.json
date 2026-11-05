@@ -124220,6 +124220,11 @@
               }
             ],
             "title": "Decider Name"
+          },
+          "feature_count": {
+            "type": "integer",
+            "title": "Feature Count",
+            "default": 0
           }
         },
         "type": "object",

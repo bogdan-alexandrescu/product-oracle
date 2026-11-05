@@ -13,6 +13,7 @@
 """
 
 import uuid
+from collections import Counter
 from datetime import datetime
 from typing import Any
 
@@ -169,6 +170,10 @@ async def list_simple_tracks(principal: Reader, db: TenantDB) -> SimpleTracks:
         if prd_ids
         else {}
     )
+    read = await service.load(db)
+    features = Counter(
+        e.track.id for e in read.entries if e.track and e.status not in ("cut", "merged")
+    )
     out = []
     for t in rows:
         decides = plan_changes.decides_track(principal, t)
@@ -178,6 +183,7 @@ async def list_simple_tracks(principal: Reader, db: TenantDB) -> SimpleTracks:
             owner_name=names.get(t.owner_id) if t.owner_id else None, prd_id=t.prd_document_id,
             prd_title=prds.get(t.prd_document_id), can_decide=decides,
             decider_name=names.get(route[0]) if route else None,
+            feature_count=features[t.id],
         ))  # fmt: skip
     people = sorted(
         (

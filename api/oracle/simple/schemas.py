@@ -2490,6 +2490,9 @@ class SimpleTrackRow(BaseModel):
     # The reader edits or deletes it directly; else it is proposed to ``decider_name``.
     can_decide: bool = False
     decider_name: str | None = None
+    # Its live features over the whole roadmap (cut and merged ones left out), whatever
+    # the roadmap's filters show: what Move to Trash sends to no track.
+    feature_count: int = 0
 
 
 class SimplePerson(BaseModel):
