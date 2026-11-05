@@ -91,3 +91,20 @@ def test_roadmap_draft_prompt_gives_the_as_of_day_month_first():
     prompt = _roadmap_prompt({"per_week": 2, "today": "2026-10-02", "features": {}, "sections": {}})
     assert '"As of Oct 2, 2026"' in prompt
     assert "As of 2026-10-02" not in prompt
+
+
+def test_a_stored_as_of_day_reads_month_first_on_the_slides():
+    # protects=B-05 fix 1: a roadmap stored with "As of 2026-10-02" reads month first where
+    # it is read (HTML, PDF, deck, and the PPTX's slide text); the stored text is unchanged;
+    # fails_when=the PPTX shows "As of 2026-10-02".
+    from oracle.export.pptx import parse_blocks
+    from oracle.export.render import days_in_words
+
+    stored = "As of 2026-10-02. Built from [Example PRD v1](/documents/example-prd/v/1)."
+    assert days_in_words(stored).startswith("As of Oct 2, 2026. Built from")
+    blocks = parse_blocks(f"{stored}\n\n| Item | As of |\n|---|---|\n| Save cart | 2026-10-02 |\n")
+    para, table = blocks.items
+    text = "".join(r.text for r in para.runs)
+    assert text.startswith("As of Oct 2, 2026. Built from Example PRD v1")
+    assert "2026-10-02" not in text
+    assert table.rows[1] == ["Save cart", "Oct 2, 2026"]
