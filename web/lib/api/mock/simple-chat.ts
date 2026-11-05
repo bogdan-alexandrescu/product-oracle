@@ -782,6 +782,10 @@ function rebaseShift(c: StoredCard, current: Record<string, unknown>) {
 const API_OP = "api_action";
 const API_CANNOT_UNDO = "This cannot be undone.";
 const API_ADD = /^(?:please\s+)?add\s+(?:the\s+|an?\s+)?(?:new\s+)?(assumption|gap)\s+(.+?)\.?$/i;
+/** ask_actions.SECRET_VALUE: a pasted key or token is never kept in a card (the API refuses it). */
+const API_SECRET =
+  /(sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|xox[abposr]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|bearer\s+\S{16,}|-----BEGIN [A-Z ]*PRIVATE KEY|(?<![A-Za-z0-9_+/=-])(?=[A-Za-z0-9_+/=]*\d)(?=[A-Za-z0-9_+/=]*[A-Za-z])[A-Za-z0-9_+/=]{32,})/i;
+export const API_SECRET_REFUSAL = "I can't do that from the chat: a value that looks like a secret is never kept in the chat.";
 
 function apiDraft(kind: string, text: string): Draft {
   const title = words(text);
@@ -791,6 +795,28 @@ function apiDraft(kind: string, text: string): Draft {
     return actionDraft(`Add a product record: type “assumption”, key “${key}”, title “${title}”.`, API_OP, null, { action: "create_entity", args: { body }, names: [] }, {}, { undo: "delete" }, null);
   }
   return actionDraft(`Add a gap: title “${title}”. ${API_CANNOT_UNDO}`, API_OP, null, { action: "create_knowledge_gap", args: { body: { title } }, names: [] }, {}, { undo: null }, null);
+}
+
+/**
+ * ask-oracle-actions: "ask <person> to decide <title>" is create_decision (POST /v1/decisions,
+ * "Request a decision"): its card names, by name, the person the route pings by Slack, and has
+ * no Undo. A person the company does not have: no card (ask_actions' unknown record).
+ */
+const API_DECIDE = /^(?:please\s+)?ask\s+(.+?)\s+to\s+decide\s+(?:on\s+)?(.+?)\.?$/i;
+export const API_NO_RECORD = "I can't tell which record that changes, so I made no card.";
+
+function decisionRequest(ctx: ChatCtx, who: string, text: string): ReaderOut {
+  const title = words(text);
+  if (API_SECRET.test(title)) return { refusal: API_SECRET_REFUSAL };
+  const p = personNamed(ctx, who);
+  if (!p || !title) return { refusal: API_NO_RECORD };
+  const body = { title, approver_id: p.id };
+  return {
+    card: actionDraft(
+      `Request a decision: title “${title}”, approver “${p.name}”. Sends a Slack message to ${p.name} asking for a decision. ${API_CANNOT_UNDO}`,
+      API_OP, null, { action: "create_decision", args: { body }, names: [], ids: { [p.id]: p.name }, pinged: [p.id] }, {}, { undo: null }, null,
+    ),
+  };
 }
 
 /** ask-oracle-actions: "it should not depend on X (. remove that dependency relationship)", "X depends on Y" (chat_actions' remove_dependency / add_dependency). */
@@ -860,7 +886,11 @@ export const mockReaderOps: Record<string, (a: ReaderArgs) => ReaderOut> = {
   set_decider: (a) => who(a, "decider"),
   api_add: ({ rest }) => {
     const [kind, text] = (rest ?? "").split("|");
-    return { card: apiDraft(kind, text) };
+    return API_SECRET.test(text) ? { refusal: API_SECRET_REFUSAL } : { card: apiDraft(kind, text) };
+  },
+  api_decide: ({ ctx, rest }) => {
+    const [who, text] = (rest ?? "").split("|");
+    return decisionRequest(ctx, who, text ?? "");
   },
   remove_dependency: (a) => dependsOn(a, true),
   add_dependency: (a) => dependsOn(a, false),
@@ -889,7 +919,7 @@ function who({ db, ctx, item, rest }: ReaderArgs, word: "owner" | "decider"): Re
 }
 
 /** The ops about no item: their clause carries only its words (`rest`). */
-const ITEMLESS = new Set(["record_decision", "minutes_note", "open_question", "add_item", "api_add"]);
+const ITEMLESS = new Set(["record_decision", "minutes_note", "open_question", "add_item", "api_add", "api_decide"]);
 
 type Clause = { op: string; x: string; months?: number; period?: [string, string]; rest?: string };
 
@@ -915,6 +945,11 @@ function clauses(text: string, skipped: string[] = []): Clause[] {
     // ask-oracle-actions: an action of the API ("add the assumption X").
     if ((m = API_ADD.exec(part))) {
       out.push({ op: "api_add", x: "", rest: `${m[1]}|${m[2]}` });
+      continue;
+    }
+    // ask-oracle-actions: a decision requested of a person ("ask Priya to decide X").
+    if ((m = API_DECIDE.exec(part))) {
+      out.push({ op: "api_decide", x: "", rest: `${m[1]}|${m[2]}` });
       continue;
     }
     // ask-oracle-actions: a dependency removed or added ("X should not depend on Y").
@@ -1051,6 +1086,7 @@ function readLine(db: SimpleDb, ctx: ChatCtx, r: NonNullable<StoredMessage["read
   const links: { label: string; href: string }[] = [];
   const said = unread(skipped, links);
   if (cs.length > 5) said.push(unused(db, ctx, cs.slice(5), items, last, meeting, documentId));
+  if (!drafts.length && refusals.length === 1 && refusals[0] === API_NO_RECORD && !said.length) return { kind: "note", body: API_NO_RECORD, cards: [], links };
   if (!drafts.length) return { kind: "note", body: [refusals.length ? `I can't do that here: ${refusals.join(" ")}` : SAY_AGAIN, ...said].join(" "), cards: [], links };
   const n = drafts.length;
   // The valid cards stay; the line says which ones it cannot do and what it did not read.
@@ -1330,7 +1366,13 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
     return { kind: "cards", body: `I understood: split ${about(i)} into ${n} slices.`, cards };
   }
   const api = API_ADD.exec(t);
+  if (api && API_SECRET.test(api[2])) return { kind: "note", body: API_SECRET_REFUSAL, cards: [] };
   if (api) return { kind: "cards", body: ONE_CHANGE, cards: [apiDraft(api[1], api[2])] };
+  const decide = API_DECIDE.exec(t);
+  if (decide) {
+    const o = decisionRequest(ctx, decide[1], decide[2]);
+    return "card" in o ? { kind: "cards", body: ONE_CHANGE, cards: [o.card] } : { kind: "note", body: o.refusal, cards: [] };
+  }
   const dw = dependencyWords(t);
   if (dw && new RegExp(`^${it}$`, "i").test(dw.x.trim())) {
     const [dep] = named(items, dw.on);
@@ -1802,6 +1844,13 @@ async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx,
   const use = withDependents ? { op: CUT_ALL, target: c.target, before: withDependents === true ? c.before : { ...c.before, dependents: withDependents }, after: {} } : n == null ? c : c.fixes[n];
   if (c.op === API_OP) {
     // ask-oracle-actions: the action's route ran as the person (ask_actions.apply); no change of the engine.
+    if (c.target.action === "create_decision") {
+      // POST /v1/decisions as the person: a proposed decision, its approver the named person, made by them.
+      const body = ((c.target.args as { body?: Schemas["DecisionCreate"] } | undefined)?.body ?? null);
+      const id = body && ctx.proposeDecision ? await ctx.proposeDecision(body) : null;
+      if (!id) return json(422, { detail: "The approver must be an active member with the approver role or above" });
+      c.target = { ...c.target, decision_id: id };
+    }
     Object.assign(c, { status: "applied", decided_by_name: ctx.names[ctx.id] ?? "someone", decided_by: ctx.id, decided_at: now() });
     return { card: cardOut(db, chat, c, ctx), result: null as unknown as Schemas["SimpleChangeResult"] };
   }
