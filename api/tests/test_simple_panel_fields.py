@@ -19,15 +19,28 @@ Test cards (protects / fails_when / no_claim):
   (``PATCH /v1/simple/goal-buckets/goals/{id}``) and the item's read shows the new measure;
   fails_when=the goal's target or date is missing from the read, or the edit is not shown;
   no_claim=the goal bucket page.
+- test_panel_goal_measure_change: protects=``set_goal_measure`` changes the measure, target
+  and date of the goal the item serves through the change engine (Undo puts them back, a
+  stale ``before`` is 409 "changed by", a commenter's is a proposal an owner accepts, a goal
+  with no target or date still takes a measure); fails_when=the measure is written over a
+  change the caller did not see, or a commenter's lands; no_claim=the goal bucket page.
+- test_panel_depends_keys_must_name_something: protects=``set_depends`` takes an item's key
+  or a feature's key and refuses (422) a key nothing has; fails_when=a typo is stored as a
+  dependency; no_claim=dependencies across companies.
+- test_panel_status_planned_keeps_other_shipped: protects=planned clears only the panel's
+  own done mark: a shipped mark made elsewhere stays; fails_when=planned wipes it;
+  no_claim=the tracker's records.
 - test_panel_fields_bad_values: protects=an unknown confidence, track, PRD, goal, status, or
   the item depending on itself, is 422; fails_when=a bad value is stored; no_claim=the web.
 """
 
+import uuid
 from datetime import date
 
 import pytest
 
 from oracle import company_time
+from oracle.roadmap.models import RoadmapItem
 from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import CHANGES, make_people
 from tests.test_simple_roadmap_api import NOW, Seed, by_key, get
@@ -195,3 +208,107 @@ async def test_panel_goal_measure_edit(client):
     goal = (await p.read(client))["a"]["goal"]
     assert goal["metric"] == "Monthly payers"
     assert goal["target"] == "500 payers" and goal["due"] == "2027-03-31"
+
+
+async def test_panel_goal_measure_change(client):
+    p = await Panel().build(await make_people())
+    async with tenant_session(p.ctx.tenant_id) as s:
+        g = await s.get(type(p.g1), p.g1.id)
+        g.attrs = {"metric": "Weekly payers", "target_text": "500 payers", "due": "2027-03-31"}
+        await s.commit()
+    goal = (await p.read(client))["a"]["goal"]
+    seen = {"measure": goal["metric"], "target": goal["target"], "due": goal["due"]}
+    new = {"measure": "Monthly payers", "target": "800 payers", "due": "2027-06-30"}
+
+    async def post(before, after, who="owner"):
+        body = {"op": "set_goal_measure", "target": {"item_id": p.a, "goal_id": goal["id"]},
+                "before": before, "after": after}  # fmt: skip
+        return await client.post(CHANGES, json=body, headers=p.ctx.as_(who))
+
+    # A commenter's is a proposal: nothing changes until an owner accepts it.
+    r = await post(seen, new, who="commenter")
+    assert r.status_code == 201, r.text
+    proposal = r.json()["change"]
+    assert proposal["status"] == "proposed"
+    assert (await p.read(client))["a"]["goal"]["metric"] == "Weekly payers"
+    r = await post(seen, {"measure": "x"}, who="viewer")
+    assert r.status_code == 403, r.text
+
+    r = await post(seen, new)
+    assert r.status_code == 201, r.text
+    applied = r.json()["change"]
+    assert applied["status"] == "applied"
+    goal_now = (await p.read(client))["a"]["goal"]
+    assert (goal_now["metric"], goal_now["target"], goal_now["due"]) == (
+        "Monthly payers",
+        "800 payers",
+        "2027-06-30",
+    )
+    # As last read is stale now: 409, changed by whoever made it, nothing written.
+    stale = await post(seen, {"measure": "Daily payers", "target": None, "due": None})
+    assert stale.status_code == 409, stale.text
+    assert "changed by" in stale.json()["detail"]["message"]
+    assert stale.json()["detail"]["current"] == new
+    r = await client.post(f"{CHANGES}/{proposal['id']}/accept", json={},
+                          headers=p.ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 409, r.text
+
+    u = await client.post(f"{CHANGES}/{applied['id']}/undo", headers=p.ctx.as_("owner"))
+    assert u.status_code == 201, u.text
+    goal_now = (await p.read(client))["a"]["goal"]
+    assert goal_now["metric"] == "Weekly payers" and goal_now["target"] == "500 payers"
+    r = await client.post(f"{CHANGES}/{proposal['id']}/accept", json={},
+                          headers=p.ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 201, r.text
+    assert (await p.read(client))["a"]["goal"]["metric"] == "Monthly payers"
+
+    # A goal with no target or date still takes a measure; only the item's goal is changed.
+    async with tenant_session(p.ctx.tenant_id) as s:
+        g = await s.get(type(p.g1), p.g1.id)
+        g.attrs = {}
+        await s.commit()
+    r = await post({"measure": None, "target": None, "due": None},
+                   {"measure": "Payers", "target": None, "due": None})  # fmt: skip
+    assert r.status_code == 201, r.text
+    goal_now = (await p.read(client))["a"]["goal"]
+    assert goal_now["metric"] == "Payers" and goal_now["target"] is None
+    body = {"op": "set_goal_measure", "target": {"item_id": p.a, "goal_id": str(p.g2.id)},
+            "before": {"measure": None, "target": None, "due": None},
+            "after": {"measure": "Other"}}  # fmt: skip
+    r = await client.post(CHANGES, json=body, headers=p.ctx.as_("owner"))
+    assert r.status_code == 422, r.text
+    r = await post({"measure": "Payers", "target": None, "due": None}, {"measure": " "})
+    assert r.status_code == 422, r.text
+
+
+async def test_panel_depends_keys_must_name_something(client):
+    p = await Panel().build(await make_people())
+    r = await p.post(client, "set_depends", {"depends_on": []}, {"depends_on": ["F-404"]},
+                     item=p.b)  # fmt: skip
+    assert r.status_code == 422, r.text
+    assert "F-404" in r.text
+    assert (await p.read(client))["b"]["depends_keys"] == []
+    # An item's key, or a feature's key (another PRD's feature), is taken.
+    r = await p.post(client, "set_depends", {"depends_on": []}, {"depends_on": ["a", "F-1"]},
+                     item=p.b)  # fmt: skip
+    assert r.status_code == 201, r.text
+    assert (await p.read(client))["b"]["depends_keys"] == ["a", "F-1"]
+
+
+async def test_panel_status_planned_keeps_other_shipped(client):
+    p = await Panel().build(await make_people())
+    mark = {"note": "Runs in the partner app", "on": "2026-10-01"}
+    async with tenant_session(p.ctx.tenant_id) as s:
+        row = await s.get(RoadmapItem, uuid.UUID(p.a))
+        row.shipped, row.cut = mark, True
+        await s.commit()
+    r = await p.post(client, "set_status", {"status": "cut"}, {"status": "planned"})
+    assert r.status_code == 201, r.text
+    a = (await p.read(client))["a"]
+    assert a["status"] == "done"
+    # The panel's own done mark is what planned clears.
+    r = await p.post(client, "set_status", {"status": "planned"}, {"status": "done"}, item=p.b)
+    assert r.status_code == 201, r.text
+    r = await p.post(client, "set_status", {"status": "done"}, {"status": "planned"}, item=p.b)
+    assert r.status_code == 201, r.text
+    assert (await p.read(client))["b"]["status"] == "planned"
