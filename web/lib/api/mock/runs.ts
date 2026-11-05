@@ -201,6 +201,16 @@ export interface RunsContext {
   vagueGoals?: () => number;
   /** C7: Approve with edits: the requirements a person added, written to the baseline as `by`'s. */
   scopeApproved?: (scope: StoredScope, by: string) => void;
+  /**
+   * C8 RP1 (api run_order.accept_new): an approved order's new features (`new: true` ranking
+   * rows) join the baseline as proposed, and the live ranking; `by` null when Oracle saved the
+   * order itself. Absent: nothing is added (older mock data).
+   */
+  acceptNewFeatures?: (snap: SnapshotRow, by: string | null, scope: PrdScopeOut["features"]) => void;
+  /** The baseline's non-rejected goal keys (api run_order.Known.goals): only these count as a new feature's goal. Absent: any named goal counts (older mock data). */
+  goalKeys?: () => string[];
+  /** A goal's title in the baseline, rejected ones too (api stale_goals names a rejected goal by it). */
+  goalTitle?: (key: string) => string | undefined;
   uuid: () => string;
   now: () => string;
 }
@@ -1061,14 +1071,14 @@ interface FeatureSetSpec {
   excluded: { key: string; reason: string }[];
 }
 
-/** The local runtime's feature set: clean, as the API's FakeRuntime leaves it. */
+/** The local runtime's feature set: clean, as the API's FakeRuntime leaves it; its goal one the baseline has (the order check counts only those). */
 const LOCAL_FEATURE_SET: FeatureSetSpec = {
   features: [
     {
       key: "price-early",
       title: "Show the price early",
       summary: "Buyers see the full price before checkout",
-      goals: [{ key: "g1", contribution: 2 }],
+      goals: [{ key: "g.activation", contribution: 2 }],
       depends_on: [],
       confidence: 0.8,
       requirements: [{ key: "price-early-total", text: "The cart shows the total with delivery before checkout", acceptance: ["Delivery cost is included"] }],
@@ -1077,7 +1087,7 @@ const LOCAL_FEATURE_SET: FeatureSetSpec = {
       key: "guest-checkout",
       title: "Guest checkout",
       summary: "First-time buyers pay without an account",
-      goals: [{ key: "g1", contribution: 3 }],
+      goals: [{ key: "g.activation", contribution: 3 }],
       depends_on: ["price-early"],
       confidence: 0.7,
       requirements: [{ key: "guest-checkout-email", text: "A guest gives an email address only", acceptance: ["No password is asked for"] }],
@@ -1086,7 +1096,7 @@ const LOCAL_FEATURE_SET: FeatureSetSpec = {
       key: "order-tracking",
       title: "Order tracking",
       summary: "Buyers follow their order after paying",
-      goals: [{ key: "g1", contribution: 1 }],
+      goals: [{ key: "g.activation", contribution: 1 }],
       depends_on: [],
       confidence: 0.6,
       requirements: [{ key: "order-tracking-link", text: "The confirmation email links to the order's status", acceptance: ["The link works without signing in"] }],
@@ -1250,18 +1260,28 @@ function priorityYaml(spec: OrderSpec, segment: string, attempt: number): string
 
 /** The approved PRD scope a run's order must rank (C6), else null. */
 function scopeOf(ctx: Pick<RunsContext, "db">, r: RunOut): PrdScopeOut["features"] | null {
-  const scope = (ctx.db.scopes?.[r.id] ?? []).filter((x) => x.status === "approved").pop();
+  const scope = approvedScope(ctx, r);
   return scope ? scope.features.filter((f) => f.decision === "include") : null;
 }
 
+const approvedScope = (ctx: Pick<RunsContext, "db">, r: RunOut) => (ctx.db.scopes?.[r.id] ?? []).filter((x) => x.status === "approved").pop();
+
+/** The baseline's non-rejected goal keys, when the context knows them (api run_order.Known.goals). */
+const goalSet = (ctx: Pick<RunsContext, "goalKeys">) => (ctx.goalKeys ? new Set(ctx.goalKeys()) : null);
+
 /**
  * As the API's check (oracle.priorities.run_order.check_order), for the codes the mock's
- * orders can show: unknown_feature, not_in_scope, missing_feature, before_prerequisite
- * (blocking); differs_from_live, no_goal (advisory). The live ranking is the mock's
+ * orders can show: unknown_feature, not_in_scope, missing_feature, before_prerequisite,
+ * new_feature_no_goal, unknown_goal (blocking); differs_from_live, no_goal (advisory). The live ranking is the mock's
  * (./lane-f.ts), restricted to the ranked features.
  */
-function checkOrder(spec: OrderSpec, scope: PrdScopeOut["features"] | null): PriorityCheck {
-  const live = ranking(spec.method).features;
+function checkOrder(given: OrderSpec, scope: PrdScopeOut["features"] | null, goals: Set<string> | null): PriorityCheck {
+  const live = ranking(given.method).features;
+  const titleOf = (k: string) => live.find((f) => f.key === k)?.title ?? (scope ?? []).find((f) => f.key === k)?.title ?? given.order.find((o) => o.key === k && o.title)?.title ?? k;
+  // A key ranked twice is checked once, at its first entry (api: duplicate_key).
+  const times = new Map<string, number>();
+  for (const o of given.order) times.set(o.key, (times.get(o.key) ?? 0) + 1);
+  const spec: OrderSpec = { ...given, order: given.order.filter((o, i) => given.order.findIndex((x) => x.key === o.key) === i) };
   const keys = spec.order.map((o) => o.key);
   const restricted = live.filter((f) => keys.includes(f.key)).map((f) => f.key);
   const rank = Object.fromEntries(keys.map((k, i) => [k, i + 1]));
@@ -1272,12 +1292,26 @@ function checkOrder(spec: OrderSpec, scope: PrdScopeOut["features"] | null): Pri
   for (const o of spec.order) if (o.title) deps[o.key] = [...(o.depends_on ?? [])];
   const problems: PriorityCheck["problems"] = [];
   const add = (code: string, feature: string, message: string, blocking = true) => problems.push({ code, blocking, feature, message });
+  for (const [k, n] of times) if (n > 1) add("duplicate_key", k, `${titleOf(k)} is ranked ${n} times`);
   const inScope = new Set((scope ?? []).map((f) => f.key));
   for (const k of keys) {
     if (!live.some((f) => f.key === k) && !inScope.has(k) && !proposed.has(k)) add("unknown_feature", k, `${k} is not a feature of the baseline or the scope`);
     else if (scope && !inScope.has(k)) add("not_in_scope", k, `${k} is not included in the approved PRD scope`);
   }
-  for (const f of scope ?? []) if (!(f.key in rank)) add("missing_feature", f.key, `${f.key} is in the approved PRD scope and not ranked`);
+  for (const f of scope ?? []) if (!(f.key in rank)) add("missing_feature", f.key, `${f.title || f.key} is in the approved PRD scope and not ranked`);
+  // A feature new in this PRD names a goal it serves, in its row or its feature-set entry: a goal
+  // of the baseline (not rejected), 0 from either source meaning it does not serve (api _check_new_goals).
+  for (const o of spec.order) {
+    const entry = (scope ?? []).find((f) => f.key === o.key);
+    if (live.some((f) => f.key === o.key) || (!o.title && !entry)) continue;
+    const title = o.title ?? entry?.title ?? o.key;
+    const named = [{ key: o.goal, contribution: o.contribution }, ...(entry?.goals ?? [])];
+    const keys = named.flatMap((g) => (g.key ? [g.key] : []));
+    const zero = new Set(named.filter((g) => g.key && g.contribution === 0).map((g) => g.key!));
+    const unknown = goals ? [...new Set(keys)].filter((k) => !goals.has(k)) : [];
+    for (const g of unknown) add("unknown_goal", o.key, `${title} names the goal ${g}, which is not a goal in the Ground Truth: the run must name one that is`);
+    if (!unknown.length && !keys.some((k) => (!goals || goals.has(k)) && !zero.has(k))) add("new_feature_no_goal", o.key, `${title} is new and names no goal it serves: the run must name one`);
+  }
   for (const k of keys) {
     for (const d of [...new Set(deps[k] ?? [])].sort()) {
       if (d in rank && rank[d] > rank[k]) add("before_prerequisite", k, `${k} is ranked ${rank[k]}, above ${d} (rank ${rank[d]}), which it depends on`);
@@ -1288,8 +1322,10 @@ function checkOrder(spec: OrderSpec, scope: PrdScopeOut["features"] | null): Pri
     const inputs = Object.fromEntries(NEW_INPUTS.filter((n) => o[n] != null).map((n) => [n, o[n]]));
     return { key: o.key, rank: i + 1, score: o.score, explanation: o.explanation, live_rank: at < 0 ? null : at + 1, ...inputs };
   });
+  // Where each sits among the live features the order ranks (api run_order.check_order): new features ranked above it do not move it.
+  const position = new Map(order.filter((o) => o.live_rank != null).map((o, i) => [o.key, i + 1]));
   for (const o of order) {
-    if (o.live_rank != null && Math.abs(o.live_rank - o.rank) > 2) {
+    if (o.live_rank != null && Math.abs(o.live_rank - position.get(o.key)!) > 2) {
       add("differs_from_live", o.key, `${o.key} is ranked ${o.rank} here and ${o.live_rank} in the live ranking`, false);
     }
     if (live.find((f) => f.key === o.key)?.flags.includes("no_confirmed_goal")) {
@@ -1341,7 +1377,7 @@ function proposeOrder(ctx: Pick<RunsContext, "db" | "uuid" | "now" | "documents"
     params: { segment_seq: seq, attempt },
     ranking: rows,
     checkpoint_id: null,
-    scope_id: null,
+    scope_id: approvedScope(ctx, r)?.id ?? null,
     check_result: check,
   };
   if (same) Object.assign(same, snap);
@@ -1364,11 +1400,15 @@ function newFeature(o: OrderEntry, rank: number, method: Method, live: SnapshotR
   const missing: string[] = [];
   let score: number | null = o.score;
   let value: number | null = null;
-  if (o.goal != null && o.weight != null && o.contribution != null) {
-    value = o.weight * o.contribution;
-    goals.push({ goal: o.goal, title: goalTitle, weight: o.weight, weight_assumed: false, contribution: o.contribution, contribution_assumed: false, link_status: "proposed", term: value });
+  if (o.goal != null) {
+    // A goal named with no weight takes the goal's live weight, with no contribution the scorer's default: either then assumed.
+    const liveWeight = live.flatMap((f) => f.explanation.goals).find((g) => g.goal === o.goal && !g.weight_assumed)?.weight ?? null;
+    const weight = o.weight ?? liveWeight ?? 1;
+    const contribution = o.contribution ?? 1;
+    value = weight * contribution;
+    goals.push({ goal: o.goal, title: goalTitle, weight, weight_assumed: o.weight == null && liveWeight == null, contribution, contribution_assumed: o.contribution == null, link_status: "proposed", term: value });
     // In the scorer's words, so the page shows them as every row's (confidence as a percent, two decimals).
-    steps.push(`goal value = ${num(o.weight)}×${num(o.contribution)} (${goalTitle}) = ${num(value)}`);
+    steps.push(`goal value = ${num(weight)}×${num(contribution)} (${goalTitle}) = ${num(value)}`);
     if (o.confidence != null && o.effort) {
       score = Math.round((value * o.confidence * 10000) / o.effort) / 10000;
       steps.push(`score = ${num(value)} × ${num(o.confidence)} ÷ ${num(o.effort)} = ${num(score)}`);
@@ -1404,12 +1444,51 @@ function newFeature(o: OrderEntry, rank: number, method: Method, live: SnapshotR
   };
 }
 
-/** As the API (rules 3-5): approving saves the order for the PRD (`by` null: Oracle, the stop was off); requesting changes discards it. */
-function decideOrder(ctx: Pick<RunsContext, "db" | "now" | "documents">, r: RunOut, cp: CheckpointOut, decision: "approved" | "changes_requested", by: string | null) {
+/**
+ * As the API (rules 3-5): approving saves the order for the PRD (`by` null: Oracle, the stop
+ * was off); requesting changes discards it. RP1: approving also adds the order's new features
+ * to the baseline as proposed (and the live ranking), for both the person's and Oracle's save.
+ */
+function decideOrder(ctx: Pick<RunsContext, "db" | "now" | "documents" | "acceptNewFeatures">, r: RunOut, cp: CheckpointOut, decision: "approved" | "changes_requested", by: string | null) {
   const snap = (ctx.db.priority_snapshots ?? []).find((x) => x.id === cp.payload.priority_snapshot_id && x.status === "proposed");
   if (!snap) return;
   Object.assign(snap, { status: decision === "approved" ? "saved" : "discarded", decided_by: by, decided_at: ctx.now() });
-  if (decision === "approved") snap.document = orderDocument(ctx, r) ?? snap.document;
+  if (decision === "approved") {
+    snap.document = orderDocument(ctx, r) ?? snap.document;
+    // The approved feature set the order was checked against (api: snapshot.scope_id).
+    const scope = Object.values(ctx.db.scopes ?? {}).flat().find((x) => x.id === snap.scope_id);
+    ctx.acceptNewFeatures?.(snap, by, (scope?.features ?? []).filter((f) => f.decision === "include"));
+  }
+}
+
+/**
+ * As oracle.priorities.run_order.stale_goals at approval: each goal an order's new feature serves
+ * that is no goal of the Ground Truth now is a blocking unknown_goal, added to the order's check.
+ */
+function recheckOrderGoals(ctx: Pick<RunsContext, "db" | "goalKeys" | "goalTitle">, cp: CheckpointOut): PriorityCheck["problems"] {
+  const goals = goalSet(ctx);
+  const snap = (ctx.db.priority_snapshots ?? []).find((x) => x.id === cp.payload.priority_snapshot_id && x.status === "proposed");
+  if (!goals || !snap) return [];
+  const check = snap.check_result ?? { method: snap.method, features: snap.ranking.length, problems: [], order: [] };
+  const said = new Set(check.problems.map((x) => x.message));
+  const stale: PriorityCheck["problems"] = [];
+  for (const row of snap.ranking.filter((x) => x.new)) {
+    for (const g of row.explanation.goals ?? []) {
+      if (goals.has(String(g.goal)) || g.contribution === 0) continue;
+      const title = ctx.goalTitle?.(String(g.goal));
+      const message = title
+          ? `${row.title} serves the goal ${title}, which was rejected after the order was checked: the run must name a goal of the Ground Truth`
+          : `${row.title} names the goal ${g.goal}, which is not a goal in the Ground Truth: the run must name one that is`;
+      if (said.has(message)) continue;
+      said.add(message);
+      stale.push({ code: "unknown_goal", blocking: true, feature: row.key, message });
+    }
+  }
+  if (stale.length) {
+    snap.check_result = { ...check, problems: [...check.problems, ...stale] };
+    cp.payload = { ...cp.payload, priority_check: snap.check_result };
+  }
+  return stale;
 }
 
 /** The priority stop's note when Oracle saved the order itself (H11 ``priorities`` at Act). */
@@ -1497,7 +1576,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
   const dates = def.outputs.includes("eng_dates.yaml") ? datesCheckOf(r, r.id === ENG_DATES_RUN ? SEEDED_DATES : LOCAL_DATES) : null;
   if (dates) ctx.db.artifacts[`${r.id}|${s.seq}|eng_dates.yaml`] = datesYaml(dates, attempt);
   if (def.outputs.includes("priority.yaml")) {
-    s.priority_check = checkOrder(LOCAL_ORDER, scopeOf(ctx, r));
+    s.priority_check = checkOrder(LOCAL_ORDER, scopeOf(ctx, r), goalSet(ctx));
     snapshot = proposeOrder(ctx, r, s.seq, attempt, LOCAL_ORDER, s.priority_check);
   }
   // The mock writes no strategy draft ("{draft}"): Company › Strategy keeps its own store.
@@ -2293,6 +2372,12 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const changedBy = ctx.reviewChange?.();
     if (changedBy) bump(draft, displayName(changedBy));
     if (expected_revision != null && expected_revision !== draft.revision) return json(409, { detail: reviewChanged(draft, expected_revision) });
+    // As the API (_recheck_order_goals): a goal a new feature serves, rejected since the order was checked, refuses Approve, named.
+    const stale = decision === "approved" && cp.kind === "priority_order" ? recheckOrderGoals(ctx, cp) : [];
+    if (stale.length) {
+      const gate = gateNow(ctx, cp, draft.actions, true);
+      return json(409, { detail: { code: "blocking_open", message: stale.map((x) => x.message).join("; "), left: gate?.left ?? [] } });
+    }
     const blocked = cannotApprove(cp);
     if (decision === "approved" && blocked) return fail(409, blocked);
     // D7: split, merge and open questions need the agents; Approve waits until they are removed.
@@ -3063,6 +3148,10 @@ export function fromRunCheckpoint(ctx: RunsContext, runId: string): { run: Schem
 /** The runs the "priority-order" scenario seeds (C8). */
 export const PRIORITY_RUN = "7a11c0de-0000-4000-8000-0000000000c8";
 export const PRIORITY_BLOCKED_RUN = "7a11c0de-0000-4000-8000-0000000000c9";
+export const PRIORITY_NO_GOAL_RUN = "7a11c0de-0000-4000-8000-0000000000ca";
+export const PRIORITY_ROWLESS_RUN = "7a11c0de-0000-4000-8000-0000000000cb";
+export const PRIORITY_DUPLICATE_RUN = "7a11c0de-0000-4000-8000-0000000000cc";
+export const PRIORITY_STALE_GOAL_RUN = "7a11c0de-0000-4000-8000-0000000000cd";
 
 /**
  * Saved addresses: one feature ranked well above the live ranking (differs_from_live,
@@ -3080,7 +3169,8 @@ const SAVED_ADDRESSES_ORDER: OrderSpec = {
     { key: "N-3", title: "Address check at checkout", depends_on: ["N-1"], goal: "g.paid-conversion", weight: 2, contribution: 2, confidence: 0.6, effort: 1, score: 2.4, explanation: "New in this PRD. Wrong addresses are the top reason a paid order fails." },
     { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
     { key: "N-4", title: "Import addresses from a spreadsheet, with a preview before saving", depends_on: ["N-1"], goal: "g.activation", weight: 3, contribution: 2, confidence: 0.6, effort: 2, score: 1.8, explanation: "New in this PRD. Large customers keep addresses in sheets." },
-    { key: "N-5", title: "Shared team addresses", goal: "g.paid-conversion", weight: 2, contribution: 1, confidence: 0.6, effort: 1, score: 1.2, explanation: "New in this PRD. Teams re-type the same office address." },
+    // Its goal named with no contribution: Approve order proposes the link, the contribution assumed.
+    { key: "N-5", title: "Shared team addresses", goal: "g.paid-conversion", weight: 2, confidence: 0.6, effort: 1, score: 1.2, explanation: "New in this PRD. Teams re-type the same office address." },
     { key: "F-7", score: 1, explanation: "G2 weight 2 x contribution 2 x 0.5 / 2" },
     { key: "N-6", title: "Address labels and notes", goal: "g.paid-conversion", weight: 2, contribution: 3, confidence: 0.3, effort: 4, score: 0.45, explanation: "New in this PRD. A guess: no evidence yet." },
   ],
@@ -3096,8 +3186,52 @@ const USAGE_ALERTS_ORDER: OrderSpec = {
   ],
 };
 
+/** Gift notes: a new feature whose row names no goal (new_feature_no_goal), one naming a goal the baseline lacks (unknown_goal): both blocking. */
+const GIFT_NOTES_ORDER: OrderSpec = {
+  method: "goal_weighted",
+  order: [
+    { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
+    { key: "N-7", title: "Gift notes at checkout", confidence: 0.5, effort: 1, score: 0.5, explanation: "New in this PRD. Buyers ask to add a note to a gift." },
+    { key: "N-8", title: "Gift wrap choice", goal: "g.no-such-goal", weight: 1, contribution: 2, confidence: 0.5, effort: 1, score: 1, explanation: "New in this PRD. Buyers pick a wrap." },
+  ],
+};
+
+/** Gift receipts: a new feature naming a goal the baseline lacks (unknown_goal, on its row) and a feature of the approved scope left unranked (missing_feature, on no row). */
+const GIFT_RECEIPTS_ORDER: OrderSpec = {
+  method: "goal_weighted",
+  order: [
+    { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
+    { key: "N-8", title: "Gift wrap choice", goal: "g.no-such-goal", weight: 1, contribution: 2, confidence: 0.5, effort: 1, score: 1, explanation: "New in this PRD. Buyers pick a wrap." },
+  ],
+};
+
+/** The approved feature set the Gift receipts order is checked against: Gift receipt by email is in it and not ranked. */
+const scopeFeature = (key: string, title: string): PrdScopeOut["features"][number] => ({
+  id: `scope-${key}`, key, title, decision: "include", origin: "agent", goals: [], depends_on: [], blocker_keys: [], flags: [], requirements: [],
+});
+const GIFT_RECEIPTS_SCOPE = [scopeFeature("F-1", "Saved addresses at checkout"), scopeFeature("N-8", "Gift wrap choice"), scopeFeature("N-9", "Gift receipt by email")];
+
+/** Gift cards: Saved addresses at checkout ranked twice (duplicate_key): one problem, said once. */
+const GIFT_CARDS_ORDER: OrderSpec = {
+  method: "goal_weighted",
+  order: [
+    { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
+    { key: "F-5", score: 1.8, explanation: "G1 weight 3 x contribution 1 x 0.6 / 3" },
+    { key: "F-1", score: 2.25, explanation: "Ranked again by mistake" },
+  ],
+};
+
+/** Gift boxes: clean; its new feature serves Cut early churn, a proposed goal a person may reject before Approve. */
+const GIFT_BOXES_ORDER: OrderSpec = {
+  method: "goal_weighted",
+  order: [
+    { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
+    { key: "N-10", title: "Gift box sizes", goal: "g.early-churn", weight: 0.2, contribution: 1, confidence: 0.5, effort: 1, score: 0.1, explanation: "New in this PRD. Buyers pick a box that fits." },
+  ],
+};
+
 /** A Baseline to PRD run for `document`, its baseline and feature set approved, waiting at the priority stop with `spec`. */
-function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, document: string, created_at: string, spec: OrderSpec, briefTitle?: string): RunOut {
+function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, document: string, created_at: string, spec: OrderSpec, briefTitle?: string, scope?: PrdScopeOut["features"]): RunOut {
   const { from, now } = seedClock();
   // Its own runs list, so the ticks below move this run only.
   const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}), priority_snapshots: (db.priority_snapshots ??= []) };
@@ -3114,11 +3248,11 @@ function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, do
     Object.assign(cp, { status: "approved", decided_by: ctx.userId, decided_at: now() });
     next(full, r, r.segments[seq - 1]);
   }
-  // Its feature set came from an earlier scope: the order is not checked against one here.
+  // Its feature set came from an earlier scope: the order is checked against `scope` when given.
   own.scopes![r.id] = [];
   tick(full);
   const priority = r.segments.find((s) => s.name === "priority")!;
-  const check = checkOrder(spec, null);
+  const check = checkOrder(spec, scope ?? null, goalSet(ctx));
   priority.priority_check = check;
   db.artifacts[`${r.id}|${priority.seq}|priority.yaml`] = priorityYaml(spec, priority.name, 1);
   const snap = proposeOrder(full, r, priority.seq, 1, spec, check);
@@ -3140,10 +3274,14 @@ export function seedPriorityRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
   seedAtPriority(db, ctx, PRIORITY_RUN, "saved-addresses", "2026-10-18T09:00:00Z", SAVED_ADDRESSES_ORDER);
   // Its PRD is not imported yet (no document has the slug): the order names it by the brief's title.
   seedAtPriority(db, ctx, PRIORITY_BLOCKED_RUN, "usage-alerts-pilot", "2026-10-18T10:00:00Z", USAGE_ALERTS_ORDER, "Example Co · Usage alerts");
+  seedAtPriority(db, ctx, PRIORITY_NO_GOAL_RUN, "gift-notes", "2026-10-18T08:00:00Z", GIFT_NOTES_ORDER, "Gift notes");
+  seedAtPriority(db, ctx, PRIORITY_ROWLESS_RUN, "gift-receipts", "2026-10-18T07:00:00Z", GIFT_RECEIPTS_ORDER, "Gift receipts", GIFT_RECEIPTS_SCOPE);
+  seedAtPriority(db, ctx, PRIORITY_DUPLICATE_RUN, "gift-cards", "2026-10-18T06:00:00Z", GIFT_CARDS_ORDER, "Gift cards");
+  seedAtPriority(db, ctx, PRIORITY_STALE_GOAL_RUN, "gift-boxes", "2026-10-18T05:00:00Z", GIFT_BOXES_ORDER, "Gift boxes");
   const checkout = ctx.documents.find((d) => d.slug === "checkout-redesign");
   const earlier = db.runs.find((r) => r.document_slug === "checkout-redesign") ?? db.runs[0];
   const spec: OrderSpec = { method: "goal_weighted", order: ranking("goal_weighted").features.slice(0, 4).map((f) => ({ key: f.key, score: f.score ?? 0, explanation: "As the live ranking" })) };
-  const check = checkOrder(spec, null);
+  const check = checkOrder(spec, null, goalSet(ctx));
   const snap = proposeOrder({ ...ctx, db }, earlier, 0, 1, spec, check);
   Object.assign(snap, {
     status: "saved",

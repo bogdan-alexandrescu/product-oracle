@@ -34,6 +34,7 @@ import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { named, namedText, useNames, type Names } from "@/lib/codes";
 import { byGoalOrder } from "@/lib/goal-order";
+import { unknownGoalParts, unknownGoalWords } from "@/lib/order-problems";
 import { formatDateTime, isHttpUrl, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { displayName } from "@/lib/names";
@@ -134,14 +135,73 @@ const PROBLEMS: Record<string, string> = {
   before_prerequisite: "Above its prerequisite",
   differs_from_live: "Differs from live",
   no_goal: "No confirmed goal",
+  new_feature_no_goal: "Names no goal",
+  unknown_goal: "Unknown goal",
 };
 
-function ProblemChip({ p }: { p: PriorityProblem }) {
+/** A goal the Ground Truth does not have: its key is all the run gave, so it has no name. */
+const isUnknownGoal = (g: { goal: string; title?: string | null }) => !g.title || g.title === g.goal;
+
+/**
+ * A run row's goals by their names: a new feature's goal that no live feature serves yet comes
+ * with its key as its title, so the company's goals name it; one they lack stays unknown.
+ */
+function withGoalNames(f: RankedFeature, names: Names | null | undefined): RankedFeature {
+  if (!names || !f.explanation.goals.some(isUnknownGoal)) return f;
+  const goals = f.explanation.goals.map((g) => (isUnknownGoal(g) && names.byKey.get(g.goal) ? { ...g, title: names.byKey.get(g.goal)!.title } : g));
+  return { ...f, explanation: { ...f.explanation, goals } };
+}
+
+/** A goal with no name: "Unknown goal", its key only in the tooltip. */
+function UnknownGoal({ goal }: { goal: string }) {
   return (
-    <Chip kind={p.blocking ? "crit" : "warn"} title={p.message} data-testid={`problem-${p.code}`}>
-      {PROBLEMS[p.code] ?? p.code.replace(/_/g, " ")}
-      <span className="sr-only">: {p.message}</span>
+    <Chip kind="crit" title={`${goal} is not a goal in the Ground Truth`} data-testid="unknown-goal">
+      Unknown goal
     </Chip>
+  );
+}
+
+/** A problem's sentence in words: a goal key with no name reads "an unknown goal". */
+const problemWords = (p: PriorityProblem) => (p.code === "unknown_goal" ? unknownGoalWords(p.message) : p.message);
+
+/** A problem's sentence as shown: as problemWords, the unknown goal's key in its tooltip. */
+function ProblemSentence({ p }: { p: PriorityProblem }) {
+  const m = p.code === "unknown_goal" ? unknownGoalParts(p.message) : null;
+  if (!m) return <>{p.message}</>;
+  return (
+    <>
+      {m.before}
+      <span title={m.key} className="underline decoration-dotted underline-offset-2">
+        an unknown goal
+      </span>
+      , {m.after}
+    </>
+  );
+}
+
+/** A problem's chip; `said`: its sentence is shown beside it, so the chip carries no second copy. */
+function ProblemChip({ p, said = false }: { p: PriorityProblem; said?: boolean }) {
+  return (
+    <Chip kind={p.blocking ? "crit" : "warn"} title={problemWords(p)} data-testid={`problem-${p.code}`}>
+      {PROBLEMS[p.code] ?? p.code.replace(/_/g, " ")}
+      {!said && <span className="sr-only">: {problemWords(p)}</span>}
+    </Chip>
+  );
+}
+
+/** Each of a run row's problems: its chip, then its sentence in full (never only a tooltip), read once. */
+function ProblemList({ problems }: { problems: PriorityProblem[] }) {
+  return (
+    <ul className="mt-2 space-y-1 text-sm">
+      {problems.map((p, i) => (
+        <li key={i} className="flex flex-col items-start gap-1">
+          <ProblemChip p={p} said />
+          <span className="break-words">
+            <ProblemSentence p={p} />
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -187,7 +247,7 @@ const fmt = (n: number | null | undefined) => (n == null ? "—" : String(Math.r
 const pct = (n: number | null | undefined) => (n == null ? null : Math.round(n * 100));
 
 /** A goal as words: its code and name ("G-B Growth"), never its key. */
-const goalText = (key: string, title: string) => namedText(named(title, key));
+const goalText = (key: string, title: string) => (isUnknownGoal({ goal: key, title }) ? "Unknown goal" : namedText(named(title, key)));
 
 /** A feature key as words: the ranked feature's name only, never its code (qa-plan-17). */
 function featureText(features: RankedFeature[], key: string): string {
@@ -522,7 +582,8 @@ function FeatureInspector({
             ))}
           </>
         }
-        fitStats
+        // A run row's four figures sit two by two (RP1 a); fitting tiles would put three on one line.
+        fitStats={!runRow}
         stats={[
           {
             label: "Rank",
@@ -540,16 +601,13 @@ function FeatureInspector({
             <p className="tnum mt-1.5 text-sm text-text2">
               {run.live_rank == null ? "Not in Oracle's live ranking." : `Oracle's live ranking puts it #${run.live_rank} (${deltaText(run.delta)}).`}
             </p>
-            {run.problems.length > 0 && (
-              <ul className="mt-2 space-y-1 text-sm">
-                {run.problems.map((p, i) => (
-                  <li key={i} className="flex flex-col items-start gap-1">
-                    <ProblemChip p={p} />
-                    <span className="break-words">{p.message}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {run.problems.length > 0 && <ProblemList problems={run.problems} />}
+          </InspectorSection>
+        )}
+        {/* A new feature has no "Why rank" section: its problems show on their own (review of PR 1244, round 3). */}
+        {run && !runRow && run.problems.length > 0 && (
+          <InspectorSection label="Problems" testId="run-problems">
+            <ProblemList problems={run.problems} />
           </InspectorSection>
         )}
         {change}
@@ -674,7 +732,7 @@ function FeatureInspector({
                 {e.goals.map((g) => (
                   <li key={g.goal} className="min-w-0">
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <CodeChip kind="goal" entityKey={g.goal} title={g.title} wrap />
+                      {isUnknownGoal(g) ? <UnknownGoal goal={g.goal} /> : <CodeChip kind="goal" entityKey={g.goal} title={g.title} wrap />}
                     </div>
                     {g.parent && (
                       <div className="mt-0.5 text-[13px] text-text2" data-testid="goal-via-parent">
@@ -726,7 +784,8 @@ type GoalRow = { id: string; title: string; count: number; top: number };
 function byGoal(features: RankedFeature[], names?: Names): GoalRow[] {
   const m = new Map<string, GoalRow>();
   for (const f of features) {
-    for (const g of f.explanation.goals) {
+    // A goal the Ground Truth does not have is no goal to list.
+    for (const g of f.explanation.goals.filter((x) => !isUnknownGoal(x))) {
       const row = m.get(g.goal) ?? { id: g.goal, title: g.title, count: 0, top: f.rank };
       row.count += 1;
       row.top = Math.min(row.top, f.rank);
@@ -833,7 +892,8 @@ const STATUS_TEXT = { saved: "Saved", proposed: "Proposed", discarded: "Discarde
 
 /**
  * The features new in the run's PRD (RP1, 'Scored with the rest'): ranked here among the
- * rest; approving the order adds them to the baseline as proposed.
+ * rest; approving the order adds them to the Ground Truth as proposed. An order with a
+ * blocking problem cannot be approved as it is, so the note does not promise it.
  */
 function NewFeaturesNote({ c }: { c: CompareOut }) {
   const n = c.rows.filter((r) => r.new).length;
@@ -842,17 +902,46 @@ function NewFeaturesNote({ c }: { c: CompareOut }) {
   if (c.snapshot.status === "saved")
     return (
       <Notice tone="pass" testId="new-features-note">
-        {`Order approved. The ${n === 1 ? "new feature" : `${n} new features`} joined the baseline as proposed, at the ${n === 1 ? "rank" : "ranks"} you approved.`}
+        {`Order approved. The ${n === 1 ? "new feature" : `${n} new features`} joined the Ground Truth as proposed, at the ${n === 1 ? "rank" : "ranks"} you approved.`}
       </Notice>
     );
   if (c.snapshot.status !== "proposed") return null;
   // As the frame words it: "the 6 features Saved addresses adds", the PRD named without its kind.
   const prd = c.snapshot.document ? prdName(c.snapshot.document).replace(/ PRD$/, "") : "this PRD";
+  const approvable = blockingOf(c).length === 0;
   return (
     <Notice tone="info" testId="new-features-note">
-      {`This order ranks the ${features} ${prd} adds, scored on the same formula and goals as the rest. Approving the order adds ${n === 1 ? "it" : "them"} to the baseline as proposed.`}
+      {`This order ranks the ${features} ${prd} adds, scored on the same formula and goals as the rest.`}
+      {approvable && ` Approving the order adds ${n === 1 ? "it" : "them"} to the Ground Truth as proposed.`}
     </Notice>
   );
+}
+
+/**
+ * The order's blocking problems, each once, in the check's order: its stored check holds every
+ * problem, one of no ranked row too (missing_feature, rank_gap, wrong_version, unknown_method).
+ */
+function blockingOf(c: CompareOut): PriorityProblem[] {
+  const all = c.snapshot.check_result?.problems ?? c.rows.flatMap((r) => r.problems);
+  const seen = new Set<string>();
+  return all.filter((p) => {
+    const id = `${p.code}|${p.feature ?? ""}|${p.message}`;
+    if (!p.blocking || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+/** Problems that ask the run for a goal: sending the order back is what fixes them. */
+const GOAL_PROBLEMS = new Set(["new_feature_no_goal", "unknown_goal"]);
+
+/**
+ * What to do about an order's blocking problems: they are never waived (gate ORDER_NOT_WAIVED),
+ * so Request changes sends the order back for the run to fix.
+ */
+function blockedText(problems: PriorityProblem[]) {
+  const fix = problems.every((p) => GOAL_PROBLEMS.has(p.code)) ? "names the goal" : `fixes ${problems.length === 1 ? "it" : "them"}`;
+  return `${plural(problems.length, "blocking problem")} left. Order problems cannot be waived: request changes so the run ${fix}.`;
 }
 
 /**
@@ -867,7 +956,13 @@ function SnapshotBand({ c, onDecided }: { c: CompareOut; onDecided: () => void }
   const doc = snap.document;
   const prd = doc ? prdName(doc) : null;
   const deciding = snap.status === "proposed" && cp?.status === "pending";
-  const blocked = cp?.cannot_approve ? `${cp.cannot_approve.charAt(0).toUpperCase()}${cp.cannot_approve.slice(1)}.` : null;
+  // The order's own problems are said in full, with what to do; any other reason as the server gives it.
+  const problems = blockingOf(c);
+  const blocked = problems.length
+    ? blockedText(problems)
+    : cp?.cannot_approve
+      ? `${cp.cannot_approve.charAt(0).toUpperCase()}${cp.cannot_approve.slice(1)}.`
+      : null;
 
   async function decide(decision: "approved" | "changes_requested") {
     if (!run || !cp) return;
@@ -884,6 +979,8 @@ function SnapshotBand({ c, onDecided }: { c: CompareOut; onDecided: () => void }
       onDecided();
     } catch (e) {
       setError(e instanceof Error && e.message ? e.message : errorMessage(e));
+      // A refusal may add a problem to the order (a goal rejected since its check): read it again.
+      if (decision === "approved") onDecided();
     } finally {
       setBusy(false);
     }
@@ -926,6 +1023,15 @@ function SnapshotBand({ c, onDecided }: { c: CompareOut; onDecided: () => void }
             <p className="text-sm text-warn" data-testid="cannot-approve">
               {blocked}
             </p>
+          )}
+          {problems.length > 0 && (
+            <ul aria-label="Blocking problems" className="mt-1.5 list-disc space-y-1 pl-5 text-sm">
+              {problems.map((p, i) => (
+                <li key={i} className="break-words">
+                  <ProblemSentence p={p} />
+                </li>
+              ))}
+            </ul>
           )}
           <textarea
             aria-label="Note for the agents"
@@ -1025,7 +1131,7 @@ function Priorities() {
   const byKey = new Map(cmp?.rows.map((c) => [c.key, c]) ?? []);
   // Run mode: the run's order, each row its live RankedFeature at the run's rank.
   const stored = new Map(cmp?.snapshot.ranking.map((f) => [f.key, f]) ?? []);
-  const runRows = cmp?.rows.map((c) => ({ ...(stored.get(c.key) ?? placeholder(c, method)), rank: c.run_rank }));
+  const runRows = cmp?.rows.map((c) => withGoalNames({ ...(stored.get(c.key) ?? placeholder(c, method)), rank: c.run_rank }, names));
   const rows = cmp ? runRows : r?.features;
   const features = rows ?? [];
   // The selected feature, else the top of the ranking.
@@ -1218,7 +1324,11 @@ function Priorities() {
         ) : (
           <span className="flex min-w-0 flex-col items-start gap-1 py-0.5 max-[600px]:flex-row max-[600px]:flex-wrap" data-testid="row-goals">
             {f.explanation.goals.map((g) => (
-              <CodeChip key={g.goal} kind="goal" entityKey={g.goal} title={g.title} wrap whole room={fonts ? goalCol - CELL_PAD : undefined} />
+              isUnknownGoal(g) ? (
+                <UnknownGoal key={g.goal} goal={g.goal} />
+              ) : (
+                <CodeChip key={g.goal} kind="goal" entityKey={g.goal} title={g.title} wrap whole room={fonts ? goalCol - CELL_PAD : undefined} />
+              )
             ))}
           </span>
         ),
@@ -1275,24 +1385,14 @@ function Priorities() {
       wrap: true,
       cell: (f) => {
         const text = f.depends_on.map((k) => featureName(known, k)).join(", ");
-        // Run mode: a dependency the feature set left out is not in this PRD; say so.
-        const outside = cmp ? f.depends_on.filter((k) => !features.some((x) => x.key === k)) : [];
-        const note =
-          outside.length === 0
-            ? null
-            : outside.length === f.depends_on.length
-              ? "Outside this PRD's scope"
-              : `${outside.map((k) => featureName(known, k)).join(", ")}: outside this PRD's scope`;
+        // RP1 a draws the names only: a dependency on a baseline feature the PRD leaves out is
+        // not a problem, and a real one (a cycle, a feature ranked above what it needs) has its
+        // own banner and flag.
         return (
-          <span data-testid="row-deps" className="block text-[13px] leading-[18px] text-text2" title={[text, note].filter(Boolean).join(". ") || undefined}>
+          <span data-testid="row-deps" className="block text-[13px] leading-[18px] text-text2" title={text || undefined}>
             {/* Between words; a word wider than the column hyphenated, never cut bare
                 ("instrumentatio / n", priorities-words). */}
             {(fonts ? fitWords(text, depsRoom, 400, 13) : text) || "—"}
-            {note && (
-              <span data-testid="row-deps-outside" className="block text-[12px] leading-4 text-warn">
-                {fonts ? fitWords(note, depsRoom, 400, 12) : note}
-              </span>
-            )}
           </span>
         );
       },
@@ -1430,7 +1530,7 @@ function Priorities() {
             <>
               {capsReady && !canSnapshot && !canOverride && <ViewOnly />}
               {/* The run's order lists its own features, not the whole live ranking. */}
-              <Chip kind="acc">{cmp ? `${features.length} in the run's order` : `${counts.features} ranked`}</Chip>
+              <Chip kind="acc">{`${cmp ? features.length : counts.features} ranked`}</Chip>
               {counts.no_goal > 0 && <Chip kind="crit">{counts.no_goal} no goal</Chip>}
               {counts.unscored > 0 && <Chip kind="warn">{counts.unscored} unscored</Chip>}
               {counts.in_cycles > 0 && <Chip kind="warn">{counts.in_cycles} in a cycle</Chip>}

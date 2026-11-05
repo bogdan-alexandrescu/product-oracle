@@ -17,8 +17,8 @@ from oracle.swarm import set_runtime
 from oracle.tenancy import tenant_session
 from tests.swarmcloud_fake import FakeSwarmCloud
 from tests.test_adapter_v2 import _member, owner, settings  # noqa: F401 - fixtures
-from tests.test_prd_scope import CLEAN, DOC, propose_feature
-from tests.test_priority_run_order import BLOCKED, BLOCKING, seed_baseline, snapshots
+from tests.test_prd_scope import DOC, propose_feature
+from tests.test_priority_run_order import BLOCKED, BLOCKING, SERVED, seed_baseline, snapshots
 from tests.test_runs import decide, get, pending, started, tick
 
 # The Engineering check (on by default) briefs CLEAN's features; decide stages verdicts.
@@ -36,7 +36,7 @@ async def test_console_approval_with_blocking_is_held(client, owner, monkeypatch
     swarm = FakeSwarmCloud(mcp=True, await_input=True, service_answer=True)
     set_runtime(swarm.runtime())
     try:
-        swarm.step_files["feature_set-2-architect"] = {"feature_set.yaml": CLEAN}
+        swarm.step_files["feature_set-2-architect"] = {"feature_set.yaml": SERVED}
         swarm.step_files["eng_review-1-architect"] = {"tech_briefs.yaml": BRIEFS}
         swarm.step_files["priority-1-prioritizer"] = {"priority.yaml": BLOCKING}
         await _member(tenant_id, "lead@example.com")

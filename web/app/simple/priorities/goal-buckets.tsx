@@ -61,9 +61,9 @@ export function placedPlan(plan: Plan, gb: Buckets | undefined): Plan {
   };
 }
 
-function featureOf(gb: Buckets | undefined, code: string, name: string): { id: string; goal_ids: string[] } | undefined {
+function featureOf(gb: Buckets | undefined, code: string, name: string): { id: string; goal_ids: string[]; assumed_goal_ids: string[] } | undefined {
   const f = gb?.features.find((x) => x.key.toLowerCase() === code.toLowerCase() || x.title === name);
-  return f ? { id: f.id, goal_ids: f.goal_ids ?? [] } : undefined;
+  return f ? { id: f.id, goal_ids: f.goal_ids ?? [], assumed_goal_ids: f.assumed_goal_ids ?? [] } : undefined;
 }
 
 /** "Dec 31" this year, "Feb 12, 2027" past it. */
@@ -237,6 +237,9 @@ export function FeatureRows({
             </li>
           );
         const links = featureOf(gb, f.code, f.name)?.goal_ids ?? [];
+        // Its link to this bucket's goal has an assumed contribution: marked as the Ground Truth marks it.
+        const here = goal ? gb?.goals.find((g) => same(g.title, goal))?.id : undefined;
+        const assumed = !!here && !!featureOf(gb, f.code, f.name)?.assumed_goal_ids.includes(here);
         const others = links.slice(1).map(titleOf).filter((x): x is string => !!x);
         const milestones = [...new Set(f.slices.map((s) => s.milestone))];
         const movable = grips && !!featureOf(gb, f.code, f.name);
@@ -283,6 +286,15 @@ export function FeatureRows({
               {others.length > 0 && (
                 <span data-testid="also-goals" title={`Also serves ${others.join(", ")}`} className="ml-1.5 inline-flex h-5 items-center whitespace-nowrap rounded-full border border-line-strong px-1.5 align-[1px] text-[12px] font-[650] text-text2">
                   +{others.length} {others.length === 1 ? "goal" : "goals"}
+                </span>
+              )}
+              {assumed && (
+                <span
+                  data-testid="contribution-assumed"
+                  title={`How much it moves ${goal} is assumed until someone sets it`}
+                  className="ml-1.5 inline-flex h-5 items-center whitespace-nowrap rounded-full bg-warn-bg px-1.5 align-[1px] text-[12px] font-[650] text-warn"
+                >
+                  Contribution assumed
                 </span>
               )}
             </span>

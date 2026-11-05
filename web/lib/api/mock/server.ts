@@ -11,7 +11,7 @@ import { parseBlocks, plainText, type Inline } from "@/lib/markdown";
 import { mockName as displayName } from "./people";
 
 import { MOCK_SCENARIO_KEY, mockUuid, seeded, stableUuid } from "./ids";
-import { addDecisionEntity, addDuplicateProposals, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, readMetricIntoGoal, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
+import { acceptNewFeatures, addDecisionEntity, addDuplicateProposals, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, readMetricIntoGoal, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
@@ -50,7 +50,7 @@ import {
 } from "./discussions";
 import { routeEngineering, techBriefOf, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
-import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
+import { addLiveFeature, laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, queueJob, queueQualityReview, seedLlm, seedStoredRefusals, SPENT, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
 import { draftRefusal, emptyAutonomy, inboxActions, levelFor, limitsFor, oracleDid, routeAutonomy, seedLaunchDid, seedOracleDid, seedRequestDid, seedRitualDid, type AutonomyDb } from "./autonomy";
@@ -3082,6 +3082,13 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     draftRefusal: (flow, kind) => draftRefusal((db.autonomy ??= emptyAutonomy()), flow, kind),
     members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role, name: x.name })),
     scopeApproved: (scope, by) => scopeToBaseline(db, scope, by),
+    // C8 RP1: an approved order's new features join the baseline as proposed, and the live ranking.
+    acceptNewFeatures: (snap, by, scope) => {
+      acceptNewFeatures(db.baseline, snap.run_id, snap.ranking, by, scope);
+      addLiveFeature(db, snap.ranking);
+    },
+    goalKeys: () => db.baseline.entities.filter((e) => e.type === "goal" && e.status !== "rejected").map((e) => e.key),
+    goalTitle: (key) => db.baseline.entities.find((e) => e.type === "goal" && e.key === key)?.title,
     ask: (q) => {
       const at = now();
       const id = uuid();

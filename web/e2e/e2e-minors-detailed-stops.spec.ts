@@ -10,8 +10,9 @@ import { login, openSection } from "./helpers";
  * - "unreadable briefs" (8): protects=the run page and the check say the briefs could not be read
  *   and that the way on is Send back; fails_when="0 features · Waiting for you", "0 of 0 decided",
  *   or an Approve that can never open; no_claim=the API's briefs check.
- * - "send back" (9): protects=Send back to architect is a secondary button; fails_when=it is the
- *   grey ghost that reads as disabled; no_claim=its decide call.
+ * - "send back" (9): protects=Send back to architect is enabled and, as the owner's EC1 b frame
+ *   draws it (re-confirmed Nov 4), the quiet ghost text button beside Approve; fails_when=it is
+ *   disabled or an outlined secondary; no_claim=its decide call.
  * - "long key" (10): protects=a feature with a long key: the list shows its name only, the pane
  *   shows the key by its title (EC1 b, owner Nov 1) inside the pane; fails_when=the key shows in
  *   the list or runs out of the pane; no_claim=other review pages.
@@ -105,11 +106,11 @@ for (const [name, viewport] of [
       await expect(page).toHaveURL(new RegExp(`/runs/${ENG_CHECK_RUN}$`));
     });
 
-    test("send back: Send back to architect is a normal secondary button", async ({ page }) => {
+    test("send back: Send back to architect is an enabled quiet ghost button, as the frame draws it", async ({ page }) => {
       await openCheck(page, "eng-check");
       const sendBack = bar(page).getByRole("button", { name: "Send back to architect" });
       await expect(sendBack).toBeEnabled();
-      await expect(sendBack).toHaveAttribute("data-variant", "secondary");
+      await expect(sendBack).toHaveAttribute("data-variant", "ghost");
     });
 
     test("long key: the list shows a long-keyed feature by name only, its key stays inside the pane", async ({ page }) => {
@@ -206,9 +207,8 @@ for (const [name, viewport] of [
       // The run's own list (build-runplan RP1: its 5 baseline features and the 6 the PRD adds).
       const rows = page.locator('tr[data-testid^="priority-row-"]');
       await expect(rows).toHaveCount(11);
-      await expect(page.getByText("11 in the run's order").filter({ visible: true })).toHaveCount(1);
-      // The header's count; each goal's "N ranked" (#1006, qa4-plan-17, a phone's words) is not it.
-      await expect(page.getByText(/^\d+ ranked$/).and(page.locator(':not([data-testid="goal-ranked"])'))).toHaveCount(0);
+      // RP1 a (owner, Nov 4): the header counts the run's list as "11 ranked".
+      await expect(page.getByText("11 ranked", { exact: true }).filter({ visible: true })).toHaveCount(1);
 
       const names = page.locator('[data-testid="row-goals"] [data-testid="code-name"]').filter({ visible: true });
       await expect(names.first()).toBeVisible();
