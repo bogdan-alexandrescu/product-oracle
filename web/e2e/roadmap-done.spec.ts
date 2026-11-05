@@ -72,7 +72,7 @@ test("an item marked done leaves every view, its broken links and every count, a
   const ship = talk.getByTestId("chat-card").filter({ hasText: "Mark as already shipped" });
   await ship.getByRole("button", { name: "Apply" }).click();
   await expect(ship).toHaveAttribute("data-status", "applied");
-  await expect(card.getByTestId("card-status")).toHaveText("Done");
+  await expect(card.getByTestId("fp-status")).toHaveText("Done");
   await page.keyboard.press("Escape");
 
   // Off the timeline, its links gone and every count down by them.
@@ -89,7 +89,7 @@ test("an item marked done leaves every view, its broken links and every count, a
   await done.getByTestId("done-items-toggle").click();
   await expect(done.getByTestId("done-item")).toHaveText(["Alert rules engine"]);
   await done.getByTestId("done-item").click();
-  await expect(page.getByTestId("floating-card").getByTestId("card-status")).toHaveText("Done");
+  await expect(page.getByTestId("floating-card").getByTestId("fp-status")).toHaveText("Done");
   await page.keyboard.press("Escape");
 
   // Not on the Gantt, Now / Next / Later or Waterfall either.
