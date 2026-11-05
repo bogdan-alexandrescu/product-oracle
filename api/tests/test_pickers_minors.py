@@ -92,7 +92,7 @@ async def test_too_many_channels_is_a_422(a, tenant_id, alice, slack):
     channels = [f"C{n:08d}" for n in range(MAX_CHANNELS + 1)]
     resp = await create_slack(a, tenant_id, alice, {"channels": channels})
     assert resp.status_code == 422
-    assert f"at most {MAX_CHANNELS} channels" in resp.json()["detail"]
+    assert f"pick {MAX_CHANNELS} channels or fewer" in resp.json()["detail"]
     assert slack.calls == []
 
 

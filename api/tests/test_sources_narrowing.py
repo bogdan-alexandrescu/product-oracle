@@ -521,8 +521,9 @@ async def test_a_source_over_the_channel_cap_needs_attention(a, tenant_id, alice
     result = (await a.post(f"/v1/sources/{source['id']}/sync")).json()
     assert result["outcome"] == "needs_attention"
     assert result["source"]["status"] == "needs_attention"
-    assert "at most 100 channels" in result["error"]
-    assert "edit this source" in result["source"]["last_error"]
+    # visual QA ST-7: plain words, what to do and what then happens.
+    assert result["error"] == "Pick 100 channels or fewer, then it syncs again"
+    assert result["source"]["last_error"] == "Pick 100 channels or fewer, then it syncs again"
     assert slack.calls == []
 
     # Editing it back within the rules clears it.
