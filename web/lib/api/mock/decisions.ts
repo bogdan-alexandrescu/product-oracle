@@ -529,21 +529,18 @@ function activeApprover(ctx: DecisionsContext, id: string): Member | undefined {
 export function logMeetingDecision(
   ctx: DecisionsContext,
   db: DecisionsDb,
-  d: { id: string; number: number; title: string; at: string; approver_id: string; subjects: Row["subjects"]; chosen: string; meeting_title: string },
+  d: { id: string; number?: number; title: string; at: string; approver_id: string; subjects: Row["subjects"]; chosen: string; meeting_title: string },
 ): void {
   if (db.decisions.some((x) => x.id === d.id)) return;
-  db.decisions.push({
-    ...blank(ctx, db, {
-      title: d.title, origin: "meeting", approver_id: d.approver_id, status: "decided",
-      options: [option(d.chosen, d.title)], chosen_option: d.chosen,
-      rationale: `Decided in ${d.meeting_title}`, context: `Decided in the review meeting ${d.meeting_title}`,
-      decided_by: d.approver_id, decided_actor: "user", decided_at: d.at, created_by: d.approver_id, created_at: d.at,
-      source: { kind: "simple_meeting_decision", id: ctx.uuid() } as Row["source"], subjects: d.subjects,
-    }),
-    // The meeting's own number (one decisions table in the API).
-    id: d.id,
-    number: d.number,
+  const row = blank(ctx, db, {
+    title: d.title, origin: "meeting", approver_id: d.approver_id, status: "decided",
+    options: [option(d.chosen, d.title)], chosen_option: d.chosen,
+    rationale: `Decided in ${d.meeting_title}`, context: `Decided in the review meeting ${d.meeting_title}`,
+    decided_by: d.approver_id, decided_actor: "user", decided_at: d.at, created_by: d.approver_id, created_at: d.at,
+    source: { kind: "simple_meeting_decision", id: ctx.uuid() } as Row["source"], subjects: d.subjects,
   });
+  // The meeting's own id and number (one decisions table in the API).
+  db.decisions.push({ ...row, id: d.id, number: d.number ?? row.number });
 }
 
 /**
