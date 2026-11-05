@@ -291,6 +291,22 @@ async def get_simple_decisions_waiting(
     return out
 
 
+async def _question_shown(db: TenantDB, principal: Principal, d: Decision) -> bool:
+    """A PRD's question as the Decisions page lists it: its PRD is not deleted and the
+    reader reads it; an open one of a replaced PRD is left out (simple-replaced-prds)."""
+    from oracle.docs.models import Document
+
+    ref = (d.prd_question or {}).get("document_id")
+    doc = await db.get(Document, uuid.UUID(str(ref))) if ref else None
+    if (
+        doc is None
+        or doc.deleted_at is not None
+        or not await meetings._readable(db, principal, doc)
+    ):
+        return False
+    return not (doc.replaced_by and d.status == "proposed")
+
+
 @router.get(
     "/decisions/{decision_id}", response_model=SimpleDecisionRow, name="get_simple_decision"
 )  # fmt: skip
@@ -304,6 +320,8 @@ async def get_simple_decision(
 
     d = await db.get(Decision, decision_id)
     if d is None or d.origin == "checkpoint" or d.deleted_at is not None:
+        raise HTTPException(404, "No such decision")
+    if d.origin == "prd" and not await _question_shown(db, principal, d):
         raise HTTPException(404, "No such decision")
     edited = await decision_sheet.edits(db, {d.id})
     by = {b for _, b in edited.values()}

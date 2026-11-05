@@ -423,11 +423,12 @@ async def decide(
             assert d is not None
             if d.status != "proposed":
                 raise ChangeError(409, f"outdated: {name_of(d)} is {d.status}")
-            now_ = fields(d)
-            current = {k: now_[k] for k in c.after}
-            if c.op in EDITS and current != {k: c.before.get(k) for k in c.after}:
-                raise ChangeError(409, {"message": "outdated: changed since it was proposed",
-                                        "current": current})  # fmt: skip
+            if c.op in EDITS:
+                now_ = fields(d)
+                current = {k: now_.get(k) for k in c.after}
+                if current != {k: c.before.get(k) for k in c.after}:
+                    raise ChangeError(409, {"message": "outdated: changed since it was proposed",
+                                            "current": current})  # fmt: skip
             _write(d, c.op, c.after, c.by)
     c.status = "accepted" if action == "accept" else "declined"
     c.decided_by, c.decided_at, c.decision_reason = me, company_time.now(), reason
