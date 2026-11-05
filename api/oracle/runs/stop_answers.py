@@ -87,14 +87,19 @@ async def engineering(db: AsyncSession, cp: Checkpoint) -> list[Answered]:
     recorded = await eng_check.recorded_of(db, cp)
     features = {f["key"]: f for f in eng_check._features(cp)}
     out: list[Answered] = []
-    for key, listed in (recorded.get("answers") or {}).items():
+    answers = recorded.get("answers")
+    for key, listed in (answers if isinstance(answers, dict) else {}).items():
+        if not isinstance(listed, list):
+            continue
         feature = features.get(key) or {}
         asked = {q.get("id"): q.get("question") for q in feature.get("questions") or []}
         title = feature.get("title")
         name = f"{key} {title}" if title and title != key else key
         for a in listed:
+            if not isinstance(a, dict) or not isinstance(a.get("answer"), str):
+                continue  # a non-text answer is dropped, as at registration
             question = a.get("question") or asked.get(a.get("question_id"))
-            answer = str(a.get("answer") or "").strip()
+            answer = a["answer"].strip()
             if not question or not answer:
                 continue
             out.append(
