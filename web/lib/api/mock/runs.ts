@@ -70,6 +70,12 @@ export interface RunsDb {
   drafts?: Record<string, DraftRow>;
   /** AQ1: checkpoint id -> the questions its run's agents asked there, with their answers. */
   agent_questions?: Record<string, StoredAgentQuestion[]>;
+  /**
+   * As oracle.engineering.check.elsewhere, for a check read again: the keys outside a run's
+   * feature set its Engineering check accepts (another PRD's feature on the company roadmap),
+   * named with their PRD.
+   */
+  roadmap_features?: Record<string, string>;
 }
 
 /** B2: what the baseline says of a run at Confirm the baseline (./from-run.ts, over the baseline mock). */
@@ -1940,7 +1946,10 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
 
   if (p[1] === "flows" && m === "GET") return json(200, flowCatalog());
-  if (p[1] === "inbox" && m === "GET") return json(200, inbox(ctx));
+  if (p[1] === "inbox" && m === "GET") {
+    for (const r of ctx.db.runs) recheckBriefs(ctx.db, r);
+    return json(200, inbox(ctx));
+  }
   if (p[1] === "internal" && p[2] === "tick" && m === "POST") return json(200, tick(ctx, true));
   // C6: the document's approved PRD scope, by id or slug (a new PRD's run names it by slug).
   if (p[1] === "documents" && p.length === 4 && p[3] === "scope" && m === "GET") {
@@ -2091,6 +2100,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
 
   const r = ctx.db.runs.find((x) => x.id === p[2]);
   if (!r) return fail(404, `run ${p[2]} not found`);
+  // As oracle.runs.service.recheck_briefs: the run, its review's gate and Approve read one check.
+  recheckBriefs(ctx.db, r);
   const done = (status = 200) => {
     refresh(r);
     // As the API: a checkpoint is decided by its approver role or above; an engineering stop
@@ -3884,6 +3895,21 @@ function briefsYaml(briefs: Brief[], attempt: number): string {
     if (!b.questions.length) lines[lines.length - 1] = "    questions: []";
   }
   return lines.join("\n") + "\n";
+}
+
+/**
+ * As oracle.engineering.check.refresh: a pending Engineering check stored with a dependency
+ * problem a later rule may answer is checked again as the rules now are (its other problems
+ * stay as they were), so the stop's page and its gate count the same problems.
+ */
+export function recheckBriefs(db: RunsDb, r: RunOut) {
+  for (const cp of r.checkpoints) {
+    const check = cp.kind === "eng_review" && cp.status === "pending" ? briefsOf(cp) : null;
+    if (!check?.problems.some((p) => p.code === "unknown_dependency")) continue;
+    const deps = briefsCheckOf(check.features, undefined, undefined, db.roadmap_features ?? {});
+    const problems = [...deps.problems, ...check.problems.filter((p) => p.code !== "unknown_dependency")];
+    cp.payload = { ...cp.payload, briefs_check: { ...check, problems, elsewhere: { ...check.elsewhere, ...deps.elsewhere } } };
+  }
 }
 
 const briefsOf = (cp: CheckpointOut) => ((cp.payload as { briefs_check?: BriefsCheck } | undefined)?.briefs_check ?? null);

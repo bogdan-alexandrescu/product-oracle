@@ -770,9 +770,12 @@ async def _roadmap_follows(
     draft = await prd_roadmap._draft(db, rid, principal)
     if draft is None:
         return None, False
-    base = await db.get(DocumentVersion, draft.base_version_id) if draft.base_version_id else None
-    published = await views.version_items(db, base) if base is not None else []
+    # hotfix PR 1273: the items the Simple roadmap shows, as approving a PRD matches them
+    # (prd_roadmap.on_prd_approved), with a draft copy of one read as that item (drafts.fold).
+    shown = await prd_roadmap._shown_version(db, rid)
+    published = await views.version_items(db, await db.get(DocumentVersion, shown)) if shown else []
     overlay = dict(draft.overlay or {})
+    copies = await drafts.copies_of(db, published, {rid: overlay})
     wrote: dict = {}
     asks: list = []
     for row in published:
@@ -783,7 +786,12 @@ async def _roadmap_follows(
         got = [x for k, x in ends.items() if re.fullmatch(rf"{re.escape(code)}[a-z]?", k) and x]
         if not got:
             continue
-        cur = drafts.overlaid(row, overlay.get(str(row.id)))
+        copy = copies.get(str(row.id))
+        cur = (
+            drafts.fold(row, copy, overlay)
+            if copy is not None
+            else drafts.overlaid(row, overlay.get(str(row.id)))
+        )
         sized = [i for i in d.needs_estimate if re.fullmatch(rf"{re.escape(code)}[a-z]?", i.id)]
         resized = bool(sized)
         if cur.end_date == max(got) and cur.estimate_pending == resized:
@@ -795,6 +803,12 @@ async def _roadmap_follows(
         # A sliced or split item's date waits on a new estimate from its owner.
         changed.estimate_pending = resized
         overlay[str(row.id)] = wrote[str(row.id)] = drafts.snapshot(changed)
+        if copy is not None:
+            # A change to a folded item lands on its copy too (drafts.write_items).
+            mine = drafts.overlaid(copy, overlay.get(str(copy.id)) or drafts.snapshot(copy))
+            mine.start_date, mine.end_date = changed.start_date, changed.end_date
+            mine.estimate_pending = changed.estimate_pending
+            overlay[str(copy.id)] = drafts.snapshot(mine)
         if resized and not cur.estimate_pending:
             asks.append((row, sized[0].title))
     if not wrote:

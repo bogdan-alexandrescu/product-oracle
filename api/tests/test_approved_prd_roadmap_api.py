@@ -455,3 +455,265 @@ async def test_already_published_copies_of_the_milestones_show_once(client):
     assert sorted(k["name"] for k in out["key_dates"] if k["prd"] is None) == [
         "Private beta", "Wrap up"
     ]  # fmt: skip
+
+
+# hotfix (approved-prd-shown-once): the roadmap has no approved version; its latest (v2,
+# not approved) holds the PRD's items from an older PRD version; the working draft was
+# opened on v1. The read shows v2 plus the draft's additions.
+
+
+async def unapproved_world() -> tuple[Ctx, dict[str, uuid.UUID]]:
+    """Roadmap 'Outdoors' with no approved version: v1 (one item of its own) and v2, its
+    latest, holding the PRD's version 1 items Offline sync and Trip reports; a working draft
+    opened on v1; the PRD's version 2, not approved yet, with newer dates for both and Route
+    search, plus 'Trail reviews', a re-keyed copy of Trip reports (same title)."""
+    ctx = await make_ctx()
+    owner = ctx.users["owner"].id
+    async with tenant_session(ctx.tenant_id) as s:
+        prd = await _add(s, Document(slug=PRD, title="Trail maps", kind="prd", status="draft",
+                                     visibility="company"))  # fmt: skip
+        rm = await _add(s, Document(slug="outdoors", title="Outdoors", kind="roadmap",
+                                    status="draft", visibility="company"))  # fmt: skip
+        rv1 = await _version(s, rm, 1, "# Outdoors v1\n")
+        rv2 = await _version(s, rm, 2, "# Outdoors v2\n")
+        pv1 = await _version(s, prd, 1, _body(1, "2027-01-29"))
+        s.add(RoadmapItem(roadmap_document_id=rm.id, roadmap_version_id=rv1.id,
+                          item_key="camp-finder", title="Camp finder", horizon="now",
+                          position=0, start_date=date(2026, 11, 9),
+                          end_date=date(2026, 11, 30)))  # fmt: skip
+        for i, (key, title, end) in enumerate([
+            ("offline-sync", "Offline sync", date(2026, 12, 15)),
+            ("trip-reports", "Trip reports", date(2027, 1, 15)),
+        ]):  # fmt: skip
+            s.add(RoadmapItem(roadmap_document_id=rm.id, roadmap_version_id=rv2.id,
+                              item_key=key, title=title, horizon="now", position=i,
+                              start_date=date(2026, 11, 9), end_date=end, date_source="typed",
+                              prd_document_id=prd.id, prd_version_id=pv1.id))  # fmt: skip
+        d = await _add(s, SimpleDraft(document_id=rm.id, base_version_id=rv1.id,
+                                      status="working", overlay={}, created_by=owner,
+                                      participant_ids=[owner]))  # fmt: skip
+        pv2 = await _version(s, prd, 2, _body(2, "2027-02-05"))
+        await _items(s, prd, pv2, rm, [
+            {"key": "offline-sync", "title": "Offline sync for trails",
+             "start": date(2026, 11, 16), "end": date(2026, 12, 22)},
+            {"key": "route-search", "title": "Route search",
+             "start": date(2026, 12, 1), "end": date(2027, 1, 8)},
+            {"key": "trail-reviews", "title": "Trip reports",
+             "start": date(2026, 12, 1), "end": date(2027, 1, 22)},
+        ])  # fmt: skip
+        await s.commit()
+        return ctx, {"prd": prd.id, "roadmap": rm.id, "draft": d.id, "v2": rv2.id,
+                     "pv2": pv2.id}  # fmt: skip
+
+
+def keys_once(out: dict) -> list[str]:
+    keys = [i["key"] for i in out["items"]]
+    assert len(keys) == len(set(keys)), keys
+    return sorted(keys)
+
+
+async def test_approving_a_prd_never_adds_an_item_the_simple_roadmap_shows_already(client):
+    """protects=approving a PRD version when the roadmap's shown version (its latest, not
+    approved) is not the draft's base updates the PRD's items the page shows (same key, else
+    same title) with the PRD's dates and title instead of adding them again;
+    fails_when=each of the PRD's items shows twice, once from the roadmap version and once
+    from the draft."""
+    ctx, ids = await unapproved_world()
+    await approve(client, ctx, 2)
+    out = await read(client, ctx)
+    assert keys_once(out) == ["offline-sync", "route-search", "trip-reports"]
+    items = by_key(out)
+    assert items["offline-sync"]["title"] == "Offline sync for trails"
+    assert items["offline-sync"]["end"]["date"] == "2026-12-22"
+    assert items["trip-reports"]["end"]["date"] == "2027-01-22"
+    [src] = (await source(client, ctx, ids["roadmap"]))["from_prds"]
+    assert src["items"] == 3
+    # Approving it again still shows each once.
+    await approve(client, ctx, 2)
+    assert keys_once(await read(client, ctx)) == ["offline-sync", "route-search", "trip-reports"]
+
+
+async def _duplicates(ctx: Ctx, ids: dict, cut: str | None = None) -> dict[str, str]:
+    """What the draft holds in production: the PRD's version 2 items added to the draft
+    again with the same keys as the shown version's (and the banner's source)."""
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.get(SimpleDraft, ids["draft"])
+        added = {}
+        for i, (key, title, end) in enumerate([
+            ("offline-sync", "Offline sync for trails", date(2026, 12, 22)),
+            ("trip-reports", "Trip reports", date(2027, 1, 22)),
+            ("route-search", "Route search", date(2027, 1, 8)),
+        ]):  # fmt: skip
+            row = await _add(s, RoadmapItem(
+                roadmap_document_id=ids["roadmap"], simple_draft_id=d.id, item_key=key,
+                title=title, horizon="now", position=10 + i, start_date=date(2026, 11, 16),
+                end_date=end, date_source="accepted", prd_document_id=ids["prd"],
+                prd_version_id=ids["pv2"], note="From Trail maps (version 2)"))  # fmt: skip
+            added[key] = str(row.id)
+        overlay = {
+            "from_prds": {
+                str(ids["prd"]): {
+                    "version": 2,
+                    "items": list(added.values()),
+                    "key_dates": [],
+                    "wrote": {},
+                }
+            }
+        }
+        if cut:
+            from oracle.simple import drafts
+
+            row = await s.get(RoadmapItem, uuid.UUID(added[cut]))
+            values = drafts.snapshot(row)
+            values["cut"] = True
+            overlay[added[cut]] = values
+        d.overlay = overlay
+        await s.commit()
+    return added
+
+
+async def test_a_draft_already_holding_the_duplicates_shows_each_item_once(client):
+    """protects=a working draft that already holds a copy of a shown item (same roadmap,
+    PRD and key) reads it once, with the PRD's newer dates and title, and a cut made on the
+    copy still cuts it; the banner counts it once; fails_when=the item shows twice, or the
+    copy's dates or cut are lost."""
+    ctx, ids = await unapproved_world()
+    await _duplicates(ctx, ids, cut="trip-reports")
+    out = await read(client, ctx)
+    assert keys_once(out) == ["offline-sync", "route-search", "trip-reports"]
+    items = by_key(out)
+    assert items["offline-sync"]["title"] == "Offline sync for trails"
+    assert items["offline-sync"]["end"]["date"] == "2026-12-22"
+    assert items["trip-reports"]["status"] == "cut"
+    [src] = (await source(client, ctx, ids["roadmap"]))["from_prds"]
+    assert src["items"] == 2
+    # The owner's own change to the shown item wins over the copy's title.
+    await retitle(client, ctx, items["offline-sync"], "Offline sync everywhere")
+    items = by_key(await read(client, ctx))
+    assert items["offline-sync"]["title"] == "Offline sync everywhere"
+    assert items["offline-sync"]["end"]["date"] == "2026-12-22"
+
+
+async def test_a_draft_holding_duplicates_publishes_one_item_per_key(client):
+    """protects=sending a draft that holds a copy of an item its base already has, then
+    approving it, publishes one item per key with the copy's dates; fails_when=the new
+    version holds the key twice."""
+    ctx, ids = await unapproved_world()
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.get(SimpleDraft, ids["draft"])
+        d.base_version_id = ids["v2"]
+        await s.commit()
+    await _duplicates(ctx, ids)
+    d = await source(client, ctx, ids["roadmap"])
+    r = await client.post(f"{DRAFTS}/{d['id']}/submit", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    r = await client.post(f"{DRAFTS}/{d['id']}/approve", headers=ctx.as_("owner"))
+    assert r.status_code == 200 and r.json()["status"] == "approved", r.text
+    out = (await client.get(ROADMAP, headers=ctx.as_("viewer"))).json()
+    assert keys_once(out) == ["offline-sync", "route-search", "trip-reports"]
+    assert by_key(out)["offline-sync"]["end"]["date"] == "2026-12-22"
+
+
+# hotfix PR 1273 fix 1 (a change to a folded item always takes effect): a change made on
+# the one item a shown item and its draft copy read as lands on both, so the read shows it
+# even when it puts back the shown item's own stored value.
+
+
+async def test_restore_after_a_copys_cut_brings_the_item_back(client):
+    """protects=restoring a folded item that a cut on its draft copy cut brings it back,
+    and the banner counts it again; fails_when=restore is logged but the item stays cut
+    (the shown item's restore equals its stored value and the copy's cut wins)."""
+    ctx, ids = await unapproved_world()
+    await _duplicates(ctx, ids, cut="trip-reports")
+    item = by_key(await read(client, ctx))["trip-reports"]
+    assert item["status"] == "cut"
+    await change(client, ctx, "restore", {"item_id": item["id"]}, {"cut": True}, {"cut": False})
+    assert by_key(await read(client, ctx))["trip-reports"]["status"] != "cut"
+    [src] = (await source(client, ctx, ids["roadmap"]))["from_prds"]
+    assert src["items"] == 3
+
+
+async def test_moving_a_folded_item_back_to_its_shown_dates_takes_effect(client):
+    """protects=moving a folded item (showing its copy's dates) back to the shown item's
+    stored dates shows those dates; fails_when=the move is logged but the copy's dates
+    still show."""
+    ctx, ids = await unapproved_world()
+    await _duplicates(ctx, ids)
+    item = by_key(await read(client, ctx))["offline-sync"]
+    assert (item["start"]["date"], item["end"]["date"]) == ("2026-11-16", "2026-12-22")
+    await change(client, ctx, "move_dates", {"item_id": item["id"]},
+                 {"start_date": "2026-11-16", "end_date": "2026-12-22"},
+                 {"start_date": "2026-11-09", "end_date": "2026-12-15"})  # fmt: skip
+    item = by_key(await read(client, ctx))["offline-sync"]
+    assert (item["start"]["date"], item["end"]["date"]) == ("2026-11-09", "2026-12-15")
+
+
+async def test_setting_a_folded_items_title_back_takes_effect(client):
+    """protects=setting a folded item's title back to the shown item's stored title shows
+    it; fails_when=the copy's title still shows."""
+    ctx, ids = await unapproved_world()
+    await _duplicates(ctx, ids)
+    item = by_key(await read(client, ctx))["offline-sync"]
+    assert item["title"] == "Offline sync for trails"
+    await retitle(client, ctx, item, "Offline sync")
+    assert by_key(await read(client, ctx))["offline-sync"]["title"] == "Offline sync"
+
+
+async def test_the_banner_does_not_count_a_cut_folded_item(client):
+    """protects=cutting a folded item takes it out of the banner's 'N items from <PRD>';
+    fails_when=the banner still counts it (it reads only the copy's own entry)."""
+    ctx, ids = await unapproved_world()
+    await _duplicates(ctx, ids)
+    [src] = (await source(client, ctx, ids["roadmap"]))["from_prds"]
+    assert src["items"] == 3
+    item = by_key(await read(client, ctx))["offline-sync"]
+    await change(client, ctx, "cut", {"item_id": item["id"]}, {"cut": False}, {"cut": True})
+    assert by_key(await read(client, ctx))["offline-sync"]["status"] == "cut"
+    [src] = (await source(client, ctx, ids["roadmap"]))["from_prds"]
+    assert src["items"] == 2
+
+
+async def test_a_copy_from_another_prd_with_the_same_key_stays_its_own_item(client):
+    """protects=an item added to the draft from a different PRD with the same key as a shown
+    item is not folded into it, and a change to the shown item leaves it alone;
+    fails_when=the two read as one item or a cut lands on both."""
+    ctx, ids = await unapproved_world()
+    async with tenant_session(ctx.tenant_id) as s:
+        other = await _add(s, Document(slug="camp-guide", title="Camp guide", kind="prd",
+                                       status="draft", visibility="company"))  # fmt: skip
+        theirs = await _add(s, RoadmapItem(
+            roadmap_document_id=ids["roadmap"], simple_draft_id=ids["draft"],
+            item_key="offline-sync", title="Offline camp guide", horizon="now", position=20,
+            start_date=date(2026, 12, 1), end_date=date(2027, 1, 29), date_source="accepted",
+            prd_document_id=other.id))  # fmt: skip
+        await s.commit()
+    out = await read(client, ctx)
+    same = [i for i in out["items"] if i["key"] == "offline-sync"]
+    assert sorted(i["title"] for i in same) == ["Offline camp guide", "Offline sync"]
+    [shown] = [i for i in same if i["title"] == "Offline sync"]
+    await change(client, ctx, "cut", {"item_id": shown["id"]}, {"cut": False}, {"cut": True})
+    same = {i["id"]: i for i in (await read(client, ctx))["items"] if i["key"] == "offline-sync"}
+    assert same[shown["id"]]["status"] == "cut"
+    assert same[str(theirs.id)]["status"] != "cut"
+
+
+def test_a_proposal_on_a_folded_item_reads_as_applied_on_both_layers():
+    """protects=a proposal's as-if read (drafts.simulate, its flags) on a folded item lands on
+    the draft copy too, so a restore after the copy's cut reads restored; fails_when=the
+    simulated read keeps the copy's cut."""
+    from oracle.simple import changes, drafts
+
+    rm, prd, base = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    shown = RoadmapItem(id=uuid.uuid4(), roadmap_document_id=rm, roadmap_version_id=base,
+                        item_key="trip-reports", title="Trip reports", horizon="now",
+                        position=0, cut=False, prd_document_id=prd)  # fmt: skip
+    copy = RoadmapItem(id=uuid.uuid4(), roadmap_document_id=rm, roadmap_version_id=None,
+                       item_key="trip-reports", title="Trip reports", horizon="now",
+                       position=1, cut=False, prd_document_id=prd)  # fmt: skip
+    overlays = {rm: {str(copy.id): {**drafts.snapshot(copy), "cut": True}}}
+    assert drafts.fold(shown, copy, overlays[rm]).cut is True
+    c = changes.SimpleChange(op="restore", target={"item_id": str(shown.id)})
+    folded = drafts.fold(shown, copy, overlays[rm])
+    out = drafts.simulate(c, {"cut": False}, {str(shown.id): folded}, overlays, changes.KEYED,
+                          changes.write, {str(shown.id): copy})  # fmt: skip
+    assert drafts.fold(shown, copy, out[rm]).cut is False

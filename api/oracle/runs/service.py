@@ -1113,8 +1113,32 @@ async def _live_reasons(
     return out
 
 
+async def recheck_briefs(
+    db: AsyncSession,
+    run: Run,
+    checkpoints: list[Checkpoint],
+    segments: list[RunSegment] | None = None,
+    *,
+    persist: bool = False,
+) -> None:
+    """The pending Engineering checks of ``checkpoints`` (of ``run``) as the rules now are
+    (:func:`oracle.engineering.check.refresh`). The one source of a check's problems:
+    every reader goes through it (the run, the review and its gate, the Inbox, each
+    approve path), so the problems a stop shows are the ones its Approve counts.
+    ``persist`` false (a read) keeps the new check in memory."""
+    if not any(c.kind == eng_check.KIND and c.status == "pending" for c in checkpoints):
+        return
+    if segments is None:
+        segments = await _segments(db, run.id)
+    await eng_check.refresh(db, run, segments, checkpoints, persist=persist)
+
+
 async def approve_gate_of(db: AsyncSession, cp: Checkpoint) -> Gate | None:
     """The approve gate of ``cp`` now (D3): its blocking reasons and staged actions."""
+    if cp.kind == eng_check.KIND:
+        # An approval (the decide route, a console's) counts the check as the rules now
+        # are, stored with the decision, as the stop's page reads it.
+        await recheck_briefs(db, await _get_run(db, cp.run_id), [cp], persist=True)
     staged = await _staged_actions(db, [cp])
     live = await _live_reasons(db, [cp])
     return gate.approve_gate(cp, live.get(cp.id), staged.get(cp.id, []))
@@ -1396,7 +1420,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     # A run already waiting at the Engineering check reads as the rules now are: its
     # briefs checked again (kept in its segment), no rerun. In memory only: a read (a
     # read-only token's too) writes nothing; deciding the stop stores it.
-    await eng_check.refresh(db, run, segments, checkpoints, persist=False)
+    await recheck_briefs(db, run, checkpoints, segments)
     names = await _decider_names(db, checkpoints)
     leads = await engineering_leads(db)
     staged = await _staged_actions(db, checkpoints)
@@ -11376,6 +11400,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         for c in owing
         if c.run_id not in hidden_runs and may_decide(principal, c, runs[c.run_id].flow, leads)
     ]
+    for c in mine:
+        # Each row's gate counts the problems its stop's page shows.
+        await recheck_briefs(db, runs[c.run_id], [c])
     names = await _decider_names(db, owed)
     staged = await _staged_actions(db, mine)
     live = await _live_reasons(db, mine)
