@@ -775,7 +775,7 @@ function restoreItemRoute(db: SimpleDb, ctx: SimpleChangesCtx, itemId: string): 
   const entry = ctx.trash?.entries.find((e) => e.out.root.type === "feature" && e.out.root.id === itemId);
   if (!entry) return json(404, { detail: "No such roadmap item" });
   if (!mayRestore(entry, ctx)) return json(403, { detail: "Only an owner, or whoever deleted it, restores this" });
-  return json(200, restoreFromTrash(ctx.trash!, entry, iso(mockNowMs()), db));
+  return json(200, restoreFromTrash(ctx.trash!, entry, iso(mockNowMs()), db, ctx.id));
 }
 
 /** add_key_date / edit_key_date / remove_key_date (key_dates.create). */

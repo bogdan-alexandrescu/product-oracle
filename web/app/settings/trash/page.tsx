@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { entryText, itemKind } from "@/components/ArtifactMenu";
@@ -92,9 +93,23 @@ export default function TrashPage() {
           {q.error && <Notice tone="error">{q.error}</Notice>}
           {q.data && q.data.length === 0 && (
             <Empty testId="trash-empty">
-              Trash is empty. Deleted documents, requests and runs wait here for 30 days, with everything that went with
-              them. Until then an owner, or whoever deleted a feature or goal, can restore them; after that they are
-              gone for good.
+              <span className="inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+                Trash is empty.
+                {/* Where they delete: owners documents, everyone else the roadmap's features and goals. */}
+                {can("delete_document") ? (
+                  <Link href="/documents" className="font-semibold text-accent-ink hover:underline">
+                    Open Documents
+                  </Link>
+                ) : (
+                  <Link href="/simple/roadmap" className="font-semibold text-accent-ink hover:underline">
+                    Open the roadmap
+                  </Link>
+                )}
+                <InfoTip label="deleted items" side="bottom">
+                  What you delete waits here for 30 days, with everything that went with it. Until then an owner, or
+                  whoever deleted a feature or goal, can restore it; after that it is gone for good.
+                </InfoTip>
+              </span>
             </Empty>
           )}
           {q.data && q.data.length > 0 && (

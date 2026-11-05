@@ -728,6 +728,101 @@ async def test_a_feature_only_in_the_draft_is_restored_to_the_draft_only(client,
         assert "Guided setup" in {i["title"] for i in (await w.items(client, "viewer")).values()}
 
 
+async def _approved_meanwhile(client, w, iid: str) -> str:
+    """The feature's own draft sent and approved while it is in Trash (v2, without it)."""
+    r = await client.post("/v1/simple/changes", headers=w.as_("decider"), json={
+        "op": "edit_title", "target": {"item_id": w.ids["import-b"]},
+        "before": {"title": "Import history"}, "after": {"title": "Import log"}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    drafts = (await client.get("/v1/simple/drafts", headers=w.as_("decider"))).json()
+    d = next(x for x in drafts if x["document"]["id"] == w.roadmap_id)
+    r = await client.post(f"/v1/simple/drafts/{d['id']}/submit", headers=w.as_("decider"))
+    assert r.status_code == 200 and r.json()["status"] == "submitted", r.text
+    for who in ("decider", "approver"):
+        r = await client.post(f"/v1/simple/drafts/{d['id']}/approve", headers=w.as_(who))
+        assert r.status_code == 200, r.text
+    assert r.json()["status"] == "approved", r.text
+    return d["id"]
+
+
+@pytest.mark.asyncio
+async def test_a_token_restore_opens_the_draft_as_a_person(client):
+    """protects=(review round 7) an owner's API token restores a feature whose draft was
+    approved while it was in Trash: the working draft opened for it is created by, and
+    takes part, a person (whoever deleted it), never the token's id; fails_when=the draft's
+    created_by or participant_ids hold the token id; no_claim=a person's own restore (they
+    open it as themselves, as the rest of Simple)."""
+    from tests.test_simple_additions_api import World as Additions
+
+    w = await Additions().build()
+    iid = (await w.add(client, "owner", "Guided setup"))["change"]["target"]["item_id"]
+    r = await client.delete(f"{ITEMS}/{iid}", headers=w.as_("decider"))
+    assert r.status_code == 200, r.text
+    await _approved_meanwhile(client, w, iid)
+    r = await client.post(f"{ITEMS}/{iid}/restore", headers=w.as_("token"))
+    assert r.status_code == 200, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        row = await s.get(RoadmapItem, uuid.UUID(iid))
+        d = await s.get(SimpleDraft, row.simple_draft_id)
+    me = w.ctx.users["decider"].id
+    assert d.status == "working"
+    assert (d.created_by, d.participant_ids) == (me, [me])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("then", ["working", "in_review"])
+async def test_approved_meanwhile_restore_lands_in_the_open_draft_only(client, then):
+    """protects=(owner's rule, Nov 5) a feature only ever in a Simple draft, that draft
+    approved while it was in Trash, then another draft opened on the roadmap (working, or
+    sent for review and waiting): Restore puts it in that draft only, and only its version
+    in review; a viewer does not see it; approving that draft publishes exactly one row of
+    it; fails_when=it lands on the published version, opens a second draft, or approving
+    leaves none or two; no_claim=the web."""
+    from tests.test_simple_additions_api import World as Additions
+
+    w = await Additions().build()
+    iid = (await w.add(client, "owner", "Guided setup"))["change"]["target"]["item_id"]
+    r = await client.delete(f"{ITEMS}/{iid}", headers=w.as_("decider"))
+    assert r.status_code == 200, r.text
+    await _approved_meanwhile(client, w, iid)
+    # Meanwhile another change opens the roadmap's next draft (on v2), maybe sent too.
+    a = next(
+        k for k, i in (await w.items(client, "decider")).items() if i["title"] == "Bulk import"
+    )
+    r = await client.post("/v1/simple/changes", headers=w.as_("decider"), json={
+        "op": "edit_title", "target": {"item_id": a},
+        "before": {"title": "Bulk import"}, "after": {"title": "Bulk upload"}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    drafts = (await client.get("/v1/simple/drafts", headers=w.as_("decider"))).json()
+    nxt = next(x for x in drafts if x["document"]["id"] == w.roadmap_id)
+    url = f"/v1/simple/drafts/{nxt['id']}"
+    if then == "in_review":
+        r = await client.post(f"{url}/submit", headers=w.as_("decider"))
+        assert r.status_code == 200 and r.json()["status"] == "submitted", r.text
+
+    r = await client.post(f"{ITEMS}/{iid}/restore", headers=w.as_("owner"))
+    assert r.status_code == 200, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        row = await s.get(RoadmapItem, uuid.UUID(iid))
+        open_ = list(await s.scalars(select(SimpleDraft).where(
+            SimpleDraft.document_id == uuid.UUID(w.roadmap_id),
+            SimpleDraft.status.in_(["working", "submitted"]))))  # fmt: skip
+    assert [str(d.id) for d in open_] == [nxt["id"]]
+    assert str(row.simple_draft_id) == nxt["id"] and row.roadmap_version_id is None
+    assert await _on_versions(w, "guided-setup") == ({3: 1} if then == "in_review" else {})
+    assert "Guided setup" not in {i["title"] for i in (await w.items(client, "viewer")).values()}
+    if then == "working":
+        r = await client.post(f"{url}/submit", headers=w.as_("decider"))
+        assert r.status_code == 200 and r.json()["status"] == "submitted", r.text
+    for who in ("decider", "approver"):
+        r = await client.post(f"{url}/approve", headers=w.as_(who))
+        assert r.status_code == 200, r.text
+    assert r.json()["status"] == "approved", r.text
+    seen = [i for i in (await w.items(client, "viewer")).values() if i["title"] == "Guided setup"]
+    assert len(seen) == 1
+    assert await _on_versions(w, "guided-setup") == {3: 1}
+
+
 @pytest.mark.asyncio
 async def test_restore_never_rewrites_an_older_approved_version(client):
     """protects=(review round 5) a feature deleted on v1, then v2 and v3 published without
