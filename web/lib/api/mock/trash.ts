@@ -184,14 +184,15 @@ export type TrashedSimple = {
 };
 
 /** trash-features-goals: takes `entry` out of Trash, putting back the feature or the goal it
- * holds; the generic `/v1/trash/{id}/restore` and the type's own restore route both end here. */
-export function restoreFromTrash(db: TrashDb, entry: TrashEntryRow, now: string, simple?: TrashedSimple): Schemas["TrashEntryOut"] {
+ * holds; the generic `/v1/trash/{id}/restore` and the type's own restore route both end here.
+ * `by` is the person restoring: a draft opened for the feature is theirs, as in the API. */
+export function restoreFromTrash(db: TrashDb, entry: TrashEntryRow, now: string, simple?: TrashedSimple, by?: string): Schemas["TrashEntryOut"] {
   const root = entry.out.root;
   // Only that roadmap's rows of the key (another roadmap may use the same key).
   // trash_items._reopened: its draft approved while it was in Trash, it goes to an open one.
   if (root.type === "feature" && simple && "ids" in simple) {
     const rm = entry.roadmap ?? simple.items.find((s) => s.key === root.slug)?.roadmap;
-    if (root.slug && rm) reopenDraftOnly(simple as SimpleDb, root.slug, rm, entry.out.deleted_by ?? "");
+    if (root.slug && rm) reopenDraftOnly(simple as SimpleDb, root.slug, rm, by ?? entry.out.deleted_by ?? "");
   }
   if (root.type === "feature") simple?.items.filter((s) => s.key === root.slug && (!entry.roadmap || s.roadmap === entry.roadmap)).forEach((s) => (s.trashed = false));
   if (root.type === "goal") simple?.goal_buckets?.goals.filter((g) => g.id === root.id).forEach((g) => (g.trashed = false));
@@ -376,7 +377,7 @@ function restore<D extends TrashDocument, V extends TrashVersion>(ctx: TrashCont
   ctx.versions.push(...(entry.versions as V[]));
   ctx.runs().push(...entry.runs);
   ctx.intakes().push(...entry.intakes);
-  const out = restoreFromTrash(ctx.db, entry, now, ctx.simple?.());
+  const out = restoreFromTrash(ctx.db, entry, now, ctx.simple?.(), ctx.me.id);
   if (entry.released !== undefined) ctx.onRestore?.(entry.released);
   return out;
 }

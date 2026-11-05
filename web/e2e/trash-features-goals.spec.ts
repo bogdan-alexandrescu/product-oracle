@@ -5,16 +5,20 @@ import { expect, test, type Page } from "./test";
 /*
  * trash-features-goals (owner's pick, Nov 4): a roadmap feature and a goal deleted to Trash are
  * listed in Settings › Trash beside documents (their kind in words, their name, who deleted them,
- * the days left), and Restore puts each back where it was. The screens that delete them are still
- * being drawn, so the delete is made through the mock API's own routes (as the API would get it);
- * Settings › Trash, and every other step a screen offers, is driven as a person would.
- * A row's Delete feature (Gantt, Timeline, Priorities) is driven in trash-feature-rows.spec.ts; the feature panel's own Delete comes later.
+ * the days left), and Restore puts each back where it was. A feature is deleted from its Timeline
+ * row's context menu (Delete feature) and a goal from its bucket's ⋯ on Priorities (Delete goal),
+ * as trash-feature-rows.spec.ts drives them; Settings › Trash and every other step is driven on
+ * its screen. One step has no screen on this branch and goes through the mock API's route: the
+ * required reviewer's approval of a roadmap draft (Home's waiting list for it is on the AN line).
+ * The API is read (never changed) to pick the example feature and goal and to check what a
+ * page's read holds.
+ * The feature panel's own Delete is another lane's.
  *
  * Card tfg-list-restore: protects = Settings › Trash lists "Feature <name>" and "Goal <name>"
  * with "Deleted by" and "30 days left"; Restore on each takes it out of Trash and the roadmap and
  * the goal buckets read it again; fails_when = either kind is missing from Trash, a bare kind
- * name ("feature") shows, or Restore leaves it out of its page's read; no_claim = the delete
- * screens (not drawn yet).
+ * name ("feature") shows, or Restore leaves it out of its page's read; no_claim = the row and
+ * bucket menus' own words (trash-feature-rows.spec.ts).
  *
  * Card tfg-code-links (review round 2): protects = the feature's row reads its code before its
  * name ("F-26 Alert rules engine"); a goal deleted with its features moved to another goal gets
@@ -50,7 +54,7 @@ async function call(page: Page, method: string, path: string, body?: unknown): P
   );
 }
 
-type Item = { id: string; title: string; code: string | null; can_decide: boolean };
+type Item = { id: string; key: string; title: string; code: string | null; can_decide: boolean };
 type Goal = { id: string; title: string };
 
 async function items(page: Page): Promise<Item[]> {
@@ -66,6 +70,34 @@ async function links(page: Page): Promise<Record<string, string[]>> {
   return Object.fromEntries(out.features.map((f) => [f.id, f.goal_ids]));
 }
 
+/** Deletes the feature from its Timeline row's context menu (Delete feature), as a person would. */
+async function deleteFeature(page: Page, item: { key: string; title: string }) {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  const bar = page.locator(`[data-testid="timeline-row"][data-item="${item.key}"] [data-testid="timeline-bar"]`);
+  await bar.click({ button: "right" });
+  await page.getByTestId("feature-menu").getByRole("menuitem", { name: "Delete feature" }).click();
+  await expect(page.getByTestId("toasts")).toContainText(`Moved ${item.title} to Trash.`);
+  await expect(bar).toHaveCount(0);
+}
+
+const bucket = (page: Page, goal: string) => page.locator(`[data-testid="plan-goal"][data-goal="${goal}"]`);
+
+/** Deletes the goal from its bucket's ⋯ on Priorities, its features moved to `to`. */
+async function deleteGoal(page: Page, goal: string, to: string) {
+  await page.goto("/simple/priorities?tab=buckets");
+  await expect(page.getByTestId("buckets-head")).toBeVisible();
+  await bucket(page, goal).getByRole("button", { name: `More for ${goal}` }).click();
+  await page.getByRole("menuitem", { name: "Delete goal" }).click();
+  const dialog = page.getByRole("dialog", { name: `Delete ${goal}` });
+  const pick = dialog.getByLabel("Goal", { exact: true });
+  const label = (await pick.locator("option").allTextContents()).find((o) => o.endsWith(` ${to}`) || o === to)!;
+  await pick.selectOption({ label });
+  await dialog.getByRole("button", { name: "Delete goal" }).click();
+  await expect(bucket(page, goal)).toHaveCount(0);
+}
+
 test("a deleted feature and goal are listed in Settings › Trash and restored from there", async ({ page }) => {
   await login(page);
   const feature = (await items(page)).find((i) => i.can_decide && i.code)!;
@@ -74,8 +106,8 @@ test("a deleted feature and goal are listed in Settings › Trash and restored f
   const before = await links(page);
   expect(Object.values(before).some((ids) => ids[0] === goal.id)).toBe(true);
 
-  expect((await call(page, "DELETE", `/v1/simple/roadmap/items/${feature.id}`)).status).toBe(200);
-  expect((await call(page, "DELETE", `/v1/simple/goal-buckets/goals/${goal.id}?to_goal_id=${other.id}`)).status).toBe(200);
+  await deleteFeature(page, feature);
+  await deleteGoal(page, goal.title, other.title);
   expect((await items(page)).map((i) => i.id)).not.toContain(feature.id);
   expect((await goals(page)).map((g) => g.id)).not.toContain(goal.id);
 
@@ -108,17 +140,15 @@ test("whoever deleted a feature or a goal sees it in Trash and restores it, with
   // An owner deletes a feature: it is the owners' to restore, so the approver never sees it.
   await login(page);
   const theirs = (await items(page)).find((i) => i.can_decide)!;
-  expect((await call(page, "DELETE", `/v1/simple/roadmap/items/${theirs.id}`)).status).toBe(200);
+  await deleteFeature(page, theirs);
 
   await signOut(page);
   await login(page, "dana.decider@example.com");
   const feature = (await items(page)).find((i) => i.can_decide && i.id !== theirs.id)!;
   const [goal, other] = await goals(page);
   expect(feature && goal && other).toBeTruthy();
-  const deleted = await call(page, "DELETE", `/v1/simple/roadmap/items/${feature.id}`);
-  expect(deleted.status).toBe(200);
-  expect((deleted.body as { can_restore: boolean }).can_restore).toBe(true);
-  expect((await call(page, "DELETE", `/v1/simple/goal-buckets/goals/${goal.id}?to_goal_id=${other.id}`)).status).toBe(200);
+  await deleteFeature(page, feature);
+  await deleteGoal(page, goal.title, other.title);
 
   await page.goto("/settings");
   await page.getByTestId("nav-trash").filter({ visible: true }).click();
@@ -191,8 +221,7 @@ test("a feature deleted before the roadmap's next version is published comes bac
   const feature = mine.find((i) => i.can_decide && i.code)!;
   const other = mine.find((i) => i.can_decide && i.id !== feature?.id)!;
   expect(feature && other).toBeTruthy();
-  // No screen deletes a feature yet (the queued feature-panel lane adds Delete): the mock API's route.
-  expect((await call(page, "DELETE", `/v1/simple/roadmap/items/${feature.id}`)).status).toBe(200);
+  await deleteFeature(page, feature);
 
   // Another feature's dates moved on the Timeline and the draft sent for review.
   await moveBar(page, other.key);
@@ -245,8 +274,7 @@ test("a feature added in the draft and restored while the draft is in review sta
   await expect(page.getByRole("status").filter({ hasText: `Added ${title} as a draft` })).toBeVisible();
   const added = (await alerts(page)).find((i) => i.title === title)!;
   expect(added).toBeTruthy();
-  // No screen deletes a feature yet (the queued feature-panel lane adds Delete): the mock API's route.
-  expect((await call(page, "DELETE", `/v1/simple/roadmap/items/${added.id}`)).status).toBe(200);
+  await deleteFeature(page, added);
 
   await moveBar(page, other.key);
   const roadmap = page.getByTestId("simple-roadmap");
@@ -310,8 +338,7 @@ test("a feature added in the draft and restored after the draft was approved wit
   await expect(page.getByRole("status").filter({ hasText: `Added ${title} as a draft` })).toBeVisible();
   const added = (await alerts(page)).find((i) => i.title === title)!;
   expect(added).toBeTruthy();
-  // No screen deletes a feature yet (the queued feature-panel lane adds Delete): the mock API's route.
-  expect((await call(page, "DELETE", `/v1/simple/roadmap/items/${added.id}`)).status).toBe(200);
+  await deleteFeature(page, added);
 
   // The draft sent and approved on Home while the feature is in Trash.
   await moveBar(page, other.key);
@@ -354,3 +381,88 @@ test("a feature added in the draft and restored after the draft was approved wit
   await expect(page.getByTestId("simple-chart")).toBeVisible();
   await expect(roadmap).toContainText(title);
 });
+
+/** Adds `title` to the Alerts roadmap's open draft from the quick add (a 2027-Q1 drop). */
+async function addInDraft(page: Page, title: string): Promise<RoadmapItem> {
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await page.getByLabel("Add an item").fill(title);
+  await page.getByTestId("quick-add-roadmap").selectOption({ label: "Alerts roadmap" });
+  const chip = page.getByTestId("quick-add-chip");
+  await expect(chip).toHaveAttribute("aria-disabled", "false");
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const target = page.locator('[data-testid="quarter-drop"][data-add-where="quarter:2027-Q1"]');
+  const from = (await chip.boundingBox())!;
+  const to = (await target.boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, Math.min(to.y + 20, (page.viewportSize()?.height ?? 800) - 12), { steps: 12 });
+  await page.mouse.up();
+  await expect(page.getByRole("status").filter({ hasText: `Added ${title} as a draft` })).toBeVisible();
+  const added = (await alerts(page)).find((i) => i.title === title)!;
+  expect(added).toBeTruthy();
+  return added;
+}
+
+/*
+ * Card tfg-approved-then-open (owner's rule, Nov 5): protects = a feature added in the open draft
+ * and deleted, that draft approved while it is in Trash, and then the roadmap's next draft opened
+ * (still working, or sent and waiting for approval): Restore in Settings › Trash puts the feature
+ * in that draft only; a viewer does not see it; approving that draft puts exactly one row of it on
+ * the roadmap; fails_when = Restore puts it on the published roadmap, opens another draft beside
+ * it, or approving shows none or two; no_claim = the API's rows (pytest
+ * test_approved_meanwhile_restore_lands_in_the_open_draft_only).
+ */
+for (const then of ["working", "in review"] as const) {
+  test(`a feature restored after its draft was approved, while the next draft is ${then}, lands in that draft only`, async ({ page }) => {
+    // Two drafts sent and approved, with sign-ins between: past the default 30 s.
+    test.slow();
+    await page.addInitScript((key) => localStorage.setItem(key, "trash-reviewer"), MOCK_SCENARIO_KEY);
+    await login(page);
+    const [first, second] = (await alerts(page)).filter((i) => i.can_decide);
+    expect(first && second).toBeTruthy();
+    const title = "Quiet hours digest";
+    const added = await addInDraft(page, title);
+    await deleteFeature(page, added);
+
+    // Its draft sent and approved on Home while the feature is in Trash.
+    await moveBar(page, first.key);
+    await sendForReview(page);
+    await approveOnHome(page);
+    await signOut(page);
+    await login(page);
+
+    // The roadmap's next draft: another bar moved, and maybe sent for review.
+    await moveBar(page, second.key);
+    if (then === "in review") await sendForReview(page);
+
+    await page.goto("/settings/trash");
+    const row = page.getByTestId("trash-entry").filter({ hasText: title });
+    await row.getByRole("button", { name: `Restore ${title}` }).click();
+    await expect(row).toHaveCount(0);
+    const roadmap = page.getByTestId("simple-roadmap");
+    const rows = page.locator(`[data-testid="timeline-row"][data-item="${added.key}"]`);
+    await page.goto("/simple/roadmap");
+    await expect(page.getByTestId("simple-chart")).toBeVisible();
+    await expect(rows).toHaveCount(1);
+    // Still one draft to send (when it was working), with the feature in it.
+    if (then === "working") await sendForReview(page);
+
+    // A viewer reads the published roadmap: it is not there.
+    await signOut(page);
+    await login(page, "vic.moss@example.com");
+    await page.goto("/simple/roadmap");
+    await expect(page.getByTestId("simple-chart")).toBeVisible();
+    await expect(roadmap).toContainText(first.title);
+    await expect(roadmap).not.toContainText(title);
+
+    // Approved on Home, exactly one row of it is on the roadmap.
+    await approveOnHome(page);
+    await signOut(page);
+    await login(page, "vic.moss@example.com");
+    await page.goto("/simple/roadmap");
+    await expect(page.getByTestId("simple-chart")).toBeVisible();
+    await expect(rows).toHaveCount(1);
+    await expect(roadmap.getByTestId("timeline-row").filter({ hasText: title })).toHaveCount(1);
+  });
+}
