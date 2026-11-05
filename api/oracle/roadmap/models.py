@@ -318,8 +318,9 @@ class RoadmapItem(Trashable, TenantScoped, Base):
     columns move (as ``artifact_dependencies`` do, §11.5), and approving the version
     applies its own plan to them once (oracle.simple.approved_roadmap: dates, plan state,
     added items). One exception: restoring a feature from Trash adds its row to the
-    approved (or proposed) versions made while it was in Trash, which were made without
-    it (oracle.simple.trash_items._onto_current); no existing row is changed.
+    published version and the one waiting for approval, when made while it was in Trash
+    (so without it); older approved versions are left as approved
+    (oracle.simple.trash_items._onto_current); no existing row is changed.
     """
 
     __tablename__ = "roadmap_items"
