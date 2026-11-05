@@ -30,6 +30,12 @@ Test cards (protects / fails_when / no_claim):
   survives the PRD read again; ``withdraw_decision`` takes it off Waiting with Undo; Delete
   sends a question to Trash (kind "question") and the PRD read again does not bring it
   back; Restore does; fails_when=any of these is lost or duplicated.
+- test_accepting_an_outdated_edit_is_refused: protects=accepting a proposed edit whose
+  fields were changed since it was made is refused (409 "outdated") and the newer edit
+  stays; fails_when=the accept overwrites the newer edit.
+- test_added_question_with_no_decider_is_not_accepted_by_its_proposer: protects=with no
+  decider and no owner to route to, a proposed question is left open and its proposer may
+  not accept it; an owner may; fails_when=the proposer accepts their own question.
 """
 
 import uuid
@@ -330,3 +336,44 @@ async def test_question_edit_add_withdraw_and_delete(client):
     assert r.status_code == 200, r.text
     assert _q(await _page(client, ctx), "Q4") is not None
     _ = questions
+
+
+async def test_accepting_an_outdated_edit_is_refused(client):
+    ctx = await make_ctx()
+    d = await _decision(client, ctx, approver="owner")
+    target = {"decision_id": d["id"]}
+    r = await _change(client, ctx, "approver", "edit_decision", target, {"title": "Old idea"})
+    assert r.status_code == 201, r.text
+    proposal = r.json()["change"]
+    assert proposal["status"] == "proposed"
+    r = await _change(client, ctx, "owner", "edit_decision", target, {"title": "Newer idea"})
+    assert r.status_code == 201, r.text
+    ok = await client.post(f"{CHANGES}/{proposal['id']}/accept", headers=ctx.as_("owner"),
+                           json={})  # fmt: skip
+    assert ok.status_code == 409, ok.text
+    assert "outdated" in ok.text
+    assert _row(await _page(client, ctx), d["id"])["title"] == "Newer idea"
+
+
+async def test_added_question_with_no_decider_is_not_accepted_by_its_proposer(
+    client, monkeypatch
+):
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+
+    async def no_decider(db, doc):
+        return None, False
+
+    monkeypatch.setattr(questions, "_decider", no_decider)
+    r = await _change(client, ctx, "approver", "add_question", {"document_id": str(ids["prd"])},
+                      {"title": "Who can export a team's alert history?"})  # fmt: skip
+    assert r.status_code == 201, r.text
+    change = r.json()["change"]
+    assert change["status"] == "proposed"
+    assert str(ctx.users["approver"].id) not in change["routed_to"]
+    mine = await client.post(f"{CHANGES}/{change['id']}/accept", headers=ctx.as_("approver"),
+                             json={})  # fmt: skip
+    assert mine.status_code == 403, mine.text
+    ok = await client.post(f"{CHANGES}/{change['id']}/accept", headers=ctx.as_("owner"),
+                           json={})  # fmt: skip
+    assert ok.status_code in (200, 201), ok.text
