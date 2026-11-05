@@ -29,7 +29,8 @@ import { expect, test, type Locator, type Page } from "./test";
  *
  * Card inbox-counts-at-once: protects = accepting Oracle's dates (their popover), a goal's
  * suggested feature (its card) and a proposal (Needs a decision) on the roadmap takes one off
- * the rail's Inbox count (on a phone, More's) at once, with no navigation or reload;
+ * the rail's Inbox count (on a phone, the tab bar's More count, or Roadmap's for the proposal)
+ * at once, with no navigation or reload;
  * fails_when = the count stays until a reload.
  *
  * Card inbox-simple-approval: protects = a roadmap version sent for review waits in its required
@@ -91,18 +92,13 @@ async function shownCount(page: Page, phone: boolean): Promise<number> {
   return t.length ? Number(t[0].trim()) : 0;
 }
 
-/** The Inbox's count as shown now, without leaving the page: the rail's, or on a phone More's (its sheet opened and closed); 0 when none shows. */
-async function inboxCount(page: Page, phone: boolean): Promise<number> {
-  if (!phone) {
-    const t = await page.getByTestId("simple-nav-inbox-count").allTextContents();
-    return t.length ? Number(t[0].trim()) : 0;
-  }
-  const sheet = page.getByRole("dialog", { name: "More" });
-  await tap(page.getByTestId("simple-tab-more"));
-  await expect(sheet.getByRole("link", { name: "Inbox", exact: true })).toBeVisible();
-  const t = await sheet.getByTestId("simple-more-inbox-count").allTextContents();
-  await page.keyboard.press("Escape");
-  await expect(sheet).toBeHidden();
+/**
+ * The count of what waits in the Inbox as shown now, read without leaving the page (or
+ * closing what is open): the rail's Inbox count; on a phone, the tab bar's More count (Oracle's
+ * suggestions wait there) or Roadmap count (a proposal); 0 when none shows.
+ */
+async function inboxCount(page: Page, phone: boolean, tab: "more" | "roadmap" = "more"): Promise<number> {
+  const t = await page.getByTestId(phone ? `simple-tab-${tab}-count` : "simple-nav-inbox-count").allTextContents();
   return t.length ? Number(t[0].trim()) : 0;
 }
 
@@ -258,8 +254,8 @@ for (const phone of [false, true]) {
       await openFromInbox(/^Open Oracle's dates for /);
       const pop = page.getByTestId("suggestion-popover");
       await expect(pop).toContainText("Oracle suggests");
+      await expect.poll(() => inboxCount(page, phone)).toBeGreaterThan(0);
       const n0 = await inboxCount(page, phone);
-      expect(n0).toBeGreaterThan(0);
       await tap(pop.getByRole("button", { name: "Accept" }));
       await expect(page.getByText("Dates accepted in your working draft")).toBeVisible();
       await expect.poll(() => inboxCount(page, phone)).toBe(n0 - 1);
@@ -268,6 +264,7 @@ for (const phone of [false, true]) {
       await openFromInbox("Open the suggestions for Keep alerts quiet");
       const card = page.getByTestId("goal-suggestion").first();
       await expect(card).toBeVisible();
+      await expect.poll(() => inboxCount(page, phone)).toBeGreaterThan(0);
       const n1 = await inboxCount(page, phone);
       await tap(card.getByRole("button", { name: "Accept" }));
       await expect(page.getByText(/^Added .+ as a draft$/)).toBeVisible();
@@ -277,10 +274,11 @@ for (const phone of [false, true]) {
       await openFromInbox("Open Weekly alert digest on its roadmap");
       const proposal = page.getByTestId("decision-tray").getByTestId("tray-proposal").filter({ hasText: "Weekly alert digest" }).first();
       await expect(proposal).toBeVisible();
-      const n2 = await inboxCount(page, phone);
+      await expect.poll(() => inboxCount(page, phone, "roadmap")).toBeGreaterThan(0);
+      const n2 = await inboxCount(page, phone, "roadmap");
       await tap(proposal.getByRole("button", { name: "Accept" }));
       await expect(page.getByText("Accepted: it is in your working draft")).toBeVisible();
-      await expect.poll(() => inboxCount(page, phone)).toBe(n2 - 1);
+      await expect.poll(() => inboxCount(page, phone, "roadmap")).toBe(n2 - 1);
     });
 
     // card: inbox-simple-approval
