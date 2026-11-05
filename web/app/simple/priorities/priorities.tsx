@@ -2224,11 +2224,12 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
                 />
               ) : (
                 <>
-                  <div className="flex items-start gap-2">
+                  {/* On a phone the count takes its own line under the heading, so the name keeps its room. */}
+                  <div className="flex items-start gap-2 max-sm:flex-wrap">
                     {rec && <OrderBadge n={rec.order} />}
                     <h3 className="min-w-0 flex-1 text-[21px] font-[650] leading-7">{goalLabel(g).name}</h3>
                     {code && <CodeTag code={code} />}
-                    <span data-testid="plan-goal-count" className="mt-1 flex-none text-[15px] text-text2">
+                    <span data-testid="plan-goal-count" className={`mt-1 flex-none text-[15px] text-text2 max-sm:order-last max-sm:mt-0 max-sm:basis-full ${rec ? "max-sm:pl-8" : ""}`}>
                       {count(n)}
                     </span>
                     {rights.edit(rec) && (

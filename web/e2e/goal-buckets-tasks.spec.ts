@@ -200,7 +200,10 @@ for (const view of VIEWS) {
           await expect(form).toHaveCount(0);
           await expect(page.locator('section[aria-label="Goal buckets"]').getByRole("alert")).toHaveCount(0);
           await expect(note(page)).toContainText("Saved Setup failure alerts.");
-          if (name) await expect(row.getByTestId("task-milestone")).toHaveText(name);
+          // A milestone a plan chip already names shows once, as that chip.
+          const chip = name ? row.getByTestId("plan-chip").filter({ hasText: name }) : null;
+          if (chip && (await chip.count())) await expect(row.getByTestId("task-milestone")).toHaveCount(0);
+          else if (name) await expect(row.getByTestId("task-milestone")).toHaveText(name);
           else await expect(row.getByTestId("task-milestone")).toHaveCount(0);
         }
         await row.getByRole("button", { name: "Edit Setup failure alerts" }).click();
