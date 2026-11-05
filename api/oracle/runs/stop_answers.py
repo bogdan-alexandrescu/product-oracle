@@ -1,42 +1,51 @@
 """The questions people answered at a run's stops, as decided calls.
 
-Two kinds of question are answered at a stop before it is approved:
+Two kinds of question are answered at a stop before it is decided:
 
 - the architect's questions of the tech briefs at the Engineering check (``eng_review``:
   ``answer:<question id>`` edits, recorded on approval in ``payload["briefs"]``,
   :mod:`oracle.engineering.check`);
 - the agents' questions on the Questions from the agents cards of any stop (AQ1,
-  :mod:`oracle.runs.agent_questions`), the feature-set stop's among them.
+  :mod:`oracle.runs.agent_questions`), the feature-set stop's among them, recorded when
+  the stop is decided (:func:`record`, ``payload["stop_answers"]``): a stop sent back
+  reruns its segment, whose next files replace the ones that asked.
 
-Once the stop is approved each answer is decided. This module reads them in one shape
-(:class:`Answered`) for:
+An answer is decided once its stop is approved, and a card's answer once its stop is
+approved or sent back. This module reads them in one shape (:class:`Answered`) for:
 
-- the run page's Decisions (``RunDecision.answers``, :func:`of_checkpoints`);
-- the PRD writer's prompt (:func:`prompt_lines`): each answer stated as decided, with the
-  person, the stop and the stop's decision record (its D-number), never as open;
+- the run page's Decisions (``RunDecision.answers``, :func:`of_checkpoints`, batched);
+- the PRD writers' prompt (:func:`prompt_lines`): each answer stated as decided, with the
+  person, the stop and the stop's decision record (its D-number), never as open, and each
+  stop's note with who approved or sent it back; the rerun of a sent-back stop's own
+  segment reads that stop's card answers;
 - the PRD import (:func:`open_problems`): a draft that still lists an answered question
   under Decisions needed or Open questions is refused, naming the question.
-
-A stop's notes are carried already (``PromptContext.reviewer_notes``).
 """
 
 import re
 import uuid
+from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.docs.schemas import ImportProblem
 from oracle.runs.models import Checkpoint, Run
 
 ANSWERED_OPEN = "answered_listed_open"
-# The segments that write the PRD and read the answers as decided.
-WRITERS = ("prd_draft",)
+# The card answers recorded when the stop is decided (:func:`record`).
+RECORD = "stop_answers"
+DECIDED = ("approved", "changes_requested")
+# The segments that write a PRD and read the answers as decided: the first draft and the
+# feedback loop's next draft (both PRD imports run :func:`open_problems`).
+WRITERS = ("prd_draft", "next_draft")
 STOPS = {
+    "baseline_confirm": "Baseline",
     "eng_review": "Engineering review",
+    "eng_dates": "Engineering dates",
     "feature_set": "Feature set",
     "priority_order": "Priority order",
     "prd_review": "PRD review",
@@ -44,6 +53,10 @@ STOPS = {
 # The PRD sections that list what is still undecided: by id, else by heading words.
 OPEN_IDS = ("decisions", "decisions-needed", "open-questions", "open-decisions")
 OPEN_WORDS = ("decisions needed", "open questions", "open decisions", "undecided")
+
+
+def stop_name(kind: str) -> str:
+    return STOPS.get(kind, kind.replace("_", " ").capitalize())
 
 
 @dataclass
@@ -59,7 +72,7 @@ class Answered:
 
     @property
     def stop(self) -> str:
-        return STOPS.get(self.kind, self.kind.replace("_", " ").capitalize())
+        return stop_name(self.kind)
 
 
 def _uuid(value: Any) -> uuid.UUID | None:
@@ -78,13 +91,9 @@ def _when(value: Any) -> datetime | None:
         return None
 
 
-async def engineering(db: AsyncSession, cp: Checkpoint) -> list[Answered]:
+def _engineering(cp: Checkpoint, recorded: dict[str, Any]) -> list[Answered]:
     from oracle.engineering import check as eng_check
 
-    check = (cp.payload or {}).get(eng_check.PAYLOAD_KEY)
-    if cp.kind != eng_check.KIND or not isinstance(check, dict):
-        return []
-    recorded = await eng_check.recorded_of(db, cp)
     features = {f["key"]: f for f in eng_check._features(cp)}
     out: list[Answered] = []
     answers = recorded.get("answers")
@@ -112,23 +121,62 @@ async def engineering(db: AsyncSession, cp: Checkpoint) -> list[Answered]:
     return out
 
 
-async def _agents(db: AsyncSession, run: Run, cp: Checkpoint) -> list[Answered]:
+def _is_check(cp: Checkpoint) -> bool:
+    from oracle.engineering import check as eng_check
+
+    return (
+        cp.kind == eng_check.KIND
+        and cp.status == "approved"
+        and isinstance((cp.payload or {}).get(eng_check.PAYLOAD_KEY), dict)
+    )
+
+
+async def engineering(db: AsyncSession, cp: Checkpoint) -> list[Answered]:
+    """The architect's questions answered at an approved Engineering check."""
+    from oracle.engineering import check as eng_check
+
+    return _engineering(cp, await eng_check.recorded_of(db, cp)) if _is_check(cp) else []
+
+
+def _card(cp: Checkpoint, q: Any, option: str, note: str | None, by: Any, at: Any) -> Answered:
+    label = {o.key: o.label for o in q.options}.get(option, option)
+    return Answered(
+        checkpoint_id=cp.id, kind=cp.kind, question=q.question,
+        answer=f"{label}. Note: {note}" if note else label, feature=q.feature,
+        by=_uuid(by), at=_when(at),
+    )  # fmt: skip
+
+
+def _recorded_cards(cp: Checkpoint) -> list[Answered]:
+    out: list[Answered] = []
+    for a in (cp.payload or {}).get(RECORD) or []:
+        if isinstance(a, dict) and a.get("question") and isinstance(a.get("answer"), str):
+            out.append(
+                Answered(
+                    checkpoint_id=cp.id, kind=cp.kind, question=str(a["question"]),
+                    answer=a["answer"], feature=a.get("feature"), by=_uuid(a.get("by")),
+                    at=_when(a.get("at")),
+                )
+            )  # fmt: skip
+    return out
+
+
+async def record(db: AsyncSession, run: Run, cp: Checkpoint) -> None:
+    """Keep the stop's answered cards on the stop as it is decided: a stop sent back reruns
+    its segment, whose next files replace the questions."""
     from oracle.runs import agent_questions
 
-    out: list[Answered] = []
+    out: list[dict[str, Any]] = []
     for q in await agent_questions._answered(db, None, run, cp):
         if q.answer is None:
             continue
-        label = {o.key: o.label for o in q.options}.get(q.answer.option, q.answer.option)
-        answer = f"{label}. Note: {q.answer.note}" if q.answer.note else label
+        by = q.answer.by.id if q.answer.by else None
+        a = _card(cp, q, q.answer.option, q.answer.note, by, q.answer.at)
         out.append(
-            Answered(
-                checkpoint_id=cp.id, kind=cp.kind, question=q.question, answer=answer,
-                feature=q.feature, by=q.answer.by.id if q.answer.by else None,
-                by_name=q.answer.by.name if q.answer.by else None, at=q.answer.at,
-            )
+            {"question": a.question, "answer": a.answer, "feature": a.feature,
+             "by": str(a.by) if a.by else None, "at": a.at.isoformat() if a.at else None}
         )  # fmt: skip
-    return out
+    cp.payload = {**(cp.payload or {}), RECORD: out}
 
 
 async def named(db: AsyncSession, answers: list[Answered]) -> list[Answered]:
@@ -142,46 +190,127 @@ async def named(db: AsyncSession, answers: list[Answered]) -> list[Answered]:
     return answers
 
 
+async def _read(
+    db: AsyncSession, runs: dict[uuid.UUID, Run], cps: list[Checkpoint]
+) -> dict[uuid.UUID, list[Answered]]:
+    """The answers of decided stops in a fixed number of reads, however many stops: an
+    approved check's answers, and every decided stop's cards (as recorded, else read from
+    its segment's files for a stop decided before they were recorded)."""
+    from oracle.engineering import check as eng_check
+    from oracle.runs import agent_questions
+    from oracle.runs.models import AgentAnswer, CheckpointAction, RunSegment
+
+    cps = [c for c in cps if c.status in DECIDED and c.run_id in runs]
+    out: dict[uuid.UUID, list[Answered]] = {c.id: [] for c in cps}
+    checks = [c for c in cps if _is_check(c)]
+    unrecorded = [c.id for c in checks if not isinstance((c.payload or {}).get("briefs"), dict)]
+    staged: dict[uuid.UUID, list[Any]] = defaultdict(list)
+    if unrecorded:
+        for action in await db.scalars(
+            select(CheckpointAction).where(
+                CheckpointAction.checkpoint_id.in_(unrecorded), CheckpointAction.state == "staged"
+            )
+        ):
+            staged[action.checkpoint_id].append(action)
+    for c in checks:
+        recorded = (c.payload or {}).get("briefs")
+        if not isinstance(recorded, dict):
+            recorded = eng_check.decisions(c, staged.get(c.id, []))
+        out[c.id] += _engineering(c, recorded)
+    for c in cps:
+        out[c.id] += _recorded_cards(c)
+    live = [c for c in cps if RECORD not in (c.payload or {})]
+    pairs = {
+        (c.run_id, seq)
+        for c in live
+        if isinstance(seq := (c.payload or {}).get("segment_seq"), int)
+    }
+    if pairs:
+        files = {
+            (s.run_id, s.seq): ((s.artifacts or {}).get("files") or {})
+            for s in await db.scalars(
+                select(RunSegment).where(tuple_(RunSegment.run_id, RunSegment.seq).in_(pairs))
+            )
+        }
+        rows: dict[uuid.UUID, dict[str, Any]] = defaultdict(dict)
+        for a in await db.scalars(
+            select(AgentAnswer).where(AgentAnswer.checkpoint_id.in_([c.id for c in live]))
+        ):
+            rows[a.checkpoint_id][a.question_key] = a
+        for c in live:
+            text = files.get((c.run_id, (c.payload or {}).get("segment_seq")), {})
+            text = text.get(agent_questions.FILE)
+            for q in agent_questions.parse(text if isinstance(text, str) else None):
+                a = rows[c.id].get(q.id)
+                if a is not None and a.option in {o.key for o in q.options}:
+                    out[c.id].append(_card(c, q, a.option, a.note, a.answered_by, a.answered_at))
+    await named(db, [a for listed in out.values() for a in listed])
+    return out
+
+
 async def of_checkpoint(db: AsyncSession, run: Run, cp: Checkpoint) -> list[Answered]:
     """The questions answered at the stop, each with who answered it and when."""
-    return await named(db, [*await engineering(db, cp), *await _agents(db, run, cp)])
+    return (await _read(db, {run.id: run}, [cp])).get(cp.id, [])
 
 
 async def of_checkpoints(
     db: AsyncSession, runs: dict[uuid.UUID, Run], cps: list[Checkpoint]
 ) -> dict[uuid.UUID, list[Answered]]:
-    """:func:`of_checkpoint` of approved stops (a stop sent back decided nothing)."""
-    out: dict[uuid.UUID, list[Answered]] = {}
-    for cp in cps:
-        if cp.status == "approved" and cp.run_id in runs:
-            out[cp.id] = await of_checkpoint(db, runs[cp.run_id], cp)
-    return out
+    """:func:`of_checkpoint` of many decided stops, batched (the Decisions of many runs)."""
+    return await _read(db, runs, cps)
 
 
-async def of_run(db: AsyncSession, run: Run) -> list[Answered]:
-    """Every question answered at the run's approved stops, the latest approval of a stop
-    kind only (an earlier attempt's answers were asked again), in stop order."""
+async def _stops(db: AsyncSession, run: Run) -> list[Checkpoint]:
+    """The run's stops whose calls stand, in stop order: the latest approval of each stop
+    kind (an earlier one was asked again), and the stops of that kind sent back since the
+    approval before it (their answers were carried into the attempt that followed)."""
     cps = list(
         await db.scalars(
             select(Checkpoint)
-            .where(Checkpoint.run_id == run.id, Checkpoint.status == "approved")
+            .where(Checkpoint.run_id == run.id, Checkpoint.status.in_(DECIDED))
             .order_by(Checkpoint.decided_at.desc())
         )
     )
-    latest: dict[str, Checkpoint] = {}
+    approvals: dict[str, list[Checkpoint]] = defaultdict(list)
     for cp in cps:
-        latest.setdefault(cp.kind, cp)
-    ordered = sorted(
-        latest.values(), key=lambda c: ((c.payload or {}).get("segment_seq") or 0, c.decided_at)
+        if cp.status == "approved":
+            approvals[cp.kind].append(cp)
+    kept: list[Checkpoint] = []
+    for cp in cps:
+        approved = approvals.get(cp.kind, [])
+        if cp.status == "approved":
+            if cp is approved[0]:
+                kept.append(cp)
+        elif len(approved) < 2 or (
+            cp.decided_at and approved[1].decided_at and cp.decided_at > approved[1].decided_at
+        ):
+            kept.append(cp)
+    first = datetime.min.replace(tzinfo=UTC)
+    return sorted(
+        kept, key=lambda c: ((c.payload or {}).get("segment_seq") or 0, c.decided_at or first)
     )
-    out: list[Answered] = []
-    for cp in ordered:
-        out += await of_checkpoint(db, run, cp)
-    return out
+
+
+def _latest(answers: list[Answered]) -> list[Answered]:
+    """One answer per question, the latest given."""
+    by_question: dict[str, Answered] = {}
+    for a in answers:
+        key = _words(a.question)
+        by_question.pop(key, None)
+        by_question[key] = a
+    return list(by_question.values())
+
+
+async def of_run(db: AsyncSession, run: Run) -> list[Answered]:
+    """Every question answered at the run's stops whose calls stand (:func:`_stops`), in
+    stop order."""
+    cps = await _stops(db, run)
+    read = await _read(db, {run.id: run}, cps)
+    return _latest([a for cp in cps for a in read.get(cp.id, [])])
 
 
 async def _numbers(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, int]:
-    """The decision record (its D-number) of each approved stop."""
+    """The decision record (its D-number) of each decided stop."""
     from oracle.decisions.models import Decision
 
     if not ids:
@@ -194,33 +323,69 @@ async def _numbers(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, int
     return {sid: n for sid, n in rows.all() if sid is not None}
 
 
-async def prompt_lines(db: AsyncSession, run: Run, segment: str) -> list[str]:
-    """What the PRD writer reads of the answers: each stated as decided, with its stop, the
-    person and the day, and the stop's decision record to cite."""
+async def prompt_lines(
+    db: AsyncSession, run: Run, segment: str, seq: int | None = None, hidden: Any = None
+) -> list[str]:
+    """What a writer reads of the stops' calls: each answer stated as decided, with its
+    stop, the person and the day, and each stop's note with who approved or sent it back,
+    citing the stop's decision record. A PRD writer (:data:`WRITERS`) reads every stop's;
+    another segment (``seq``) rerun after its own stop was sent back reads that stop's
+    answered cards. A note that names what ``hidden`` withholds is left out."""
+    from oracle.runs import service
+
+    stops = await _stops(db, run)
     if segment not in WRITERS:
+        stops = [
+            c for c in stops
+            if c.status == "changes_requested" and (c.payload or {}).get("segment_seq") == seq
+        ]  # fmt: skip
+    if not stops:
         return []
-    answers = await of_run(db, run)
-    if not answers:
+    read = await _read(db, {run.id: run}, stops)
+    answers = _latest([a for cp in stops for a in read.get(cp.id, [])])
+    noted = [
+        c for c in stops
+        if segment in WRITERS and c.note and not (hidden and hidden.names(c.note))
+    ]  # fmt: skip
+    if not answers and not noted:
         return []
     from oracle import company_time
 
     zone = await company_time.company_time_zone(db)
-    numbers = await _numbers(db, {a.checkpoint_id for a in answers})
+    numbers = await _numbers(db, {c.id for c in stops})
+    deciders = await service._people_named(
+        db, {i for c in noted if (i := service._decider_of(c)) is not None}
+    )
+
+    def where(cp_id: uuid.UUID, kind: str) -> str:
+        n = numbers.get(cp_id)
+        return f"{stop_name(kind)} (D-{n})" if n else stop_name(kind)
+
     lines = [
-        "Decided at this run's stops: a person answered each question below and approved "
-        "the stop, so each is a decision, never an open question. State each answer as "
-        "decided in the body where it belongs (Approach, Requirements, Rules and the "
-        "feature's own section), cite it like a decision with its D-number, and never list "
-        "it under Decisions needed or Open questions:",
+        "Decided at this run's stops: a person answered each question below at the stop, "
+        "and each note below is the call of the person who approved or sent back the stop, "
+        "so each is a decision, never an open question. State each answer as decided in "
+        "the body where it belongs (Approach, Requirements, Rules and the feature's own "
+        "section), cite it like a decision with its D-number, and never list it under "
+        "Decisions needed or Open questions:",
     ]
+    for c in noted:
+        did = "approved" if c.status == "approved" else "sent back"
+        decider = service._decider_of(c)
+        name = deciders.get(decider) if decider else None
+        who = f"{did} by {name}" if name else did
+        if c.decided_at is not None:
+            who += f" on {company_time.day_in_words(c.decided_at, zone)}"
+        lines.append(f'- {where(c.id, c.kind)}, {who}: note "{c.note}"')
     for a in answers:
-        n = numbers.get(a.checkpoint_id)
-        where = f"{a.stop} (D-{n})" if n else a.stop
         who = f"answered by {a.by_name}" if a.by_name else "answered"
         if a.at is not None:
             who += f" on {company_time.day_in_words(a.at, zone)}"
         about = f"{a.feature}: " if a.feature else ""
-        lines.append(f'- {where}, {who}: {about}"{a.question}" Decided: "{a.answer}"')
+        lines.append(
+            f'- {where(a.checkpoint_id, a.kind)}, {who}: {about}"{a.question}" '
+            f'Decided: "{a.answer}"'
+        )
     return lines
 
 
@@ -239,6 +404,19 @@ def decision_lines(answers: list[Answered]) -> list[str]:
 # --------------------------------------------------------------------------- import check
 
 _HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*(?:\{#([^}\s]+)\})?\s*$")
+# A listed item's marker: a bullet, a number, a checkbox, an id ("Q2:") or a "Question:"
+# label before the question itself.
+_MARKER = re.compile(
+    r"^(?:[-*+]\s+|\d+[.)]\s+)?(?:\[[ xX]\]\s*)?(?:[A-Z]{1,3}-?\d+[:.)]\s+)?"
+    r"(?:(?:open\s+)?(?:question|decision)s?\s*:\s*)?",
+    re.IGNORECASE,
+)
+# The owner and due day an open question is listed with: "Owner: Rae, needed by Nov 30".
+_TAIL = re.compile(
+    r"[\s(\[,;:.\-–—]+\b(?:owners?|owned by|needed by|decide by|due by|due)\b.*$",
+    re.IGNORECASE,
+)
+_RULE = re.compile(r"^:?-{3,}:?$")
 
 
 def _words(text: str) -> str:
@@ -269,17 +447,91 @@ def open_sections(markdown: str) -> list[tuple[str, str, str]]:
     return out
 
 
+def _cells(line: str) -> list[str]:
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
+def _is_open_label(words: str) -> bool:
+    return any(w in words for w in ("question", "decision", "undecided"))
+
+
+def listed_items(title: str, text: str) -> list[str]:
+    """The items an open section lists, one each: a bullet, a table cell or a line. In a
+    section that also holds risks ("Risks and open questions") only its open-questions
+    list counts (after a label or heading naming open questions, a table with a Question
+    column, or an item labelled "Question:"), never a risk line that quotes a question."""
+    mixed = "risk" in _words(title)
+    listing = not mixed
+    column: int | None = None
+    table: list[str] | None = None
+    out: list[str] = []
+    rows = text.splitlines()
+    for n, line in enumerate(rows):
+        s = line.strip()
+        if not s or s.startswith("<!--"):
+            continue
+        if s.startswith("|"):
+            cells = _cells(s)
+            if all(_RULE.match(c) or not c for c in cells):
+                continue
+            if table is None:
+                table = cells
+                below = rows[n + 1].strip() if n + 1 < len(rows) else ""
+                if below.startswith("|") and all(_RULE.match(c) or not c for c in _cells(below)):
+                    asks = [i for i, c in enumerate(cells) if "question" in _words(c)]
+                    column = asks[0] if asks else None
+                    continue
+            if column is not None:
+                out += cells[column : column + 1]
+            elif listing:
+                out += cells
+            continue
+        table, column = None, None
+        bullet = re.match(r"^(?:[-*+]|\d+[.)])\s+", s)
+        if mixed and not bullet:
+            bare = s.lstrip("#").strip().strip("*_").strip()
+            if s.startswith("#") or bare.endswith(":") or s.startswith(("**", "__")):
+                listing = _is_open_label(_words(bare)) and "risk" not in _words(bare)
+                continue
+        if listing:
+            out.append(s)
+        elif re.match(r"(?i)^(?:(?:[-*+]|\d+[.)])\s+)?(?:open\s+)?question\s*:", s):
+            out.append(s)
+    return out
+
+
+def _forms(item: str) -> set[str]:
+    """The item as words, with and without its owner and due tail."""
+    bare = _MARKER.sub("", item.strip(), count=1)
+    return {w for w in (_words(bare), _words(_TAIL.sub("", bare))) if w}
+
+
+def same_question(asked: str, listed: str) -> bool:
+    """``listed`` is the answered question ``asked`` (both as words): equal, or the same
+    words but for one, at near-equal length. A longer question that contains it is not."""
+    if asked == listed:
+        return True
+    a, b = asked.split(), listed.split()
+    if abs(len(a) - len(b)) > 1:
+        return False
+    sa, sb = set(a), set(b)
+    return len(sa & sb) / len(sa | sb) >= 0.9
+
+
 def listed_open(answers: list[Answered], markdown: str) -> list[ImportProblem]:
     """An answered question the draft still lists as undecided, once per question."""
-    sections = [(sid, title, _words(text)) for sid, title, text in open_sections(markdown)]
+    sections = [
+        (sid, title, [f for item in listed_items(title, text) for f in _forms(item)])
+        for sid, title, text in open_sections(markdown)
+    ]
     out: list[ImportProblem] = []
     seen: set[str] = set()
     for a in answers:
         asked = _words(a.question)
         if not asked or asked in seen:
             continue
-        for sid, title, text in sections:
-            if asked in text:
+        for sid, title, forms in sections:
+            if any(same_question(asked, f) for f in forms):
                 seen.add(asked)
                 by = f" by {a.by_name}" if a.by_name else ""
                 out.append(

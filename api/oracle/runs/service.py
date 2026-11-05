@@ -2924,11 +2924,14 @@ async def _prompt_context(
     # of a member-view run's prompt (reviewer notes, the change request, the Regenerate
     # note; discussions: oracle.discussions.agent_view.for_member_run).
     hidden = await member_hidden(db, run)
+    # A PRD writer reads each stop's note in its decided block, with the stop's name, who
+    # decided and the decision record (stop_answers.prompt_lines).
     notes = [
         f"{c.kind}: {c.note}"
         for c in await _checkpoints(db, [run.id])
         if c.status == "approved" and c.note and not (hidden and hidden.names(c.note))
-    ]
+        and segment.name not in stop_answers.WRITERS
+    ]  # fmt: skip
     if change_request and hidden and hidden.names(change_request):
         change_request = WITHHELD_NOTE
     feedback: list[dict[str, Any]] = []
@@ -2995,7 +2998,7 @@ async def _prompt_context(
         extra_lines=[
             *await extensions.prompt_lines(db, run),
             *await eng_check.prompt_lines(db, run.id, segment.name),
-            *await stop_answers.prompt_lines(db, run, segment.name),
+            *await stop_answers.prompt_lines(db, run, segment.name, segment.seq, hidden),
             *(
                 await eng_check.run_architect_lines(db, run, mcp_reachable=mcp_reachable)
                 if flows.BRIEFS_FILE in _flow(run).segment(segment.name).outputs
@@ -7724,6 +7727,7 @@ async def _take_answer(
     }
     cp.status = "approved" if approved else "changes_requested"
     cp.decided_at = record.answered_at or _now()
+    await stop_answers.record(db, run, cp)
     cp.note = applied
     if not ours:
         _record_decider(
@@ -8448,6 +8452,9 @@ async def decide_checkpoint(
     cp.decided_by = principal.id
     cp.decided_at = _now()
     cp.note = note
+    # The stop's answered cards, kept as it is decided: a send-back reruns the segment,
+    # whose next files replace the questions.
+    await stop_answers.record(db, run, cp)
     if document_review is not None:
         cp.review = document_review
     elif send_back:

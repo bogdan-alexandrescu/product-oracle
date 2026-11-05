@@ -382,7 +382,7 @@ async def test_a_card_answered_at_a_sent_back_prd_review_reaches_the_next_attemp
     assert resp.status_code == 200, resp.text
     assert runtime.submitted[-1].labels["attempt"] == "2", runtime.submitted[-1].labels
     prompt = _writer_prompt(runtime)
-    line = next((ln for ln in prompt.splitlines() if PRD_AQ in ln), "")
+    line = next((ln for ln in prompt.splitlines() if PRD_AQ in ln and "Decided:" in ln), "")
     assert "PRD review" in line and "answered by Rae Example" in line, prompt
     assert 'Decided: "After launch"' in line, line
     _assert_decided(prompt)
