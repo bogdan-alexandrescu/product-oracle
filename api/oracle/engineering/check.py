@@ -42,6 +42,7 @@ from typing import Any, Protocol
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import set_committed_value
 
 from oracle import audit, safe_yaml
 from oracle.auth.deps import Principal
@@ -266,12 +267,19 @@ STALE = frozenset({"unknown_dependency"})
 
 
 async def refresh(
-    db: AsyncSession, run: Run, segments: Iterable[Any], checkpoints: Iterable[Checkpoint]
+    db: AsyncSession,
+    run: Run,
+    segments: Iterable[Any],
+    checkpoints: Iterable[Checkpoint],
+    *,
+    persist: bool = True,
 ) -> bool:
     """Check again the briefs of each pending Engineering check whose stored check holds a
     problem a later rule may answer (:data:`STALE`), from the file its segment kept, and
     store the new check when it differs: a run already waiting reads as the rules now are,
-    with no rerun. True when one changed (flushed, for the caller to commit)."""
+    with no rerun. True when one changed (flushed, for the caller to commit). With
+    ``persist`` false (a read), the new check is only in memory: the checkpoint is not
+    marked changed, so no flush or commit of the session writes it."""
     by_seq = {s.seq: s for s in segments}
     changed = False
     for cp in checkpoints:
@@ -287,9 +295,13 @@ async def refresh(
         fresh = await check_segment(db, run, text)
         if fresh != stored:
             # A new object: the column is not mutation-tracked.
-            cp.payload = {**(cp.payload or {}), PAYLOAD_KEY: fresh}
+            payload = {**(cp.payload or {}), PAYLOAD_KEY: fresh}
+            if persist:
+                cp.payload = payload
+            else:
+                set_committed_value(cp, "payload", payload)
             changed = True
-    if changed:
+    if changed and persist:
         await db.flush()
     return changed
 

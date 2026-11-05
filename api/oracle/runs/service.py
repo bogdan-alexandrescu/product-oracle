@@ -1394,9 +1394,9 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     segments = await _segments(db, run.id)
     checkpoints = await _checkpoints(db, [run.id])
     # A run already waiting at the Engineering check reads as the rules now are: its
-    # briefs checked again (kept in its segment), no rerun.
-    if await eng_check.refresh(db, run, segments, checkpoints):
-        await db.commit()
+    # briefs checked again (kept in its segment), no rerun. In memory only: a read (a
+    # read-only token's too) writes nothing; deciding the stop stores it.
+    await eng_check.refresh(db, run, segments, checkpoints, persist=False)
     names = await _decider_names(db, checkpoints)
     leads = await engineering_leads(db)
     staged = await _staged_actions(db, checkpoints)
@@ -5947,7 +5947,7 @@ async def items_check(db: AsyncSession, run: Run, text: str) -> roadmap.ItemsChe
 
 async def _checked(
     db: AsyncSession, run: Run, text: str
-) -> tuple[roadmap.ItemsCheck, str | None, int | None, set[str] | None]:
+) -> tuple[roadmap.ItemsCheck, str | None, int | None, set[str] | None, tuple[Any, ...]]:
     slug = version = prd_id = markdown = title = None
     keys: set[str] | None = None
     source_id = _source_id(run)
@@ -5978,7 +5978,7 @@ async def _checked(
     )
     if source_id is not None and markdown is not None and check.items:
         check = await _with_work_problems(db, source_id, markdown, check)
-    return check, slug, version, keys
+    return check, slug, version, keys, elsewhere
 
 
 async def _with_work_problems(
@@ -6002,7 +6002,7 @@ async def _with_work_problems(
 async def checked_items(
     db: AsyncSession, run: Run, text: str, prior: PriorReview | None = None
 ) -> CheckedItems:
-    check, slug, version, keys = await once(
+    check, slug, version, keys, elsewhere = await once(
         ("items_check", _source_id(run), text), lambda: _checked(db, run, text)
     )
     if not check.items:
@@ -6017,7 +6017,8 @@ async def checked_items(
         log.exception("the reasons of %s of run %s could not be loaded", ITEMS_FILE, run.id)
         context = reasons.ReasonContext(prd_title=slug, prd_version=version, advisory=False)
         partial = True
-    found = reasons.reasons_for(check.items, check.problems, context)
+    # The check's own list of other PRDs' items: each dependency problem finds its item.
+    found = reasons.reasons_for(check.items, check.problems, context, elsewhere)
     if prior is None:
         return CheckedItems(check, found, context.base, partial, keys)
     before = await roadmap.check_items_async(prior.text)

@@ -19,6 +19,7 @@ import json
 import math
 import re
 import uuid
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, NamedTuple
@@ -387,12 +388,37 @@ def _reason(
 # --------------------------------------------------------------------------- blocking
 
 
-def _dependency_events(items: list[dict[str, Any]]) -> list[tuple[str, str, str]]:
-    """(item, code, dependency) in the order check_items adds dependency problems."""
+def _others(elsewhere: Collection[str | roadmap.Elsewhere] | None) -> dict[str, roadmap.Elsewhere]:
+    """``elsewhere`` as check_items reads it: each other PRD's feature or item by its key."""
+    return {
+        e.key: e
+        for e in (
+            x if isinstance(x, roadmap.Elsewhere) else roadmap.Elsewhere(x, x)
+            for x in elsewhere or ()
+        )
+    }
+
+
+def _dependency_events(
+    items: list[dict[str, Any]], others: dict[str, roadmap.Elsewhere] | None = None
+) -> list[tuple[str, str, str]]:
+    """(item, code, dependency) in the order check_items adds dependency problems, with
+    the same ``others`` (another PRD's features and items on the company roadmap): one of
+    them is never unknown, and breaks the horizon when it is in a later one."""
     index = {i["id"]: n for n, i in enumerate(items)}
+    others = others or {}
     out: list[tuple[str, str, str]] = []
     for n, item in enumerate(items):
         for dep in item.get("depends_on") or []:
+            if dep not in index and dep in others:
+                mine, theirs = item.get("horizon"), others[dep].horizon
+                if (
+                    mine in roadmap.HORIZONS
+                    and theirs in roadmap.HORIZONS
+                    and roadmap.HORIZONS.index(theirs) > roadmap.HORIZONS.index(mine)
+                ):
+                    out.append((item["id"], "horizon_breaks_dependency", dep))
+                continue
             if dep not in index:
                 out.append((item["id"], "unknown_dependency", dep))
                 continue
@@ -414,6 +440,7 @@ def _blocking(
     dep: str | None,
     by_id: dict[str, dict[str, Any]],
     ctx: ReasonContext,
+    others: dict[str, roadmap.Elsewhere] | None = None,
 ) -> dict[str, Any]:
     code, key = problem["code"], problem["item"]
     title = roadmap._text(item.get("title"))
@@ -439,6 +466,17 @@ def _blocking(
     if code == "invalid_date":
         value = _milestone_date(item)
         return r(CATALOGUE[code].sentence.format(value=value), [remove_date(key)], {"value": value})
+    if code == "horizon_breaks_dependency" and dep not in by_id and dep in (others or {}):
+        # Another PRD's, on the company roadmap: named with its PRD; it is that PRD's to
+        # move, so not pulled from here.
+        elsewhere = (others or {})[dep]
+        return r(
+            CATALOGUE[code].sentence.format(
+                dep_title=elsewhere.label, dep_horizon=_h(elsewhere.horizon)
+            ),
+            [move(key, elsewhere.horizon), remove_dependency(key, dep)],
+            {"dependency": dep, "dependency_horizon": elsewhere.horizon},
+        )
     if code in DEPENDENCY_CODES and dep is not None:
         other = by_id.get(dep) or {}
         dep_title = roadmap._text(other.get("title")) or dep
@@ -643,10 +681,13 @@ def reasons_for(
     items: list[dict[str, Any]],
     problems: list[dict[str, Any]],
     ctx: ReasonContext | None,
+    elsewhere: Collection[str | roadmap.Elsewhere] | None = None,
 ) -> list[dict[str, Any]]:
     """Every item's reasons: its rule problems (blocking) and, with a context, the advisory
     ones (to confirm). ``items`` and ``problems`` are :func:`check_items`' (ids filled in,
-    ``depends_on`` lists of strings). Pure: the same input gives the same list."""
+    ``depends_on`` lists of strings), ``elsewhere`` the one it was given (other PRDs'
+    features and items on the company roadmap). Pure: the same input gives the same list."""
+    others = _others(elsewhere)
     ctx = ctx or ReasonContext(advisory=False)
     by_id: dict[str, dict[str, Any]] = {}
     for item in items:
@@ -686,13 +727,13 @@ def reasons_for(
 
     # Blocking: each problem on an item, placed on that item (the first with its id; a
     # duplicate's problems on the later one).
-    events = _dependency_events(items)
+    events = _dependency_events(items, others)
     dep_problems = [p for p in problems if p.get("item") and p["code"] in DEPENDENCY_CODES]
     deps: list[str | None] = []
     at = 0
     for p in dep_problems:
-        # An unknown dependency the check accepted (another PRD's, on the company roadmap)
-        # has no problem: passed over.
+        # An unknown dependency the check accepted (another PRD's, on the company roadmap,
+        # when ``elsewhere`` is not given) has no problem: passed over.
         while (
             at < len(events)
             and events[at][:2] != (p["item"], p["code"])
@@ -728,7 +769,7 @@ def reasons_for(
         item = items[index] if index < len(items) else {"id": key}
         add(
             slots.get(("head", index), index),
-            _blocking(p, item, dep_of.get(id(p)), by_id, ctx),
+            _blocking(p, item, dep_of.get(id(p)), by_id, ctx, others),
         )
 
     if ctx.advisory:
