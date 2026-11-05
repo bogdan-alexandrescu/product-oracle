@@ -695,3 +695,25 @@ async def test_a_copy_from_another_prd_with_the_same_key_stays_its_own_item(clie
     same = {i["id"]: i for i in (await read(client, ctx))["items"] if i["key"] == "offline-sync"}
     assert same[shown["id"]]["status"] == "cut"
     assert same[str(theirs.id)]["status"] != "cut"
+
+
+def test_a_proposal_on_a_folded_item_reads_as_applied_on_both_layers():
+    """protects=a proposal's as-if read (drafts.simulate, its flags) on a folded item lands on
+    the draft copy too, so a restore after the copy's cut reads restored; fails_when=the
+    simulated read keeps the copy's cut."""
+    from oracle.simple import changes, drafts
+
+    rm, prd, base = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    shown = RoadmapItem(id=uuid.uuid4(), roadmap_document_id=rm, roadmap_version_id=base,
+                        item_key="trip-reports", title="Trip reports", horizon="now",
+                        position=0, cut=False, prd_document_id=prd)  # fmt: skip
+    copy = RoadmapItem(id=uuid.uuid4(), roadmap_document_id=rm, roadmap_version_id=None,
+                       item_key="trip-reports", title="Trip reports", horizon="now",
+                       position=1, cut=False, prd_document_id=prd)  # fmt: skip
+    overlays = {rm: {str(copy.id): {**drafts.snapshot(copy), "cut": True}}}
+    assert drafts.fold(shown, copy, overlays[rm]).cut is True
+    c = changes.SimpleChange(op="restore", target={"item_id": str(shown.id)})
+    folded = drafts.fold(shown, copy, overlays[rm])
+    out = drafts.simulate(c, {"cut": False}, {str(shown.id): folded}, overlays, changes.KEYED,
+                          changes.write, {str(shown.id): copy})  # fmt: skip
+    assert drafts.fold(shown, copy, out[rm]).cut is False
