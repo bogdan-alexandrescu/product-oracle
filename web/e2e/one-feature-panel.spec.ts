@@ -86,6 +86,21 @@ for (const size of SIZES) {
       await expect(panel(page).getByTestId("card-name")).toContainText("Weekly alert summary");
     });
 
+    test("the panel changes how the feature's goal is measured, with Undo", async ({ page }) => {
+      await login(page);
+      await page.goto("/simple/roadmap");
+      await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+      await openRoadmapItem(page, "alert-digest");
+      const measure = panel(page).getByTestId("card-goal-measure");
+      await expect(measure).toHaveText("Teams active after 90 days");
+      await tap(panel(page).getByRole("button", { name: "Change the measure" }));
+      await panel(page).getByTestId("card-goal-measure-edit").getByLabel("Measure").fill("Teams active after 60 days");
+      await tap(panel(page).getByTestId("card-goal-measure-edit").getByRole("button", { name: "Save" }));
+      await expect(measure).toHaveText("Teams active after 60 days");
+      await tap(page.getByRole("button", { name: "Undo" }).last());
+      await expect(measure).toHaveText("Teams active after 90 days");
+    });
+
     test("a Priorities row opens the same panel, and its name changes there", async ({ page }) => {
       await login(page);
       await page.goto("/simple/priorities");

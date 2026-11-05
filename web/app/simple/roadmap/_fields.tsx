@@ -5,9 +5,12 @@
 
 import { useState } from "react";
 
+import { toast as dsToast } from "@/components/ds";
 import { Icon } from "@/components/ds/Icon";
 
 import { api, unwrap } from "@/lib/api/client";
+import { sendCardChanged } from "@/lib/api/simple-chat";
+import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 import type { Act } from "./_card";
@@ -31,6 +34,33 @@ export function Named({ item }: { item: Pick<Item, "code" | "title"> }) {
       {item.title}
     </>
   );
+}
+
+/** How a goal is measured, changed through the goal's own edit; Undo puts it back. */
+async function saveMeasure(goal: NonNullable<Item["goal"]>, measure: string) {
+  const toast = (ask: Parameters<typeof dsToast>[0]) => dsToast({ place: "corner", ...ask });
+  try {
+    const r = await unwrap(
+      api.PATCH("/v1/simple/goal-buckets/goals/{goal_id}", {
+        params: { path: { goal_id: goal.id } },
+        body: { title: goal.title, measure, target: goal.target!, due: goal.due! },
+      }),
+    );
+    toast({
+      message: `${goal.title} is now measured by ${measure}`,
+      action: {
+        label: "Undo",
+        onClick: () =>
+          void unwrap(api.POST("/v1/simple/goal-buckets/undo", { body: r.undo })).then(
+            sendCardChanged,
+            () => toast({ message: "Oracle could not undo it" }),
+          ),
+      },
+    });
+  } catch {
+    toast({ message: "Oracle could not change the measure" });
+  }
+  sendCardChanged();
 }
 
 /** One field: its value, and (canChange) a Change button that opens its editor in place. */
@@ -182,6 +212,9 @@ export function PanelFields({
   onOpen?: (id: string) => void;
 }) {
   const [why, setWhy] = useState(false);
+  const { can } = useMe();
+  const goal = item.goal;
+  const canEditGoal = can("update_bucket_goal");
   const people = useQuery(`people:panel:${canChange}`, () =>
     canChange
       ? unwrap(api.GET("/v1/people", { params: { query: { limit: 200 } } }))
@@ -415,17 +448,7 @@ export function PanelFields({
         canChange={canChange}
         value={
           item.goal ? (
-            <>
-              {item.goal.title}
-              <span
-                className="block text-sm text-text2"
-                data-testid="card-goal-measure"
-              >
-                {item.goal.metric
-                  ? `Measured by ${item.goal.metric}`
-                  : "No measure set for this goal yet"}
-              </span>
-            </>
+            item.goal.title
           ) : (
             <span className="text-text2">No goal yet</span>
           )
@@ -455,6 +478,27 @@ export function PanelFields({
           />
         )}
       />
+      {goal && (
+        // How the goal is measured: the goal's own edit (it takes the whole goal), with Undo.
+        <Field
+          label="Measure"
+          testId="card-goal-measure"
+          canChange={canEditGoal && !!goal.target && !!goal.due}
+          value={
+            goal.metric ?? (
+              <span className="text-text2">No measure set for this goal yet</span>
+            )
+          }
+          editor={(done) => (
+            <TextEdit
+              label="Measure"
+              value={goal.metric ?? ""}
+              done={done}
+              save={(v) => saveMeasure(goal, v)}
+            />
+          )}
+        />
+      )}
       <Field
         label="PRD"
         testId="card-prd"
