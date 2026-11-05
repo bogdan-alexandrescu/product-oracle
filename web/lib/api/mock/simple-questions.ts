@@ -26,6 +26,8 @@ type Change = Schemas["SimpleChangeOut"];
 export interface QuestionsCtx {
   me: { id: string; role: Role };
   members: { id: string; name: string; role: Role; email: string }[];
+  /** simple-replaced-prds: the PRD documents; one marked replaced (`replaced_by`) has its questions left out of Simple. */
+  documents?: () => { id: string; slug: string; replaced_by?: unknown[] }[];
 }
 
 interface Q {
@@ -99,7 +101,7 @@ export function seedQuestions(ctx: QuestionsCtx): QuestionsDb {
       q(7, "Legal input on health notes", approver, -2, "M1", ["F-03", "Health log"], "Ask outside counsel", ["Use our own template"]),
       q(8, "Sign-in choice: Google at launch", owner, 7, "M1", ["F-01", "Sign in"], "Yes, at launch", ["After launch"]),
       q(9, "Onboarding checklist length", owner, 12, "M1", ["F-04", "Onboarding checklist"], "Five steps", ["Three steps", "Seven steps"]),
-      q(10, "Weekly summary email", owner, 15, "M2", ["F-08", "Weekly summary"], "Monday mornings", ["Friday afternoons"]),
+      q(10, "Weekly summary email", owner, 15, "M2", ["F-06", "Weekly alert digest"], "Monday mornings", ["Friday afternoons"]),
       q(11, "Dark mode in the first release", owner, 20, "M2", ["F-12", "Themes"], "Yes", ["Later"]),
       q(12, "Status page provider", approver, 22, "M2", ["F-14", "Status page"], "Host our own", ["Use a vendor"]),
       q(13, "Usage-based add-on", owner, 29, "M3", ["F-18", "Add-ons"], "Not this year", ["Pilot with five teams"]),
@@ -163,11 +165,17 @@ function out(ctx: QuestionsCtx, q: Q): Question {
   };
 }
 
-/** Open first, soonest due first; decided after, newest first (as the API). */
-export function questionsOut(ctx: QuestionsCtx, db: QuestionsDb, prd?: string | null): Question[] {
+/** simple-replaced-prds: the questions' PRD is marked replaced. */
+export const questionsPrdReplaced = (ctx: QuestionsCtx) =>
+  !!ctx.documents?.().some((d) => (d.slug === QUESTIONS_PRD.slug || d.id === QUESTIONS_PRD.id) && d.replaced_by?.length);
+
+/** Open first, soonest due first; decided after, newest first (as the API). `agenda`: a review meeting's own PRD, replaced or not (as questions.due_for). */
+export function questionsOut(ctx: QuestionsCtx, db: QuestionsDb, prd?: string | null, agenda = false): Question[] {
   if (prd && prd !== QUESTIONS_PRD.slug && prd !== QUESTIONS_PRD.id) return [];
+  // simple-replaced-prds (as questions.page_fields and questions._readable): a replaced PRD's open questions leave Simple; its decided ones stay as history.
+  const replaced = !agenda && questionsPrdReplaced(ctx);
   const all = db.questions.map((q) => [q, out(ctx, q)] as const);
-  const open = all.filter(([q]) => !decided(q)).sort(([a], [b]) => a.due - b.due || a.n - b.n);
+  const open = replaced ? [] : all.filter(([q]) => !decided(q)).sort(([a], [b]) => a.due - b.due || a.n - b.n);
   const done = all.filter(([q]) => decided(q)).sort(([a], [b]) => (b.decided_at ?? "").localeCompare(a.decided_at ?? ""));
   return [...open, ...done].map(([, o]) => o);
 }
@@ -212,7 +220,7 @@ export function decidedOutsideRows(ctx: QuestionsCtx, db: QuestionsDb, shown: Qu
  * them while it runs); soonest first.
  */
 export function agendaOut(ctx: QuestionsCtx, db: QuestionsDb, meeting: { id: string; session_id: string; live: boolean }): Question[] {
-  const all = questionsOut(ctx, db);
+  const all = questionsOut(ctx, db, null, true);
   const open = all.filter((q) => q.status === "proposed");
   const here = new Set(db.questions.filter((q) => decided(q) && q.meeting_id === meeting.id).map((q) => stableUuid(`simple-question/${q.n}`)));
   const done = all
@@ -231,7 +239,7 @@ export function agendaOut(ctx: QuestionsCtx, db: QuestionsDb, meeting: { id: str
 /** GET /v1/simple/decisions/waiting: `others` is the decision log's judgement calls waiting for me. */
 export function waitingOut(ctx: QuestionsCtx, db: QuestionsDb, others: number): Schemas["SimpleDecisionsWaitingOut"] {
   const c = questionsCounts(ctx, db);
-  return { count: c.waiting_count + others, late: c.late_count, questions: c.mine, others, approvals_waiting: c.approvals_waiting, tasks: [] };
+  return { count: c.waiting_count + others, late: c.late_count, questions: c.mine, others, approvals_waiting: c.approvals_waiting, tasks: [], items: [] };
 }
 
 async function readBody(req: Request): Promise<Record<string, unknown>> {

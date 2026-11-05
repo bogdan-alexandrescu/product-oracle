@@ -18,6 +18,7 @@ import { formatDate } from "@/lib/format";
 import { goalNumbers } from "@/lib/goal-tree";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
+import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 import { QuickAdd } from "./_add";
 import { MsCard, MsKey, MsLayer, MsProvider, MsToast, useMilestones, type MsLane, type MsRow } from "./_milestones";
@@ -26,6 +27,7 @@ import { useKeyBurst } from "./_burst";
 import { changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
 import { boardPicture, chartPicture, exportView, type Brand } from "./_export";
 import { KeyDatesEditor } from "./_keydates";
+import { OldMilestones, oldToDecide } from "./_old_milestones";
 import { Lanes, pmItem } from "./_lanes";
 import {
   addDays,
@@ -66,6 +68,7 @@ import {
 } from "./_lib";
 import { Chart, PHASES, type Layout } from "./_timeline";
 import { ConflictPanel, ZoomTimeline } from "./_zoom";
+import { RebuildSign } from "@/components/RebuildSign";
 
 /** #34: the Roadmap's toasts sit in the bottom-right corner on a desktop, clear of the chart. */
 const toast = (ask: ToastAsk) => dsToast({ place: "corner", ...ask });
@@ -475,6 +478,9 @@ function DecisionTray({
   phone,
   suggestions,
   top,
+  old,
+  today,
+  onOld,
 }: {
   items: Item[];
   byId: Map<string, Item>;
@@ -488,6 +494,10 @@ function DecisionTray({
   suggestions: GoalSuggestionsApi;
   /** Where the desktop panel starts: under the toolbar's button. */
   top: number;
+  /** old-milestones: the older roadmaps' goal milestones an owner may bring over. */
+  old: Schemas["SimpleOldMilestones"] | undefined;
+  today: string;
+  onOld: () => Promise<void> | void;
 }) {
   const twins = items.filter((i) => i.can_decide && i.looks_like.length > 0);
   // qa4-simple-roadmap-14: Escape closes the drawer, focus back on its button.
@@ -512,7 +522,7 @@ function DecisionTray({
   }, [atProposals]);
   const suggested = (suggestions.data?.suggestions ?? []).filter((s) => s.can_accept || s.can_reject);
   // fix4 qa-simple-roadmap-8: the same counts the toolbar button reads (decisionCounts).
-  const counts = decisionCounts(items, proposals);
+  const counts = decisionCounts(items, proposals, oldToDecide(old));
   const brokenItems = counts.broken;
   // The other red flags (a draft with no owner, an end past its milestone): listed, not broken links.
   const flagged = items.filter((i) => i.can_decide && broken(i).some((f) => !brokenLinks(i).includes(f)));
@@ -537,13 +547,18 @@ function DecisionTray({
     ["Dates to confirm", dateRows.length],
     ["Proposals", others.length],
     ["Pulled in", pulled.length],
+    // old-milestones: a tile only while an old milestone waits on a call.
+    ...(counts.old.length ? ([["Old milestones", counts.old.length]] as [string, number][]) : []),
   ];
   const kd = (c: Change) => (c.after.key_date ?? c.before.key_date) as { name?: string } | null | undefined;
-  const title = (c: Change) => (kd(c)?.name ? `Key date '${kd(c)!.name}'` : (byId.get(String(c.target.item_id))?.title ?? (typeof c.after.title === "string" ? c.after.title : "An item")));
+  // milestone-rights: a goal milestone's proposal names the milestone and says change or remove.
+  const ms = (c: Change) => c.op === "edit_goal_milestone" && typeof c.target.name === "string";
+  const title = (c: Change) => (ms(c) ? `Milestone '${String(c.target.name)}'` : kd(c)?.name ? `Key date '${kd(c)!.name}'` : (byId.get(String(c.target.item_id))?.title ?? (typeof c.after.title === "string" ? c.after.title : "An item")));
+  const asks = (c: Change) => (ms(c) ? ("milestone" in c.before && c.after.milestone === null ? "remove it" : "change it") : opWords(c.op).toLowerCase());
   const row = (c: Change) => (
     <li key={c.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-proposal">
       <span className="min-w-0 flex-1 text-[15px]">
-        {title(c)}: {opWords(c.op).toLowerCase()} · <span className="text-text2">{c.by_name}</span>
+        {title(c)}: {asks(c)} · <span className="text-text2">{c.by_name}</span>
         {c.from_meeting && <span className="block text-sm text-text2" data-testid="proposal-from-meeting">Asked for by the meeting {c.from_meeting.title}</span>}
       </span>
       <Button onClick={() => onDecide(c, "accept")}>Accept</Button>
@@ -571,7 +586,7 @@ function DecisionTray({
       </div>
       {/* #37: what the button's count is, on screen: this view's own, not the side menu's badges. */}
       <p className="mt-1 text-sm text-text2" data-testid="tray-scope">
-        {counts.total} on this roadmap view. The side menu&apos;s Decisions and Roadmap counts cover other things, so they can differ.
+        {counts.total} on this roadmap view. The side menu&apos;s Roadmap count counts the same across the whole roadmap; its Decisions count holds all that waits on you.
       </p>
       <ul className="mt-3 grid grid-cols-2 gap-2 min-[420px]:grid-cols-4" data-testid="tray-counters">
         {counters.map(([label, n]) => (
@@ -586,6 +601,7 @@ function DecisionTray({
           </li>
         ))}
       </ul>
+      <OldMilestones old={old} today={today} onDone={onOld} tray />
       <section className="mt-4">
         <h3 className="font-semibold">Broken links</h3>
         {brokenItems.length ? (
@@ -787,8 +803,13 @@ export function SimpleRoadmap() {
   const startOptions = useQuery("simple-meeting-options||", () =>
     unwrap(api.GET("/v1/simple/meetings/options", { params: { query: { prd: undefined, occurrence: undefined } } })),
   );
+  // home-waiting-one-list: every action reloads through here, and each may change what waits
+  // on me (a date, a proposal, a broken link, a draft), so the rail and Home read again too.
   const reload = useCallback(async () => {
-    await Promise.all([roadmap.reload(), proposals.reload(), drafts.reload()]);
+    invalidateWaiting();
+    const done = Promise.all([roadmap.reload(), proposals.reload(), drafts.reload()]);
+    waitingChanged();
+    await done;
   }, [roadmap, proposals, drafts]);
   // roadmap-talk: a chat card applied, proposed, rejected or undone (the item's talk, the Ask panel) reads the roadmap again.
   useEffect(() => {
@@ -915,7 +936,7 @@ export function SimpleRoadmap() {
   const titleOf = useCallback((id: string | null) => (id ? byId.get(id)?.title : undefined), [byId]);
   const canChange = can("create_simple_change");
   // build-milestones-on-roadmap: the milestones per goal, added on the time axis.
-  const ms = useMilestones({ data, phone, canChange, reload: roadmap.reload, openItem: (id) => setCard({ id, ...anchorOf(id) }) });
+  const ms = useMilestones({ data, phone, canChange, reload: roadmap.reload, openItem: (id) => setCard({ id, ...anchorOf(id) }), knownGoals: suggestions.data?.goals.map((g) => g.goal) });
   // The items as last loaded, for a burst sent after the render that started it.
   const latest = useRef(byId);
   useEffect(() => {
@@ -924,12 +945,12 @@ export function SimpleRoadmap() {
 
   /** One change through the engine, its toast (with Undo when it applied) and the reload; null when it failed. */
   const run = useCallback(
-    async (what: string, body: Parameters<Act>[1]): Promise<ChangeResult | null> => {
+    async (what: string, body: Parameters<Act>[1], opts?: Parameters<Act>[2]): Promise<ChangeResult | null> => {
       try {
         const r = await propose(body);
         const target = latest.current.get(String(body.target?.item_id ?? ""));
         toast({
-          message: resultWords(r, what, target?.deciders),
+          message: r.change.status === "applied" && opts?.words ? await opts.words(r) : resultWords(r, what, target?.deciders),
           action: r.change.status === "applied" && r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(reload, (e) => toast({ message: String(e.message) })) } : undefined,
         });
         return r;
@@ -948,8 +969,8 @@ export function SimpleRoadmap() {
     [reload],
   );
   const act: Act = useCallback(
-    async (what, body) => {
-      await run(what, body);
+    async (what, body, opts) => {
+      await run(what, body, opts);
     },
     [run],
   );
@@ -1019,11 +1040,25 @@ export function SimpleRoadmap() {
     return { left: Math.max(0, Math.min(r.left - box.left, box.width - 390)), top: r.bottom - box.top + 6, above: r.top - box.top - 6 };
   };
 
+  // home-waiting-one-list: a "waiting for you" row links ?item=<id> (Fix the link, Confirm the
+  // dates, Accept): the item's panel opens once, on what waits there, its actions in view.
+  const linkedItem = params.get("item");
+  const [opened, setOpened] = useState<string | null>(null);
+  useEffect(() => {
+    if (!linkedItem || opened === linkedItem || !byId.has(linkedItem)) return;
+    // Once the roadmap that holds it is read (the link is the outside system here).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOpened(linkedItem);
+    setPop(null);
+    setCard({ id: linkedItem, ...anchorOf(linkedItem) });
+    // anchorOf reads the drawn bars: once the item is known, not on every render.
+  }, [linkedItem, opened, byId]);
+
   const onDecide = useCallback(
     async (c: Change, how: "accept" | "decline") => {
       try {
         await decide(c.id, how);
-        toast({ message: how === "accept" ? "Accepted: it is in your working draft" : "Declined" });
+        toast({ message: how === "accept" ? (c.op === "edit_goal_milestone" ? "Accepted" : "Accepted: it is in your working draft") : "Declined" });
       } catch (e) {
         toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not decide it" });
       }
@@ -1097,7 +1132,7 @@ export function SimpleRoadmap() {
   // no PRD) sees no Start review at all, once the start options say so (busy until then).
   const startsReviews = mayStartReview || (!startOptions.data && !startOptions.error);
   // fix4 qa-simple-roadmap-8: the tray's own counts (one helper), so the button and its tiles agree.
-  const waiting = decisionCounts(data.items, allProposals).total;
+  const waiting = decisionCounts(data.items, allProposals, oldToDecide(data.old_milestones)).total;
   const qList = quarters(data.windows.now.start, data.windows.later.end);
   // qa-shell-8: a new company's roadmap has nothing on it (no item, milestone or key date, and
   // no filter narrowing it): one line on what shows here and the next step, no empty chart and
@@ -1183,13 +1218,12 @@ export function SimpleRoadmap() {
     <div className={`flex flex-wrap items-center gap-2 ${phone ? "" : "ml-auto justify-end"}`} data-testid="roadmap-actions">
       {phone && canChange && addable.length > 0 && <QuickAdd phone options={addOptions} verb={addVerb} onAdd={onAdd} target={target?.title ?? null} roadmaps={askRoadmap ? addable.map((r) => r.roadmap) : []} />}
       {decides && !blank && (
-        // #37: this counts broken links, suggestions and proposals on THIS roadmap view,
-        // not the same things the side menu's Decisions (product decisions waiting on you,
-        // everywhere) or Roadmap (proposals and drafts in your inbox) badges count; the
-        // label and title say so rather than let the three numbers look like one metric.
+        // #37: this counts items with broken links, dates to confirm and proposals on THIS
+        // roadmap view; the side menu's Roadmap count counts the same for the whole roadmap
+        // (home-waiting-one-list), its Decisions count all that waits on you.
         <Button
           data-testid="needs-decision"
-          title="Broken dates, date suggestions and proposals on this roadmap view (not the same count as Decisions or Roadmap in the side menu)"
+          title="Items with broken links, dates to confirm and proposals on this roadmap view (the side menu's Roadmap count, for the whole roadmap)"
           onClick={() => setTray(true)}
           data-zero={waiting ? undefined : "true"}
           // fix4 qa-simple-roadmap-38: at 0 the button is muted (nothing waits), still opens the tray.
@@ -1377,6 +1411,8 @@ export function SimpleRoadmap() {
             </span>
           )
         )}
+        {/* The rebuild sign beside the roadmap's name: its run, or the PRDs that feed it. */}
+        <RebuildSign slug={data.roadmap?.slug ?? null} />
         <div className={phone ? "w-full" : ""} data-testid="format-switch">
           <SegmentedControl<Format>
             label="Format"
@@ -1397,7 +1433,7 @@ export function SimpleRoadmap() {
           />
         </div>
         {!phone && actions}
-        {keyDates && <KeyDatesEditor key={data.roadmap?.id ?? "all"} data={data} act={act} mayChange={canChange} phone={phone} onClose={() => setKeyDates(false)} />}
+        {keyDates && <KeyDatesEditor key={data.roadmap?.id ?? "all"} data={data} act={act} mayChange={canChange} phone={phone} onClose={() => setKeyDates(false)} onOld={reload} />}
       </header>
       <p role="status" aria-live="polite" className="sr-only" data-testid="key-pending">
         {said}
@@ -1525,6 +1561,8 @@ export function SimpleRoadmap() {
                 onDecide={(c, how) => void onDecide(c, how)}
                 onClose={onClose}
                 near={nearWords(it, data.key_dates ?? [])}
+                onSuggestion={(how, d) => void onSuggestion(it, how, d)}
+                focus={it.id === linkedItem}
               />
             )}
           />
@@ -1614,6 +1652,8 @@ export function SimpleRoadmap() {
             onDecide={(c, how) => void onDecide(c, how)}
             onClose={() => setCard(null)}
             near={nearWords(cardItem, data.key_dates ?? [])}
+            onSuggestion={(how, d) => void onSuggestion(cardItem, how, d)}
+            focus={cardItem.id === linkedItem}
             onHorizon={format === "board" && canChange && !closedItem(cardItem) ? (h) => onHorizon(cardItem, h) : undefined}
           />
         )}
@@ -1686,6 +1726,9 @@ export function SimpleRoadmap() {
           phone={phone}
           suggestions={suggestions}
           top={trayTop}
+          old={data.old_milestones}
+          today={data.today}
+          onOld={reload}
         />
       )}
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} start={goalStart} onClose={() => setGoalPanel(null)} />}

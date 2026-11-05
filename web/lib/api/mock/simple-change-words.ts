@@ -42,6 +42,7 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
     }
     case "edit_title": return title ? `renamed ${x} to ${title}` : `renamed ${x}`;
     case "edit_outcome": return `changed the outcome of ${x}`;
+    case "edit_note": return `changed the notes of ${x}`;
     case "accept_risk": return `accepted a risk on ${x}`;
     case "shift_dependents": return `moved ${x} and its dependents after what it depends on`;
     case "move_dependency": return `moved what ${x} depends on`;
@@ -75,6 +76,7 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
       const name = m && typeof m === "object" ? quoted(m.name) : null;
       return name ? `set the milestone of ${x} to ${name}` : `set the milestone of ${x}`;
     }
+    case "set_goals": return `moved ${x} to another goal`;
     case "add_feature_ask": return title ? `filed the feature ask ${title}` : "filed a feature ask";
     case "set_owner": return `changed the owner of ${x}`;
     case "set_decider": return `changed the decider of ${x}`;
@@ -86,6 +88,12 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
     }
     // prd-questions: a PRD question (a decision) answered, or its decider named.
     case "decide_question": return `decided ${x}`;
+    // Goal milestones (goal_milestones): a roadmap's own milestone changed, or removed.
+    case "edit_goal_milestone": {
+      const name = quoted(target.name) ?? item;
+      if ("milestone" in before && after.milestone === null) return name ? `removed the milestone ${name}` : "removed a milestone";
+      return name ? `changed the milestone ${name}` : "changed a milestone";
+    }
     case "name_decider": return `named who decides ${x}`;
   }
   return `changed ${x}`;

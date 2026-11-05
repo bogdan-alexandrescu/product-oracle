@@ -82,7 +82,7 @@ test.describe("StartSheet", () => {
 });
 
 /** The item's own talk (roadmap-talk's F-16 Adaptive pacing, 16 Nov - 27 Nov 2026), opened
- * the same on a desktop (a button) or a phone (a tab). */
+ * on a desktop beside the details, on a phone behind its tab. */
 async function openTalk(page: Page, phone: boolean): Promise<Locator> {
   await page.context().addInitScript(([key]) => localStorage.setItem(key, "roadmap-talk"), [MOCK_SCENARIO_KEY] as const);
   await login(page);
@@ -90,9 +90,11 @@ async function openTalk(page: Page, phone: boolean): Promise<Locator> {
   await openRoadmapItem(page, "adaptive-pacing");
   const card = page.getByTestId("floating-card");
   await expect(card).toBeVisible();
+  // The feature panel: a desktop's talk is always beside the details.
   if (phone) await card.getByRole("tab", { name: "Talk to Oracle" }).click();
-  else await card.getByRole("button", { name: "Talk to Oracle" }).click();
-  return card.getByTestId("item-talk");
+  const talk = card.getByTestId("item-talk");
+  await expect(talk).toBeVisible();
+  return talk;
 }
 
 /** Says `text` in the talk and returns its one new card. */

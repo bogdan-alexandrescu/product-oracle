@@ -190,7 +190,7 @@ for (const [where, use] of [
         const card = page.getByTestId("floating-card");
         await expect(card.getByTestId("card-flow")).toContainText("Act on a pushed alert");
         await card.getByRole("button", { name: "Open the item's flow" }).click();
-        await expect(card).toHaveAttribute("data-flow-open", "true");
+        await expect(card.getByTestId("fp-more")).toHaveAttribute("data-flow-open", "true");
         const view = page.getByTestId("flow-detail");
         await expect(view.getByRole("heading", { level: 2 })).toHaveText(where === "phone" ? "Act on a pushed alert · flow" : "Mobile alert push · flow");
         await expect(view.getByTestId("flow-regions")).toContainText("Snooze and Assign buttons");
@@ -199,7 +199,7 @@ for (const [where, use] of [
           expect(box.height).toBeGreaterThanOrEqual(840);
         }
         await view.getByRole("button", { name: "Close" }).click();
-        await expect(card).toHaveAttribute("data-flow-open", "false");
+        await expect(card.getByTestId("fp-more")).toHaveAttribute("data-flow-open", "false");
         await card.getByRole("button", { name: "Close", exact: true }).click();
         await openRoadmapItem(page, "alert-digest");
         await expect(card.getByTestId("card-flow")).toContainText("No flow yet");

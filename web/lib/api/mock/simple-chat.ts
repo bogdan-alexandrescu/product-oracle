@@ -277,6 +277,25 @@ export function seedStrayReply(chat: ChatDb, owner: { id: string; name: string }
   };
 }
 
+/**
+ * build-feature-panel review 2: the "feature-panel-frames" scenario's talk about Weekly alert
+ * digest, as the picked mk-featurepanel frames draw it: Oracle, its owner, Oracle.
+ */
+export function seedFramesTalk(chat: ChatDb, reader: string, itemId: string, owner: { id: string; name: string }): void {
+  const at = new Date(mockNowMs() - 60_000).toISOString();
+  const base = { card_ids: [], choices: [], picked: null, retry: false, reply_to: null };
+  const page = `/simple/roadmap/items/${itemId}`;
+  const oracle = (body: string) => ({ ...base, id: crypto.randomUUID(), author_kind: "oracle" as const, author_id: null, author_name: "Oracle", body, at, kind: "answer" });
+  chat.threads[`ask:${reader}:${page}`] = {
+    id: crypto.randomUUID(), meeting_id: null, owner_id: reader, page,
+    messages: [
+      oracle("Engineering estimates the digest ends Dec 10. It starts Oct 31, but Alert rules engine, which it needs, ends Nov 10."),
+      { ...base, id: crypto.randomUUID(), author_kind: "person", author_id: owner.id, author_name: owner.name, body: "Can we have it before the Beta on Nov 30?", at, kind: "request" },
+      oracle("Only if the email template is cut to one layout. That saves about two weeks, so it could end Nov 27."),
+    ],
+  };
+}
+
 const DAY = 86_400_000;
 const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
@@ -579,9 +598,11 @@ const actionDraft = (summary: string, op: string, item: Item | null, target: Val
 /** chat-actions' cards, for its phrases and Oracle's reader alike: a new owner or decider. */
 function whoDraft(db: SimpleDb, ctx: ChatCtx, who: Person, i: Item, word: "owner" | "decider"): Draft {
   if (word === "owner") {
-    const before = itemOwnerId(db, i.key);
+    // The item's own owner, as chat_actions names it (null: its track's, named by before_name).
+    const shown = itemOwnerId(db, i.key);
+    const before = (db.targets?.[i.id]?.owner_id as string | null | undefined) ?? null;
     return actionDraft(`Make ${who.name} the owner of ${i.title}`, "set_owner", i, { item_id: i.id }, { owner_id: before }, { owner_id: who.id }, {
-      kind: "owner", item_id: i.id, person_id: who.id, person_name: who.name, before_name: before ? (ctx.names[before] ?? i.owner?.name ?? null) : null,
+      kind: "owner", item_id: i.id, person_id: who.id, person_name: who.name, before_name: shown ? (ctx.names[shown] ?? i.owner?.name ?? null) : null,
     });
   }
   const before = itemDeciderId(db, i.key, ctx.roles);

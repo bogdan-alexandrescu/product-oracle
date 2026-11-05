@@ -55,11 +55,11 @@ async function openTalk(page: Page, key: string): Promise<Locator> {
     // A phone's sheet: the Talk to Oracle tab.
     await card.getByRole("tab", { name: "Talk to Oracle" }).click();
     await expect(card.getByRole("tab", { name: "Talk to Oracle" })).toHaveAttribute("aria-selected", "true");
-  } else {
-    await card.getByRole("button", { name: "Talk to Oracle" }).click();
-    await expect(card).toHaveAttribute("data-talk", "true");
   }
-  return card.getByTestId("item-talk");
+  // The feature panel: a desktop's talk is always beside the details (no button to open it).
+  const talk = card.getByTestId("item-talk");
+  await expect(talk).toBeVisible();
+  return talk;
 }
 
 async function say(box: Locator, text: string) {

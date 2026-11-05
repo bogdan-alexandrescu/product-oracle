@@ -110,15 +110,23 @@ for (const [where, size] of [
     test(`qa4-42: an item card says Nothing / None for empty links (${where})`, async ({ page }) => {
       await open(page);
       const card = await openCard(page, "setup-checklist");
-      await expect(card.getByTestId("card-depends")).toHaveText("Nothing");
+      // The feature panel's Links: an empty list says so in words, a count of 0 and no rows.
+      const depends = card.getByTestId("fp-list-depends");
+      await expect(depends.getByRole("heading")).toHaveText("Depends on (0)");
+      await expect(depends.getByTestId("fp-dep")).toHaveCount(0);
+      await expect(depends.getByTestId("fp-empty")).toHaveText("Nothing");
     });
 
     test(`qa4-12: cutting an item nothing depends on offers just Cut it (${where})`, async ({ page }) => {
       await open(page, { scenario: "roadmap-talk" });
       const card = await openCard(page, "alert-digest");
-      await expect(card.getByTestId("card-needed")).toHaveText("None");
+      const needed = card.getByTestId("fp-list-needed");
+      await expect(needed.getByRole("heading")).toHaveText("Needed by (0)");
+      // Nothing live depends on it (Oracle's link someone removed stays listed, struck, with Restore).
+      await expect(needed.getByTestId("fp-dep").filter({ hasNotText: "removed by" })).toHaveCount(0);
+      await expect(needed.getByTestId("fp-empty")).toHaveText("None");
+      // The feature panel: a desktop shows the talk beside the details, a phone behind its tab.
       if (isPhone(page)) await card.getByRole("tab", { name: "Talk to Oracle" }).click();
-      else await card.getByRole("button", { name: "Talk to Oracle" }).click();
       const talk = card.getByTestId("item-talk");
       await talk.getByRole("textbox", { name: "Message Oracle" }).fill("cut it");
       await talk.getByRole("button", { name: "Send" }).click();
@@ -168,7 +176,7 @@ test.describe("desktop only", () => {
     await open(page, { scenario: "simple-home" });
     const count = page.getByTestId("simple-nav-roadmap-count");
     await expect(count).toBeVisible();
-    await expect(count).toHaveAttribute("title", /^\d+ (change or draft|changes or drafts) waiting on you$/);
+    await expect(count).toHaveAttribute("title", /^\d+ on the roadmap waiting on you: items with broken links, dates to confirm and proposals$/);
   });
 
   test("qa4-17: Enter with a title but no roadmap moves focus to the roadmap picker", async ({ page }) => {
@@ -221,9 +229,10 @@ test.describe("phone only", () => {
     const list = page.getByTestId("timeline-list");
     await expect(list).toBeVisible();
     for (const q of await list.getByTestId("timeline-quarter").all()) {
-      // "Q1 2027 Jan – Mar 2027 · 4 items": a plain count, the months in words.
+      // "Q1 2027 Jan – Mar 2027 · 4 items" ("1 item"): a plain count, the months in words.
       const head = q.locator("h3");
-      await expect(head).toHaveText(/^Q\d \d{4} (Jan|Apr|Jul|Oct) – (Mar|Jun|Sep|Dec) \d{4} · \d+ items/);
+      await expect(head).toHaveText(/^Q\d \d{4} (Jan|Apr|Jul|Oct) – (Mar|Jun|Sep|Dec) \d{4} · \d+ items?/);
+      await expect(head).not.toContainText("· 1 items");
       await expect(head).not.toContainText("at once");
     }
     for (const t of await list.getByTestId("timeline-row").allTextContents()) expect(t).not.toMatch(/\b[FD]-\d/);

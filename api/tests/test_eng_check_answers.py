@@ -13,7 +13,8 @@ import uuid
 from datetime import timedelta
 
 from oracle.engineering import check as eng_check
-from oracle.runs import flows, service
+from oracle.runs import flows, service, stop_answers
+from oracle.runs.models import Run
 from oracle.swarm import set_runtime
 from oracle.tenancy import tenant_session
 from tests import swarmcloud_fake
@@ -45,7 +46,12 @@ async def _answer_all(client, headers, run) -> None:
 
 async def _lines(tenant_id, run_id, segment: str) -> str:
     async with tenant_session(tenant_id) as s:
-        return "\n".join(await eng_check.prompt_lines(s, uuid.UUID(run_id), segment))
+        lines = await eng_check.prompt_lines(s, uuid.UUID(run_id), segment)
+        # The PRD writer reads the answers with who gave them and the stop
+        # (oracle.runs.stop_answers), in place of the check's own answer lines.
+        run = await s.get(Run, uuid.UUID(run_id))
+        lines += await stop_answers.prompt_lines(s, run, segment)
+        return "\n".join(lines)
 
 
 def _assert_answered(text: str) -> None:

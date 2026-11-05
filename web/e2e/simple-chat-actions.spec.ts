@@ -275,3 +275,18 @@ for (const [phone, dark] of [
 async function chatScenario(page: Page) {
   await page.context().addInitScript((key) => localStorage.setItem(key, "simple-chat"), MOCK_SCENARIO_KEY);
 }
+
+/* build-feature-panel review 5: the agenda strip's Next and Skipped names open the one feature panel. */
+test("the agenda strip's Next and Skipped names open the feature panel", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await startReview(page);
+  await apply(await understood(chat(page), "next: Setup checklist", "Take Setup checklist next"));
+  await apply(await understood(chat(page), "skip Team invite nudges", "Skip Team invite nudges"));
+  await tap(page.getByTestId("agenda-next").getByRole("button", { name: "Setup checklist" }));
+  const next = page.getByRole("dialog", { name: "Setup checklist" });
+  await expect(next.getByTestId("fp-details")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(next).toBeHidden();
+  await tap(page.getByTestId("agenda-skipped").getByRole("button", { name: "Team invite nudges" }));
+  await expect(page.getByRole("dialog", { name: "Team invite nudges" }).getByTestId("fp-details")).toBeVisible();
+});

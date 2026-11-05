@@ -492,6 +492,8 @@ class FeatureSetCheck(BaseModel):
     excluded: int
     problems: list[FeatureSetProblem]
     flags: dict[str, list[str]] = {}
+    # Each feature's title by its key (included and left out).
+    titles: dict[str, str] = {}
 
 
 class ScopeGoal(BaseModel):
@@ -561,6 +563,9 @@ class ScopeReason(BaseModel):
     answers it."""
 
     code: str
+    # This reason's own name among its feature's (a problem's gate.problem_ref, a flag's
+    # code): Waive on it names it, so it is waived alone, with its own reason.
+    ref: str = ""
     severity: Literal["blocking", "to_confirm"]
     label: str
     requirement: str | None = None
@@ -849,6 +854,9 @@ class GateLeft(BaseModel):
     item: str
     item_title: str | None = None
     code: str
+    # This reason's own name among its item's (a C6 or C8 problem's gate.problem_ref, else
+    # its code): Waive… on it names it, so it is waived alone, with its own reason.
+    ref: str = ""
     label: str
     waivable: bool
     # F4's blocking_question: the question left unanswered.
@@ -916,6 +924,21 @@ class CheckpointOut(BaseModel):
     vague_goals: int | None = None
 
 
+class RunDecisionAnswer(BaseModel):
+    """A question answered at a decided stop: the architect's at an approved Engineering
+    check, or the agents' on the Questions from the agents cards of a stop approved or sent
+    back (``oracle.runs.stop_answers``)."""
+
+    question: str
+    answer: str
+    # The feature it is about, when the question names one: its key, and its name from the
+    # briefs or the run's feature set (None when neither names it). A person reads the name.
+    feature_key: str | None = None
+    feature_title: str | None = None
+    answered_by_name: str | None = None
+    answered_at: datetime | None = None
+
+
 class RunDecision(BaseModel):
     """A decided checkpoint of a run, as its agents read it (``get_checkpoint_review``):
     who decided (the person's name beside their role), when, and what. A console
@@ -946,6 +969,8 @@ class RunDecision(BaseModel):
     # The decision in one line, as the run page shows it:
     # "Feature set · approved by Ana Example, an approver · note: Keep bulk import out of v1".
     summary: str
+    # The questions answered at the stop, so a person sees what was decided there.
+    answers: list[RunDecisionAnswer] = []
 
 
 class RunProgress(BaseModel):
@@ -1036,6 +1061,63 @@ class RunSummary(BaseModel):
     sent_back: str | None = None
     # Set by GET /v1/runs and GET /v1/runs/{id}; None where a summary is embedded (inbox).
     progress: RunProgress | None = None
+
+
+class Rebuild(BaseModel):
+    """The rebuild sign (owner's pick A): a run that will make a new version of a document,
+    as the chip beside its version pill says it (``oracle.runs.rebuilds``)."""
+
+    run_id: uuid.UUID
+    flow: Flow
+    flow_title: str
+    document_slug: str
+    document_title: str | None = None
+    document_kind: DocumentKind | None = None
+    # A run writing a new document (Ground Truth to PRD making a new PRD): no version of it
+    # exists yet, so there is no page to open; the sign names it as a new PRD and links the run.
+    new_document: bool = False
+    # prd_to_roadmap: the PRD it reads (its sign lists the run beside the PRD's own runs).
+    source_slug: str | None = None
+    # scheduled: not started yet; waiting: at a stop on a person; done: its new version
+    # landed and is not approved yet.
+    state: Literal["scheduled", "running", "waiting", "failed", "done"]
+    # The steps it runs, by their titles, and the one it is on (1-based; failed: where it
+    # stopped; done: the last).
+    steps: list[str]
+    step: int
+    # The version everyone reads until the new one is approved (None: none approved yet),
+    # and the version the run makes (done: made).
+    from_version: int | None = None
+    to_version: int
+    # Who started it (their name, else their email), and when.
+    started_by: str | None = None
+    started_at: datetime | None = None
+    # When a scheduled run is set to start, if it says.
+    scheduled_for: datetime | None = None
+    # A running run's time left, from how long the flow's steps took before; None unknown.
+    minutes_left: int | None = None
+    # Running or scheduled: its next stop, who decides it and what they do there.
+    next_stop: str | None = None
+    next_stop_who: str | None = None
+    next_stop_action: str | None = None
+    # Waiting: on whom, and what they do ("review the new draft").
+    waits_on: str | None = None
+    waits_on_action: str | None = None
+    review_link: str | None = None
+    error: str | None = None
+
+
+class CompanyRoadmapRebuilds(BaseModel):
+    """The company roadmap every PRD feeds: a PRD's rebuild changes it too."""
+
+    slug: str
+    title: str
+    prds: int
+
+
+class RebuildsOut(BaseModel):
+    rebuilds: list[Rebuild]
+    company_roadmap: CompanyRoadmapRebuilds | None = None
 
 
 class CancelAgain(BaseModel):

@@ -24,6 +24,13 @@ function shared<T>(key: string, load: () => Promise<T>): Promise<T> {
 
 export const loadInbox = () => shared("inbox", () => unwrap(api.GET("/v1/inbox")));
 
+/**
+ * home-waiting-one-list: everything waiting on me as one list (`items`: run stops, questions,
+ * broken links, dates, drafts, proposals, goal suggestions), with the decisions' count; Home,
+ * Decisions and the rail share it.
+ */
+export const loadWaiting = () => shared("decisions-waiting", () => unwrap(api.GET("/v1/simple/decisions/waiting")));
+
 type Inbox = Awaited<ReturnType<typeof loadInbox>>;
 
 /**

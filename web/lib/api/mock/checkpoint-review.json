@@ -88,7 +88,7 @@
       "open": false,
       "blocking_open": 2,
       "file_problems": 0,
-      "left": [{ "item": "budget-caps", "item_title": "Budget caps", "code": "horizon_breaks_dependency", "label": "Depends on a later item", "waivable": true, "question_id": null }]
+      "left": [{ "item": "budget-caps", "item_title": "Budget caps", "code": "horizon_breaks_dependency", "ref": "horizon_breaks_dependency", "label": "Depends on a later item", "waivable": true, "question_id": null }]
     },
     "diff": { "against_attempt": 1, "items": [{ "id": "slack-alerts", "changes": [{ "field": "horizon", "from": "next", "to": "now" }] }], "added": [], "removed": ["weekly-digest"] }
   },
@@ -103,12 +103,12 @@
     "blocking_open": {
       "code": "blocking_open",
       "message": "2 blocking problems are open: fix or waive them, then approve.",
-      "left": [{ "item": "budget-caps", "item_title": "Budget caps", "code": "horizon_breaks_dependency", "label": "Depends on a later item", "waivable": true, "question_id": null }]
+      "left": [{ "item": "budget-caps", "item_title": "Budget caps", "code": "horizon_breaks_dependency", "ref": "horizon_breaks_dependency", "label": "Depends on a later item", "waivable": true, "question_id": null }]
     },
     "edits_leave_problems": {
       "code": "edits_leave_problems",
       "message": "After the edits, 1 blocking problem is left: slack-alerts: Date unverified",
-      "left": [{ "item": "slack-alerts", "item_title": "Slack alerts", "code": "unverified_date", "label": "Date unverified", "waivable": false, "question_id": null }]
+      "left": [{ "item": "slack-alerts", "item_title": "Slack alerts", "code": "unverified_date", "ref": "unverified_date", "label": "Date unverified", "waivable": false, "question_id": null }]
     },
     "needs_agents": {
       "code": "needs_agents",

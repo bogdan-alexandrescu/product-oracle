@@ -72,7 +72,10 @@ def with_plan(md: str, items: str, bases: tuple = ()) -> str:
     """``md`` (ROADMAP_MD) with the plan tables of another items file and bases."""
     from oracle.runs import plan_tables
 
-    return md.replace(PLAN_TABLES, plan_tables.markdown(plan_tables.engineering_plan(items, bases)))
+    return md.replace(
+        PLAN_TABLES,
+        plan_tables.markdown(plan_tables.engineering_plan(check_items(items).items, bases)),
+    )
 
 
 ROADMAP_MD = """\

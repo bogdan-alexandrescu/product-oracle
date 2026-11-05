@@ -12,11 +12,13 @@ from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
+    Identity,
     Index,
     Integer,
     Text,
@@ -171,6 +173,9 @@ class SimpleChange(TenantScoped, Base):
     draft_ids: Mapped[list[uuid.UUID]] = mapped_column(
         ARRAY(Uuid), nullable=False, server_default="{}"
     )
+    # The order the rows were written in (build-feature-panel review 3): two changes with
+    # one ``at`` read back in that order, not by their random ids.
+    seq: Mapped[int] = mapped_column(BigInteger, Identity(always=False), nullable=False)
 
 
 DRAFT_STATUSES = ("working", "submitted", "approved", "discarded")

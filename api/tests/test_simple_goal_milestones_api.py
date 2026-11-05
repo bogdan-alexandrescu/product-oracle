@@ -315,3 +315,47 @@ async def test_the_prd_owners_names_are_read_in_one_query(client):
     # roadmap read makes one of its own).
     single = [st for st in statements if "FROM users" in st and "WHERE users.id = " in st]
     assert len(single) <= 1, len(single)
+
+
+async def test_a_prd_milestone_refuses_its_name_goal_and_items_even_with_a_date(client):
+    """The PRD's name, goal and items are its own: a proposal that carries any of them is
+    422 whole, not a date proposal that drops them unsaid."""
+    ctx = await make_ctx()
+    async with tenant_session(ctx.tenant_id) as s:
+        owner = User(email="planner@example.com", name="Pat Planner", password_hash="x",
+                     role="approver")  # fmt: skip
+        s.add(owner)
+        await s.commit()
+    await seed_prd_roadmap(ctx, owner.id)
+    m1_id = by_code(await get_roadmap(client, ctx, "commenter"))["M1"]["id"]
+    for extra in ({"name": "Renamed"}, {"goal_id": str(uuid.uuid4())},
+                  {"item_ids": [str(uuid.uuid4())]}):  # fmt: skip
+        r = await client.patch(f"{MILESTONES}/{m1_id}", json={"date": "2026-12-04", **extra},
+                               headers=ctx.as_("commenter"))  # fmt: skip
+        assert r.status_code == 422, (extra, r.text)
+    listed = by_code(await get_roadmap(client, ctx, "commenter"))
+    assert listed["M1"]["pending"] is None
+
+
+async def test_a_roadmap_that_is_history_takes_no_milestone(client):
+    """While the company roadmap exists an older per-PRD roadmap is history
+    (oracle.roadmap.company.feeding_ids): no milestone is added to it or changed on it."""
+    ctx = await make_ctx()
+    ids = await seed_roadmap(ctx)
+    body = {"roadmap_id": ids["roadmap_id"], "name": "Prove it", "date": "2026-11-27",
+            "goal_id": ids["goal_id"]}  # fmt: skip
+    r = await client.post(MILESTONES, json=body, headers=ctx.as_("owner"))
+    assert r.status_code == 201, r.text
+    m1 = r.json()
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(Document(slug="product", title="Product", kind="roadmap", company_roadmap=True))
+        await s.commit()
+    r = await client.post(MILESTONES, json={**body, "name": "Scale"}, headers=ctx.as_("owner"))
+    assert r.status_code == 409, r.text
+    assert "history" in r.json()["detail"]
+    r = await client.patch(f"{MILESTONES}/{m1['id']}", json={"date": "2026-12-04"},
+                           headers=ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 409, r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(TrackMilestone, uuid.UUID(m1["id"]))
+        assert str(row.target_date) == "2026-11-27"
