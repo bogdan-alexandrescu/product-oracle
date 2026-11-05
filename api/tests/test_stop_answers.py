@@ -13,12 +13,15 @@ placeholders only.
 
 import uuid
 
+import yaml
+from sqlalchemy import select
+
 from oracle.runs import service
-from oracle.runs.models import Run
+from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.tenancy import tenant_session
 from tests.test_eng_check_answers import _answer_all
 from tests.test_eng_review_stop import _approve, _at_check, owner, runtime  # noqa: F401
-from tests.test_runs import decide, get, pending, tick
+from tests.test_runs import decide, get, pending, started, tick
 
 Q1 = "Can the tax service answer within 200 ms?"
 A1 = "Not today: 900 ms at p95."
@@ -155,3 +158,73 @@ async def test_the_decisions_list_each_answer_under_its_stop(
         assert a["feature"] == "price-early Show the price early"
     others = [x for x in decisions if x["kind"] != "eng_review"]
     assert all(x["answers"] == [] for x in others)
+
+
+AQ = "Reuse the old notice sender, or build a new one?"
+AGENT_QUESTIONS = {
+    "questions": [
+        {
+            "id": "aq1",
+            "role": "architect",
+            "feature": "price-early",
+            "question": AQ,
+            "why": "A half-built sender exists with no tests.",
+            "options": [
+                {"key": "reuse", "label": "Reuse the old sender"},
+                {"key": "build", "label": "Build a new sender"},
+            ],
+            "recommended": "build",
+        }
+    ]
+}
+
+
+async def test_answers_to_the_agents_questions_at_the_feature_set_reach_the_prd_writer(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    # protects=answers on the Questions from the agents cards of the feature-set stop are
+    # decided for the PRD writer and listed under that stop; fails_when=the writer's prompt
+    # or the stop's Decisions lack the question or its answer; no_claim=an unanswered card.
+    tenant_id, auth = owner
+    run = await started(client, auth)
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    run = await decide(client, auth, run)
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["waiting_on"] == "feature_set", run["waiting_on"]
+    cp = pending(run)
+    async with tenant_session(tenant_id) as s:
+        row = await s.get(Checkpoint, uuid.UUID(cp["id"]))
+        segment = await s.scalar(
+            select(RunSegment).where(
+                RunSegment.run_id == row.run_id, RunSegment.seq == row.payload["segment_seq"]
+            )
+        )
+        arts = dict(segment.artifacts or {})
+        files = {**(arts.get("files") or {}), "agent_questions.yaml": yaml.dump(AGENT_QUESTIONS)}
+        segment.artifacts = {**arts, "files": files}
+        await s.commit()
+    resp = await client.put(
+        f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/agent-questions/aq1/answer",
+        json={"option": "reuse", "note": "It ships this month."},
+        headers=auth,
+    )
+    assert resp.status_code == 200, resp.text
+    run = await decide(client, auth, run)
+    decisions = (await client.get(f"/v1/runs/{run['id']}/decisions", headers=auth)).json()
+    [d] = [x for x in decisions if x["kind"] == "feature_set"]
+    assert [(a["question"], a["answer"]) for a in d["answers"]] == [
+        (AQ, "Reuse the old sender. Note: It ships this month.")
+    ]
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["waiting_on"] == "eng_review", run["waiting_on"]
+    await _answer_all(client, auth, run)
+    assert (await _approve(client, auth, run)).status_code == 200
+    run = await _to_prd_review(client, auth, await get(client, auth, run["id"]))
+    prompt = _writer_prompt(runtime)
+    assert f'"{AQ}" Decided: "Reuse the old sender. Note: It ships this month."' in prompt
+    assert "Feature set" in prompt
