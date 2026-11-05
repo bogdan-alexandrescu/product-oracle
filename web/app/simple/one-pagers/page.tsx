@@ -65,17 +65,17 @@ export default function OnePagers() {
           <> {/* MOCK-HOOK */}
           <PrdNote /> {/* MOCK-HOOK */}
           {picked && ( // MOCK-HOOK
-            <div data-testid="mk-select-bar" className="sticky top-2 z-20 max-[600px]:top-[calc(var(--phone-top-bar)+8px)] mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-accent bg-accent-soft px-3 py-2 text-[15px]"> {/* MOCK-HOOK */}
+            <div data-testid="mk-select-bar" className="sticky top-2 z-20 max-[600px]:top-[var(--phone-top-bar)] max-[600px]:rounded-t-none mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-accent bg-surface shadow-md px-3 py-2 text-[15px]"> {/* MOCK-HOOK */}
               <strong className="mr-auto">{picked.length ? `${picked.length} selected` : "Pick PRDs"}</strong> {/* MOCK-HOOK */}
               <button type="button" disabled={!picked.length} className="inline-flex h-8 items-center rounded-lg border border-line-strong bg-surface px-3 font-semibold disabled:opacity-50" onClick={() => setAsk({ slugs: picked, titles: picked.map((x) => rows.find((r) => r.slug === x)?.title ?? x), verb: "archive" })}>{access === "propose" ? "Ask to archive" : "Archive"}</button> {/* MOCK-HOOK */}
               <button type="button" disabled={!picked.length} className="inline-flex h-8 items-center rounded-lg border border-line-strong bg-surface px-3 font-semibold text-warn disabled:opacity-50" onClick={() => setAsk({ slugs: picked, titles: picked.map((x) => rows.find((r) => r.slug === x)?.title ?? x), verb: "delete" })}>{access === "propose" ? "Ask to delete" : "Delete"}</button> {/* MOCK-HOOK */}
             </div> // MOCK-HOOK
           )} {/* MOCK-HOOK */}
-          <ul className="flex flex-col">
+          <ul className={`flex flex-col ${picked ? "[&>li]:pl-8" : ""}`}> {/* MOCK-HOOK: room for the boxes */}
             <StartedRows started={mine} />
             {rows.map((d) => (
               <li key={d.id} data-testid="one-pager-row" className="relative flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line py-3 last:border-b-0 hover:bg-bg/50">
-                {picked && <input type="checkbox" aria-label={`Select ${d.title}`} checked={picked.includes(d.slug)} onChange={(e) => setPicked((x) => (e.target.checked ? [...(x ?? []), d.slug] : (x ?? []).filter((y) => y !== d.slug)))} className="relative z-[2] h-5 w-5 accent-[var(--accent)]" />} {/* MOCK-HOOK */}
+                {picked && <input type="checkbox" aria-label={`Select ${d.title}`} checked={picked.includes(d.slug)} onChange={(e) => setPicked((x) => (e.target.checked ? [...(x ?? []), d.slug] : (x ?? []).filter((y) => y !== d.slug)))} className="absolute left-0 top-[15px] z-[2] h-5 w-5 accent-[var(--accent)]" />} {/* MOCK-HOOK */}
                 <Link href={`/simple/one-pagers/${d.slug}`} className="min-w-0 font-semibold break-words after:absolute after:inset-0 after:content-[''] hover:underline">
                   {d.title}
                 </Link>

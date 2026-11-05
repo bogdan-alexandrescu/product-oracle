@@ -396,9 +396,9 @@ test("ep2-c-roles", async ({ browser }) => { // MOCK-HOOK
   page = await start(browser, W.p, "owner"); // MOCK-HOOK
   await list(page, "c"); // MOCK-HOOK
   await page.getByTestId("mk-select").click(); // MOCK-HOOK
-  await page.getByRole("checkbox", { name: "Select Single sign-on for larger teams" }).check(); // MOCK-HOOK
-  await page.getByRole("checkbox", { name: "Select Capture notes from a phone" }).check(); // MOCK-HOOK
-  await page.getByRole("checkbox", { name: "Select Single sign-on for larger teams" }).evaluate((e) => window.scrollTo(0, e.closest("li")!.getBoundingClientRect().top + window.scrollY - 150)); // MOCK-HOOK
+  await page.getByRole("checkbox", { name: "Select Import customers from a CSV file" }).check(); // MOCK-HOOK
+  await page.getByRole("checkbox", { name: "Select Guided setup" }).check(); // MOCK-HOOK
+  await page.getByRole("checkbox", { name: "Select Import customers from a CSV file" }).evaluate((e) => { const bar = document.querySelector("[data-testid=mk-select-bar]")!.getBoundingClientRect(); window.scrollTo(0, e.closest("li")!.getBoundingClientRect().top + window.scrollY - bar.height - 60); }); // MOCK-HOOK
   await frame(page, "ep2-c-phone", W.p); // MOCK-HOOK
   page = await start(browser, W.d, "commenter"); // MOCK-HOOK
   await list(page, "c"); // MOCK-HOOK
