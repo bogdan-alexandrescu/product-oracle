@@ -111,8 +111,7 @@ test("dates: Ask the architect in the panel is a button like the others", async 
   await dateRow(page, "saved-addresses").getByRole("button").first().click();
   const panel = page.getByTestId("dates-inspector");
   await expect(panel).toContainText("Dec 11 · Capacity plan: Q4 checkout");
-  // EC1 b (owner, Nov 4): a quiet accent link after "None for this feature.", not grey text and not a button below.
-  await expect(panel.getByRole("button", { name: "Ask the architect" })).toHaveClass(/text-accent/);
+  await expect(panel.getByRole("button", { name: "Ask the architect" })).toHaveAttribute("data-variant", "secondary");
 });
 
 for (const [name, size] of [
