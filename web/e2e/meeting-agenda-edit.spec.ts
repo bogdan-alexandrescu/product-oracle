@@ -1,0 +1,159 @@
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { login, signOut } from "./helpers";
+import { expect, test, type Locator, type Page } from "./test";
+
+/**
+ * agenda-sheet (mk-edit-meetings-tracks, proposal b, the owner's pick Nov 5): in a live
+ * review of the invented Usage alerts PRD (the mock's "meeting-agenda-sheet" scenario: Alert
+ * rules engine decided, Weekly alert digest now, Dana Whitfield's topic added, Alert history
+ * export skipped; Priya Raman decides the PRD), the strip says Now, Next and Item 2 of 5 and
+ * Edit agenda opens the Agenda sheet. The owner adds a topic and a feature, renames, reorders
+ * by arrows and by drag, removes with Undo; Dana (an approver, not the decider) proposes and
+ * the proposal waits for Priya; a viewer reads; on a phone the sheet is a bottom sheet.
+ */
+
+async function tap(l: Locator) {
+  await l.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await l.click();
+}
+
+async function startReview(page: Page): Promise<string> {
+  await login(page);
+  await page.goto("/simple/meetings");
+  await tap(page.getByRole("button", { name: /^Start review/ }).first());
+  const sheet = page.getByRole("dialog", { name: "Start a review" });
+  await sheet.getByLabel("PRD").selectOption({ label: "Usage alerts PRD" });
+  await sheet.getByRole("checkbox", { name: "Theo Brandt" }).check();
+  await tap(sheet.getByRole("button", { name: "Start", exact: true }));
+  await expect(page.getByRole("heading", { name: "Review: Usage alerts PRD" })).toBeVisible();
+  return page.url();
+}
+
+/** Signs out from Home's account menu and signs in as another member; the mock's data stays. */
+async function switchTo(page: Page, email: string, url: string) {
+  await page.goto("/home");
+  await signOut(page);
+  await login(page, email);
+  await page.goto(url);
+}
+
+const strip = (page: Page) => page.getByTestId("agenda-strip");
+const sheet = (page: Page) => page.getByRole("dialog", { name: "Agenda" });
+const rows = (page: Page) => sheet(page).getByTestId("agenda-row");
+const names = async (page: Page) => (await rows(page).locator("p:first-child").allInnerTexts()).map((t) => t.replace(/\s*(✓|skipped)\s*$/, "").trim());
+
+test.beforeEach(async ({ context }) => {
+  await context.addInitScript((key) => localStorage.setItem(key, "meeting-agenda-sheet"), MOCK_SCENARIO_KEY);
+});
+
+test.describe("desktop", () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test("the owner adds a topic and a feature, renames, reorders by arrows and drag, removes with Undo", async ({ page }) => {
+    test.setTimeout(90_000);
+    await startReview(page);
+    await expect(strip(page)).toContainText("Now: Weekly alert digest");
+    await expect(strip(page)).toContainText("Next: Mobile alert push");
+    await expect(strip(page)).toContainText("Item 2 of 5");
+    await tap(strip(page).getByRole("button", { name: "Edit agenda" }));
+    const s = sheet(page);
+    await expect(s).toBeVisible();
+    expect(await names(page)).toEqual(["Alert rules engine", "Weekly alert digest", "Mobile alert push", "Quiet hours for muted teams", "Alert history export"]);
+    // Done and current items are fixed; the item after Now has no up arrow, the last no down arrow.
+    await expect(rows(page).nth(0).getByRole("button", { name: /^(Move|Rename|Remove)/ })).toHaveCount(0);
+    await expect(rows(page).nth(1).getByRole("button", { name: /^(Move|Rename|Remove)/ })).toHaveCount(0);
+    await expect(s.getByRole("button", { name: "Move Mobile alert push up" })).toHaveCount(0);
+    await expect(s.getByRole("button", { name: "Move Alert history export down" })).toHaveCount(0);
+    await expect(rows(page).nth(3)).toContainText("5 min · topic · added by Dana Whitfield");
+
+    // Up by the arrow.
+    await tap(s.getByRole("button", { name: "Move Quiet hours for muted teams up" }));
+    await expect.poll(() => names(page)).toEqual(["Alert rules engine", "Weekly alert digest", "Quiet hours for muted teams", "Mobile alert push", "Alert history export"]);
+    // Rename in place.
+    await tap(s.getByRole("button", { name: "Rename Quiet hours for muted teams" }));
+    await s.getByLabel("Item name").fill("Quiet hours by default");
+    await tap(s.getByRole("button", { name: "Save" }));
+    await expect(rows(page).nth(2)).toContainText("Quiet hours by default");
+    // A typed topic and a feature.
+    await s.getByLabel("Add a feature or a topic").fill("Beta date sign-off");
+    await s.getByLabel("Add a feature or a topic").press("Enter");
+    await expect(rows(page).last()).toContainText("Beta date sign-off");
+    await expect(rows(page).last()).toContainText("5 min · topic · added by Avery Stone");
+    await tap(s.getByRole("button", { name: "+ Alert routing by team" }));
+    await expect(rows(page).last()).toContainText("Alert routing by team");
+    await expect(s.getByRole("button", { name: "+ Alert routing by team" })).toHaveCount(0);
+    // Down by dragging: Mobile alert push dropped on the last row.
+    await rows(page).filter({ hasText: "Mobile alert push" }).dragTo(rows(page).last());
+    await expect.poll(async () => (await names(page)).at(-1)).toBe("Mobile alert push");
+    // Remove: no Trash for agenda items; it goes, with Undo.
+    await tap(s.getByRole("button", { name: "Remove Alert history export" }));
+    await expect.poll(() => names(page)).not.toContain("Alert history export");
+    await page.keyboard.press("Escape");
+    await expect(s).toBeHidden();
+    const done = page.getByTestId("agenda-done");
+    await expect(done).toContainText("Moved Quiet hours for muted teams up, renamed Quiet hours for muted teams to Quiet hours by default, added Beta date sign-off, added Alert routing by team, moved Mobile alert push down and removed Alert history export.");
+    await expect(strip(page)).toContainText("Next: Quiet hours by default · topic");
+    await expect(strip(page)).toContainText("Item 2 of 6");
+    await tap(done.getByRole("button", { name: "Undo" }));
+    await expect(done).toBeHidden();
+    await expect(strip(page)).toContainText("Next: Mobile alert push");
+    await expect(strip(page)).toContainText("Item 2 of 5");
+  });
+
+  test("an approver who is not the decider proposes; the proposal waits for Priya Raman", async ({ page }) => {
+    test.setTimeout(90_000);
+    const url = await startReview(page);
+    await switchTo(page, "dana.whitfield@example.com", url);
+    await tap(strip(page).getByRole("button", { name: "Edit agenda" }));
+    const s = sheet(page);
+    await expect(s.getByText("Waits for Priya Raman")).toBeVisible();
+    await tap(s.getByRole("button", { name: "Rename Quiet hours for muted teams" }));
+    await s.getByLabel("Item name").fill("Quiet hours by default");
+    await tap(s.getByRole("button", { name: "Propose" }));
+    // The agenda stays as it is until Priya accepts.
+    await expect(rows(page).nth(3)).toContainText("Quiet hours for muted teams");
+    await page.keyboard.press("Escape");
+    const line = page.getByTestId("agenda-proposal");
+    await expect(line).toContainText("Proposed");
+    await expect(line).toContainText("Waits for Priya Raman");
+    await tap(line.getByRole("button", { name: "About What is proposed" }));
+    await expect(page.getByText("Renamed Quiet hours for muted teams to Quiet hours by default.")).toBeVisible();
+    await expect(strip(page)).toContainText("Next: Mobile alert push");
+
+    // Priya, the decider, accepts it.
+    await switchTo(page, "approver@example.com", url);
+    await tap(page.getByTestId("agenda-proposal").getByRole("button", { name: "Accept" }));
+    await expect(page.getByTestId("agenda-proposal")).toBeHidden();
+    await tap(strip(page).getByRole("button", { name: "Edit agenda" }));
+    await expect(rows(page).nth(3)).toContainText("Quiet hours by default");
+  });
+
+  test("a viewer reads the agenda with no controls", async ({ page }) => {
+    const url = await startReview(page);
+    await switchTo(page, "viewer@example.com", url);
+    await expect(strip(page)).toContainText("Item 2 of 5");
+    await tap(strip(page).getByRole("button", { name: "See agenda" }));
+    const s = sheet(page);
+    await expect(s.getByText("View only")).toBeVisible();
+    await expect(rows(page)).toHaveCount(5);
+    await expect(s.getByRole("button", { name: /^(Move|Rename|Remove)/ })).toHaveCount(0);
+    await expect(s.getByLabel("Add a feature or a topic")).toHaveCount(0);
+  });
+});
+
+test.describe("phone", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("the Agenda sheet is a bottom sheet with arrows and no drag", async ({ page }) => {
+    await startReview(page);
+    await tap(strip(page).getByRole("button", { name: "Edit agenda" }));
+    const s = sheet(page);
+    await expect(s).toBeVisible();
+    const box = (await s.boundingBox())!;
+    expect(Math.round(box.y + box.height)).toBeGreaterThanOrEqual(840);
+    expect(box.width).toBeGreaterThan(380);
+    await expect(rows(page).filter({ hasText: "Mobile alert push" })).not.toHaveAttribute("draggable", "true");
+    await tap(s.getByRole("button", { name: "Move Quiet hours for muted teams up" }));
+    await expect.poll(() => names(page)).toEqual(["Alert rules engine", "Weekly alert digest", "Quiet hours for muted teams", "Mobile alert push", "Alert history export"]);
+  });
+});
