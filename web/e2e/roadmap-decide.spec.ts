@@ -330,10 +330,9 @@ test("an approver's proposed Remove the dependency says who it waits for and is 
   const line = cut.getByTestId("fix-proposed").first();
   await expect(line).toContainText(/[Pp]roposed,? waits for Avery Stone/);
   // The proposed line's item name opens that item's panel, as other item names do.
-  const dependent = /of ‘(.+)’/.exec(label)?.[1] ?? (await line.innerText());
-  await line.getByRole("button").click();
-  await expect(page.getByTestId("floating-card")).toBeVisible();
-  if (/of ‘/.test(label)) await expect(page.getByTestId("floating-card")).toContainText(dependent);
+  const dependent = /of ‘(.+?)’/.exec(await line.innerText())![1];
+  await line.getByRole("button", { name: `‘${dependent}’` }).click();
+  await expect(page.getByTestId("floating-card")).toContainText(dependent);
   // The person it waits for reads "waits for you", on the strip and in Needs a decision.
   await login(page);
   await page.goto("/simple/roadmap");

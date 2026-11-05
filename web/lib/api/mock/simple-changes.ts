@@ -302,7 +302,10 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
 }
 
 function touched(c: Pick<Change, "op" | "target" | "after" | "before">): string[] {
-  return KEYED.includes(c.op) ? [...new Set([...Object.keys(c.after), ...Object.keys(c.before)])] : [String(c.target.item_id)];
+  if (KEYED.includes(c.op)) return [...new Set([...Object.keys(c.after), ...Object.keys(c.before)])];
+  // Review: a removed dependency touches the item it depended on too (changes.py _touched).
+  if (c.op === "remove_dependency" && c.target.subject) return [String(c.target.item_id), String(c.target.subject)];
+  return [String(c.target.item_id)];
 }
 
 function idle(s: Session): boolean {

@@ -25,7 +25,7 @@ import { QuickAdd } from "./_add";
 import { MsCard, MsKey, MsLayer, MsProvider, MsToast, useMilestones, type MsLane, type MsRow } from "./_milestones";
 import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, MARK_WORDS, PM_LANE, type Horizon, type LegendEntry } from "./_board";
 import { useKeyBurst } from "./_burst";
-import { changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, ProposedFixes, SuggestionPopover, type Act } from "./_card";
+import { changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, OpenItem, opWords, ProposedFixes, SuggestionPopover, type Act } from "./_card";
 import { boardPicture, chartPicture, exportView, type Brand } from "./_export";
 import { KeyDatesEditor } from "./_keydates";
 import { Lanes, pmItem } from "./_lanes";
@@ -339,7 +339,7 @@ function prdWords(p: { prd: { title: string }; version?: number | null; items: n
 }
 
 /** The working-draft banner (D18 as amended: one shared draft per roadmap). */
-function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onReview, titleOf, nameOf, focus }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; onApprove: (d: Draft[]) => void; onReview: (prdSlug: string) => void; titleOf: (id: string | null) => string | undefined; nameOf?: (id: string) => string; focus?: string | null }) {
+function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onReview, titleOf, nameOf, personOf, focus }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; onApprove: (d: Draft[]) => void; onReview: (prdSlug: string) => void; titleOf: (id: string | null) => string | undefined; nameOf?: (id: string) => string; personOf?: (id: string) => string | undefined; focus?: string | null }) {
   const [open, setOpen] = useState(false);
   // Review: Home's "Open draft to approve" (?draft=<id>) lands on that draft: in sight, its button focused, once.
   const focused = useRef(false);
@@ -406,7 +406,8 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onRe
             </>
           ) : (
             <>
-              <b>Your working draft</b> · <span data-testid="draft-count">{changes}</span> {changes === 1 ? "change" : "changes"} since {time(since)} · <span data-testid="draft-next">{next.words}</span>
+              {/* Review: another person's draft (the decider reading the owner's) names whose it is and its roadmap. */}
+              <b>{working[0].created_by === meId || !meId ? "Your working draft" : `${personOf?.(working[0].created_by) ?? "Someone"}'s working draft of the ${working[0].document.title}`}</b> · <span data-testid="draft-count">{changes}</span> {changes === 1 ? "change" : "changes"} since {time(since)} · <span data-testid="draft-next">{next.words}</span>
             </>
           )}
         </p>
@@ -423,8 +424,9 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onRe
             Approve and publish
           </Button>
         )}
-        {!many && (submittable.length > 0 || !publishable.length) && (
-          <Button variant="solid" data-step disabled={!submittable.length} onClick={() => onSubmit(submittable)}>
+        {/* Review: only while something can be sent: the decider of a draft sent already sees Approve alone. */}
+        {!many && submittable.length > 0 && (
+          <Button variant="solid" data-step onClick={() => onSubmit(submittable)}>
             Send for review
           </Button>
         )}
@@ -597,6 +599,8 @@ function DecisionTray({
   top,
   allLinks,
   allDates,
+  oneRoadmap,
+  waitsFor,
   onAll,
 }: {
   items: Item[];
@@ -615,6 +619,10 @@ function DecisionTray({
   allLinks?: number;
   /** Review: under a filter, the whole roadmap's dates to confirm (the same basis as allLinks). */
   allDates?: number;
+  /** Review: the whole count is one chosen roadmap's ("in all"), else every roadmap the reader sees. */
+  oneRoadmap?: boolean;
+  /** Review: whom a proposed Remove the dependency waits for ("you" to that person). */
+  waitsFor?: (c: Change) => string;
   onAll?: () => void;
 }) {
   const twins = items.filter((i) => i.can_decide && i.looks_like.length > 0);
@@ -676,6 +684,7 @@ function DecisionTray({
     <li key={c.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-proposal">
       <span className="min-w-0 flex-1 text-[15px]">
         {title(c)}: {opWords(c.op).toLowerCase()} · <span className="text-text2">{c.by_name}</span>
+        {c.op === "remove_dependency" && waitsFor && <span className="text-text2"> · waits for {waitsFor(c)}</span>}
         {c.from_meeting && <span className="block text-sm text-text2" data-testid="proposal-from-meeting">Asked for by the meeting {c.from_meeting.title}</span>}
       </span>
       <Button onClick={() => onDecide(c, "accept")}>Accept</Button>
@@ -704,7 +713,7 @@ function DecisionTray({
       {/* roadmap-decide: what the button's count is, said in words; the broken links are the same ones Home and the side menu count. */}
       <p className="mt-1 text-sm text-text2" data-testid="tray-scope">
         {/* Review: under a filter, every kind on one basis: what these filters show, and the whole roadmap's. */}
-        {whole !== here ? `${here} here, ${whole} in all` : whole} to decide in this roadmap&apos;s working draft: broken links, dates to confirm, proposals and items pulled in.
+        {whole !== here ? `${here} here, ${whole} in all${oneRoadmap ? "" : " your roadmaps"}` : whole} to decide in this roadmap&apos;s working draft: broken links, dates to confirm, proposals and items pulled in.
         {allLinks !== undefined && allLinks !== counts.links && (
           <span data-testid="tray-links-here">
             {" "}
@@ -930,25 +939,37 @@ export function SimpleRoadmap() {
     unwrap(api.GET("/v1/simple/meetings/options", { params: { query: { prd: undefined, occurrence: undefined } } })),
   );
   // Review: the whole roadmap's broken links (the side menu's light count), whatever the filters.
-  const wholeLinks = useQuery("simple-roadmap-waiting", () => unwrap(api.GET("/v1/simple/roadmap/waiting")));
+  // Review: a chosen roadmap's count is that roadmap's ("in all"), else every roadmap the reader sees ("in all your roadmaps").
+  const wholeLinks = useQuery(`simple-roadmap-waiting:${f.roadmap ?? ""}`, () =>
+    unwrap(api.GET("/v1/simple/roadmap/waiting", { params: { query: f.roadmap ? { roadmap: f.roadmap } : {} } })),
+  );
   // Review: the people a draft's next step names (who it waits on, who reviews it after the decider).
   // A proposed fix names whom it waits for too.
   const asked = (proposals.data ?? []).filter((c) => c.op === "remove_dependency");
-  const draftIds = [...new Set([...(drafts.data ?? []).flatMap((d) => [...d.waiting_on, ...(d.required_reviewers ?? [])]), ...asked.flatMap((c) => c.routed_to)])].sort();
+  // Review: and whose draft it is, when it is not the reader's.
+  const draftIds = [...new Set([...(drafts.data ?? []).flatMap((d) => [...d.waiting_on, ...(d.required_reviewers ?? []), d.created_by]), ...asked.flatMap((c) => c.routed_to)])].sort();
   const draftPeople = useQuery(
     `people|${draftIds.join(",")}`,
     () => (draftIds.length ? unwrap(api.GET("/v1/people", { params: { query: { ids: draftIds } } })) : Promise.resolve([] as Schemas["PersonOut"][])),
     { keepPrevious: true },
   );
+  // Review: whom a proposal waits for, by name; "you" to that person.
+  const myId = me?.user_id;
+  const waitsFor = useCallback(
+    (c: Change) => {
+      if (myId && c.routed_to.includes(myId)) return "you";
+      const who = c.routed_to.map((id) => draftPeople.data?.find((p) => p.user_id === id)?.name).filter(Boolean);
+      return who.length ? who.join(", ") : "its decider";
+    },
+    [myId, draftPeople.data],
+  );
   // Review: a Remove the dependency proposed already says whom it waits for, and is not offered again.
   const proposedFix = useCallback(
     (op: string, itemId: string, subject: string) => {
       const c = asked.find((x) => x.op === op && String(x.target.item_id) === itemId && String(x.target.subject) === subject);
-      if (!c) return null;
-      const who = c.routed_to.map((id) => draftPeople.data?.find((p) => p.user_id === id)?.name).filter(Boolean);
-      return who.length ? who.join(", ") : "its decider";
+      return c ? waitsFor(c) : null;
     },
-    [asked, draftPeople.data],
+    [asked, waitsFor],
   );
   const reload = useCallback(async () => {
     await Promise.all([roadmap.reload(), proposals.reload(), drafts.reload(), wholeLinks.reload()]);
@@ -1094,7 +1115,7 @@ export function SimpleRoadmap() {
 
   /** One change through the engine, its toast (with Undo when it applied) and the reload; null when it failed. */
   const run = useCallback(
-    async (what: string, body: Parameters<Act>[1]): Promise<ChangeResult | null> => {
+    async (what: Parameters<Act>[0], body: Parameters<Act>[1]): Promise<ChangeResult | null> => {
       try {
         const r = await propose(body);
         const target = latest.current.get(String(body.target?.item_id ?? ""));
@@ -1188,6 +1209,8 @@ export function SimpleRoadmap() {
     if (!r || !box) return { left: 0, top: 0, above: 0 };
     return { left: Math.max(0, Math.min(r.left - box.left, box.width - 390)), top: r.bottom - box.top + 6, above: r.top - box.top - 6 };
   };
+  // Review: an item's name in a fix's line opens its feature panel, as its bar does.
+  const openCard = (id: string) => setCard({ id, ...anchorOf(id) });
 
   const onDecide = useCallback(
     async (c: Change, how: "accept" | "decline") => {
@@ -1514,6 +1537,7 @@ export function SimpleRoadmap() {
       focus={params.get("draft")}
       titleOf={titleOf}
       nameOf={(id) => draftPeople.data?.find((p) => p.user_id === id)?.name ?? "a reviewer"}
+      personOf={(id) => draftPeople.data?.find((p) => p.user_id === id)?.name}
       onReview={(slug) => pickFilter("prd", slug)}
       inReview={data.changes_in_review ?? 0}
       meId={me?.user_id ?? null}
@@ -1548,6 +1572,7 @@ export function SimpleRoadmap() {
   return (
     <GoalNumbers.Provider value={numbers}>
     <ProposedFixes.Provider value={proposedFix}>
+    <OpenItem.Provider value={openCard}>
     <MsProvider value={ms!}>
     {/* A phone's page ends clear of the tab bar (#36: its filters lead the chart, not the foot). */}
     <div className="simple-mode space-y-3 px-4 py-4 max-[600px]:pb-[calc(var(--phone-tab-bar)+16px)] min-[641px]:px-6" data-testid="simple-roadmap" data-phone={phone ? "true" : "false"}>
@@ -1891,6 +1916,8 @@ export function SimpleRoadmap() {
           top={trayTop}
           allLinks={allLinks}
           allDates={allDates}
+          oneRoadmap={!!f.roadmap}
+          waitsFor={waitsFor}
           onAll={showAllLinks}
         />
       )}
@@ -1899,6 +1926,7 @@ export function SimpleRoadmap() {
       <MsCard />
       <MsToast />
     </MsProvider>
+    </OpenItem.Provider>
     </ProposedFixes.Provider>
     </GoalNumbers.Provider>
   );

@@ -30,7 +30,7 @@ import {
 
 /** What a change asks the engine, built by the page and sent through `act`. */
 export type Act = (
-  what: string,
+  what: import("./_lib").ChangeWords,
   body: Parameters<typeof import("./_lib").propose>[0],
 ) => Promise<void>;
 
@@ -54,6 +54,9 @@ export const fixCount = (flag: Flag): number => flag.fixes.reduce((n, f) => n + 
  * or null. The roadmap page answers it from its open proposals. */
 export const ProposedFixes = createContext<(op: Flag["fixes"][number], itemId: string, subject: string) => string | null>(() => null);
 
+/** Review: opens an item's feature panel from a name in a fix's line (the page's own card), or null. */
+export const OpenItem = createContext<((itemId: string) => void) | null>(null);
+
 /** D14's one-click fixes of one flag: move the dependents, move the dependency, or accept
  * the risk with a note (the flag then stays amber). */
 export function FixButtons({
@@ -73,6 +76,7 @@ export function FixButtons({
 }) {
   const [note, setNote] = useState<string | null>(null);
   const proposed = useContext(ProposedFixes);
+  const openItem = useContext(OpenItem);
   if (!canChange) return null;
   const dep = flag.subject ? items.get(flag.subject) : undefined;
   // roadmap-decide: a cut item others depend on: bring it back, or a dependent drops it. Review:
@@ -82,7 +86,7 @@ export function FixButtons({
     void act(`Brought back '${item.title}'`, { op: "restore", target: { item_id: item.id }, before: { cut: true }, after: { cut: false } });
   // Review: the API checks only that the item still depends on this one (a filter may hide its other dependencies).
   const unlink = (n: Flag["dependents"][number]) =>
-    void act(`Removed the dependency of ‘${n.title}’ on ‘${item.title}’`, {
+    void act({ applied: `Removed the dependency of ‘${n.title}’ on ‘${item.title}’`, proposed: `remove the dependency of ‘${n.title}’ on ‘${item.title}’` }, {
       op: "remove_dependency",
       target: { item_id: n.id, subject: item.id },
       before: {},
@@ -175,7 +179,16 @@ export function FixButtons({
             const waits = proposed(f, n.id, item.id);
             return waits !== null ? (
               <span key={`${f}-${n.id}`} data-testid="fix-proposed" className="self-center text-sm text-text2">
-                {live.length > 1 ? `Removing the dependency of ‘${n.title}’: proposed, waits for ${waits}` : `Proposed: waits for ${waits}`}
+                {/* Review: the dependent's name opens its feature panel, as other item names do. */}
+                Removing the dependency of{" "}
+                {openItem ? (
+                  <button type="button" className="font-medium text-text underline-offset-2 hover:underline" onClick={() => openItem(n.id)}>
+                    ‘{n.title}’
+                  </button>
+                ) : (
+                  `‘${n.title}’`
+                )}
+                {`: proposed, waits for ${waits}`}
               </span>
             ) : (
               // A long name wraps inside its button rather than run past a phone's edge.

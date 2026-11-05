@@ -339,9 +339,17 @@ export async function suggestion(id: string, how: "accept" | "edit" | "dismiss",
 export const deciderWords = (deciders: string[] | undefined): string =>
   deciders?.length ? (deciders.length === 1 ? deciders[0] : `${deciders.slice(0, -1).join(", ")} or ${deciders.at(-1)}`) : "the roadmap's owner";
 
+/** What a change says it did when applied, and, when the two read differently, what it asks
+ * when it is only proposed ("remove the dependency of ‘A’ on ‘B’"). */
+export type ChangeWords = string | { applied: string; proposed: string };
+
 /** The words a change's result says: applied (undo) or proposed (to whom, and where it shows). */
-export function resultWords(r: ChangeResult, what: string, deciders?: string[]): string {
-  return r.change.status === "applied" ? `${what} in your working draft` : `${what} proposed: it waits for ${deciderWords(deciders)} in Needs a decision`;
+export function resultWords(r: ChangeResult, what: ChangeWords, deciders?: string[]): string {
+  const done = typeof what === "string" ? what : what.applied;
+  if (r.change.status === "applied") return `${done} in your working draft`;
+  // Review: nothing was done yet: a proposal says what it asks, then whom it waits for.
+  if (typeof what !== "string") return `Proposed: ${what.proposed}; it waits for ${deciderWords(deciders)} in Needs a decision`;
+  return `${what} proposed: it waits for ${deciderWords(deciders)} in Needs a decision`;
 }
 
 const PHASE_SPLIT: [Item["phases"][number]["key"], number][] = [

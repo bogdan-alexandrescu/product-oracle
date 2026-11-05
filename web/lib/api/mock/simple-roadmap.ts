@@ -1300,8 +1300,10 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
   }
   if (p[3] === "waiting" && !p[4] && m === "GET") {
     // roadmap-decide review (GET /v1/simple/roadmap/waiting): the whole roadmap's broken links and
-    // the dates the reader may confirm, no filter.
-    const items = (roadmapOut(db, me.role, new URLSearchParams(), me)?.items ?? []).filter((i) => i.status !== "done");
+    // the dates the reader may confirm, no filter but ``roadmap`` (one roadmap's; 404 when unread).
+    const one = q.get("roadmap");
+    if (one && !readableRoadmap(one, me.role)) return json(404, { detail: "No such roadmap" });
+    const items = (roadmapOut(db, me.role, new URLSearchParams(one ? { roadmap: one } : {}), me)?.items ?? []).filter((i) => i.status !== "done");
     const links = items.flatMap((i) => i.flags).filter((f) => f.state === "red" && f.fixes.length > 0 && (f.kind === "dependency_order" || f.kind === "cut_with_dependents"));
     return json(200, { broken_links: links.length, dates_to_confirm: items.filter((i) => !!i.suggestion?.can_decide).length });
   }
