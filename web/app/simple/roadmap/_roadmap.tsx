@@ -27,7 +27,9 @@ import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, 
 import { useKeyBurst } from "./_burst";
 import { changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
 import { boardPicture, chartPicture, exportView, type Brand } from "./_export";
+import { DraftLayer, useShowDrafts, type DraftItem, type DraftPrd } from "./_drafts";
 import { KeyDatesEditor } from "./_keydates";
+import { FeaturePanel } from "./_panel";
 import { Lanes, pmItem } from "./_lanes";
 import {
   addDays,
@@ -851,12 +853,14 @@ export function SimpleRoadmap() {
   const startOptions = useQuery("simple-meeting-options||", () =>
     unwrap(api.GET("/v1/simple/meetings/options", { params: { query: { prd: undefined, occurrence: undefined } } })),
   );
+  // RP2 'Draft layer on roadmap': the PRDs whose run dated items not approved yet (./_drafts.tsx).
+  const draftPrds = useQuery("simple-roadmap-draft-prds", () => unwrap(api.GET("/v1/simple/roadmap/draft-prds")));
   const reload = useCallback(async () => {
-    await Promise.all([roadmap.reload(), proposals.reload(), drafts.reload()]);
+    await Promise.all([roadmap.reload(), proposals.reload(), drafts.reload(), draftPrds.reload()]);
     // roadmap-decide: the side menu's Roadmap count reads the same working draft again.
     invalidateWaiting();
     waitingChanged();
-  }, [roadmap, proposals, drafts]);
+  }, [roadmap, proposals, drafts, draftPrds]);
   // roadmap-talk: a chat card applied, proposed, rejected or undone (the item's talk, the Ask panel) reads the roadmap again.
   useEffect(() => {
     const on = () => void reload();
@@ -982,6 +986,17 @@ export function SimpleRoadmap() {
       track: add(seen.track, data.items.flatMap((i) => (i.track ? [[i.track.id, i.track.title] as [string, string]] : []))),
     });
   }
+  // RP2: the draft PRDs the layer shows, and the PRD filter's "(draft)" entries for those not on the roadmap.
+  const [showDrafts, setShowDrafts] = useShowDrafts(me?.user_id ?? me?.email);
+  const draftList = useMemo(() => draftPrds.data ?? [], [draftPrds.data]);
+  const draftOnly = useMemo(() => draftList.filter((d) => !seen.prd.some(([slug]) => slug === d.prd.slug)), [draftList, seen.prd]);
+  const prdOptions = useMemo(() => [...seen.prd, ...draftOnly.map((d) => [d.prd.slug, `${d.prd.title} (draft)`] as [string, string])], [seen.prd, draftOnly]);
+  const pickedDraft = f.prd ? (draftOnly.find((d) => d.prd.slug === f.prd) ?? null) : null;
+  const shownDrafts = f.goal || f.track ? [] : f.prd ? draftList.filter((d) => d.prd.slug === f.prd) : draftList;
+  const [draftOpen, setDraftOpen] = useState<string | null>(null);
+  const openDraft = draftList.flatMap((d) => d.items.filter((i) => i.id === draftOpen).map((item) => ({ item, prd: d })))[0] ?? null;
+  // One panel at a time: a roadmap item's card closes a draft item's panel.
+  if (card && draftOpen) setDraftOpen(null);
   const byId = useMemo(() => new Map((all?.items ?? []).map((i) => [i.id, i])), [all]);
   const titleOf = useCallback((id: string | null) => (id ? byId.get(id)?.title : undefined), [byId]);
   const canChange = can("create_simple_change");
@@ -1341,7 +1356,7 @@ export function SimpleRoadmap() {
       {readable.length > 1 && (
         <Select label="Roadmap" all="All roadmaps" testId="filter-roadmap" value={data.roadmap?.id ?? ""} options={readable.map((r) => [r.roadmap.id, r.roadmap.title])} onChange={pickRoadmap} />
       )}
-      <Select label="PRD" value={f.prd} options={seen.prd} onChange={(prd) => pickFilter("prd", prd)} />
+      <Select label="PRD" value={f.prd} options={prdOptions} onChange={(prd) => pickFilter("prd", prd)} />
       <Select label="Goal" value={f.goal} options={seen.goal} onChange={(goal) => pickFilter("goal", goal)} />
       <Select label="Track" value={f.track} options={seen.track} onChange={(track) => pickFilter("track", track)} />
       <Select label="From" value={f.from} options={qList.map((q) => [q.start, q.label])} onChange={(from) => setRange(from, f.to)} testId="filter-from" />
@@ -1397,7 +1412,8 @@ export function SimpleRoadmap() {
     setGoalStart(!people.length && oracle.length ? "oracle" : undefined);
     setGoalPanel(g);
   };
-  const goalCounters = <GoalCounters data={data} byGoal={f.group === "goal" || f.group === "milestone"} suggestions={suggestions} onGoal={openCounted} only={pickedGoal} />;
+  // RP2: a draft PRD alone has nothing on the roadmap yet, so no goal tiles.
+  const goalCounters = pickedDraft ? null : <GoalCounters data={data} byGoal={f.group === "goal" || f.group === "milestone"} suggestions={suggestions} onGoal={openCounted} only={pickedGoal} />;
   const draftBanner = (
     <DraftBanner
       drafts={drafts.data ?? []}
@@ -1476,6 +1492,35 @@ export function SimpleRoadmap() {
         {!phone && actions}
         {keyDates && <KeyDatesEditor key={data.roadmap?.id ?? "all"} data={data} act={act} mayChange={canChange} phone={phone} onClose={() => setKeyDates(false)} />}
       </header>
+      <DraftLayer
+        drafts={shownDrafts}
+        phone={phone}
+        show={showDrafts}
+        onShow={setShowDrafts}
+        onlyPrd={pickedDraft && !data.items.length ? pickedDraft : null}
+        picked={openDraft?.item.id ?? null}
+        onOpen={(i: DraftItem) => {
+          setCard(null);
+          setDraftOpen(i.id);
+        }}
+      />
+      {openDraft && (
+        <FeaturePanel
+          key={openDraft.item.id}
+          feature={{ code: openDraft.item.key, name: openDraft.item.title, prd: openDraft.prd.prd }}
+          phone={phone}
+          canChange={openDraft.prd.can_change}
+          onClose={() => setDraftOpen(null)}
+          draft={{
+            item: openDraft.item,
+            prd: openDraft.prd as DraftPrd,
+            onChanged: async (words: string) => {
+              await reload();
+              toast({ message: words });
+            },
+          }}
+        />
+      )}
       <p role="status" aria-live="polite" className="sr-only" data-testid="key-pending">
         {said}
       </p>

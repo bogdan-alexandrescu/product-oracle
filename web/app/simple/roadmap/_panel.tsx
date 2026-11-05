@@ -11,6 +11,7 @@ import { CARD_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { useQuery } from "@/lib/use-query";
 
 import { FloatingCard, type Act } from "./_card";
+import { DraftDetails, type DraftItem, type DraftPrd } from "./_drafts";
 import { ChangeFailed, changedWords, decide, nearWords, propose, resultWords, setRoadmapToday, undo, type Change, type Item } from "./_lib";
 
 const toast = (ask: ToastAsk) => dsToast({ place: "corner", ...ask });
@@ -31,11 +32,14 @@ export function FeaturePanel({
   phone,
   canChange,
   onClose,
+  draft,
 }: {
   feature: { code: string; name: string; prd?: { id: string; slug: string } | null };
   phone: boolean;
   canChange: boolean;
   onClose: () => void;
+  /** RP2 'Draft layer on roadmap': a draft PRD's item, not on a roadmap yet; its changes go to the run's draft. */
+  draft?: { item: DraftItem; prd: DraftPrd; onChanged: (said: string) => Promise<unknown> };
 }) {
   const roadmap = useQuery("simple-roadmap:{}", () =>
     unwrap(api.GET("/v1/simple/roadmap", {})).then((d) => {
@@ -90,7 +94,9 @@ export function FeaturePanel({
     await reload();
   };
 
-  const body = !data ? (
+  const body = draft ? (
+    <DraftDetails item={draft.item} prd={draft.prd.prd} canChange={draft.prd.can_change} onChanged={draft.onChanged} onClose={onClose} />
+  ) : !data ? (
     <p className="p-4 text-[15px] text-text2">{roadmap.error ?? "Loading…"}</p>
   ) : !item ? (
     <div className="p-4">
@@ -115,11 +121,11 @@ export function FeaturePanel({
       near={nearWords(item, data.key_dates ?? [])}
     />
   );
-  if (phone && item) return <div data-testid="item-panel" aria-label={item.title} className="contents">{body}</div>;
+  if (phone && item && !draft) return <div data-testid="item-panel" aria-label={item.title} className="contents">{body}</div>;
   return (
     <aside
       data-testid="item-panel"
-      aria-label={item?.title ?? feature.name}
+      aria-label={draft?.item.title ?? item?.title ?? feature.name}
       className={
         phone
           ? "fixed inset-x-0 bottom-0 z-40 rounded-t-xl border border-line bg-surface shadow-tip"

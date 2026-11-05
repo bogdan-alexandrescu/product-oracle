@@ -25,10 +25,10 @@ const at = (d: string) => Date.parse(`${d.slice(0, 10)}T00:00:00Z`);
 const span = (i: Bar) => `${calendarDay(i.start)} – ${calendarDay(i.end)}`;
 
 /** The hatch every draft bar wears. */
-const HATCH: CSSProperties = { backgroundImage: "repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent) 28%, transparent) 0 6px, transparent 6px 12px)", border: "1.5px dashed var(--accent)" };
+export const HATCH: CSSProperties = { backgroundImage: "repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent) 28%, transparent) 0 6px, transparent 6px 12px)", border: "1.5px dashed var(--accent)" };
 
 /** The months from the first item's to the last's, each as wide as its days. */
-function months(bars: Bar[]): { first: number; end: number; cols: { name: string; days: number }[] } {
+export function months(bars: Bar[]): { first: number; end: number; cols: { name: string; days: number }[] } {
   const lo = new Date(Math.min(...bars.map((b) => at(b.start))));
   const hi = new Date(Math.max(...bars.map((b) => at(b.end))));
   const cols: { name: string; days: number }[] = [];
@@ -75,7 +75,7 @@ function Bars({ bars, solid, picked, label }: { bars: Bar[]; solid?: boolean; pi
 }
 
 /** What a change of dates did, in words: "Moved X 4 weeks later (draft)". */
-function movedWords(title: string, from: string, to: string): string {
+export function movedWords(title: string, from: string, to: string): string {
   const days = Math.round((at(to) - at(from)) / DAY);
   if (days !== 0 && days % 7 === 0) {
     const w = Math.abs(days / 7);
@@ -84,7 +84,7 @@ function movedWords(title: string, from: string, to: string): string {
   return `New dates for ${title} (draft)`;
 }
 
-function DatesForm({ item, busy, onSave, onCancel }: { item: Bar; busy: boolean; onSave: (start: string, end: string) => void; onCancel: () => void }) {
+export function DatesForm({ item, busy, onSave, onCancel }: { item: Bar; busy: boolean; onSave: (start: string, end: string) => void; onCancel: () => void }) {
   const [start, setStart] = useState(item.start);
   const [end, setEnd] = useState(item.end);
   const field = "block h-9 rounded-lg border border-line-strong bg-surface px-2 text-base text-text";
