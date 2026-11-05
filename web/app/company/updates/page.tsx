@@ -167,8 +167,10 @@ function Updates() {
             title="No updates yet"
             action={
               mayCreate ? (
-                <Button icon="plus" onClick={() => setCreating(true)}>
-                  New update
+                // Review r2 of PR 1286: on a phone it reads as the header's ("+ Update"), named in full.
+                <Button icon="plus" aria-label="New update" title="New update" onClick={() => setCreating(true)}>
+                  <span className="max-[600px]:hidden">New update</span>
+                  <span className="hidden max-[600px]:inline">Update</span>
                 </Button>
               ) : undefined
             }

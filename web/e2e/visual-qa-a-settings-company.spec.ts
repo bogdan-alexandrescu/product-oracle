@@ -179,7 +179,7 @@ test("CO-2: on a phone the empty Updates list's button reads as the header's", a
   const header = page.getByTestId("company-action").getByRole("button", { name: "New update" });
   const empty = page.getByTestId("updates-empty").getByRole("button", { name: "New update" });
   await expect(header).toBeVisible();
-  await expect(empty).toHaveText((await header.innerText()).trim());
+  await expect(empty).toHaveText((await header.innerText()).trim(), { useInnerText: true });
 });
 
 const FAILED: { name: string; path: string; url: string; what: string; after: (p: Page) => Promise<void> }[] = [

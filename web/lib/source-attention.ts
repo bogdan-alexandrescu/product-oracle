@@ -23,25 +23,19 @@ export const shownStatus = (s: Source): Source["status"] => (needsPerson(s) ? "n
 /** Sources that need attention, as Settings › Sources' header and the Inbox count them. */
 export const needingAttention = (sources: Source[]): Source[] => sources.filter((s) => shownStatus(s) === "needs_attention");
 
-/** The two ways the API's needs_attention message ends: the fix itself, or the edit to make. */
-const THEN_SYNCS = ", then it syncs again";
-const EDIT_TO_SYNC = ": edit this source to sync it again";
-const WHO_FIXES = "an owner or the source's owner";
-
 /**
- * Why a source needs attention, for who reads it (as the Inbox's sourceNeedReason): someone
- * who may edit it reads the API's message as it is, what to do; someone who may not reads who
- * can do it ("An owner or the source's owner can pick 100 channels or fewer, then it syncs again").
- * ``mayEdit`` comes from can() only.
+ * Why a source needs attention, for who reads it: someone who may edit it reads the API's
+ * message as it is, what to do; someone who may not reads the API's cause and the role that
+ * can ("Over 100 channels: your role cannot edit sources; a commenter or above can. Ask an
+ * owner to raise your role."), as the Inbox names it. The API lists only the caller's own
+ * sources and editing one needs commenter or above, so a role that cannot edit cannot even
+ * its own. ``mayEdit`` comes from can() only.
  */
-export function attentionMessage(message: string, mayEdit: boolean): string {
-  if (mayEdit) return message;
-  if (message.endsWith(EDIT_TO_SYNC)) {
-    return `${message.slice(0, -EDIT_TO_SYNC.length)}: ${WHO_FIXES} can edit this source to sync it again`;
-  }
-  if (message.endsWith(THEN_SYNCS)) {
-    const fix = message.slice(0, -THEN_SYNCS.length);
-    return `${WHO_FIXES[0].toUpperCase()}${WHO_FIXES.slice(1)} can ${fix[0].toLowerCase()}${fix.slice(1)}${THEN_SYNCS}`;
-  }
-  return message;
+export function attentionMessage(s: Source, mayEdit: boolean): string {
+  const message = s.last_error ?? "";
+  if (mayEdit || !s.attention) return message;
+  const cause = s.attention.cause;
+  // A cause that holds a colon already ("... is a direct message: DMs are never ingested") ends as a sentence.
+  const join = cause.includes(":") ? ". Your" : ": your";
+  return `${cause}${join} role cannot edit sources; a commenter or above can. Ask an owner to raise your role.`;
 }

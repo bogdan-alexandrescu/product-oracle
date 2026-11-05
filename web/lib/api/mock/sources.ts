@@ -572,8 +572,18 @@ function hideOutsidePicks(db: SourcesDb, s: Source): number {
 const FIRST_SLACK_READ = ["Customers keep asking for a weekly summary email.", "The export button is hard to find on a phone."];
 
 function counted(db: SourcesDb, s: Source): Source {
-  return { ...s, item_count: db.items.filter((i) => i.source_id === s.id && !i.deleted_at).length };
+  return { ...s, item_count: db.items.filter((i) => i.source_id === s.id && !i.deleted_at).length, attention: attentionOf(s) };
 }
+
+/** As the API's attention_of: a source a rule of its saved config stops reads the cause and
+ * whether last_error is itself the fix; any other source none. */
+function attentionOf(s: Source): Source["attention"] {
+  if (s.status !== "needs_attention") return null;
+  const refused = badConfig(s.kind, s.config);
+  return refused ? { cause: upper(refused.cause ?? refused.message), is_action: !!refused.is_action } : null;
+}
+
+const upper = (text: string) => `${text.slice(0, 1).toUpperCase()}${text.slice(1)}`;
 
 function search(db: SourcesDb, q: URLSearchParams): Schemas["SearchResults"] {
   const query = q.get("q") ?? "";
@@ -595,45 +605,58 @@ function search(db: SourcesDb, q: URLSearchParams): Schemas["SearchResults"] {
   return { query, as_of: q.get("as_of"), hits };
 }
 
+/** A config the API refuses, as its ConnectorConfigError: the message, whether it is itself
+ * the fix (``is_action``) and then the cause a role that cannot edit reads. */
+type Refusal = { message: string; is_action?: boolean; cause?: string };
+
+/** A day as people read it: "Jan 1, 2000". */
+const shownDay = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+
 /**
  * The API's Slack config rules (oracle.sources.connectors.slack check_config), as the
- * connector words them: at most 100 channels, dates from 2000-01-01 to 2100-12-31, until
- * not before since; Notion needs a root. Other kinds pass.
+ * connector words them: at most 100 channels, dates from Jan 1, 2000 to Dec 31, 2100, the end
+ * not before the start; Notion needs a root. Other kinds pass.
  */
-/** The Slack channel cap's refusal: a message that is itself the fix (the API's is_action). */
-const CAP_MESSAGE = `pick ${MAX_CHANNELS} channels or fewer`;
-
-function badConfig(kind: Source["kind"], config: Record<string, unknown>): string | null {
+function badConfig(kind: Source["kind"], config: Record<string, unknown>): Refusal | null {
   const rule = LABELLED[kind];
   if (rule && config.labels !== undefined) {
-    if (!mapsStrings(config.labels)) return rule.message;
-    if (Object.keys(config.labels).length > rule.max) return `labels takes at most ${rule.max} entries`;
+    if (!mapsStrings(config.labels)) return { message: rule.message };
+    if (Object.keys(config.labels).length > rule.max) return { message: `labels takes at most ${rule.max} entries` };
   }
   // As the real connector reads a Notion allowlist: "roots" only.
   if (kind === "notion") {
-    return Array.isArray(config.roots) && config.roots.length ? null : "allowlist at least one root page or database";
+    return Array.isArray(config.roots) && config.roots.length ? null : { message: "allowlist at least one root page or database" };
   }
   // As the GitHub connector's _parse_config reads include: absent (all), or at least one known kind.
   if (kind === "github" && config.include !== undefined) {
     const include = config.include;
-    if (!Array.isArray(include) || !include.length) return `include at least one of ${GITHUB_INCLUDE.join(", ")}`;
+    if (!Array.isArray(include) || !include.length) {
+      return { message: `include at least one of ${GITHUB_INCLUDE.join(", ")}`, is_action: true, cause: "nothing to include" };
+    }
     const unknown = include.find((i) => !GITHUB_INCLUDE.includes(String(i)));
-    if (unknown !== undefined) return `unknown include '${unknown}'; use ${GITHUB_INCLUDE.join(", ")}`;
+    if (unknown !== undefined) return { message: `unknown include '${unknown}'; use ${GITHUB_INCLUDE.join(", ")}` };
   }
   if (kind !== "slack") return null;
   const channels = config.channels;
   // As the Slack connector's _channels: a source reads at least one channel (qa-onboarding-4).
-  if (!Array.isArray(channels) || channels.length === 0) return "allowlist at least one channel id";
-  if (channels.length > MAX_CHANNELS) return CAP_MESSAGE;
+  if (!Array.isArray(channels) || channels.length === 0) return { message: "allowlist at least one channel id" };
+  if (channels.length > MAX_CHANNELS) {
+    return { message: `pick ${MAX_CHANNELS} channels or fewer`, is_action: true, cause: `over ${MAX_CHANNELS} channels` };
+  }
   for (const key of ["since", "until"] as const) {
     const v = config[key];
     if (v == null) continue;
     if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v) || v < FIRST_DAY || v > LAST_DAY) {
-      return `${key} must be a date (YYYY-MM-DD) from ${FIRST_DAY} to ${LAST_DAY}`;
+      const label = key === "since" ? "start date" : "end date";
+      return {
+        message: `pick ${key === "since" ? "a" : "an"} ${label} from ${shownDay(FIRST_DAY)} to ${shownDay(LAST_DAY)}`,
+        is_action: true,
+        cause: `the ${label} is out of range`,
+      };
     }
   }
   const { since, until } = config;
-  if (typeof since === "string" && typeof until === "string" && until < since) return "until must be on or after since";
+  if (typeof since === "string" && typeof until === "string" && until < since) return { message: "the end date must be on or after the start date" };
   return null;
 }
 
@@ -676,7 +699,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       });
     }
     const invalid = badConfig(body.kind, body.config ?? {});
-    if (invalid) return json(422, { detail: invalid });
+    if (invalid) return json(422, { detail: invalid.message });
     if (db.sources.some((s) => s.name === body.name.trim())) {
       return json(409, { detail: "You already have a source with this name" });
     }
@@ -747,7 +770,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
         });
       }
       const invalid = patch.config ? badConfig(s.kind, patch.config) : null;
-      if (invalid) return json(422, { detail: invalid });
+      if (invalid) return json(422, { detail: invalid.message });
       // As the API's _check_connection: one of the person's active connections of the kind's provider.
       const relinked = "connection_id" in patch && patch.connection_id !== s.connection_id;
       if (relinked) {
@@ -816,9 +839,9 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     const broken = badConfig(s.kind, s.config);
     if (broken) {
       s.status = "needs_attention";
-      // As the API's _needs_attention: only the channel cap is itself the fix.
-      const then = broken === CAP_MESSAGE ? ", then it syncs again" : ": edit this source to sync it again";
-      s.last_error = `${broken[0].toUpperCase()}${broken.slice(1)}${then}`;
+      // As the API's _needs_attention: a refusal that is the fix reads once; any other names the edit.
+      const message = upper(broken.message);
+      s.last_error = broken.is_action ? `${message}, then it syncs again` : `${message}. Edit this source to sync it again.`;
       return json(200, { source_id: s.id, outcome: "needs_attention", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: s.last_error, source: counted(db, s) });
     }
     // As the API's credential_for: a source a Disconnect left without a connection.

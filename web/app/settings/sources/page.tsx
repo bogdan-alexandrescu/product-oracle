@@ -864,7 +864,7 @@ function SourceRow({
               <span className="flex min-w-0 flex-1 basis-60 items-start gap-2">
                 <Icon name="alert" size={16} className="mt-0.5 flex-none" />
                 <span className="min-w-0 break-words" data-testid="last-error">
-                  {attentionMessage(source.last_error, mayEdit)}
+                  {attentionMessage(source, mayEdit)}
                 </span>
               </span>
               {allowlist && !editing && mayEdit && (
