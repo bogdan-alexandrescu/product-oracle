@@ -42177,6 +42177,13 @@ export interface components {
              */
             created_at: string;
         };
+        /** SourceAttention */
+        SourceAttention: {
+            /** Cause */
+            cause: string;
+            /** Is Action */
+            is_action: boolean;
+        };
         /**
          * SourceCopy
          * @description What filing shared of the source item, copied onto the request.
@@ -42386,6 +42393,7 @@ export interface components {
             unavailable_items?: components["schemas"]["UnavailableItem"][];
             /** Reconnect Reason */
             reconnect_reason?: string | null;
+            attention?: components["schemas"]["SourceAttention"] | null;
         };
         /** SourcePatch */
         SourcePatch: {

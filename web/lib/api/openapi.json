@@ -125172,6 +125172,24 @@
         ],
         "title": "SnapshotOut"
       },
+      "SourceAttention": {
+        "properties": {
+          "cause": {
+            "type": "string",
+            "title": "Cause"
+          },
+          "is_action": {
+            "type": "boolean",
+            "title": "Is Action"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cause",
+          "is_action"
+        ],
+        "title": "SourceAttention"
+      },
       "SourceCopy": {
         "properties": {
           "item_id": {
@@ -125756,6 +125774,16 @@
               }
             ],
             "title": "Reconnect Reason"
+          },
+          "attention": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceAttention"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
