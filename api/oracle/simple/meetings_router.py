@@ -28,9 +28,11 @@ from typing import Annotated
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
 from oracle.auth.deps import Principal, TenantDB
+from oracle.decisions.models import Decision
 from oracle.simple import meeting_draft, meetings
 from oracle.simple.router import _people
 from oracle.simple.schemas import (
+    SimpleDecisionRow,
     SimpleDecisionsOut,
     SimpleDecisionsWaitingOut,
     SimpleDraftDatesIn,
@@ -287,3 +289,23 @@ async def get_simple_decisions_waiting(
     out = await _run(db, questions.waiting(db, principal))
     await db.commit()
     return out
+
+
+@router.get(
+    "/decisions/{decision_id}", response_model=SimpleDecisionRow, name="get_simple_decision"
+)  # fmt: skip
+async def get_simple_decision(
+    decision_id: uuid.UUID, principal: Reader, db: TenantDB
+) -> SimpleDecisionRow:
+    """edit-decisions (ec1 b): one decision as the Decisions page lists it, with every field
+    the sheet shows and what this reader may do there (Home's and Waiting for you's
+    decision-log calls open the sheet by id). After /decisions/waiting, which it would hide."""
+    from oracle.simple import decision_sheet
+
+    d = await db.get(Decision, decision_id)
+    if d is None or d.origin == "checkpoint" or d.deleted_at is not None:
+        raise HTTPException(404, "No such decision")
+    edited = await decision_sheet.edits(db, {d.id})
+    by = {b for _, b in edited.values()}
+    names = await meetings._names(db, ({d.approver_id} if d.approver_id else set()) | by)
+    return meetings._row(d, names, principal, edited)

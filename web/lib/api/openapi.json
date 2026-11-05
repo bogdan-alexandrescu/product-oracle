@@ -43809,6 +43809,57 @@
           }
         },
         "x-min-role": "commenter"
+      },
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Decision",
+        "description": "edit-decisions (ec1 b): one decision as the Decisions page lists it, with every field\nthe sheet shows and what this reader may do there (Home's and Waiting for you's\ndecision-log calls open the sheet by id). After /decisions/waiting, which it would hide.",
+        "operationId": "get_simple_decision",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Decision Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleDecisionRow"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/simple/decisions/{decision_id}/restore": {

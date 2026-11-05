@@ -12743,7 +12743,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get Simple Decision
+         * @description edit-decisions (ec1 b): one decision as the Decisions page lists it, with every field
+         *     the sheet shows and what this reader may do there (Home's and Waiting for you's
+         *     decision-log calls open the sheet by id). After /decisions/waiting, which it would hide.
+         */
+        get: operations["get_simple_decision"];
         put?: never;
         post?: never;
         /**
@@ -72035,6 +72041,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TrashEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_simple_decision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                decision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleDecisionRow"];
                 };
             };
             /** @description Validation Error */
