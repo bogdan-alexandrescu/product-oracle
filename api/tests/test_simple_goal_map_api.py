@@ -83,7 +83,7 @@ async def world() -> tuple[Ctx, dict[str, str]]:
         seed = Seed(s)
         signups = await seed.entity(
             "goal", "signups", metric="sign-ups per rep per day", target=40, unit="",
-            math="Each rep's daily sign-ups",
+            math="Each rep's daily sign-ups", position=1,
             target_history=[
                 {"date": "Oct 30, 2026", "text": "Target 30 → 40", "by": "Ann Example"}
             ],
@@ -91,10 +91,11 @@ async def world() -> tuple[Ctx, dict[str, str]]:
         conv = await seed.entity(
             "goal", "conversions", metric="paid conversions per rep per day", target=10,
             unit="", math="Sign-ups per rep × conversion rate", builds_on=[str(signups.id)],
+            position=2,
         )  # fmt: skip
         revenue = await seed.entity(
             "goal", "revenue", metric="revenue per day", target=20000, unit="$",
-            math="Reps × conversions per rep × value", builds_on=[str(conv.id)],
+            math="Reps × conversions per rep × value", builds_on=[str(conv.id)], position=3,
         )  # fmt: skip
         guard = await seed.entity(
             "constraint", "customer-complaints", guardrail=True, rule="= 0 every day"

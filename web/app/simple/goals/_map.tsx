@@ -2,7 +2,8 @@
 
 /**
  * Simple Goal map (build-goal-map), drawn to the owner's pick "Ladder by area lanes": the
- * goals on top as cards joined by arrows, the guardrail strip every milestone must hold,
+ * goals on top as cards side by side in priority order (nothing joins them: no goal comes
+ * before or after another), the guardrail strip every milestone must hold (never a goal card),
  * then one grid with the areas as rows in the owner's order and the milestones as columns
  * in steps, each gate with its reading, status and 7 days of proof; each feature a card in
  * the cell of its area under the milestone it serves (drawn once; its other places point to
@@ -671,7 +672,7 @@ function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: Go
 
 /* ---------- Shared pieces of the proposals ---------- */
 
-function GoalCard({ g, onEdit, goals, canEdit }: { g: GmGoal; onEdit: () => void; goals: GmGoal[]; canEdit: boolean }) {
+function GoalCard({ g, onEdit, canEdit }: { g: GmGoal; onEdit: () => void; canEdit: boolean }) {
   return (
     <div data-testid="gm-goal" data-goal={g.id} className="simple-card flex-1 gap-1.5! px-4! py-3!">
       <span className="flex items-start justify-between gap-2">
@@ -686,10 +687,8 @@ function GoalCard({ g, onEdit, goals, canEdit }: { g: GmGoal; onEdit: () => void
         </span>
       </span>
       <Bar current={g.current} target={g.target} status={g.status} />
-      <span className="simple-small text-[14px]! leading-5">
-        {g.builds_on.length ? `Builds on ${goals.find((x) => x.id === g.builds_on[0])?.name.toLowerCase()}: ` : ""}
-        {g.math}
-      </span>
+      {/* Only the goal's own math: no goal is said to build on another. */}
+      <span className="simple-small text-[14px]! leading-5">{g.math}</span>
     </div>
   );
 }
@@ -697,15 +696,12 @@ function GoalCard({ g, onEdit, goals, canEdit }: { g: GmGoal; onEdit: () => void
 /** The goal cards' widths as the picked frame draws them: the last (the top goal) widest. */
 const GOAL_GROW = [1.04, 1, 1.3];
 
-function Goals({ map, open, arrows = true }: Ctx & { arrows?: boolean }) {
+function Goals({ map, open }: Ctx) {
   return (
-    <div className="flex items-stretch gap-2 max-[600px]:flex-col">
+    <div className="flex items-stretch gap-2 max-[600px]:flex-col" data-testid="gm-goals">
       {map.goals.map((g, i) => (
         <div key={g.id} className="flex flex-1 items-stretch gap-2 max-[600px]:flex-col" style={{ flexGrow: GOAL_GROW[i] ?? 1 }}>
-          <GoalCard g={g} goals={map.goals} canEdit={map.can_edit} onEdit={() => open("goal", g.id)} />
-          {arrows && i < map.goals.length - 1 && (
-            <span className="self-center text-[24px] font-bold text-text-faint max-[600px]:rotate-90" aria-label="builds on">→</span>
-          )}
+          <GoalCard g={g} canEdit={map.can_edit} onEdit={() => open("goal", g.id)} />
         </div>
       ))}
     </div>
