@@ -49,6 +49,27 @@ async function textContrast(el: ReturnType<Page["locator"]>): Promise<number> {
  * Seeds two of the large company's grouped runs as arrived after my last visit, the rest
  * before it, so the group's runs split between New and Seen.
  */
+/**
+ * Where an open tooltip's corners are covered: each corner, 3 px in, that the page's top
+ * element there is not the tooltip or inside it (none when it is really on top).
+ */
+async function coveredCorners(tip: ReturnType<Page["locator"]>): Promise<string[]> {
+  return tip.evaluate((node) => {
+    const r = node.getBoundingClientRect();
+    const corners: [string, number, number][] = [
+      ["top left", r.left + 3, r.top + 3],
+      ["top right", r.right - 3, r.top + 3],
+      ["bottom left", r.left + 3, r.bottom - 3],
+      ["bottom right", r.right - 3, r.bottom - 3],
+    ];
+    return corners.filter(([, x, y]) => !node.contains(document.elementFromPoint(x, y))).map(([name]) => name);
+  });
+}
+
+/** Whether two boxes overlap. */
+const overlaps = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
 async function seedGroupSeen(page: Page): Promise<void> {
   await page.evaluate(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -146,6 +167,8 @@ test.describe("desktop", () => {
     await expect(chip).not.toHaveAttribute("title");
     await far.first().getByTestId("date-suggestion-far-out-tip").hover();
     await expect(far.first().getByRole("tooltip")).toHaveText(FAR_OUT_TIP);
+    // In the table's cut-off cell it is still all there, on top of every row.
+    expect(await coveredCorners(far.first().getByRole("tooltip"))).toEqual([]);
     // Only a suggestion that ends after Feb 28, 2027 carries it.
     for (const t of await contexts.allTextContents()) {
       const year = Number(/(\d{4})(?!.*\d{4})/.exec(t)?.[1]);
@@ -160,6 +183,8 @@ test.describe("desktop", () => {
     await page.goto("/inbox");
     const group = page.getByTestId("checkpoint-group").first();
     await expect(group).toHaveText(/ · \d+ runs$/);
+    // Its name says the Ground Truth, never baseline.
+    await expect(group).toHaveText(/^Confirm the Ground Truth · \d+ runs$/);
     const n = Number(/(\d+) runs$/.exec((await group.textContent())!)![1]);
     expect(n).toBeGreaterThan(5);
     // The count still counts each run: the rail badge and the heading agree.
@@ -199,10 +224,13 @@ test.describe("desktop", () => {
       await expect(page.locator("tr[data-child-of]").filter({ has: page.getByTestId("checkpoint-label") })).toHaveCount(runs);
     };
     await expect(page.getByTestId("inbox-tab-new")).toBeVisible();
-    await open(2);
+    // Two new runs are fewer than three: plain rows, never a group of them.
+    await expect(page.getByTestId("checkpoint-group")).toHaveCount(0);
+    await expect(page.locator("[role=tabpanel] tr[data-need]").getByTestId("checkpoint-label").filter({ hasText: /^Confirm the baseline/ })).toHaveCount(2);
     expect(await listed()).toBe(await tabCount("New"));
     await tabs.getByRole("tab", { name: /^Seen/ }).click();
     await expect(page.getByTestId("inbox-tab-open")).toBeVisible();
+    await expect(page.getByTestId("checkpoint-group")).toHaveText(/^Confirm the Ground Truth · \d+ runs$/);
     const seen = Number(/(\d+) runs$/.exec((await page.getByTestId("checkpoint-group").textContent())!)![1]);
     expect(seen).toBeGreaterThan(3);
     await open(seen);
@@ -226,6 +254,7 @@ test.describe("desktop", () => {
     await tip.getByTestId("date-suggestion-far-out-tip").hover();
     await expect(tip.getByRole("tooltip")).toHaveText(FAR_OUT_TIP);
     expect(await textContrast(tip.getByRole("tooltip"))).toBeGreaterThanOrEqual(4.5);
+    expect(await coveredCorners(tip.getByRole("tooltip"))).toEqual([]);
   });
 
   test("B-22 dark: the grouped checkpoints and their runs read in dark", async ({ page }) => {
@@ -235,7 +264,7 @@ test.describe("desktop", () => {
     await page.goto("/inbox");
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     const group = page.getByTestId("checkpoint-group").first();
-    await expect(group).toHaveText(/ · \d+ runs$/);
+    await expect(group).toHaveText(/^Confirm the Ground Truth · \d+ runs$/);
     expect(await textContrast(group)).toBeGreaterThanOrEqual(4.5);
     const groupRow = page.getByRole("row").filter({ has: group });
     const toggle = groupRow.getByRole("button", { name: "Show runs" });
@@ -284,6 +313,17 @@ test.describe("phone", () => {
       expect(box.x).toBeGreaterThanOrEqual(0);
       expect(box.x + box.width).toBeLessThanOrEqual(390);
       expect(await textContrast(tip)).toBeGreaterThanOrEqual(4.5);
+      expect(await coveredCorners(tip)).toEqual([]);
+      // It opens below its chip: over neither its own date line nor the row above's Open.
+      const chip = (await far.getByTestId("date-suggestion-far-out").boundingBox())!;
+      expect(box.y).toBeGreaterThanOrEqual(chip.y + chip.height);
+      const row = page.locator("[data-need]").filter({ has: far });
+      const above = page.locator("[data-need]").filter({ has: page.getByRole("link", { name: "Open" }) });
+      const rowBox = (await row.first().boundingBox())!;
+      for (const open of await above.getByRole("link", { name: "Open" }).all()) {
+        const o = (await open.boundingBox())!;
+        if (o.y + o.height <= rowBox.y + 1) expect(overlaps(box, o), "covers an Open above it").toBe(false);
+      }
     });
   }
 
