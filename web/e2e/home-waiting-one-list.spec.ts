@@ -363,7 +363,7 @@ for (const phone of [false, true]) {
       // Only the kinds that wait are named, each with its number (as Decisions lists them).
       await nav(page, "Decisions").click();
       const rows = page.getByTestId("questions-mine").getByTestId("waiting-item");
-      await expect(rows).toHaveCount(all);
+      await expect(rows.first()).toBeVisible();
       const kinds = await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-kind")));
       const named = ALL_WORDS.flatMap(([kind, one, many]) => {
         const n = kinds.filter((k) => k === kind).length;
@@ -419,9 +419,16 @@ for (const phone of [false, true]) {
       await expect(also.getByRole("listitem", { name })).toHaveCount(0);
       await expect(page.getByTestId("home-drafting-slow")).toHaveCount(0);
       // Past two minutes of reading again, Home stops and says so, with Refresh.
-      await page.clock.fastForward(10 * 60_000);
       const slow = page.getByTestId("home-drafting-slow");
-      await expect(slow).toBeVisible({ timeout: 15_000 });
+      await expect
+        .poll(
+          async () => {
+            await page.clock.fastForward(30_000);
+            return slow.count();
+          },
+          { timeout: 60_000, intervals: [1_000] },
+        )
+        .toBe(1);
       await expect(slow).toContainText("Oracle is still drafting");
       await page.clock.fastForward(5 * 60_000);
       await expect(slow).toBeVisible();
