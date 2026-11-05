@@ -281,7 +281,8 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
       phoneLabel: "For ",
       cell: (t) => <span className={t.owner_email ? "" : "text-text2"}>{t.owner_email ?? "The company"}</span>,
     },
-    { key: "scopes", header: "Scopes", width: "15%", hideOnPhone: true, wrap: true, cell: (t) => <Scopes scopes={t.scopes} role={t.role} /> },
+    // Visual QA ST-5: on a phone the scopes take their own line under "For <email>".
+    { key: "scopes", header: "Scopes", width: "15%", wrap: true, className: "max-[600px]:basis-full", cell: (t) => <Scopes scopes={t.scopes} role={t.role} /> },
     { key: "used", header: "Last used", width: "124px", phoneLabel: "Used ", cell: (t) => when(t.last_used_at) },
     // Created is in the name's title: the expiry matters more on one line.
     { key: "expires", header: "Expiry", width: "164px", cell: (t) => <Expiry t={t} /> },

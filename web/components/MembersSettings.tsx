@@ -28,6 +28,7 @@ import {
   ViewOnly,
   type Column,
 } from "@/components/ds";
+import { LoadError } from "@/components/ui";
 import { api, unwrap, type Invite, type Member } from "@/lib/api/client";
 import { hasRole, membersApi, type HandOver, type Impact } from "@/lib/api/members-types";
 import { formatDate, formatDateTime } from "@/lib/format";
@@ -1241,8 +1242,9 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
           }
         >
           {membersQ.error ? (
-            <div className="p-4">
-              <Notice tone="error">{membersQ.error}</Notice>
+            // Visual QA X-1: the shared failed-load notice, its Try again reads the list again.
+            <div className="px-4 pt-4">
+              <LoadError what="the members" error={membersQ.error} onRetry={() => void membersQ.reload()} />
             </div>
           ) : (
             <div className={SETTLING}>

@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 
-import { Button, Chip, confirmInPage, Notice, type ChipKind } from "@/components/ds";
+import { Button, Chip, confirmInPage, InfoTip, Notice, type ChipKind } from "@/components/ds";
 import { DOCS_ONLY } from "@/components/tech-brief";
 import { api, type Schemas, unwrap } from "@/lib/api/client";
 import { failedAt, formatDateTime } from "@/lib/format";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 type Source = Schemas["SourceOut"];
@@ -31,6 +32,7 @@ const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLow
 function CodeMapLine({ repo, map, onChange, sourceId }: { repo: string; map?: CodeMap; sourceId: string; onChange: (m: CodeMap) => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { can } = useMe();
 
   async function act(fn: () => Promise<CodeMap>) {
     setBusy(true);
@@ -83,17 +85,21 @@ function CodeMapLine({ repo, map, onChange, sourceId }: { repo: string; map?: Co
         {usable && map.as_of && <span className="text-text2">as of {formatDateTime(map.as_of)}</span>}
         <span className="ml-auto flex flex-none flex-wrap items-center gap-1">
           {/* A stale map refreshes at once on Map the code, whatever the refresh setting. */}
-          {(!map || map.status === "failed" || map.status === "stale") && (
+          {(!map || map.status === "failed" || map.status === "stale") && can("start_code_map") && (
             <Button disabled={busy} onClick={start}>
               Map the code
             </Button>
           )}
-          {usable && map.mine && map.sharing === "private" && (
+          {/* Visual QA ST-7: what a code map is, in one line. */}
+          <InfoTip label="code maps" align="end">
+            A code map is Oracle&apos;s short guide to a repository&apos;s code (its parts and where things live) that runs read before they change it.
+          </InfoTip>
+          {usable && map.mine && map.sharing === "private" && can("share_code_map") && (
             <Button disabled={busy} onClick={() => void share("full")}>
               Share with the company
             </Button>
           )}
-          {usable && map.mine && map.sharing === "full" && (
+          {usable && map.mine && map.sharing === "full" && can("share_code_map") && (
             <Button disabled={busy} onClick={() => void share("private")}>
               Make private
             </Button>
