@@ -917,6 +917,39 @@ async def test_a_commenters_edit_at_a_checkpoint_is_a_suggested_action(review): 
     assert action.value == "later"
 
 
+# protects=review follow-up (PR 1264, minor 4): Undo of one dependency of a joined removal
+# that came from a discussion re-posts the edit with keep_origin, so the action stays the
+# discussion's and its change stays staged; fails_when=the narrowed edit reads as a row action
+# and the change goes back to proposed as replaced; no_claim=a fresh post (no keep_origin)
+# still replaces it, as before.
+async def test_undo_of_one_dependency_keeps_the_discussions_origin(review):  # noqa: F811
+    rv = review
+    _tenant[0] = rv.tenant_id
+    d_id = await item_discussion(rv)
+    both = {"item_key": "mobile-push", "add": [], "remove": ["payment-step", "gift-cards"]}
+    cid = await add_change(rv.tenant_id, d_id, "item_dependency", both)
+    out = await act(rv.client, rv.h("approver"), cid, "stage")
+    assert out["change"]["status"] == "staged"
+    url = f"/v1/runs/{rv.run['id']}/checkpoints/{rv.cp['id']}/actions"
+    one = {"item_key": "mobile-push", "kind": "edit", "field": "depends_on",
+           "value": {"add": [], "remove": ["payment-step"]}, "answers": []}  # fmt: skip
+    resp = await rv.client.post(url, json={**one, "keep_origin": True}, headers=rv.h("approver"))
+    assert resp.status_code == 200, resp.text
+    async with tenant_session(rv.tenant_id) as s:
+        [action] = list(await s.scalars(select(CheckpointAction)))
+        change = await s.get(DiscussionChange, uuid.UUID(cid))
+    assert action.value == {"add": [], "remove": ["payment-step"]}
+    assert (action.origin, str(action.discussion_change_id)) == ("discussion", cid)
+    assert change.status == "staged"
+    resp = await rv.client.post(url, json=one, headers=rv.h("approver"))
+    assert resp.status_code == 200, resp.text
+    async with tenant_session(rv.tenant_id) as s:
+        [action] = list(await s.scalars(select(CheckpointAction)))
+        change = await s.get(DiscussionChange, uuid.UUID(cid))
+    assert (action.origin, action.discussion_change_id) == ("row", None)
+    assert change.status == "proposed"
+
+
 # --- the summary queue -------------------------------------------------------------------------
 
 
