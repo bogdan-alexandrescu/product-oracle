@@ -377,6 +377,9 @@ export interface LanesProps {
   dropTargets?: boolean;
   /** The plan's no-work weeks (holidays), hatched. */
   noWork?: { start: string; end: string; label?: string | null }[];
+  /** An export's copy: a row over the months naming each quarter and its months ("Q4 2026",
+   * "Oct – Dec 2026"), as a phone's quarter list does. */
+  quarterAxis?: boolean;
 }
 
 /** A goal lane the API names (its key is a goal's id): quick add drops on it. */
@@ -454,12 +457,13 @@ function monthLabels(months: { day: string; label: string; start: boolean }[], s
     list.every((m, i) => {
       const next = list[i + 1];
       const w = textWidth(m.label, 13, 650) + 10;
-      return sc.x(m.day) + w <= width && (!next || sc.x(next.day) - sc.x(m.day) >= w);
+      return !next || sc.x(next.day) - sc.x(m.day) >= w;
     });
   // fix4 qa-simple-roadmap-30: the first label shown names its year ("Oct 2026"), as each January does.
   const withYear = (list: typeof months) => list.map((m, i) => (i === 0 && !/\d/.test(m.label) ? { ...m, label: `${m.label} ${m.day.slice(0, 4)}` } : m));
   for (const step of [1, 2, 3, 6, 12]) {
-    const list = withYear(months.filter((m) => m.start && (new Date(ms(m.day)).getUTCMonth() % step === 0 || step === 1)));
+    // A label that would run off the chart's right edge is left out (never every label with it).
+    const list = withYear(months.filter((m) => m.start && (new Date(ms(m.day)).getUTCMonth() % step === 0 || step === 1))).filter((m) => sc.x(m.day) + textWidth(m.label, 13, 650) + 10 <= width);
     if (!fits(list)) continue;
     // The span's first, partial month, when it runs at least half a month (a sliver's label
     // crowds the next month's: qa-simple-roadmap-30) and its label fits before the next one.
@@ -472,6 +476,26 @@ function monthLabels(months: { day: string; label: string; start: boolean }[], s
     return list;
   }
   return [];
+}
+
+/** An export's quarter row: each quarter's name and months from its first day (or the chart's
+ * left edge), kept inside the chart; one that has no room clear of the one before is left out. */
+const QUARTER_H = 34;
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function quarterLabels(t0: string, t1: string, sc: Scale, width: number) {
+  const out: { start: string; label: string; months: string; x: number; line: number }[] = [];
+  let end = -Infinity;
+  for (const q of quarters(t0, addDays(t1, -1))) {
+    const m = Number(q.start.slice(5, 7)) - 1;
+    const months = `${MONTH_SHORT[m]} – ${MONTH_SHORT[m + 2]} ${q.start.slice(0, 4)}`;
+    const w = Math.max(textWidth(q.label, 13, 700), textWidth(months, 11, 400));
+    const line = Math.max(0, sc.x(q.start));
+    const x = Math.min(line + 6, width - w - 4);
+    if (x < end + 8) continue;
+    end = x + w;
+    out.push({ start: q.start, label: q.label, months, x, line });
+  }
+  return out;
 }
 
 /** B2's week row: each Monday's day over its line where there is room, not under the Today pill (the week it sits in). */
@@ -621,7 +645,7 @@ const holidayWords = (noWork: { start: string; end: string }[]) => noWork.map((h
 
 // ---------------------------------------------------------------- B2: the desktop
 
-function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef, dropTargets, noWork = [] }: LanesProps) {
+function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef, dropTargets, noWork = [], quarterAxis = false }: LanesProps) {
   const numbers = useContext(GoalNumbers);
   const [box, boxW] = useWidth(1030);
   const fonts = useFontsReady();
@@ -706,6 +730,8 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
   const xt = sc.x(data.today) + sc.px / 2;
   const shownMonths = monthLabels(months, sc, W);
   const weekLabels = weekLabelsOf(mondays, sc, W, xt);
+  const qH = quarterAxis ? QUARTER_H : 0;
+  const quarterMarks = quarterAxis ? quarterLabels(t0, t1, sc, W) : [];
   // fix4 qa-simple-roadmap-2: the room right of each pill, to the next pill in its row (and that
   // pill's "?"), where a name too long for its pill is written instead.
   const roomOf = useMemo(() => {
@@ -905,7 +931,7 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
     >
       <div ref={box} className="flex">
         <div className="min-w-0 flex-none" style={{ width: LABEL_W }} data-testid="chart-labels">
-          <div style={{ height: top }} aria-hidden />
+          <div style={{ height: top + qH }} aria-hidden />
           {lanes.map((l, n) => (
             <div
               key={l.key}
@@ -928,14 +954,15 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
           ))}
         </div>
         <div className="relative min-w-0 flex-1" data-testid="chart-scroll">
-          <div className="relative" style={{ width: W, height }}>
+          <div className="relative" style={{ width: W, height: height + qH }}>
             <svg
               ref={(el) => {
                 svg.current = el;
                 chartRef?.(el);
               }}
               width={W}
-              height={height}
+              height={height + qH}
+              data-head={quarterAxis ? top + qH : undefined}
               data-testid="chart-svg"
               className="block select-none"
               onPointerMove={onMoveEvt}
@@ -945,6 +972,23 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
               aria-label="Roadmap chart"
             >
               <Defs />
+              {quarterAxis && (
+                <g data-testid="quarter-axis" pointerEvents="none">
+                  <rect x={0} y={0} width={W} height={qH} fill="var(--simple-paper)" />
+                  {quarterMarks.map((q) => (
+                    <g key={q.start}>
+                      {q.line > 0 && <line x1={q.line + 0.5} x2={q.line + 0.5} y1={2} y2={qH - 2} stroke="var(--line)" strokeWidth={1} />}
+                      <text data-testid="export-quarter" x={q.x} y={13} fontSize={13} fontWeight={700} fill="var(--text)">
+                        {q.label}
+                      </text>
+                      <text data-testid="export-quarter" x={q.x} y={28} fontSize={11} fill="var(--text-faint)">
+                        {q.months}
+                      </text>
+                    </g>
+                  ))}
+                </g>
+              )}
+              <g transform={qH ? `translate(0 ${qH})` : undefined}>
               <rect x={0} y={0} width={W} height={height} fill="var(--simple-paper)" />
               {/* Quick add's drop targets: a quarter's columns (transparent). */}
               {dropTargets &&
@@ -999,6 +1043,7 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
               )}
               <PreviewGhost l={layout} sc={sc} items={items} preview={preview} data={data} inset={{ top: 4, h: BAR_H }} />
               <TodayPill x={xt} y={MONTH_H + 2} />
+              </g>
             </svg>
             <div ref={live} hidden data-testid="drag-live" className="pointer-events-none absolute top-0 left-0 z-20 will-change-transform rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text" />
             {/* fix4 qa-simple-roadmap-1: a callout under its pill writes its words whole, wrapping
