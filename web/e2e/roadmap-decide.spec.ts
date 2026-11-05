@@ -8,7 +8,9 @@ import { expect, test, type Locator, type Page } from "./test";
  * or updates it at once, everywhere), driven through the UI against the mock:
  *
  * - acting on a broken link drops the page's strip, Needs a decision, Home's tile and the side
- *   menu's Roadmap count together; the panel no longer apologises that the counts differ;
+ *   menu's Roadmap count together; the panel no longer apologises that the counts differ
+ *   (qa-simple-home-3: Home's tile also counts a red flag with a fix that the Roadmap lists
+ *   under Other flags, such as an end past its milestone, so it is the strip's count and those);
  * - a cut item others depend on offers Bring it back and Remove the dependency, each into the
  *   working draft with Undo, and is never listed as starting before what it depends on ends;
  * - every line of the draft's change list names its item;
@@ -78,7 +80,9 @@ test("acting on a broken link drops the strip, Needs a decision, Home and the si
   await page.getByTestId("needs-decision").click();
   await expect(tray(page).getByTestId("tray-scope")).not.toContainText("can differ");
   await tray(page).getByRole("button", { name: "Close" }).click();
-  expect(await homeLinks(page)).toBe(before);
+  // Home's tile: the strip's broken links and the other red flags with a fix (an end past its milestone).
+  const home = await homeLinks(page);
+  expect(home).toBeGreaterThanOrEqual(before);
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Move the dependents" }).click();
@@ -88,7 +92,7 @@ test("acting on a broken link drops the strip, Needs a decision, Home and the si
   await expect.poll(() => stripCount(page)).toBe(before - 1);
   expect(await trayLinks(page)).toBe(before - 1);
   await expect.poll(() => badgeLinks(page)).toBe(before - 1);
-  expect(await homeLinks(page)).toBe(before - 1);
+  expect(await homeLinks(page)).toBe(home - 1);
 });
 
 test("the draft's change list names the item on every line, and the banner says who acts next", async ({ page }) => {

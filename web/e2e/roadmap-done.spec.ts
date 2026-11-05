@@ -6,7 +6,8 @@ import { expect, test, type Page } from "./test";
  * not included in the roadmap"), driven through the UI against the mock: an item marked
  * shipped from its talk leaves the Timeline, Gantt, Now / Next / Later and Waterfall; it is
  * kept under a collapsed "Done · N" list that opens the item; a dependency on it is satisfied,
- * so its broken links leave the strip, Needs a decision, Home and the side menu's count.
+ * so its broken links leave the strip, Needs a decision, Home and the side menu's count (Home's
+ * tile also counts the other red flags with a fix, qa-simple-home-3, so it drops by as many).
  *
  * fails_when: the done item still draws a bar or card in any view, a link on it is still
  * counted anywhere, or the Done list is missing or does not open it; no_claim: the API's own
@@ -54,6 +55,8 @@ async function openRoadmap(page: Page) {
 
 test("an item marked done leaves every view, its broken links and every count, and is kept under Done", async ({ page }) => {
   await login(page);
+  // Home's tile counts the strip's links and the other red flags with a fix (qa-simple-home-3).
+  const home = await homeLinks(page);
   await openRoadmap(page);
   const before = await stripCount(page);
   // The links that name Alert rules engine (its dependents start before it ends).
@@ -101,7 +104,7 @@ test("an item marked done leaves every view, its broken links and every count, a
     await expect(doneList(page).getByTestId("done-items-toggle")).toHaveText("Done · 1");
   }
 
-  expect(await homeLinks(page)).toBe(before - onIt);
+  expect(await homeLinks(page)).toBe(home - onIt);
 });
 
 /**
@@ -113,6 +116,7 @@ test("an item marked done leaves every view, its broken links and every count, a
  */
 test("the decider's working draft is read at once everywhere, with Approve and publish in place", async ({ page }) => {
   await login(page);
+  const home = await homeLinks(page);
   await openRoadmap(page);
   const before = await stripCount(page);
   await strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Move the dependents" }).click();
@@ -128,5 +132,5 @@ test("the decider's working draft is read at once everywhere, with Approve and p
   await expect(page.getByText(/Approved: .* is published/)).toBeVisible();
   await expect(banner).toHaveCount(0);
   await expect.poll(() => stripCount(page)).toBe(before - 1);
-  expect(await homeLinks(page)).toBe(before - 1);
+  expect(await homeLinks(page)).toBe(home - 1);
 });
