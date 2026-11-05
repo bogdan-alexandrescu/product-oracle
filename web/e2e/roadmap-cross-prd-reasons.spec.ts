@@ -204,7 +204,7 @@ test("a commenter's Remove dependency where another person's suggestion holds th
   await form.getByRole("button", { name: "Ask", exact: true }).click();
   await expect(row(page, "budget-caps").getByTestId("asked-chip")).toHaveText("Asked Priya Raman");
   // The other person's suggestion is still theirs, unchanged.
-  await expect(row(page, "budget-caps").getByTestId("suggested-by")).toContainText("Suggested by Sam Okafor");
+  await expect(row(page, "budget-caps").getByTestId("suggested-by").filter({ hasText: "Suggested by Sam Okafor" })).toContainText("Dependency removed");
 });
 
 // Review follow-up (PR 1264, minor 2): protects = an approver's Remove dependency joins a
