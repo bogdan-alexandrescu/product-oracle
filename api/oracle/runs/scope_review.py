@@ -110,6 +110,15 @@ def _answers(action: Any, code: str, kind: str) -> bool:
     )
 
 
+def _label(problem: dict[str, Any], key: str, code: str) -> str:
+    """A problem's words on its feature's row: ``needs_other_prd`` reads "Needs Account
+    health ledger from Safety PRD" (the row names the feature already)."""
+    message = problem.get("message") or code
+    if code == "needs_other_prd" and message.startswith(f"{key} needs "):
+        return "Needs " + message.removeprefix(f"{key} needs ")
+    return message
+
+
 def reasons_of(
     scope: PrdScope, items: list[PrdScopeItem], actions: list[Any]
 ) -> dict[str, list[ScopeReason]]:
@@ -139,7 +148,7 @@ def reasons_of(
             ScopeReason(
                 code=code,
                 severity=severity,  # type: ignore[arg-type]
-                label=p.get("message") or code,
+                label=_label(p, key, code),
                 requirement=p.get("requirement"),
                 waivable=can_waive,
                 answered=bool(answered and (can_waive or not blocking)),

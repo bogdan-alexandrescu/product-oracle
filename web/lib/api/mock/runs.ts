@@ -3664,7 +3664,7 @@ export const ROADMAP_FILE_PROBLEM_RUN: { run: RunOut; artifacts: Record<string, 
 // ---------------------------------------------------------------- F4 Engineering check
 
 type Brief = { key: string; title: string; approach: string; size: string; depends_on: string[]; questions: { id: string; question: string; blocking: boolean }[] };
-type BriefsCheck = { features: Brief[]; problems: { code: string; message: string; feature?: string | null; features?: string[] }[]; code_map_used: boolean; unmapped_repos: string[]; unnamed_repo: boolean };
+type BriefsCheck = { features: Brief[]; problems: { code: string; message: string; feature?: string | null; features?: string[] }[]; code_map_used: boolean; unmapped_repos: string[]; unnamed_repo: boolean; elsewhere?: Record<string, string> };
 const SIZES = ["xs", "s", "m", "l", "xl"];
 const VERDICTS = ["feasible", "feasible_with_changes", "not_feasible"];
 const VERDICT_WORDS: Record<string, string> = { feasible: "Feasible", feasible_with_changes: "Feasible with changes", not_feasible: "Not feasible as scoped" };
@@ -3698,7 +3698,12 @@ type RunMaps = { ids: string[]; repos: string[] };
  * features citing it and where; the repositories the file names that none of the run's maps
  * covers (compared as owner/name); unnamed_repo when ids are unknown but none is named.
  */
-function briefsCheckOf(briefs: Brief[], file?: BriefsMaps, maps?: RunMaps): BriefsCheck {
+/**
+ * As oracle.engineering.check._summarize. `elsewhere`: the keys outside the feature set a brief may
+ * depend on, named with their PRD (features of other PRDs on the company roadmap, or waived at the
+ * feature set stop); any other dependency outside the set is unknown_dependency.
+ */
+export function briefsCheckOf(briefs: Brief[], file?: BriefsMaps, maps?: RunMaps, elsewhere: Record<string, string> = {}): BriefsCheck {
   const cited: Record<string, Record<string, string[]>> = {};
   for (const b of briefs) {
     for (const [ref, at] of file?.cites[b.key] ?? []) {
@@ -3715,7 +3720,24 @@ function briefsCheckOf(briefs: Brief[], file?: BriefsMaps, maps?: RunMaps): Brie
     });
   const mapped = new Set((maps?.repos ?? []).map(repoKey));
   const unmapped_repos = [...new Set([...(file?.repos ?? []), ...(file?.unmapped ?? [])])].filter((r) => r.trim() && !mapped.has(repoKey(r)));
-  return { features: briefs, problems, code_map_used: !!file?.repos.length, unmapped_repos, unnamed_repo: !unmapped_repos.length && problems.length > 0 };
+  const keys = new Set(briefs.map((b) => b.key));
+  const named: Record<string, string> = {};
+  const unknown: BriefsCheck["problems"] = [];
+  briefs.forEach((b, i) => {
+    for (const d of b.depends_on) {
+      if (keys.has(d)) continue;
+      if (d in elsewhere) named[d] = elsewhere[d];
+      else unknown.push({ code: "unknown_dependency", feature: b.key, message: `features[${i}] (${b.key}): depends on '${d}', not a feature of the feature set or the company roadmap` });
+    }
+  });
+  return {
+    features: briefs,
+    problems: [...unknown, ...problems],
+    code_map_used: !!file?.repos.length,
+    unmapped_repos,
+    unnamed_repo: !unmapped_repos.length && problems.length > 0,
+    elsewhere: named,
+  };
 }
 
 /** As oracle.engineering.check._repo_key: a repository name as owner/name (URL, ssh address and .git dropped). */

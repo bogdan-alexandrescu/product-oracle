@@ -78,6 +78,7 @@ import {
   seedEngCheckRun,
   seedEngCheckUnmappedRun,
   shopBriefsCheck,
+  briefsCheckOf,
   seedRunDecisions,
   seedEngDatesRuns,
   seedBaselineReviewRun,
@@ -178,7 +179,7 @@ import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStray
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
-import { appliedVersionOf, approvedPrdToDraft, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { appliedVersionOf, approvedPrdToDraft, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, seedFitDateRoadmap } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
 import { routeGoalMap, type GoalMap } from "./goal-map";
@@ -957,6 +958,17 @@ function seedMeetingAgendaScenario(): Db {
   const db = seed();
   db.simple_roadmap = seedSimpleRoadmap();
   itemOfOtherPrd(db.simple_roadmap, "setup-video", "alerts-roadmap");
+  return db;
+}
+
+/**
+ * cross-prd-deps "simple-cross-prd-dates" scenario: "simple-home", with the Setup
+ * checklist (Guided setup, typed to start before) waiting on the Alert rules engine of the
+ * Usage alerts PRD: its warning names that PRD.
+ */
+function seedSimpleCrossPrdDates(): Db {
+  const db = seedSimpleHomeScenario();
+  dependOnOtherPrd(db.simple_roadmap!, "setup-checklist", "alert-rules");
   return db;
 }
 
@@ -1811,6 +1823,18 @@ const seedEngCheckUnreadable = () =>
   seedEngCheckWith("eng-check-unreadable", (check) => {
     check.features = [];
     check.problems = [{ code: "missing_file", message: "the segment left no tech_briefs.yaml" }];
+  });
+
+/**
+ * "eng-check-cross-prd" scenario: the "eng-check" run whose first brief also depends on the
+ * account health ledger, a feature of the Safety PRD on the company roadmap (the owner, Nov 4):
+ * the check reads it and names it with its PRD, as oracle.engineering.check does.
+ */
+const seedEngCheckCrossPrd = () =>
+  seedEngCheckWith("eng-check-cross-prd", (check) => {
+    const briefs = (check as unknown as { features: Parameters<typeof briefsCheckOf>[0] }).features;
+    const linked = briefs.map((b, i) => (i === 0 ? { ...b, depends_on: [...b.depends_on, "account-health-ledger"] } : b));
+    Object.assign(check, briefsCheckOf(linked, undefined, undefined, { "account-health-ledger": "Account health ledger (Safety PRD)" }));
   });
 
 /** "eng-check-long-key" scenario: the "eng-check" run whose first brief has a long key with no break in it. */
@@ -3303,6 +3327,8 @@ function load(): Db {
             ? seedEngCheckUnnamed
           : scenario === "eng-check-unreadable"
             ? seedEngCheckUnreadable
+          : scenario === "eng-check-cross-prd"
+            ? seedEngCheckCrossPrd
           : scenario === "eng-check-long-key"
             ? seedEngCheckLongKey
           : scenario === "eng-check-shop"
@@ -3345,6 +3371,8 @@ function load(): Db {
                 ? seedSimpleDecidersScenario
               : scenario === "meeting-agenda"
                 ? seedMeetingAgendaScenario
+              : scenario === "simple-cross-prd-dates"
+                ? seedSimpleCrossPrdDates
               : scenario === "simple-home"
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-move"

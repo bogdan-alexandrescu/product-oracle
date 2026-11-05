@@ -138,6 +138,8 @@ export type BriefsCheck = {
   unmapped_repos?: string[];
   /** True when cited ids are in no map and the briefs name no repository without one. */
   unnamed_repo?: boolean;
+  /** The dependencies outside the feature set the check accepted, by key, named with their PRD ("Account health ledger (Safety PRD)"). */
+  elsewhere?: Record<string, string>;
 };
 
 export function briefsCheck(cp: Pick<CheckpointOut, "kind" | "payload">): BriefsCheck | null {

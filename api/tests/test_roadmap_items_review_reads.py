@@ -25,8 +25,9 @@ from tests.test_roadmap_reasons import roadmap_items_check
 # segment, the PRD version and its sections, the date bases, the company-wide trace inputs,
 # the items' traces together, the base roadmap, the actions and their people). The SAVEPOINT
 # around the advisory reasons (two statements) is not a read. Plus the approved product
-# strategy (H4 §5 drift reasons; none approved here, so that one read only).
-MAX_REVIEW_READS = 25
+# strategy (H4 §5 drift reasons; none approved here, so that one read only), and the company
+# roadmap's features (one read: an item may depend on another PRD's feature, the owner Nov 4).
+MAX_REVIEW_READS = 26
 # The run's own read (measured 13 with the sign-in).
 MAX_RUN_READS = 13
 

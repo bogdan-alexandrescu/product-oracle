@@ -62,6 +62,8 @@ class Node:
     # (name, date) of the item's milestone, when it has a date.
     milestone: tuple[str, date] | None = None
     accepted_risks: list[dict[str, Any]] = field(default_factory=list)
+    # The item's PRD ("Safety PRD"): a dependency in another PRD is named with it.
+    prd: str | None = None
 
 
 @dataclass(frozen=True)
@@ -77,6 +79,13 @@ class Flag:
 def _t(title: str) -> str:
     title = " ".join(title.split())
     return title if len(title) <= TITLE else title[: TITLE - 1] + "…"
+
+
+def _dep(node: Node, dep: Node) -> str:
+    """‘Account health ledger’, with its PRD when it is another PRD's than the item's:
+    ‘Account health ledger’ (Safety PRD)."""
+    name = f"‘{_t(dep.title)}’"
+    return f"{name} ({dep.prd})" if dep.prd and dep.prd != node.prd else name
 
 
 def _day(d: date, year: bool = False) -> str:
@@ -128,7 +137,7 @@ def check(nodes: list[Node]) -> dict[str, list[Flag]]:
                     years = n.end.date.year != dep.end.date.year
                     reason = (
                         f"‘{_t(n.title)}’ ends {_day(n.end.date, years)}, but "
-                        f"‘{_t(dep.title)}’, which it depends on, ends {_day(dep.end.date, years)}"
+                        f"{_dep(n, dep)}, which it depends on, ends {_day(dep.end.date, years)}"
                     )
                     flags.append(_flag(n, "dependency_order", reason, dep.id))
                 continue
@@ -138,7 +147,7 @@ def check(nodes: list[Node]) -> dict[str, list[Flag]]:
                 years = n.start.date.year != dep.end.date.year
                 reason = (
                     f"‘{_t(n.title)}’ starts {_day(n.start.date, years)}, but "
-                    f"‘{_t(dep.title)}’, which it depends on, ends {_day(dep.end.date, years)}"
+                    f"{_dep(n, dep)}, which it depends on, ends {_day(dep.end.date, years)}"
                 )
                 flags.append(_flag(n, "dependency_order", reason, dep.id))
         for b in n.blockers:

@@ -215,21 +215,30 @@ def _load(text: str) -> tuple[dict[str, Any] | None, list[Problem]]:
 
 
 def check(
-    text: str, feature_keys: Collection[str], code_map: Collection[str] | None
+    text: str,
+    feature_keys: Collection[str],
+    code_map: Collection[str] | None,
+    elsewhere: Collection[str] = (),
 ) -> list[Problem]:
     """The problems of ``text``; ``[]`` when it is a valid set of briefs.
 
     ``feature_keys``: the keys of the approved feature set (one brief each).
     ``code_map``: the ids of the code map(s) the run used (``module:billing``...), None
-    when no shared code map was available to the run."""
+    when no shared code map was available to the run.
+    ``elsewhere``: the other keys a brief may depend on (the owner, Nov 4): features the
+    company roadmap knows from any PRD feeding it, and the dependencies waived at the run's
+    feature set stop. Only a key in neither is ``unknown_dependency``."""
     data, problems = _load(text)
     if data is None:
         return problems
-    return _check(data, feature_keys, code_map)
+    return _check(data, feature_keys, code_map, elsewhere)
 
 
 def _check(
-    data: dict[str, Any], feature_keys: Collection[str], code_map: Collection[str] | None
+    data: dict[str, Any],
+    feature_keys: Collection[str],
+    code_map: Collection[str] | None,
+    elsewhere: Collection[str] = (),
 ) -> list[Problem]:
     """:func:`check` on the file's loaded mapping."""
     out: list[Problem] = []
@@ -323,10 +332,10 @@ def _check(
                     )
                 ids.add(qid)
         for dep in entry.get("depends_on") or [] if not shape else []:
-            if dep not in wanted:
+            if dep not in wanted and dep not in elsewhere:
                 out.append(
                     _p("unknown_dependency", f"{where}: depends on {dep!r}, not a feature of "
-                       "the feature set", key)
+                       "the feature set or the company roadmap", key)
                 )  # fmt: skip
         for rw, at, ref in refs:
             if not used:
@@ -361,7 +370,10 @@ def parse(text: str) -> TechBriefs:
 
 
 def parse_checked(
-    text: str, feature_keys: Collection[str], code_map: Collection[str] | None
+    text: str,
+    feature_keys: Collection[str],
+    code_map: Collection[str] | None,
+    elsewhere: Collection[str] = (),
 ) -> tuple[TechBriefs, list[Problem]]:
     """:func:`parse` and :func:`check` on one load of the file: the briefs and the
     problems :func:`check` lists (the file's entries are well formed, so none is
@@ -369,7 +381,7 @@ def parse_checked(
     data, problems = _load(text)
     if data is None:
         raise BriefsInvalid(problems)
-    return _parse(data), _check(data, feature_keys, code_map)
+    return _parse(data), _check(data, feature_keys, code_map, elsewhere)
 
 
 def _parse(data: dict[str, Any]) -> TechBriefs:

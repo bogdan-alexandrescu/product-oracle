@@ -717,6 +717,12 @@ export function itemOfOtherPrd(db: SimpleDb, key: string, roadmap: string): void
   if (s) s.prd_doc = itemPrd({ ...s, roadmap });
 }
 
+/** cross-prd-deps ("simple-cross-prd-dates"): ``key`` also depends on ``dep``, an item of another PRD. */
+export function dependOnOtherPrd(db: SimpleDb, key: string, dep: string): void {
+  const s = db.items.find((x) => x.key === key);
+  if (s) s.depends = [...(s.depends ?? []), dep];
+}
+
 /** The PRD a seeded item was built from (its roadmap's). */
 function itemPrd(s: SeedItem): Schemas["SimpleDocRef"] {
   const prd = ROADMAPS[s.roadmap].prd;
@@ -769,11 +775,15 @@ function phases(start: string, end: string, s: SeedItem, w: [string, string]): S
 
 const short = (t: string): string => (t.length <= 40 ? t : `${t.slice(0, 39)}…`);
 
-/** A dependency_order line, naming the item and its dependency (constraints.check), with the years when they differ. */
-function dependencyLine(title: string, start: string, depTitle: string, end: string, verb: "starts" | "ends" = "starts"): string {
+/** "Usage alerts PRD": a PRD's title with PRD after it when it does not say so (company.OnRoadmap.prd_name). */
+const prdName = (title: string): string => (title.toLowerCase().endsWith("prd") ? title : `${title} PRD`);
+
+/** A dependency_order line, naming the item and its dependency (constraints.check), with the years when they differ;
+ * a dependency of another PRD is named with its PRD (the owner, Nov 4). */
+function dependencyLine(title: string, start: string, depTitle: string, end: string, verb: "starts" | "ends" = "starts", depPrd: string | null = null): string {
   const years = start.slice(0, 4) !== end.slice(0, 4);
   const day = (d: string) => `${word(d)}${years ? ` ${d.slice(0, 4)}` : ""}`;
-  return `‘${short(title)}’ ${verb} ${day(start)}, but ‘${short(depTitle)}’, which it depends on, ends ${day(end)}`;
+  return `‘${short(title)}’ ${verb} ${day(start)}, but ‘${short(depTitle)}’${depPrd ? ` (${depPrd})` : ""}, which it depends on, ends ${day(end)}`;
 }
 
 function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>, w: [string, string]): Flag[] {
@@ -785,14 +795,16 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
   for (const key of s.depends ?? []) {
     const dep = all.get(key);
     if (!dep || closed(dep.s) || (dep.r.end.estimated && r.start.estimated)) continue;
+    const theirs = ownPrd(dep.s).title;
+    const depPrd = theirs !== ownPrd(s).title ? prdName(theirs) : null;
     if (r.start.estimated) {
       // walkb-roadmap, as constraints.check: an invented start breaks no link; a real end before the dependency's end does.
       if (!r.end.estimated && dep.r.end.date >= r.end.date)
-        flag("dependency_order", dependencyLine(s.title, r.end.date, dep.s.title, dep.r.end.date, "ends"), ["shift_dependents", "move_dependency", "accept_risk"], stableUuid(`simple-item/${key}`));
+        flag("dependency_order", dependencyLine(s.title, r.end.date, dep.s.title, dep.r.end.date, "ends", depPrd), ["shift_dependents", "move_dependency", "accept_risk"], stableUuid(`simple-item/${key}`));
       continue;
     }
     if (dep.r.end.date >= r.start.date)
-      flag("dependency_order", dependencyLine(s.title, r.start.date, dep.s.title, dep.r.end.date), ["shift_dependents", "move_dependency", "accept_risk"], stableUuid(`simple-item/${key}`));
+      flag("dependency_order", dependencyLine(s.title, r.start.date, dep.s.title, dep.r.end.date, "starts", depPrd), ["shift_dependents", "move_dependency", "accept_risk"], stableUuid(`simple-item/${key}`));
   }
   if (s.milestone) {
     const day = addDays(w[0], s.milestone.day);
