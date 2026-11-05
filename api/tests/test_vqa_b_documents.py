@@ -23,6 +23,37 @@ async def test_present_mode_without_a_brief_shows_the_full_document(client, tena
     assert resp.status_code == 422
 
 
+TITLED = """---
+title: Notes
+---
+
+# Notes {#title}
+A short note on saved carts for example.com shoppers.
+
+## Background {#background}
+Text.
+
+## Sources and data points {#sources}
+
+### Interviews {#interviews}
+Five invented shoppers.
+"""
+
+
+async def test_present_mode_without_a_brief_never_repeats_the_title(client, tenant_id):
+    # protects=B-04 fix 1: a non-empty title section folds into the next slide;
+    # fails_when=slide 2 is headed "Notes" again right after the title slide.
+    h = await _token(tenant_id, "approver")
+    assert (await _import(client, h, TITLED, "notes")).status_code == 201
+    resp = await client.get("/v1/documents/notes/versions/1/deck", headers=h)
+    assert resp.status_code == 200, resp.text
+    slides = resp.json()["slides"]
+    assert [s["heading"] for s in slides] == ["Notes", "Background"]
+    assert slides[1]["kind"] == "section" and slides[1]["section_key"] == "background"
+    assert "A short note on saved carts" in slides[1]["html"]
+    assert slides[1]["html"].index("A short note") < slides[1]["html"].index("Text.")
+
+
 def _roadmap_prompt(company_plan: dict) -> str:
     flow = flows.FLOWS["prd_to_roadmap"]
     knobs = flows.resolve_knobs(flow, {})
