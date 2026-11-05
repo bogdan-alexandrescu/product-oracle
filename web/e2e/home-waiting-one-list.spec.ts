@@ -43,11 +43,32 @@ import { expect, test, type Page } from "./test";
  * decides, as the list does (Decisions' "Broken link" rows); a commenter, who decides none, reads a
  * tile that says it counts the links they can propose fixes for; each broken-link row on Decisions names its own flag; fails_when = the tile
  * counts every broken link on the roadmap or two rows read alike.
+ *
+ * Card roadmap-rail: protects = accepting a date in the Roadmap's "Needs a decision" drops the
+ * rail's Roadmap and Decisions counts at once, with no navigation; fails_when = the counts stay
+ * until the person moves to another page.
+ *
+ * Card fix-the-link: protects = a broken-link row on Decisions fixes in place (its fixes shown on
+ * "Fix the link", acting clears the row and every count), and its Roadmap link opens that item's
+ * panel with the fixes in view; fails_when = "Fix the link" leads to a Roadmap that shows neither
+ * the item nor its fix, or the row and counts stay after the fix.
+ *
+ * Card goal-dates: protects = confirming a goal suggestion on Home brings its dates to confirm
+ * onto Home and into the rail's count once Oracle has drafted it, with no navigation;
+ * fails_when = the new dates row shows only after leaving Home.
+ *
+ * Card decide-on-home: protects = deciding a decision-log call on Home takes it off Home and the
+ * rail's count down at once; fails_when = the call stays or the count does not drop.
+ *
+ * Card tile-words: protects = Home's decisions tile says plainly that the rail's Decisions count
+ * holds more than the decisions; fails_when = two different numbers with no word on why.
  */
 
 const nav = (page: Page, name: string) => page.getByRole("navigation", { name: "Simple" }).getByRole("link", { name, exact: true }).filter({ visible: true });
 const APPROVER = "approver@example.com";
 const COMMENTER = "commenter@example.com";
+const roadmapCount = (page: Page) => page.locator("[data-testid='simple-nav-roadmap-count'], [data-testid='simple-tab-roadmap-count']").filter({ visible: true });
+const num = async (l: ReturnType<Page["locator"]>) => Number((await l.textContent()) ?? "0");
 const decisionsCount = (page: Page) => page.locator("[data-testid='simple-nav-decisions-count'], [data-testid='simple-tab-decisions-count']").filter({ visible: true });
 
 for (const phone of [false, true]) {
@@ -206,6 +227,112 @@ for (const phone of [false, true]) {
       await proposed.getByRole("button", { name: "Confirm" }).click();
       await expect(page.getByTestId("home-goals-proposed-list")).toHaveCount(0);
       await expect(page.getByTestId("home-goals")).toContainText("Cut early churn");
+    });
+    test("Accepting a date on the Roadmap drops the rail's Roadmap and Decisions counts at once", async ({ page }) => {
+      await login(page);
+      await page.goto("/simple/roadmap");
+      await expect(decisionsCount(page)).toHaveText(/^\d+$/);
+      await expect(roadmapCount(page)).toHaveText(/^\d+$/);
+      const decisions = await num(decisionsCount(page));
+      const roadmap = await num(roadmapCount(page));
+      await page.getByTestId("needs-decision").click();
+      const tray = page.getByTestId("decision-tray");
+      const date = tray.getByTestId("tray-date").filter({ hasText: "Alert routing by team" });
+      await date.getByRole("button", { name: "Accept" }).click();
+      await expect(date).toHaveCount(0);
+      await expect.poll(() => num(decisionsCount(page))).toBeLessThan(decisions);
+      await expect.poll(() => num(roadmapCount(page))).toBeLessThan(roadmap);
+      await expect(page).toHaveURL(/\/simple\/roadmap/);
+    });
+
+    test("'Fix the link' on Decisions shows the fixes in place; acting clears the row and every count", async ({ page }) => {
+      await login(page);
+      await page.goto("/simple/decisions");
+      const mine = page.getByTestId("questions-mine");
+      const row = mine.getByRole("listitem", { name: /^Broken link: In-app tour/ }).first();
+      await expect(row).toBeVisible();
+      const name = (await row.getAttribute("aria-label"))!;
+      const n = Number(await page.getByTestId("questions-mine-count").textContent());
+      await expect(decisionsCount(page)).toHaveText(String(n));
+      await row.getByRole("button", { name: "Fix the link" }).click();
+      const fixes = row.getByTestId("waiting-fixes");
+      await expect(fixes.getByRole("button", { name: "Accept as risk" })).toBeVisible();
+      await fixes.getByRole("button", { name: "Accept as risk" }).click();
+      await fixes.getByRole("textbox", { name: "Why the risk is acceptable" }).fill("The tour can wait for the next release");
+      await fixes.getByRole("button", { name: "Accept as risk" }).click();
+      await expect(mine.getByRole("listitem", { name, exact: true })).toHaveCount(0);
+      await expect(page.getByTestId("questions-mine-count")).toHaveText(String(n - 1));
+      await expect(decisionsCount(page)).toHaveText(String(n - 1));
+    });
+
+    test("A broken-link row's Roadmap link opens the item's panel with its fixes in view", async ({ page }) => {
+      await login(page);
+      await page.goto("/simple/decisions");
+      const row = page.getByTestId("questions-mine").getByRole("listitem", { name: /^Broken link: In-app tour/ }).first();
+      await row.getByRole("button", { name: "Fix the link" }).click();
+      await row.getByRole("link", { name: "Open it on the Roadmap" }).click();
+      await expect(page).toHaveURL(/\/simple\/roadmap\?item=/);
+      const card = page.getByTestId("floating-card");
+      await expect(card).toContainText("In-app tour");
+      const fixes = card.getByTestId("card-flags").getByTestId("fixes").first();
+      await expect(fixes).toBeInViewport();
+      await expect(fixes.getByRole("button").first()).toBeVisible();
+    });
+
+    test("A 'Confirm the dates' link opens the item's panel on Oracle's dates", async ({ page }) => {
+      await login(page);
+      // The item's own link, as a "Confirm the dates" row's link reads it (/simple/roadmap?item=<id>).
+      await page.goto("/simple/roadmap");
+      await page.getByTestId("needs-decision").click();
+      const item = await page.getByTestId("decision-tray").getByTestId("tray-date").filter({ hasText: "Alert routing by team" }).getAttribute("data-item");
+      await page.goto(`/simple/roadmap?item=${item}`);
+      const suggestion = page.getByTestId("floating-card").getByTestId("card-suggestion");
+      await expect(suggestion).toBeInViewport();
+      const before = await num(decisionsCount(page));
+      await suggestion.getByRole("button", { name: "Accept" }).click();
+      await expect(page.getByTestId("floating-card").getByTestId("card-suggestion")).toHaveCount(0);
+      await expect.poll(() => num(decisionsCount(page))).toBeLessThan(before);
+    });
+
+    test("Confirming a goal suggestion on Home brings its dates onto Home and the count, with no navigation", async ({ page }) => {
+      await login(page);
+      await page.goto("/simple");
+      const also = page.getByTestId("home-also-waiting-list");
+      const goal = also.getByRole("listitem", { name: /^Goal suggestion: / }).first();
+      await expect(goal).toBeVisible();
+      const title = (await goal.getAttribute("aria-label"))!.replace(/^Goal suggestion: /, "");
+      await expect(decisionsCount(page)).toHaveText(/^\d+$/);
+      const before = await num(decisionsCount(page));
+      await goal.getByRole("button", { name: "Confirm" }).click();
+      await expect(also.getByRole("listitem", { name: `Goal suggestion: ${title}` })).toHaveCount(0);
+      // Oracle drafts the new item; its dates to confirm then wait on me, here and in the rail.
+      await expect(also.getByRole("listitem", { name: `Dates to confirm: ${title}` })).toBeVisible({ timeout: 15_000 });
+      await expect(decisionsCount(page)).toHaveText(String(before));
+      await expect(page).toHaveURL(/\/simple$/);
+    });
+
+    test("Deciding a decision-log call on Home takes it off Home and the count down at once", async ({ page }) => {
+      await login(page, APPROVER);
+      await page.goto("/simple");
+      const call = page.getByTestId("home-decisions").getByTestId("home-decision").filter({ hasText: "Ship usage caps before anomaly detection" });
+      await expect(call).toBeVisible();
+      await expect(decisionsCount(page)).toHaveText(/^\d+$/);
+      const before = await num(decisionsCount(page));
+      await call.getByRole("button", { name: /^Decide/ }).first().click();
+      await expect(call).toHaveCount(0);
+      await expect(decisionsCount(page)).toHaveText(String(before - 1));
+      await expect(page).toHaveURL(/\/simple$/);
+    });
+
+    test("Home's decisions tile says what the rail's Decisions count holds besides", async ({ page }) => {
+      await login(page);
+      await page.goto("/simple");
+      await expect(decisionsCount(page)).toHaveText(/^\d+$/);
+      const all = await num(decisionsCount(page));
+      const line = page.getByTestId("home-summary-all");
+      await expect(line).toContainText(`In all, ${all} things wait on you`);
+      await expect(line).toContainText("run stops, broken links, dates, drafts and goal suggestions");
+      await expect(page.getByTestId("home-also-waiting")).toHaveCount(1);
     });
   });
 }
