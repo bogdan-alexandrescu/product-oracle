@@ -10,7 +10,8 @@ import { expect, test, type Locator, type Page } from "./test";
  * Edit agenda opens the Agenda sheet. The owner adds a topic and a feature, renames, reorders
  * by arrows and by drag, removes with Undo; Dana (an approver, not the decider) proposes and
  * the proposal waits for Priya, whose Accept she can Undo; an op of Dana's proposal whose item
- * the owner removed since is left out, and the proposal says so; a viewer reads; on a phone
+ * the owner removed since is left out, and the proposal (or Priya's Accept) says "1 left out";
+ * Undo is for the last change only (two tabs, owner and Priya); a viewer reads; on a phone
  * the sheet is a bottom sheet.
  */
 
@@ -144,27 +145,107 @@ test.describe("desktop", () => {
     const url = await startReview(page);
     await switchTo(page, "dana.whitfield@example.com", url);
     await tap(strip(page).getByRole("button", { name: "Edit agenda" }));
+    // A move and a rename of one item: when left out, they read as one.
+    await tap(sheet(page).getByRole("button", { name: "Move Quiet hours for muted teams up" }));
     await tap(sheet(page).getByRole("button", { name: "Rename Quiet hours for muted teams" }));
     await sheet(page).getByLabel("Item name").fill("Quiet hours by default");
     await tap(sheet(page).getByRole("button", { name: "Propose" }));
+    await expect(sheet(page).getByLabel("Item name")).toHaveCount(0);
     await expect(page.getByTestId("agenda-proposal")).toBeVisible();
 
-    // The owner removes the topic Dana's proposal renames.
+    // The owner removes the topic Dana's proposal moves and renames.
     await switchTo(page, "admin@example.com", url);
     await tap(strip(page).getByRole("button", { name: "Edit agenda" }));
     await tap(sheet(page).getByRole("button", { name: "Remove Quiet hours for muted teams" }));
     await expect.poll(() => names(page)).not.toContain("Quiet hours for muted teams");
 
-    // Dana's next op still goes through; the rename is left out, and the line says so.
+    // Dana's next op still goes through; the line says "1 left out", the detail behind the (i).
     await switchTo(page, "dana.whitfield@example.com", url);
     await tap(strip(page).getByRole("button", { name: "Edit agenda" }));
     await sheet(page).getByLabel("Add a feature or a topic").fill("Help text");
     await sheet(page).getByLabel("Add a feature or a topic").press("Enter");
     await page.keyboard.press("Escape");
     const line = page.getByTestId("agenda-proposal");
-    await expect(line.getByTestId("agenda-dropped")).toHaveText("Left out, since the item was removed: Renamed Quiet hours for muted teams to Quiet hours by default.");
+    await expect(line.getByTestId("agenda-dropped")).toHaveText("1 left out");
+    await tap(line.getByRole("button", { name: "About What was left out" }));
+    await expect(page.getByText("The item was removed since: Moved Quiet hours for muted teams up and renamed it.")).toBeVisible();
+    await page.keyboard.press("Escape");
     await tap(line.getByRole("button", { name: "About What is proposed" }));
     await expect(page.getByText("Added Help text.")).toBeVisible();
+  });
+
+  test("the decider's Accept says which ops it left out, since their item was removed", async ({ page }) => {
+    test.setTimeout(120_000);
+    const url = await startReview(page);
+    await switchTo(page, "dana.whitfield@example.com", url);
+    await tap(strip(page).getByRole("button", { name: "Edit agenda" }));
+    await tap(sheet(page).getByRole("button", { name: "Rename Quiet hours for muted teams" }));
+    await sheet(page).getByLabel("Item name").fill("Quiet hours by default");
+    await tap(sheet(page).getByRole("button", { name: "Propose" }));
+    await expect(sheet(page).getByLabel("Item name")).toHaveCount(0);
+    await sheet(page).getByLabel("Add a feature or a topic").fill("Help text");
+    await sheet(page).getByLabel("Add a feature or a topic").press("Enter");
+    await expect(sheet(page).getByLabel("Add a feature or a topic")).toHaveValue("");
+
+    // The owner removes the topic before Priya accepts.
+    await switchTo(page, "admin@example.com", url);
+    await tap(strip(page).getByRole("button", { name: "Edit agenda" }));
+    await tap(sheet(page).getByRole("button", { name: "Remove Quiet hours for muted teams" }));
+    await expect.poll(() => names(page)).not.toContain("Quiet hours for muted teams");
+
+    await switchTo(page, "approver@example.com", url);
+    await tap(page.getByTestId("agenda-proposal").getByRole("button", { name: "Accept" }));
+    const done = page.getByTestId("agenda-done");
+    await expect(done).toContainText("Added Help text.");
+    await expect(done.getByTestId("agenda-left-out")).toHaveText("1 left out");
+    await tap(done.getByRole("button", { name: "About What was left out" }));
+    await expect(page.getByText("The item was removed since: Renamed Quiet hours for muted teams to Quiet hours by default.")).toBeVisible();
+  });
+
+  test("Undo is for the last change only: another person's change hides your Undo line, and a stale Undo says so", async ({ page, context }) => {
+    test.setTimeout(120_000);
+    const url = await startReview(page);
+    // Priya, the decider, in a second tab of the same browser (the mock's data is shared there).
+    // Her tab does not poll the meeting, so her Undo line is still up after the owner's change.
+    const priya = await context.newPage();
+    await priya.addInitScript(() => {
+      const every = window.setInterval;
+      window.setInterval = ((f: TimerHandler, ms?: number, ...rest: unknown[]) => (ms === 5_000 ? 0 : every(f, ms, ...rest))) as typeof window.setInterval;
+    });
+    await priya.goto("/home");
+    await signOut(priya);
+    await login(priya, "approver@example.com");
+    await priya.goto(url);
+
+    const addTopic = async (tab: Page, title: string) => {
+      await tap(strip(tab).getByRole("button", { name: "Edit agenda" }));
+      await sheet(tab).getByLabel("Add a feature or a topic").fill(title);
+      await sheet(tab).getByLabel("Add a feature or a topic").press("Enter");
+      await expect.poll(() => names(tab)).toContain(title);
+      await tab.keyboard.press("Escape");
+    };
+
+    await page.bringToFront();
+    await addTopic(page, "Owner topic");
+    await expect(page.getByTestId("agenda-done")).toContainText("Added Owner topic.");
+    await priya.bringToFront();
+    await addTopic(priya, "Decider topic");
+    await expect(priya.getByTestId("agenda-done")).toContainText("Added Decider topic.");
+    // The owner's page reads Priya's change: their Undo is not the last change now.
+    await page.bringToFront();
+    await expect(page.getByTestId("agenda-done")).toBeHidden({ timeout: 15_000 });
+
+    // The owner changes the agenda again; Priya's Undo line is stale.
+    await addTopic(page, "Second owner topic");
+    await priya.bringToFront();
+    const done = priya.getByTestId("agenda-done");
+    await expect(done).toContainText("Added Decider topic.");
+    await tap(done.getByRole("button", { name: "Undo" }));
+    await expect(priya.getByText(/Someone changed the agenda since/)).toBeVisible();
+    // The agenda is read again at once: the stale line goes, and the owner's work stays.
+    await expect(done).toBeHidden({ timeout: 3_000 });
+    await tap(strip(priya).getByRole("button", { name: "Edit agenda" }));
+    await expect.poll(() => names(priya)).toEqual(expect.arrayContaining(["Owner topic", "Decider topic", "Second owner topic"]));
   });
 
   test("a viewer reads the agenda with no controls", async ({ page }) => {

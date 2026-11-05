@@ -25,7 +25,8 @@ export type AgendaSheetDb = {
   batch?: string | null;
   clauses?: AgendaClause[];
   words?: string[];
-  proposal?: { by: string; decider: string | null; ops: AgendaOp[]; said: AgendaClause[]; words: string[]; dropped: string[] } | null;
+  left_out?: string[];
+  proposal?: { by: string; decider: string | null; ops: AgendaOp[]; said: AgendaClause[]; words: string[]; gone?: AgendaClause[]; dropped: string[] } | null;
 };
 
 export type AgendaCtx = {
@@ -91,7 +92,7 @@ function states(s: AgendaSheetDb, ctx: AgendaCtx, rows: AgendaRowDb[]): Schemas[
   });
 }
 
-export function agendaRowsOut(s: AgendaSheetDb, ctx: AgendaCtx): Pick<Schemas["SimpleAgenda"], "items" | "addable" | "batch" | "words" | "proposal" | "decider"> {
+export function agendaRowsOut(s: AgendaSheetDb, ctx: AgendaCtx): Pick<Schemas["SimpleAgenda"], "items" | "addable" | "batch" | "words" | "left_out" | "proposal" | "decider"> {
   const rows = rowsOf(s, ctx);
   const titles = new Map(ctx.features.map((f) => [f.id, f.title]));
   const st = states(s, ctx, rows);
@@ -110,6 +111,7 @@ export function agendaRowsOut(s: AgendaSheetDb, ctx: AgendaCtx): Pick<Schemas["S
     addable: ctx.features.filter((f) => !on.has(f.id)).map((f) => ({ id: f.id, title: f.title })),
     batch: s.batch ?? null,
     words: [...(s.words ?? [])],
+    left_out: [...(s.left_out ?? [])],
     decider: ctx.decider ? { id: ctx.decider, name: ctx.nameOf(ctx.decider) } : null,
     proposal: p ? { by: { id: p.by, name: ctx.nameOf(p.by) }, decider: p.decider ? { id: p.decider, name: ctx.nameOf(p.decider) } : null, words: [...p.words], dropped: [...(p.dropped ?? [])] } : null,
   };
@@ -173,27 +175,31 @@ export function editAgenda(s: AgendaSheetDb, ctx: AgendaCtx, b: AgendaOp): { sta
       // The accept is the decider's batch: their sheet named it, so their Undo line shows.
       s.before = rows.map((x) => ({ ...x }));
       s.batch = b.batch || `accept-${crypto.randomUUID()}`;
+      // An op whose item is gone since is left out, and the decider is told which.
       const clauses: AgendaClause[] = [];
-      for (const o of p.ops) {
+      const gone: AgendaClause[] = [];
+      p.ops.forEach((o, k) => {
         try {
           clauses.push(applyOp(s, ctx, rows, p.by, o));
-        } catch {
-          // an item the proposal named is gone since
+        } catch (e) {
+          if (!(e instanceof AgendaError)) throw e;
+          if (p.said[k]) gone.push(p.said[k]!);
         }
-      }
-      Object.assign(s, { items: rows, clauses, words: agendaWords(clauses), proposal: null });
+      });
+      Object.assign(s, { items: rows, clauses, words: agendaWords(clauses), proposal: null, left_out: agendaWords(gone) });
     } else if (b.op === "undo") {
       if (right !== "save" || !s.before) throw new AgendaError(404, "Nothing to undo");
       if ((b.batch ?? null) !== (s.batch ?? null)) throw new AgendaError(409, "Someone changed the agenda since");
-      Object.assign(s, { items: s.before, clauses: [], words: [], batch: null });
+      Object.assign(s, { items: s.before, clauses: [], words: [], left_out: [], batch: null });
       delete s.before;
     } else if (right === "propose") {
-      // An op of the earlier proposal whose item is gone since is dropped, and the proposal says so.
+      // An op of the earlier proposal whose item is gone since is dropped, and the proposal says so
+      // (its clauses read together, so a move and a rename of one item read as one).
       const mine = p && p.by === ctx.me.id ? p : null;
       const trial = rowsOf(s, ctx);
       const kept: AgendaOp[] = [];
       const clauses: AgendaClause[] = [];
-      const dropped = [...(mine?.dropped ?? [])];
+      const gone = [...(mine?.gone ?? [])];
       (mine?.ops ?? []).forEach((o, k) => {
         try {
           clauses.push(applyOp(s, ctx, trial, ctx.me.id, o));
@@ -201,13 +207,13 @@ export function editAgenda(s: AgendaSheetDb, ctx: AgendaCtx, b: AgendaOp): { sta
         } catch (e) {
           if (!(e instanceof AgendaError)) throw e;
           const said = mine?.said?.[k];
-          if (said) dropped.push(...agendaWords([said]));
+          if (said) gone.push(said);
         }
       });
       clauses.push(applyOp(s, ctx, trial, ctx.me.id, b));
-      s.proposal = { by: ctx.me.id, decider: ctx.decider, ops: [...kept, b], said: clauses, words: agendaWords(clauses), dropped };
+      s.proposal = { by: ctx.me.id, decider: ctx.decider, ops: [...kept, b], said: clauses, words: agendaWords(clauses), gone, dropped: agendaWords(gone) };
     } else {
-      if (s.batch !== (b.batch ?? null) || !s.before) Object.assign(s, { before: rows.map((x) => ({ ...x })), batch: b.batch ?? null, clauses: [] });
+      if (s.batch !== (b.batch ?? null) || !s.before) Object.assign(s, { before: rows.map((x) => ({ ...x })), batch: b.batch ?? null, clauses: [], left_out: [] });
       const clauses = [...(s.clauses ?? []), applyOp(s, ctx, rows, ctx.me.id, b)];
       Object.assign(s, { items: rows, clauses, words: agendaWords(clauses) });
     }

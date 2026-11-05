@@ -13,7 +13,7 @@ import { useRef, useState } from "react";
 
 import { InfoTip, Sheet, toast } from "@/components/ds";
 import { openFeaturePanel } from "@/components/simple/FeaturePanelHost";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage } from "@/lib/use-query";
 
 type Agenda = Schemas["SimpleAgenda"];
@@ -59,6 +59,18 @@ function Name({ x, onOpen }: { x: Row; onOpen?: () => void }) {
   );
 }
 
+/** "1 left out": the ops whose item was removed since, said behind the (i). */
+function LeftOut({ words, testId }: { words: string[]; testId: string }) {
+  return (
+    <span className="flex items-center gap-1 text-text2" data-testid={testId}>
+      {words.length} left out
+      <InfoTip label="What was left out" align="start">
+        The item was removed since: {agendaSentence(words)}
+      </InfoTip>
+    </span>
+  );
+}
+
 function Mark({ s }: { s: Row["state"] }) {
   if (s === "done") return <span aria-label="Done" className="text-text-faint">✓</span>;
   if (s === "now") return <span aria-label="Now" className="inline-block h-2.5 w-2.5 rounded-full bg-accent" />;
@@ -93,6 +105,8 @@ export function AgendaSheet({ meetingId, agenda, can, phone, reload }: { meeting
       return true;
     } catch (e) {
       toast({ message: errorMessage(e) });
+      // Someone changed the agenda since: read it again, so a stale Undo line goes at once.
+      if (e instanceof ApiError && e.status === 409) await reload();
       return false;
     } finally {
       setBusy(false);
@@ -116,7 +130,8 @@ export function AgendaSheet({ meetingId, agenda, can, phone, reload }: { meeting
   const typed = adding.trim();
   const addable = (agenda.addable ?? []).filter((f) => !typed || f.title.toLowerCase().includes(typed.toLowerCase())).slice(0, phone ? 2 : 4);
 
-  const showDone = mode === "save" && agenda.batch && mine.includes(agenda.batch) && agenda.words.length > 0;
+  const leftOut = agenda.left_out ?? [];
+  const showDone = mode === "save" && agenda.batch && mine.includes(agenda.batch) && (agenda.words.length > 0 || leftOut.length > 0);
   const prop = agenda.proposal;
 
   return (
@@ -145,6 +160,7 @@ export function AgendaSheet({ meetingId, agenda, can, phone, reload }: { meeting
       {showDone && (
         <p role="status" className="flex flex-wrap items-center gap-x-3 border-b border-line bg-[var(--simple-edited)] px-4 py-1.5 text-base" data-testid="agenda-done">
           {agendaSentence(agenda.words)}
+          {leftOut.length > 0 && <LeftOut words={leftOut} testId="agenda-left-out" />}
           <button type="button" className={LINK} disabled={busy} onClick={() => send({ op: "undo", batch: agenda.batch })}>
             Undo
           </button>
@@ -169,11 +185,7 @@ export function AgendaSheet({ meetingId, agenda, can, phone, reload }: { meeting
               {mode === "save" ? "Decline" : "Withdraw"}
             </button>
           )}
-          {mode === "propose" && (prop.dropped ?? []).length > 0 && (
-            <span className="basis-full text-text2" data-testid="agenda-dropped">
-              Left out, since the item was removed: {agendaSentence(prop.dropped ?? [])}
-            </span>
-          )}
+          {mode === "propose" && (prop.dropped ?? []).length > 0 && <LeftOut words={prop.dropped ?? []} testId="agenda-dropped" />}
         </p>
       )}
       <Sheet open={open} title="Agenda" onClose={() => setOpen(false)} side testId="agenda-sheet" tools={!may ? <span className="text-sm text-text2">View only</span> : undefined}>
