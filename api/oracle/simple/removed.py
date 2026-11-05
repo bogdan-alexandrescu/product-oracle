@@ -174,6 +174,9 @@ async def list_simple_tracks(principal: Reader, db: TenantDB) -> SimpleTracks:
     features = Counter(
         e.track.id for e in read.entries if e.track and e.status not in ("cut", "merged")
     )
+    # What Move to Trash moves: the features Simple's roadmap shows, cut and merged ones too. It
+    # leaves out the rows trash.delete_track also clears that a person no longer sees (trashed,
+    # shipped, moved on, older versions).
     moves = Counter(e.track.id for e in read.entries if e.track)
     out = []
     for t in rows:

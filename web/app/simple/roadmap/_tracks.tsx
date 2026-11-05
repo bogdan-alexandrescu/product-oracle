@@ -30,6 +30,12 @@ async function withdraw(id: string): Promise<void> {
 }
 
 const features = (n: number) => `${n} ${n === 1 ? "feature" : "features"}`;
+/** The Move to Trash confirm: its live features, then the cut or merged ones it moves too. */
+const movesLine = (live: number, moves: number) => {
+  const closed = moves - live;
+  const what = !closed ? features(live) : live ? `${features(live)} and ${closed} cut or merged` : `${closed} cut or merged ${closed === 1 ? "feature" : "features"}`;
+  return `Its ${what} ${moves === 1 ? "moves" : "move"} to No track.`;
+};
 
 /** A short stamp of the roadmap's items: the sheet reads its tracks again when the roadmap reloads. */
 function stampOf(items: Item[]): string {
@@ -140,8 +146,7 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
                       {canChange && t.can_decide && trashing === t.id && (
                         <div className="mt-1 grid gap-1.5" data-testid="track-trash-confirm">
                           <p className="text-sm">
-                            Its {features(moves)}
-                            {moves > count ? ", cut ones too," : ""} move to No track.
+                            {movesLine(count, moves)}
                           </p>
                           <div className="flex gap-1.5">
                             <Button variant="danger" onClick={() => toTrash(t)}>
