@@ -340,7 +340,7 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
             <span className={`grid min-w-0 items-center gap-1 ${mode !== "viewer" ? "grid-cols-[minmax(0,1fr)_2rem] max-[600px]:grid-cols-[minmax(0,1fr)_2.5rem]" : "grid-cols-1"}`} data-testid="your-call">
               <span className="flex min-w-0 flex-wrap items-center justify-end gap-1" data-testid="your-call-buttons">
                 {confirm === it.key && rowFixes(openReasons(it))[0] ? (
-                  <ConfirmFix {...rowFixes(openReasons(it))[0]} ops={ops} onDone={() => leaveConfirm(it.key)} />
+                  <ConfirmFix {...rowFixes(openReasons(it))[0]} it={it} ops={ops} onDone={() => leaveConfirm(it.key)} />
                 ) : (
                   <YourCall it={it} open={openReasons(it)} staged={it.actions.filter((a) => a.state === "staged" && a.kind !== "question")} mode={mode} ops={ops} titleOf={titleOf} meId={me?.user_id ?? null} />
                 )}
@@ -587,23 +587,38 @@ function YourCall({ it, open, staged, mode, ops, titleOf, meId }: { it: Item; op
     <>
       {askedChip}
       {rowFixes(open).map(({ reason, fix }, i) => (
-        <FixButton key={fix.label} fix={fix} reason={reason} mode={mode} ops={ops} primary={i === 0} />
+        <FixButton key={fix.label} fix={fix} reason={reason} it={it} mode={mode} ops={ops} primary={i === 0} />
       ))}
     </>
   );
 }
 
-/** Stages a fix (or suggests it, for a commenter), answering its reason when it is the row's. */
-const applyFix = (fix: Fix, reason: Reason, ops: Ops) =>
-  ops.act({ item_key: fix.action.item, kind: fix.action.kind, field: fix.action.field ?? null, value: fix.action.value ?? null, answers: fix.action.item === reason.item ? [reason.code] : [] });
+/**
+ * Stages a fix (or suggests it, for a commenter), answering its reason when it is the row's. An
+ * item keeps one dependency edit, so Remove dependency joins the removal already staged (as the
+ * panel's × does): both dependencies stay removed and both reasons answered.
+ */
+function applyFix(fix: Fix, reason: Reason, ops: Ops, it: Item) {
+  let value = fix.action.value ?? null;
+  let answers = fix.action.item === reason.item ? [reason.code] : [];
+  const removing = (value as { remove?: string[] } | null)?.remove;
+  const before = it.actions.find((a) => a.kind === "edit" && a.field === "depends_on" && a.state === "staged");
+  if (fix.action.kind === "edit" && fix.action.field === "depends_on" && fix.action.item === it.key && removing && before) {
+    const was = (before.value ?? {}) as { add?: string[]; remove?: string[] };
+    value = { add: was.add ?? [], remove: [...new Set([...(was.remove ?? []), ...removing])] };
+    // An edit naming no reason answers every reason of its item: it stays so.
+    answers = before.answers.length ? [...new Set([...before.answers, ...answers])] : [];
+  }
+  return ops.act({ item_key: fix.action.item, kind: fix.action.kind, field: fix.action.field ?? null, value, answers });
+}
 
-export function FixButton({ fix, reason, mode, ops, primary }: { fix: Fix; reason: Reason; mode: Mode; ops: Ops; primary?: boolean }) {
+export function FixButton({ fix, reason, it, mode, ops, primary }: { fix: Fix; reason: Reason; it: Item; mode: Mode; ops: Ops; primary?: boolean }) {
   return (
     <Button
       variant={primary ? "primary" : "secondary"}
       className="h-8 px-2.5 text-sm max-[600px]:h-10"
       title={mode === "commenter" ? "Suggest: an approver stages it" : undefined}
-      onClick={() => void applyFix(fix, reason, ops)}
+      onClick={() => void applyFix(fix, reason, ops, it)}
     >
       {fix.label}
     </Button>
@@ -614,7 +629,7 @@ export function FixButton({ fix, reason, mode, ops, primary }: { fix: Fix; reaso
  * Enter on a row (criterion 16): the row's first fix as "Confirm: {fix}", focused, so Enter
  * again applies it; Cancel or Escape goes back to the row with nothing staged.
  */
-function ConfirmFix({ fix, reason, ops, onDone }: { fix: Fix; reason: Reason; ops: Ops; onDone: () => void }) {
+function ConfirmFix({ fix, reason, it, ops, onDone }: { fix: Fix; reason: Reason; it: Item; ops: Ops; onDone: () => void }) {
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => ref.current?.querySelector("button")?.focus(), []);
   return (
@@ -627,7 +642,7 @@ function ConfirmFix({ fix, reason, ops, onDone }: { fix: Fix; reason: Reason; op
         onDone();
       }}
     >
-      <Button variant="primary" className="h-8 px-2.5 text-sm max-[600px]:h-10" onClick={() => void applyFix(fix, reason, ops).then(onDone)}>
+      <Button variant="primary" className="h-8 px-2.5 text-sm max-[600px]:h-10" onClick={() => void applyFix(fix, reason, ops, it).then(onDone)}>
         Confirm: {fix.label}
       </Button>
       <Button variant="ghost" className="h-8 px-2.5 text-sm max-[600px]:h-10" onClick={onDone}>
@@ -880,7 +895,7 @@ function ReviewInspector({
                         {r.fixes
                           .filter((f) => f.action.kind !== "waive")
                           .map((f, i) => (
-                            <FixButton key={f.label} fix={f} reason={r} mode={mode} ops={ops} primary={i === 0} />
+                            <FixButton key={f.label} fix={f} reason={r} it={item} mode={mode} ops={ops} primary={i === 0} />
                           ))}
                         {mode === "approver" && mayWaive(r, can("waive_strategy_finding")) && (
                           <Button className="h-8 px-2.5 text-sm" onClick={() => setForm({ key: item.key, kind: "waive", code: r.code, where: "inspector" })}>

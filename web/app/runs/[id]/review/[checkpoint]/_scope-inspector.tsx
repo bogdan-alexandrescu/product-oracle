@@ -652,21 +652,28 @@ export function ScopeInspector({
           </div>
         )}
       </InspectorSection>
-      <InspectorSection label="Depends on">
+      <InspectorSection label="Depends on" testId="scope-depends">
         {f.depends_on.length === 0 ? (
           <p className="text-sm text-text2">Nothing</p>
         ) : (
           <ul className="flex flex-col gap-1">
             {f.depends_on.map((d) => {
               const dep = byKey.get(d);
+              // Another PRD's feature on the company roadmap: named with its PRD, not unknown.
+              const other = dep?.decision === "include" ? undefined : f.other_prd_dependencies?.find((x) => x.key === d);
+              const name = other?.title ?? dep?.title ?? d;
               return (
                 <li key={d} className="flex items-center gap-2 text-sm">
-                  <span className="min-w-0 flex-1 truncate">{dep?.title ?? d}</span>
-                  <Chip kind={!dep ? "crit" : dep.decision === "include" ? "pass" : "warn"}>{dep ? decisionText(dep.decision) : "Unknown"}</Chip>
+                  <span className="min-w-0 flex-1 truncate">{name}</span>
+                  {other ? (
+                    <Chip kind="acc">{other.prd}</Chip>
+                  ) : (
+                    <Chip kind={!dep ? "crit" : dep.decision === "include" ? "pass" : "warn"}>{dep ? decisionText(dep.decision) : "Unknown"}</Chip>
+                  )}
                   {mode === "approver" && (
                     <button
                       type="button"
-                      aria-label={`Remove dependency on ${dep?.title ?? d}`}
+                      aria-label={`Remove dependency on ${name}`}
                       className="grid size-8 place-items-center rounded hover:bg-surface2"
                       onClick={() => void ops.patch(f, { depends_on: f.depends_on.filter((x) => x !== d) })}
                     >

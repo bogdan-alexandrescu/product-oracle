@@ -40,8 +40,8 @@ export type StoredScope = Omit<PrdScopeOut, "features"> & {
   /** The previous attempt's decisions (feature key -> decision) and kept requirement keys. */
   previous?: Record<string, string> | null;
   previous_requirements?: Record<string, string[]> | null;
-  /** Other PRDs' features on the company roadmap (key -> "Account health ledger from Safety PRD"), as feature_set.known_for_run reads them. */
-  elsewhere?: Record<string, string>;
+  /** Other PRDs' features on the company roadmap (key -> its title and PRD, "Safety PRD"), as feature_set.known_for_run reads them. */
+  elsewhere?: Record<string, { title: string; prd: string }>;
 };
 
 export const DECIDED = "This feature set is already decided";
@@ -187,7 +187,7 @@ export function recheck(db: RunsDb, scope: StoredScope) {
       const dep = byKey.get(d);
       const other = scope.elsewhere?.[d];
       // Another PRD on the company roadmap holds it: a real link, not a problem (to confirm).
-      if (other && dep?.decision !== "include") problems.push({ code: "needs_other_prd", blocking: false, feature: f.key, requirement: null, message: `${f.key} needs ${other}` });
+      if (other && dep?.decision !== "include") problems.push({ code: "needs_other_prd", blocking: false, feature: f.key, requirement: null, message: `${f.key} needs ${other.title} from ${other.prd}` });
       else if (!dep) problems.push({ code: "unknown_dependency", blocking: true, feature: f.key, requirement: null, message: `${f.key} depends on ${d}, which is not a feature` });
       else if (dep.decision !== "include") problems.push({ code: "depends_on_excluded", blocking: true, feature: f.key, requirement: null, message: `${f.key} depends on ${d}, which is excluded` });
     }
@@ -256,6 +256,7 @@ function reviewOf(ctx: Ctx, scope: StoredScope): Schemas["PrdScopeReview"] {
   // The roadmap's other features are the mock's own: never a field of the scope read.
   const rest: Omit<typeof withElsewhere, "elsewhere"> & { elsewhere?: unknown } = { ...withElsewhere };
   delete rest.elsewhere;
+  const included = new Set(scope.features.filter((f) => f.decision === "include").map((f) => f.key));
   return {
     ...rest,
     checkpoint_id: cp?.id ?? null,
@@ -276,6 +277,11 @@ function reviewOf(ctx: Ctx, scope: StoredScope): Schemas["PrdScopeReview"] {
           reasons: mine,
           needs_you: mine.some((r) => !r.answered),
           history: history(ctx, f),
+          // As the API: the dependencies another PRD on the company roadmap holds, named.
+          other_prd_dependencies: f.depends_on.flatMap((d) => {
+            const other = withElsewhere.elsewhere?.[d];
+            return other && !included.has(d) ? [{ key: d, title: other.title, prd: other.prd }] : [];
+          }),
           requirements: f.requirements.map((q) => ({
             ...q,
             parent_id: f.id,

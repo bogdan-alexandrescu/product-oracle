@@ -711,19 +711,31 @@ const OWNER_WAIVES = ["stopped_but_planned"];
 
 type Answering = { item_key?: string; kind: string; field?: string | null; value?: unknown; answers?: string[] | null };
 
+type Answered = { item?: string; code?: string; data?: unknown; fixes?: ReasonFix[] };
+const HORIZON_ORDER = ["now", "next", "later"];
+
 /**
  * As oracle.runs.reasons.is_its_fix: an edit naming a reason's code answers it only when it is
  * one of its edits of that item and field, if it has any (of an item's two dependency reasons,
- * Remove dependency on one answers that one); any other action always.
+ * Remove dependency on one answers that one); any other action always. A dependency reason is
+ * also answered by an edit removing its dependency among others, and a later horizon reason by a
+ * move to the dependency's horizon or after it.
  */
-const isItsFix = (a: Answering, x?: { fixes?: ReasonFix[] }) => {
+const isItsFix = (a: Answering, x?: Answered) => {
   if (a.kind !== "edit" || !x) return true;
+  const data = (x.data ?? {}) as { dependency?: unknown; dependency_horizon?: unknown };
+  if (a.item_key === x.item && typeof data.dependency === "string") {
+    const removed = (a.value as { remove?: unknown } | null | undefined)?.remove;
+    if (a.field === "depends_on" && Array.isArray(removed) && removed.includes(data.dependency)) return true;
+    const at = (h: unknown) => HORIZON_ORDER.indexOf(String(h));
+    if (x.code === "horizon_breaks_dependency" && a.field === "horizon" && at(a.value) >= 0 && at(data.dependency_horizon) >= 0) return at(a.value) >= at(data.dependency_horizon);
+  }
   const mine = (x.fixes ?? []).filter((f) => f.action.item === a.item_key && f.action.kind === a.kind && (f.action.field ?? null) === (a.field ?? null));
   return !mine.length || mine.some((f) => JSON.stringify(f.action.value ?? null) === JSON.stringify(a.value ?? null));
 };
 
 /** As the API: an action answers a reason it names, every reason of its item when it names none, but a waiver naming none never an owner's. */
-const answersCode = (a: Answering, code: string, x?: { fixes?: ReasonFix[] }) =>
+const answersCode = (a: Answering, code: string, x?: Answered) =>
   a.kind !== "question" && (a.answers?.length ? a.answers.includes(code) && isItsFix(a, x) : a.kind !== "waive" || !OWNER_WAIVES.includes(code));
 
 /** As the API: waiving another reason of the item adds it to the staged waiver before (naming none covers them all). */
@@ -4869,7 +4881,7 @@ export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">, ke
   const first = seedScopeRun(db, ctx, SCOPE_REVIEW_RUN, "saved-addresses", "2026-10-17T09:00:00Z", SCOPE_REVIEW_SET, 1, { "pick-address": ["new_feature"] });
   if (otherPrd) {
     // The owner, Nov 4: Address lookup needs Address verification, the Trust PRD's feature on the company roadmap.
-    first.scope.elsewhere = { "address-verification": "Address verification from Trust PRD" };
+    first.scope.elsewhere = { "address-verification": { title: "Address verification", prd: "Trust PRD" } };
     first.scope.features.find((f) => f.key === "address-lookup")!.depends_on = ["address-verification"];
     recheckScope(db, first.scope);
   }
