@@ -120,17 +120,16 @@ export function DecisionSheetHost({ onChanged, children }: { onChanged: () => un
   );
 }
 
-/** Home's and Waiting for you's decision-log calls: the sheet reads the decision's row (every field and `can`) from Decisions. */
+/** Home's and Waiting for you's decision-log calls: the sheet reads the decision's row (every field and `can`) by id. */
 function RowLoader({ id, onRow }: { id: string; onRow: (row: Row) => void }) {
-  const page = useQuery(`decision-sheet-row-${id}`, () => unwrap(api.GET("/v1/simple/decisions", {})));
-  const row = page.data ? [...page.data.meetings.flatMap((g) => g.decisions), ...page.data.other].find((r) => r.id === id) : undefined;
+  const one = useQuery(`decision-sheet-row-${id}`, () => unwrap(api.GET("/v1/simple/decisions/{decision_id}", { params: { path: { decision_id: id } } })));
   useEffect(() => {
-    if (row) onRow(row);
-  }, [row, onRow]);
+    if (one.data) onRow(one.data);
+  }, [one.data, onRow]);
   return (
     <div className="flex flex-col gap-3 p-1" data-testid="decision-sheet-body">
       <p className="simple-meta" role="status">
-        {page.error ?? (page.data && !row ? "This decision is no longer open" : "Loading…")}
+        {one.error ?? "Loading…"}
       </p>
     </div>
   );

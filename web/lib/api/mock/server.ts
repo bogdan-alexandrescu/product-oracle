@@ -6655,6 +6655,14 @@ async function route(db: Db, req: Request): Promise<Response> {
       ensureDecisions(db, ctx);
       return decisionInbox(ctx, db.decisions!, null).filter((d) => d.counts && d.reason === "needs_decision").length;
     };
+    meetingsCtx.logCall = async (id) => {
+      const ctx = decisionsContext(db, me);
+      ensureDecisions(db, ctx);
+      const found = db.decisions!.decisions.find((d) => d.id === id);
+      if (!found) return null;
+      const r = await routeDecisions(ctx, db.decisions!, new Request(`http://mock/v1/decisions/${found.number}`), ["v1", "decisions", String(found.number)], new URLSearchParams());
+      return r?.ok ? ((await r.json()) as Schemas["DecisionOut"]) : null;
+    };
     const meetingsDb = ensureMeetings(db, meetingsCtx);
     const meetingsRes =
       (await routeMeetingQuestions(meetingsDb, meetingsCtx, req, p)) ??

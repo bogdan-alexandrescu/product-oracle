@@ -83,6 +83,8 @@ export interface MeetingsCtx {
   chatLines?: (meetingId: string) => string[];
   /** prd-questions: the person's remembered Decisions view (preferences.simple_decisions_view). */
   view?: () => "list" | "board" | "meetings" | null;
+  /** edit-decisions: a decision-log call by id (GET /v1/decisions/{number}), for the sheet's GET /v1/simple/decisions/{id} (one decisions table in the API). */
+  logCall?: (id: string) => Promise<Schemas["DecisionOut"] | null>;
   /** prd-questions: the decision log's judgement calls waiting for this person (not run approvals). */
   othersWaiting?: () => number;
   /** home-honest-loading: every document of this kind is in Trash (and there is one). */
@@ -1462,6 +1464,18 @@ function withOptions(old: { key: string; label: string }[], labels: string[]) {
  */
 async function routeDecisionSheet(db: MeetingsDb, ctx: MeetingsCtx, req: Request, p: string[]): Promise<Response | null> {
   const now = iso(mockNowMs());
+  // GET /v1/simple/decisions/{id} (meetings_router.get_simple_decision): one decision as its Decisions row.
+  if (req.method === "GET" && p[1] === "simple" && p[2] === "decisions" && p.length === 4 && p[3] !== "waiting") {
+    let d = db.decisions.find((x) => x.id === p[3] && !x.trashed && product(x));
+    if (!d && !db.decisions.some((x) => x.id === p[3])) {
+      const logged = await ctx.logCall?.(p[3]);
+      if (logged && logged.status === "proposed") {
+        sheetDecisionMade(db, logged, logged.created_by ?? ctx.me.id, logged.number);
+        d = db.decisions.find((x) => x.id === p[3]);
+      }
+    }
+    return d ? json(200, row(ctx, d)) : json(404, { detail: "No such decision" });
+  }
   if (p[1] === "simple" && p[2] === "decisions" && p.length >= 4 && p[3] !== "waiting") {
     const trash = ctx.trash?.();
     if (!trash) return null;
@@ -1553,10 +1567,10 @@ async function routeDecisionSheet(db: MeetingsDb, ctx: MeetingsCtx, req: Request
 }
 
 /** edit-decisions: a decision made in Simple (POST /v1/decisions) is listed on its Decisions page too, with every field. */
-export function sheetDecisionMade(db: MeetingsDb, made: Schemas["DecisionOut"], by: string): void {
+export function sheetDecisionMade(db: MeetingsDb, made: Schemas["DecisionOut"], by: string, number?: number): void {
   if (db.decisions.some((x) => x.id === made.id)) return;
   db.decisions.push({
-    id: made.id, number: Math.max(0, ...db.decisions.map((x) => x.number)) + 1, title: made.title, origin: "manual", status: "proposed", approver_id: made.approver_id,
+    id: made.id, number: number ?? Math.max(0, ...db.decisions.map((x) => x.number)) + 1, title: made.title, origin: "manual", status: "proposed", approver_id: made.approver_id,
     at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))), subjects: [], meeting_id: null, change_ids: [],
     ask: made.question ?? null, context: made.context ?? null, options: (made.options ?? []).map((o) => ({ key: o.key, label: o.label })), review_at: made.review_at ?? null, created_by: by,
   });
