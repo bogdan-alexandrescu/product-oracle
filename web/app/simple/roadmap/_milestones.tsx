@@ -219,6 +219,8 @@ export interface MsLayerProps {
   phone: boolean;
   /** Left inset of the track (the Timeline's names column). */
   left?: number;
+  /** Spans of the axis (layer pixels) the "+ Milestone" hint keeps off: the Timeline's roadmap milestone names. */
+  keepOff?: [number, number][];
 }
 
 /** The day under a point of the track: x is monotonic, so a halving search over days finds it. */
@@ -448,9 +450,12 @@ export function MsLayer(props: MsLayerProps) {
   // Adding: the time axis takes a click; pointing at it shows where the milestone lands.
   const d = ms.draft;
   if (ms.canAdd) {
+    // The hint steps right past any name it would cover.
+    let hintL = X(addDays(ms.today, 97));
+    for (const [a, b] of [...(props.keepOff ?? [])].sort((p, q) => p[0] - q[0])) if (hintL < b + 6 && hintL + 92 > a - 6) hintL = b + 8;
     if (!ms.hover && !d && !phone)
       out.push(
-        <Chip key="hint" testid="ms-add-hint" className="z-[26] border border-dashed border-line-strong bg-surface text-text2" style={{ left: X(addDays(ms.today, 97)), top: axisY - 10 }}>
+        <Chip key="hint" testid="ms-add-hint" className="z-[26] border border-dashed border-line-strong bg-surface text-text2" style={{ left: hintL, top: axisY - 10 }}>
           + Milestone
         </Chip>,
       );

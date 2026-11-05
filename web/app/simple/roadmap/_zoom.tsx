@@ -836,7 +836,17 @@ function DayChart(props: TimelineProps) {
             );
           })}
           {/* build-milestones-on-roadmap: the milestones over the Timeline */}
-          <TimelineMilestones rows={rows} moved={moved} x={x} labelW={labelW} trackW={trackW} phone={phone} />
+          <TimelineMilestones
+            rows={rows}
+            moved={moved}
+            x={x}
+            labelW={labelW}
+            trackW={trackW}
+            phone={phone}
+            keepOff={milestones
+              .filter((m) => !m.gone)
+              .map((m): [number, number] => [labelW + m.left + 4, labelW + m.left + 20 + m.words.length * 7])}
+          />
         </div>
       </div>
     </div>
@@ -844,7 +854,7 @@ function DayChart(props: TimelineProps) {
 }
 
 /** build-milestones-on-roadmap: each row's place, for the milestone layer over the Timeline. */
-function TimelineMilestones({ rows, moved, x, labelW, trackW, phone }: { rows: Row[]; moved: Record<string, [string, string]>; x: (d: string) => number; labelW: number; trackW: number; phone: boolean }) {
+function TimelineMilestones({ rows, moved, x, labelW, trackW, phone, keepOff }: { rows: Row[]; moved: Record<string, [string, string]>; x: (d: string) => number; labelW: number; trackW: number; phone: boolean; keepOff: [number, number][] }) {
   let y = 44;
   const out: MsRow[] = [];
   const lanes: MsLane[] = [];
@@ -859,7 +869,7 @@ function TimelineMilestones({ rows, moved, x, labelW, trackW, phone }: { rows: R
     y += ROW_H;
     if (lanes.length) lanes[lanes.length - 1].y1 = y;
   }
-  return <MsLayer view="timeline" x={x} left={labelW} top={44} axisY={33} height={y} width={labelW + trackW} rows={out} lanes={lanes} phone={phone} />;
+  return <MsLayer view="timeline" x={x} left={labelW} top={44} axisY={33} height={y} width={labelW + trackW} rows={out} lanes={lanes} phone={phone} keepOff={keepOff} />;
 }
 
 const NO_WARN: string[] = [];
