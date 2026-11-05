@@ -340,7 +340,7 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
             <span className={`grid min-w-0 items-center gap-1 ${mode !== "viewer" ? "grid-cols-[minmax(0,1fr)_2rem] max-[600px]:grid-cols-[minmax(0,1fr)_2.5rem]" : "grid-cols-1"}`} data-testid="your-call">
               <span className="flex min-w-0 flex-wrap items-center justify-end gap-1" data-testid="your-call-buttons">
                 {confirm === it.key && rowFixes(openReasons(it))[0] ? (
-                  <ConfirmFix {...rowFixes(openReasons(it))[0]} it={it} ops={ops} onDone={() => leaveConfirm(it.key)} />
+                  <ConfirmFix {...rowFixes(openReasons(it))[0]} it={it} mode={mode} ops={ops} onDone={() => leaveConfirm(it.key)} />
                 ) : (
                   <YourCall it={it} open={openReasons(it)} staged={it.actions.filter((a) => a.state === "staged" && a.kind !== "question")} mode={mode} ops={ops} titleOf={titleOf} meId={me?.user_id ?? null} />
                 )}
@@ -595,14 +595,16 @@ function YourCall({ it, open, staged, mode, ops, titleOf, meId }: { it: Item; op
 
 /**
  * Stages a fix (or suggests it, for a commenter), answering its reason when it is the row's. An
- * item keeps one dependency edit, so Remove dependency joins the removal already staged (as the
- * panel's × does): both dependencies stay removed and both reasons answered.
+ * item keeps one dependency edit, so Remove dependency joins the removal already there (as the
+ * panel's × does): the one staged for an approver, a commenter's own suggestion for a commenter
+ * (the API keeps one action per item and field, so a second would replace the first). Both
+ * dependencies stay removed and both reasons answered.
  */
-function applyFix(fix: Fix, reason: Reason, ops: Ops, it: Item) {
+function applyFix(fix: Fix, reason: Reason, ops: Ops, it: Item, mode: Mode) {
   let value = fix.action.value ?? null;
   let answers = fix.action.item === reason.item ? [reason.code] : [];
   const removing = (value as { remove?: string[] } | null)?.remove;
-  const before = it.actions.find((a) => a.kind === "edit" && a.field === "depends_on" && a.state === "staged");
+  const before = it.actions.find((a) => a.kind === "edit" && a.field === "depends_on" && a.state === (mode === "approver" ? "staged" : "suggested"));
   if (fix.action.kind === "edit" && fix.action.field === "depends_on" && fix.action.item === it.key && removing && before) {
     const was = (before.value ?? {}) as { add?: string[]; remove?: string[] };
     value = { add: was.add ?? [], remove: [...new Set([...(was.remove ?? []), ...removing])] };
@@ -612,13 +614,29 @@ function applyFix(fix: Fix, reason: Reason, ops: Ops, it: Item) {
   return ops.act({ item_key: fix.action.item, kind: fix.action.kind, field: fix.action.field ?? null, value, answers });
 }
 
+/**
+ * Undo on one reason's card. A joined dependency removal goes back minus that reason's
+ * dependency only, still answering the other reasons it answered; any other action goes.
+ */
+function undoReason(a: Action, r: Reason, it: Item, ops: Ops) {
+  const dep = (r.data as { dependency?: unknown } | null)?.dependency;
+  const was = (a.value ?? {}) as { add?: string[]; remove?: string[] };
+  const remove = (was.remove ?? []).filter((k) => k !== dep);
+  if (a.kind !== "edit" || a.field !== "depends_on" || remove.length === (was.remove ?? []).length || (!remove.length && !was.add?.length)) return ops.remove(a.id);
+  const value = { add: was.add ?? [], remove };
+  const next = { ...a, value, state: "staged" as const };
+  const kept = [...new Set(it.reasons.filter((x) => x !== r && answersReason(next, x)).map((x) => x.code))];
+  // Naming none would answer every reason, this one too: naming its code, the edit is not its fix.
+  return ops.act({ item_key: a.item_key, kind: "edit", field: "depends_on", value, answers: kept.length ? kept : [r.code] });
+}
+
 export function FixButton({ fix, reason, it, mode, ops, primary }: { fix: Fix; reason: Reason; it: Item; mode: Mode; ops: Ops; primary?: boolean }) {
   return (
     <Button
       variant={primary ? "primary" : "secondary"}
       className="h-8 px-2.5 text-sm max-[600px]:h-10"
       title={mode === "commenter" ? "Suggest: an approver stages it" : undefined}
-      onClick={() => void applyFix(fix, reason, ops, it)}
+      onClick={() => void applyFix(fix, reason, ops, it, mode)}
     >
       {fix.label}
     </Button>
@@ -629,7 +647,7 @@ export function FixButton({ fix, reason, it, mode, ops, primary }: { fix: Fix; r
  * Enter on a row (criterion 16): the row's first fix as "Confirm: {fix}", focused, so Enter
  * again applies it; Cancel or Escape goes back to the row with nothing staged.
  */
-function ConfirmFix({ fix, reason, it, ops, onDone }: { fix: Fix; reason: Reason; it: Item; ops: Ops; onDone: () => void }) {
+function ConfirmFix({ fix, reason, it, mode, ops, onDone }: { fix: Fix; reason: Reason; it: Item; mode: Mode; ops: Ops; onDone: () => void }) {
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => ref.current?.querySelector("button")?.focus(), []);
   return (
@@ -642,7 +660,7 @@ function ConfirmFix({ fix, reason, it, ops, onDone }: { fix: Fix; reason: Reason
         onDone();
       }}
     >
-      <Button variant="primary" className="h-8 px-2.5 text-sm max-[600px]:h-10" onClick={() => void applyFix(fix, reason, ops, it).then(onDone)}>
+      <Button variant="primary" className="h-8 px-2.5 text-sm max-[600px]:h-10" onClick={() => void applyFix(fix, reason, ops, it, mode).then(onDone)}>
         Confirm: {fix.label}
       </Button>
       <Button variant="ghost" className="h-8 px-2.5 text-sm max-[600px]:h-10" onClick={onDone}>
@@ -874,6 +892,8 @@ function ReviewInspector({
             {item.reasons.map((r, n) => {
               const isOpen = open.includes(r);
               const by = item.actions.find((a) => answersReason(a, r));
+              // A commenter's own suggestion that would answer it, with its own Undo.
+              const mine = !by && mode !== "approver" ? item.actions.find((a) => a.state === "suggested" && a.created_by?.id === meId && answersReason({ ...a, state: "staged" }, r)) : undefined;
               return (
                 <li key={`${r.code}:${n}`} className="rounded-button border border-line p-2.5" data-testid="reason-card">
                   <Chip kind={!isOpen ? "na" : r.severity === "blocking" ? "crit" : "warn"} wrap>
@@ -884,10 +904,17 @@ function ReviewInspector({
                     <p className="mt-1.5 flex items-center gap-2 text-sm font-medium text-pass">
                       ✓ {doneText(by, titleOf)}
                       {(mode === "approver" || by.created_by?.id === meId) && (
-                        <Button variant="ghost" className="h-8 px-2 text-sm" onClick={() => void ops.remove(by.id)}>
+                        <Button variant="ghost" className="h-8 px-2 text-sm" onClick={() => void undoReason(by, r, item, ops)}>
                           Undo
                         </Button>
                       )}
+                    </p>
+                  ) : mine ? (
+                    <p className="mt-1.5 flex items-center gap-2 text-sm text-text2">
+                      Suggested: {doneText(mine, titleOf)}
+                      <Button variant="ghost" className="h-8 px-2 text-sm" onClick={() => void undoReason(mine, r, item, ops)}>
+                        Undo
+                      </Button>
                     </p>
                   ) : (
                     mode !== "viewer" && (

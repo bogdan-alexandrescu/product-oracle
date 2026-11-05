@@ -194,13 +194,16 @@ test.describe("desktop", () => {
     await expect(diff).not.toContainText("person-weeks");
   });
 
-  for (const [target, row, total] of [
-    ["27", "2.8 person-weeks down to 1.5. Saves 1.3 person-weeks.", "1.3"],
-    ["33", "5.2 person-weeks down to 3. Saves 2.2 person-weeks.", "2.2"],
+  for (const [target, row] of [
+    ["27", "2.8 person-weeks down to 1.5."],
+    ["33", "5.2 person-weeks down to 3."],
   ] as const) {
     test(`at ${target} the slice shrinks the smaller item, as the API slices it`, async ({ page }) => {
       // The API's slice lever ships half the item's whole weeks (ceil(pw) / 2) and saves the rest:
       // the summary card's 8 person-weeks slice to 4; a smaller goal shrinks the card first, then slices it.
+      // What it saves, the rows, their days and the live date are the API engine's (plan.expect).
+      const want = plan.expect[`fit-date-hard@${target}`];
+      const saved = want.changes.find(([id]) => id === "summary")![2] as number;
       await openHard(page);
       await expect(page.getByTestId("fit-change-summary")).toContainText("8 person-weeks down to 4. Saves 4 person-weeks.");
       await page.getByRole("button", { name: "Keep Jan 8 with a smaller goal" }).click();
@@ -209,16 +212,28 @@ test.describe("desktop", () => {
       await sheet.getByRole("button", { name: "Save" }).click();
       await expect(sheet).toBeHidden();
       await expect(page.getByTestId("fit-smaller")).toContainText(`Counted against the smaller goal: At least ${target} threads`);
+      await readsTheEngine(page, `fit-date-hard@${target}`);
       const summary = page.getByTestId("fit-change-summary");
-      await expect(summary).toContainText(row);
+      await expect(summary).toContainText(`${row} Saves ${saved} person-weeks.`);
       // The live total with the slice alone ticked.
       const ticked = page.getByTestId("fit-ranked").getByRole("checkbox", { checked: true });
       while ((await ticked.count()) > 0) await ticked.first().click();
       await expect(page.getByTestId("fit-meter")).toContainText("0 person-weeks off the milestone, 0 changes picked.");
       await summary.getByRole("checkbox").click();
-      await expect(page.getByTestId("fit-meter")).toContainText(`${total} person-weeks off the milestone, 1 change picked.`);
+      await expect(page.getByTestId("fit-meter")).toContainText(`${saved} person-weeks off the milestone, 1 change picked.`);
     });
   }
+
+  test("at 30 the rows, their days and the live date are the API engine's", async ({ page }) => {
+    await openHard(page);
+    await page.getByRole("button", { name: "Keep Jan 8 with a smaller goal" }).click();
+    const sheet = page.getByTestId("fit-goal-sheet");
+    await sheet.getByLabel("Target", { exact: true }).fill("30");
+    await sheet.getByRole("button", { name: "Save" }).click();
+    await expect(sheet).toBeHidden();
+    await expect(page.getByTestId("fit-smaller")).toContainText("Counted against the smaller goal: At least 30 threads");
+    await readsTheEngine(page, "fit-date-hard@30");
+  });
 });
 
 /** Nothing in the open sheet reaches past the screen's right edge, and nothing scrolls sideways. */
