@@ -191,20 +191,24 @@ async def visible(
     return out
 
 
-async def inbox_rows(db: AsyncSession, principal: Any, seen: Any) -> list[Any]:
+async def inbox_rows(
+    db: AsyncSession, principal: Any, seen: Any, rows: list[RoadmapDateSuggestion] | None = None
+) -> list[Any]:
     """inbox-meeting-proposals fix: the open suggestions I may decide, one row per item (its
-    slices' span), newest first, for the Inbox."""
+    slices' span), newest first, for the Inbox. ``rows``: the open suggestions, newest
+    first, when the Inbox read them already (drafts.waiting)."""
     from oracle.simple.schemas import InboxSimpleDateSuggestion
 
     if getattr(principal, "user_id", None) is None or getattr(principal, "is_run", False):
         return []
-    rows = list(
-        await db.scalars(
-            select(RoadmapDateSuggestion)
-            .where(RoadmapDateSuggestion.status == "open")
-            .order_by(RoadmapDateSuggestion.created_at.desc())
+    if rows is None:
+        rows = list(
+            await db.scalars(
+                select(RoadmapDateSuggestion)
+                .where(RoadmapDateSuggestion.status == "open")
+                .order_by(RoadmapDateSuggestion.created_at.desc())
+            )
         )
-    )
     if not rows:
         return []
     read = await service.load(db)

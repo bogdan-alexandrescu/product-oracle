@@ -1116,20 +1116,25 @@ async def deciding(
     return out
 
 
-async def inbox_rows(db: AsyncSession, principal: Any, seen: Any) -> list[Any]:
+async def inbox_rows(
+    db: AsyncSession, principal: Any, seen: Any, rows: list[SimpleGoalSuggestion] | None = None
+) -> list[Any]:
     """inbox-meeting-proposals fix: the open suggestions of the goals whose suggestions I
-    decide, oldest first, for the Inbox (a failed-checks one only to owners, as listed)."""
+    decide, oldest first, for the Inbox (a failed-checks one only to owners, as listed).
+    ``rows``: the open suggestions, oldest first, when the Inbox read them already
+    (drafts.waiting)."""
     from oracle.simple.schemas import InboxSimpleGoalSuggestion
 
     if _me_or_none(principal) is None or getattr(principal, "is_run", False):
         return []
-    rows = list(
-        await db.scalars(
-            select(SimpleGoalSuggestion)
-            .where(SimpleGoalSuggestion.status == "open")
-            .order_by(SimpleGoalSuggestion.created_at, SimpleGoalSuggestion.id)
+    if rows is None:
+        rows = list(
+            await db.scalars(
+                select(SimpleGoalSuggestion)
+                .where(SimpleGoalSuggestion.status == "open")
+                .order_by(SimpleGoalSuggestion.created_at, SimpleGoalSuggestion.id)
+            )
         )
-    )
     owner = has_role(principal.role, "owner")
     rows = [r for r in rows if owner or not r.checks]
     if not rows:
