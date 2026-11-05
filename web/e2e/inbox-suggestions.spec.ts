@@ -40,6 +40,16 @@ import { expect, test, type Locator, type Page } from "./test";
  * has it in their Inbox until they approve it too, which publishes it; fails_when = no row for
  * either, the counts differ or wait for a reload, the reviewer's approval publishes it, or
  * Approve is not there. Desktop and phone.
+ *
+ * Card inbox-send-counts-at-once: protects = the owner, who decides the roadmap, sends a version
+ * for review and the rail's Inbox count (on a phone, the Roadmap tab's) goes up by one at once;
+ * fails_when = it stays until a reload.
+ *
+ * Card roadmap-toast-clear: protects = the "Sent for review" message covers no bar of the
+ * chart on a desktop; fails_when = it sits over a bar.
+ *
+ * Card inbox-ask-not-in-tray: protects = a feature ask on no roadmap sits in no roadmap's Needs a
+ * decision (as its Inbox row has no Open); fails_when = the Alerts roadmap's tray lists it.
  */
 
 async function tap(l: Locator) {
@@ -274,6 +284,8 @@ for (const phone of [false, true]) {
       await openFromInbox("Open Weekly alert digest on its roadmap");
       const proposal = page.getByTestId("decision-tray").getByTestId("tray-proposal").filter({ hasText: "Weekly alert digest" }).first();
       await expect(proposal).toBeVisible();
+      // card: inbox-ask-not-in-tray: a feature ask on no roadmap is decided in its Inbox row only: no roadmap's tray lists it.
+      await expect(page.getByTestId("decision-tray").getByTestId("tray-proposal").filter({ hasText: "Bulk export" })).toHaveCount(0);
       await expect.poll(() => inboxCount(page, phone, "roadmap")).toBeGreaterThan(0);
       const n2 = await inboxCount(page, phone, "roadmap");
       await tap(proposal.getByRole("button", { name: "Accept" }));
@@ -287,17 +299,34 @@ for (const phone of [false, true]) {
       await login(page);
       // The owner changes the Alerts roadmap and sends it for review (on a desktop, by the keyboard).
       const size = page.viewportSize()!;
-      await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto("/simple/roadmap");
+      await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+      // On a phone, the Roadmap tab's count (Weekly alert digest's proposal waits there).
+      if (phone) await expect.poll(() => shownCount(page, true)).toBeGreaterThan(0);
+      const phoneBefore = phone ? await shownCount(page, true) : 0;
+      await page.setViewportSize({ width: 1440, height: 900 });
       await page.getByTestId("filter-roadmap").selectOption({ label: "Alerts roadmap" });
       const bar = page.locator('[data-testid="timeline-row"][data-item="alert-export"] [data-testid="timeline-bar"]').first();
       await expect(bar).toBeVisible();
+      await expect.poll(() => shownCount(page, false)).toBeGreaterThan(0);
+      const railBefore = await shownCount(page, false);
       await bar.focus();
       await page.keyboard.press("ArrowRight");
       await expect(page.getByTestId("draft-count")).toHaveText("1");
       await page.getByTestId("draft-banner").getByRole("button", { name: "Send for review" }).click();
-      await expect(page.getByRole("status").filter({ hasText: "Sent for review" })).toBeVisible();
+      const sent = page.getByRole("status").filter({ hasText: "Sent for review" });
+      await expect(sent).toBeVisible();
+      // card: inbox-send-counts-at-once: the owner decides the roadmap: the version now waits on them too, and the rail counts it at once.
+      await expect.poll(() => shownCount(page, false)).toBe(railBefore + 1);
+      // card: roadmap-toast-clear: the toast covers no bar of the chart.
+      const box = (await sent.boundingBox())!;
+      const bars = await page.getByTestId("timeline-bar").evaluateAll((els) =>
+        els.map((el) => el.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0).map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height })),
+      );
+      const covered = bars.filter((b) => b.x < box.x + box.width && box.x < b.x + b.width && b.y < box.y + box.height && box.y < b.y + b.height);
+      expect(covered).toEqual([]);
       await page.setViewportSize(size);
+      if (phone) await expect.poll(() => shownCount(page, true)).toBe(phoneBefore + 1);
 
       await switchTo(page, "approver@example.com");
       const railCount = await openInboxFromRail(page, phone);
