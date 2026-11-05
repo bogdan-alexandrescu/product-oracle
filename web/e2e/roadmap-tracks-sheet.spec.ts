@@ -1,3 +1,4 @@
+import { MOCK_SCENARIO_KEY, TRACKS_CLOSED_SCENARIO } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
 import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -70,7 +71,7 @@ test.describe("Tracks sheet", () => {
     // It shows its 3 live features; Move to Trash moves its cut one (In-app tour) too, and says so.
     await expect(row(page, "Setup and onboarding")).toContainText("3 features");
     await row(page, "Setup and onboarding").getByRole("button", { name: "Move to Trash" }).click();
-    await expect(row(page, "Setup and onboarding").getByTestId("track-trash-confirm")).toContainText("Its 4 features, cut ones too, move to No track.");
+    await expect(row(page, "Setup and onboarding").getByTestId("track-trash-confirm")).toHaveText(/Its 3 features and 1 cut or merged move to No track\./);
     await row(page, "Setup and onboarding").getByTestId("track-trash-confirm").getByRole("button", { name: "Move to Trash" }).click();
     await expect(toasts(page)).toContainText("Moved Setup and onboarding to Trash · 4 features now have no track");
     await expect(row(page, "Setup and onboarding")).toHaveCount(0);
@@ -122,6 +123,29 @@ test.describe("Tracks sheet", () => {
     await expect(lane("Usage alerts track")).toHaveCount(1);
     await page.getByTestId("tracks-open").click();
     await expect(row(page, "Usage alerts track")).toContainText("5 features");
+  });
+
+  test("Move to Trash names the live features, and the cut or merged ones only when there are any", async ({ page }) => {
+    await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, TRACKS_CLOSED_SCENARIO] as const);
+    await open(page);
+    await page.getByTestId("tracks-open").click();
+    const ask = async (title: string) => {
+      await sheet(page).getByRole("button", { name: `Change ${title}` }).click();
+      await row(page, title).getByRole("button", { name: "Move to Trash" }).click();
+      return row(page, title).getByTestId("track-trash-confirm");
+    };
+    // 2 live and 1 cut.
+    await expect(row(page, "Guided setup track")).toContainText("2 features");
+    await expect(await ask("Guided setup track")).toHaveText(/^Its 2 features and 1 cut or merged move to No track\./);
+    // No live feature, 1 cut.
+    await expect(row(page, "Welcome media track")).toContainText("0 features");
+    await expect(await ask("Welcome media track")).toHaveText(/^Its 1 cut or merged feature moves to No track\./);
+    // 5 live and 1 merged.
+    await expect(row(page, "Usage alerts track")).toContainText("5 features");
+    const confirm = await ask("Usage alerts track");
+    await expect(confirm).toHaveText(/^Its 5 features and 1 cut or merged move to No track\./);
+    await confirm.getByRole("button", { name: "Move to Trash" }).click();
+    await expect(toasts(page)).toContainText("Moved Usage alerts track to Trash · 6 features now have no track");
   });
 
   test("a track with no features moves to Trash at once", async ({ page }) => {

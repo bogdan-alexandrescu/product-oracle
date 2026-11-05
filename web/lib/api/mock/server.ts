@@ -954,6 +954,22 @@ function seedFeaturePanelFramesScenario(): Db {
 }
 
 /**
+ * removed-tracks review (the Move to Trash confirm), "tracks-closed": Guided setup track holds 2
+ * live features and 1 cut, Welcome media track only a cut one (Welcome video), and Usage alerts
+ * track 5 live and 1 merged draft (Alert inbox, merged into Alert rules engine). Invented data.
+ */
+export const TRACKS_CLOSED_SCENARIO = "tracks-closed";
+
+function seedTracksClosedScenario(): Db {
+  const db = seed();
+  const rm = (db.simple_roadmap = seedSimpleRoadmap());
+  Object.assign(rm.items.find((s) => s.key === "setup-video")!, { track: "welcome", status: "cut", depends: [] });
+  rm.items.push({ key: "alert-inbox", title: "Alert inbox", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", draft: true, merged_into: "alert-rules" });
+  rm.ids["alert-inbox"] = stableUuid("simple-item/alert-inbox");
+  return db;
+}
+
+/**
  * meeting-changes-only-its-agenda "meeting-agenda" scenario: the default company, with the
  * Welcome video (on the onboarding roadmap) built from Usage alerts, so a review of Usage
  * alerts (pinned to the alerts roadmap) sees an item it does not review.
@@ -3538,6 +3554,8 @@ function load(): Db {
                     db.simple_roadmap!.goal_milestones = seedOldMilestones(OLD_ROADMAP[0]);
                     return db;
                   }
+              : scenario === TRACKS_CLOSED_SCENARIO
+                ? seedTracksClosedScenario
               : scenario === "simple-500"
                 ? () => ({ ...seed(), simple_roadmap: seedSimpleMany() })
                 : scenario === "strategy" || scenario === "strategy-no-vision"
