@@ -37,9 +37,13 @@ async function pillAfter(name: Locator, pill: Locator) {
 }
 
 /** Per pill in `box`: the words just before it and its own word (the pill is the next thing after a name). */
-async function pillsAfterWords(box: Locator): Promise<{ before: string; word: string }[]> {
+async function pillsAfterWords(box: Locator): Promise<{ before: string; word: string; afterSource: boolean }[]> {
   return box.getByTestId("answer-mark").evaluateAll((els) =>
-    els.map((el) => ({ before: (el.previousSibling?.textContent ?? "").trim(), word: el.querySelector('[data-testid="cs-mark"]')?.textContent ?? "" })),
+    els.map((el) => ({
+      before: (el.previousSibling?.textContent ?? "").trim(),
+      word: el.querySelector('[data-testid="cs-mark"]')?.textContent ?? "",
+      afterSource: el.previousSibling?.nodeName === "SUP",
+    })),
   );
 }
 
@@ -111,7 +115,7 @@ for (const size of ["desktop", "phone"] as const) {
       expect(pills.length, "a pill after each item named").toBeGreaterThanOrEqual(4);
       // A feature named in words carries one pill, after its name: none again after the line's marker.
       await expect(line.getByTestId("cs-mark")).toHaveCount(pills.length);
-      expect(pills.every((p) => !/\d$/.test(p.before)), "no pill after a source number").toBe(true);
+      expect(pills.every((p) => !p.afterSource), "no pill after a source number").toBe(true);
       // No raw marker or token is shown.
       await expect(line).not.toContainText("[c:");
       // The pill after a name opens that feature's card.
