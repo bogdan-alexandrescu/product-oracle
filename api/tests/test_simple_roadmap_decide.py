@@ -25,6 +25,14 @@ Test cards (protects / fails_when / no_claim):
   also counts the dates the reader may confirm in the whole roadmap (Needs a decision's
   Dates to confirm), so the side menu's Roadmap count equals Needs a decision;
   fails_when=the field is missing or counts dates the reader may not decide; no_claim=the web.
+- test_waiting_count_reads_one_chosen_roadmap: protects=GET /v1/simple/roadmap/waiting
+  with ``roadmap`` counts that roadmap alone, as the read with the same filter does (the
+  tray's "in this roadmap"), and 404s an unknown one; fails_when=the filter is ignored;
+  no_claim=the web.
+- test_remove_dependency_reads_the_subject_too: protects=a Remove the dependency touches the
+  item it depended on as well (its flags, the "changed since you saw it" check's last
+  writer, the locks): the result's flags hold the cut item's, cleared;
+  fails_when=the subject is left out; no_claim=the web.
 - test_draft_change_list_names_the_item: protects=each line of the working draft's change
   list carries the item's name, fixes included; fails_when=a line has no name;
   no_claim=the web's wording.
@@ -216,6 +224,40 @@ async def test_waiting_count_holds_the_dates_to_confirm(client):
     assert r.json()["dates_to_confirm"] == 2 == await _dates_in_read(client, ctx, "decider")
     r = await client.get(f"{ROADMAP}/waiting", headers=ctx.as_("viewer"))
     assert r.json()["dates_to_confirm"] == 0 == await _dates_in_read(client, ctx, "viewer")
+
+
+async def test_waiting_count_reads_one_chosen_roadmap(client):
+    ctx = await make_people()
+    await World(ctx).build(decider=True, ops=["cut"])
+    r = await client.get(ROADMAP, headers=ctx.as_("decider"))
+    chosen = r.json()["roadmaps"][0]["roadmap"]["id"]
+    r = await client.get(
+        f"{ROADMAP}/waiting", params={"roadmap": chosen}, headers=ctx.as_("decider")
+    )
+    assert r.status_code == 200, r.text
+    assert (
+        r.json()["broken_links"]
+        == 1
+        == await _links_in_read(client, ctx, "decider", roadmap=chosen)
+    )
+    r = await client.get(f"{ROADMAP}/waiting", params={"roadmap": str(uuid.uuid4())},
+                         headers=ctx.as_("decider"))  # fmt: skip
+    assert r.status_code == 404, r.text
+
+
+async def test_remove_dependency_reads_the_subject_too(client):
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, ops=["cut"])
+    ids = {"a": w.ids["cut-a"], "b": w.ids["cut-b"]}
+    r = await w.post(client, "decider", "cut")
+    assert r.status_code == 201, r.text
+    r = await client.post(CHANGES, headers=ctx.as_("decider"), json={
+        "op": "remove_dependency", "target": {"item_id": ids["b"], "subject": ids["a"]},
+        "before": {}, "after": {}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    flags = {f["item_id"]: f["flags"] for f in r.json()["flags"]}
+    assert ids["a"] in flags
+    assert not any(f["kind"] == "cut_with_dependents" for f in flags[ids["a"]])
 
 
 async def test_draft_change_list_names_the_item(client):

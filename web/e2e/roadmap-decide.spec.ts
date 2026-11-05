@@ -323,9 +323,43 @@ test("an approver's proposed Remove the dependency says who it waits for and is 
   const propose = cut.getByRole("button", { name: /^Propose: remove the dependency/ }).first();
   const label = (await propose.innerText()).trim();
   await propose.click();
-  await expect(page.getByText(/proposed: it waits for/).first()).toBeVisible();
+  // Nothing was removed yet: the toast says it was proposed, and to whom.
+  await expect(page.getByText(/^Proposed: remove the dependency of ‘.+’ on ‘Alert rules engine’; it waits for Avery Stone in Needs a decision/).first()).toBeVisible();
+  await expect(page.getByText(/^Removed the dependency/)).toHaveCount(0);
   await expect(cut.getByRole("button", { name: label, exact: true })).toHaveCount(0);
-  await expect(cut.getByTestId("fix-proposed").first()).toContainText(/[Pp]roposed,? waits for Avery Stone/);
+  const line = cut.getByTestId("fix-proposed").first();
+  await expect(line).toContainText(/[Pp]roposed,? waits for Avery Stone/);
+  // The proposed line's item name opens that item's panel, as other item names do.
+  const dependent = /of ‘(.+)’/.exec(label)?.[1] ?? (await line.innerText());
+  await line.getByRole("button").click();
+  await expect(page.getByTestId("floating-card")).toBeVisible();
+  if (/of ‘/.test(label)) await expect(page.getByTestId("floating-card")).toContainText(dependent);
+  // The person it waits for reads "waits for you", on the strip and in Needs a decision.
+  await login(page);
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await expect(strip(page).locator('[data-testid="conflict"][data-item="alert-rules"]').getByTestId("fix-proposed").first()).toContainText(/waits for you/);
+  await page.getByTestId("needs-decision").click();
+  await expect(tray(page).getByTestId("tray-proposal").filter({ hasText: "remove the dependency" }).first()).toContainText("waits for you");
+});
+
+test("the decider of a draft sent for review sees Approve, not Send for review, on the owner's named draft", async ({ page }) => {
+  await open(page, "roadmap-two-drafts");
+  await strip(page).locator('[data-testid="conflict"][data-item="setup-tour"]').getByRole("button", { name: "Bring it back" }).click();
+  await expect(page.getByText(/Brought back 'In-app tour'/)).toBeVisible();
+  const banner = page.getByTestId("draft-banner");
+  await banner.getByRole("button", { name: "Send for review" }).click();
+  await expect(page.getByText(/Sent for review/).first()).toBeVisible();
+  // Priya Raman decides the Onboarding roadmap.
+  await login(page, "approver@example.com");
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await expect(banner).toBeVisible();
+  await expect(banner.getByRole("button", { name: "Send for review" })).toHaveCount(0);
+  await expect(banner.getByRole("button", { name: "Approve", exact: true })).toBeVisible();
+  // Not hers: the banner names whose draft it is and its roadmap.
+  await expect(banner.getByTestId("draft-words")).not.toContainText("Your working draft");
+  await expect(banner.getByTestId("draft-words")).toContainText("Avery Stone's working draft of the Onboarding roadmap");
 });
 
 test("under a filter, Needs a decision says N here, M in all on one basis, and 1 of N is", async ({ page }) => {
@@ -338,7 +372,8 @@ test("under a filter, Needs a decision says N here, M in all on one basis, and 1
   const button = Number(/· (\d+)/.exec(await page.getByTestId("needs-decision").innerText())![1]);
   await page.getByTestId("needs-decision").click();
   const scope = tray(page).getByTestId("tray-scope");
-  const m = /^(\d+) here, (\d+) in all to decide/.exec(await scope.innerText());
+  // The whole count is every roadmap the reader sees, and says so.
+  const m = /^(\d+) here, (\d+) in all your roadmaps to decide/.exec(await scope.innerText());
   expect(m).not.toBeNull();
   const tiles = await tray(page).getByTestId("tray-counter").locator("b").allInnerTexts();
   // The tiles count the whole roadmap, as the "in all" does and the button does.
