@@ -34,7 +34,7 @@ const REASON_CHIP: Record<string, string> = {
   serves_no_goal: "No confirmed goal",
   low_confidence: "Low confidence",
   linked_blocker: "Linked open blocker",
-  new_feature: "New, not in the baseline",
+  new_feature: "New, not in the Ground Truth",
   duplicate_of_existing: "Duplicate",
 };
 const FILE_PROBLEMS = ["unreadable_yaml", "missing_file", "wrong_version", "wrong_document", "no_features"];

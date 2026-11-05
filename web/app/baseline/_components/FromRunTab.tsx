@@ -455,7 +455,7 @@ function BottomBar({ view, busy, act }: { view: FromRunOut; busy: boolean; act: 
   const gate = cp.gate;
   const closed = gate && !gate.open ? gate : null;
   const message = closed ? `${plural(closed.blocking_open + closed.file_problems, "blocking problem")} left: fix or waive them, or send back to the agents` : null;
-  const approveLabel = view.run.flow === "baseline" ? "Approve baseline" : "Approve and continue";
+  const approveLabel = view.run.flow === "baseline" ? "Approve the Ground Truth" : "Approve and continue";
   const saveNote = () =>
     note !== (cp.note ?? "")
       ? unwrap(api.PUT("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note", { ...path, body: { note: note.trim() ? note : null } }))
@@ -469,7 +469,7 @@ function BottomBar({ view, busy, act }: { view: FromRunOut; busy: boolean; act: 
   return (
     <div
       role="region"
-      aria-label="Decide: Confirm the baseline"
+      aria-label="Decide: Confirm the Ground Truth"
       data-testid="from-run-bar"
       className="fixed inset-x-0 bottom-0 z-20 flex flex-wrap items-center gap-2 border-t border-line bg-surface px-4 py-3 shadow-lg md:left-auto md:w-[min(100%,56rem)]"
     >

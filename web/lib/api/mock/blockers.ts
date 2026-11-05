@@ -312,7 +312,7 @@ export function narrowResolvedBlocker(db: BlockersDb, v2: V2Db) {
   const resolve = { id: crypto.randomUUID(), blocker_id: b.id, option_id: null, experiment_id: null, kind: "status_changed" as const, from_status: b.status, to_status: "resolved" as const, reason: "The provider raised our tier", actor: "user:approver", data: { gate: resolved }, created_at: at(1) };
   b.status = "resolved";
   b.document_ids = [];
-  const narrowed = { id: crypto.randomUUID(), blocker_id: b.id, option_id: null, experiment_id: null, kind: "status_changed" as const, from_status: null, to_status: null, reason: "Baseline import", actor: "user:approver", data: { change: "reclassified", before: resolved, by_decider: false, gate: snapshot(b) }, created_at: at(2) };
+  const narrowed = { id: crypto.randomUUID(), blocker_id: b.id, option_id: null, experiment_id: null, kind: "status_changed" as const, from_status: null, to_status: null, reason: "Ground Truth import", actor: "user:approver", data: { change: "reclassified", before: resolved, by_decider: false, gate: snapshot(b) }, created_at: at(2) };
   for (const e of [resolve, narrowed]) v2.blocker_events.push({ ...e, summary: describeEvent(e) });
 }
 

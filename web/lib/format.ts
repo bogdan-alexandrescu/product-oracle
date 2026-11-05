@@ -126,7 +126,7 @@ export const SOURCE_LABEL: Record<CitationOut["source"], string> = {
   fireflies: "Meeting notes",
   upload: "Upload",
   web: "Web",
-  oracle: "Oracle baseline",
+  oracle: "Oracle Ground Truth",
 };
 
 /** An absolute http(s) URL with a host: the only ref a citation opens as a link. */

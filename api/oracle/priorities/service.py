@@ -653,7 +653,7 @@ async def _override_inputs(
 async def _feature(db: AsyncSession, entity_id: uuid.UUID, field: str) -> Entity:
     e = await db.get(Entity, entity_id)
     if e is None or e.type != "feature" or e.status == "rejected":
-        raise InvalidError(f"{field} must be a feature of the baseline that is not rejected")
+        raise InvalidError(f"{field} must be a feature of the Ground Truth that is not rejected")
     return e
 
 

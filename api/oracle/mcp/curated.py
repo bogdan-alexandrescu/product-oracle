@@ -420,7 +420,7 @@ CURATED: tuple[Curated, ...] = (
     Curated(
         name="get_baseline",
         about=(
-            "Read the shared product baseline: goals, products, features, requirements, "
+            "Read the shared product Ground Truth: goals, products, features, requirements, "
             "constraints, decisions and people, with the edges between them and the "
             "evidence behind each. " + CONFIDENCE_GUIDANCE
         ),
@@ -489,7 +489,7 @@ CURATED: tuple[Curated, ...] = (
     Curated(
         name="propose_change",
         about=(
-            "Propose a change to the baseline. Proposals wait for a person to accept or "
+            "Propose a change to the Ground Truth. Proposals wait for a person to accept or "
             "reject them; locked items only change this way. A person accepting it applies the "
             "change, and the item is then locked against Oracle's changes until a person "
             "unlocks it. The run is recorded for you: "
@@ -531,7 +531,7 @@ CURATED: tuple[Curated, ...] = (
         name="get_run_output",
         about=(
             "Read a file an earlier segment of this run wrote (by segment number and file "
-            "name), e.g. the baseline proposal or the feature set a later step builds on, "
+            "name), e.g. the Ground Truth proposal or the feature set a later step builds on, "
             "or with attempt, a segment's previous attempt that a reviewer sent back. Only "
             "the run's own files."
         ),

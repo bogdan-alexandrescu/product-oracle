@@ -50,7 +50,7 @@ def _proposal(view: TraceOutput, subject_kind: str) -> RegenerationProposal | No
     if sections:
         scope.append("sections " + ", ".join(sections))
     if entities:
-        scope.append(f"{len(entities)} baseline item(s)")
+        scope.append(f"{len(entities)} Ground Truth item(s)")
     if whole and not sections:
         scope.append("the changes in " + ", ".join(sorted(set(filter(None, whole)))))
     scope_text = " and ".join(scope) or "what changed"
@@ -146,7 +146,7 @@ async def _subject_of_event(db: AsyncSession, event: ChangeEvent) -> ImpactSubje
                 d = await db.get(Document, v.document_id)
                 title = f"{d.title} v{v.number}"
     elif (event.data or {}).get("roots"):
-        title = f"{len(event.data['roots'])} baseline items"
+        title = f"{len(event.data['roots'])} Ground Truth items"
     return ImpactSubject(
         kind=event.subject_kind,
         id=event.subject_id,

@@ -416,7 +416,7 @@ function CodeCard({ kind, entityKey, entityId, title, proposed, code }: ChipProp
         </span>
       )}
       {e && (
-        <Link href={`/baseline?entity=${e.id}`} className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-accent-ink hover:underline">
+        <Link href={`/ground-truth?entity=${e.id}`} className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-accent-ink hover:underline">
           Open
         </Link>
       )}
@@ -467,7 +467,7 @@ export function NamedCode({ text, entry }: { text: string; entry: CodeEntry }) {
           Go to section
         </a>
       ) : entry.entityId ? (
-        <Link href={`/baseline?entity=${entry.entityId}`} className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-accent-ink hover:underline">
+        <Link href={`/ground-truth?entity=${entry.entityId}`} className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-accent-ink hover:underline">
           Open
         </Link>
       ) : null}

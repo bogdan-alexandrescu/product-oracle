@@ -98,7 +98,7 @@ export function RunCost({ run }: { run: RunSummary }) {
 export const WAITING_STATUSES: RunStatus[] = ["awaiting_checkpoint", "awaiting_approval", "paused_overrun"];
 
 export const CHECKPOINT_LABEL: Record<CheckpointKind, string> = {
-  baseline_confirm: "Confirm the baseline",
+  baseline_confirm: "Confirm the Ground Truth",
   feature_set: "Feature set and dependencies",
   priority_order: "Priority order",
   prd_review: "PRD review",

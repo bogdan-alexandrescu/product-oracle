@@ -43,7 +43,7 @@ function GoalCard({
           // qa-company-10: the goal's name opens the goal; a card that only repeated the name
           // and target over the figure is not drawn.
           <Link
-            href={`/baseline?entity=${g.id}`}
+            href={`/ground-truth?entity=${g.id}`}
             data-testid="goal-open"
             className="flex min-h-6 min-w-0 flex-1 items-start gap-1.5 rounded-goal font-semibold outline-offset-2 hover:underline"
           >
@@ -124,7 +124,7 @@ function GoalCard({
         {p.state === "notarget" && canInterview && (
           // B6: a goals interview on it, in the Baseline's goal drawer (nothing starts before the click).
           <Link
-            href={`/baseline?entity=${g.id}&interview=1`}
+            href={`/ground-truth?entity=${g.id}&interview=1`}
             data-testid="goal-make-measurable"
             className="text-sm font-semibold text-accent-ink hover:underline"
           >
@@ -243,13 +243,13 @@ export function GoalsPanel({
               </Chip>
             )}
             {more > 0 && (
-              <LinkButton href="/baseline" data-testid="goals-more">
+              <LinkButton href="/ground-truth" data-testid="goals-more">
                 {more} more
               </LinkButton>
             )}
             <InfoTip label="goals">
-              Current value over target, from the baseline. Ring: how well the evidence supports the goal. Dashed line: the
-              target. The trend shows when the baseline has recorded earlier values.
+              Current value over target, from the Ground Truth. Ring: how well the evidence supports the goal. Dashed line: the
+              target. The trend shows when the Ground Truth has recorded earlier values.
             </InfoTip>
           </>
         )
@@ -265,7 +265,7 @@ export function GoalsPanel({
       {goals && shown.length === 0 && (
         <div data-testid="home-goals-empty" className="flex flex-wrap items-center gap-3 px-4 py-4">
           <span className="text-[15px] font-semibold text-text2">No goals yet</span>
-          <InfoTip label="building the baseline" align="start">
+          <InfoTip label="building the Ground Truth" align="start">
             Oracle reads your sources and proposes your goals; they show here once confirmed. You can also push a
             baseline YAML with <code>oracle push</code>.
           </InfoTip>
@@ -274,7 +274,7 @@ export function GoalsPanel({
               with Set up hidden, the card opens the build under way, or starts one. */}
           {baseline?.inSetup ? (
             <span className="ml-auto text-[15px] text-text2" data-testid="goals-build-in-setup">
-              {baseline.runId ? "The baseline is building: open it from Set up, above" : "Build the baseline from Set up, above"}
+              {baseline.runId ? "The Ground Truth is building: open it from Set up, above" : "Build the Ground Truth from Set up, above"}
             </span>
           ) : baseline?.runId ? (
             <LinkButton href={buildRun(baseline.runId)} className="ml-auto" data-testid="goals-open-build">
@@ -282,8 +282,8 @@ export function GoalsPanel({
             </LinkButton>
           ) : (
             canImport && (
-              <LinkButton href="/baseline?build=1" className="ml-auto">
-                Build the baseline
+              <LinkButton href="/ground-truth?build=1" className="ml-auto">
+                Build the Ground Truth
               </LinkButton>
             )
           )}

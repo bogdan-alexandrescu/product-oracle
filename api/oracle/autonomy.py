@@ -202,12 +202,12 @@ SUMMARIES = {
 _ALL: tuple[Responsibility, ...] = (
     Responsibility(
         key="baseline",
-        title="Keep the baseline current",
+        title="Keep the Ground Truth current",
         group="knowledge",
         ceiling="act",
         default="act",
         levels={
-            "observe": "Oracle reads what runs find and writes nothing to the baseline.",
+            "observe": "Oracle reads what runs find and writes nothing to the Ground Truth.",
             "draft": "Agents write every change as a proposal for a person to edit and accept.",
             "recommend": "Agents propose every change; a person accepts each one.",
             "act": "Agents write unlocked entries directly; locked ones become proposals.",

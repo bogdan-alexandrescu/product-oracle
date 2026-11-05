@@ -224,7 +224,7 @@ async def start_intake_read(intake_id: uuid.UUID, principal: Commenter, db: Tena
 
 @router.post("/intakes/{intake_id}/analyze", response_model=IntakeSummary)
 async def analyze_intake(intake_id: uuid.UUID, principal: Commenter, db: TenantDB) -> IntakeSummary:
-    """Re-read the pinned snapshot and the baseline (the author only). Decided gaps are
+    """Re-read the pinned snapshot and the Ground Truth (the author only). Decided gaps are
     never changed and answered questions never asked again."""
     intake = await _intake(db, intake_id)
     try:
@@ -422,7 +422,7 @@ async def withdraw_intake_questions(
 async def get_intake_composition_inputs(
     intake_id: uuid.UUID, principal: Viewer, db: TenantDB
 ) -> CompositionInputs:
-    """What the module composer reads from this intake (brief, signals, scope, baseline
+    """What the module composer reads from this intake (brief, signals, scope, Ground Truth
     links, pinned snapshots, open critical gaps)."""
     return await summary.composition_inputs(db, await _intake(db, intake_id), principal)
 
@@ -436,7 +436,7 @@ async def get_intake_composition_inputs(
 async def start_intake_run(
     intake_id: uuid.UUID, body: IntakeRunIn, principal: Approver, db: TenantDB
 ) -> RunOut:
-    """Create a draft baseline-to-PRD run pinned to the intake's snapshot. Nothing runs
+    """Create a draft Ground Truth to PRD run pinned to the intake's snapshot. Nothing runs
     until an approver estimates and starts it; while that run is a draft, posting again
     updates it (no second run), and the intake stays open until it starts (then it is
     converted). Drafting waits until decided (C5): 409
@@ -782,7 +782,7 @@ async def create_question(
     body: QuestionCreate, principal: Commenter, db: TenantDB
 ) -> StakeholderQuestionOut:
     """Ask a teammate: a named person (commenter or above) is asked a question about an
-    intake, a document section, a run checkpoint item or a baseline entity. It lands in
+    intake, a document section, a run checkpoint item or a Ground Truth entity. It lands in
     their Inbox as "<your name> asks"; you see the answer on the subject. 422 when the
     subject does not exist or the person cannot answer. Audited (``question.asked``)."""
     try:

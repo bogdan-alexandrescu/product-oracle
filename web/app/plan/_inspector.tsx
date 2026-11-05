@@ -408,7 +408,7 @@ function AlertCard({ a, item, links, onChanged }: { a: TrackAlertOut; item: Plan
               </Button>
             )}
             {has("open_blocker") && blocker && (
-              <LinkButton href={`/baseline?tab=blockers&blocker=${encodeURIComponent(blocker)}`}>Open blocker</LinkButton>
+              <LinkButton href={`/ground-truth?tab=blockers&blocker=${encodeURIComponent(blocker)}`}>Open blocker</LinkButton>
             )}
             {has("link") && links && item.prd && (
               <Button disabled={busy} onClick={() => links.onLink(item, ref)}>

@@ -292,7 +292,9 @@ def _check_features(out: OrderCheck, rows: list[dict[str, Any]], known: Known) -
     for r in rows:
         key = r["key"]
         if key not in known.features:
-            out.add("unknown_feature", f"{key} is not a feature of the baseline or the scope", key)
+            out.add(
+                "unknown_feature", f"{key} is not a feature of the Ground Truth or the scope", key
+            )
         elif scope is not None and key not in scope:
             out.add("not_in_scope", f"{key} is not included in the approved PRD scope", key)
     for key in known.scope or []:

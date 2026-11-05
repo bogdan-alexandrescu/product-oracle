@@ -267,8 +267,8 @@ export function Priorities() {
           ) : (
             <>
               No features yet: confirm your company&rsquo;s goals in{" "}
-              <Link href="/baseline" className="font-medium text-accent-ink underline">
-                Detailed › Baseline
+              <Link href="/ground-truth" className="font-medium text-accent-ink underline">
+                Detailed › Ground Truth
               </Link>{" "}
               and the features Oracle suggests for them rank here.
             </>

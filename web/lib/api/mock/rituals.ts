@@ -201,7 +201,7 @@ const BUILTINS = [
   { kind: "goals_review", title: "Quarterly goals review", schedule: sched("quarterly", { month: 1, week_of_month: 1, weekday: 2, time: "10:00" }), duration_min: 90, prep_hours: 48, on: true },
   { kind: "investor_update", title: "Investor update", schedule: sched("monthly", { week_of_month: 1, weekday: 0, time: "09:00" }), duration_min: 30, prep_hours: 72, on: false },
   // B1's Build the baseline on the ritual clock, seeded paused (rebuild.py).
-  { kind: "baseline_rebuild", title: "Baseline rebuild", schedule: sched("monthly", { week_of_month: 1, weekday: 0, time: "09:00" }), duration_min: 30, prep_hours: 0, on: false },
+  { kind: "baseline_rebuild", title: "Ground Truth rebuild", schedule: sched("monthly", { week_of_month: 1, weekday: 0, time: "09:00" }), duration_min: 30, prep_hours: 0, on: false },
 ];
 
 const BLOCK_TITLES: Record<string, string> = {
@@ -215,7 +215,7 @@ const BLOCK_TITLES: Record<string, string> = {
   done_items: "Done in the window",
   priority_changes: "Priority changes",
   suggested_next: "Suggested next",
-  baseline_rebuild: "Baseline rebuild",
+  baseline_rebuild: "Ground Truth rebuild",
 };
 
 type Row = { text: string; href?: string | null; method?: string; label?: string };
@@ -237,7 +237,7 @@ function roadmapBlocks(asOf: string, trackId: string) {
     block("priority_changes", asOf, [{ text: "Usage alerts: #5 → #2", href: "/priorities" }]),
     block("suggested_next", asOf, [
       { label: "Start a roadmap run from Usage alerts PRD", method: "POST", href: `/v1/tracks/${trackId}/roadmap-run`, text: "Start a roadmap run from Usage alerts PRD" },
-      { label: "Review goals", href: "/baseline", text: "Review goals" },
+      { label: "Review goals", href: "/ground-truth", text: "Review goals" },
       { label: "Open priorities", href: "/priorities", text: "Open priorities" },
     ]),
   ];
@@ -253,7 +253,7 @@ function goalRows(ctx: RitualsContext): Row[] {
     .sort((a, b) => a.title.localeCompare(b.title))
     .map((g) => {
       const distance = assess(g).text;
-      return { text: `${g.title}: ${g.currentText ?? "-"} of ${g.targetText ?? "-"}${distance ? ` · ${distance}` : ""}`, href: `/baseline?entity=${g.id}` };
+      return { text: `${g.title}: ${g.currentText ?? "-"} of ${g.targetText ?? "-"}${distance ? ` · ${distance}` : ""}`, href: `/ground-truth?entity=${g.id}` };
     });
 }
 
@@ -279,13 +279,13 @@ const APPROVAL_USD = 50;
 const WAITS = " · Waits for an owner's approval";
 const approvalNote = (usd: number) => `Waiting for an owner's approval: the estimate ${usd2(usd)} is over $${APPROVAL_USD}`;
 const rebuildUsd = (ctx: RitualsContext) => ctx.rebuildUsd?.() ?? REBUILD_USD;
-const BUILD_HERE = "Build it from the Baseline page.";
-const REBUILD_FAILED = "The baseline build did not finish · Build it from the Baseline page";
+const BUILD_HERE = "Build it from the Ground Truth page.";
+const REBUILD_FAILED = "The Ground Truth build did not finish · Build it from the Ground Truth page";
 const UNDER_WAY = ["draft", "awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun"];
 const usd2 = (n: number) => `$${n.toFixed(2)}`;
 /** Why Oracle starts no build now (rebuild.blocked), or null: Observe. No ritual cost cap; over $50 the run waits (P3). */
 function rebuildBlocked(ctx: RitualsContext): string | null {
-  if (!(ctx.baselineStarts?.() ?? true)) return `Not started: Oracle is set to observe the baseline. ${BUILD_HERE}`;
+  if (!(ctx.baselineStarts?.() ?? true)) return `Not started: Oracle is set to observe the Ground Truth. ${BUILD_HERE}`;
   return null;
 }
 
@@ -293,13 +293,13 @@ function rebuildBlocks(ctx: RitualsContext, asOf: string) {
   const last = ctx.lastBaselineRun?.() ?? null;
   const usd = rebuildUsd(ctx);
   const rows: Row[] = [
-    last ? { text: `Last built ${companyStamp(last.created_at)}`, href: `/runs/${last.id}` } : { text: "No baseline build yet", href: null },
+    last ? { text: `Last built ${companyStamp(last.created_at)}`, href: `/runs/${last.id}` } : { text: "No Ground Truth build yet", href: null },
     { text: `Estimate ${usd2(usd)} at standard depth`, href: null },
   ];
   const why = rebuildBlocked(ctx);
-  if (why) rows.push({ text: why, href: null }, { text: "Build the baseline", label: "Build the baseline", href: "/baseline?build=1" });
-  else if (usd > APPROVAL_USD) rows.push({ text: `Oracle starts the build; over $${APPROVAL_USD} it waits for an owner's approval`, href: "/baseline" });
-  else rows.push({ text: "Oracle starts the build; its proposals wait for review", href: "/baseline" });
+  if (why) rows.push({ text: why, href: null }, { text: "Build the Ground Truth", label: "Build the Ground Truth", href: "/ground-truth?build=1" });
+  else if (usd > APPROVAL_USD) rows.push({ text: `Oracle starts the build; over $${APPROVAL_USD} it waits for an owner's approval`, href: "/ground-truth" });
+  else rows.push({ text: "Oracle starts the build; its proposals wait for review", href: "/ground-truth" });
   return [block(REBUILD, asOf, rows)];
 }
 
@@ -318,8 +318,8 @@ async function rebuildAfterReady(ctx: RitualsContext, r: Ritual, o: Occurrence) 
   Object.assign(o, { summary_state: "running", summary_run_id: started.id, summary_note: waits ? approvalNote(usd) : null, summary: null });
   ctx.oracleDid?.({
     responsibility: "baseline",
-    responsibility_title: "Keep the baseline current",
-    summary: `Started the baseline rebuild · Estimate ${usd2(usd)}${waits ? WAITS : ""}`,
+    responsibility_title: "Keep the Ground Truth current",
+    summary: `Started the Ground Truth rebuild · Estimate ${usd2(usd)}${waits ? WAITS : ""}`,
     subject: { kind: "ritual", key: r.id, href: `/company/rituals/${o.id}` },
     undo: { method: "POST", path: `/v1/runs/${started.id}/cancel`, body: null },
     notify_ids: [r.owner_id],
@@ -854,7 +854,7 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
     // Baseline rebuild, then Observe.
     if (!["ready", "held", "missed", "skipped"].includes(o.status) || !o.pre_read) return fail(409, "The pre-read is not ready yet");
     if (o.summary_state === "running") return fail(409, "Oracle is already writing this summary");
-    if (r.kind === REBUILD) return fail(409, "Start the baseline rebuild from the Baseline page");
+    if (r.kind === REBUILD) return fail(409, "Start the Ground Truth rebuild from the Ground Truth page");
     if (r.kind === DIGEST.kind && !ctx.marketWrites()) return fail(409, "Oracle does not write the digest at Observe");
     const special = FLOW_FOR_KIND[r.kind];
     if (special?.flow === "metrics_variance" && !ctx.openVariances?.(o.id)) return fail(409, "No open variance to explain");

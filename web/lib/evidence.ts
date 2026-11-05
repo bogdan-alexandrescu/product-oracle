@@ -37,7 +37,7 @@ const SOURCE: Record<string, string> = {
   fireflies: "Meeting notes",
   upload: "Upload",
   web: "Web",
-  oracle: "Oracle baseline",
+  oracle: "Oracle Ground Truth",
 };
 /** "github:issue" → "GitHub". */
 export const sourceLabel = (kind: string | null | undefined) => (kind ? (SOURCE[kind.split(":")[0]] ?? kind) : "Source");
@@ -67,7 +67,7 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, 
 
 /** The second line of a target: its ref and status, or its source and state. */
 export function targetSub(t: SectionLinkTarget): string {
-  if (t.type === "entity") return [t.entity_type ? cap(t.entity_type) : "Baseline item", t.status ? t.status.replace(/_/g, " ") : null, t.locked ? "locked" : null].filter(Boolean).join(" · ");
+  if (t.type === "entity") return [t.entity_type ? cap(t.entity_type) : "Ground Truth item", t.status ? t.status.replace(/_/g, " ") : null, t.locked ? "locked" : null].filter(Boolean).join(" · ");
   const parts: string[] = [sourceLabel(t.source_kind)];
   if (t.restricted) parts.push("restricted · kind only");
   if (t.source_removed) parts.push("source removed");
@@ -75,14 +75,14 @@ export function targetSub(t: SectionLinkTarget): string {
 }
 
 export function targetEyebrow(t: SectionLinkTarget): string {
-  if (t.type === "entity") return `Baseline ${t.entity_type ?? "item"}`;
+  if (t.type === "entity") return `Ground Truth ${t.entity_type ?? "item"}`;
   if (t.type === "evidence") return `Evidence · ${sourceLabel(t.source_kind)}`;
   return `Source item · ${sourceLabel(t.source_kind)}`;
 }
 
 export type MatrixGroup = "baseline" | "evidence" | "citations";
 export const GROUP_LABEL: Record<MatrixGroup, string> = {
-  baseline: "Baseline items",
+  baseline: "Ground Truth items",
   evidence: "Evidence & source items",
   citations: "Draft citations",
 };

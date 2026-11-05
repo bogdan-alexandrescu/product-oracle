@@ -138,7 +138,7 @@ export function GoalForm({ start, order, title, year, onSave, onCancel }: { star
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
         <OrderBadge n={order} />
         <h3 className="whitespace-nowrap text-[17px] font-[650]">{title}</h3>
-        <span className="text-[13px] text-text2 max-sm:basis-full sm:ml-auto">Goal {order} in the order; change it in Baseline</span>
+        <span className="text-[13px] text-text2 max-sm:basis-full sm:ml-auto">Goal {order} in the order; change it in the Ground Truth</span>
       </div>
       <Field label="Goal" error={!f.title.trim() ? "Name the goal." : undefined}>
         <textarea autoFocus rows={f.title.length > 60 ? 2 : 1} value={f.title} onChange={set("title")} className={`${INPUT} h-auto py-1.5`} />

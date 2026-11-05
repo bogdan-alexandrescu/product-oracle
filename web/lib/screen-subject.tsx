@@ -18,7 +18,7 @@ export const GENERAL: ScreenSubject = { kind: "screen", subject: { path: "/" }, 
 const PAGES: Record<string, string> = {
   home: "Home",
   requests: "Requests",
-  baseline: "Baseline",
+  baseline: "Ground Truth",
   documents: "PRDs",
   priorities: "Priorities",
   plan: "Plan",

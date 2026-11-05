@@ -240,7 +240,7 @@ export const RESEARCH_START_FAILED = "Oracle couldn't start this research.";
 /** The "research-unsafe-link" scenario: the web page the research cites has an address that is not http(s) (#606 re-review). */
 export const RESEARCH_UNSAFE_LINK_SCENARIO = "research-unsafe-link";
 export const RESEARCH_UNSAFE_LINK = "javascript:alert(document.domain)";
-const CANNED_CITATIONS = [{ n: 1, kind: "entity", ref: "g.activation", title: "Goal: Raise activation", url: "/baseline", confidence: 0.82, low_confidence: false }];
+const CANNED_CITATIONS = [{ n: 1, kind: "entity", ref: "g.activation", title: "Goal: Raise activation", url: "/ground-truth", confidence: 0.82, low_confidence: false }];
 /** The web page the mock's research read (read:web): a `web` citation linking to it. */
 const RESEARCH_CITATIONS: Record<string, unknown>[] = [
   ...CANNED_CITATIONS,

@@ -663,7 +663,7 @@ async def update(
 async def _check_goal(db: AsyncSession, prediction: PredictionIn) -> None:
     goal = await db.get(Entity, prediction.goal_id)
     if goal is None or goal.type != "goal":
-        raise DecisionError(422, "prediction.goal_id is not a goal of the baseline")
+        raise DecisionError(422, "prediction.goal_id is not a goal of the Ground Truth")
 
 
 async def _set_prediction(

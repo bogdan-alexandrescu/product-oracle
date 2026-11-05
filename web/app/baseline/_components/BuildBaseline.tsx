@@ -61,14 +61,14 @@ export function BuildBanner({ build }: { build: RunSummary }) {
   if (build.status === "failed") {
     return (
       <Notice tone="error" testId="baseline-build-banner">
-        Baseline build failed · {link("Open run")}
+        Ground Truth build failed · {link("Open run")}
       </Notice>
     );
   }
   const started = build.started_at ?? build.created_at;
   return (
     <Notice testId="baseline-build-banner">
-      Baseline being built · started {formatDateTime(started)} · {link("Open run")}. You&apos;ll get an Inbox item when
+      Ground Truth being built · started {formatDateTime(started)} · {link("Open run")}. You&apos;ll get an Inbox item when
       it&apos;s ready to review.
     </Notice>
   );
@@ -195,7 +195,7 @@ export function BuildBaselineSheet({
       >
         <div className="flex min-h-14 items-center gap-2 border-b border-line px-5 max-[600px]:px-4">
           <h2 id={`${id}-title`} className="min-w-0 flex-1 font-display text-xl font-bold tracking-heading">
-            Build the baseline
+            Build the Ground Truth
           </h2>
           <Button variant="ghost" icon="x" onClick={onClose} aria-label="Close" />
         </div>
@@ -247,7 +247,7 @@ export function BuildBaselineSheet({
             (first ? (
               <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-button bg-crit-bg px-3 py-2 text-sm font-medium text-crit">
                 <Icon name="alert" size={16} />
-                <span className="min-w-0 flex-1">A baseline build is already under way.</span>
+                <span className="min-w-0 flex-1">A Ground Truth build is already under way.</span>
                 <Link href={`/runs/${first}`} className="font-semibold underline underline-offset-2">
                   Open the build under way
                 </Link>

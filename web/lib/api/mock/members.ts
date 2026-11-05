@@ -91,7 +91,7 @@ function holdings(ctx: MembersContext): Record<string, Holding> {
       },
       section_approvals: 3,
       version_approvals: [{ document: "usage-alerts", title: "Usage alerts", version: 4 }],
-      checkpoint_decisions: [{ run_id: "run-mock-feature-set", checkpoint_id: "cp-mock-feature-set", kind: "feature_set", title: "Baseline to PRD · Usage alerts" }],
+      checkpoint_decisions: [{ run_id: "run-mock-feature-set", checkpoint_id: "cp-mock-feature-set", kind: "feature_set", title: "Ground Truth to PRD · Usage alerts" }],
       spend_approvals: [],
       approvals: [
         approval(approver.id, "2026-10-18T10:00:00Z", "problem"),

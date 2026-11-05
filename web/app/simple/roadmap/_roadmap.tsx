@@ -1448,8 +1448,8 @@ export function SimpleRoadmap() {
           ) : (
             <>
               No features yet: confirm your company&rsquo;s goals in{" "}
-              <Link href="/baseline" className="font-semibold text-accent-ink underline">
-                Detailed › Baseline
+              <Link href="/ground-truth" className="font-semibold text-accent-ink underline">
+                Detailed › Ground Truth
               </Link>{" "}
               and Oracle suggests the features for them here.
             </>

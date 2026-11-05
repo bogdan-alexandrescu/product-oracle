@@ -17,7 +17,7 @@ brief: [summary, goals, problems, brief-items, brief-roadmap, not-doing, top-ris
 
 ## Goals served {#goals}
 
-<!-- Brief: fits one slide; plain language for an all-hands. List the confirmed goals (from the baseline) this roadmap serves, each with metric, current value, target, horizon and owner. Give each a short code (G1, G2...) used as chips on cards. -->
+<!-- Brief: fits one slide; plain language for an all-hands. List the confirmed goals (from the Ground Truth) this roadmap serves, each with metric, current value, target, horizon and owner. Give each a short code (G1, G2...) used as chips on cards. -->
 
 ## Problems we are solving {#problems}
 

@@ -27,7 +27,7 @@ RULES = (
 
 def test_job_prompts_that_write_text_are_new_versions_with_the_rules():
     # refinement_batch.v2 is main's discussion-instructions version; the rules go in v3.
-    versions = {"refinement": "v2", "refinement_batch": "v3", "review_comments": "v2"}
+    versions = {"refinement": "v2", "refinement_batch": "v3", "review_comments": "v3"}
     for kind, version in versions.items():
         name, text = prompting.current(kind)
         assert name == f"{kind}.{version}"

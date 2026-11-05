@@ -77,7 +77,7 @@ const CHECKPOINT_LOCKED = "A checkpoint record is not edited; it records the run
 const DECIDED_LOCKED = "Decided decisions are not edited. Revisit it instead.";
 const CAPTURED = ["version_approval", "assumption", "blocker", "pushback_override", "priority_override", "checkpoint", "request_decline"];
 const STOP_LABELS: Record<string, string> = {
-  baseline_confirm: "Baseline confirm",
+  baseline_confirm: "Ground Truth confirm",
   feature_set: "Feature set",
   priority_order: "Priority order",
   prd_review: "PRD review",

@@ -522,7 +522,7 @@ ENG_DATES_TASK = (
 # (B1), one definition so the two can never drift.
 BASELINE_SEGMENT = SegmentDef(
     name="baseline",
-    title="Baseline proposal",
+    title="Ground Truth proposal",
     roles=("researcher", "analyst"),
     scopes=(*READ, "write:proposals"),
     outputs=("baseline.yaml", "summary.md"),
@@ -604,9 +604,9 @@ FLOWS: dict[str, FlowDef] = {
         FlowDef(
             key="baseline_to_prd",
             company_draft=True,
-            title="Baseline to PRD",
-            description="Baseline proposal, feature set and design, engineering check, priority "
-            "order, PRD draft.",
+            title="Ground Truth to PRD",
+            description="Ground Truth proposal, feature set and design, engineering check, "
+            "priority order, PRD draft.",
             # C4 One New PRD door: a PRD run starts from New PRD's brief (POST /v1/runs
             # keeps the flow for agents and the CLI).
             in_new_run_dialog=False,
@@ -985,7 +985,7 @@ FLOWS: dict[str, FlowDef] = {
             key="request_triage",
             member_output=True,
             title="Request triage",
-            description="Oracle suggests a theme, goals, a duplicate and a baseline feature "
+            description="Oracle suggests a theme, goals, a duplicate and a Ground Truth feature "
             "for every New request, and lists possible requests it finds in the starter's own "
             "sources. People accept or ignore each suggestion on Requests.",
             target_kind=None,
@@ -1209,13 +1209,13 @@ FLOWS: dict[str, FlowDef] = {
         ),
         FlowDef(
             key="baseline",
-            title="Build the baseline",
+            title="Build the Ground Truth",
             description="Read the sources and propose goals, products, features, constraints "
             "and evidence for you to review.",
             target_kind=None,
             writes_document=False,
             # D12: started from the Baseline page, never from the New run dialog.
-            starts_from=("Build the baseline · Baseline", "/baseline?build=1"),
+            starts_from=("Build the Ground Truth · Ground Truth", "/ground-truth?build=1"),
             segments=(BASELINE_SEGMENT,),
         ),
         FlowDef(

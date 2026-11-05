@@ -202,7 +202,7 @@ export function plainText(text: string): string {
 export const goalsOf = (f: Feature) => (f.goals.length ? f.goals : f.decision !== "include" ? (f.baseline_goals ?? []) : []);
 
 export function goalName(scope: Scope, key: string): string {
-  return scope.goals_available.find((g) => g.key === key)?.title ?? "A goal not in the baseline";
+  return scope.goals_available.find((g) => g.key === key)?.title ?? "A goal not in the Ground Truth";
 }
 
 /**

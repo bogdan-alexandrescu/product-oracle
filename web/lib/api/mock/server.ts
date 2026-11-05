@@ -3762,7 +3762,7 @@ function seedRunDiscussionsScenario(db: Db): DiscussionsDb {
 }
 
 const CHECKPOINT_NAMES: Record<string, string> = {
-  baseline_confirm: "Confirm the baseline",
+  baseline_confirm: "Confirm the Ground Truth",
   feature_set: "Feature set",
   priority_order: "Priority order",
   prd_review: "PRD review",
@@ -3792,7 +3792,7 @@ function discussionDocument(db: Db, d: DiscussionRow): DocumentSection[] {
 }
 
 /** A `screen` subject's page name, never its route (oracle.discussions.context.page_name): "Home", "Settings · Members", "General" for /. */
-const SCREEN_PAGES: Record<string, string> = { home: "Home", requests: "Requests", baseline: "Baseline", documents: "PRDs", priorities: "Priorities", plan: "Plan", roadmap: "Plan", runs: "Runs", inbox: "Inbox", company: "Company", sources: "Sources", settings: "Settings" };
+const SCREEN_PAGES: Record<string, string> = { home: "Home", requests: "Requests", baseline: "Ground Truth", documents: "PRDs", priorities: "Priorities", plan: "Plan", roadmap: "Plan", runs: "Runs", inbox: "Inbox", company: "Company", sources: "Sources", settings: "Settings" };
 const SCREEN_SIMPLE_PAGES: Record<string, string> = { "": "Home", roadmap: "Roadmap", priorities: "Priorities", decisions: "Decisions", meetings: "Meetings", prds: "One-pager", "one-pagers": "One-pager" };
 function screenPageName(path: string): string {
   const parts = path.split("?")[0].split("/").filter(Boolean);

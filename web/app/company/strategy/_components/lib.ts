@@ -72,7 +72,7 @@ export function subjectName(f: Finding, stack: Stack | undefined): string {
 export function subjectHref(f: Finding, stack: Stack | undefined): string | null {
   const choice = stack?.strategy?.choices.find((c) => c.entity_id === f.subject_id);
   if (choice && stack?.strategy) return `/documents/${stack.strategy.document.slug}/v/${stack.strategy.document.version}#choice-${choice.id}`;
-  if (f.subject_kind === "entity" && f.subject_id) return `/baseline?entity=${f.subject_id}`;
+  if (f.subject_kind === "entity" && f.subject_id) return `/ground-truth?entity=${f.subject_id}`;
   if (f.subject_kind === "roadmap_item") return "/plan";
   if (f.subject_kind === "document") return `/documents/${f.subject_ref}`;
   return null;

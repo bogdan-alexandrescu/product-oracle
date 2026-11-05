@@ -230,7 +230,7 @@ export function EvidencePane({ doc, n, title, latest }: { doc: string; n: number
   ) : capsReady && !canAdd ? (
     can("create_comment") ? (
       <Notice testId="evidence-commenter">
-        Section links are added by approvers. You can add an evidence link to a section&rsquo;s baseline item from the{" "}
+        Section links are added by approvers. You can add an evidence link to a section&rsquo;s Ground Truth item from the{" "}
         <Link href={`/documents/${doc}/v/${n}`} className="underline">
           Document tab
         </Link>
@@ -681,8 +681,8 @@ function TargetInspector(props: Shared & { row: MatrixRow }) {
 function TargetOpen({ target: t }: { target: SectionLinkTarget }) {
   if (t.type === "entity") {
     return (
-      <LinkButton variant="hero" href={`/baseline?entity=${t.id}`}>
-        Open in Baseline
+      <LinkButton variant="hero" href={`/ground-truth?entity=${t.id}`}>
+        Open in Ground Truth
       </LinkButton>
     );
   }
@@ -1187,9 +1187,9 @@ function AddSectionLinkForm({ section, rows, add }: { section: SectionEvidence; 
         <KindPrecision {...{ kind, setKind, precision, setPrecision, claim, setClaim }} />
         <Field label="Links to">
           <select aria-label="Links to" className={INPUT} value={to} onChange={(e) => setTo(e.target.value)} aria-busy={entitiesQ.loading}>
-            <option value="">Pick a baseline item, evidence or source item</option>
+            <option value="">Pick a Ground Truth item, evidence or source item</option>
             {entities.length > 0 && (
-              <optgroup label="Baseline items">
+              <optgroup label="Ground Truth items">
                 {entities.map((e) => (
                   <option key={e.id} value={`entity:${e.id}`}>
                     {e.title} · {cap(e.type)}

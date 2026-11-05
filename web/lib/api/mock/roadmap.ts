@@ -587,7 +587,7 @@ function unplanned(db: RoadmapDb, trackId: string, keys: Set<string>): Schemas["
  * #505): one counted line per verb, the latest, so two bulk writes never read as two counts.
  */
 function staleWhy(reasons: readonly string[], fallback: string): string {
-  const counted = /^(\d+) baseline items? (.+)$/;
+  const counted = /^(\d+) Ground Truth items? (.+)$/;
   const out: string[] = [];
   for (const r of reasons) {
     const verb = counted.exec(r)?.[2];
@@ -1373,7 +1373,7 @@ const ALERTS_APPROVED: PlanSeedItem[] = [
     reasons: [
       // #505: two bulk baseline writes marked it stale, as the API's stale reasons read; prod-6:
       // changes to its feature, goals and product, named by ref, read in words.
-      { kind: "stale", detail: staleWhy(["feature:alert-digest changed", "goal:g-paid-conversion changed", "goal:g-activation changed", "product:usage was confirmed", "42 baseline items changed", "11 baseline items changed"], "its PRD trace changed") },
+      { kind: "stale", detail: staleWhy(["feature:alert-digest changed", "goal:g-paid-conversion changed", "goal:g-activation changed", "product:usage was confirmed", "42 Ground Truth items changed", "11 Ground Truth items changed"], "its PRD trace changed") },
       { kind: "slipping", detail: "ENG-405 targets Dec 9, after the milestone date Nov 30." },
     ],
     next: { action: "decide_slip", who: "owner" } },

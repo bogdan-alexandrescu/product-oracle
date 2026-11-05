@@ -13,21 +13,21 @@ import { api, unwrap, type ConflictOut, type EntityOut, type ProposalOut } from 
 import { useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
-import { AddItemSheet, type AddKind } from "./_components/AddItem";
-import { BlockerInspector } from "./_components/BlockerInspector";
-import { BlockersTab } from "./_components/BlockersTab";
-import { BuildBanner, BuildBaselineSheet, BuildChip, currentBuild } from "./_components/BuildBaseline";
-import { goalTags, KPI_PHONE } from "./_components/common";
-import { ConflictsTab } from "./_components/ConflictsTab";
-import { EntityDrawer } from "./_components/EntityDrawer";
-import { FlaggedTab } from "./_components/FlaggedTab";
-import { FromRunBand, FromRunTab, RowActions, WhyCard } from "./_components/FromRunTab";
-import { fillNotice } from "./_components/goal-fields";
-import type { Stepper } from "./_components/GoalInterview";
-import { GraphTab } from "./_components/GraphTab";
-import { ItemsTab } from "./_components/ItemsTab";
-import { cardsOf, fieldName, noChange, ProposalsTab, type FromFilter } from "./_components/ProposalsTab";
-import { Tabs, type TabItem } from "./_components/Tabs";
+import { AddItemSheet, type AddKind } from "@/app/baseline/_components/AddItem";
+import { BlockerInspector } from "@/app/baseline/_components/BlockerInspector";
+import { BlockersTab } from "@/app/baseline/_components/BlockersTab";
+import { BuildBanner, BuildBaselineSheet, BuildChip, currentBuild } from "@/app/baseline/_components/BuildBaseline";
+import { goalTags, KPI_PHONE } from "@/app/baseline/_components/common";
+import { ConflictsTab } from "@/app/baseline/_components/ConflictsTab";
+import { EntityDrawer } from "@/app/baseline/_components/EntityDrawer";
+import { FlaggedTab } from "@/app/baseline/_components/FlaggedTab";
+import { FromRunBand, FromRunTab, RowActions, WhyCard } from "@/app/baseline/_components/FromRunTab";
+import { fillNotice } from "@/app/baseline/_components/goal-fields";
+import type { Stepper } from "@/app/baseline/_components/GoalInterview";
+import { GraphTab } from "@/app/baseline/_components/GraphTab";
+import { ItemsTab } from "@/app/baseline/_components/ItemsTab";
+import { cardsOf, fieldName, noChange, ProposalsTab, type FromFilter } from "@/app/baseline/_components/ProposalsTab";
+import { Tabs, type TabItem } from "@/app/baseline/_components/Tabs";
 
 type Tab = "from-run" | "graph" | "items" | "flagged" | "conflicts" | "proposals" | "blockers";
 const TABS: readonly Tab[] = ["from-run", "graph", "items", "flagged", "conflicts", "proposals", "blockers"];
@@ -81,7 +81,7 @@ function BackHomeFromUrl() {
 function BuildRefusedFromUrl() {
   const build = useSearchParams().get("build") === "1";
   if (!build) return null;
-  return <Notice testId="build-refused">Approvers and owners build the baseline.</Notice>;
+  return <Notice testId="build-refused">Approvers and owners build the Ground Truth.</Notice>;
 }
 
 /** ?entity=<id> opens that item (Publish's Resolve links here); ?blocker=<id> that blocker (its Open blocker). */
@@ -119,7 +119,7 @@ function InterviewFromUrl({ onGoal, onVague }: { onGoal: (id: string) => void; o
     const next = new URLSearchParams(params.toString());
     next.delete("interview");
     const rest = next.toString();
-    router.replace(rest ? `/baseline?${rest}` : "/baseline", { scroll: false });
+    router.replace(rest ? `/ground-truth?${rest}` : "/ground-truth", { scroll: false });
   }, [interview, entity, onGoal, onVague, params, router]);
   return null;
 }
@@ -164,7 +164,7 @@ export default function BaselinePage() {
   );
   const chooseFrom = (next: FromFilter) => {
     setFrom(next);
-    router.replace(next ? `/baseline?tab=proposals&run=${encodeURIComponent(next)}` : "/baseline?tab=proposals", { scroll: false });
+    router.replace(next ? `/ground-truth?tab=proposals&run=${encodeURIComponent(next)}` : "/ground-truth?tab=proposals", { scroll: false });
   };
   const shown = from ? (filtered.data ?? undefined) : proposals.data;
 
@@ -188,7 +188,7 @@ export default function BaselinePage() {
   const closeBuild = () => {
     setBuilding(false);
     setBuildFromSetup(false);
-    router.replace("/baseline", { scroll: false });
+    router.replace("/ground-truth", { scroll: false });
   };
   const started = () => {
     closeBuild();
@@ -461,7 +461,7 @@ export default function BaselinePage() {
   if (!capsReady && !capsError)
     return (
       <Page>
-        <PageHeader title="Baseline" />
+        <PageHeader title="Ground Truth" />
         <Loading />
       </Page>
     );
@@ -479,9 +479,9 @@ export default function BaselinePage() {
         <AddItemSheet kind={adding} graph={graph.data} tags={tags} onClose={() => setAdding(null)} onAdded={added} />
       )}
       <PageHeader
-        title="Baseline"
+        title="Ground Truth"
         info={
-          <InfoTip label="Baseline" align="start" side="bottom">
+          <InfoTip label="Ground Truth" align="start" side="bottom">
             Goals, products and features the product is built on, each linked to its evidence.
           </InfoTip>
         }
@@ -502,7 +502,7 @@ export default function BaselinePage() {
                 <BuildChip build={build} />
               ) : (
                 <Button variant="primary" icon="baseline" onClick={() => openBuild(false)}>
-                  Build baseline
+                  Build the Ground Truth
                 </Button>
               ))}
           </span>
@@ -578,7 +578,7 @@ export default function BaselinePage() {
         {view && <FromRunBand view={view} />}
         {runId && fromRun.error && <Notice tone="error">{fromRun.error}</Notice>}
 
-        <Tabs label="Baseline views" items={tabs} value={tab} onChange={setTab} />
+        <Tabs label="Ground Truth views" items={tabs} value={tab} onChange={setTab} />
 
         {error && <Notice tone="error">{error}</Notice>}
         {notice && <Notice>{notice}</Notice>}
