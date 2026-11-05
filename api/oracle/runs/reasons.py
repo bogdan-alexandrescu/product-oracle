@@ -147,9 +147,11 @@ def remove_dependency(item: str, dep: str) -> dict:
 
 def is_its_fix(action: Any, reason: dict[str, Any]) -> bool:
     """Whether a staged ``action`` (a ReviewAction or CheckpointAction) that names the
-    reason's code is that reason's: when the reason has fixes on the action's item, kind and
-    field, only one of them is (of an item's two dependency reasons, Remove dependency on
-    one answers that one); otherwise any is."""
+    reason's code is that reason's: an edit, when the reason has edits of the action's item
+    and field among its fixes, only when it is one of them (of an item's two dependency
+    reasons, Remove dependency on one answers that one); any other action always."""
+    if action.kind != "edit":
+        return True
     same = [
         f["action"]
         for f in reason.get("fixes") or []
