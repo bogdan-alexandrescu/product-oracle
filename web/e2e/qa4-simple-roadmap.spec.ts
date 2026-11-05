@@ -168,7 +168,7 @@ test.describe("desktop only", () => {
     await open(page, { scenario: "simple-home" });
     const count = page.getByTestId("simple-nav-roadmap-count");
     await expect(count).toBeVisible();
-    await expect(count).toHaveAttribute("title", /^\d+ on the roadmap waiting on you: broken links, dates, proposals and drafts$/);
+    await expect(count).toHaveAttribute("title", /^\d+ on the roadmap waiting on you: items with broken links, dates to confirm and proposals$/);
   });
 
   test("qa4-17: Enter with a title but no roadmap moves focus to the roadmap picker", async ({ page }) => {
