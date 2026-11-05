@@ -656,7 +656,8 @@ async def _on_versions(w, key: str) -> dict[int, int]:
 
 
 @pytest.mark.asyncio
-async def test_a_feature_only_in_the_draft_is_restored_to_the_draft_only(client):
+@pytest.mark.parametrize("then", ["draft_open", "draft_in_review"])
+async def test_a_feature_only_in_the_draft_is_restored_to_the_draft_only(client, then):
     """protects=(review round 5) a feature added in the open Simple draft (never approved),
     deleted, then restored, is back in that draft and on no version: a viewer, who sees the
     published roadmap, does not see it; fails_when=Restore copies it onto the published
@@ -668,9 +669,31 @@ async def test_a_feature_only_in_the_draft_is_restored_to_the_draft_only(client)
     r = await client.delete(f"{ITEMS}/{iid}", headers=w.as_("decider"))
     assert r.status_code == 200 and r.json()["change"] is None, r.text
     assert iid not in await w.items(client, "decider")
+    if then == "draft_in_review":
+        # The draft sent for review while the feature is in Trash: v2 waits without it.
+        r = await client.post("/v1/simple/changes", headers=w.as_("decider"), json={
+            "op": "edit_title", "target": {"item_id": w.ids["import-b"]},
+            "before": {"title": "Import history"}, "after": {"title": "Import log"}})  # fmt: skip
+        assert r.status_code == 201, r.text
+        drafts = (await client.get("/v1/simple/drafts", headers=w.as_("decider"))).json()
+        d = next(x for x in drafts if x["document"]["id"] == w.roadmap_id)
+        r = await client.post(f"/v1/simple/drafts/{d['id']}/submit", headers=w.as_("decider"))
+        assert r.status_code == 200 and r.json()["status"] == "submitted", r.text
 
     r = await client.post(f"{ITEMS}/{iid}/restore", headers=w.as_("owner"))
     assert r.status_code == 200, r.text
+    if then == "draft_in_review":
+        # On the version in review only, so approving it keeps the feature.
+        assert await _on_versions(w, "guided-setup") == {2: 1}
+        assert "Guided setup" not in {
+            i["title"] for i in (await w.items(client, "viewer")).values()
+        }
+        for who in ("decider", "approver"):
+            r = await client.post(f"/v1/simple/drafts/{d['id']}/approve", headers=w.as_(who))
+            assert r.status_code == 200, r.text
+        assert r.json()["status"] == "approved", r.text
+        assert "Guided setup" in {i["title"] for i in (await w.items(client, "viewer")).values()}
+        return
     assert iid in await w.items(client, "decider")
     assert iid not in await w.items(client, "viewer")
     assert "Guided setup" not in {i["title"] for i in (await w.items(client, "viewer")).values()}

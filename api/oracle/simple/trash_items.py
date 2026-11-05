@@ -413,7 +413,8 @@ async def _onto_current(db: AsyncSession, entry: TrashEntry) -> list[dict[str, A
     dependencies and milestones. An older approved version keeps what it was approved
     with; a version that can no longer be approved (withdrawn from review, superseded, or
     no longer the latest: only the latest is approved) is left as it is. A feature only
-    ever in a working draft goes back to that draft and onto no version. A dependency on a
+    ever in a Simple draft goes back to that draft and onto no version but the draft's
+    own version in review, when it was sent for review since. A dependency on a
     key no longer on that version (nor in Trash) is dropped, and said."""
     from oracle.docs.models import DocumentVersion
     from oracle.roadmap.models import RoadmapChangeSet, TrackMilestone
@@ -439,11 +440,21 @@ async def _onto_current(db: AsyncSession, entry: TrashEntry) -> list[dict[str, A
     if not rows:
         return []
     have = {r.roadmap_version_id for r in rows} - {None}
+    only: set[uuid.UUID | None] | None = None
     if not have:
-        # Only ever in a working draft (never approved): its own row is back there.
-        return []
-    newest = await db.scalar(
-        select(func.max(DocumentVersion.number)).where(DocumentVersion.id.in_(have))
+        # Only ever in a Simple draft (never approved): its own row is back there. A draft
+        # sent for review since has its version in review take it too, and no other version
+        # (approving it keeps the version's rows, not the draft's).
+        own = rows[0].simple_draft_id
+        sent = await db.get(SimpleDraft, own) if own else None
+        if sent is None or sent.status != "submitted" or sent.version_id is None:
+            return []
+        have, only = {sent.base_version_id} - {None}, {sent.version_id}
+    newest = (
+        await db.scalar(
+            select(func.max(DocumentVersion.number)).where(DocumentVersion.id.in_(have))
+        )
+        or 0
     )
     latest = await db.scalar(
         select(DocumentVersion).where(DocumentVersion.document_id == doc)
@@ -472,6 +483,8 @@ async def _onto_current(db: AsyncSession, entry: TrashEntry) -> list[dict[str, A
             )
         )
     )
+    if only is not None:
+        targets &= only
     if not targets:
         return []
     drafts_ = list(
