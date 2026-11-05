@@ -43279,7 +43279,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
       }
     },
     "/v1/simple/goal-buckets/goals/{goal_id}/archive": {

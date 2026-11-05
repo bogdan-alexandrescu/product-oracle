@@ -216,6 +216,9 @@ PER_ITEM: dict[str, Role | None] = {
     # H9: only the pricing owner, one owner (oracle.pricing.decide).
     "decide_pricing_memo": None,
     "decline_simple_change": "owner",
+    # trash-features-goals: below approver a goal's delete is proposed to the owners
+    # (trash_items._may_delete_goal), so the web offers Ask to delete.
+    "delete_bucket_goal": "approver",
     "delete_checkpoint_action": "owner",
     "delete_discussion_message": None,
     "delete_goal_milestone": "owner",

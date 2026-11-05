@@ -349,21 +349,22 @@ export type GoalFeatures = (goal: string) => { code: string; name: string; slice
  * EG1 a: the same question for Delete goal (eg1-a-hard: it goes to Settings > Trash first), and,
  * for who may not archive or delete, an ask (`ask`: whom it goes to, eg1-a-propose).
  */
-export function ArchiveDialog({ goal, plan, gb, onClose, onArchive, kind = "archive", ask }: { goal: Goal; plan: Plan; gb: Buckets; onClose: () => void; onArchive: (to: string | null) => Promise<void>; kind?: "archive" | "delete"; ask?: string[] | null }) {
+export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive, kind = "archive", ask }: { goal: Goal; plan: Plan | null; featuresOf?: GoalFeatures; gb: Buckets; onClose: () => void; onArchive: (to: string | null) => Promise<void>; kind?: "archive" | "delete"; ask?: string[] | null }) {
   const [mode, setMode] = useState<"move" | "none">("move");
   const [to, setTo] = useState("");
   const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const list = planFeatures(plan, goal.title);
+  const listOf: GoalFeatures = (title) => (plan ? planFeatures(plan, title) : (featuresOf?.(title) ?? []));
+  const list = listOf(goal.title);
   const others = gb.goals.filter((g) => g.id !== goal.id);
   const titleOf = (id: string) => gb.goals.find((g) => g.id === id)?.title ?? "";
   const multi = list.filter((f) => (featureOf(gb, f.code, f.name)?.goal_ids ?? []).some((g) => g !== goal.id));
   const rest = list.length - multi.length;
   const ms = [...new Set(list.flatMap((f) => f.slices.map((s) => s.milestone)))].sort();
-  const msLabel = (code: string) => `${code} ${plan.milestones.find((m) => m.code === code)?.name ?? ""}`.trim();
+  const msLabel = (code: string) => `${code} ${plan?.milestones.find((m) => m.code === code)?.name ?? ""}`.trim();
   const feats = `${list.length} ${list.length === 1 ? "feature" : "features"}`;
   const picked = mode === "none" || !!to || rest === 0;
-  const holds = to ? planFeatures(plan, titleOf(to)).length + rest : 0;
+  const holds = to ? listOf(titleOf(to)).length + rest : 0;
   const verb = kind === "delete" ? "Delete" : "Archive";
   const heading = ask ? `Ask to ${verb.toLowerCase()}` : verb;
   useEffect(() => {
@@ -380,7 +381,13 @@ export function ArchiveDialog({ goal, plan, gb, onClose, onArchive, kind = "arch
         </h2>
         {kind === "delete" && <p className="mt-1 text-[15px] text-text">It goes to Settings &gt; Trash for 30 days.</p>}
         <p className="mt-1 text-[15px] text-text2">
-          {list.length ? `It holds ${feats} with work in ${andList(ms.map(msLabel))}. The milestones stay as planned; their work moves with the features.` : "It holds no features in the plan. The milestones stay as planned."}
+          {!plan
+            ? list.length
+              ? `It holds ${feats}.`
+              : "It holds no features."
+            : list.length
+              ? `It holds ${feats} with work in ${andList(ms.map(msLabel))}. The milestones stay as planned; their work moves with the features.`
+              : "It holds no features in the plan. The milestones stay as planned."}
         </p>
         {list.length > 0 && (
           <div className="mt-3 grid gap-2 text-[15px]">

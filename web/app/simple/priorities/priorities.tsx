@@ -306,7 +306,7 @@ export function Priorities() {
         </FeatureMarks.Provider>
       )}
       {data && !blank && tab === "value-effort" && <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} moved={moved} />}
-      {data && !blank && tab === "buckets" && <Buckets data={data} suggestions={suggestions} />}
+      {data && !blank && tab === "buckets" && <Buckets data={data} suggestions={suggestions} reload={q.reload} />}
       </div>
     </div>
   );
@@ -1835,11 +1835,28 @@ function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }
 
 // --------------------------------------------------------------------------- goal buckets
 
-function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestionsApi }) {
-  const { can } = useMe();
-  const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
+function Buckets({ data, suggestions, reload }: { data: Out; suggestions: GoalSuggestionsApi; reload: () => Promise<unknown> }) {
   // plan-charts: with a dated plan, where each goal's work lands milestone by milestone.
   if (data.plan?.milestones.length && data.plan.span) return <PlanBuckets data={data} plan={data.plan} suggestions={suggestions} />;
+  return <UndatedBuckets data={data} suggestions={suggestions} reload={reload} />;
+}
+
+const sameGoal = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions: GoalSuggestionsApi; reload: () => Promise<unknown> }) {
+  const { can } = useMe();
+  const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
+  // EG1 a without a dated plan: each goal's ⋯ (Edit goal, Move up and down, Archive, Delete, or
+  // the asks), its owner, its form in place, the note with Undo and the Archived goals fold.
+  const bucketsQ = useGoalBuckets();
+  const gb = bucketsQ.data;
+  const [note, setNote] = useState<Note | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const writes = useBucketWrites(async () => void (await Promise.all([bucketsQ.reload(), reload()])), setNote, setError);
+  const rights = useBucketRights(gb);
+  const [editingGoal, setEditingGoal] = useState<string | null>(null);
+  const year = data.today.slice(0, 4);
+  const goalOf = (b: Bucket) => (b.no_goal ? undefined : gb?.goals.find((g) => sameGoal(g.title, b.title)));
   // An empty "No goal" bucket warns about nothing: it is left out.
   const buckets: Bucket[] = data.buckets.filter((b) => !(b.no_goal && b.weeks === 0 && b.codes.length === 0));
   const percent = sharePercents(buckets.map((b) => b.weeks));
@@ -1847,8 +1864,11 @@ function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestion
   const rowOf = new Map(data.rows.map((r) => [r.code, r]));
   // qa4-simple-plan-2: milestones or key dates on the roadmap (the Line's) are not a dated plan; never say there are no dates.
   const dated = (data.lines ?? []).some((l) => l.kind === "milestone" || l.kind === "key_date");
+  // A goal's features as Archive counts them: its bucket's.
+  const featuresOf: GoalFeatures = (title) => (buckets.find((b) => !b.no_goal && sameGoal(b.title, title))?.codes ?? []).map((c) => ({ code: c, name: rowOf.get(c)?.title ?? c, slices: [] }));
+  const acts = useGoalActs({ gb, plan: null, featuresOf, writes, rights });
   return (
-    <section aria-label="Goal buckets">
+    <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
       <p className="mb-3 text-text2" data-testid="buckets-intro">
         {dated
           ? "Grouped by goal for this quarter; the milestones and key dates are on the Ranked list's Line."
@@ -1874,15 +1894,47 @@ function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestion
           )}
         </div>
       </figure>
+      {note && <UndoNote id={note.id} clear='[data-testid="goal-bucket"] h3' onUndo={undoOf(note, writes)}>{note.text}</UndoNote>}
+      {error && (
+        <p role="alert" className="mt-3 text-[15px] text-warn">
+          {error}
+        </p>
+      )}
       <ul className="mt-3 grid gap-[var(--simple-gap)] sm:grid-cols-2">
-        {buckets.map((b, k) => (
-          <li key={b.key} data-testid="goal-bucket" data-key={b.key} className={`rounded-[var(--simple-card-radius)] border bg-surface p-3 ${b.no_goal ? "border-warn" : "border-line"}`}>
-            <div className="flex items-baseline justify-between gap-2">
-              <h3 className="font-semibold">{b.title}</h3>
-              <span className="tabular-nums">
-                {fmt(b.weeks)} wk · <span data-testid="bucket-share">{percent[k]}%</span>
-              </span>
-            </div>
+        {buckets.map((b, k) => {
+          const rec = goalOf(b);
+          return (
+          <li key={b.key} data-testid="goal-bucket" data-key={b.key} data-goal-id={rec?.id} className={`rounded-[var(--simple-card-radius)] border bg-surface p-3 ${b.no_goal ? "border-warn" : "border-line"}`}>
+            {rec && editingGoal === rec.id ? (
+              <GoalForm
+                start={{ title: rec.title, measure: rec.measure ?? "", target: rec.target ?? "", due: dayOf(rec.due, year), owner: rec.owner_id ?? null }}
+                order={rec.order}
+                title="Edit goal"
+                year={year}
+                onCancel={() => setEditingGoal(null)}
+                onSave={async (f) => {
+                  if (await writes.edit(rec, f, year)) setEditingGoal(null);
+                }}
+              />
+            ) : (
+              <>
+                <div className="flex items-baseline justify-between gap-2">
+                  <h3 className="min-w-0 flex-1 font-semibold">{b.title}</h3>
+                  <span className="tabular-nums">
+                    {fmt(b.weeks)} wk · <span data-testid="bucket-share">{percent[k]}%</span>
+                  </span>
+                  {rec && <span className="self-center">{acts.menu(rec, b.title, rights.edit(rec) ? () => setEditingGoal(rec.id) : undefined)}</span>}
+                </div>
+                {/* eg1-a-rest: each goal names its owner under its heading. */}
+                {rec?.owner_name && (
+                  <p className="mt-0.5">
+                    <span data-testid="goal-owner" className="text-[14px] text-text2">
+                      Owner: <b className="font-[650] text-text">{rec.owner_name}</b>
+                    </span>
+                  </p>
+                )}
+              </>
+            )}
             <div className="mt-2 h-3 overflow-hidden rounded-full bg-surface2">
               <div className={`h-full ${b.no_goal ? "bg-warn" : "bg-accent"}`} style={{ width: `${b.share * 100}%` }} />
             </div>
@@ -1892,7 +1944,7 @@ function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestion
                 {b.codes.map((c) => {
                   const r = rowOf.get(c);
                   return (
-                    <li key={c} className="flex items-center gap-1.5">
+                    <li key={c} data-code={c} className="flex items-center gap-1.5">
                       {r && <CodeChip r={r} />}
                       <span>{r?.title ?? c}</span>
                     </li>
@@ -1908,8 +1960,11 @@ function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestion
               </div>
             )}
           </li>
-        ))}
+          );
+        })}
+        {acts.fold(year)}
       </ul>
+      {acts.dialogs}
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
     </section>
   );
@@ -2187,7 +2242,7 @@ function undoOf(note: Note, writes: ReturnType<typeof useBucketWrites>): (() => 
  * for who may not), the Archived goals fold (Restore and Delete, or Ask to restore), and the
  * questions each asks first.
  */
-function useGoalActs({ gb, plan, featuresOf, writes, rights, onArchived }: { gb: Schemas["GoalBucketsOut"] | undefined; plan: Schemas["SimplePlanOut"]; featuresOf: GoalFeatures; writes: ReturnType<typeof useBucketWrites>; rights: ReturnType<typeof useBucketRights>; onArchived?: () => void }) {
+function useGoalActs({ gb, plan, featuresOf, writes, rights, onArchived }: { gb: Schemas["GoalBucketsOut"] | undefined; plan: Schemas["SimplePlanOut"] | null; featuresOf: GoalFeatures; writes: ReturnType<typeof useBucketWrites>; rights: ReturnType<typeof useBucketRights>; onArchived?: () => void }) {
   const [archiving, setArchiving] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [archOpen, setArchOpen] = useState(false);
@@ -2223,6 +2278,7 @@ function useGoalActs({ gb, plan, featuresOf, writes, rights, onArchived }: { gb:
           <ArchiveDialog
             goal={deletedGoal}
             plan={plan}
+            featuresOf={featuresOf}
             gb={gb}
             kind="delete"
             ask={rights.deleteAct === "ask" ? asksTo : null}
@@ -2246,6 +2302,7 @@ function useGoalActs({ gb, plan, featuresOf, writes, rights, onArchived }: { gb:
           <ArchiveDialog
             goal={archivedGoal}
             plan={plan}
+            featuresOf={featuresOf}
             gb={gb}
             ask={rights.archiveAct === "ask" ? asksTo : null}
             onClose={() => setArchiving(null)}
