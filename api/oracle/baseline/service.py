@@ -1233,7 +1233,7 @@ async def batched_changes(db: AsyncSession) -> AsyncIterator[None]:
             kind,
             cause=causes.pop() if len(causes) == 1 else "bulk_write",
             actor=entries[0]["actor"],
-            subject_ref=f"{len(entries)} baseline items",
+            subject_ref=f"{len(entries)} Ground Truth items",
             data={
                 "entity_ids": [str(e["id"]) for e in entries],
                 "fields": sorted({f for e in entries for f in e["fields"]}),

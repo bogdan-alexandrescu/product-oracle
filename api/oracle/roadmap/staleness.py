@@ -95,9 +95,12 @@ def _entity_ids(event: ChangeEvent) -> set[uuid.UUID]:
     return ids
 
 
-# A bulk write's reason: "11 Ground Truth items changed" (#505).
-_COUNTED = re.compile(r"(\d+) Ground Truth items? (.+)")
-_SIZE = re.compile(r"\d+ Ground Truth items?")
+# A bulk write's reason: "11 Ground Truth items changed" (#505). Change events and
+# reasons stored before the Ground Truth rename say "11 baseline items": they count the
+# same, and the read path says them in the new words (:func:`_reworded`).
+_COUNTED = re.compile(r"(\d+) (?:Ground Truth|baseline) items? (.+)")
+_SIZE = re.compile(r"\d+ (?:Ground Truth|baseline) items?")
+_OLD_COUNT = re.compile(r"\b(\d+) baseline (items?)\b")
 
 
 def one_count(reasons: Iterable[str]) -> list[str]:
@@ -183,7 +186,7 @@ def _reworded(reason: str) -> str:
     migration is never needed: the read path keeps up with the wording on its own."""
     if m := _OLD_SECTION_LINK.fullmatch(reason):
         return f"PRD section {m[1]} links {_noun(m[2], 1)}{m[3]}"
-    return reason
+    return _OLD_COUNT.sub(r"\1 Ground Truth \2", reason)
 
 
 # The reason an earlier rule wrote on an item with no PRD section for any new PRD version:

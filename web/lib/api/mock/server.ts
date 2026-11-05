@@ -984,7 +984,7 @@ function seedSimpleHomeOnePrdScenario(): Db {
 /**
  * CLD's production walk (#723, 2026-10-27), the "simple-walk" scenario: "simple-home-one-prd"
  * whose Guided setup items carry milestone texts with their notes appended, as real roadmaps
- * do ("M1 · Measure it, make it safe (baseline needs the export); ..."), its one-pager's slice
+ * do ("M1 · Measure it, make it safe (the usage report needs the export); ..."), its one-pager's slice
  * alike with a long problem line, and Checkout redesign started from an empty skeleton (the
  * template's guidance only). Invented data.
  */
@@ -994,7 +994,7 @@ function seedSimpleWalkScenario(): Db {
   const M1 = "M1 · Measure it, make it safe";
   const M2 = "M2 · Ship to beta";
   const noted: [string, string, number, number, string, number][] = [
-    ["walk-export", "Baseline export", 5, 40, `${M1} (baseline needs the export); Alert digest in ${M2}`, 45],
+    ["walk-export", "Usage export", 5, 40, `${M1} (the usage report needs the export); Alert digest in ${M2}`, 45],
     ["walk-dry-run", "Dry run", 10, 45, `${M1} (owner asks for a dry run)`, 45],
     ["walk-audit", "Setup audit", 15, 35, `${M1}; follow-up in M3`, 45],
     ["walk-invites", "Beta invites", 45, 70, `${M2} (two teams first)`, 75],

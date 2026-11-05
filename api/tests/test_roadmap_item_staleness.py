@@ -231,16 +231,16 @@ async def test_a_real_bulk_write_reads_ground_truth_items_merged_and_plural(
     """#505 / prod-6 with the Ground Truth rename: a bulk write through the Ground Truth
     service (:func:`baseline.batched_changes`) names its size "N Ground Truth items", so the
     payment step's reason is narrowed to its own count, plural, and two bulk writes read one
-    line; fails_when=the service writes "N baseline items" and the item reads "4 baseline
-    items changed; 3 baseline items changed" or "2 Ground Truth items was confirmed"."""
+    line; fails_when=the service writes "N baseline items" and the item reads "5 baseline
+    items changed; 4 baseline items changed" or "3 Ground Truth items was confirmed"."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await seed_baseline(tenant_id)
     ids = await seed_trace(tenant_id)
     await built_roadmap(client, auth, runtime)
-    # The payment step's own feature and blocker, and an entity that is not its own.
-    mine = (ids["feature"], ids["blocker"])
-    touched = (*mine, ids["criterion"])
+    # The payment step's own feature, blocker and acceptance criterion; a bulk write adds
+    # features that are not its own.
+    touched = (ids["feature"], ids["blocker"], ids["criterion"])
     writer = baseline.Writer(None, "user")
 
     async def bulk(n: int) -> None:
@@ -266,12 +266,12 @@ async def test_a_real_bulk_write_reads_ground_truth_items_merged_and_plural(
             )
         )
     assert refs == {"5 Ground Truth items"}, refs
-    await bulk(3)
+    await bulk(4)
     reasons = (await items(client, auth))["payment-step"]["stale_reasons"]
-    # The 5 and then the 3 each touch two of the payment step's own: one line, its count.
-    assert reasons == ["2 Ground Truth items changed"], reasons
+    # The 5 and then the 4 each touch three of the payment step's own: one line, its count.
+    assert reasons == ["3 Ground Truth items changed"], reasons
 
-    # A bulk confirm of its two reads "were confirmed", never "was confirmed".
+    # A bulk confirm of its three reads "were confirmed", never "was confirmed".
     approver = Principal(tenant_id=tenant_id, kind="user", role="owner")
     async with tenant_session(tenant_id) as s:
         for entity_id in touched:
@@ -284,7 +284,7 @@ async def test_a_real_bulk_write_reads_ground_truth_items_merged_and_plural(
                 await baseline.set_entity_status(s, approver, entity, "confirmed", None)
         await s.commit()
     reasons = (await items(client, auth))["payment-step"]["stale_reasons"]
-    assert reasons == ["2 Ground Truth items changed", "2 Ground Truth items were confirmed"]
+    assert reasons == ["3 Ground Truth items changed", "3 Ground Truth items were confirmed"]
 
 
 def test_a_stored_baseline_items_reason_reads_ground_truth_and_merges():

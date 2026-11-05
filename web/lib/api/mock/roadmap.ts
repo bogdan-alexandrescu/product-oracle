@@ -587,7 +587,8 @@ function unplanned(db: RoadmapDb, trackId: string, keys: Set<string>): Schemas["
  * #505): one counted line per verb, the latest, so two bulk writes never read as two counts.
  */
 function staleWhy(reasons: readonly string[], fallback: string): string {
-  const counted = /^(\d+) Ground Truth items? (.+)$/;
+  // As the API's staleness._COUNTED: one stored before the rename says "N baseline items".
+  const counted = /^(\d+) (?:Ground Truth|baseline) items? (.+)$/;
   const out: string[] = [];
   for (const r of reasons) {
     const verb = counted.exec(r)?.[2];

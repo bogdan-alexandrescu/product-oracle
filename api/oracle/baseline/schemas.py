@@ -344,7 +344,8 @@ class ProposalProposer(BaseModel):
     a member, an API token, or Oracle itself."""
 
     kind: Literal["run", "intake", "person", "token", "oracle"]
-    # "Baseline to PRD · Oct 16", "From an intake answer", "First Last", "API token “CI”", "Oracle"
+    # "Ground Truth to PRD · Oct 16", "From an intake answer", "First Last",
+    # "API token “CI”", "Oracle"
     label: str
     run_id: uuid.UUID | None = None
     # A person's: the web says "You" when it is the signed-in member's.

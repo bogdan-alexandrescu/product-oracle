@@ -223,7 +223,7 @@ export function describe(p: Proposal, entities: Entity[], edges: Edge[], awaitin
   return entitySentence(op, fields, id ? byId.get(id.toLowerCase()) : undefined, byId);
 }
 
-/** "Baseline to PRD · Oct 16", the day the run started in the Company time zone, as the API writes it. */
+/** "Ground Truth to PRD · Oct 16", the day the run started in the Company time zone, as the API writes it. */
 export function runLabel(run: Schemas["ProposalRun"]): string {
   return `${run.flow_title} · ${companyDayInWords(run.created_at)}`;
 }

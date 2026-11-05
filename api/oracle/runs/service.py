@@ -4970,7 +4970,7 @@ async def _import_baseline(db: AsyncSession, run: Run, text: str) -> dict[str, A
                 text,
                 run_id=run.id,
                 origin="agent",
-                reason="Run baseline.yaml",
+                reason="The run's Ground Truth file (baseline.yaml)",
                 proposals_only=level != "act",
             )
         except yaml_io.YamlInvalid as exc:
@@ -5083,7 +5083,7 @@ async def _advance(
     if sdef.imports_baseline:
         text = art["files"].get("baseline.yaml")
         if text is None:
-            baseline_import = {"error": "the segment left no baseline.yaml"}
+            baseline_import = {"error": "the segment left no Ground Truth file (baseline.yaml)"}
         else:
             # Committed first: the import runs in its own transaction.
             _set_art(segment, art)
@@ -8107,7 +8107,7 @@ async def _unchecked(db: AsyncSession, why: dict[uuid.UUID, str]) -> list[TickUn
         return []
     runs = list(await db.scalars(select(Run).where(Run.id.in_(why))))
     refs = await _refs(db, runs)
-    # As the run's page heads it: "Team onboarding · Baseline to PRD".
+    # As the run's page heads it: "Team onboarding · Ground Truth to PRD".
     titles = {r.id: " · ".join(t for t in (refs.title(r), _flow(r).title) if t) for r in runs}
     await db.rollback()
     return [
