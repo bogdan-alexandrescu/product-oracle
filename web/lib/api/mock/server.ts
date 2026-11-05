@@ -166,6 +166,7 @@ import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simpl
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
+import { rebuildsOut } from "./rebuilds";
 import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
@@ -176,7 +177,7 @@ import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADM
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { appliedVersionOf, approvedPrdToDraft, betLineItemIds, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
-import { closed, GOALS, shownDates, storedDates } from "./simple-roadmap";
+import { closed, GOALS, prdTrackOwnerIds, shownDates, storedDates } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -6716,6 +6717,36 @@ async function route(db: Db, req: Request): Promise<Response> {
   const seenBefore = db.inbox_seen?.[me.id] ?? null;
   // E1: the ticker moves each PRD draft's derivation one step (queued -> running -> ready).
   if (p[1] === "internal" && p[2] === "tick" && m === "POST") tickDraftRoadmaps(draftCtx(db), draftDb(db));
+  // The rebuild sign (owner's pick A): the runs that will make a new version of a document.
+  if (p[1] === "rebuilds" && p.length === 2 && m === "GET") {
+    const nameOf = (id: string | null) => {
+      const mm = db.members.find((x) => x.id === id);
+      return mm ? displayName(mm.email, mm.name) : null;
+    };
+    // As the API's ask_decider: the document's decider (its review policy), else its tracks'
+    // owners, else the company's owners; the first active approver or above.
+    const decider = (documentId: string | null) => {
+      const doc = documentId ? db.documents.find((d) => d.id === documentId) : undefined;
+      const ids = doc
+        ? [db.review_v2?.policies.find((x) => x.document_id === doc.id)?.decider_id ?? null, ...(db.simple_roadmap ? prdTrackOwnerIds(db.simple_roadmap, doc.slug) : [])]
+        : [];
+      ids.push(...db.members.filter((x) => x.role === "owner").sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)).map((x) => x.id));
+      const to = ids.map((id) => db.members.find((x) => x.id === id && x.status !== "disabled" && atLeast(x.role, "approver"))).find((x) => !!x);
+      return to ? displayName(to.email, to.name) : null;
+    };
+    return json(
+      200,
+      rebuildsOut({
+        runs: db.runs?.runs ?? [],
+        documents: db.documents,
+        role: me.role,
+        versions: (id) => db.versions.filter((v) => v.document_id === id).map((v) => ({ number: v.number, approved: !!v.approved_at })),
+        name: nameOf,
+        decider,
+        now: new Date(mockNowMs()),
+      }),
+    );
+  }
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
   // C4: an intake's draft run that starts converts its brief (the API's drafting.on_start).
   if (runs?.ok && req.method === "POST" && p[1] === "runs" && p[3] === "start" && p.length === 4) {
