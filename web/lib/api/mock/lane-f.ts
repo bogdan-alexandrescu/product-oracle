@@ -7,7 +7,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { goalPosition, sortGoals } from "@/lib/goal-order";
 import { plainText } from "@/lib/markdown";
-import { effortOf, LONG_WORDS_SCENARIO, type NewOrderRow } from "./baseline";
+import { LONG_WORDS_SCENARIO, type NewOrderRow } from "./baseline";
 import { presenterNotes, resolveBrief } from "./brief";
 import { MOCK_SCENARIO_KEY, mockUuid, seeded } from "./ids";
 import { calibration } from "./quality";
