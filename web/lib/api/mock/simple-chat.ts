@@ -1542,20 +1542,70 @@ function mayOf(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): { may: 
   return { may: decides ? "apply" : "propose", why_not: null };
 }
 
-/** chat-latest-card (card_order.topic): what a card changes, its item or the record its target names. */
+/**
+ * chat-latest-card (card_order.topic): the record a card changes, its item or the record its
+ * target names. A card that makes a new record (a note, a question, a decision, a suggestion, a
+ * feature ask, a new item) is its own topic; the meeting, page or goal it is made in is where.
+ */
 const NOT_TOPIC = new Set(["note_id", "suggestion_id", "meeting_id", "dependency_id", "decider_id"]);
+const NEW_OPS = new Set(["minutes_note", "open_question", "record_decision", "suggest_feature", "add_feature_ask", "add_item"]);
+const SMALL = new Set("a an the and or of to for in on at by with is are was be we it this that our".split(" "));
+const REWORDED = 0.5;
+/** The API's path parameters of each action the mock offers (ask_actions' catalogue: its route's path). */
+const API_PATHS: Record<string, string> = { create_entity: "/v1/baseline/entities", create_knowledge_gap: "/v1/gaps" };
+const sortedJson = (o: Record<string, unknown>) => JSON.stringify(Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b))));
 function cardTopic(c: StoredCard): string {
   if (c.item_id) return c.item_id;
   const t = (c.target ?? {}) as Record<string, unknown>;
+  if (NEW_OPS.has(c.op)) return `new:${c.id}`;
   if (c.op === API_OP) {
+    // card_order._api_topic: the record the route's path names (its last id); a create names none.
     const args = (t.args ?? {}) as Record<string, unknown>;
-    const ids = Object.entries(args).filter(([k, v]) => (k === "id" || k.endsWith("_id")) && typeof v === "string");
-    return ids.length ? String(ids[ids.length - 1][1]) : `${String(t.action)}:${JSON.stringify(args)}`;
+    const path = [...(API_PATHS[String(t.action)] ?? "").matchAll(/\{([^}/]+)\}/g)].map((m) => m[1]);
+    const ids = path.filter((p) => args[p] != null).map((p) => String(args[p]));
+    return ids.length ? ids[ids.length - 1] : `${String(t.action)}:${sortedJson(args)}`;
   }
   const id = Object.entries(t).find(([k, v]) => k.endsWith("_id") && !NOT_TOPIC.has(k) && v);
   if (id) return String(id[1]);
-  const rest = Object.fromEntries(Object.entries(t).filter(([k]) => k !== "note_id" && k !== "suggestion_id").sort(([a], [b]) => a.localeCompare(b)));
-  return `${c.op}:${JSON.stringify(rest)}`;
+  return `${c.op}:${sortedJson(Object.fromEntries(Object.entries(t).filter(([k]) => k !== "note_id" && k !== "suggestion_id")))}`;
+}
+
+/** card_order._draft: a new record's draft, its op, where it is made and its words; else null. */
+function draftOf(c: StoredCard): { op: string; where: string; words: Set<string> } | null {
+  if (c.item_id || !NEW_OPS.has(c.op)) return null;
+  const t = (c.target ?? {}) as Record<string, unknown>;
+  const after = (c.after ?? {}) as Record<string, unknown>;
+  const where = Object.fromEntries(Object.entries(t).filter(([k]) => k.endsWith("_id") && k !== "note_id" && k !== "suggestion_id" && k !== "item_id"));
+  const text = [after.text, after.outcome, after.title, t.title].find((v) => v) ?? "";
+  const words = new Set((String(text).toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((w) => !SMALL.has(w)));
+  return { op: c.op, where: sortedJson(where), words };
+}
+
+function reworded(a: Set<string>, b: Set<string>): boolean {
+  if (!a.size || !b.size) return a.size === b.size;
+  const both = [...a].filter((w) => b.has(w)).length;
+  return both / (a.size + b.size - both) >= REWORDED;
+}
+
+/** card_order.topics: each card's topic, oldest first; a draft offered again in other words takes the topic of the earlier open draft it rewords. */
+function cardTopics(cards: StoredCard[]): string[] {
+  const drafts = cards.map(draftOf);
+  const keys: string[] = [];
+  cards.forEach((c, i) => {
+    let key = cardTopic(c);
+    const mine = drafts[i];
+    if (mine) {
+      for (let j = i - 1; j >= 0; j--) {
+        const d = drafts[j];
+        if (d && cards[j].status === "open" && d.op === mine.op && d.where === mine.where && reworded(d.words, mine.words)) {
+          key = keys[j];
+          break;
+        }
+      }
+    }
+    keys.push(key);
+  });
+  return keys;
 }
 
 /**
@@ -1569,10 +1619,10 @@ function replacedBy(chat: ChatDb, c: StoredCard): string | null {
   const all = t.messages.flatMap((m) => m.card_ids.map((id) => chat.cards[id]).filter(Boolean));
   const at = all.findIndex((x) => x.id === c.id);
   if (at < 0) return null;
-  const later = all.slice(at + 1).filter((x) => x.message_id !== c.message_id);
-  const key = cardTopic(c);
-  const acted = later.filter((x) => x.status !== "open");
-  const same = later.filter((x) => cardTopic(x) === key);
+  const keys = cardTopics(all);
+  const later = all.map((x, i) => ({ x, k: keys[i] })).slice(at + 1).filter(({ x }) => x.message_id !== c.message_id);
+  const acted = later.filter(({ x }) => x.status !== "open").map(({ x }) => x);
+  const same = later.filter(({ k }) => k === keys[at]).map(({ x }) => x);
   const pick = c.status === "open" ? (same.length ? same : acted) : acted.filter((x) => same.includes(x)).length ? acted.filter((x) => same.includes(x)) : acted;
   return pick.length ? pick[pick.length - 1].id : null;
 }
