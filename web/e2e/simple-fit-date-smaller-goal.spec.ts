@@ -118,7 +118,7 @@ test.describe("desktop", () => {
 
   test("a smaller goal's person-weeks are rounded to a tenth, as the API rounds them", async ({ page }) => {
     // At 25 the goal's own work counts at a quarter: the bulk reply's 5 person-weeks are 1.25, read
-    // 1.2 as the API's round(…, 1) reads it (ties to even), and the slice's 2 are 0.5.
+    // 1.2 as the API's round(…, 1) reads it (ties to even), and the summary card's 8 are 2, sliced to 1.
     await openHard(page);
     await page.getByRole("button", { name: "Keep Jan 8 with a smaller goal" }).click();
     const sheet = page.getByTestId("fit-goal-sheet");
@@ -127,8 +127,34 @@ test.describe("desktop", () => {
     await expect(sheet).toBeHidden();
     await expect(page.getByTestId("fit-smaller")).toContainText("Counted against the smaller goal: At least 25 threads");
     await expect(page.getByTestId("fit-change-bulk")).toContainText("Saves 1.2 person-weeks.");
-    await expect(page.getByTestId("fit-change-summary")).toContainText("Saves 0.5 person-weeks.");
+    await expect(page.getByTestId("fit-change-summary")).toContainText("2 person-weeks down to 1. Saves 1 person-week.");
   });
+
+  for (const [target, row, total] of [
+    ["27", "2.8 person-weeks down to 1.5. Saves 1.3 person-weeks.", "1.3"],
+    ["33", "5.2 person-weeks down to 3. Saves 2.2 person-weeks.", "2.2"],
+  ] as const) {
+    test(`at ${target} the slice shrinks the smaller item, as the API slices it`, async ({ page }) => {
+      // The API's slice lever ships half the item's whole weeks (ceil(pw) / 2) and saves the rest:
+      // the summary card's 8 person-weeks slice to 4; a smaller goal shrinks the card first, then slices it.
+      await openHard(page);
+      await expect(page.getByTestId("fit-change-summary")).toContainText("8 person-weeks down to 4. Saves 4 person-weeks.");
+      await page.getByRole("button", { name: "Keep Jan 8 with a smaller goal" }).click();
+      const sheet = page.getByTestId("fit-goal-sheet");
+      await sheet.getByLabel("Target", { exact: true }).fill(target);
+      await sheet.getByRole("button", { name: "Save" }).click();
+      await expect(sheet).toBeHidden();
+      await expect(page.getByTestId("fit-smaller")).toContainText(`Counted against the smaller goal: At least ${target} threads`);
+      const summary = page.getByTestId("fit-change-summary");
+      await expect(summary).toContainText(row);
+      // The live total with the slice alone ticked.
+      const ticked = page.getByTestId("fit-ranked").getByRole("checkbox", { checked: true });
+      while ((await ticked.count()) > 0) await ticked.first().click();
+      await expect(page.getByTestId("fit-meter")).toContainText("0 person-weeks off the milestone, 0 changes picked.");
+      await summary.getByRole("checkbox").click();
+      await expect(page.getByTestId("fit-meter")).toContainText(`${total} person-weeks off the milestone, 1 change picked.`);
+    });
+  }
 });
 
 /** Nothing in the open sheet reaches past the screen's right edge, and nothing scrolls sideways. */
