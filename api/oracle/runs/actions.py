@@ -708,6 +708,9 @@ async def put_action(
     replaced = existing.discussion_change_id if existing is not None else None
     if stages and source is None and cp.kind == "feature_set" and body.kind in ("edit", "add"):
         return await _apply_now(db, principal, run, cp, body, existing, replaced)
+    if body.keep_origin and existing is not None and source is None:
+        # Undo of part of it: the action stays the discussion's (or the row's) it was.
+        source = _source_of(existing)
     question_id = None
     if body.kind == "question":
         if existing is not None:
@@ -743,6 +746,17 @@ async def put_action(
     await _bump(db, principal, run, cp, event, body.item_key, _snapshot(action))
     await db.commit()
     return action
+
+
+def _source_of(action: CheckpointAction) -> ActionSource | None:
+    """Where an action came from, as put_action's ``source``: None for a row action."""
+    if action.discussion_id is None or action.discussion_change_id is None:
+        return None
+    return ActionSource(
+        discussion_id=action.discussion_id,
+        change_id=action.discussion_change_id,
+        from_private=action.from_private,
+    )
 
 
 async def _apply_now(

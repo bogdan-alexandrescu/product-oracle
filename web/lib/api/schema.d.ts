@@ -15778,6 +15778,11 @@ export interface components {
             answers: string[];
             /** Note */
             note?: string | null;
+            /**
+             * Keep Origin
+             * @default false
+             */
+            keep_origin: boolean;
         };
         /**
          * AddChange
