@@ -288,6 +288,7 @@ const FILE_WORDS: Record<string, string> = {
   "design.json": "Design data",
   "summary.md": "Summary",
   "review.yaml": "Review",
+  "baseline.yaml": "Ground Truth",
 };
 export const fileLabel = (name: string) => FILE_WORDS[name] ?? keyWords(name.replace(/\.[a-z]+$/i, ""));
 
