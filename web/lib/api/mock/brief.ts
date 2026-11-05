@@ -58,12 +58,142 @@ export function subtree<T extends { section_key: string; level: number }>(sectio
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** A calendar day standing alone in prose reads month first, "Nov 1, 2026" (export/render.py days_in_words). */
+const PROSE_DAY = /(?<![\w./-])(\d{4})-(\d{2})-(\d{2})(?![\w/-]|:\d)/g;
+export function daysInWords(text: string): string {
+  return text.replace(PROSE_DAY, (all, y: string, m: string, d: string) => {
+    const month = Number(m);
+    const day = Number(d);
+    const valid = month >= 1 && month <= 12 && day >= 1 && day <= new Date(Date.UTC(Number(y), month, 0)).getUTCDate();
+    return valid ? `${MONTHS[month - 1]} ${day}, ${Number(y)}` : all;
+  });
+}
+
+/** A goal's code and its name where the PRD names it, "**G2 (retention)**" (export/deck.py goal_names). */
+const GOAL_NAMED = /\b(G\d{1,3})\b\**\s*\(([A-Za-z][^()\n]{0,40})\)/g;
+const GOAL_CELL = /(?<=\|)([ \t]*)(G\d{1,3})([ \t]*)(?=\|)/g;
+export function goalNames(sections: { heading: string; body_md: string }[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const s of sections)
+    for (const m of `${s.heading}\n${s.body_md ?? ""}`.matchAll(GOAL_NAMED)) {
+      const name = m[2].trim();
+      if (!out.has(m[1])) out.set(m[1], name.charAt(0).toUpperCase() + name.slice(1));
+    }
+  return out;
+}
+/** A table cell holding only a goal's code shows its name too: "G2 Retention" (export/deck.py with_goal_names). */
+export function withGoalNames(body: string, names: Map<string, string>): string {
+  return names.size ? body.replace(GOAL_CELL, (all, a: string, code: string, b: string) => (names.has(code) ? `${a}${code} ${names.get(code)}${b}` : all)) : body;
+}
+
+// A section past what a slide holds goes on continuation slides, "Top risks (2 of 2)" (export/deck.py slide_pages).
+const SLIDE_LINES = 15;
+const LINE_CHARS = 95;
+type Unit = { text: string; cost: number; group: number; kind: "block" | "item" | "row"; header: string };
+const lineCost = (text: string) =>
+  text
+    .replace(/\]\([^)]*\)/g, "]")
+    .replace(/\[c:[^\]]*\]/g, "")
+    .split("\n")
+    .filter((l) => l.trim())
+    .reduce((n, l) => n + Math.max(1, Math.ceil(l.trim().length / LINE_CHARS)), 0);
+function units(body: string): Unit[] {
+  const out: Unit[] = [];
+  const lines = body.split("\n");
+  let group = 0;
+  let heading = "";
+  let i = 0;
+  const item = (l: string) => /^(?:[-*+]|\d{1,3}[.)])\s/.test(l);
+  const fence = (l: string) => /^\s*(```|~~~)/.test(l);
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim()) {
+      group++;
+      i++;
+    } else if (fence(line)) {
+      let j = i + 1;
+      while (j < lines.length && !fence(lines[j])) j++;
+      const text = lines.slice(i, j + 1).join("\n");
+      out.push({ text: heading + text, cost: j + 1 - i + 0.4, group, kind: "block", header: "" });
+      heading = "";
+      i = j + 1;
+      group++;
+    } else if (line.trimStart().startsWith("#")) {
+      heading += line + "\n\n";
+      i++;
+      group++;
+    } else if (line.trimStart().startsWith("|")) {
+      let j = i;
+      while (j < lines.length && lines[j].trimStart().startsWith("|")) j++;
+      const rows = lines.slice(i, j);
+      const head = rows.length > 1 && /^\s*\|?\s*:?-{2,}/.test(rows[1]) ? rows.slice(0, 2) : [];
+      const header = head.join("\n");
+      const cols = Math.max(1, rows[0].trim().replace(/^\||\|$/g, "").split("|").length);
+      rows.slice(head.length).forEach((row, k) => {
+        const longest = Math.max(0, ...row.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim().length));
+        const cost = 1.2 * Math.max(1, Math.ceil(longest / Math.max(1, Math.floor(LINE_CHARS / cols)))) + (k === 0 && header ? 1.2 : 0);
+        out.push({ text: (k === 0 && header ? heading + header + "\n" : "") + row, cost, group, kind: "row", header });
+        heading = "";
+      });
+      i = j;
+      group++;
+    } else {
+      let j = i + 1;
+      const kind = item(line) ? "item" : "block";
+      if (kind === "item") while (j < lines.length && lines[j].trim() && /^\s/.test(lines[j])) j++;
+      else while (j < lines.length && lines[j].trim() && !/^\s*[|#]/.test(lines[j]) && !item(lines[j]) && !fence(lines[j])) j++;
+      const text = lines.slice(i, j).join("\n");
+      out.push({ text: heading + text, cost: lineCost(text) + 0.4 + (heading ? 1.5 : 0), group, kind, header: "" });
+      heading = "";
+      i = j;
+    }
+  }
+  if (heading) out.push({ text: heading.trim(), cost: 1.5, group: group + 1, kind: "block", header: "" });
+  return out;
+}
+function pack(us: Unit[], budget: number): Unit[][] {
+  const pages: Unit[][] = [[]];
+  let used = 0;
+  for (const u of us) {
+    if (pages[pages.length - 1].length && used + u.cost > budget) {
+      pages.push([]);
+      used = 0;
+    }
+    pages[pages.length - 1].push(u);
+    used += u.cost;
+  }
+  return pages;
+}
+function join(page: Unit[]): string {
+  let out = "";
+  let prev: Unit | null = null;
+  for (const u of page) {
+    let text = u.text;
+    if (!prev && u.kind === "row" && u.header && !text.includes(u.header)) text = `${u.header}\n${text}`;
+    if (prev) out += prev.group === u.group && u.kind === prev.kind && u.kind !== "block" ? "\n" : "\n\n";
+    out += text;
+    prev = u;
+  }
+  return out;
+}
+export function slidePages(body: string, budget = SLIDE_LINES): string[] {
+  const us = units(body);
+  const total = us.reduce((n, u) => n + u.cost, 0);
+  if (total <= budget || us.length < 2) return [body];
+  const count = pack(us, budget).length;
+  let even = Math.max(total / count, ...us.map((u) => u.cost));
+  let pages = pack(us, even);
+  while (pages.length > count) pages = pack(us, (even += 0.5));
+  return pages.filter((p) => p.length).map(join);
+}
+
 function inline(nodes: Inline[], links: (key: string, inner: string) => string): string {
   return nodes
     .map((n) => {
       switch (n.t) {
         case "text":
-          return esc(n.v);
+          return esc(daysInWords(n.v));
         case "code":
           return `<code>${esc(n.v)}</code>`;
         case "strong":
@@ -228,16 +358,24 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
   // In document order: a group sits where its first section does.
   const order = new Map(brief.map((s, i) => [s.section_key, i]));
   if (d.slides?.length) groups.sort((a, b) => order.get(a[0].section_key)! - order.get(b[0].section_key)!);
+  const goals = goalNames(sections);
   for (const [s, ...rest] of groups) {
     const all = [s, ...rest];
     const notes = all.map((x) => presenterNotes(x.body_md)).filter(Boolean);
+    const whole = withGoalNames(
+      [slideBody(s.body_md), ...rest.map((x) => `### ${x.heading}\n\n${slideBody(x.body_md)}`)].join("\n\n"),
+      goals,
+    );
+    const pages = slidePages(whole);
+    pages.forEach((body, p) => {
+    const heading = daysInWords(s.heading) + (pages.length > 1 ? ` (${p + 1} of ${pages.length})` : "");
     raw.push({
       index: raw.length + 1,
       kind: "section",
-      heading: s.heading,
+      heading,
       section_key: s.section_key,
-      notes: notes.length ? notes.join("\n\n") : null,
-      expand: [...new Set(all.flatMap((x) => linked(x.body_md)))]
+      notes: p === 0 && notes.length ? daysInWords(notes.join("\n\n")) : null,
+      expand: [...new Set(linked(body))]
         .filter((k) => detail.has(k))
         .map((k) => ({
           section_key: k,
@@ -246,9 +384,8 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
             .map((x) => `<section class="expand-section" data-section-key="${esc(x.section_key)}"><h3>${esc(x.heading)}</h3>${toHtml(x.body_md, plainLinks)}</section>`)
             .join(""),
         })),
-      inner: `<h2 class="slide-title">${esc(s.heading)}</h2><div class="slide-body">${toHtml(s.body_md, slideLinks)}${rest
-        .map((x) => `<h3 class="slide-subheading" data-section-key="${esc(x.section_key)}">${esc(x.heading)}</h3>${toHtml(x.body_md, slideLinks)}`)
-        .join("")}</div>`,
+      inner: `<h2 class="slide-title">${esc(heading)}</h2><div class="slide-body">${toHtml(body, slideLinks)}</div>`,
+    });
     });
   }
   if (d.citations.length) {
@@ -270,7 +407,7 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
     number: d.number,
     latest_number: d.latest,
     status: d.status,
-    as_of: d.created_at,
+    as_of: momentInWords(d.created_at),
     banner,
     source: d.source ?? null,
     theme: "clean-document",

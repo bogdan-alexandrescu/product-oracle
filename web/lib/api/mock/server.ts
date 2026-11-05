@@ -7321,7 +7321,8 @@ function exportRoute(db: Db, doc: DocumentRow, v: VersionRow, sub: string | unde
   const badge = isAudience(audience) ? audienceLabel(audience) : null;
   if (sub === "deck" || (sub === "export" && (q.get("layer") ?? "full") !== "full")) {
     if (!v.sections.some((s) => s.layer === "brief")) {
-      return json(422, { detail: `version ${v.number} of '${doc.slug}' has no brief sections; export the full document instead` });
+      const kind = ({ prd: "PRD", pricing: "pricing memo" } as Record<string, string>)[doc.kind ?? "prd"] ?? doc.kind ?? "document";
+      return json(422, { detail: `Version ${v.number} of ${doc.title} has no brief: export the full ${kind} instead.` });
     }
   }
   if (sub === "deck") {
