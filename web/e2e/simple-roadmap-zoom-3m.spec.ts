@@ -105,6 +105,12 @@ function readsWhole(scheme: "light" | "dark") {
       expect(b.x, "the label starts right of the names column").toBeGreaterThanOrEqual(h.x + h.width);
       expect(b.x + b.width).toBeLessThanOrEqual(v.x + v.width);
       await expect(label).toHaveText("◆ Beta · Nov 30");
+      // The "+ Milestone" hint on the axis keeps off it.
+      const hint = page.getByTestId("ms-add-hint");
+      if (await hint.isVisible()) {
+        const k = (await hint.boundingBox())!;
+        expect(k.x + k.width <= b.x || b.x + b.width <= k.x, "the + Milestone hint covers the label").toBe(true);
+      }
     };
     for (const z of ["3m", "6m", "1y", "all"]) {
       await page.getByTestId(`zoom-${z}`).click();
