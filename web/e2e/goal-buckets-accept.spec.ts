@@ -5,8 +5,8 @@ import { expect, test, type Page } from "./test";
 
 /*
  * Goal buckets, fix round 3 (PR 1224). Card tasks-accept-move: protects = a commenter's move of a
- * planned task to another goal (proposed, the task stays put) shows on Home as "Move to another
- * goal"; once the owner accepts it there, the task shows in the new goal in the dated Goal
+ * planned task to another goal (proposed, the task stays put) waits in the roadmap's Needs a
+ * decision panel as "move it to another goal"; once the owner accepts it there, the task shows in the new goal in the dated Goal
  * buckets, for the owner and for the commenter who proposed it, with the goals' feature counts
  * following; fails_when = the accepted move leaves the task under its old goal. The mock's
  * "simple-plan" (dated): goals Reliability, Growth, Activation and Revenue. Invented data.
@@ -47,13 +47,13 @@ test("a commenter's proposed move, once accepted, moves the task in the dated go
   await page.goto("/home");
   await signOut(page);
 
-  // The owner decides it on Simple's Home.
+  // The owner decides it in the roadmap's Needs a decision panel (Home's "All proposals").
   await login(page, ADMIN.email);
-  await page.goto("/simple");
-  const proposal = page.getByTestId("home-proposal").filter({ hasText: "Move to another goal: Setup failure alerts" });
+  await page.goto("/simple/roadmap?review=proposals");
+  const proposal = page.getByTestId("tray-proposal").filter({ hasText: "Setup failure alerts: move it to another goal" });
   await expect(proposal).toBeVisible();
   await proposal.getByRole("button", { name: "Accept" }).click();
-  await expect(page.getByTestId("home-proposal").filter({ hasText: "Setup failure alerts" })).toHaveCount(0);
+  await expect(proposal).toHaveCount(0);
   await page.goto("/simple/priorities?tab=buckets");
   await expect(bucket(page, "Growth").locator('[data-code="F-03"]')).toBeVisible();
   await expect(bucket(page, "Reliability").locator('[data-code="F-03"]')).toHaveCount(0);
