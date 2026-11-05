@@ -38,12 +38,12 @@ for (const [label, viewport] of [
       await expect(dateWarnings(page)).toHaveCount(1);
       await expect(dateWarnings(page)).toContainText("The date Dec 15, 2026");
       await expect(dateWarnings(page)).not.toContainText("Nov 30");
-      await expect(lacking(page)).toHaveText("1 date lacks a basis");
+      await expect(lacking(page)).toHaveText("1 date lacks a date source");
 
       await lacking(page).click();
       await expect(page).toHaveURL(/\/plan\/dates\?prd=[^&]+&dates=2026-12-15$/);
       const filter = page.getByTestId("dates-lacking-filter");
-      await expect(filter).toContainText("1 date needs a basis: Dec 15.");
+      await expect(filter).toContainText("1 date needs a date source: Dec 15.");
       await expect(filter).toContainText("Showing the date sources of Usage alerts PRD.");
 
       // The lead records the date's source; it is verified at once.
@@ -107,10 +107,10 @@ test("one date written for two items warns for each item but counts as one date"
   await login(page, LEAD);
   await page.goto("/documents/usage-alerts-roadmap/v/1");
   await expect(dateWarnings(page)).toHaveCount(2);
-  await expect(lacking(page)).toHaveText("1 date lacks a basis");
+  await expect(lacking(page)).toHaveText("1 date lacks a date source");
   await lacking(page).click();
   await expect(page).toHaveURL(/\/plan\/dates\?prd=[^&]+&dates=2026-12-15$/);
-  await expect(page.getByTestId("dates-lacking-filter")).toContainText("1 date needs a basis: Dec 15.");
+  await expect(page.getByTestId("dates-lacking-filter")).toContainText("1 date needs a date source: Dec 15.");
 });
 
 test("the version's own day, a quoted source's date and a quarter's range do not warn", async ({ page }) => {
@@ -123,5 +123,5 @@ test("the version's own day, a quoted source's date and a quarter's range do not
   await expect(page.getByText("The courier said").filter({ visible: true }).first()).toBeVisible();
   await expect(dateWarnings(page)).toHaveCount(1);
   await expect(dateWarnings(page)).toContainText("The date Dec 15, 2026");
-  await expect(lacking(page)).toHaveText("1 date lacks a basis");
+  await expect(lacking(page)).toHaveText("1 date lacks a date source");
 });
