@@ -1,0 +1,352 @@
+{
+  "title": "Tasks under a feature, and where removed things come back",
+  "subtitle": "Every field editable, and anything removed can be found and restored",
+  "decisions": [
+    {
+      "code": "ec1",
+      "name": "Tasks under a feature",
+      "question": "How does a person add, change, set the status of and drop a task inside the feature panel?",
+      "common": "The Tasks part of the one feature panel, everywhere it opens (Roadmap, Priorities, Home). Each row keeps its title, owner, due date and status; the heading counts what is done. Owners and approvers save; a commenter's change reads Propose and waits under Proposals on it; a viewer reads the list with no controls. Every change shows a toast with Undo; a dropped task leaves the list.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Edit each row in place",
+          "recommended": true,
+          "what": "Each part of a row is a control where it sits, like the panel's other fields: click the title to retitle it, the owner to pick a person, the date to pick a day; the status pill is a picker whose last choice is Drop this task. A small '+ Add a task' row at the end opens one line to type in.",
+          "why": "It works the way every other field in the panel already works, so there is nothing new to learn, and each change is one click and one save.",
+          "plus": "Fastest for one change; owner and date are one click; the list keeps its reading shape.",
+          "cost": "Every row carries a status picker, so the list reads busier; dropping sits inside the status picker, where it is less obvious.",
+          "frames": [
+            {
+              "file": "frames/ec1-a-rest.html",
+              "caption": "At rest: eight tasks, each with its status picker; '+ Add a task' at the end."
+            },
+            {
+              "file": "frames/ec1-a-open.html",
+              "caption": "The owner of 'Check how it reads on a phone' clicked: the people list opens under it."
+            },
+            {
+              "file": "frames/ec1-a-mid.html",
+              "caption": "Lena Ortiz picked; '+ Add a task' opened and a new task typed."
+            },
+            {
+              "file": "frames/ec1-a-mid-1512.html",
+              "caption": "The same moment in a 1512 wide window."
+            },
+            {
+              "file": "frames/ec1-a-result.html",
+              "caption": "Added: the new task ends the list, the toast offers Undo."
+            },
+            {
+              "file": "frames/ec1-a-open-phone.html",
+              "caption": "On a phone the panel is a sheet; the owner list opens the same way."
+            },
+            {
+              "file": "frames/ec1-a-propose.html",
+              "caption": "A commenter: the same controls; the change is proposed and waits under Proposals on it."
+            },
+            {
+              "file": "frames/ec1-a-readonly.html",
+              "caption": "A viewer: owner, date and status read as plain text, no add row."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Checklist with a tick",
+          "recommended": false,
+          "what": "Tasks are a checklist: the tick marks a task done (and untick puts it back to do). A row's menu holds Mark as doing, Change the title, Change owner or due date and Drop this task. An 'Add a task' box always waits at the end.",
+          "plus": "The most common change, done, is one tick; done tasks are struck through so what is left stands out.",
+          "cost": "Owner, date and doing hide behind a menu; a tick cannot say 'doing', so that state lives in a small tag.",
+          "frames": [
+            {
+              "file": "frames/ec1-b-rest.html",
+              "caption": "At rest: a checklist; two tasks ticked and struck through."
+            },
+            {
+              "file": "frames/ec1-b-open.html",
+              "caption": "The menu of 'Add an unsubscribe link to each digest' open."
+            },
+            {
+              "file": "frames/ec1-b-mid.html",
+              "caption": "A new task typed in the add box at the end."
+            },
+            {
+              "file": "frames/ec1-b-mid-1512.html",
+              "caption": "The same moment in a 1512 wide window."
+            },
+            {
+              "file": "frames/ec1-b-result.html",
+              "caption": "Added: the new task joins the list, the toast offers Undo."
+            },
+            {
+              "file": "frames/ec1-b-open-phone.html",
+              "caption": "On a phone: the row menu over the sheet."
+            },
+            {
+              "file": "frames/ec1-b-propose.html",
+              "caption": "A commenter: the add is proposed and waits for an owner."
+            },
+            {
+              "file": "frames/ec1-b-readonly.html",
+              "caption": "A viewer: ticks are greyed, no menus, no add box."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Row menu and a form",
+          "recommended": false,
+          "what": "Rows read as they do today. Each has a menu: Change…, Mark as to do / doing / done, Drop this task. Change and 'Add a task' open one small form with the title, owner and due date, saved together.",
+          "plus": "The list stays as calm as now; a new task gets its owner and date in one go.",
+          "cost": "Two to three clicks for any change, even a status; the form pushes the rows below it down.",
+          "frames": [
+            {
+              "file": "frames/ec1-c-rest.html",
+              "caption": "At rest: rows as today, each with a ⋯ menu; 'Add a task' below."
+            },
+            {
+              "file": "frames/ec1-c-open.html",
+              "caption": "The menu of 'Add an unsubscribe link to each digest' open."
+            },
+            {
+              "file": "frames/ec1-c-mid.html",
+              "caption": "'Add a task' opened the form: title, owner Lena Ortiz and a due date filled in."
+            },
+            {
+              "file": "frames/ec1-c-mid-1512.html",
+              "caption": "The same form in a 1512 wide window."
+            },
+            {
+              "file": "frames/ec1-c-result.html",
+              "caption": "Added with its owner and date; the toast offers Undo."
+            },
+            {
+              "file": "frames/ec1-c-open-phone.html",
+              "caption": "On a phone: the row menu in the sheet."
+            },
+            {
+              "file": "frames/ec1-c-propose.html",
+              "caption": "A commenter proposed the task from the form; it waits for an owner under Proposals on it."
+            },
+            {
+              "file": "frames/ec1-c-readonly.html",
+              "caption": "A viewer: no menus and no Add button."
+            }
+          ]
+        },
+        {
+          "letter": "d",
+          "name": "Edit the whole list",
+          "recommended": false,
+          "what": "An 'Edit tasks' button turns the list into a table of fields (task, owner, due, status) with 'Add a row'; 'Save all' sends every changed row at once, Cancel drops them.",
+          "plus": "Good for a big tidy-up after a meeting: many tasks changed in one pass.",
+          "cost": "A mode to enter and leave for one small change; the table is wider than the panel, so it scrolls sideways; Save all sends several changes but the toast names only one.",
+          "frames": [
+            {
+              "file": "frames/ec1-d-rest.html",
+              "caption": "At rest: the list as today with an 'Edit tasks' button."
+            },
+            {
+              "file": "frames/ec1-d-open.html",
+              "caption": "Edit tasks: the list becomes a table of fields."
+            },
+            {
+              "file": "frames/ec1-d-mid.html",
+              "caption": "One task set to Done and a new row typed, not yet saved."
+            },
+            {
+              "file": "frames/ec1-d-mid-1512.html",
+              "caption": "The same table in a 1512 wide window: still scrolls sideways in the panel."
+            },
+            {
+              "file": "frames/ec1-d-result.html",
+              "caption": "Saved: both changes applied; the toast names only the last one."
+            },
+            {
+              "file": "frames/ec1-d-open-phone.html",
+              "caption": "On a phone the table scrolls sideways inside the sheet."
+            },
+            {
+              "file": "frames/ec1-d-propose.html",
+              "caption": "A commenter: Propose all; the changes wait as proposals."
+            },
+            {
+              "file": "frames/ec1-d-readonly.html",
+              "caption": "A viewer: the list with no Edit tasks button."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "ec2",
+      "name": "Where removed things come back",
+      "question": "Where does a person find a cut feature, an archived goal or a removed goal milestone, and bring it back?",
+      "common": "Each removed thing says what it was, where it was, who removed it and when (month first), with Restore. A restore is a change like any other: owners and approvers restore, a commenter proposes it, a viewer only sees it. The Undo toast stays as it is.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Show removed switch",
+          "recommended": false,
+          "what": "A 'Show removed · N' switch under the Roadmap's filters (and the same on Priorities for archived goals). On, the page lists what was removed from it, each row with Restore.",
+          "plus": "Found where the thing used to be; nothing new in the menus.",
+          "cost": "Each page needs its own switch and list; goals and milestones removed elsewhere are not on this page; a dashed list pushes the timeline down.",
+          "frames": [
+            {
+              "file": "frames/ec2-a-rest.html",
+              "caption": "At rest: 'Show removed · 3' under the Roadmap's filters."
+            },
+            {
+              "file": "frames/ec2-a-open.html",
+              "caption": "Switched on: one cut feature and two removed milestones, each with Restore."
+            },
+            {
+              "file": "frames/ec2-a-result.html",
+              "caption": "'Alert routing by team' restored: it leaves the list and is back in the working draft."
+            },
+            {
+              "file": "frames/ec2-a-open-1512.html",
+              "caption": "The Onboarding roadmap in a 1512 wide window: its own removed things."
+            },
+            {
+              "file": "frames/ec2-a-open-phone.html",
+              "caption": "On a phone the list sits under the filters."
+            },
+            {
+              "file": "frames/ec2-a-propose.html",
+              "caption": "A commenter: each row reads Propose restoring."
+            },
+            {
+              "file": "frames/ec2-a-readonly.html",
+              "caption": "A viewer: the list with no buttons."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Settings › Trash",
+          "recommended": false,
+          "what": "Settings › Trash gets a second list, 'Removed from plans', beside deleted documents: cut features, archived goals and removed milestones, filtered by kind, each with Restore.",
+          "plus": "One place for everything that left, the same place as deleted documents.",
+          "cost": "Far from the plan; Trash is for owners only, so approvers and commenters cannot restore or propose from it; 'cut' is not a delete, yet it sits in Trash.",
+          "frames": [
+            {
+              "file": "frames/ec2-b-rest.html",
+              "caption": "At rest: under deleted documents, 'Removed from plans' with all seven."
+            },
+            {
+              "file": "frames/ec2-b-open.html",
+              "caption": "Filtered to Features."
+            },
+            {
+              "file": "frames/ec2-b-result.html",
+              "caption": "One restored: it leaves the list; the toast offers Undo."
+            },
+            {
+              "file": "frames/ec2-b-rest-1512.html",
+              "caption": "The full list in a 1512 wide window."
+            },
+            {
+              "file": "frames/ec2-b-rest-phone.html",
+              "caption": "On a phone: kind filters wrap above the rows."
+            },
+            {
+              "file": "frames/ec2-b-propose.html",
+              "caption": "A commenter or a viewer: Trash is owners only, so they cannot propose a restore here."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Removed list, panel says who",
+          "recommended": true,
+          "what": "A 'Removed · N' button beside the Roadmap's filters opens one list of everything removed from the plans (features, goals, milestones) with who and when. A feature opens its own panel, whose header says 'Cut on Oct 21 by Priya Raman · Restore'.",
+          "why": "Everything is found from the plan in one click, the page stays clean until asked, and a cut feature's panel says what happened and undoes it where people already read and change the feature.",
+          "plus": "One list for all three kinds; the panel line also shows when the feature is opened from the Timeline's 'Below the line' row.",
+          "cost": "One more button in the filter row; a list across all roadmaps grows long, so it scrolls.",
+          "frames": [
+            {
+              "file": "frames/ec2-c-rest.html",
+              "caption": "At rest: 'Removed · 6' at the start of the filter row."
+            },
+            {
+              "file": "frames/ec2-c-open.html",
+              "caption": "Opened: features, a goal and milestones, with who and when, each with Restore."
+            },
+            {
+              "file": "frames/ec2-c-open-1512.html",
+              "caption": "The same list in a 1512 wide window."
+            },
+            {
+              "file": "frames/ec2-c-mid.html",
+              "caption": "'Alert routing by team' opened: the panel says 'Cut on Oct 21 by Priya Raman · Restore'."
+            },
+            {
+              "file": "frames/ec2-c-result.html",
+              "caption": "Restored from the panel: it is Planned again; the toast offers Undo."
+            },
+            {
+              "file": "frames/ec2-c-open-phone.html",
+              "caption": "On a phone the list opens under the button."
+            },
+            {
+              "file": "frames/ec2-c-propose.html",
+              "caption": "A commenter: the panel line reads Propose restoring."
+            },
+            {
+              "file": "frames/ec2-c-readonly.html",
+              "caption": "A viewer: the list with no buttons."
+            }
+          ]
+        },
+        {
+          "letter": "d",
+          "name": "Delete beside cut",
+          "recommended": false,
+          "what": "The panel's 'More…' offers Cut from the plan (it stays on the roadmap, below the line, restored there) and Delete (to Trash for 30 days, restored by an owner from Settings › Trash). Goals get Archive and Delete the same way.",
+          "plus": "Two clear meanings: cut keeps the feature in sight, delete clears it away and is still safe for 30 days.",
+          "cost": "A second way to remove things to explain; only owners and approvers delete and only owners restore from Trash; archived goals and removed milestones still need a place to come back.",
+          "frames": [
+            {
+              "file": "frames/ec2-d-rest.html",
+              "caption": "At rest: 'More…' under the panel's title."
+            },
+            {
+              "file": "frames/ec2-d-open.html",
+              "caption": "More open: Cut from the plan, Delete."
+            },
+            {
+              "file": "frames/ec2-d-mid.html",
+              "caption": "Delete asks first: what goes with it and 30 days to restore."
+            },
+            {
+              "file": "frames/ec2-d-result.html",
+              "caption": "Deleted: the toast says it is in Trash, with Undo."
+            },
+            {
+              "file": "frames/ec2-d-trash.html",
+              "caption": "Settings › Trash: 'Deleted from plans' lists it with Restore and days left."
+            },
+            {
+              "file": "frames/ec2-d-trash-1512.html",
+              "caption": "The same Trash in a 1512 wide window."
+            },
+            {
+              "file": "frames/ec2-d-open-phone.html",
+              "caption": "On a phone: the menu in the sheet."
+            },
+            {
+              "file": "frames/ec2-d-propose.html",
+              "caption": "A commenter: only Propose cutting; no Delete."
+            },
+            {
+              "file": "frames/ec2-d-readonly.html",
+              "caption": "A viewer: no More button; the panel says who can change it."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
