@@ -27,7 +27,8 @@ Test cards (protects / fails_when / no_claim):
   /v1/simple/tracks`` counts its track's live features over the whole roadmap (cut and
   merged ones left out), whatever the roadmap's filters show (PR 1272 review);
   fails_when=the count is missing, counts a cut feature or another track's;
-  no_claim=the web's filters (web/e2e/roadmap-tracks-sheet.spec.ts).
+  no_claim=the web's filters (web/e2e/roadmap-tracks-sheet.spec.ts). Its ``moves_count``
+  counts every feature on it, cut ones too: what Move to Trash sends to no track.
 - test_undo_of_an_add_never_hard_deletes_a_track_that_holds_something: protects=Undo of
   ``add_track`` removes the track while it holds nothing added since; once it holds a
   milestone or a feature, Undo moves it to Settings > Trash (restorable, what it holds
@@ -330,6 +331,14 @@ async def test_a_tracks_feature_count_is_the_whole_roadmaps(client):
     assert added["status"] == "applied"
     counts = {t["title"]: t["feature_count"] for t in (await read_tracks(client, ctx))["tracks"]}
     assert counts == {"Guided setup": 2, "Gift boxes": 0}
+    # What Move to Trash sends to no track counts the cut one too, and is what moves.
+    rows = (await read_tracks(client, ctx))["tracks"]
+    assert {t["title"]: t["moves_count"] for t in rows} == {"Guided setup": 3, "Gift boxes": 0}
+    await change(client, ctx, "owner", "delete_track", {"track_id": ids["track_id"]})
+    async with tenant_session(ctx.tenant_id) as s:
+        moved = await s.scalars(select(RoadmapItem.id).where(RoadmapItem.track_id.is_(None))
+                                .execution_options(**{INCLUDE_TRASHED: True}))  # fmt: skip
+        assert len(list(moved)) == 3
 
 
 async def test_undo_of_an_add_never_hard_deletes_a_track_that_holds_something(client):
