@@ -758,9 +758,7 @@ async def recheck_goals(
     problems = list(check.get("problems") or [])
     kept = [p for p in problems if not _is_stale(p)]
     said = {p.get("message") for p in problems if _is_stale(p)}
-    stale = [
-        p for p in await stale_goals(db, snapshot, kept) if add or p["message"] in said
-    ]
+    stale = [p for p in await stale_goals(db, snapshot, kept) if add or p["message"] in said]
     check["problems"] = [*kept, *stale]
     return check, stale
 
