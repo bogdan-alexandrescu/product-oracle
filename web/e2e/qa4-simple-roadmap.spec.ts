@@ -115,7 +115,6 @@ for (const [where, size] of [
       await expect(depends.getByRole("heading")).toHaveText("Depends on (0)");
       await expect(depends.getByTestId("fp-dep")).toHaveCount(0);
       await expect(depends.getByTestId("fp-empty")).toHaveText("Nothing");
-      await expect(card.getByTestId("fp-list-needed").getByTestId("fp-empty")).toHaveText("None");
     });
 
     test(`qa4-12: cutting an item nothing depends on offers just Cut it (${where})`, async ({ page }) => {
@@ -125,6 +124,7 @@ for (const [where, size] of [
       await expect(needed.getByRole("heading")).toHaveText("Needed by (0)");
       // Nothing live depends on it (Oracle's link someone removed stays listed, struck, with Restore).
       await expect(needed.getByTestId("fp-dep").filter({ hasNotText: "removed by" })).toHaveCount(0);
+      await expect(needed.getByTestId("fp-empty")).toHaveText("None");
       // The feature panel: a desktop shows the talk beside the details, a phone behind its tab.
       if (isPhone(page)) await card.getByRole("tab", { name: "Talk to Oracle" }).click();
       const talk = card.getByTestId("item-talk");
