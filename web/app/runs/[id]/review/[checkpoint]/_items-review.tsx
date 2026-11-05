@@ -61,7 +61,7 @@ export type Ops = {
   stage: (id: string) => Promise<void>;
 };
 /** An inline form a row's ⋯ menu or the inspector opens. */
-export type Form = { key: string; kind: "waive" | "split" | "ask"; code?: string; where: "row" | "inspector" } | null;
+export type Form = { key: string; kind: "waive" | "split" | "ask"; code?: string; where: "row" | "inspector"; text?: string } | null;
 
 const POLL_MS = 10_000;
 const OUTCOME_MAX = 500;
@@ -248,7 +248,15 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   // on a row would pick it instead of asking to confirm its fix (a failed read: a viewer's).
   if (!review || (!capsReady && !capsError)) return <div className="px-6 py-8"><Loading /></div>;
 
-  const titleOf = (key: string) => items.find((x) => x.key === key)?.title ?? key;
+  // Another PRD's feature is not a row: its reasons name it, as in the inspector.
+  const otherTitle = (key: string) => {
+    for (const it of items) for (const r of it.reasons) {
+      const d = r.data as { dependency?: unknown; dependency_title?: unknown };
+      if (d.dependency === key && typeof d.dependency_title === "string") return d.dependency_title;
+    }
+    return key;
+  };
+  const titleOf = (key: string) => items.find((x) => x.key === key)?.title ?? otherTitle(key);
   const byKey = new Map(items.map((x) => [x.key, x]));
   const tableRows = rows.map((it) => toRow(it, prdRef));
   // Group: by horizon (Now, Next, Later, then items not in the file), or by the first open reason.
@@ -310,6 +318,8 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
       setConfirm(key);
     } else pick(it);
   };
+  // Suggest yours separately… on a row: its Ask a teammate form, filled in.
+  const askRow = (key: string) => (text: string) => setForm({ key, kind: "ask", where: "row", text });
   const leaveConfirm = (key: string) => {
     setConfirm(null);
     [...document.querySelectorAll<HTMLElement>(`tr[data-testid="roadmap-item-row"][data-key="${CSS.escape(key)}"]`)].find((el) => el.checkVisibility())?.focus();
@@ -340,9 +350,9 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
             <span className={`grid min-w-0 items-center gap-1 ${mode !== "viewer" ? "grid-cols-[minmax(0,1fr)_2rem] max-[600px]:grid-cols-[minmax(0,1fr)_2.5rem]" : "grid-cols-1"}`} data-testid="your-call">
               <span className="flex min-w-0 flex-wrap items-center justify-end gap-1" data-testid="your-call-buttons">
                 {confirm === it.key && rowFixes(openReasons(it))[0] ? (
-                  <ConfirmFix {...rowFixes(openReasons(it))[0]} it={it} mode={mode} ops={ops} onDone={() => leaveConfirm(it.key)} />
+                  <ConfirmFix {...rowFixes(openReasons(it))[0]} it={it} mode={mode} ops={ops} onDone={() => leaveConfirm(it.key)} meId={me?.user_id ?? null} titleOf={titleOf} ask={askRow(it.key)} />
                 ) : (
-                  <YourCall it={it} open={openReasons(it)} staged={it.actions.filter((a) => a.state === "staged" && a.kind !== "question")} mode={mode} ops={ops} titleOf={titleOf} meId={me?.user_id ?? null} />
+                  <YourCall it={it} open={openReasons(it)} staged={it.actions.filter((a) => a.state === "staged" && a.kind !== "question")} mode={mode} ops={ops} titleOf={titleOf} meId={me?.user_id ?? null} ask={askRow(it.key)} />
                 )}
               </span>
               {mode !== "viewer" &&
@@ -470,7 +480,7 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
               groupBy={groupBy}
               groupOrder={groupOrder}
               groupLabel={groupHead}
-              detail={(r) => (form?.key === r.key && form.where === "row" ? <RowForm it={byKey.get(r.key)!} form={form} mode={mode} ops={ops} onDone={() => setForm(null)} /> : null)}
+              detail={(r) => (form?.key === r.key && form.where === "row" ? <RowForm key={`${form.kind}:${form.text ?? ""}`} it={byKey.get(r.key)!} form={form} mode={mode} ops={ops} onDone={() => setForm(null)} /> : null)}
               empty={filter === "needs" ? "Nothing needs you. Approve, or look at All." : "No items here."}
             />
           </>
@@ -554,7 +564,25 @@ function ReasonsCell({ it, showDiff }: { it: Item; showDiff: boolean }) {
 }
 
 /** The row's call: what was done (✓ … · Undo), who was asked, else the first fixes. */
-function YourCall({ it, open, staged, mode, ops, titleOf, meId }: { it: Item; open: Reason[]; staged: Action[]; mode: Mode; ops: Ops; titleOf: (k: string) => string; meId: string | null }) {
+function YourCall({
+  it,
+  open,
+  staged,
+  mode,
+  ops,
+  titleOf,
+  meId,
+  ask,
+}: {
+  it: Item;
+  open: Reason[];
+  staged: Action[];
+  mode: Mode;
+  ops: Ops;
+  titleOf: (k: string) => string;
+  meId: string | null;
+  ask: (text: string) => void;
+}) {
   const asked = it.actions.find((a) => a.kind === "question" && a.question);
   const askedChip = asked?.question && (
     <span data-testid="asked-chip">
@@ -564,15 +592,17 @@ function YourCall({ it, open, staged, mode, ops, titleOf, meId }: { it: Item; op
   if (it.state === "handled" && staged.length) {
     const a = staged[0];
     const mayUndo = mode === "approver" || (a.created_by?.id != null && a.created_by.id === meId);
+    // A joined removal goes whole from the row: it says so (each reason card's Undo takes back one).
+    const joined = a.kind === "edit" && a.field === "depends_on" ? removedBy(a) : [];
     return (
       <>
         <span className="flex flex-wrap items-center gap-1 text-sm font-medium text-pass" data-testid="row-done">
-          ✓ {doneText(a, titleOf)}
+          ✓ {joined.length > 1 ? `${joined.length} dependencies removed` : doneText(a, titleOf)}
           {mayUndo && (
             <>
               <span aria-hidden>·</span>
               <Button variant="ghost" className="h-8 px-2 text-sm max-[600px]:h-10" onClick={() => void ops.remove(a.id)}>
-                Undo
+                {joined.length > 2 ? `Undo all ${joined.length}` : joined.length === 2 ? "Undo both" : "Undo"}
               </Button>
             </>
           )}
@@ -587,25 +617,43 @@ function YourCall({ it, open, staged, mode, ops, titleOf, meId }: { it: Item; op
     <>
       {askedChip}
       {rowFixes(open).map(({ reason, fix }, i) => (
-        <FixButton key={fix.label} fix={fix} reason={reason} it={it} mode={mode} ops={ops} primary={i === 0} />
+        <FixButton key={fix.label} fix={fix} reason={reason} it={it} mode={mode} ops={ops} primary={i === 0} meId={meId} titleOf={titleOf} ask={ask} />
       ))}
     </>
   );
 }
 
+/** The dependencies a depends_on edit removes. */
+const removedBy = (a: Pick<Action, "value">) => ((a.value ?? {}) as { remove?: string[] }).remove ?? [];
+
+/** The fix's dependency removal on its own item, if it is one. */
+const removalOf = (fix: Fix, it: Item) =>
+  fix.action.kind === "edit" && fix.action.field === "depends_on" && fix.action.item === it.key ? (fix.action.value as { remove?: string[] } | null)?.remove : undefined;
+
+const mineAction = (a: Action, meId: string | null) => a.created_by?.id != null && a.created_by.id === meId;
+
+/**
+ * Another person's dependency edit on the item, when a commenter's Remove dependency would meet
+ * it: the API keeps one per item, and only its author or an approver changes it (a 403).
+ */
+function othersRemoval(fix: Fix, it: Item, mode: Mode, meId: string | null): Action | undefined {
+  if (mode !== "commenter" || !removalOf(fix, it)) return undefined;
+  return it.actions.find((a) => a.kind === "edit" && a.field === "depends_on" && !mineAction(a, meId));
+}
+
 /**
  * Stages a fix (or suggests it, for a commenter), answering its reason when it is the row's. An
  * item keeps one dependency edit, so Remove dependency joins the removal already there (as the
- * panel's × does): the one staged for an approver, a commenter's own suggestion for a commenter
- * (the API keeps one action per item and field, so a second would replace the first). Both
- * dependencies stay removed and both reasons answered.
+ * panel's × does): for an approver the one staged or a commenter's suggestion, for a commenter
+ * their own suggestion only (the API keeps one action per item and field, so a second would
+ * replace the first). Both dependencies stay removed and both reasons answered.
  */
-function applyFix(fix: Fix, reason: Reason, ops: Ops, it: Item, mode: Mode) {
+function applyFix(fix: Fix, reason: Reason, ops: Ops, it: Item, mode: Mode, meId: string | null) {
   let value = fix.action.value ?? null;
   let answers = fix.action.item === reason.item ? [reason.code] : [];
-  const removing = (value as { remove?: string[] } | null)?.remove;
-  const before = it.actions.find((a) => a.kind === "edit" && a.field === "depends_on" && a.state === (mode === "approver" ? "staged" : "suggested"));
-  if (fix.action.kind === "edit" && fix.action.field === "depends_on" && fix.action.item === it.key && removing && before) {
+  const removing = removalOf(fix, it);
+  const before = it.actions.find((a) => a.kind === "edit" && a.field === "depends_on" && (mode === "approver" || (a.state === "suggested" && mineAction(a, meId))));
+  if (removing && before) {
     const was = (before.value ?? {}) as { add?: string[]; remove?: string[] };
     value = { add: was.add ?? [], remove: [...new Set([...(was.remove ?? []), ...removing])] };
     // An edit naming no reason answers every reason of its item: it stays so.
@@ -627,16 +675,21 @@ function undoReason(a: Action, r: Reason, it: Item, ops: Ops) {
   const next = { ...a, value, state: "staged" as const };
   const kept = [...new Set(it.reasons.filter((x) => x !== r && answersReason(next, x)).map((x) => x.code))];
   // Naming none would answer every reason, this one too: naming its code, the edit is not its fix.
-  return ops.act({ item_key: a.item_key, kind: "edit", field: "depends_on", value, answers: kept.length ? kept : [r.code] });
+  // keep_origin: the narrowed edit stays where it came from (a discussion's change stays staged).
+  return ops.act({ item_key: a.item_key, kind: "edit", field: "depends_on", value, answers: kept.length ? kept : [r.code], keep_origin: true });
 }
 
-export function FixButton({ fix, reason, it, mode, ops, primary }: { fix: Fix; reason: Reason; it: Item; mode: Mode; ops: Ops; primary?: boolean }) {
+type FixProps = { fix: Fix; reason: Reason; it: Item; mode: Mode; ops: Ops; meId: string | null; titleOf: (k: string) => string; ask: (text: string) => void };
+
+export function FixButton({ fix, reason, it, mode, ops, primary, meId, titleOf, ask }: FixProps & { primary?: boolean }) {
+  const theirs = othersRemoval(fix, it, mode, meId);
+  if (theirs) return <TheirRemoval fix={fix} it={it} theirs={theirs} titleOf={titleOf} ask={ask} />;
   return (
     <Button
       variant={primary ? "primary" : "secondary"}
       className="h-8 px-2.5 text-sm max-[600px]:h-10"
       title={mode === "commenter" ? "Suggest: an approver stages it" : undefined}
-      onClick={() => void applyFix(fix, reason, ops, it, mode)}
+      onClick={() => void applyFix(fix, reason, ops, it, mode, meId)}
     >
       {fix.label}
     </Button>
@@ -644,11 +697,31 @@ export function FixButton({ fix, reason, it, mode, ops, primary }: { fix: Fix; r
 }
 
 /**
+ * A commenter's Remove dependency where another person's dependency change already holds the
+ * item: whose it is, and theirs sent as a separate suggestion (Ask a teammate, filled in).
+ */
+function TheirRemoval({ fix, it, theirs, titleOf, ask }: { fix: Fix; it: Item; theirs: Action; titleOf: (k: string) => string; ask: (text: string) => void }) {
+  const who = theirs.created_by?.name ?? "Someone";
+  const deps = (removalOf(fix, it) ?? []).map(titleOf).join(", ");
+  return (
+    <span className="flex flex-wrap items-center justify-end gap-1 text-sm text-text2" data-testid="their-removal">
+      <span>
+        {who} {theirs.state === "staged" ? "staged" : "suggested"} this item&apos;s dependency change
+      </span>
+      <Button className="h-8 px-2.5 text-sm max-[600px]:h-10" onClick={() => ask(`Please also remove the dependency on ${deps}.`)}>
+        Suggest yours separately…
+      </Button>
+    </span>
+  );
+}
+
+/**
  * Enter on a row (criterion 16): the row's first fix as "Confirm: {fix}", focused, so Enter
  * again applies it; Cancel or Escape goes back to the row with nothing staged.
  */
-function ConfirmFix({ fix, reason, it, mode, ops, onDone }: { fix: Fix; reason: Reason; it: Item; mode: Mode; ops: Ops; onDone: () => void }) {
+function ConfirmFix({ fix, reason, it, mode, ops, onDone, meId, titleOf, ask }: FixProps & { onDone: () => void }) {
   const ref = useRef<HTMLSpanElement>(null);
+  const theirs = othersRemoval(fix, it, mode, meId);
   useEffect(() => ref.current?.querySelector("button")?.focus(), []);
   return (
     <span
@@ -660,9 +733,13 @@ function ConfirmFix({ fix, reason, it, mode, ops, onDone }: { fix: Fix; reason: 
         onDone();
       }}
     >
-      <Button variant="primary" className="h-8 px-2.5 text-sm max-[600px]:h-10" onClick={() => void applyFix(fix, reason, ops, it, mode).then(onDone)}>
-        Confirm: {fix.label}
-      </Button>
+      {theirs ? (
+        <TheirRemoval fix={fix} it={it} theirs={theirs} titleOf={titleOf} ask={ask} />
+      ) : (
+        <Button variant="primary" className="h-8 px-2.5 text-sm max-[600px]:h-10" onClick={() => void applyFix(fix, reason, ops, it, mode, meId).then(onDone)}>
+          Confirm: {fix.label}
+        </Button>
+      )}
       <Button variant="ghost" className="h-8 px-2.5 text-sm max-[600px]:h-10" onClick={onDone}>
         Cancel
       </Button>
@@ -782,7 +859,7 @@ function RowMenu({
 
 /** Waive…, Split… and Ask a teammate…: a small form under the row (or in the inspector). */
 export function RowForm({ it, form, mode, ops, onDone }: { it: Item; form: NonNullable<Form>; mode: Mode; ops: Ops; onDone: () => void }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(form.text ?? "");
   const [who, setWho] = useState("");
   const people = useQuery(form.kind === "ask" ? "people|writers" : "people|none", () =>
     form.kind === "ask" ? unwrap(api.GET("/v1/people", { params: { query: { limit: 100 } } })) : Promise.resolve([] as Schemas["PersonOut"][]),
@@ -922,7 +999,7 @@ function ReviewInspector({
                         {r.fixes
                           .filter((f) => f.action.kind !== "waive")
                           .map((f, i) => (
-                            <FixButton key={f.label} fix={f} reason={r} it={item} mode={mode} ops={ops} primary={i === 0} />
+                            <FixButton key={f.label} fix={f} reason={r} it={item} mode={mode} ops={ops} primary={i === 0} meId={meId} titleOf={titleOf} ask={(text) => setForm({ key: item.key, kind: "ask", where: "inspector", text })} />
                           ))}
                         {mode === "approver" && mayWaive(r, can("waive_strategy_finding")) && (
                           <Button className="h-8 px-2.5 text-sm" onClick={() => setForm({ key: item.key, kind: "waive", code: r.code, where: "inspector" })}>
@@ -940,7 +1017,7 @@ function ReviewInspector({
       )}
       {form && (
         <InspectorSection>
-          <RowForm it={item} form={form} mode={mode} ops={ops} onDone={() => setForm(null)} />
+          <RowForm key={`${form.kind}:${form.text ?? ""}`} it={item} form={form} mode={mode} ops={ops} onDone={() => setForm(null)} />
         </InspectorSection>
       )}
     </>

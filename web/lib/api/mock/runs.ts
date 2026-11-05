@@ -4253,6 +4253,10 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
       created_by: who,
       updated_by: who,
       updated_at: ctx.now(),
+      // As the API's keep_origin: Undo of part of it keeps where it came from (a discussion's change).
+      ...(a.keep_origin && existing?.discussion_id
+        ? { origin: existing.origin, discussion_id: existing.discussion_id, discussion_change_id: existing.discussion_change_id, from_private: existing.from_private }
+        : {}),
     };
     if (a.kind === "question" && ctx.ask) {
       // C2: asked through the questions store; a changed question withdraws the one before.

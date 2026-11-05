@@ -52961,9 +52961,15 @@
             "title": "Note"
           },
           "keep_origin": {
-            "type": "boolean",
-            "title": "Keep Origin",
-            "default": false
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Origin"
           }
         },
         "type": "object",
