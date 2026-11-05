@@ -951,8 +951,8 @@ def test_a_link_holder_reads_no_left_out_line_no_empty_or_repeated_column():
         "| Bulk import | Faster setup |  | Grow activation |",
     ])  # fmt: skip
     got = reader_body(table, "now-group-1")
-    assert got.split("\n")[0] == "| Item | Outcome |"
-    assert "| CSV parser |  |" in got and "| Bulk import | Faster setup |" in got
+    assert got.split("\n")[0] == "| Item | When | Outcome |"
+    assert "| CSV parser | Now |  |" in got and "| Bulk import | Now | Faster setup |" in got
     assert "Confidence" not in got and "Grow activation" not in got
     # Outside a goal group the Goal column says something the page does not.
     assert "| Goal |" in reader_body(table, "brief-items")
@@ -960,6 +960,24 @@ def test_a_link_holder_reads_no_left_out_line_no_empty_or_repeated_column():
     assert reader_body(note, "now") == ""
     assert reader_body(f"{note}\n\nWe ship in order.", "roadmap") == "We ship in order."
     assert "left out" not in reader_body("2 items serve no confirmed goal and are left out.", "x")
+
+
+def test_a_link_holder_reads_each_item_with_when_and_status():
+    """protects=E-14: a link holder's goal group lists each item with its name, when (the
+    horizon it sits in) and status (its confidence, in words), so the page draws them as
+    cards; fails_when=a goal group's table holds the item names alone, or the status reads
+    a bare "high"; no_claim=the company's own audience view and its PDF export."""
+    from oracle.shares.render import reader_body
+
+    table = "\n".join([
+        "| Item | Outcome | Confidence | Goal |",
+        "|---|---|---|---|",
+        "| CSV parser |  | high | Grow activation |",
+        "| Bulk import |  |  | Grow activation |",
+    ])  # fmt: skip
+    got = reader_body(table, "later-group-2").split("\n")
+    assert got[0] == "| Item | When | Status |"
+    assert got[2:] == ["| CSV parser | Later | High confidence |", "| Bulk import | Later |  |"]
 
 
 def test_a_link_holder_reads_no_per_item_no_goal_flag():
@@ -999,5 +1017,6 @@ async def test_the_footer_ends_on_the_headers_day_in_its_words(client, ctx):
     footer = re.search(r'<footer class="share-footer"[^>]*>(.*?)</footer>', page.text, re.S)
     assert footer is not None, page.text
     text = footer.group(1)
-    assert f"link expires {got['expires_on']}" in text, text
-    assert re.search(r" on [A-Z][a-z]{2} \d{1,2}, \d{4} · ", text), text
+    # E-14: the page's header says when the link ends; the footer does not say it again.
+    assert "expires" not in text and got["expires_on"] not in text, text
+    assert re.search(r" on [A-Z][a-z]{2} \d{1,2}, \d{4}$", text.strip()), text
