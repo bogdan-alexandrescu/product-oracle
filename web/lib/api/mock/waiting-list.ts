@@ -1,5 +1,6 @@
 import type { Schemas } from "../client";
 import { mockNowMs } from "./clock";
+import { companyZone } from "./connections";
 
 type Item = Schemas["SimpleWaitingItem"];
 
@@ -14,10 +15,11 @@ const STOP_ACTION: Record<string, string> = {
   baseline_confirm: "Confirm the baseline",
 };
 
-/** "Nov 4", with the year when it is not this year's ("Jan 8, 2027"). */
+/** "Nov 4", with the year when it is not this year's in the company's time zone ("Jan 8, 2027"). */
 function day(d: string): string {
   const at = new Date(`${d.slice(0, 10)}T00:00:00Z`);
-  const thisYear = at.getUTCFullYear() === new Date(mockNowMs()).getUTCFullYear();
+  const year = new Intl.DateTimeFormat("en-US", { timeZone: companyZone(), year: "numeric" }).format(new Date(mockNowMs()));
+  const thisYear = String(at.getUTCFullYear()) === year;
   return at.toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric", ...(thisYear ? {} : { year: "numeric" }) });
 }
 
@@ -25,7 +27,8 @@ function day(d: string): string {
  * home-waiting-one-list: the mock of oracle.simple.waiting_list. GET
  * /v1/simple/decisions/waiting's `items`, everything that waits on the signed-in person, read
  * from the mock's own answers to the routes each kind lives on (so it can never disagree with
- * them): the run stops they may decide, the PRD questions they own, broken links and dates on
+ * them): the run stops they may decide, the PRD questions they own, the decision-log calls
+ * proposed to them (the Inbox's decisions they decide, as the waiting count's `others`), broken links and dates on
  * items they decide, drafts waiting for their approval, proposals on their items and the goal
  * suggestions they decide.
  */
@@ -46,6 +49,11 @@ export async function waitingItems(get: (path: string) => Promise<unknown>, meId
   }
   for (const q of questions) {
     out.push({ kind: "question", key: `question:${q.id}`, ref_id: q.id, title: `${q.code} ${q.title}`.trim(), detail: q.prd.title, action: "Decide", href: `/simple/decisions?prd=${q.prd.slug}`, at: null, op: null });
+  }
+  const calls = (inbox?.decisions ?? []).filter((d) => d.counts && d.reason === "needs_decision").sort((a, b) => a.number - b.number);
+  for (const c of calls) {
+    const d = await read<Schemas["DecisionOut"]>(`/v1/decisions/${c.number}`);
+    out.push({ kind: "decision", key: `decision:${c.id}`, ref_id: String(c.number), title: c.title, detail: d?.question ?? "", action: "Decide", href: `/company/decisions?d=${c.number}`, at: c.since, op: null });
   }
   const titles = new Map((roadmap?.items ?? []).map((i) => [i.id, i.title]));
   for (const i of roadmap?.items ?? []) {

@@ -40,8 +40,8 @@ import { expect, test, type Page } from "./test";
  * Decisions and the rail leave out.
  *
  * Card broken-tile: protects = Home's broken-links tile counts only links on items the person
- * decides, as the list does (Decisions' "Broken link" rows); a commenter, who only proposes fixes,
- * has no such tile; each broken-link row on Decisions names its own flag; fails_when = the tile
+ * decides, as the list does (Decisions' "Broken link" rows); a commenter, who decides none, reads a
+ * tile that says it counts the links they can propose fixes for; each broken-link row on Decisions names its own flag; fails_when = the tile
  * counts every broken link on the roadmap or two rows read alike.
  */
 
@@ -130,9 +130,12 @@ for (const phone of [false, true]) {
       await page.context().clearCookies();
       await login(page, COMMENTER);
       await page.goto("/simple");
-      await expect(page.getByTestId("home-broken").first()).toBeVisible();
-      await expect(page.getByTestId("home-summary")).toBeVisible();
-      await expect(page.getByTestId("home-summary-broken-links")).toHaveCount(0);
+      // A commenter decides none: the tile says it counts the links they can propose fixes for.
+      const rowsShown = page.getByTestId("home-broken");
+      await expect(rowsShown.first()).toBeVisible();
+      const tile = page.getByTestId("home-summary-broken-links");
+      await expect(tile).toContainText(phone ? /fix(es)? to propose/ : /you can propose (a fix|fixes) for/);
+      await expect(tile.locator(".simple-number")).toHaveText(String(await rowsShown.count()));
     });
 
     test("Home's tiles say they are loading until the waiting list is read, never a 0", async ({ page }) => {

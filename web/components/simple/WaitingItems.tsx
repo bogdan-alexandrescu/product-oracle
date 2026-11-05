@@ -33,8 +33,28 @@ export function useWaitingList(): { data: Waiting | undefined; error: unknown } 
   return { data, error };
 }
 
+type Act = { label: string; run: () => Promise<unknown>; done: string; primary?: boolean };
+
+/** A decision-log call's Decide: its proposed option, then each other option. */
+function decideActs(d: Schemas["DecisionOut"]): Act[] {
+  if (d.can_decide === false || d.options.length < 2) return [];
+  const proposed = d.options.find((o) => o.recommended) ?? d.options[0]!;
+  return [proposed, ...d.options.filter((o) => o.key !== proposed.key)].map((o, n) => ({
+    label: n === 0 ? `Decide: ${o.label}` : o.label,
+    primary: n === 0,
+    done: `Decided: ${o.label}`,
+    run: () =>
+      unwrap(
+        api.POST("/v1/decisions/{decision}/decide", {
+          params: { path: { decision: String(d.number) } },
+          body: { option_key: o.key, rationale: `Decided in Simple: ${o.label}`, expected_outcome: o.summary || o.label, lock_version: d.lock_version },
+        }),
+      ),
+  }));
+}
+
 /** The actions an item takes in place; a run stop and a broken link open where they are done. */
-function actionsOf(i: WaitingItem): { label: string; run: () => Promise<unknown>; done: string; primary?: boolean }[] {
+function actionsOf(i: WaitingItem): Act[] {
   const change = { params: { path: { change_id: i.ref_id } } };
   const suggestion = { params: { path: { suggestion_id: i.ref_id } } };
   if (i.kind === "proposal" || (i.kind === "date" && i.op)) {
@@ -65,6 +85,7 @@ function actionsOf(i: WaitingItem): { label: string; run: () => Promise<unknown>
 const KIND: Record<WaitingItem["kind"], string> = {
   run_stop: "Run stop",
   question: "Decision",
+  decision: "Decision",
   broken_link: "Broken link",
   date: "Dates to confirm",
   draft: "Roadmap draft",
@@ -74,16 +95,31 @@ const KIND: Record<WaitingItem["kind"], string> = {
 
 /**
  * One thing waiting on me, with its action in place (Accept / Decline, Confirm / Not this,
- * Approve) or, for a run stop or a broken link, a link to where it is done. Acting tells every
- * page and the rail, which read the list again, so the row leaves everywhere at once.
+ * Approve, a decision-log call's Decide) or, for a run stop or a broken link, a link to where it
+ * is done. Acting takes the row away at once and tells every page and the rail, which read the
+ * list again, so it leaves everywhere at once.
  */
 export function WaitingRow({ item }: { item: WaitingItem }) {
   const [busy, setBusy] = useState(false);
-  const acts = actionsOf(item);
+  const [gone, setGone] = useState(false);
+  // A decision-log call decides in place with its options (GET /v1/decisions/{number}).
+  const [call, setCall] = useState<Schemas["DecisionOut"] | null>(null);
+  useEffect(() => {
+    if (item.kind !== "decision") return;
+    let alive = true;
+    unwrap(api.GET("/v1/decisions/{decision}", { params: { path: { decision: item.ref_id } } }))
+      .then((d) => alive && setCall(d))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [item.kind, item.ref_id]);
+  const acts = item.kind === "decision" ? (call ? decideActs(call) : []) : actionsOf(item);
   const act = async (run: () => Promise<unknown>, done: string) => {
     setBusy(true);
     try {
       await run();
+      setGone(true);
       invalidateWaiting();
       waitingChanged();
       toast({ message: done });
@@ -92,8 +128,11 @@ export function WaitingRow({ item }: { item: WaitingItem }) {
       setBusy(false);
     }
   };
+  if (gone) return null;
+  // A broken link names its flag too: one item with two broken links is two rows.
+  const name = `${KIND[item.kind]}: ${item.title}${item.kind === "broken_link" && item.detail ? `, ${item.detail}` : ""}`;
   return (
-    <li className="flex flex-wrap items-center gap-3 border-t border-line py-3 first:border-t-0" data-testid="waiting-item" data-kind={item.kind} aria-label={`${KIND[item.kind]}: ${item.title}`}>
+    <li className="flex flex-wrap items-center gap-3 border-t border-line py-3 first:border-t-0" data-testid="waiting-item" data-kind={item.kind} aria-label={name}>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="break-words">
           <span className="text-text2">{KIND[item.kind]} · </span>

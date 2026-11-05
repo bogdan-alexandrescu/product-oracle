@@ -39,7 +39,7 @@ import {
   type GoalTile,
 } from "@/lib/simple-home";
 import { errorMessage, useQuery } from "@/lib/use-query";
-import { invalidateWaiting, loadInbox, loadWaiting, waitingChanged } from "@/lib/waiting";
+import { invalidateWaiting, loadInbox, loadWaiting, onWaitingChanged, waitingChanged } from "@/lib/waiting";
 import { WaitingRow } from "@/components/simple/WaitingItems";
 
 type Change = Schemas["SimpleChangeOut"];
@@ -146,9 +146,11 @@ export default function SimpleHome() {
   const k = (name: string) => `simple-home|${name}|${stamp}`;
   // qa-simple-home-30: Home's toasts sit bottom-left over the rail, clear of the rows' buttons.
   useEffect(() => setToastPlace("rail"), []);
+  // home-waiting-one-list: whatever changes what waits on me (an action here, in a row of the one
+  // list, or anywhere else) reads Home again, so what was acted on leaves Home with the rail's count.
+  useEffect(() => onWaitingChanged(() => setStamp((s) => s + 1)), []);
   const reloadAll = () => {
     invalidateWaiting();
-    setStamp((s) => s + 1);
     waitingChanged();
   };
 
@@ -185,12 +187,13 @@ export default function SimpleHome() {
   // Inbox, never Oracle's run approvals (class checkpoint) nor a PRD's question read twice.
   // home-waiting-one-list: the one list of what waits on me, shared with Decisions and the rail.
   const waiting = useQuery(k("waiting"), loadWaiting, { keepPrevious: true });
+  // home-waiting-one-list: the decision-log calls proposed to me, from the one list (kind
+  // "decision"), so this card and its tile count what Decisions and the rail count.
   const decisions = useQuery(
     k("decisions"),
     async (): Promise<Decision[]> => {
-      const rows = (await loadInbox()).decisions.filter((d) => d.counts && d.reason === "needs_decision");
-      const all = await Promise.all(rows.map((d) => unwrap(api.GET("/v1/decisions/{decision}", { params: { path: { decision: String(d.number) } } }))));
-      return all.filter((d) => d.class !== "checkpoint" && d.origin !== "checkpoint" && (d.origin as string) !== "prd");
+      const rows = (await loadWaiting()).items.filter((i) => i.kind === "decision");
+      return Promise.all(rows.map((i) => unwrap(api.GET("/v1/decisions/{decision}", { params: { path: { decision: i.ref_id } } }))));
     },
     { keepPrevious: true },
   );
@@ -292,6 +295,8 @@ export default function SimpleHome() {
   const now = new Date();
   /** A moment's day in the company zone, comparable ("2026-10-30"). */
   const zoneDay = (iso: string) => formatInZone(iso, zone, { year: "numeric", month: "2-digit", day: "2-digit" }).replace(/(\d+)\/(\d+)\/(\d+)/, "$3-$1-$2");
+  /** Whether a moment falls in this year, in the company zone. */
+  const sameYear = (iso: string) => formatInZone(iso, zone, { year: "numeric" }) === formatInZone(now.toISOString(), zone, { year: "numeric" });
   const hour = Number(formatInZone(now.toISOString(), zone, { hour: "numeric", hourCycle: "h23" }).replace(/\D.*$/, "")) || 9;
   // A person with no name is greeted plainly, never by their email's local part.
   const firstName = (me?.name ?? "").trim().split(/\s/)[0];
@@ -352,7 +357,11 @@ export default function SimpleHome() {
         proposalRows === toDecide ? (proposalRows.length === 1 ? "proposal on your items" : "proposals on your items") : proposalRows.length === 1 ? "of your proposals waits" : "of your proposals waiting",
         proposalRows.length === 1 ? "proposal" : "proposals",
       ],
-      ["broken-links", roadmap.data ? broken.length : null, broken.length === 1 ? "broken link" : "broken links", broken.length === 1 ? "broken link" : "broken links"],
+      // home-waiting-one-list: only the links on items I decide wait on me (the one list's and the
+      // Roadmap count's); one who decides none of them reads those they can propose fixes for, said so.
+      brokenMine > 0 || brokenOthers === 0
+        ? (["broken-links", roadmap.data ? brokenMine : null, brokenMine === 1 ? "broken link" : "broken links", brokenMine === 1 ? "broken link" : "broken links"] as const)
+        : (["broken-links", brokenOthers, brokenOthers === 1 ? "broken link you can propose a fix for" : "broken links you can propose fixes for", brokenOthers === 1 ? "fix to propose" : "fixes to propose"] as const),
     ] as const
   ).filter(([id]) => (id === "broken-links" ? (roadmap.data?.items.length ?? 1) > 0 : id === "decisions" ? !decisionsEmpty || prdWaiting.length > 0 : !proposalsEmpty));
   // The tiles show once each of their counts is read (or failed): never a 0 or a "–" that later changes.
@@ -918,6 +927,8 @@ export default function SimpleHome() {
                     <span className="simple-date-tile tnum" aria-hidden>
                       <span>{formatInZone(next.due_at, zone, { month: "short" })}</span>
                       <strong>{formatInZone(next.due_at, zone, { day: "numeric" })}</strong>
+                      {/* home-waiting-one-list: a meeting in another year says its year on the tile too. */}
+                      {!sameYear(next.due_at) && <span className="text-[11px] leading-3">{formatInZone(next.due_at, zone, { year: "numeric" })}</span>}
                     </span>
                   }
                   title={next.ritual_title}
@@ -927,7 +938,7 @@ export default function SimpleHome() {
                         {/* home-waiting-one-list: a meeting in another year says its day with the year ("Fri, Jan 8, 2027, 2:00 PM PST"). */}
                         {formatInZone(next.due_at, zone, {
                           weekday: "short",
-                          ...(formatInZone(next.due_at, zone, { year: "numeric" }) === formatInZone(new Date().toISOString(), zone, { year: "numeric" }) ? {} : { month: "short", day: "numeric", year: "numeric" }),
+                          ...(sameYear(next.due_at) ? {} : { month: "short", day: "numeric", year: "numeric" }),
                           hour: "numeric",
                           minute: "2-digit",
                           timeZoneName: "short",
