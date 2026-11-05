@@ -3824,7 +3824,7 @@ function approveEngCheck(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged:
     ctx.setEffort?.(f.key, sizes[f.key], r.id);
     for (const q of f.questions) {
       const a = stagedEdit(staged, f.key, `answer:${q.id}`);
-      if (a) (answers[f.key] ??= []).push({ question_id: q.id, question: q.question, answer: String(a.value), by: a.updated_by ?? a.created_by, at: a.updated_at ?? a.created_at ?? ctx.now() });
+      if (a) (answers[f.key] ??= []).push({ question_id: q.id, question: q.question, answer: String(a.value), by: a.updated_by ?? a.created_by, at: a.updated_at ?? ctx.now() });
     }
   }
   cp.payload = { ...cp.payload, briefs: { verdicts, sizes, answers } };
