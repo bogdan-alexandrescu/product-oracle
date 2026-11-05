@@ -22,7 +22,7 @@ import { downloadedNote } from "@/lib/export-note";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { stripRawTokens } from "@/lib/raw-tokens";
-import { RebuildSign } from "@/components/RebuildSign";
+import { RebuildSeen, RebuildSign } from "@/components/RebuildSign";
 
 type View = Schemas["OnePagerOut"];
 type Line = Schemas["OnePagerLine"];
@@ -886,7 +886,8 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeet
         {!approved && run === "waiting" && <span data-testid="one-pager-status"><DocStatusChip status="in_review" dot /></span>}
         {!approved && run !== "waiting" && summary && <span data-testid="one-pager-status"><PrdStatus d={summary} /></span>}
         <span>{phone && plan ? `v${v.version}` : `Version ${v.version}`}{published ? ` · ${published}` : ""}</span>
-        <RebuildSign slug={v.document.slug} />
+        <RebuildSign slug={v.document.slug} version={v.version} />
+        <RebuildSeen slug={v.document.slug} version={v.version} />
         {sep}
         {v.owner ? <span>Owner <b className="font-[650] text-text">{v.owner.name}</b></span> : <span>No owner yet</span>}
         {!plan && v.decider && (

@@ -1,4 +1,6 @@
 import type { Schemas } from "../client";
+import { FLOW_CATALOG, importsDraft } from "./runs";
+import { canSee } from "./updates";
 
 /**
  * GET /v1/rebuilds, as the API's oracle.runs.rebuilds: the runs that will make a new version
@@ -10,7 +12,9 @@ type Rebuild = Schemas["Rebuild"];
 
 export interface RebuildsInput {
   runs: RunOut[];
-  documents: { id: string; slug: string; title: string; kind: string; company_roadmap?: boolean }[];
+  documents: { id: string; slug: string; title: string; kind: string; company_roadmap?: boolean; visibility?: Schemas["DocumentOut"]["visibility"] }[];
+  /** The reader's role: an `approvers` document is hidden from a commenter or a viewer. */
+  role: Schemas["Me"]["role"];
   /** The document's versions: number and whether approved. */
   versions: (documentId: string) => { number: number; approved: boolean }[];
   /** A member's name (else email) by id. */
@@ -50,10 +54,13 @@ const STOP_ACTIONS: Record<string, string> = {
   roadmap_items: "approve the roadmap items",
   roadmap_review: "review the new roadmap",
 };
-const WRITES_DOCUMENT = ["baseline_to_prd", "feedback_loop", "prd_to_roadmap", "strategy_draft", "update_draft", "pricing_memo"];
+/** The API's _writes_document: a flow with a segment whose draft Oracle imports. */
+const WRITES_DOCUMENT = FLOW_CATALOG.flows.filter((f) => f.segments.some((g) => importsDraft(g.outputs))).map((f) => f.key);
 
 export function rebuildsOut(input: RebuildsInput): Schemas["RebuildsOut"] {
-  const docs = new Map(input.documents.map((d) => [d.slug, d]));
+  // As the API: only the documents the reader may see.
+  const visible = input.documents.filter((d) => canSee(input.role, d.visibility));
+  const docs = new Map(visible.map((d) => [d.slug, d]));
   const rows = input.runs.filter((r) => r.document_slug && STATES[r.status] && WRITES_DOCUMENT.includes(r.flow) && docs.has(r.document_slug));
   const newest = new Map<string, string>();
   for (const r of rows) if ((newest.get(r.document_slug!) ?? "") < r.created_at) newest.set(r.document_slug!, r.created_at);
@@ -88,6 +95,7 @@ export function rebuildsOut(input: RebuildsInput): Schemas["RebuildsOut"] {
       document_slug: doc.slug,
       document_title: doc.title,
       document_kind: doc.kind as Rebuild["document_kind"],
+      source_slug: r.flow === "prd_to_roadmap" && r.source && docs.has(r.source.slug) ? r.source.slug : null,
       state,
       steps: segs.map((s) => s.title),
       step: state === "done" ? segs.length : Math.min(current + 1, Math.max(segs.length, 1)),
@@ -107,9 +115,9 @@ export function rebuildsOut(input: RebuildsInput): Schemas["RebuildsOut"] {
       error: state === "failed" ? (r.error ?? null) : null,
     });
   }
-  const roadmap = input.documents.find((d) => d.company_roadmap);
+  const roadmap = visible.find((d) => d.company_roadmap);
   return {
     rebuilds: out,
-    company_roadmap: roadmap ? { slug: roadmap.slug, title: roadmap.title, prds: input.documents.filter((d) => d.kind === "prd").length } : null,
+    company_roadmap: roadmap ? { slug: roadmap.slug, title: roadmap.title, prds: visible.filter((d) => d.kind === "prd").length } : null,
   };
 }

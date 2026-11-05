@@ -4,9 +4,11 @@
 // roadmap's version saying the run that will make its next version, opening the run's steps,
 // who started it, its next stop and who it waits on, what will change, and Open run.
 // GET /v1/rebuilds (oracle.runs.rebuilds), re-read every 5 s while a run moves (the run
-// page's POLL_MS, RunDetail in app/runs/_run-detail.tsx).
+// page's POLL_MS, RunDetail in app/runs/_run-detail.tsx) and the tab is shown; while nothing
+// moves, re-read only when the tab comes back, on a page change and after a change is saved.
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { api, type Schemas } from "@/lib/api/client";
@@ -17,22 +19,31 @@ type Rebuild = Schemas["Rebuild"];
 type State = Rebuild["state"];
 type Data = Schemas["RebuildsOut"];
 
-/** While a run moves, the sign re-reads as often as the run page does; else now and then. */
+/** While a run moves, the sign re-reads as often as the run page does. */
 export const POLL_MS = 5000;
-const IDLE_MS = 30_000;
-/** Landed versions this browser opened from the sign ("v4 ready: review it" goes away). */
+/** Landed versions this browser opened ("v4 ready: review it" goes away), as "slug@4". */
 export const OPENED_KEY = "po-rebuild-opened";
+/** A change that may start, move or end a run: the sign re-reads at once. */
+export const REBUILDS_CHANGED = "po-rebuilds-changed";
 
 // One shared read for every sign on the page.
 let data: Data | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
+let reading = false;
+let again = false;
 let opened: string[] | null = null;
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
+const moving = (d: Data | null) => !!d?.rebuilds.some((r) => r.state === "running" || r.state === "waiting" || r.state === "scheduled");
 
 async function read() {
   if (timer) clearTimeout(timer);
   timer = null;
+  if (reading) {
+    again = true;
+    return;
+  }
+  reading = true;
   try {
     const { data: got } = await api.GET("/v1/rebuilds");
     if (got) {
@@ -41,21 +52,60 @@ async function read() {
     }
   } catch {
     // A failed read keeps what the sign said; the next read tries again.
+  } finally {
+    reading = false;
   }
-  if (!listeners.size) return;
-  const moving = data?.rebuilds.some((r) => r.state === "running" || r.state === "waiting" || r.state === "scheduled");
-  timer = setTimeout(() => void read(), moving ? POLL_MS : IDLE_MS);
+  if (again) {
+    again = false;
+    return read();
+  }
+  schedule();
 }
+
+/** The next read: in 5 s while a run moves and the tab is shown; else none until a wake. */
+function schedule() {
+  if (timer) clearTimeout(timer);
+  timer = null;
+  if (!listeners.size || document.hidden || !moving(data)) return;
+  timer = setTimeout(() => void read(), POLL_MS);
+}
+
+/** Re-read now, if a sign is on the page. */
+export function refreshRebuilds() {
+  if (listeners.size) void read();
+}
+
+const wake = () => {
+  if (document.hidden) {
+    if (timer) clearTimeout(timer);
+    timer = null;
+  } else refreshRebuilds();
+};
+
+// A saved change (Approve, a run started or stopped) re-reads at once: the done chip must
+// not wait for the next read.
+api.use({
+  onResponse({ request, response }) {
+    if (request.method !== "GET" && response.ok && !request.url.includes("/v1/rebuilds")) setTimeout(refreshRebuilds, 0);
+  },
+});
 
 function subscribe(l: () => void) {
   listeners.add(l);
-  if (listeners.size === 1) void read();
+  if (listeners.size === 1) {
+    document.addEventListener("visibilitychange", wake);
+    window.addEventListener("focus", wake);
+    window.addEventListener(REBUILDS_CHANGED, wake);
+    void read();
+  }
   return () => {
     listeners.delete(l);
-    if (!listeners.size && timer) {
-      clearTimeout(timer);
-      timer = null;
-    }
+    if (listeners.size) return;
+    document.removeEventListener("visibilitychange", wake);
+    window.removeEventListener("focus", wake);
+    window.removeEventListener(REBUILDS_CHANGED, wake);
+    if (timer) clearTimeout(timer);
+    timer = null;
   };
 }
 
@@ -69,21 +119,46 @@ function openedIds(): string[] {
   return opened;
 }
 
-function markOpened(id: string) {
-  opened = [...openedIds().filter((x) => x !== id), id].slice(-50);
+const versionKey = (slug: string, n: number) => `${slug}@${n}`;
+
+/** A landed version this person opened: its "ready: review it" goes away. */
+export function markVersionOpened(slug: string, n: number) {
+  const id = versionKey(slug, n);
+  if (openedIds().includes(id)) return;
+  opened = [...openedIds(), id].slice(-50);
   localStorage.setItem(OPENED_KEY, JSON.stringify(opened));
-  emit();
+  listeners.forEach((l) => l());
 }
 
 const getData = () => data;
 const getOpened = () => (typeof window === "undefined" ? null : openedIds());
+const noop = () => () => {};
 
 /** The runs that will make a new version of a document, live; null until read. */
 export function useRebuilds() {
   const d = useSyncExternalStore(subscribe, getData, () => null);
   const seen = useSyncExternalStore(subscribe, getOpened, () => null);
+  // A page change re-reads: what was started or approved elsewhere shows at once.
+  const path = usePathname();
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    refreshRebuilds();
+  }, [path]);
   if (!d) return null;
-  return { ...d, rebuilds: d.rebuilds.filter((r) => r.state !== "done" || !seen?.includes(r.run_id)) };
+  return { ...d, rebuilds: d.rebuilds.filter((r) => r.state !== "done" || !seen?.includes(versionKey(r.document_slug, r.to_version))) };
+}
+
+/** The version page (and a page showing a version): it marks that version opened. */
+export function RebuildSeen({ slug, version }: { slug: string; version: number }) {
+  useSyncExternalStore(noop, getOpened, () => null);
+  useEffect(() => {
+    if (slug && Number.isFinite(version)) markVersionOpened(slug, version);
+  }, [slug, version]);
+  return null;
 }
 
 type Rb = NonNullable<ReturnType<typeof useRebuilds>>;
@@ -92,10 +167,13 @@ type Rb = NonNullable<ReturnType<typeof useRebuilds>>;
 const ORDER: Record<State, number> = { running: 0, waiting: 1, scheduled: 2, failed: 3, done: 4 };
 const byState = (a: Rebuild, b: Rebuild) => ORDER[a.state] - ORDER[b.state];
 
-/** A document's runs: its own and, for the company roadmap, the PRDs that feed it. */
+/**
+ * A document's runs: its own and, for a PRD, a roadmap run that reads it (frame
+ * a-one-pager-running-rbcasetwo); for the company roadmap, the PRD runs that feed it.
+ */
 function runsFor(rb: Rb, slug: string) {
-  const own = rb.rebuilds.filter((r) => r.document_slug === slug).sort(byState);
-  const feeds = rb.company_roadmap?.slug === slug ? rb.rebuilds.filter((r) => r.document_kind === "prd").sort(byState) : [];
+  const own = rb.rebuilds.filter((r) => r.document_slug === slug || r.source_slug === slug).sort(byState);
+  const feeds = rb.company_roadmap?.slug === slug ? rb.rebuilds.filter((r) => r.document_kind === "prd" && r.document_slug !== slug).sort(byState) : [];
   return { own, feeds };
 }
 
@@ -236,7 +314,7 @@ function RunAction({ r }: { r: Rebuild }) {
     );
   if (r.state === "done")
     return (
-      <Link href={versionHref(r.document_slug, r.document_kind, r.to_version)} className={`${cls} simple-button-primary`} onClick={() => markOpened(r.run_id)}>
+      <Link href={versionHref(r.document_slug, r.document_kind, r.to_version)} className={`${cls} simple-button-primary`} onClick={() => markVersionOpened(r.document_slug, r.to_version)}>
         Review v{r.to_version}
       </Link>
     );
@@ -351,19 +429,29 @@ function Chip({ runs, compact, summary, roadmap }: { runs: Rebuild[]; compact?: 
  * The sign beside a PRD's or roadmap's version or title: nothing while no run will make a
  * new version of it. `compact` in lists and on Home.
  */
-export function RebuildSign({ slug: named, compact = false }: { slug: string | null; compact?: boolean }) {
+export function RebuildSign({ slug: named, compact = false, version }: { slug: string | null; compact?: boolean; version?: number | null }) {
   const rb = useRebuilds();
   // No document named (the Roadmap's All roadmaps): the company roadmap.
   const slug = named ?? rb?.company_roadmap?.slug;
   if (!rb || !slug) return null;
-  const { own, feeds } = runsFor(rb, slug);
+  const sign = signFor(rb, slug, version);
+  if (!sign) return null;
+  return <Chip runs={sign.runs} compact={compact} summary={sign.summary} roadmap={sign.roadmap} />;
+}
+
+/** What a document's sign shows: its runs, first the one the chip names, and A's summary. */
+function signFor(rb: Rb, slug: string, version?: number | null) {
+  const { own: all, feeds } = runsFor(rb, slug);
+  // A page already showing the landed version says nothing of it.
+  const own = all.filter((r) => !(r.state === "done" && r.document_slug === slug && version != null && r.to_version === version));
   const roadmap = rb.company_roadmap?.slug === slug;
-  const runs = [...own, ...feeds];
-  if (!runs.length) return null;
-  // The company roadmap fed by several PRDs: how many of them rebuild, then its own run.
+  // The company roadmap fed by several PRDs: how many of them rebuild, then its own run. Only
+  // then are the PRDs' runs folded in (A's '2 of 4 PRDs rebuilding'); else its own runs.
   const rebuilding = feeds.filter((r) => r.state === "running" || r.state === "waiting");
   const summary = roadmap && rebuilding.length > 1 && !own.some((r) => r.state === "running" || r.state === "waiting") ? `${rebuilding.length} of ${rb.company_roadmap!.prds} PRDs rebuilding · the roadmap updates after them` : undefined;
-  return <Chip runs={runs} compact={compact} summary={summary} roadmap={roadmap || runs[0].document_kind === "roadmap"} />;
+  const runs = summary ? [...rebuilding, ...own] : own;
+  if (!runs.length) return null;
+  return { runs, summary, roadmap: roadmap || runs[0].document_kind === "roadmap" };
 }
 
 /** Home's part: what shared with me is being rebuilt, each with its compact chip. */
@@ -376,7 +464,8 @@ export function RebuildHome() {
     const roadmap = r.document_kind === "roadmap" || rb.company_roadmap?.slug === r.document_slug;
     items.set(r.document_slug, { slug: r.document_slug, title: r.document_title ?? r.document_slug, href: roadmap ? "/simple/roadmap" : `/simple/one-pagers/${r.document_slug}` });
   }
-  const states = new Set(rb.rebuilds.map((r) => r.state));
+  // As A: the heading says what every row's chip says first.
+  const states = new Set([...items.values()].map((it) => signFor(rb, it.slug)?.runs[0].state));
   const heading = states.size === 1 && states.has("done") ? "New versions ready" : states.size === 1 && states.has("failed") ? "Rebuilds that stopped" : "Being rebuilt";
   return (
     <section className="simple-card" aria-label={heading} data-testid="rb-home">

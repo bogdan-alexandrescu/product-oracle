@@ -6659,6 +6659,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       rebuildsOut({
         runs: db.runs?.runs ?? [],
         documents: db.documents,
+        role: me.role,
         versions: (id) => db.versions.filter((v) => v.document_id === id).map((v) => ({ number: v.number, approved: !!v.approved_at })),
         name: nameOf,
         decider: owner ? displayName(owner.email, owner.name) : null,
