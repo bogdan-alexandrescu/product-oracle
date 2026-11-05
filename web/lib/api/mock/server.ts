@@ -172,7 +172,7 @@ import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visual
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
-import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
+import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { appliedVersionOf, approvedPrdToDraft, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
@@ -1280,8 +1280,9 @@ function seedRoadmapMilestonesHardScenario(): Db {
  * with its items on Simple on the old engineering estimates, version 3 in review with the
  * re-planned dates, a shipped item, a new one, one moved to the next PRD and two milestones.
  * Their dates rest on verified bases (./roadmap.ts seedRoadmap), so version 3 may be approved.
+ * "crowded-milestones": version 3 already approved, with five milestones in two weeks.
  */
-function seedApprovedRoadmapScenario(): Db {
+function seedApprovedRoadmapScenario(crowded = false): Db {
   const db = seed();
   const doc = (slug: string, title: string, kind: "prd" | "roadmap", at: string): DocumentRow => {
     const row: DocumentRow = { id: uuid(), slug, title, status: "approved", kind, template: null, template_version: null, theme: null, created_at: at, updated_at: at };
@@ -1295,13 +1296,17 @@ function seedApprovedRoadmapScenario(): Db {
   const roadmap = doc(TRAILS_SLUG, TRAILS_TITLE, "roadmap", "2026-09-10T09:00:00Z");
   roadmap.status = "in_review";
   for (const [n, at] of [[1, "2026-09-10T09:00:00Z"], [2, "2026-09-24T09:00:00Z"], [3, "2026-10-20T09:00:00Z"]] as const) {
-    const v = buildVersion(roadmap, { number: n, created_at: at, sections: trailSections(n === 3 ? 3 : 2), citations: [] });
-    if (n < 3) v.approved_at = at;
+    const v = buildVersion(roadmap, { number: n, created_at: at, sections: trailSections(n === 3 ? 3 : 2, crowded), citations: [] });
+    if (n < 3 || crowded) v.approved_at = at;
     v.source = versionSource(prd, p1);
     db.versions.push(v);
   }
   roadmap.updated_at = "2026-10-20T09:00:00Z";
   db.simple_roadmap = seedTrails(seedSimpleRoadmap());
+  if (crowded) {
+    roadmap.status = "approved";
+    applyRoadmapVersion(db, roadmap, db.versions.find((v) => v.document_id === roadmap.id && v.number === 3)!);
+  }
   return db;
 }
 
@@ -3454,7 +3459,9 @@ function load(): Db {
                     return db;
                   }
               : scenario === APPROVED_ROADMAP_SCENARIO
-                ? seedApprovedRoadmapScenario
+                ? () => seedApprovedRoadmapScenario()
+              : scenario === CROWDED_MILESTONES_SCENARIO
+                ? () => seedApprovedRoadmapScenario(true)
               : scenario === ONE_ROADMAP_SCENARIO
                 ? seedOneRoadmapScenario
               : scenario === "simple-500"
