@@ -165,6 +165,7 @@ function AudienceView({ doc, n, audience }: { doc: string; n: number; audience: 
     <Panel
       title={`Audience view · ${audienceLabel(audience)}`}
       testId="audience-view"
+      bodyClassName="p-4 max-[600px]:p-3"
       tools={audience !== "public" ? <Button onClick={pdf}>Export PDF for {audienceLabel(audience)}</Button> : undefined}
     >
       {failed && <ErrorNote>{failed}</ErrorNote>}

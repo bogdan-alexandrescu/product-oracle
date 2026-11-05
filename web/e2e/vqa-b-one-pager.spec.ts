@@ -106,6 +106,24 @@ test.describe("desktop", () => {
     await expect(page).toHaveURL(/\/simple\/roadmap\?prd=guided-setup$/);
   });
 
+  test("B-14: at 1440 every plan row's label fits whole, its item count on the row", async ({ page }) => {
+    // protects=B-14 fix 1; fails_when=the labels are cut ("M1 · Measure it, make i…") in a 32% column.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-walk"] as const);
+    await login(page);
+    await page.goto("/simple/prds/guided-setup");
+    const labels = page.getByLabel("Timeline strip").getByTestId("plan-strip-label");
+    await expect(labels.first()).toBeVisible();
+    await expect(page.getByLabel("Timeline strip").getByTestId("plan-strip-row").filter({ hasText: "M1 · Measure it, make it safe · 3 roadmap items" })).toHaveCount(1);
+    for (const label of await labels.all()) {
+      const text = (await label.textContent())!;
+      expect(text).toMatch(/ · \d+ roadmap items?$/);
+      const cut = await label.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
+      expect(cut, `${text} fits whole`).toBe(false);
+    }
+    await expect(page.getByLabel("Timeline strip").getByTestId("plan-strip-label-tip")).toHaveCount(0);
+  });
+
   test("B-14: the No milestone row and the footnote count the same items", async ({ page }) => {
     await login(page);
     await page.goto("/simple/prds/guided-setup");

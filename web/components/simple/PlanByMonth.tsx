@@ -13,6 +13,9 @@ const ms = (day: string) => Date.parse(`${day}T00:00:00Z`);
 /** The row grid: a label column beside the bars; on a phone the label sits above its bars
  * (qa-simple-prd-38: a narrow label column cut "Checkout redesi…" and "No milestone…"). */
 const GRID = "grid grid-cols-[minmax(10rem,32%)_1fr] gap-x-2 max-[600px]:grid-cols-1";
+/** vqa B-14: on a wide screen the one-pager's label column fits a milestone's name and its item
+ * count ("M1 · Measure it, make it safe · 3 roadmap items"). */
+const WIDE_LABELS = "min-[1280px]:grid-cols-[minmax(10rem,min(26rem,58%))_1fr]";
 
 /** A row's name as read: a bare milestone code says it is a milestone ("Milestone M1"); a
  * named one keeps its name ("M1 · Prove it"). */
@@ -108,6 +111,7 @@ export function PlanByMonth({
   const holders = holderRows.map((r) => (r.milestone ? `in ${rowName(r)}` : "with no milestone"));
   const holderText = holders.length > 1 ? `${holders.slice(0, -1).join(", ")} and ${holders.at(-1)}` : (holders[0] ?? "");
   // qa4-simple-prd-15: the one-pager counts "roadmap items" in its rows, so its footnote does too.
+  const rowGrid = named ? GRID : `${GRID} ${WIDE_LABELS}`;
   const edgeWord = legend ? ["roadmap item", "roadmap items"] : ["commitment", "commitments"];
   const ends = plan.past_edge === 1 ? "ends" : "end";
   // vqa B-14: on the one-pager, when one row holds every item past the edge and only some of
@@ -120,7 +124,7 @@ export function PlanByMonth({
     : `${plan.past_edge} ${plan.past_edge === 1 ? edgeWord[0] : edgeWord[1]}${holderText ? ` ${holderText}` : ""} ${ends} ${after}`;
   return (
     <div data-testid={testId} className="flex flex-col gap-1">
-      <div className={`${GRID} items-end`}>
+      <div className={`${rowGrid} items-end`}>
         <span aria-hidden className="max-[600px]:hidden" />
         <div className="relative h-6 text-[13px] text-text2">
           {plan.months.map((m) => (
@@ -187,7 +191,7 @@ export function PlanByMonth({
                 data-testid={`${testId}-row`}
                 data-milestone={r.milestone ? "true" : undefined}
                 aria-label={rowLabel}
-                className={`${GRID} items-center rounded-md py-1 hover:bg-surface2`}
+                className={`${rowGrid} items-center rounded-md py-1 hover:bg-surface2`}
               >
                 {words}
                 {bars}
@@ -200,7 +204,7 @@ export function PlanByMonth({
               key={`${r.name}|${r.date ?? ""}`}
               data-testid={`${testId}-row`}
               data-milestone={r.milestone ? "true" : undefined}
-              className={`${GRID} relative items-center rounded-md py-1 hover:bg-surface2`}
+              className={`${rowGrid} relative items-center rounded-md py-1 hover:bg-surface2`}
             >
               <Link href={href} aria-label={rowLabel} className="absolute inset-0 rounded-md" />
               {words}

@@ -65,6 +65,29 @@ test("B-10: the Audience view preview has a caption and a frame that shows on th
   expect(rgb(look.color)).not.toEqual(rgb(look.faint));
 });
 
+for (const viewport of [{ width: 1440, height: 900 }, PHONE]) {
+  test(`B-10: the preview's caption and page sit inside the panel's inset at ${viewport.width}px`, async ({ page }) => {
+    // protects=B-10 fix 1; fails_when=the caption and the preview touch the panel's edge.
+    await page.setViewportSize(viewport);
+    await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "sharing"));
+    await login(page);
+    await page.goto("/documents/usage-alerts-roadmap");
+    const view = page.getByTestId("audience-view");
+    const caption = view.getByText("How the exported page looks", { exact: true });
+    const preview = view.locator('iframe[title="Roadmap for Team"]');
+    await expect(preview).toBeVisible();
+    const panel = (await view.boundingBox())!;
+    const inset = viewport.width < 600 ? 12 : 16;
+    for (const part of [caption, preview]) {
+      const b = (await part.boundingBox())!;
+      expect(b.x - panel.x).toBeGreaterThanOrEqual(inset - 0.5);
+      expect(panel.x + panel.width - (b.x + b.width)).toBeGreaterThanOrEqual(inset - 0.5);
+    }
+    const p = (await preview.boundingBox())!;
+    expect(panel.y + panel.height - (p.y + p.height)).toBeGreaterThanOrEqual(inset - 0.5);
+  });
+}
+
 test("B-23: the selected block's chips use plain words", async ({ page }) => {
   await openPublish(page, "online-deposits");
   const inspector = page.getByTestId("publish-inspector");
