@@ -283,6 +283,8 @@ test("a feature added in the draft and restored while the draft is in review sta
  * (pytest test_a_feature_only_in_the_draft_is_restored_to_the_draft_only[draft_approved]).
  */
 test("a feature added in the draft and restored after the draft was approved without it comes back in a new draft", async ({ page }) => {
+  // Two drafts sent and approved, with sign-ins between: past the default 30 s.
+  test.slow();
   await page.addInitScript((key) => localStorage.setItem(key, "trash-reviewer"), MOCK_SCENARIO_KEY);
   await login(page);
   const other = (await alerts(page)).find((i) => i.can_decide)!;
