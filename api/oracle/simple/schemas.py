@@ -1948,6 +1948,23 @@ class SimpleDraftRoadmap(BaseModel):
     approved: int | None = None
 
 
+class SimpleRoadmapDraftItem(SimpleDraftRoadmapItem):
+    """A dated item of a draft PRD on the Simple roadmap's draft layer, with its owner."""
+
+    owner_name: str | None = None
+
+
+class SimpleRoadmapDraftPrd(BaseModel):
+    """RP2 'Draft layer on roadmap': a PRD whose run's draft roadmap holds dated items not
+    approved yet, shown hatched over the roadmap until the PRD is approved."""
+
+    prd: SimpleDocRef
+    run_id: uuid.UUID | None = None
+    items: list[SimpleRoadmapDraftItem]
+    # The reader may Change dates and Leave out (approvers and up).
+    can_change: bool = False
+
+
 class SimpleDraftDatesIn(BaseModel):
     """Change dates on a draft item: it stays draft."""
 

@@ -1,0 +1,125 @@
+"""The Simple roadmap's draft layer (RP2, the owner's pick 'Draft layer on roadmap', Nov 4).
+
+Each PRD whose run's draft roadmap holds dated items not approved yet shows over the
+roadmap's chart, hatched: :func:`draft_prds` reads them as the meeting's Roadmap step does
+(oracle.simple.meeting_draft), for every such PRD the reader may see. Left out: a PRD that
+was replaced, a draft whose run was cancelled, and a draft whose PRD version is approved
+(approval puts its dated items on the roadmap's working draft, oracle.simple.prd_roadmap).
+
+Change dates and Leave out (:func:`change_dates`, :func:`leave_out`) change the run's draft
+through the meeting step's own actions, never the roadmap; approvers and up.
+"""
+
+import uuid
+from datetime import date
+from typing import Any
+
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from oracle.auth.models import User
+from oracle.authz import has_role
+from oracle.docs import visibility
+from oracle.docs.models import Document, DocumentVersion
+from oracle.roadmap.models import DraftRoadmap, RoadmapItem
+from oracle.runs.models import Run
+from oracle.simple import meeting_draft
+from oracle.simple.schemas import SimpleDocRef, SimpleRoadmapDraftItem, SimpleRoadmapDraftPrd
+
+# Who changes a draft item from the roadmap: those who decide (approvers and up).
+CHANGE_ROLE = "approver"
+
+
+async def _drafts(db: AsyncSession, principal: Any) -> list[tuple[DraftRoadmap, Document]]:
+    """The ready drafts the layer shows, by PRD title."""
+    rows = await db.execute(
+        select(DraftRoadmap, Document)
+        .join(Document, Document.id == DraftRoadmap.prd_document_id)
+        .join(DocumentVersion, DocumentVersion.id == DraftRoadmap.prd_version_id)
+        .outerjoin(Run, Run.id == DraftRoadmap.run_id)
+        .where(
+            DraftRoadmap.status == "ready",
+            DocumentVersion.approved_at.is_(None),
+            func.cardinality(Document.replaced_by) == 0,
+            or_(Run.id.is_(None), Run.status != "cancelled"),
+            visibility.visible_to(principal),
+        )
+        .order_by(Document.title, DraftRoadmap.created_at)
+    )
+    return [(d, doc) for d, doc in rows.all()]
+
+
+async def _items(db: AsyncSession, draft_ids: list[uuid.UUID]) -> list[RoadmapItem]:
+    return list(
+        await db.scalars(
+            select(RoadmapItem)
+            .where(
+                RoadmapItem.draft_roadmap_id.in_(draft_ids),
+                RoadmapItem.cut.is_(False),
+                RoadmapItem.merged_into.is_(None),
+            )
+            .order_by(RoadmapItem.position, RoadmapItem.item_key)
+        )
+    )
+
+
+async def draft_prds(db: AsyncSession, principal: Any) -> list[SimpleRoadmapDraftPrd]:
+    drafts = await _drafts(db, principal)
+    rows = await _items(db, [d.id for d, _ in drafts])
+    spans = await meeting_draft._spans(db, rows)
+    owners = {r.owner_id for r in rows if r.owner_id is not None}
+    names = {
+        u: name or email
+        for u, name, email in (
+            await db.execute(select(User.id, User.name, User.email).where(User.id.in_(owners)))
+        ).all()
+    } if owners else {}  # fmt: skip
+    may = has_role(principal.role, CHANGE_ROLE)
+    out = []
+    for d, doc in drafts:
+        items = [
+            SimpleRoadmapDraftItem(
+                id=r.id,
+                key=r.item_key,
+                title=r.title,
+                horizon=r.horizon,
+                start=spans[r.id][0],
+                end=spans[r.id][1],
+                owner_name=names.get(r.owner_id) if r.owner_id else None,
+            )
+            for r in rows
+            if r.draft_roadmap_id == d.id
+        ]
+        if items:
+            out.append(SimpleRoadmapDraftPrd(
+                prd=SimpleDocRef(id=doc.id, slug=doc.slug, title=doc.title),
+                run_id=d.run_id, items=items, can_change=may,
+            ))  # fmt: skip
+    return out
+
+
+async def _item(db: AsyncSession, principal: Any, item_id: uuid.UUID) -> RoadmapItem | None:
+    """The draft item when the layer shows it to ``principal``, else None."""
+    drafts = await _drafts(db, principal)
+    return next((r for r in await _items(db, [d.id for d, _ in drafts]) if r.id == item_id), None)
+
+
+async def change_dates(
+    db: AsyncSession, principal: Any, item_id: uuid.UUID, start: date, end: date
+) -> bool:
+    """Change dates: the item keeps them, still draft. False: no such draft item. The
+    caller commits."""
+    row = await _item(db, principal, item_id)
+    if row is None:
+        return False
+    meeting_draft.set_dates(row, start, end)
+    return True
+
+
+async def leave_out(db: AsyncSession, principal: Any, item_id: uuid.UUID) -> bool:
+    """Leave out: the item is cut from the run's draft and never goes on the roadmap."""
+    row = await _item(db, principal, item_id)
+    if row is None:
+        return False
+    row.cut = True
+    return True

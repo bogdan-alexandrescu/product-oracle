@@ -21,12 +21,13 @@ Test cards (protects / fails_when / no_claim):
 from datetime import UTC, date, datetime
 
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from oracle.docs.models import Document, DocumentVersion
 from oracle.roadmap.models import DraftRoadmap, RoadmapItem
 from oracle.runs.models import Run
 from oracle.tenancy import tenant_session
+from tests.test_plan import Seed
 from tests.test_simple_changes_api import clock as clock  # noqa: F401
 from tests.test_simple_meetings_api import PRD, world
 
@@ -37,9 +38,11 @@ async def add_draft(w, *, run_status: str = "succeeded") -> dict:
     """Three dated items on a run's draft roadmap of the PRD, the first owned by a person."""
     async with tenant_session(w.ctx.tenant_id) as s:
         prd = await s.scalar(select(Document).where(Document.slug == PRD))
-        pv = await s.scalar(
-            select(DocumentVersion.id).where(DocumentVersion.document_id == prd.id).limit(1)
+        n = await s.scalar(
+            select(func.max(DocumentVersion.number)).where(DocumentVersion.document_id == prd.id)
         )
+        version = await Seed(s).version(prd, n + 1)  # the run's new draft, not approved
+        pv = version.id
         run = Run(flow="baseline_to_prd", status=run_status, created_by=w.ctx.users["owner"].id)
         s.add(run)
         await s.flush()
@@ -73,7 +76,7 @@ async def test_draft_prds_lists_each_prd_with_its_items(client):
     assert [i["title"] for i in d["items"]] == ["Draft item 0", "Draft item 1", "Draft item 2"]
     first = d["items"][0]
     assert (first["start"], first["end"]) == ("2026-11-09", "2026-12-18")
-    assert first["owner_name"] == w.ctx.users["approver"].name
+    assert first["owner_name"] == "approver@example.com"  # no name: the email
     [c] = await read(client, w, "commenter")
     assert c["can_change"] is False
 
