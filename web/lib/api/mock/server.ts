@@ -7155,6 +7155,7 @@ async function route(db: Db, req: Request): Promise<Response> {
               title: i.title,
               horizon: i.horizon,
               outcome: i.outcome ?? null,
+              feature_id: (i as { feature_id?: string | null }).feature_id ?? null,
               start,
               end,
               source: lead ? ("engineering" as const) : ("accepted" as const),
