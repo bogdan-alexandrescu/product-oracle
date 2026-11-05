@@ -42,6 +42,8 @@ const bar = (page: Page) => page.getByTestId("from-run-bar");
 const VIEWS = [
   { name: "1440 light", viewport: { width: 1440, height: 900 }, colorScheme: "light", ask: false },
   { name: "1440 dark", viewport: { width: 1440, height: 900 }, colorScheme: "dark", ask: false },
+  { name: "1440 Ask open", viewport: { width: 1440, height: 900 }, colorScheme: "light", ask: true },
+  { name: "1440 dark Ask open", viewport: { width: 1440, height: 900 }, colorScheme: "dark", ask: true },
   { name: "1680 Ask open", viewport: { width: 1680, height: 900 }, colorScheme: "light", ask: true },
   { name: "390 light", viewport: { width: 390, height: 844 }, colorScheme: "light", ask: false },
   { name: "390 dark", viewport: { width: 390, height: 844 }, colorScheme: "dark", ask: false },
