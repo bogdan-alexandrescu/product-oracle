@@ -92,6 +92,52 @@ test.describe("phone", () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(PHONE.width);
   });
 
+  // qa-plan-18 at text far wider than any system draws (the macOS wrap, brought about here by
+  // a big step in letter-spacing or in the tabs' type size, as Inter Tight's wider metrics there
+  // do) and on narrower phones: still one row, scrolling sideways, Reports on Plan's line.
+  for (const step of [
+    { name: "letter-spacing 1px", css: "*, *::before, *::after { letter-spacing: 1px !important; }" },
+    { name: "tabs at 18px", css: '[data-testid="plan-tabs"] a { font-size: 18px !important; }' },
+    { name: "tabs at 20px, spaced 0.6px", css: '[data-testid="plan-tabs"] a { font-size: 20px !important; letter-spacing: 0.6px !important; }' },
+  ]) {
+    for (const width of [390, 375]) {
+      test(`qa-plan-18: the Plan tabs hold one row with ${step.name} at ${width} px`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 800 });
+        await start(page);
+        await page.goto("/plan");
+        await page.addStyleTag({ content: step.css });
+        await expect(strip(page).getByTestId("plan-tab-plan")).toHaveAttribute("aria-current", "page");
+        const tabs = strip(page).locator('[data-testid^="plan-tab-"]');
+        const look = () =>
+          tabs.first().evaluate((first) => {
+            const s = first.parentElement!;
+            const box = s.getBoundingClientRect();
+            const all = [...s.querySelectorAll<HTMLElement>("[data-testid^='plan-tab-']")].map((t) => t.getBoundingClientRect());
+            return {
+              rows: new Set(all.map((t) => Math.round(t.top))).size,
+              // The strip is no taller than one tab and its padding: no second line, no scroll up and down.
+              tall: s.scrollHeight > s.clientHeight + 1 || box.height > Math.max(...all.map((t) => t.height)) + 12,
+              scrolls: s.scrollWidth > s.clientWidth,
+            };
+          });
+        await expect.poll(look).toEqual({ rows: 1, tall: false, scrolls: true });
+        const reports = strip(page).getByTestId("plan-tab-reports");
+        // The chevron pages the strip, as a person would, until Reports is in full view.
+        for (let i = 0; i < 6 && !(await reports.evaluate((r) => {
+          const [a, b] = [r.getBoundingClientRect(), r.parentElement!.getBoundingClientRect()];
+          return a.left >= b.left - 0.5 && a.right <= b.right + 0.5;
+        })); i++) {
+          await strip(page).getByRole("button", { name: "Scroll tabs right" }).click();
+          await page.waitForTimeout(400);
+        }
+        await expect(reports).toBeInViewport({ ratio: 1 });
+        const plan = (await tabs.first().boundingBox())!;
+        expect(Math.abs((await reports.boundingBox())!.y - plan.y)).toBeLessThanOrEqual(1);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      });
+    }
+  }
+
   test("qa-plan-19: the Dates filters are one row, and a filter reading 0 is an ordinary chip", async ({ page }) => {
     await start(page, { scenario: DATE_BASES_SCENARIO });
     await page.goto("/plan/dates");

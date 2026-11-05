@@ -160,28 +160,45 @@ for (const v of VIEWS) {
       // A label shows only where it fits (B leaves a narrow segment blank, its words in its title);
       // named labels ("M2 Scale volume · 3 wk") fit fewer segments than the code alone did.
       await nothingCut(head.locator('[data-testid="goal-bar-label"], [data-testid="milestone-chip"]'));
-      // The rule, at whatever width the text draws: each shown label fits its segment with room
-      // to spare and lies wholly inside it; each hidden one would not fit, and its segment's
-      // title holds its words.
-      const segments = await head.getByTestId("goal-bar-segment").evaluateAll((els) =>
-        els.map((e) => {
-          const text = e.querySelector<HTMLElement>("[data-label]")!;
-          const [s, t] = [e.getBoundingClientRect(), text.getBoundingClientRect()];
-          return {
-            label: text.textContent!,
-            shown: text.dataset.testid === "goal-bar-label" && getComputedStyle(text).opacity === "1",
-            fits: text.offsetWidth + 12 <= e.clientWidth,
-            inside: t.left >= s.left - 0.5 && t.right <= s.right + 0.5,
-            title: e.getAttribute("title")!,
-          };
-        }),
-      );
-      for (const g of segments) {
-        expect(g.shown, `"${g.label}" shows only where it fits`).toBe(g.fits);
-        if (g.shown) expect(g.inside, `"${g.label}" is not cut`).toBe(true);
-        else expect(g.title, `"${g.label}"'s words are in its title`).toBe(g.label.replace(/ · ([\d.]+) wk$/, ": $1 engineer-weeks"));
+      // The rule, at whatever width the text draws: a label shows only where it fits its segment
+      // with the frame's own margin (8 px a letter and 12 px over, the picked frames' look) and,
+      // as drawn, with 6 px to spare each side, wholly inside it; a hidden one's segment title
+      // holds its words. So text drawn wider hides a label that would be cut, and text drawn
+      // narrower shows no more labels than the frames do.
+      const segments = () =>
+        head.getByTestId("goal-bar-segment").evaluateAll((els) =>
+          els.map((e) => {
+            const text = e.querySelector<HTMLElement>("[data-label]")!;
+            const [s, t] = [e.getBoundingClientRect(), text.getBoundingClientRect()];
+            return {
+              label: text.textContent!,
+              shown: text.dataset.testid === "goal-bar-label" && getComputedStyle(text).opacity === "1",
+              fits: text.offsetWidth + 12 <= e.clientWidth && text.textContent!.length * 8 + 12 <= s.width,
+              inside: t.left >= s.left - 0.5 && t.right <= s.right + 0.5,
+              title: e.getAttribute("title")!,
+            };
+          }),
+        );
+      const holds = async () => {
+        const all = await segments();
+        for (const g of all) {
+          expect(g.shown, `"${g.label}" shows only where it fits`).toBe(g.fits);
+          if (g.shown) expect(g.inside, `"${g.label}" is not cut`).toBe(true);
+          else expect(g.title, `"${g.label}"'s words are in its title`).toBe(g.label.replace(/ · ([\d.]+) wk$/, ": $1 engineer-weeks"));
+        }
+        return all.filter((g) => g.shown).map((g) => g.label);
+      };
+      const shown = await holds();
+      if (!v.phone) expect(shown.length, "a desktop bar names its milestones").toBeGreaterThan(0);
+      // At the default text width a desktop reads as the picked frames: five labels at 1366,
+      // and at 1440 Growth's short M1 segment stays blank.
+      if (!v.phone && !process.env.E2E_TEXT_SPACING) {
+        expect(shown).toHaveLength(5);
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await expect.poll(async () => (await holds()).length).toBe(5);
+        await expect(head.locator('[data-testid="goal-bar"][data-goal="Growth"] [data-milestone="M1"]').getByTestId("goal-bar-label")).toHaveCount(0);
+        await page.setViewportSize({ width: 1366, height: 820 });
       }
-      if (!v.phone) expect(segments.filter((g) => g.shown).length, "a desktop bar names its milestones").toBeGreaterThan(0);
       // Every label on a milestone colour reads at AA (4.5:1), light and dark.
       expect(await contrasts(head.getByTestId("goal-bar-label"))).toEqual([]);
 
