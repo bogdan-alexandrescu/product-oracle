@@ -185,15 +185,21 @@ export const brokenLinks = (i: Item): Flag[] => broken(i).filter((f) => LINK_KIN
 
 /** fix4 qa-simple-roadmap-8: what "Needs a decision" counts, read by its toolbar button and its
  * panel's tiles alike (one number): broken links, dates to confirm, proposals, pulled in. */
-export function decisionCounts(items: Item[], proposals: Change[]): { broken: Item[]; dates: Item[]; proposals: Change[]; pulled: Change[]; total: number } {
+export function decisionCounts(
+  items: Item[],
+  proposals: Change[],
+  old: Schemas["SimpleOldMilestone"][] = [],
+): { broken: Item[]; dates: Item[]; proposals: Change[]; pulled: Change[]; old: Schemas["SimpleOldMilestone"][]; total: number } {
   const mine = proposals.filter((c) => c.can_decide);
   const out = {
     broken: items.filter((i) => i.can_decide && brokenLinks(i).length > 0),
     dates: items.filter((i) => !!i.suggestion?.can_decide),
     proposals: mine.filter((c) => c.op !== "change_horizon"),
     pulled: mine.filter((c) => c.op === "change_horizon"),
+    // old-milestones: an old milestone with no items left, waiting on an owner's Keep or Drop.
+    old,
   };
-  return { ...out, total: out.broken.length + out.dates.length + out.proposals.length + out.pulled.length };
+  return { ...out, total: out.broken.length + out.dates.length + out.proposals.length + out.pulled.length + out.old.length };
 }
 
 /**

@@ -27,6 +27,7 @@ import { useKeyBurst } from "./_burst";
 import { changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
 import { boardPicture, chartPicture, exportView, type Brand } from "./_export";
 import { KeyDatesEditor } from "./_keydates";
+import { OldMilestones, oldToDecide } from "./_old_milestones";
 import { Lanes, pmItem } from "./_lanes";
 import {
   addDays,
@@ -477,6 +478,9 @@ function DecisionTray({
   phone,
   suggestions,
   top,
+  old,
+  today,
+  onOld,
 }: {
   items: Item[];
   byId: Map<string, Item>;
@@ -490,6 +494,10 @@ function DecisionTray({
   suggestions: GoalSuggestionsApi;
   /** Where the desktop panel starts: under the toolbar's button. */
   top: number;
+  /** old-milestones: the older roadmaps' goal milestones an owner may bring over. */
+  old: Schemas["SimpleOldMilestones"] | undefined;
+  today: string;
+  onOld: () => Promise<void> | void;
 }) {
   const twins = items.filter((i) => i.can_decide && i.looks_like.length > 0);
   // qa4-simple-roadmap-14: Escape closes the drawer, focus back on its button.
@@ -514,7 +522,7 @@ function DecisionTray({
   }, [atProposals]);
   const suggested = (suggestions.data?.suggestions ?? []).filter((s) => s.can_accept || s.can_reject);
   // fix4 qa-simple-roadmap-8: the same counts the toolbar button reads (decisionCounts).
-  const counts = decisionCounts(items, proposals);
+  const counts = decisionCounts(items, proposals, oldToDecide(old));
   const brokenItems = counts.broken;
   // The other red flags (a draft with no owner, an end past its milestone): listed, not broken links.
   const flagged = items.filter((i) => i.can_decide && broken(i).some((f) => !brokenLinks(i).includes(f)));
@@ -539,6 +547,8 @@ function DecisionTray({
     ["Dates to confirm", dateRows.length],
     ["Proposals", others.length],
     ["Pulled in", pulled.length],
+    // old-milestones: a tile only while an old milestone waits on a call.
+    ...(counts.old.length ? ([["Old milestones", counts.old.length]] as [string, number][]) : []),
   ];
   const kd = (c: Change) => (c.after.key_date ?? c.before.key_date) as { name?: string } | null | undefined;
   const title = (c: Change) => (kd(c)?.name ? `Key date '${kd(c)!.name}'` : (byId.get(String(c.target.item_id))?.title ?? (typeof c.after.title === "string" ? c.after.title : "An item")));
@@ -588,6 +598,7 @@ function DecisionTray({
           </li>
         ))}
       </ul>
+      <OldMilestones old={old} today={today} onDone={onOld} tray />
       <section className="mt-4">
         <h3 className="font-semibold">Broken links</h3>
         {brokenItems.length ? (
@@ -922,7 +933,7 @@ export function SimpleRoadmap() {
   const titleOf = useCallback((id: string | null) => (id ? byId.get(id)?.title : undefined), [byId]);
   const canChange = can("create_simple_change");
   // build-milestones-on-roadmap: the milestones per goal, added on the time axis.
-  const ms = useMilestones({ data, phone, canChange, reload: roadmap.reload, openItem: (id) => setCard({ id, ...anchorOf(id) }) });
+  const ms = useMilestones({ data, phone, canChange, reload: roadmap.reload, openItem: (id) => setCard({ id, ...anchorOf(id) }), knownGoals: suggestions.data?.goals.map((g) => g.goal) });
   // The items as last loaded, for a burst sent after the render that started it.
   const latest = useRef(byId);
   useEffect(() => {
@@ -1118,7 +1129,7 @@ export function SimpleRoadmap() {
   // no PRD) sees no Start review at all, once the start options say so (busy until then).
   const startsReviews = mayStartReview || (!startOptions.data && !startOptions.error);
   // fix4 qa-simple-roadmap-8: the tray's own counts (one helper), so the button and its tiles agree.
-  const waiting = decisionCounts(data.items, allProposals).total;
+  const waiting = decisionCounts(data.items, allProposals, oldToDecide(data.old_milestones)).total;
   const qList = quarters(data.windows.now.start, data.windows.later.end);
   // qa-shell-8: a new company's roadmap has nothing on it (no item, milestone or key date, and
   // no filter narrowing it): one line on what shows here and the next step, no empty chart and
@@ -1419,7 +1430,7 @@ export function SimpleRoadmap() {
           />
         </div>
         {!phone && actions}
-        {keyDates && <KeyDatesEditor key={data.roadmap?.id ?? "all"} data={data} act={act} mayChange={canChange} phone={phone} onClose={() => setKeyDates(false)} />}
+        {keyDates && <KeyDatesEditor key={data.roadmap?.id ?? "all"} data={data} act={act} mayChange={canChange} phone={phone} onClose={() => setKeyDates(false)} onOld={reload} />}
       </header>
       <p role="status" aria-live="polite" className="sr-only" data-testid="key-pending">
         {said}
@@ -1712,6 +1723,9 @@ export function SimpleRoadmap() {
           phone={phone}
           suggestions={suggestions}
           top={trayTop}
+          old={data.old_milestones}
+          today={data.today}
+          onOld={reload}
         />
       )}
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} start={goalStart} onClose={() => setGoalPanel(null)} />}
