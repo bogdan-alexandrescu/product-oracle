@@ -295,5 +295,7 @@ test("an approver's × on a dependency joins a commenter's suggested removal on 
   await inspector(page).getByTestId("item-depends").getByRole("button", { name: "Remove dependency Anomaly detection" }).click();
   await expect(card(page, LOCAL)).toContainText("✓ Dependency removed");
   await expect(card(page, CROSS)).toContainText("✓ Dependency removed");
+  // Both dependencies read as removed: the commenter's stays in the joined edit.
+  await expect(inspector(page).getByTestId("item-depends").getByRole("button", { name: /^Remove dependency / })).toHaveCount(0);
   await expect(page.getByTestId("review-summary")).toHaveText("2 blocking · 7 to confirm");
 });
