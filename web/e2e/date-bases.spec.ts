@@ -263,5 +263,7 @@ test("plan inspector: an unverified date offers Verify date; the dialog picks th
   await expect(line).toContainText("Dec 15 ✓ ENG-431, verified by Avery Stone");
   await openDates(page);
   await page.getByTestId("dates-filter").getByRole("button", { name: "Verified" }).click();
-  await expect(row(page, "ENG-431")).toContainText("Item: Alerts in the team chat");
+  // The row names the item; Applies to says only what kind of thing (PR 1285 review 3).
+  await expect(row(page, "ENG-431").getByTestId("basis-title")).toHaveText("Alerts in the team chat (ENG-431)");
+  await expect(row(page, "ENG-431")).toContainText("One item");
 });
