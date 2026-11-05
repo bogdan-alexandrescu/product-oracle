@@ -16,6 +16,7 @@ from oracle import autonomy
 from oracle.auth.deps import Principal, TenantDB, body_type
 from oracle.authz import recheck_caller, require_role, require_role_now
 from oracle.baseline import (
+    check,
     conflicts,
     describe,
     evidence,
@@ -30,6 +31,7 @@ from oracle.baseline import (
 )
 from oracle.baseline.models import Edge, Entity, Proposal
 from oracle.baseline.schemas import (
+    CheckOut,
     ConflictCreate,
     ConflictOut,
     ConflictResolve,
@@ -968,6 +970,15 @@ async def resolve_conflict(
 async def get_trace(principal: Reader, db: TenantDB) -> TraceReport:
     """Features that serve no confirmed goal, or rest on weak evidence; goal coverage."""
     return await trace.report(db, principal)
+
+
+@router.get("/check", response_model=CheckOut)
+async def get_check(principal: Reader, db: TenantDB) -> CheckOut:
+    """The Ground Truth check (docs/ground-truth.md): every roadmap item, slice and PRD
+    feature not in the Ground Truth, and every feature with no F-code, no goal, or running
+    today while still on the roadmap; each with plain words and its fixes, counted per kind.
+    Flags only: nothing is refused on save."""
+    return await check.run(db)
 
 
 @router.get(

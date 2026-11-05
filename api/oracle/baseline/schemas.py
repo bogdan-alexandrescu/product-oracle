@@ -622,3 +622,67 @@ class FillFromTextResult(BaseModel):
     applied: int
     proposed: int
     left_as_text: list[FilledText]
+
+
+# --- the Ground Truth check (oracle.baseline.check, docs/ground-truth.md) --------------------
+
+CheckKind = Literal[
+    "unlinked_item",
+    "slice_parent_missing",
+    "prd_feature_missing",
+    "no_code",
+    "no_goal",
+    "runs_today_on_roadmap",
+]
+CHECK_KINDS: tuple[str, ...] = CheckKind.__args__  # type: ignore[attr-defined]
+CheckAction = Literal[
+    "add_to_ground_truth", "link_to_feature", "give_code", "pick_goal", "take_off_roadmap"
+]
+
+
+class CheckRef(BaseModel):
+    """A roadmap item, slice or feature: its id (none for a PRD's feature or slice that is no
+    row of its own), its code (F-15, F-15a; none when it has no F-code) and its name."""
+
+    id: uuid.UUID | None
+    code: str | None
+    name: str
+
+
+class CheckDoc(BaseModel):
+    id: uuid.UUID
+    title: str
+
+
+class CheckWhere(BaseModel):
+    """Where the flag shows: the roadmap and the PRD (with its title), when it has them."""
+
+    roadmap: CheckDoc | None = None
+    prd: CheckDoc | None = None
+
+
+class CheckFix(BaseModel):
+    """A fix a person makes in the UI. ``target``: the item's or feature's id, or for a PRD's
+    feature or slice the PRD feature's code (with ``where.prd``)."""
+
+    action: CheckAction
+    target: str
+
+
+class CheckFlag(BaseModel):
+    """One place that breaks the Ground Truth: allowed, flagged "Not in the Ground Truth"."""
+
+    kind: CheckKind
+    item: CheckRef | None = None
+    feature: CheckRef | None = None
+    where: CheckWhere
+    # One short plain sentence, no ids.
+    words: str
+    fixes: list[CheckFix]
+
+
+class CheckOut(BaseModel):
+    flags: list[CheckFlag]
+    # Every kind, zero included.
+    counts: dict[str, int]
+    total: int
