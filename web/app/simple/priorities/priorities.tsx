@@ -607,8 +607,8 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
                   <button type="button" data-feature={r.item_id ?? r.code} className="text-left hover:underline">
                     {r.title}
                   </button>
-                  <OwnKey r={r} />
                 </span>
+                <OwnKey r={r} />
                 <MarkFor featureId={r.feature_id} />
               </span>
               {/* walkb-priorities: no ml-auto, so details that wrap under the title start at the left on every row. */}
@@ -2104,7 +2104,7 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
           </div>
         </figure>
       )}
-      {note && <UndoNote id={note.id} onUndo={note.undo ? () => void writes.undo(note.undo!) : note.changes?.length ? () => void tasks.undo(note.changes!) : undefined}>{note.text}</UndoNote>}
+      {note && <UndoNote id={note.id} clear='[data-testid="goal-bucket"] h3' onUndo={note.undo ? () => void writes.undo(note.undo!) : note.changes?.length ? () => void tasks.undo(note.changes!) : undefined}>{note.text}</UndoNote>}
       {error && (
         <p role="alert" className="mt-3 text-[15px] text-warn">
           {error}

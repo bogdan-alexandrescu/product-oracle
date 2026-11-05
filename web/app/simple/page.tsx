@@ -1012,7 +1012,7 @@ export default function SimpleHome() {
                 {/* build-feature-panel review 6: the task's feature opens the one feature panel. */}
                 <button type="button" data-feature={t.item_id} className="text-left hover:underline">
                   {t.item_title}
-                </button>
+                </button>{" "}
                 <MarkForItem itemId={t.item_id} />
                 {t.due_date ? ` · due ${calendarDay(t.due_date)}` : ""}
                 {t.late ? " · late" : ""}
