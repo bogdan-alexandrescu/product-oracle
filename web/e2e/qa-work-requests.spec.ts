@@ -80,7 +80,7 @@ test("qa-work-35, qa-work-36: every row has a checkbox slot and its fields in on
   const xs = await Promise.all([0, 1, 2, 3].map(async (i) => (await title(i).boundingBox())!.x));
   for (const x of xs) expect(Math.abs(x - xs[0])).toBeLessThan(1);
 
-  await expect(page.getByTestId("request-list-head")).toHaveText(/State\s*Goal\s*Theme\s*Asked by\s*Channel\s*Age/);
+  await expect(page.getByTestId("request-list-head")).toHaveText(/Request\s*Goal\s*Theme\s*Asked by\s*Channel\s*Age/);
   for (const i of [0, 1, 2]) {
     const fields = await rows(page).nth(i).locator("[data-field]").evaluateAll((els) => els.map((e) => e.getAttribute("data-field")));
     expect(fields).toEqual(["state", "goal", "theme", "asker", "channel", "age"]);
