@@ -406,17 +406,19 @@ _OWN = frozenset({"id", "roadmap_version_id", "draft_roadmap_id", "simple_draft_
 
 
 async def _onto_current(db: AsyncSession, entry: TrashEntry) -> list[dict[str, Any]]:
-    """A version published, opened in a draft or proposed while the feature was in Trash
-    was made without it: Restore puts a copy of its latest row on the roadmap's current
-    version, the working draft's base and every newer version that has items, approved
-    or waiting for approval (a Simple draft in review, a Detailed change set's proposal),
-    wherever it is missing, with its goal, dependencies and milestones. A version
-    withdrawn from review or superseded is left as it is: it is never approved. A
-    dependency on a key no longer on that version (nor in Trash) is dropped, and said."""
+    """A version published or proposed while the feature was in Trash was made without it:
+    Restore puts a copy of its latest row on the roadmap's published version and on the
+    version waiting for approval (a Simple draft in review, a Detailed change set's
+    proposal), when newer than the last version it was on and missing it, with its goal,
+    dependencies and milestones. An older approved version keeps what it was approved
+    with; a version that can no longer be approved (withdrawn from review, superseded, or
+    no longer the latest: only the latest is approved) is left as it is. A feature only
+    ever in a working draft goes back to that draft and onto no version. A dependency on a
+    key no longer on that version (nor in Trash) is dropped, and said."""
     from oracle.docs.models import DocumentVersion
     from oracle.roadmap.models import RoadmapChangeSet, TrackMilestone
     from oracle.simple.additions import _shown_version
-    from oracle.simple.drafts import _withdrawn
+    from oracle.simple.drafts import withdrawn_message
     from oracle.simple.models import SimpleDraft
 
     key = entry.root.get("slug")
@@ -436,42 +438,51 @@ async def _onto_current(db: AsyncSession, entry: TrashEntry) -> list[dict[str, A
     )  # fmt: skip
     if not rows:
         return []
-    have = {r.roadmap_version_id for r in rows}
+    have = {r.roadmap_version_id for r in rows} - {None}
+    if not have:
+        # Only ever in a working draft (never approved): its own row is back there.
+        return []
+    newest = await db.scalar(
+        select(func.max(DocumentVersion.number)).where(DocumentVersion.id.in_(have))
+    )
+    latest = await db.scalar(
+        select(DocumentVersion).where(DocumentVersion.document_id == doc)
+        .order_by(DocumentVersion.number.desc()).limit(1)
+    )  # fmt: skip
+    targets = {await _shown_version(db, doc, draft=False)}
+    superseded = await db.scalar(
+        select(RoadmapChangeSet.id).where(
+            RoadmapChangeSet.status == "superseded",
+            RoadmapChangeSet.proposed_version_id == latest.id,
+        )
+    )
+    if (
+        latest.approved_at is None
+        and await withdrawn_message(db, latest) is None
+        and superseded is None
+        and await db.scalar(
+            select(RoadmapItem.id).where(RoadmapItem.roadmap_version_id == latest.id).limit(1)
+        )
+    ):
+        targets.add(latest.id)
+    targets = set(
+        await db.scalars(
+            select(DocumentVersion.id).where(
+                DocumentVersion.id.in_(targets - {None}), DocumentVersion.number > newest
+            )
+        )
+    )
+    if not targets:
+        return []
     drafts_ = list(
         await db.scalars(
             select(SimpleDraft).where(
-                SimpleDraft.document_id == doc, SimpleDraft.status.in_(("working", "submitted"))
+                SimpleDraft.document_id == doc, SimpleDraft.status == "working"
             )
         )
     )
-    targets = {await _shown_version(db, doc, draft=False)}
-    targets |= {d.base_version_id if d.status == "working" else d.version_id for d in drafts_}
-    newest = await db.scalar(
-        select(func.max(DocumentVersion.number)).where(DocumentVersion.id.in_(have - {None}))
-    )
-    superseded = select(RoadmapChangeSet.proposed_version_id).where(
-        RoadmapChangeSet.status == "superseded", RoadmapChangeSet.proposed_version_id.is_not(None)
-    )
-    targets |= set(
-        await db.scalars(
-            select(DocumentVersion.id).where(
-                DocumentVersion.document_id == doc,
-                DocumentVersion.number > (newest or 0),
-                DocumentVersion.id.in_(
-                    select(RoadmapItem.roadmap_version_id).where(
-                        RoadmapItem.roadmap_document_id == doc
-                    )
-                ),
-                (DocumentVersion.approved_at.is_not(None))
-                | (~_withdrawn() & DocumentVersion.id.not_in(superseded)),
-            )
-        )
-    )
-    targets -= {None, *have}
-    if not targets:
-        return []
     src, kept = rows[0], await trashed_keys(db, doc)
-    added = {d.base_version_id: d.id for d in drafts_ if d.status == "working"}
+    added = {d.base_version_id: d.id for d in drafts_}
     dropped: dict[str, str] = {}
     copies = []
     for version in sorted(targets):
