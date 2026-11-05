@@ -22,7 +22,9 @@ scope), ``not_in_scope`` and ``missing_feature`` (an approved PRD scope exists a
 feature is not included in it, or is included and not ranked) and ``before_prerequisite``
 (ranked above a feature it depends on: decision O3, ordered by dependencies) and
 ``new_feature_no_goal`` (a feature new in this PRD whose row and feature-set entry name no
-goal it serves: none joins the Ground Truth without its goal). Advisory:
+known goal it serves: none joins the Ground Truth without its goal) and ``unknown_goal`` (a
+new feature's row or entry names a goal the Ground Truth does not have, or rejected; a
+contribution of 0 from either source means it does not serve). Advisory:
 ``differs_from_live`` (its place among the ranked live features differs by more than
 ``LIVE_SLACK`` from the live ranking of the same method, restricted to the same features)
 and ``no_goal`` (the live ranking flags it ``no_confirmed_goal``).
@@ -112,6 +114,8 @@ class Known:
     # A scope feature not in the baseline (new in this PRD) -> the goals its feature-set
     # entry names: key and contribution (None: named by key alone).
     new_goals: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    # The Ground Truth's non-rejected goals: key -> title. Only these count as served.
+    goals: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -269,13 +273,8 @@ def check_order(text: str, *, known: Known) -> OrderCheck:
         )
     _check_features(out, rows, known)
     for r in rows:
-        if r["key"] in known.new_goals and not _serves(r, known.new_goals[r["key"]]):
-            out.add(
-                "new_feature_no_goal",
-                f"{known.features.get(r['key']) or r['key']} is new and names no goal it "
-                "serves: the run must name one",
-                r["key"],
-            )
+        if r["key"] in known.new_goals:
+            _check_new_goals(out, r, known)
     live = known.live.get(out.method or "", [])
     live_rank = live_ranks([r["key"] for r in rows], live)
     by_key = {f["key"]: f for f in live}
@@ -327,11 +326,33 @@ def _check_features(out: OrderCheck, rows: list[dict[str, Any]], known: Known) -
                 )
 
 
-def _serves(row: dict[str, Any], goals: list[dict[str, Any]]) -> bool:
-    """A new feature names a goal it serves: its row's goal or its feature-set entry's, with
-    no contribution or one above 0 (0: does not serve)."""
-    named = [{"key": row.get("goal"), "contribution": row.get("contribution")}, *goals]
-    return any(g.get("key") and g.get("contribution") != 0 for g in named)
+def _check_new_goals(out: OrderCheck, row: dict[str, Any], known: Known) -> None:
+    """A new feature names a goal it serves: its row's goal or its feature-set entry's, a
+    goal of the Ground Truth (not rejected), with no contribution or one above 0. A 0 from
+    either source wins (does not serve). A goal the Ground Truth does not have is blocking
+    on its own: its link would be dropped (review of PR 1244, round 3)."""
+    key = row["key"]
+    title = known.features.get(key) or key
+    named = [
+        {"key": row.get("goal"), "contribution": row.get("contribution")},
+        *known.new_goals[key],
+    ]
+    keys = [str(g["key"]) for g in named if g.get("key")]
+    zero = {str(g["key"]) for g in named if g.get("key") and g.get("contribution") == 0}
+    unknown = [k for k in dict.fromkeys(keys) if k not in known.goals]
+    for goal in unknown:
+        out.add(
+            "unknown_goal",
+            f"{title} names the goal {goal}, which is not a goal in the Ground Truth: "
+            "the run must name one that is",
+            key,
+        )
+    if not unknown and not any(k in known.goals and k not in zero for k in keys):
+        out.add(
+            "new_feature_no_goal",
+            f"{title} is new and names no goal it serves: the run must name one",
+            key,
+        )
 
 
 async def check_order_async(text: str, **kwargs: Any) -> OrderCheck:
@@ -362,15 +383,20 @@ async def check_order_async(text: str, **kwargs: Any) -> OrderCheck:
 async def known_for_run(db: AsyncSession, run: Any) -> tuple[Known, uuid.UUID | None]:
     """The baseline's features, the run's approved PRD scope (C6) and the live ranking of
     every method, read once; with the scope's id (None without one)."""
+    from oracle.baseline.models import Entity
     from oracle.priorities import service
     from oracle.priorities.scoring import rank
     from oracle.runs import feature_set
 
     features = await service.load_features(db)
+    goals = await db.scalars(
+        select(Entity).where(Entity.type == "goal", Entity.status != "rejected")
+    )
     known = Known(
         features={f.key: f.title for f in features},
         depends_on={f.key: set(f.depends_on) for f in features},
         live={m: list(rank(features, m)["features"]) for m in PRIORITY_METHODS},
+        goals={g.key: g.title for g in goals},
     )
     scope = await feature_set.approved_scope(db, run_id=run.id, document_id=run.document_id)
     if scope is None:
@@ -739,7 +765,8 @@ async def _propose_links(
     """A new feature's supports links to the goals it serves (its ranking row's, then the
     feature set's) and depends_on links to the features it needs, proposed by the run. A
     goal named with no usable contribution still gets its link, the contribution assumed
-    (``ASSUMED_LINK``) unless the other names one; one of 0 (does not serve) gets none."""
+    (``ASSUMED_LINK``) unless the other names one; a 0 from either source (does not serve)
+    gets none."""
     from oracle.baseline.service import Writer, create_edge, find_edge, find_entity
 
     feature = await find_entity(db, "feature", key)
@@ -748,9 +775,12 @@ async def _propose_links(
     writer = Writer(None, "agent", run_id=run_id, reason="Proposed by the approved order")
     goals: dict[str, dict[str, Any]] = {}
     terms = (row.get("explanation") or {}).get("goals") or []
-    for g in [*terms, *[{**g, "goal": g.get("key")} for g in (item.goals if item else [])]]:
+    named = [*terms, *[{**g, "goal": g.get("key")} for g in (item.goals if item else [])]]
+    # A 0 from either source wins: the feature does not serve that goal.
+    zero = {str(g["goal"]) for g in named if g.get("goal") and g.get("contribution") == 0}
+    for g in named:
         contribution = _contribution(g.get("contribution"))
-        if not g.get("goal") or contribution == 0:
+        if not g.get("goal") or str(g["goal"]) in zero:
             continue
         if contribution is None or g.get("contribution_assumed"):
             goals.setdefault(str(g["goal"]), ASSUMED_LINK)
