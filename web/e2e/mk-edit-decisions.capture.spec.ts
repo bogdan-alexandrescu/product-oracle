@@ -25,7 +25,7 @@ const ec1 = (v: string): Frame[] => [
   { file: `ec1-${v}-reassigned`, url: `${D}?ec1=${v}&phase=done&act=reassign`, scroll: "#mk-outside" },
   { file: `ec1-${v}-withdrawn`, url: `${D}?ec1=${v}&phase=done&act=withdraw`, scroll: "#mk-outside" },
   { file: `ec1-${v}-deleted`, url: `${D}?ec1=${v}&phase=done&act=delete`, scroll: "#mk-outside" },
-  { file: `ec1-${v}-new`, url: `${D}?ec1=${v}&open=1&act=new&phase=mid`, scroll: v === "c" ? "#mk-outside" : undefined },
+  { file: `ec1-${v}-new`, url: `${D}?ec1=${v}&open=1&act=new&phase=mid`, scroll: v === "c" ? "#mk-outside" : v === "a" ? "section[aria-label='New decision']" : undefined },
   { file: `ec1-${v}-new-done`, url: `${D}?ec1=${v}&act=new&phase=done`, scroll: "#mk-outside" },
   { file: `ec1-${v}-hard`, url: `${D}?ec1=${v}&long=1&phase=mid`, scroll: "#mk-outside" },
   { file: `ec1-${v}-hard-1512`, url: `${D}?ec1=${v}&long=1&phase=mid`, w: 1512, h: 982, scroll: "#mk-outside" },
@@ -45,7 +45,8 @@ const eq2 = (v: string): Frame[] => [
   { file: `eq2-${v}-hard`, url: `${D}?eq2=${v}&long=1&phase=mid`, scroll: "[data-testid=questions-mine] [data-testid=question-row] >> nth=0" },
   { file: `eq2-${v}-hard-1512`, url: `${D}?eq2=${v}&long=1&phase=mid`, w: 1512, h: 982, scroll: "[data-testid=questions-mine] [data-testid=question-row] >> nth=0" },
   { file: `eq2-${v}-mid-390`, url: `${D}?eq2=${v}&phase=mid`, w: 390, h: 844 },
-  { file: `eq2-${v}-propose`, url: `${D}?eq2=${v}&as=approver&open=1&act=${v === "b" ? "sheet" : "edit"}`, scroll: "[data-mk-target]", who: "approver" },
+  { file: `eq2-${v}-propose`, url: `${D}?eq2=${v}&as=approver&open=1&act=${v === "b" ? "sheet" : "edit"}`, scroll: v === "c" ? "[data-testid=questions-mine]" : "[data-mk-target]", who: "approver" },
+  ...(v === "c" ? [{ file: `eq2-c-propose-q5`, url: `${D}?eq2=c&as=approver&open=1&act=edit`, scroll: "[data-mk-target]", who: "approver" as Who }] : []),
   { file: `eq2-${v}-home`, url: `/simple?eq2=${v}`, scroll: "[data-code] >> nth=0" },
   { file: `eq2-${v}-read`, url: `${D}?eq2=${v}&as=viewer`, scroll: "[data-testid=questions-others]", who: "viewer" },
 ];

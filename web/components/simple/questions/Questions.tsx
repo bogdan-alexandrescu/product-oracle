@@ -443,7 +443,7 @@ export function QuestionRow({
       <Tag data-testid={testId} className="simple-row" data-mk-target={m.target || undefined}> {/* MOCK-HOOK */}
         <span aria-hidden className="simple-ico"><Icon name="flag" size={20} stroke={1.7} /></span> {/* MOCK-HOOK */}
         <div className="simple-rb min-w-0"><span className="simple-meta"><span className="simple-code">{q.code}</span> · {q.prd.title}</span>{m.power === "read" ? <b className="font-[650]">{m.s.title}</b> : <QuestionForm d={m.draft} onChange={m.setDraft} />}</div> {/* MOCK-HOOK */}
-        <div className="simple-actions min-[601px]:w-[232px]">{m.power === "change" && <span className="flex flex-wrap justify-end gap-2"><button type="button" className="simple-button" onClick={() => m.setS({ ...m.s, withdrawn: true })}>Withdraw</button><button type="button" className="simple-button text-[var(--danger,#b42318)]" onClick={() => m.setS({ ...m.s, deleted: true })}>Delete</button></span>}</div> {/* MOCK-HOOK */}
+        <div className="simple-actions min-[601px]:w-[232px]">{m.power === "change" && <span className="flex flex-wrap justify-end gap-2"><button type="button" className="simple-button" onClick={() => m.setS({ ...m.s, withdrawn: true })}>Withdraw</button><button type="button" className="simple-button !text-[var(--crit)]" onClick={() => m.setS({ ...m.s, deleted: true })}>Delete</button></span>}</div> {/* MOCK-HOOK */}
       </Tag> // MOCK-HOOK
     ); // MOCK-HOOK
   return (

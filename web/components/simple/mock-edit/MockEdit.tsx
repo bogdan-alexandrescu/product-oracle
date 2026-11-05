@@ -26,8 +26,8 @@ export const TITLE_LINK = "text-left font-[650] underline decoration-line-strong
 export function MkStyles() {
   return (
     <style>{`:root{--mk-edited:#fff1bf;--mk-edited-bar:#d4a017}
-:root[data-theme="dark"]{--mk-edited:#4f4110;--mk-edited-bar:#f2c94c}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--mk-edited:#4f4110;--mk-edited-bar:#f2c94c}}
+:root[data-theme="dark"]{--mk-edited:#3b3110;--mk-edited-bar:#f2c94c}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--mk-edited:#3b3110;--mk-edited-bar:#f2c94c}}
 @media (min-width: 1500px){html:has([data-testid="question-sheet"]) .simple-page{margin-left:auto;margin-right:480px}}`}</style>
   );
 }
@@ -83,7 +83,7 @@ export function RowMenu({ items, open, onOpen, label }: { items: { label: string
       {open && (
         <span role="menu" className="flex w-[200px] flex-col rounded-xl border border-line bg-surface p-1 shadow-lg">
           {items.map((i) => (
-            <button key={i.label} role="menuitem" type="button" className={`rounded-lg px-3 py-2 text-left text-[16px] hover:bg-surface2 ${i.danger ? "text-[var(--danger,#b42318)]" : ""}`} onClick={i.onClick}>
+            <button key={i.label} role="menuitem" type="button" className={`rounded-lg px-3 py-2 text-left text-[16px] hover:bg-surface2 ${i.danger ? "text-[var(--crit)]" : ""}`} onClick={i.onClick}>
               {i.label}
             </button>
           ))}
@@ -391,7 +391,7 @@ export function DecisionEditRow({ title, decider, status, meta, first, long, cod
                   <button type="button" className="simple-more !mt-0" onClick={withdraw}>
                     Withdraw
                   </button>
-                  <button type="button" className="simple-more !mt-0 !text-[var(--danger,#b42318)]" onClick={remove}>
+                  <button type="button" className="simple-more !mt-0 !text-[var(--crit)]" onClick={remove}>
                     Delete
                   </button>
                 </span>
@@ -430,7 +430,7 @@ function InPlace({ label, value, onSave, power, multiline, bold, prefix }: { lab
         {value}
       </span>
       {power !== "read" && (
-        <button type="button" aria-label={`${power === "change" ? "Edit" : "Suggest a change to"} ${label.toLowerCase()}`} className="text-text2 opacity-60 group-hover:opacity-100 hover:text-accent-ink" onClick={() => { setDraft(value); setEditing(true); }}>
+        <button type="button" aria-label={`${power === "change" ? "Edit" : "Suggest a change to"} ${label.toLowerCase()}`} className="text-accent-ink hover:underline" onClick={() => { setDraft(value); setEditing(true); }}>
           <span className="text-[14px] font-[650] underline-offset-2 hover:underline">{power === "change" ? "Edit" : "Suggest"}</span>
         </button>
       )}
@@ -460,7 +460,7 @@ function InPlaceOptions({ d, power, startOpen, extra, onSave }: { d: MkDecision;
         <>
           <ol className="min-w-0 flex-1 list-decimal pl-5">{d.options.map((o) => <li key={o}>{o}</li>)}</ol>
           {power !== "read" && (
-            <button type="button" aria-label="Edit options" className="text-text2 opacity-60 group-hover:opacity-100 hover:text-accent-ink" onClick={() => { setDraft(d.options); setEditing(true); }}>
+            <button type="button" aria-label="Edit options" className="text-accent-ink hover:underline" onClick={() => { setDraft(d.options); setEditing(true); }}>
               <span className="text-[14px] font-[650] underline-offset-2 hover:underline">{power === "change" ? "Edit" : "Suggest"}</span>
             </button>
           )}
@@ -517,7 +517,7 @@ export function DecisionSheet({ open, d, power, mayReassign = false, mayWithdraw
                     <button type="button" className="simple-button" onClick={onWithdraw}>
                       Withdraw
                     </button>
-                    <button type="button" className="simple-button text-[var(--danger,#b42318)]" onClick={onDelete}>
+                    <button type="button" className="simple-button !text-[var(--crit)]" onClick={onDelete}>
                       Delete
                     </button>
                   </span>
@@ -726,7 +726,7 @@ export function QuestionSheet({ open, q, m, isNew = false, onClose, onAdd }: { o
                     <button type="button" className="simple-button" onClick={() => { m!.setS({ ...m!.s, withdrawn: true }); onClose(); }}>
                       Withdraw
                     </button>
-                    <button type="button" className="simple-button text-[var(--danger,#b42318)]" onClick={() => { m!.setS({ ...m!.s, deleted: true }); onClose(); }}>
+                    <button type="button" className="simple-button !text-[var(--crit)]" onClick={() => { m!.setS({ ...m!.s, deleted: true }); onClose(); }}>
                       Delete
                     </button>
                   </span>

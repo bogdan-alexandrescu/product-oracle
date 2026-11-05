@@ -58,11 +58,11 @@
             },
             {
               "file": "frames/ec1-a-hard.html",
-              "caption": "Hard case at 1440: D-80, with its six options and long context, opens a tall form inside the list."
+              "caption": "Hard case at 1440: D-80's form, six options and a long context, opens tall inside the list; its Review on and Save run past the bottom of the screen."
             },
             {
               "file": "frames/ec1-a-hard-1512.html",
-              "caption": "Hard case at 1512: D-80's form, six options and a long context, runs past the bottom of the screen inside the list."
+              "caption": "Hard case at 1512: D-80's form, six options and a long context, fills the screen inside the list, Save and Cancel just in view."
             },
             {
               "file": "frames/ec1-a-mid-390.html",
@@ -199,11 +199,11 @@
             },
             {
               "file": "frames/ec1-c-hard.html",
-              "caption": "Hard case at 1440: D-80 opened, with every field and its own Edit, fills the screen; its six options are listed."
+              "caption": "Hard case at 1440: D-80 opened, Options in edit: its six options as inputs with Save and Cancel; the other fields each with its own Edit."
             },
             {
               "file": "frames/ec1-c-hard-1512.html",
-              "caption": "Hard case at 1512: D-80 opened shows its six options and long context inside the list."
+              "caption": "Hard case at 1512: D-80 opened, Options in edit with its six inputs, the long context above them, inside the list."
             },
             {
               "file": "frames/ec1-c-mid-390.html",
@@ -265,7 +265,7 @@
             },
             {
               "file": "frames/eq2-a-new-done.html",
-              "caption": "Added: Q11 Who can export a team's alert history? waits for a decider."
+              "caption": "Added: Q17 Who can export a team's alert history? waits for a decider."
             },
             {
               "file": "frames/eq2-a-hard.html",
@@ -332,7 +332,7 @@
             },
             {
               "file": "frames/eq2-b-new-done.html",
-              "caption": "Added: Q11 Who can export a team's alert history? keeps its recommendation and two other answers; it waits for a decider."
+              "caption": "Added: Q17 Who can export a team's alert history? keeps its recommendation and two other answers; it waits for a decider."
             },
             {
               "file": "frames/eq2-b-hard.html",
@@ -398,7 +398,7 @@
             },
             {
               "file": "frames/eq2-c-new-done.html",
-              "caption": "Added: Q11 Who can export a team's alert history? waits for a decider."
+              "caption": "Added: Q17 Who can export a team's alert history? waits for a decider."
             },
             {
               "file": "frames/eq2-c-hard.html",
@@ -418,7 +418,11 @@
             },
             {
               "file": "frames/eq2-c-propose.html",
-              "caption": "An approver who is not the decider (Priya Raman, signed in), Edit questions on: the button reads Done editing, and Q5, which Avery Stone decides, becomes fields to suggest a change, with no Withdraw or Delete."
+              "caption": "An approver who is not the decider (Priya Raman, signed in), Edit questions on: the button reads Done editing; Q7 and Q3, which she decides herself, keep Withdraw and Delete."
+            },
+            {
+              "file": "frames/eq2-c-propose-q5.html",
+              "caption": "The same list further down: Q5 and Q6, which Avery Stone decides, are fields for Priya Raman to suggest a change, with no Withdraw or Delete."
             },
             {
               "file": "frames/eq2-c-read.html",
