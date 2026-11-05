@@ -149,9 +149,29 @@ def is_its_fix(action: Any, reason: dict[str, Any]) -> bool:
     """Whether a staged ``action`` (a ReviewAction or CheckpointAction) that names the
     reason's code is that reason's: an edit, when the reason has edits of the action's item
     and field among its fixes, only when it is one of them (of an item's two dependency
-    reasons, Remove dependency on one answers that one); any other action always."""
+    reasons, Remove dependency on one answers that one); any other action always.
+
+    A dependency reason is also answered by an edit of its item that removes its dependency
+    among others (Remove dependency pressed on two reasons is one edit), and a later
+    horizon reason by a move of its item to the dependency's horizon or after it (Move to
+    Later on one reason answers its item's reason of a dependency in Next too)."""
     if action.kind != "edit":
         return True
+    data = reason.get("data") or {}
+    dep = data.get("dependency")
+    if action.item_key == reason.get("item") and dep is not None:
+        value = action.value
+        if action.field == "depends_on" and isinstance(value, dict):
+            if dep in (value.get("remove") or []):
+                return True
+        theirs = data.get("dependency_horizon")
+        if (
+            reason.get("code") == "horizon_breaks_dependency"
+            and action.field == "horizon"
+            and value in roadmap.HORIZONS
+            and theirs in roadmap.HORIZONS
+        ):
+            return roadmap.HORIZONS.index(value) >= roadmap.HORIZONS.index(theirs)
     same = [
         f["action"]
         for f in reason.get("fixes") or []

@@ -38111,6 +38111,18 @@ export interface components {
              */
             revert: boolean;
         };
+        /**
+         * ScopeOtherDependency
+         * @description A dependency on another PRD's feature on the company roadmap: its name and PRD.
+         */
+        ScopeOtherDependency: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Prd */
+            prd: string;
+        };
         /** ScopeOut */
         ScopeOut: {
             /** Name */
@@ -38299,6 +38311,11 @@ export interface components {
              *     }
              */
             history: components["schemas"]["ScopeHistory"];
+            /**
+             * Other Prd Dependencies
+             * @default []
+             */
+            other_prd_dependencies: components["schemas"]["ScopeOtherDependency"][];
         };
         /** ScopeReviewRequirement */
         ScopeReviewRequirement: {
