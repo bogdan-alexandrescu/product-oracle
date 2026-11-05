@@ -309,8 +309,8 @@ export function useMkPanel({ item, items, act, canChange, onClose }: { item: Ite
 
 /** A goal's Delete (Priorities' goal menu), as each pm2 proposal asks it. */
 export function GoalDelete({ title, features, measure, onClose }: { title: string; features: string[]; measure: string; onClose: () => void }) {
-  const { me, role } = useMe();
-  const decides = role === "owner";
+  const { me, can } = useMe();
+  const decides = can("list_trash"); // MOCK-HOOK: owners delete and restore
   const by = (me as { name?: string | null } | null)?.name ?? "you";
   const done = () => {
     onClose();
@@ -331,13 +331,13 @@ export function GoalDelete({ title, features, measure, onClose }: { title: strin
 }
 
 /** Settings › Trash's features and goals beside documents, as each pm3 proposal lists them. */
-export function MkTrashList({ docs, owner, role }: { docs: { kind: string; title: string; by: string; at: string; days_left: number; node: ReactNode }[]; owner: boolean; role: string | null }) {
+export function MkTrashList({ docs, owner, proposes }: { docs: { kind: string; title: string; by: string; at: string; days_left: number; node: ReactNode }[]; owner: boolean; proposes: boolean }) {
   const v = mkParam("pm3", "a");
   const [rows, setRows] = useState<MkTrash[]>([]);
   const [tab, setTab] = useState<"All" | "Feature" | "Goal" | "Document">("All");
   // eslint-disable-next-line react-hooks/set-state-in-effect -- the mock's store is read once mounted
   useEffect(() => setRows(mkTrash()), []);
-  const approver = role === "approver";
+  const approver = proposes;
   const restore = (t: MkTrash) => {
     if (!owner) return toast({ message: `Proposed: restore ${t.title} · waiting for the company's owners` });
     mkSaveTrash(mkTrash().filter((x) => x.id !== t.id));

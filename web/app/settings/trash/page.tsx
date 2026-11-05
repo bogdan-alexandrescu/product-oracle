@@ -68,7 +68,7 @@ function Row({ e, onRestored }: { e: Entry; onRestored: () => void }) {
 
 /** Settings › Trash (#482, owners): each delete with what went with it, Restore and days left. */
 export default function TrashPage() {
-  const { can, loading, role } = useMe(); // MOCK-HOOK
+  const { can, loading } = useMe(); // MOCK-HOOK
   const owner = can("list_trash");
   const q = useQuery(owner ? "trash" : "trash|none", () => (owner ? unwrap(api.GET("/v1/trash")) : Promise.resolve([] as Entry[])));
   return (
@@ -86,7 +86,7 @@ export default function TrashPage() {
       {!loading && (
         <MkTrashList
           owner={owner}
-          role={role}
+          proposes={!owner && can("create_simple_change")}
           docs={(q.data?.length ? q.data : owner ? (MK_DOCS as Entry[]) : []).map((e) => ({ kind: itemKind(e.root), title: e.root.title, by: e.deleted_by_name ?? "someone", at: e.deleted_at, days_left: e.days_left, node: <Row e={e} onRestored={() => q.setData((rows) => rows?.filter((r) => r.id !== e.id))} /> }))} /* MOCK-HOOK */
         />
       )}
