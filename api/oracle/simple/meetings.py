@@ -1424,41 +1424,44 @@ async def edit_agenda(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
         # The accept is the decider's batch: their sheet named it, so their Undo line shows.
         batch = body.get("batch") or f"accept-{uuid.uuid4()}"
         a.update(before=[dict(x) for x in rows], batch=batch)
-        clauses = []
-        for o in prop.get("ops") or []:
+        # An op whose item is gone since is left out, and the decider is told which.
+        clauses, gone, said = [], [], prop.get("said") or []
+        for k, o in enumerate(prop.get("ops") or []):
             try:
                 clauses.append(_agenda_apply(a, rows, titles, uuid.UUID(prop["by"]), o))
             except MeetingError:
-                continue  # an item the proposal named is gone since
-        a.update(items=rows, clauses=clauses, words=_agenda_words(clauses), proposal=None)
+                gone.extend(said[k : k + 1])
+        a.update(items=rows, clauses=clauses, words=_agenda_words(clauses), proposal=None,
+                 left_out=_agenda_words(gone))  # fmt: skip
     elif op == "undo":
         if right != "save" or "before" not in a:
             raise MeetingError(404, "Nothing to undo")
         if body.get("batch") != a.get("batch"):
             raise MeetingError(409, "Someone changed the agenda since")
-        a.update(items=a.pop("before"), clauses=[], words=[], batch=None)
+        a.update(items=a.pop("before"), clauses=[], words=[], left_out=[], batch=None)
     elif right == "propose":
         # The agenda stays as it is; the ops wait for the decider. An op of the earlier
-        # proposal whose item is gone since is dropped, and the proposal says so.
+        # proposal whose item is gone since is dropped, and the proposal says so (its clauses
+        # read together, so a move and a rename of one item read as one).
         mine = prop if prop and prop.get("by") == str(me) else None
         ops, said = list((mine or {}).get("ops") or []), list((mine or {}).get("said") or [])
         trial = [dict(x) for x in _rows(m, features)]
-        kept, clauses, dropped = [], [], list((mine or {}).get("dropped") or [])
+        kept, clauses, gone = [], [], list((mine or {}).get("gone") or [])
         for k, o in enumerate(ops):
             try:
                 clauses.append(_agenda_apply(a, trial, titles, me, o))  # type: ignore[arg-type]
                 kept.append(o)
             except MeetingError:
-                if k < len(said):
-                    dropped.extend(_agenda_words([said[k]]))
+                gone.extend(said[k : k + 1])
         clauses.append(_agenda_apply(a, trial, titles, me, body))  # type: ignore[arg-type]
         a["proposal"] = {"by": str(me), "decider": str(w.decider) if w.decider else None,
                          "ops": [*kept, {k: v for k, v in body.items() if v is not None}],
                          "said": clauses, "words": _agenda_words(clauses),
-                         "dropped": dropped}  # fmt: skip
+                         "gone": gone, "dropped": _agenda_words(gone)}  # fmt: skip
     else:
         if a.get("batch") != body.get("batch") or "before" not in a:
-            a.update(before=[dict(x) for x in rows], batch=body.get("batch"), clauses=[])
+            a.update(before=[dict(x) for x in rows], batch=body.get("batch"), clauses=[],
+                     left_out=[])  # fmt: skip
         clauses = [*(a.get("clauses") or []), _agenda_apply(a, rows, titles, me, body)]  # type: ignore[arg-type]
         a.update(items=rows, clauses=clauses, words=_agenda_words(clauses))
     m.agenda = json.loads(json.dumps(a, default=str))
@@ -1585,6 +1588,7 @@ async def _agenda_out(
         addable=[SimpleAgendaItem(id=r.id, title=r.title) for r in features if str(r.id) not in on],
         batch=a.get("batch"),
         words=list(a.get("words") or []),
+        left_out=list(a.get("left_out") or []),
         proposal=SimpleAgendaProposal(
             by=_ref(uuid.UUID(prop["by"]), names),
             decider=_ref(uuid.UUID(prop["decider"]), names) if prop.get("decider") else None,

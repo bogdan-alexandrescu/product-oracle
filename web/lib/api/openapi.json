@@ -116467,6 +116467,14 @@
             "title": "Words",
             "default": []
           },
+          "left_out": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Left Out",
+            "default": []
+          },
           "proposal": {
             "anyOf": [
               {
@@ -120649,7 +120657,8 @@
               "skipped": [],
               "items": [],
               "addable": [],
-              "words": []
+              "words": [],
+              "left_out": []
             }
           },
           "draft_roadmap": {

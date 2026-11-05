@@ -2072,6 +2072,8 @@ class SimpleAgenda(BaseModel):
     addable: list[SimpleAgendaItem] = []
     batch: str | None = None
     words: list[str] = []
+    # The accepted proposal's ops whose item was gone, as words: left out of the batch.
+    left_out: list[str] = []
     proposal: SimpleAgendaProposal | None = None
     # Who decides what an approver proposes: the PRD's decider (none: an owner).
     decider: SimplePersonRef | None = None

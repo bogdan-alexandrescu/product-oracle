@@ -38655,6 +38655,11 @@ export interface components {
              * @default []
              */
             words: string[];
+            /**
+             * Left Out
+             * @default []
+             */
+            left_out: string[];
             proposal?: components["schemas"]["SimpleAgendaProposal"] | null;
             decider?: components["schemas"]["SimplePersonRef"] | null;
         };
@@ -40346,7 +40351,8 @@ export interface components {
              *       "skipped": [],
              *       "items": [],
              *       "addable": [],
-             *       "words": []
+             *       "words": [],
+             *       "left_out": []
              *     }
              */
             agenda: components["schemas"]["SimpleAgenda"];
