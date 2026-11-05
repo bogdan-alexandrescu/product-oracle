@@ -60984,7 +60984,8 @@
                   "set_depends_on",
                   "delete_item",
                   "archive_goal",
-                  "delete_goal"
+                  "delete_goal",
+                  "unarchive_goal"
                 ]
               },
               {
@@ -61389,7 +61390,8 @@
               "set_depends_on",
               "delete_item",
               "archive_goal",
-              "delete_goal"
+              "delete_goal",
+              "unarchive_goal"
             ],
             "title": "Op"
           },
@@ -82936,7 +82938,8 @@
               "set_depends_on",
               "delete_item",
               "archive_goal",
-              "delete_goal"
+              "delete_goal",
+              "unarchive_goal"
             ],
             "title": "Op"
           },
@@ -117017,7 +117020,8 @@
               "set_depends_on",
               "delete_item",
               "archive_goal",
-              "delete_goal"
+              "delete_goal",
+              "unarchive_goal"
             ],
             "title": "Op"
           },
@@ -117168,7 +117172,8 @@
               "set_depends_on",
               "delete_item",
               "archive_goal",
-              "delete_goal"
+              "delete_goal",
+              "unarchive_goal"
             ],
             "title": "Op"
           },
@@ -135256,6 +135261,16 @@
             "type": "boolean",
             "title": "Can Restore",
             "default": false
+          },
+          "undo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalBucketsUndo"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

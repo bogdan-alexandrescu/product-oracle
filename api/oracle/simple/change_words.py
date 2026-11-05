@@ -160,11 +160,13 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
         # trash-features-goals: a feature deleted to Trash (oracle.simple.trash_items).
         case "delete_item":
             return f"moved {x} to Trash"
-        # edit-goals-prds: a goal archived or moved to Trash (oracle.simple.goal_asks).
+        # edit-goals-prds: a goal archived, moved to Trash or restored (oracle.simple.goal_asks).
         case "archive_goal":
             return f"archived the goal {_quoted(target.get('title')) or 'a goal'}"
         case "delete_goal":
             return f"moved the goal {_quoted(target.get('title')) or 'a goal'} to Trash"
+        case "unarchive_goal":
+            return f"restored the goal {_quoted(target.get('title')) or 'a goal'}"
     return f"changed {x}"
 
 
@@ -193,6 +195,8 @@ def sentence(
         asked = "move" + what[len("moved") :]
     elif op == "archive_goal":
         asked = "archive" + what[len("archived") :]
+    elif op == "unarchive_goal":
+        asked = "restore" + what[len("restored") :]
     if status == "proposed":
         words = f"{who} proposed: {asked}"
     elif status == "declined":

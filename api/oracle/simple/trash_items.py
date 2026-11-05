@@ -35,6 +35,7 @@ from oracle.authz import has_role
 from oracle.baseline.models import Entity
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import drafts, service
+from oracle.simple.goal_buckets import GoalBucketsUndo
 from oracle.simple.models import SimpleChange
 from oracle.simple.router import Approver, Commenter
 from oracle.simple.schemas import SimpleChangeOut
@@ -59,6 +60,9 @@ class TrashedOut(BaseModel):
     entry: TrashEntryOut | None = None
     change: SimpleChangeOut | None = None
     can_restore: bool = False
+    # edit-goals-prds: a goal's delete, the links it moved, for Undo after Restore
+    # (POST /v1/simple/goal-buckets/undo).
+    undo: GoalBucketsUndo | None = None
 
 
 def _me(principal: Any) -> uuid.UUID | None:
@@ -250,13 +254,14 @@ async def decide(
 async def trash_goal(
     db: AsyncSession, principal: Any, goal: Entity, to_goal_id: uuid.UUID | None,
     reason: str | None,
-) -> TrashEntry:  # fmt: skip
+) -> tuple[TrashEntry, GoalBucketsUndo]:  # fmt: skip
     """Move the goal's features off it (to ``to_goal_id`` or to no goal, as Archive does,
     and the items that name it as their own goal), then the goal to Trash. Its order,
-    measure, target and due stay on it for Restore."""
+    measure, target and due stay on it for Restore. With the entry, the Undo that puts
+    the links back once it is restored."""
     from oracle.simple import goal_buckets
 
-    await goal_buckets.move_off(db, goal, to_goal_id)
+    links = await goal_buckets.move_off(db, goal, to_goal_id)
     moved = []
     for row in await db.scalars(
         select(RoadmapItem).where(RoadmapItem.goal_ids.contains([goal.id])).with_for_update()
@@ -267,8 +272,9 @@ async def trash_goal(
         row.goal_ids = ids
         moved.append(str(row.id))
     to = str(to_goal_id) if to_goal_id else None
-    return await _new_entry(db, principal, goal, [goal],
-                            {"to_goal_id": to, "moved_items": moved}, reason)  # fmt: skip
+    entry = await _new_entry(db, principal, goal, [goal],
+                             {"to_goal_id": to, "moved_items": moved}, reason)  # fmt: skip
+    return entry, GoalBucketsUndo(features=links)
 
 
 def _restores(principal: Any, entry: TrashEntry | None) -> bool:
@@ -346,8 +352,9 @@ async def delete_goal(
         to = await goal_buckets._entity(db, to_goal_id, "goal")
         if to.id == g.id or to.status == "rejected":
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Pick another goal")
-    entry = await trash_goal(db, principal, g, to_goal_id, reason)
-    out = TrashedOut(entry=_entry_out(entry), can_restore=_restores(principal, entry))
+    entry, undo = await trash_goal(db, principal, g, to_goal_id, reason)
+    out = TrashedOut(entry=_entry_out(entry), can_restore=_restores(principal, entry),
+                     undo=goal_buckets._signed(principal.tenant_id, undo))  # fmt: skip
     await db.commit()
     return out
 

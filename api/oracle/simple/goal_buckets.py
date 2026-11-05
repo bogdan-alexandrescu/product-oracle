@@ -322,7 +322,7 @@ async def _check_owner(db: AsyncSession, body: GoalIn) -> None:
         return
     u = await db.get(User, body.owner_id)
     if u is None or u.disabled_at is not None:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Pick a member as its owner")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Pick a member as its owner")
 
 
 def _fields(g: Entity, body: GoalIn) -> None:
@@ -465,7 +465,7 @@ async def archive(
     if to_goal_id is not None:
         to = await _entity(db, to_goal_id, "goal")
         if to.id == g.id or to.status == "rejected":
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Pick another goal")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Pick another goal")
     undo = GoalBucketsUndo(goals=[_goal_snap(g)], features=await move_off(db, g, to_goal_id))
     g.status = "rejected"
     g.attrs = {**(g.attrs or {}), "archived_at": company_time.now().isoformat()}
@@ -481,16 +481,22 @@ async def unarchive_bucket_goal(
 ) -> GoalBucketWrite:
     """Restore an archived goal to the buckets (its features stay where Archive moved them)."""
     g = await _entity(db, goal_id, "goal")
+    undo = await unarchive(db, g)
+    order = next((i + 1 for i, x in enumerate(await _goals(db)) if x.id == g.id), 1)
+    out = await _goal_full(db, g, order)
+    await db.commit()
+    return GoalBucketWrite(goal=out, undo=_signed(principal.tenant_id, undo))
+
+
+async def unarchive(db: AsyncSession, g: Entity) -> GoalBucketsUndo:
+    """Put an archived goal back in the buckets (Restore, and an accepted ask)."""
     if g.status != "rejected":
         raise HTTPException(status.HTTP_409_CONFLICT, f"{g.title} is not archived")
     undo = GoalBucketsUndo(goals=[_goal_snap(g)])
     g.status = "confirmed"
     g.attrs = {k: v for k, v in (g.attrs or {}).items() if k != "archived_at"}
     await db.flush()
-    order = next((i + 1 for i, x in enumerate(await _goals(db)) if x.id == g.id), 1)
-    out = await _goal_full(db, g, order)
-    await db.commit()
-    return GoalBucketWrite(goal=out, undo=_signed(principal.tenant_id, undo))
+    return undo
 
 
 @router.post(

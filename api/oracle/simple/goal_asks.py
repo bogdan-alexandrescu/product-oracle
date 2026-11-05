@@ -1,13 +1,14 @@
-"""edit-goals-prds EG1: Archive and Delete a goal through the change engine, so who may
-not archive or delete a goal (below approver, as ``archive_bucket_goal`` and
-``delete_bucket_goal`` need) asks for it.
+"""edit-goals-prds EG1: Archive, Delete and Restore a goal through the change engine, so
+who may not archive, delete or restore a goal (below approver, as ``archive_bucket_goal``,
+``delete_bucket_goal`` and ``unarchive_bucket_goal`` need) asks for it.
 
-- ``POST /v1/simple/changes`` op ``archive_goal`` or ``delete_goal``, ``target``
-  ``{goal_id, to_goal_id?}`` (where the goal's features go, as Archive moves them): an
-  approver or owner's applies at once (``applied``); a commenter's is ``proposed``, routed
-  to the company's owners (``GoalBucketsOut.asks_to`` names them), one open ask per goal
-  and op. An approver or owner accepts (the goal is archived, or goes to Trash with
-  oracle.simple.trash_items.trash_goal) or declines it (nothing changes).
+- ``POST /v1/simple/changes`` op ``archive_goal``, ``delete_goal`` or ``unarchive_goal``,
+  ``target`` ``{goal_id, to_goal_id?}`` (where the goal's features go, as Archive moves
+  them): an approver or owner's applies at once (``applied``); a commenter's is
+  ``proposed``, routed to the company's owners (``GoalBucketsOut.asks_to`` names them),
+  one open ask per goal and op. An owner, whom the ask was sent to, accepts (the goal is
+  archived, goes to Trash with oracle.simple.trash_items.trash_goal, or is back in the
+  buckets) or declines it (nothing changes).
 """
 
 import uuid
@@ -20,11 +21,17 @@ from oracle import audit, company_time
 from oracle.authz import has_role
 from oracle.simple.models import SimpleChange
 
-OPS: frozenset[str] = frozenset({"archive_goal", "delete_goal"})
+OPS: frozenset[str] = frozenset({"archive_goal", "delete_goal", "unarchive_goal"})
+
+
+def may_act(principal: Any) -> bool:
+    """Archives, deletes or restores a goal at once (as the goal-buckets routes allow)."""
+    return has_role(principal.role, "approver")
 
 
 def may_decide(principal: Any) -> bool:
-    return has_role(principal.role, "approver")
+    """Decides an ask: the company's owners, whom it is sent to (``routed_to``)."""
+    return has_role(principal.role, "owner")
 
 
 def _id(raw: Any, field: str) -> uuid.UUID:
@@ -46,6 +53,9 @@ async def _apply(db: AsyncSession, principal: Any, c: SimpleChange) -> None:
         await goal_buckets.archive(db, goal_id, to_id)
         return
     g = await goal_buckets._entity(db, goal_id, "goal")
+    if c.op == "unarchive_goal":
+        await goal_buckets.unarchive(db, g)
+        return
     if to_id is not None:
         dest = await goal_buckets._entity(db, to_id, "goal")
         if dest.id == g.id or dest.status == "rejected":
@@ -64,10 +74,12 @@ async def create_change(db: AsyncSession, principal: Any, body: Any) -> Any:
     g = await goal_buckets._entity(db, goal_id, "goal")
     if body.op == "archive_goal" and g.status == "rejected":
         raise ChangeError(409, f"{g.title} is archived already")
+    if body.op == "unarchive_goal" and g.status != "rejected":
+        raise ChangeError(409, f"{g.title} is not archived")
     to = body.target.get("to_goal_id")
     target = {"goal_id": str(g.id), "title": g.title,
               "to_goal_id": str(_id(to, "to_goal_id")) if to else None}  # fmt: skip
-    done = may_decide(principal)
+    done = may_act(principal)
     if not done:
         open_ = await db.scalar(
             select(SimpleChange.id).where(
@@ -96,12 +108,12 @@ async def create_change(db: AsyncSession, principal: Any, body: Any) -> Any:
 async def decide(
     db: AsyncSession, principal: Any, c: SimpleChange, action: str, reason: str | None
 ) -> Any:
-    """Accept (archive the goal, or move it to Trash) or decline an ask."""
+    """Accept (archive the goal, move it to Trash or restore it) or decline an ask."""
     from oracle.simple.changes import ChangeError, _me, one_out
     from oracle.simple.schemas import SimpleChangeResult
 
     if not may_decide(principal):
-        raise ChangeError(403, "Only an approver or owner decides this")
+        raise ChangeError(403, "Only an owner decides this")
     if c.status != "proposed":
         raise ChangeError(409, f"This change is {c.status} already")
     if action == "accept":
