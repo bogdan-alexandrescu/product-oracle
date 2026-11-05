@@ -29,6 +29,26 @@ Test cards (protects / fails_when / no_claim):
 - test_trashed_features_and_goals_expire_after_30_days: protects=the ticker's purge deletes
   them for good after 30 days, as documents; fails_when=one is left; no_claim=the tick's
   lock.
+- test_delete_a_goal_and_restore_keep_links_and_item_goals_exactly: protects=(review round 2)
+  a goal's delete with no goal picked rewrites no link and no item's goal_ids, the reads
+  leave it out while it is in Trash; with a goal picked its features move there; either
+  way Restore puts every link (id, attrs, status, origin, created_at) and every item's
+  goal_ids back exactly; fails_when=a feature or an item loses its goal; no_claim=the web.
+- test_a_new_feature_never_takes_a_trashed_key_and_restore_keeps_dependents: protects=a
+  new feature never takes a trashed feature's key; Restore refuses (409) when a live item
+  holds it anyway; restored, the item that depended on it points at it again;
+  fails_when=two items share a key or the dependent points at the new one; no_claim=PRD
+  imports (the same helper).
+- test_a_commenters_goal_delete_is_a_proposal_to_its_decider: protects=a commenter's goal
+  delete is a delete_goal proposal ("proposed: move the goal Grow to Trash"), the goal
+  stays until an owner accepts it; the commenter may not accept it; a viewer is refused;
+  fails_when=the commenter is refused or deletes directly; no_claim=the Inbox screen.
+- test_a_proposed_delete_of_a_feature_already_in_trash_is_closed: protects=a proposal to
+  delete a feature that its decider then deletes is closed "Already in Trash";
+  fails_when=it stays proposed; no_claim=goals (the same close).
+- test_a_purged_feature_leaves_no_milestone_or_dependency_on_it: protects=a purge takes
+  the feature's id out of milestones and its key out of other items' depends_on;
+  fails_when=either still names it; no_claim=decisions (they name it "(deleted)").
 """
 
 import uuid
@@ -185,7 +205,8 @@ async def test_viewers_neither_delete_nor_restore(client):
     assert (await client.get("/v1/trash", headers=w.ctx.as_("viewer"))).status_code == 403
     for who in ("approver", "decider"):
         assert (await client.get("/v1/trash", headers=w.ctx.as_(who))).json() == []
-    g = await client.delete(f"{BUCKETS}/goals/{w.goal_id}", headers=w.ctx.as_("commenter"))
+    # A commenter's goal delete is a proposal (below); a viewer's is refused.
+    g = await client.delete(f"{BUCKETS}/goals/{w.goal_id}", headers=w.ctx.as_("viewer"))
     assert g.status_code == 403
 
 

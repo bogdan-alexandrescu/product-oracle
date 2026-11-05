@@ -160,6 +160,8 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
         # trash-features-goals: a feature deleted to Trash (oracle.simple.trash_items).
         case "delete_item":
             return f"moved {x} to Trash"
+        case "delete_goal":
+            return f"moved the goal {item or target.get('title') or 'a goal'} to Trash"
     return f"changed {x}"
 
 
@@ -183,7 +185,7 @@ def sentence(
     what = phrase(op, target, before, after, item)
     words = f"{who} {what}"
     # What was asked, not done: "proposed: move F-26 Alert rules engine to Trash".
-    asked = "move" + what[len("moved") :] if op == "delete_item" else what
+    asked = "move" + what[len("moved") :] if op in ("delete_item", "delete_goal") else what
     if status == "proposed":
         words = f"{who} proposed: {asked}"
     elif status == "declined":

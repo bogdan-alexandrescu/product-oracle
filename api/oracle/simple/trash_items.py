@@ -12,8 +12,18 @@ for "not now"; Delete is for "this should not be here".
   are, so Restore puts it back exactly; while it is in Trash every read leaves it out
   (oracle.trash.filter), and history and decisions name it with "(deleted)".
 - ``DELETE /v1/simple/goal-buckets/goals/{goal_id}``: who may edit the goal (approver and
-  up) deletes it; its features first move to ``to_goal_id`` or to no goal, as Archive
-  moves them. Restore puts the goal back with its order, measure, target and due.
+  up) deletes it; a commenter proposes it through the change engine (op ``delete_goal``,
+  "Move the goal <name> to Trash", routed to the company's owners, decided by an approver
+  or up); viewers are refused. With no ``to_goal_id`` nothing that names it is rewritten:
+  its features' links and the items' ``goal_ids`` stay, and the trash filter (and the
+  roadmap reads, for ``goal_ids``) leave it out. With ``to_goal_id`` its features move
+  there as Archive moves them, and the links and ``goal_ids`` as they were are kept on
+  the Trash entry for Restore. Restore puts the goal back with its order, measure, target
+  and due, and its features' links and the items' goals exactly as they were.
+- Item keys: a feature in Trash keeps its key (``trashed_keys``: new features never take
+  it), so the items that depend on it still point at it; Restore refuses (409) if another
+  live item holds its key all the same. A purge takes its id out of milestones and its key
+  out of the items that depended on it.
 - ``POST .../restore``: an owner, or whoever deleted it (owner's answer, Nov 5;
   oracle.trash.service.may_restore), restores one; ``/v1/trash`` lists and restores them
   beside documents (to those below owner, only what they deleted), and the ticker purges
@@ -36,14 +46,15 @@ from oracle.baseline.models import Entity
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import drafts, service
 from oracle.simple.models import SimpleChange
-from oracle.simple.router import Approver, Commenter
+from oracle.simple.router import Commenter
 from oracle.simple.schemas import SimpleChangeOut
 from oracle.trash import service as trash
 from oracle.trash.filter import INCLUDE_TRASHED
 from oracle.trash.models import RETENTION_DAYS, TrashEntry
 from oracle.trash.schemas import TrashEntryOut
 
-OPS: frozenset[str] = frozenset({"delete_item"})
+OPS: frozenset[str] = frozenset({"delete_item", "delete_goal"})
+ALREADY = "Already in Trash"
 ALL = {INCLUDE_TRASHED: True}
 DELETED = "(deleted)"
 
@@ -98,11 +109,44 @@ async def _new_entry(
         row.deleted_by = principal.id
         row.deleted_reason = reason
         row.trash_entry_id = entry.id
+    await _close_proposals(db, principal, root, at)
     await audit.record(db, principal, "trash.delete", root_type, root.id,
                        {"entry_id": str(entry.id), "root": entry.root, "items": [],
                         "reason": reason})  # fmt: skip
     await db.flush()
     return entry
+
+
+async def _close_proposals(db: AsyncSession, principal: Any, root: Any, at: Any) -> None:
+    """A proposal to delete what just went to Trash is closed: "Already in Trash"."""
+    op, ref = (
+        ("delete_item", "item_id") if isinstance(root, RoadmapItem) else ("delete_goal", "goal_id")
+    )
+    for c in await db.scalars(
+        select(SimpleChange).where(
+            SimpleChange.op == op,
+            SimpleChange.status == "proposed",
+            SimpleChange.target[ref].astext == str(root.id),
+        )
+    ):
+        c.status, c.decision_reason = "declined", ALREADY
+        c.decided_by, c.decided_at = _me(principal), company_time.now()
+
+
+async def trashed_keys(db: AsyncSession, roadmap_document_id: Any) -> set[str]:
+    """The keys of the roadmap's features in Trash: taken, so a new feature never gets one
+    and the items that depend on a trashed feature still point at it on Restore."""
+    if roadmap_document_id is None:
+        return set()
+    stmt = (
+        select(RoadmapItem.item_key)
+        .where(
+            RoadmapItem.roadmap_document_id == roadmap_document_id,
+            RoadmapItem.deleted_at.is_not(None),
+        )
+        .execution_options(**ALL)
+    )
+    return set(await db.scalars(stmt))
 
 
 async def _feature_rows(db: AsyncSession, row: RoadmapItem) -> list[RoadmapItem]:
@@ -213,6 +257,18 @@ async def create_change(db: AsyncSession, principal: Any, body: Any) -> Any:
     from oracle.simple import changes
     from oracle.simple.schemas import SimpleChangeResult
 
+    if body.op == "delete_goal":
+        from oracle.simple import goal_buckets
+
+        g = await goal_buckets._entity(
+            db, changes._uuid(body.target.get("goal_id"), "goal_id"), "goal"
+        )
+        c = await _propose_goal(db, principal, g, None, body.reason)
+        if _may_delete_goal(principal):
+            await trash_goal(db, principal, g, None, body.reason)
+            c.status, c.routed_to = "applied", []
+        await db.commit()
+        return SimpleChangeResult(change=await changes.one_out(db, principal, c), flags=[])
     item_id = changes._uuid(body.target.get("item_id"), "item_id")
     c, _ = await _delete(db, principal, item_id, body.reason)
     await db.commit()
@@ -227,9 +283,13 @@ async def decide(
     from oracle.simple.changes import ChangeError, one_out
     from oracle.simple.schemas import SimpleChangeResult
 
+    if c.op == "delete_goal":
+        return await _decide_goal(db, principal, c, action, reason)
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     entry = read_.by_id().get(uuid.UUID(c.target["item_id"]))
     if entry is None:
+        if c.status == "proposed" and await _in_trash(db, RoadmapItem, c.target["item_id"]):
+            return await _closed(db, principal, c)
         raise ChangeError(404, "The feature is gone")
     if not service.can_decide(principal, entry, read_.deciders):
         raise ChangeError(403, "Only an owner or the roadmap's decider (with no decider, its "
@@ -247,28 +307,188 @@ async def decide(
     return SimpleChangeResult(change=await one_out(db, principal, c), flags=[])
 
 
+async def _in_trash(db: AsyncSession, model: type, ref: str) -> bool:
+    stmt = select(model.deleted_at).where(model.id == uuid.UUID(str(ref))).execution_options(**ALL)  # type: ignore[attr-defined]
+    return await db.scalar(stmt) is not None
+
+
+async def _closed(db: AsyncSession, principal: Any, c: SimpleChange) -> Any:
+    """A proposal whose feature or goal went to Trash meanwhile: closed, not left open."""
+    from oracle.simple.changes import one_out
+    from oracle.simple.schemas import SimpleChangeResult
+
+    c.status, c.decision_reason = "declined", ALREADY
+    c.decided_by, c.decided_at = _me(principal), company_time.now()
+    await db.commit()
+    return SimpleChangeResult(change=await one_out(db, principal, c), flags=[])
+
+
 async def trash_goal(
     db: AsyncSession, principal: Any, goal: Entity, to_goal_id: uuid.UUID | None,
     reason: str | None,
 ) -> TrashEntry:  # fmt: skip
-    """Move the goal's features off it (to ``to_goal_id`` or to no goal, as Archive does,
-    and the items that name it as their own goal), then the goal to Trash. Its order,
-    measure, target and due stay on it for Restore."""
+    """The goal to Trash. With no ``to_goal_id`` nothing is rewritten: its features' links
+    and the items' goal_ids stay, and the reads leave the goal out while it is in Trash.
+    With ``to_goal_id`` its features move there as Archive moves them (and the items that
+    name it as their own goal), and the links and goal_ids as they were go on the entry
+    for :func:`after_restore`. Its order, measure, target and due stay on it."""
     from oracle.simple import goal_buckets
 
-    await goal_buckets.move_off(db, goal, to_goal_id)
-    moved = []
-    for row in await db.scalars(
-        select(RoadmapItem).where(RoadmapItem.goal_ids.contains([goal.id])).with_for_update()
+    extra: dict[str, Any] = {"to_goal_id": None, "links": [], "goal_ids": {}}
+    if to_goal_id is not None:
+        before = await goal_buckets.move_off(db, goal, to_goal_id)
+        goal_ids = {}
+        for row in await db.scalars(
+            select(RoadmapItem).where(RoadmapItem.goal_ids.contains([goal.id])).with_for_update()
+        ):
+            goal_ids[str(row.id)] = [str(i) for i in row.goal_ids]
+            ids = [i for i in row.goal_ids if i != goal.id]
+            row.goal_ids = ids if to_goal_id in ids else [to_goal_id, *ids]
+        extra = {"to_goal_id": str(to_goal_id), "goal_ids": goal_ids,
+                 "links": [snap.model_dump(mode="json") for snap in before]}  # fmt: skip
+    return await _new_entry(db, principal, goal, [goal], extra, reason)
+
+
+async def before_restore(db: AsyncSession, entry: TrashEntry) -> None:
+    """A feature whose key another live item holds is not restored (409): the two would
+    share it and the items that depend on it would point at both."""
+    if entry.root_type != "feature":
+        return
+    rows = await db.execute(
+        select(RoadmapItem.roadmap_document_id, RoadmapItem.item_key)
+        .where(RoadmapItem.trash_entry_id == entry.id)
+        .execution_options(**ALL)
+    )
+    for doc, key in set(rows.all()):
+        clash = await db.scalar(
+            select(RoadmapItem.title).where(
+                RoadmapItem.roadmap_document_id == doc, RoadmapItem.item_key == key
+            ).limit(1)
+        )  # fmt: skip
+        if clash is not None:
+            raise trash.Conflict(
+                f"'{clash}' holds this feature's key now: rename or delete it, then restore"
+            )
+
+
+async def after_restore(db: AsyncSession, entry: TrashEntry) -> None:
+    """A goal's features' links and the items' goal_ids, exactly as before its delete moved
+    them (``links`` and ``goal_ids`` on the entry; none when nothing was moved)."""
+    from oracle.simple import goal_buckets
+
+    if entry.root_type != "goal":
+        return
+    for snap in entry.root.get("links") or []:
+        await goal_buckets._restore_links(db, goal_buckets.FeatureSnap.model_validate(snap))
+    for item_id, ids in (entry.root.get("goal_ids") or {}).items():
+        row = await db.scalar(
+            select(RoadmapItem).where(RoadmapItem.id == uuid.UUID(item_id))
+            .execution_options(**ALL).with_for_update()
+        )  # fmt: skip
+        if row is not None:
+            row.goal_ids = [uuid.UUID(i) for i in ids]
+    await db.flush()
+
+
+async def before_purge(db: AsyncSession, entry: TrashEntry) -> None:
+    """A purged feature leaves nothing pointing at it: its id out of the milestones, its key
+    out of the depends_on of the roadmap's other items (every version and draft)."""
+    from oracle.roadmap.models import TrackMilestone
+
+    if entry.root_type != "feature":
+        return
+    rows = (
+        await db.execute(
+            select(RoadmapItem.id, RoadmapItem.roadmap_document_id, RoadmapItem.item_key)
+            .where(RoadmapItem.trash_entry_id == entry.id)
+            .execution_options(**ALL)
+        )
+    ).all()
+    ids = {i for i, _, _ in rows}
+    for m in await db.scalars(
+        select(TrackMilestone).where(TrackMilestone.item_ids.overlap(list(ids)))
     ):
-        ids = [i for i in row.goal_ids if i != goal.id]
-        if to_goal_id is not None and to_goal_id not in ids:
-            ids = [to_goal_id, *ids]
-        row.goal_ids = ids
-        moved.append(str(row.id))
+        m.item_ids = [i for i in m.item_ids if i not in ids]
+    for doc, key in {(d, k) for _, d, k in rows}:
+        for row in await db.scalars(
+            select(RoadmapItem)
+            .where(RoadmapItem.roadmap_document_id == doc,
+                   RoadmapItem.depends_on.contains([key]), RoadmapItem.id.not_in(ids))
+            .execution_options(**ALL)
+        ):  # fmt: skip
+            row.depends_on = [k for k in row.depends_on if k != key]
+    await db.flush()
+
+
+def _may_delete_goal(principal: Any) -> bool:
+    return has_role(principal.role, "approver")
+
+
+async def _propose_goal(
+    db: AsyncSession, principal: Any, goal: Entity, to_goal_id: uuid.UUID | None,
+    reason: str | None,
+) -> SimpleChange:  # fmt: skip
+    """A commenter's goal delete: a proposal to the company's owners (an approver or up
+    decides it), as a feature's goes to its decider."""
+    from oracle.simple import changes
+
+    open_ = await db.scalar(
+        select(SimpleChange.id).where(
+            SimpleChange.op == "delete_goal",
+            SimpleChange.status == "proposed",
+            SimpleChange.target["goal_id"].astext == str(goal.id),
+        )
+    )
+    if open_ is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Moving this to Trash is proposed already")
     to = str(to_goal_id) if to_goal_id else None
-    return await _new_entry(db, principal, goal, [goal],
-                            {"to_goal_id": to, "moved_items": moved}, reason)  # fmt: skip
+    c = SimpleChange(
+        document_id=None, op="delete_goal",
+        target={"goal_id": str(goal.id), "title": goal.title, "to_goal_id": to},
+        before={"deleted": False}, after={"deleted": True}, status="proposed",
+        by=_me(principal), at=company_time.now(), reason=reason,
+        routed_to=await changes._company_owners(db),
+    )  # fmt: skip
+    db.add(c)
+    await db.flush()
+    await audit.record(db, principal, "simple_change.proposed", "simple_change", c.id,
+                       data={"op": c.op, "target": c.target})  # fmt: skip
+    return c
+
+
+def may_decide_goal(principal: Any) -> bool:
+    return _may_delete_goal(principal)
+
+
+async def _decide_goal(
+    db: AsyncSession, principal: Any, c: SimpleChange, action: str, reason: str | None
+) -> Any:
+    from oracle.simple import goal_buckets
+    from oracle.simple.changes import ChangeError, one_out
+    from oracle.simple.schemas import SimpleChangeResult
+
+    if not _may_delete_goal(principal):
+        raise ChangeError(403, "Only an approver or an owner decides on deleting a goal")
+    if c.status != "proposed":
+        raise ChangeError(409, f"This change is {c.status} already")
+    goal = await db.get(Entity, uuid.UUID(c.target["goal_id"]))
+    if goal is None:
+        if await _in_trash(db, Entity, c.target["goal_id"]):
+            return await _closed(db, principal, c)
+        raise ChangeError(404, "The goal is gone")
+    if action == "accept":
+        to = c.target.get("to_goal_id")
+        to_goal = await db.get(Entity, uuid.UUID(to)) if to else None
+        live_to = to_goal is not None and to_goal.type == "goal" and to_goal.status != "rejected"
+        await trash_goal(db, principal, await goal_buckets._entity(db, goal.id, "goal"),
+                         to_goal.id if live_to else None, c.reason)  # type: ignore[union-attr]  # fmt: skip
+    c.status = "accepted" if action == "accept" else "declined"
+    c.decided_by, c.decided_at, c.decision_reason = _me(principal), company_time.now(), reason
+    await db.flush()
+    await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,
+                       data={"op": c.op, "target": c.target, "reason": reason})  # fmt: skip
+    await db.commit()
+    return SimpleChangeResult(change=await one_out(db, principal, c), flags=[])
 
 
 def _restores(principal: Any, entry: TrashEntry | None) -> bool:
@@ -333,19 +553,23 @@ async def restore_item(item_id: uuid.UUID, db: TenantDB, principal: Commenter) -
 async def delete_goal(
     goal_id: uuid.UUID,
     db: TenantDB,
-    principal: Approver,
+    principal: Commenter,
     to_goal_id: uuid.UUID | None = None,
     reason: Reason = None,
 ) -> TrashedOut:
-    """Move the goal to Trash, after its features move to ``to_goal_id`` (absent: to no
-    goal), as Archive moves them."""
-    from oracle.simple import goal_buckets
+    """Move the goal to Trash; its features move to ``to_goal_id`` when one is picked, as
+    Archive moves them. A commenter proposes it instead (``change``); viewers are refused."""
+    from oracle.simple import changes, goal_buckets
 
     g = await goal_buckets._entity(db, goal_id, "goal")
     if to_goal_id is not None:
         to = await goal_buckets._entity(db, to_goal_id, "goal")
         if to.id == g.id or to.status == "rejected":
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Pick another goal")
+    if not _may_delete_goal(principal):
+        c = await _propose_goal(db, principal, g, to_goal_id, reason)
+        await db.commit()
+        return TrashedOut(change=await changes.one_out(db, principal, c))
     entry = await trash_goal(db, principal, g, to_goal_id, reason)
     out = TrashedOut(entry=_entry_out(entry), can_restore=_restores(principal, entry))
     await db.commit()

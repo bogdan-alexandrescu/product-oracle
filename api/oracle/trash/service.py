@@ -462,6 +462,9 @@ async def restore_entry(
     entry = await get_entry(db, entry_id)
     if not may_restore(principal, entry):
         raise Forbidden("Only an owner, or whoever deleted it, restores this")
+    from oracle.simple import trash_items
+
+    await trash_items.before_restore(db, entry)
     for model in _models():
         await db.execute(
             update(model)
@@ -471,6 +474,7 @@ async def restore_entry(
         )
     from oracle.roadmap import alerts
 
+    await trash_items.after_restore(db, entry)
     await alerts.reopen_after_trash(db, entry.root.get("closed_alerts") or [])
     from oracle.requests import service as requests_service
 
@@ -509,7 +513,11 @@ async def restore_root(
 async def purge_entry(
     db: AsyncSession, principal: Principal | str | None, entry: TrashEntry
 ) -> None:
-    """Delete the entry's rows for good (what hangs off them goes by cascade)."""
+    """Delete the entry's rows for good (what hangs off them goes by cascade; a feature's
+    milestones and dependents drop it first)."""
+    from oracle.simple import trash_items
+
+    await trash_items.before_purge(db, entry)
     for model in (Run, Document, ProductIntake, *_feature_goal_models().values()):
         await db.execute(
             delete(model)

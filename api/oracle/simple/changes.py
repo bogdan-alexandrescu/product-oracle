@@ -1490,6 +1490,10 @@ class _View:
             return one_pager.may_decide(self.principal, c)
         if c.op in goal_milestones.OPS:
             return goal_milestones.may_decide(self.principal, c, self)
+        if c.op == "delete_goal":
+            from oracle.simple import trash_items
+
+            return trash_items.may_decide_goal(self.principal)
         if c.op == CUT_ALL:
             return decides_all(self.principal, cut_entries(c, self.by_id), self.deciders)
         e = self.entry(c)
@@ -1552,6 +1556,8 @@ def _words(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> str:
     item = f"{e.code or ''} {e.row.title}".strip() if e is not None else None
     if item is None and c.target.get("item_id"):
         item = v.deleted.get(str(c.target["item_id"]))
+    if c.op == "delete_goal":
+        item = v.deleted.get(str(c.target.get("goal_id")))
     return change_words.sentence(c.op, c.target, c.before, c.after,
                                  who=names.get(c.by, "someone"), item=item,
                                  status=c.status, undone=c.id in v.undone)  # fmt: skip
@@ -1600,7 +1606,8 @@ async def _deleted(db: AsyncSession, changes: list[SimpleChange], v: _View) -> d
     ids = set()
     for c in changes:
         try:
-            item = uuid.UUID(str(c.target.get("item_id")))
+            ref = c.target.get("goal_id" if c.op == "delete_goal" else "item_id")
+            item = uuid.UUID(str(ref))
         except ValueError:
             continue
         if item not in v.by_id:

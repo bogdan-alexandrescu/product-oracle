@@ -708,6 +708,9 @@ async def add_to_company(db: AsyncSession, principal: Any, feature_id: Any) -> s
     taken = set(
         await db.scalars(select(RoadmapItem.item_key).where(RoadmapItem.roadmap_version_id == base))
     )
+    from oracle.simple import trash_items
+
+    taken |= await trash_items.trashed_keys(db, doc.id)
     key, n = f.key, 2
     while key in taken:
         key, n = f"{f.key}-{n}", n + 1

@@ -116,6 +116,8 @@ class Entry:
     # build-feature-panel review 2: the goal a person set on the item (oracle.simple.panel's
     # goal_sets), which wins over its feature's; None: Oracle's goal.
     goal_set: dict[str, Any] | None = None
+    # trash-features-goals: the item's goal_ids less a goal in Trash (None: row.goal_ids).
+    goal_ids: list[uuid.UUID] | None = None
 
 
 @dataclass
@@ -426,6 +428,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 else (goals.get(row.feature_id) if row.feature_id else None)
                 or next((linked[g] for g in row.goal_ids or [] if g in linked), None),
                 goal_set=goal_sets.get(str(row.id)),
+                goal_ids=[g for g in row.goal_ids or [] if g in linked],
                 window=window,
                 resolved=dates.resolve(cands, window),
                 status=_status(row, recs, cut.get(roadmap.id, set())),
@@ -927,7 +930,7 @@ def item_out(
         deciders=[names[i] for i in decider_ids(e, deciders) or owners or [] if i in names],
         reasons=_reasons(e),
         open_decisions=(decisions or {}).get(row.id, []),
-        goal_ids=[str(g) for g in row.goal_ids or []],
+        goal_ids=[str(g) for g in (row.goal_ids if e.goal_ids is None else e.goal_ids) or []],
         **(extra or {}).get(row.id, {}),
         decided_in=(decided or {}).get(row.id, []),
     )

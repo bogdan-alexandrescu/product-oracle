@@ -386,6 +386,9 @@ async def _place(
             )
         )
     )
+    from oracle.simple import trash_items
+
+    taken |= await trash_items.trashed_keys(db, doc)
     key, n = _slug(c.after["title"]), 2
     while key in taken:
         key, n = f"{_slug(c.after['title'])[:21]}-{n}", n + 1
