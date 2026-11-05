@@ -1801,33 +1801,42 @@ function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestion
   const rowOf = new Map(data.rows.map((r) => [r.code, r]));
   // qa4-simple-plan-2: milestones or key dates on the roadmap (the Line's) are not a dated plan; never say there are no dates.
   const dated = (data.lines ?? []).some((l) => l.kind === "milestone" || l.kind === "key_date");
+  // Round 6: no work this quarter is said in words, not as "0 wk" over an empty chart.
+  const planned = data.weeks_total > 0;
   return (
     <section aria-label="Goal buckets">
       <p className="mb-3 text-text2" data-testid="buckets-intro">
         {dated
           ? "Grouped by goal for this quarter; the milestones and key dates are on the Ranked list's Line."
-          : "No dated plan yet, so the work is not placed by milestone."}{" "}
-        Engineer-weeks per confirmed goal this quarter: {fmt(data.weeks_total)} wk in all.
+          : "No dated plan yet, so the work is not placed by milestone."}
+        {planned ? ` Engineer-weeks per confirmed goal this quarter: ${fmt(data.weeks_total)} wk in all.` : null}
       </p>
-      <figure className="hidden sm:block" data-testid="bucket-bar">
-        <figcaption className="mb-1 text-[length:var(--simple-small)] text-text2">Share of engineer-weeks by goal</figcaption>
-        <div className="flex overflow-hidden rounded-[var(--simple-card-radius)] border border-line">
-          {buckets.map((b, k) =>
-            b.weeks > 0 ? (
-              <div
-                key={b.key}
-                data-testid="bucket-segment"
-                title={`${b.title}: ${fmt(b.weeks)} wk · ${percent[k]}%`}
-                style={{ width: `${b.share * 100}%` }}
-                className={`min-h-12 min-w-0 border-r border-surface p-2 text-[length:var(--simple-small)] ${b.no_goal ? "bg-warn-bg text-warn" : "bg-accent-soft text-accent-ink"}`}
-              >
-                {/* qa-simple-plan-40: the numbers are said once, on the cards below. */}
-                <span className="block truncate font-medium">{b.title}</span>
-              </div>
-            ) : null,
-          )}
-        </div>
-      </figure>
+      {!planned && (
+        <p className="mb-3 text-text2" data-testid="buckets-empty">
+          Nothing planned this quarter.
+        </p>
+      )}
+      {planned && (
+        <figure className="hidden sm:block" data-testid="bucket-bar">
+          <figcaption className="mb-1 text-[length:var(--simple-small)] text-text2">Share of engineer-weeks by goal</figcaption>
+          <div className="flex overflow-hidden rounded-[var(--simple-card-radius)] border border-line">
+            {buckets.map((b, k) =>
+              b.weeks > 0 ? (
+                <div
+                  key={b.key}
+                  data-testid="bucket-segment"
+                  title={`${b.title}: ${fmt(b.weeks)} wk · ${percent[k]}%`}
+                  style={{ width: `${b.share * 100}%` }}
+                  className={`min-h-12 min-w-0 border-r border-surface p-2 text-[length:var(--simple-small)] ${b.no_goal ? "bg-warn-bg text-warn" : "bg-accent-soft text-accent-ink"}`}
+                >
+                  {/* qa-simple-plan-40: the numbers are said once, on the cards below. */}
+                  <span className="block truncate font-medium">{b.title}</span>
+                </div>
+              ) : null,
+            )}
+          </div>
+        </figure>
+      )}
       <ul className="mt-3 grid gap-[var(--simple-gap)] sm:grid-cols-2">
         {buckets.map((b, k) => (
           <li key={b.key} data-testid="goal-bucket" data-key={b.key} className={`rounded-[var(--simple-card-radius)] border bg-surface p-3 ${b.no_goal ? "border-warn" : "border-line"}`}>
