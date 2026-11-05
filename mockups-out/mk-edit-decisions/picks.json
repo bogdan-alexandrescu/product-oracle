@@ -1,18 +1,18 @@
 {
   "title": "Decisions and questions edited in Simple",
-  "subtitle": "Every field of a decision and of a PRD's open question can be changed, added and withdrawn on Simple's Decisions page; owners and approvers change, a commenter suggests, a viewer reads.",
+  "subtitle": "Every field of a decision and of a PRD's open question can be changed, added, withdrawn and deleted on Simple's Decisions page; an owner changes, an approver who is not the decider proposes, a viewer reads.",
   "decisions": [
     {
       "code": "ec1",
       "name": "Decisions edited in Simple",
       "question": "How does a person edit, reassign, withdraw and propose a decision in Simple?",
-      "common": "Open decisions (Outside meetings and beside their meeting) get every field Detailed's inspector has: title, question, context, options, review day; Reassign (owners only); Withdraw keeps it in the history with Undo; a new decision. An owner or approver changes; a commenter suggests a change to the decider; a viewer reads. Decided ones stay as they are.",
+      "common": "Open decisions (Outside meetings and beside their meeting) get every field Detailed's inspector has: title, question, context, options, review day, and who decides; Reassign (owners only); a new decision. Withdraw is the 'not now': the decision stays in the history, with Undo. Delete sends it to Settings > Trash, where it can be restored (a toast offers Undo). An owner changes; an approver who is not the decider proposes a change to the decider; a viewer reads. What each person may do comes from can() and the decision's own can_edit, can_withdraw and can_reassign, as in Detailed's inspector. Decided ones stay as they are.",
       "proposals": [
         {
           "letter": "a",
           "name": "Row menu",
           "recommended": false,
-          "what": "A ⋯ button at the end of each open decision's row opens Edit, Reassign and Withdraw. Edit unfolds the whole form under the row; Reassign a person list; Withdraw a one-line confirm. + New decision at the top opens a blank form above the lists.",
+          "what": "A ⋯ button at the end of each open decision's row opens Edit, Reassign, Withdraw and Delete, under the button. Edit unfolds the whole form under the row; Reassign a person list; Withdraw a one-line confirm; Delete sends it to Settings > Trash with Undo. + New decision at the top opens a form above the lists, its decider picked in it.",
           "plus": "Familiar; the row stays in its list and nothing covers the page; one control per row.",
           "cost": "The form pushes the rest of the list down, far for a long decision (hard case); on a phone it fills the screen inside the list; the menu hides what can be done until opened.",
           "frames": [
@@ -22,11 +22,11 @@
             },
             {
               "file": "frames/ec1-a-open.html",
-              "caption": "The ⋯ on D-81 Keep the free plan's five-seat limit is opened: Edit, Reassign, Withdraw."
+              "caption": "The ⋯ on D-81 Keep the free plan's five-seat limit is opened under the button: Edit, Reassign, Withdraw, Delete."
             },
             {
               "file": "frames/ec1-a-mid.html",
-              "caption": "Edit opens the decision's fields under its row: an option is added and the review day moved to Dec 7."
+              "caption": "Edit opens D-81's fields under its row: an option is added and the review day moved to Dec 7."
             },
             {
               "file": "frames/ec1-a-done.html",
@@ -34,39 +34,47 @@
             },
             {
               "file": "frames/ec1-a-reassign.html",
-              "caption": "Reassign opens a person list under the row; Sam Okafor decides now."
+              "caption": "Reassign: the person list opens under the row; Sam Okafor decides now."
+            },
+            {
+              "file": "frames/ec1-a-reassigned.html",
+              "caption": "Mei Tanaka picked: D-81 now reads Mei Tanaka decides, marked edited just now."
             },
             {
               "file": "frames/ec1-a-withdrawn.html",
-              "caption": "Withdraw, confirmed: D-81 is struck through, kept in the history, with Undo."
+              "caption": "Withdraw, confirmed (the 'not now'): D-81 is struck through, kept in the history, with Undo."
+            },
+            {
+              "file": "frames/ec1-a-deleted.html",
+              "caption": "Delete: D-81 leaves the list; a toast says it is in Settings > Trash, with Undo."
             },
             {
               "file": "frames/ec1-a-new.html",
-              "caption": "+ New decision at the top of the page opens a blank form above the lists, partly filled in."
+              "caption": "+ New decision at the top of the page opens a form above the lists, filled in: title, question, two options, Priya Nair decides."
             },
             {
               "file": "frames/ec1-a-new-done.html",
-              "caption": "Added: Offer a yearly plan at launch is the first row of Outside meetings."
+              "caption": "Added: Offer a yearly plan at launch is the first row of Outside meetings; Priya Nair decides."
             },
             {
               "file": "frames/ec1-a-hard.html",
-              "caption": "Hard case at 1440: D-80, with six options and a long context, opens a tall form inside the list."
+              "caption": "Hard case at 1440: D-80, with its six options and long context, opens a tall form inside the list."
             },
             {
               "file": "frames/ec1-a-hard-1512.html",
-              "caption": "Hard case at 1512: D-80, with six options and a long context, pushes the form far down the list."
+              "caption": "Hard case at 1512: D-80's form, six options and a long context, runs past the bottom of the screen inside the list."
             },
             {
               "file": "frames/ec1-a-mid-390.html",
-              "caption": "Phone: the form takes the row's full width and fills the screen; the list is lost behind it."
+              "caption": "Phone: D-81's form takes the row's full width and fills the screen."
             },
             {
               "file": "frames/ec1-a-propose.html",
-              "caption": "A commenter: the ⋯ menu offers only Suggest a change."
+              "caption": "An approver who is not the decider (Priya Raman, signed in): the ⋯ on D-81 offers only Suggest a change."
             },
             {
               "file": "frames/ec1-a-read.html",
-              "caption": "A viewer: no ⋯ on any row; the decisions read only."
+              "caption": "A viewer (Lena Ortiz, signed in): no ⋯ on any row; the decisions read only."
             }
           ]
         },
@@ -74,18 +82,18 @@
           "letter": "b",
           "name": "Decision sheet",
           "recommended": true,
-          "what": "A decision's title opens its sheet, the same side sheet (a bottom sheet on a phone) the feature panel uses: every field, the decider with Reassign, Edit and Withdraw at its foot. + New decision opens the same sheet blank. The list itself does not change.",
+          "what": "A decision's title (underlined) opens its sheet, the same side sheet (a bottom sheet on a phone) the feature panel uses: every field, the decider with Reassign, Edit, Withdraw and Delete at its foot. + New decision opens the same sheet, with Pick for its decider. The list itself does not change.",
           "why": "It matches Simple's one-panel rule for features: a person learns one way to read and change an item, the list keeps its place while the sheet scrolls a long decision, and the phone gets the bottom sheet it already knows. Questions use the same sheet (the question sheet).",
           "plus": "One place for every field, long or short; the list never jumps; the same pattern as the feature panel and the questions.",
           "cost": "One more click to see the details; the sheet covers part of the page at 1440 (the list stays visible beside it at 1512).",
           "frames": [
             {
               "file": "frames/ec1-b-rest.html",
-              "caption": "At rest: each open decision's title is a link; the rows look as today."
+              "caption": "At rest: each open decision's title is an underlined link; the rows look as today otherwise."
             },
             {
               "file": "frames/ec1-b-open.html",
-              "caption": "D-81's title is clicked: its sheet opens on the right with the question, context, options, review day and decider."
+              "caption": "D-81's title is clicked: its sheet opens on the right with the question, context, options, review day and decider; Edit, Withdraw and Delete at its foot."
             },
             {
               "file": "frames/ec1-b-mid.html",
@@ -97,19 +105,27 @@
             },
             {
               "file": "frames/ec1-b-reassign.html",
-              "caption": "Reassign in the sheet opens the person list under the decider."
+              "caption": "Reassign in the sheet: the person list opens under the decider; Sam Okafor decides now."
+            },
+            {
+              "file": "frames/ec1-b-reassigned.html",
+              "caption": "Mei Tanaka picked: D-81 now reads Mei Tanaka decides, marked edited just now."
             },
             {
               "file": "frames/ec1-b-withdrawn.html",
-              "caption": "Withdraw at the sheet's foot: D-81 is struck through, kept in the history, with Undo."
+              "caption": "Withdraw at the sheet's foot (the 'not now'): D-81 is struck through, kept in the history, with Undo."
+            },
+            {
+              "file": "frames/ec1-b-deleted.html",
+              "caption": "Delete at the sheet's foot: D-81 leaves the list; a toast says it is in Settings > Trash, with Undo."
             },
             {
               "file": "frames/ec1-b-new.html",
-              "caption": "+ New decision opens the same sheet, blank, partly filled in."
+              "caption": "+ New decision opens the same sheet, filled in: title, question, two options, Priya Nair decides."
             },
             {
               "file": "frames/ec1-b-new-done.html",
-              "caption": "Added: Offer a yearly plan at launch is the first row of Outside meetings."
+              "caption": "Added: Offer a yearly plan at launch is the first row of Outside meetings; Priya Nair decides."
             },
             {
               "file": "frames/ec1-b-hard.html",
@@ -117,7 +133,7 @@
             },
             {
               "file": "frames/ec1-b-hard-1512.html",
-              "caption": "Hard case at 1512: D-80's six options and long context scroll inside the sheet; the list stays put beside it."
+              "caption": "Hard case at 1512: D-80's six options and long context scroll inside the sheet."
             },
             {
               "file": "frames/ec1-b-mid-390.html",
@@ -125,11 +141,11 @@
             },
             {
               "file": "frames/ec1-b-propose.html",
-              "caption": "A commenter: the sheet offers Suggest a change instead of Edit; no Reassign or Withdraw."
+              "caption": "An approver who is not the decider (Priya Raman, signed in): the sheet offers Suggest a change instead of Edit; no Reassign, Withdraw or Delete."
             },
             {
               "file": "frames/ec1-b-read.html",
-              "caption": "A viewer: the sheet reads only, with no buttons."
+              "caption": "A viewer (Lena Ortiz, signed in): the sheet reads only, with no buttons."
             }
           ]
         },
@@ -137,7 +153,7 @@
           "letter": "c",
           "name": "Edit in place",
           "recommended": false,
-          "what": "A chevron on each open decision shows all its fields under the title, each with its own Edit that turns just that field into an input. The decider's name is a link to reassign; Withdraw ends the open row. A New decision line at the foot of the list adds one by its title.",
+          "what": "A chevron on each open decision shows all its fields under the title, each with its own Edit that turns just that field into an input. The decider's name is a link to reassign; Withdraw and Delete end the open row. A New decision line at the foot of the list adds one by its title, its decider picked beside it.",
           "plus": "No dialog or sheet: what you read is what you change, one field at a time; adding is one line.",
           "cost": "Many small Edit links on every open row; a long decision fills the list (hard case); a new decision starts with only a title, its other fields filled later; no single Save for several changes.",
           "frames": [
@@ -147,7 +163,7 @@
             },
             {
               "file": "frames/ec1-c-open.html",
-              "caption": "The chevron on D-81 shows every field under its title, each with its own Edit."
+              "caption": "The chevron on D-81 shows every field under its title, each with its own Edit; Withdraw and Delete end the open row."
             },
             {
               "file": "frames/ec1-c-mid.html",
@@ -155,43 +171,51 @@
             },
             {
               "file": "frames/ec1-c-done.html",
-              "caption": "Saved: the field reads again and D-81 is marked edited just now."
+              "caption": "Saved: Options read again with the new option; the review day is unchanged; D-81 is marked edited just now."
             },
             {
               "file": "frames/ec1-c-reassign.html",
-              "caption": "The decider's name is a link: it opens the person list in the row."
+              "caption": "The decider's name is a link: the person list opens in the row; Sam Okafor decides now."
+            },
+            {
+              "file": "frames/ec1-c-reassigned.html",
+              "caption": "Mei Tanaka picked: D-81 now reads Mei Tanaka decides, marked edited just now."
             },
             {
               "file": "frames/ec1-c-withdrawn.html",
-              "caption": "Withdraw, at the end of the open row: D-81 is struck through, kept in the history, with Undo."
+              "caption": "Withdraw, at the end of the open row (the 'not now'): D-81 is struck through, kept in the history, with Undo."
+            },
+            {
+              "file": "frames/ec1-c-deleted.html",
+              "caption": "Delete, beside Withdraw: D-81 leaves the list; a toast says it is in Settings > Trash, with Undo."
             },
             {
               "file": "frames/ec1-c-new.html",
-              "caption": "A title typed in the New decision line at the foot of Outside meetings."
+              "caption": "A title typed in the New decision line at the foot of Outside meetings, Priya Nair picked to decide beside it."
             },
             {
               "file": "frames/ec1-c-new-done.html",
-              "caption": "Added with Enter: Offer a yearly plan at launch, its other fields to fill in its own row."
+              "caption": "Added with Enter: Offer a yearly plan at launch, Priya Nair decides; its other fields to fill in its own row."
             },
             {
               "file": "frames/ec1-c-hard.html",
-              "caption": "Hard case at 1440: D-80 opened, with every field and Edit link, fills the list."
+              "caption": "Hard case at 1440: D-80 opened, with every field and its own Edit, fills the screen; its six options are listed."
             },
             {
               "file": "frames/ec1-c-hard-1512.html",
-              "caption": "Hard case at 1512: D-80 opened shows six options and a long context inside the list."
+              "caption": "Hard case at 1512: D-80 opened shows its six options and long context inside the list."
             },
             {
               "file": "frames/ec1-c-mid-390.html",
-              "caption": "Phone: labels sit over their values; one field is edited at a time."
+              "caption": "Phone: labels sit over their values; Options is edited on its own, an option added."
             },
             {
               "file": "frames/ec1-c-propose.html",
-              "caption": "A commenter: every field says Suggest instead of Edit; no Withdraw."
+              "caption": "An approver who is not the decider (Priya Raman, signed in): every field says Suggest instead of Edit; no Withdraw or Delete."
             },
             {
               "file": "frames/ec1-c-read.html",
-              "caption": "A viewer: the fields read only, with no Edit links."
+              "caption": "A viewer (Lena Ortiz, signed in): the fields read only, with no Edit links."
             }
           ]
         }
@@ -201,13 +225,13 @@
       "code": "eq2",
       "name": "Questions edited in Simple",
       "question": "How does a person add, edit and withdraw a PRD's open question in Simple?",
-      "common": "A question's text, the PRD's recommendation and its other answers can be changed; a question can be added to a PRD; Withdraw keeps it in the PRD's history with Undo. Whoever may decide the question changes it; whoever may propose suggests a change to the decider; others read only. Deciding and naming a decider stay as today. The same question row is used on Home, so what a proposal adds there shows on Home too.",
+      "common": "A question's text, the PRD's recommendation and its other answers can be changed; a question can be added to a PRD. Withdraw is the 'not now': the question stays in the PRD's history, with Undo. Delete sends it to Settings > Trash, where it can be restored (a toast offers Undo). An owner changes (so does the question's decider); an approver who is not the decider proposes a change to the decider; a viewer reads. Deciding and naming a decider stay as today. The same question row is used on Home, so what a proposal adds there shows on Home too.",
       "proposals": [
         {
           "letter": "a",
           "name": "In the row",
           "recommended": false,
-          "what": "A ⋯ beside Ask Oracle on each question opens Edit and Withdraw. Edit turns the row into fields (text, recommendation, other answers) with Save; an Ask a question line under the list adds one, its PRD picked beside it.",
+          "what": "A ⋯ beside Ask Oracle on each question opens Edit, Withdraw and Delete. Edit turns the row into fields (text, recommendation, other answers) with Save; an Ask a question line under the list adds one, its PRD picked beside it.",
           "plus": "Changes happen where the question is read; adding is one line under the list.",
           "cost": "The form shares the row with the action column, so it is narrow; a long question makes a very tall row (hard case); a fourth control on every row.",
           "frames": [
@@ -217,7 +241,7 @@
             },
             {
               "file": "frames/eq2-a-open.html",
-              "caption": "The ⋯ on Q5 Reminder default time is opened: Edit, Withdraw."
+              "caption": "The ⋯ on Q5 Reminder default time opens under the button: Edit, Withdraw, Delete."
             },
             {
               "file": "frames/eq2-a-mid.html",
@@ -229,23 +253,27 @@
             },
             {
               "file": "frames/eq2-a-withdrawn.html",
-              "caption": "Withdraw, confirmed: Q5 is struck through, kept in the PRD's history, with Undo."
+              "caption": "After that edit, Withdraw, confirmed (the 'not now'): Q5 Do weekly digests include muted alerts? is struck through, kept in the PRD's history, with Undo."
+            },
+            {
+              "file": "frames/eq2-a-deleted.html",
+              "caption": "After that edit, Delete: Q5 leaves the list; a toast says it is in Settings > Trash, with Undo."
             },
             {
               "file": "frames/eq2-a-new.html",
-              "caption": "The Ask a question line under the questions, with its PRD picked beside it."
+              "caption": "The Ask a question line under the questions, a question typed, its PRD picked beside it."
             },
             {
               "file": "frames/eq2-a-new-done.html",
-              "caption": "Added: Q-41 Who can export a team's alert history? waits for a decider."
+              "caption": "Added: Q11 Who can export a team's alert history? waits for a decider."
             },
             {
               "file": "frames/eq2-a-hard.html",
-              "caption": "Hard case at 1440: a long question with six answers makes a tall row, its fields squeezed beside the actions."
+              "caption": "Hard case at 1440: Q6, a long question with a recommendation and five other answers, makes a tall row, its fields beside the actions."
             },
             {
               "file": "frames/eq2-a-hard-1512.html",
-              "caption": "Hard case at 1512: a long question with six answers grows its row beside the actions column."
+              "caption": "Hard case at 1512: Q6's long question, recommendation and five other answers grow its row beside the actions column."
             },
             {
               "file": "frames/eq2-a-mid-390.html",
@@ -257,11 +285,11 @@
             },
             {
               "file": "frames/eq2-a-propose.html",
-              "caption": "A commenter: the ⋯ on a question waiting for others offers Suggest a change."
+              "caption": "An approver who is not the decider (Priya Raman, signed in): the ⋯ on Q5, which Avery Stone decides, offers Suggest a change."
             },
             {
               "file": "frames/eq2-a-read.html",
-              "caption": "A viewer: no ⋯ on any question."
+              "caption": "A viewer (Lena Ortiz, signed in): no ⋯ on any question."
             }
           ]
         },
@@ -269,18 +297,18 @@
           "letter": "b",
           "name": "Question sheet",
           "recommended": true,
-          "what": "A question's title opens its sheet, the same one decisions use (the decision sheet): the recommendation, other answers and decider, with Edit and Withdraw at its foot. + Ask a question at the top of Waiting for you opens the same sheet blank, with its PRD to pick.",
+          "what": "A question's title (underlined) opens its sheet, the same one decisions use (the decision sheet): the recommendation, other answers and decider, with Edit, Withdraw and Delete at its foot. + Ask a question at the top of Waiting for you opens the same sheet, with its PRD to pick.",
           "why": "Same sheet as decisions, so questions and decisions are changed the same way; the row keeps today's buttons for deciding, so nothing in the List changes for people who only decide; long questions scroll inside the sheet.",
           "plus": "Rows stay as they are; one place for every field; works the same on a phone (bottom sheet).",
           "cost": "One more click to edit; the sheet covers part of the list while open.",
           "frames": [
             {
               "file": "frames/eq2-b-rest.html",
-              "caption": "At rest: + Ask a question at the top of Waiting for you; each question's title is a link."
+              "caption": "At rest: + Ask a question at the top of Waiting for you; each question's title is an underlined link."
             },
             {
               "file": "frames/eq2-b-open.html",
-              "caption": "Q5's title is clicked: its sheet opens with the recommendation, other answers and decider."
+              "caption": "Q5's title is clicked: its sheet opens with the recommendation, other answers and decider; Edit, Withdraw and Delete at its foot."
             },
             {
               "file": "frames/eq2-b-mid.html",
@@ -292,23 +320,27 @@
             },
             {
               "file": "frames/eq2-b-withdrawn.html",
-              "caption": "Withdraw at the sheet's foot: Q5 is struck through, kept in the PRD's history, with Undo."
+              "caption": "After that edit, Withdraw at the sheet's foot (the 'not now'): Q5 Do weekly digests include muted alerts? is struck through, kept in the PRD's history, with Undo."
+            },
+            {
+              "file": "frames/eq2-b-deleted.html",
+              "caption": "After that edit, Delete at the sheet's foot: Q5 leaves the list; a toast says it is in Settings > Trash, with Undo."
             },
             {
               "file": "frames/eq2-b-new.html",
-              "caption": "+ Ask a question opens the same sheet, blank, with its PRD picked."
+              "caption": "+ Ask a question opens the same sheet, filled in: the question, a recommendation and two other answers, its PRD picked."
             },
             {
               "file": "frames/eq2-b-new-done.html",
-              "caption": "Added: Q-41 Who can export a team's alert history? waits for a decider."
+              "caption": "Added: Q11 Who can export a team's alert history? keeps its recommendation and two other answers; it waits for a decider."
             },
             {
               "file": "frames/eq2-b-hard.html",
-              "caption": "Hard case at 1440: the long question and its six answers scroll inside the sheet."
+              "caption": "Hard case at 1440: Q6's long question, recommendation and five other answers scroll inside the sheet."
             },
             {
               "file": "frames/eq2-b-hard-1512.html",
-              "caption": "Hard case at 1512: the long question and its six answers scroll inside the sheet; the list keeps its width."
+              "caption": "Hard case at 1512: the list moves left beside the sheet, so Q6's title stays in view; its five other answers scroll inside the sheet."
             },
             {
               "file": "frames/eq2-b-mid-390.html",
@@ -316,15 +348,15 @@
             },
             {
               "file": "frames/eq2-b-home.html",
-              "caption": "Home: the question titles open the same sheet; the rows look as today."
+              "caption": "Home: the question titles are underlined links that open the same sheet."
             },
             {
               "file": "frames/eq2-b-propose.html",
-              "caption": "A commenter: the sheet offers Suggest a change; no Withdraw."
+              "caption": "An approver who is not the decider (Priya Raman, signed in): Q5's sheet, which Avery Stone decides, offers Suggest a change; no Withdraw or Delete."
             },
             {
               "file": "frames/eq2-b-read.html",
-              "caption": "A viewer: no Ask a question, and titles open a read-only sheet."
+              "caption": "A viewer (Lena Ortiz, signed in): no Ask a question; the titles open a read-only sheet."
             }
           ]
         },
@@ -332,7 +364,7 @@
           "letter": "c",
           "name": "Edit mode",
           "recommended": false,
-          "what": "An Edit questions button at the top of Waiting for you switches the whole list into fields at once, each question with its own Withdraw and an Ask a question line at the end; Done editing goes back.",
+          "what": "An Edit questions button at the top of Waiting for you switches the whole list into fields at once, each question with its own Withdraw and Delete and an Ask a question line at the end; Done editing goes back.",
           "plus": "Fast for tidying many questions in one go; clear when you are editing and when you are not.",
           "cost": "With 21 questions the page becomes a long form (hard case); deciding is hidden while editing; a mode people must remember to leave.",
           "frames": [
@@ -342,7 +374,7 @@
             },
             {
               "file": "frames/eq2-c-open.html",
-              "caption": "Edit questions is on: every question in the list becomes fields at once, each with Withdraw."
+              "caption": "Edit questions is on: every question in the list becomes fields at once, each with Withdraw and Delete."
             },
             {
               "file": "frames/eq2-c-mid.html",
@@ -354,23 +386,27 @@
             },
             {
               "file": "frames/eq2-c-withdrawn.html",
-              "caption": "Withdrawn in edit mode, then Done editing: Q5 is struck through, kept in the PRD's history, with Undo."
+              "caption": "After that edit, Withdraw (the 'not now'), then Done editing: Q5 Do weekly digests include muted alerts? is struck through, kept in the PRD's history, with Undo."
+            },
+            {
+              "file": "frames/eq2-c-deleted.html",
+              "caption": "After that edit, Delete, then Done editing: Q5 leaves the list; a toast says it is in Settings > Trash, with Undo."
             },
             {
               "file": "frames/eq2-c-new.html",
-              "caption": "In edit mode an Ask a question line ends the list."
+              "caption": "In edit mode an Ask a question line ends the list, a question typed."
             },
             {
               "file": "frames/eq2-c-new-done.html",
-              "caption": "Added: Q-41 Who can export a team's alert history? waits for a decider."
+              "caption": "Added: Q11 Who can export a team's alert history? waits for a decider."
             },
             {
               "file": "frames/eq2-c-hard.html",
-              "caption": "Hard case at 1440: in edit mode each question is a block of fields; two fill the screen."
+              "caption": "Hard case at 1440: in edit mode each question is a block of fields; Q5 and the long Q6 fill the screen."
             },
             {
               "file": "frames/eq2-c-hard-1512.html",
-              "caption": "Hard case at 1512: 21 questions as forms make a very long page."
+              "caption": "Hard case at 1512: in edit mode every question is a block of fields, so the page runs long."
             },
             {
               "file": "frames/eq2-c-mid-390.html",
@@ -382,11 +418,11 @@
             },
             {
               "file": "frames/eq2-c-propose.html",
-              "caption": "A commenter in edit mode: the questions waiting for others become fields too, with no Withdraw."
+              "caption": "An approver who is not the decider (Priya Raman, signed in), Edit questions on: the button reads Done editing, and Q5, which Avery Stone decides, becomes fields to suggest a change, with no Withdraw or Delete."
             },
             {
               "file": "frames/eq2-c-read.html",
-              "caption": "A viewer: no Edit questions button."
+              "caption": "A viewer (Lena Ortiz, signed in): no Edit questions button."
             }
           ]
         }

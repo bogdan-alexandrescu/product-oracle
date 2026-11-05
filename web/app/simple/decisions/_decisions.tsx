@@ -17,7 +17,7 @@ import { useWaitingList, WaitingRow } from "@/components/simple/WaitingItems";
 
 import { DeliveryLine, emailWords, slackWords } from "../meetings/_delivery";
 import { DecidedItem, LINK, momentWords } from "../meetings/_flow";
-import { AddedQuestion, AskQuestionRow, DecisionEditRow, MkEditAll, NewDecision, NewDecisionRow, QuestionSheet, useMk } from "@/components/simple/mock-edit/MockEdit"; // MOCK-HOOK
+import { AddedQuestion, AskQuestionRow, DecisionEditRow, MkEditAll, MkStyles, NewDecision, NewDecisionRow, QuestionSheet, useMk, type MkQ } from "@/components/simple/mock-edit/MockEdit"; // MOCK-HOOK
 import { MK_EXTRA_DECISIONS } from "@/lib/api/mock/mk-edit-decisions"; // MOCK-HOOK
 
 type Row = Schemas["SimpleDecisionRow"];
@@ -102,7 +102,7 @@ export function SimpleDecisions() {
   const other = d?.other ?? [];
   const zone = useCompanyZone();
   const mk = useMk(); // MOCK-HOOK
-  const [added, setAdded] = useState<string[]>(mk.phase === "done" && mk.act === "new" ? ["Offer a yearly plan at launch"] : []); // MOCK-HOOK
+  const [added, setAdded] = useState<{ title: string; decider: string }[]>(mk.phase === "done" && mk.act === "new" ? [{ title: "Offer a yearly plan at launch", decider: "Priya Nair" }] : []); // MOCK-HOOK
   return (
     <SimplePage title="Decisions" lead={`${LEADS[view]} Dates are in ${zoneName(zone)}.`}>
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -114,7 +114,8 @@ export function SimpleDecisions() {
         </div>
         <ViewSwitch value={view} onChange={pick} />
       </div>
-      {mk.ec1 && <NewDecision onAdd={(t) => setAdded((a) => [t, ...a])} /> /* MOCK-HOOK */}
+      {(mk.ec1 || mk.eq2) && <MkStyles /> /* MOCK-HOOK */}
+      {mk.ec1 && <NewDecision onAdd={(title, decider) => setAdded((a) => [{ title, decider }, ...a])} /> /* MOCK-HOOK */}
       {q.loading && !d && <Loading />}
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
       {d && view === "list" && <QuestionList d={d} actions={actions} filtered={filtered} onClear={clear} />}
@@ -146,8 +147,8 @@ export function SimpleDecisions() {
           {(other.length > 0 || !!mk.ec1) /* MOCK-HOOK */ && (
             <section className="simple-card" aria-label="Outside meetings" id="mk-outside" /* MOCK-HOOK */>
               <h2 className="simple-h2">Outside meetings</h2>
-              <Rows rows={mk.ec1 ? [...added.map((t, i) => mkRow(t, 90 + i, "You")), ...MK_EXTRA_DECISIONS.map((x, i) => mkRow(x.title, 80 + i, x.approver, x.long)), ...other] : other} /* MOCK-HOOK */ />
-              {mk.ec1 === "c" && <ul><NewDecisionRow onAdd={(t) => setAdded((a) => [...a, t])} /></ul> /* MOCK-HOOK */}
+              <Rows rows={mk.ec1 ? [...added.map((x, i) => mkRow(x.title, 90 + i, x.decider)), ...MK_EXTRA_DECISIONS.map((x, i) => mkRow(x.title, 80 + i, x.approver, x.long)), ...other] : other} /* MOCK-HOOK */ />
+              {mk.ec1 === "c" && <ul><NewDecisionRow onAdd={(title, decider) => setAdded((a) => [...a, { title, decider }])} /></ul> /* MOCK-HOOK */}
             </section>
           )}
         </>
@@ -241,14 +242,24 @@ function QuestionList({ d, actions, filtered, onClear }: { d: Schemas["SimpleDec
   const count = Math.min(d.waiting_count, mine.length) + extra.length;
   const mk = useMk(); // MOCK-HOOK
   const longest = [...shown].sort((a, b) => b.title.length + b.alternatives.length * 40 - (a.title.length + a.alternatives.length * 40))[0]?.id; // MOCK-HOOK
-  const mkTargetId = mk.long ? longest : shown[0]?.id; // MOCK-HOOK
+  // An approver who is not the decider: the first question they may only propose a change to. // MOCK-HOOK
+  const mkTargetId = mk.as === "approver" ? [...shown, ...others].find((x) => !x.can.decide && x.can.propose)?.id : mk.long ? longest : shown[0]?.id ?? (mine.length === 0 ? others[0]?.id : undefined); // MOCK-HOOK
   const mayAsk = open.some((x) => x.can.decide || x.can.propose); // MOCK-HOOK
-  const [addedQ, setAddedQ] = useState<string[]>(mk.eq2 && mk.act === "new" && mk.phase === "done" ? ["Who can export a team's alert history?"] : []); // MOCK-HOOK
+  const nextCode = `Q${Math.max(0, ...open.map((x) => Number(x.code.replace(/\D/g, "")) || 0)) + 1}`; // MOCK-HOOK: the list's own code format
+  const mkNewQ = (title: string): MkQ => ({ title, recommendation: "", options: [], withdrawn: false, edited: false, suggested: false }); // MOCK-HOOK
+  const [addedQ, setAddedQ] = useState<MkQ[]>(mk.eq2 && mk.act === "new" && mk.phase === "done" ? [mk.eq2 === "b" ? { ...mkNewQ("Who can export a team's alert history?"), recommendation: "Owners only, from Settings", options: ["Every member", "Owners and approvers"] } : mkNewQ("Who can export a team's alert history?")] : []); // MOCK-HOOK
   const [editAll, setEditAll] = useState(mk.eq2 === "c" && (mk.open || mk.phase === "mid")); // MOCK-HOOK
   const [askOpen, setAskOpen] = useState(mk.eq2 === "b" && mk.act === "new" && (mk.open || mk.phase === "mid")); // MOCK-HOOK
   return (
     <MkEditAll.Provider value={{ on: editAll, set: setEditAll }} /* MOCK-HOOK */>
       <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={count} source>
+        {mk.eq2 && mayAsk && (mk.eq2 === "b" || mk.eq2 === "c") && ( /* MOCK-HOOK */
+          <div className="flex flex-wrap gap-2"> {/* MOCK-HOOK */}
+            {mk.eq2 === "b" && <button type="button" className="simple-button" onClick={() => setAskOpen(true)}>+ Ask a question</button> /* MOCK-HOOK */}
+            {mk.eq2 === "c" && <button type="button" className={`simple-button ${editAll ? "simple-button-primary" : ""}`} onClick={() => setEditAll(!editAll)}>{editAll ? "Done editing" : "Edit questions"}</button> /* MOCK-HOOK */}
+          </div> // MOCK-HOOK
+        )}
+        {mk.eq2 === "b" && <QuestionSheet open={askOpen} isNew onClose={() => setAskOpen(false)} onAdd={(n) => { setAddedQ((a) => [...a, n]); setAskOpen(false); }} /> /* MOCK-HOOK */}
         {mine.length === 0 && extra.length === 0 ? (
           !filtered && !waiting.data && !waiting.error ? (
             <p className="simple-meta" role="status">
@@ -260,21 +271,14 @@ function QuestionList({ d, actions, filtered, onClear }: { d: Schemas["SimpleDec
             </p>
           )
         ) : (
-          <>
-          {mk.eq2 && mayAsk && (mk.eq2 === "b" || mk.eq2 === "c") && ( /* MOCK-HOOK */
-            <div className="flex flex-wrap gap-2"> {/* MOCK-HOOK */}
-              {mk.eq2 === "b" && <button type="button" className="simple-button" onClick={() => setAskOpen(true)}>+ Ask a question</button> /* MOCK-HOOK */}
-              {mk.eq2 === "c" && <button type="button" className={`simple-button ${editAll ? "simple-button-primary" : ""}`} onClick={() => setEditAll(!editAll)}>{editAll ? "Done editing" : "Edit questions"}</button> /* MOCK-HOOK */}
-            </div> // MOCK-HOOK
-          )}
-          {mk.eq2 === "b" && <QuestionSheet open={askOpen} isNew onClose={() => setAskOpen(false)} onAdd={(t) => { setAddedQ((a) => [...a, t]); setAskOpen(false); }} /> /* MOCK-HOOK */}
+          <> {/* MOCK-HOOK */}
           <ul>
-            {addedQ.map((t, i) => <AddedQuestion key={t} title={t} n={41 + i} />) /* MOCK-HOOK */}
+            {addedQ.map((x, i) => <AddedQuestion key={x.title} q={x} code={`Q${Number(nextCode.slice(1)) + i}`} />) /* MOCK-HOOK */}
             {shown.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} mkTarget={x.id === mkTargetId} /* MOCK-HOOK */ />)}
-            {(mk.eq2 === "a" || (mk.eq2 === "c" && editAll)) && mayAsk && <AskQuestionRow onAdd={(t) => setAddedQ((a) => [...a, t])} /> /* MOCK-HOOK */}
+            {(mk.eq2 === "a" || (mk.eq2 === "c" && editAll)) && mayAsk && <AskQuestionRow onAdd={(t) => setAddedQ((a) => [...a, mkNewQ(t)])} /> /* MOCK-HOOK */}
             {extra.map((i) => <WaitingRow key={i.key} item={i} />)}
           </ul>
-          </>
+          </> // MOCK-HOOK
         )}
         {mine.length > FIRST && (
           <button type="button" className="simple-more" aria-expanded={all} onClick={() => setAll((x) => !x)}>
@@ -284,7 +288,7 @@ function QuestionList({ d, actions, filtered, onClear }: { d: Schemas["SimpleDec
       </QuestionCard>
       {others.length > 0 && (
         <QuestionCard label="Waiting for others" testId="questions-others" questions={others} count={others.length}>
-          <ul>{others.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} forOthers mkTarget={mine.length === 0 && x.id === others[0]?.id} /* MOCK-HOOK */ />)}</ul>
+          <ul>{others.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} forOthers mkTarget={x.id === mkTargetId} /* MOCK-HOOK */ />)}</ul>
         </QuestionCard>
       )}
     </MkEditAll.Provider /* MOCK-HOOK */>

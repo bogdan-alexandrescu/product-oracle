@@ -3,19 +3,42 @@
 // MOCK-HOOK: ?ec1=a|b|c (decisions) and ?eq2=a|b|c (questions); &open=1, &phase=mid|done, &act=edit|reassign|withdraw|new, &long=1, &as=viewer|commenter.
 
 import { useSearchParams } from "next/navigation";
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Schemas } from "@/lib/api/client";
 
 import { Icon } from "@/components/ds/Icon";
 import { InfoTip } from "@/components/ds/InfoTip";
 import { Sheet } from "@/components/ds/Sheet";
+import { toast } from "@/components/ds/Toast";
 import { calendarDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
-import { MK_LONG, MK_LONG_Q, MK_PEOPLE, mkDecisionFields, type MkDecisionFields } from "@/lib/api/mock/mk-edit-decisions";
+import { MK_LONG, MK_LONG_Q, MK_PEOPLE, mkDecisionCan, mkDecisionFields, type MkDecisionFields } from "@/lib/api/mock/mk-edit-decisions";
 
 export const FIELD =
   "w-full rounded-xl border border-line bg-surface px-3 py-2 text-[16px] leading-6 text-text placeholder:text-text2 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30";
 const LABEL = "text-[14px] font-semibold text-text2";
+/** An edited row's mark: a warm fill and a bar on its left, strong enough in the dark theme too. */
+export const EDITED = "bg-[var(--mk-edited)] shadow-[inset_4px_0_0_var(--mk-edited-bar)]";
+/** A title that opens its sheet: underlined at rest, so it reads as a link. */
+export const TITLE_LINK = "text-left font-[650] underline decoration-line-strong decoration-1 underline-offset-[5px] hover:decoration-accent";
+
+/** The mock-up's own tokens (the edited mark) and, on a wide screen, room for an open sheet beside the list. */
+export function MkStyles() {
+  return (
+    <style>{`:root{--mk-edited:#fff1bf;--mk-edited-bar:#d4a017}
+:root[data-theme="dark"]{--mk-edited:#4f4110;--mk-edited-bar:#f2c94c}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--mk-edited:#4f4110;--mk-edited-bar:#f2c94c}}
+@media (min-width: 1500px){html:has([data-testid="question-sheet"]) .simple-page{margin-left:auto;margin-right:480px}}`}</style>
+  );
+}
+
+/** Delete sends an item to Settings > Trash, where it can be restored: the toast says so, with Undo. */
+export function useTrashToast(deleted: boolean, label: string, undo: () => void) {
+  useEffect(() => {
+    if (deleted) toast({ message: `${label} is in Settings › Trash`, action: { label: "Undo", onClick: undo } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deleted]);
+}
 
 export function useMk() {
   const p = useSearchParams();
@@ -23,29 +46,27 @@ export function useMk() {
     const x = p.get(k);
     return x === "a" || x === "b" || x === "c" ? x : null;
   };
-  return { ec1: v("ec1"), eq2: v("eq2"), open: p.get("open") === "1", phase: p.get("phase") ?? "", act: p.get("act") ?? "edit", long: p.get("long") === "1" };
+  return { ec1: v("ec1"), eq2: v("eq2"), open: p.get("open") === "1", phase: p.get("phase") ?? "", act: p.get("act") ?? "edit", long: p.get("long") === "1", as: p.get("as") ?? "" };
 }
 
-/** Who may act: can("update_decision") changes, can("create_decision") proposes (a commenter), else read only. */
-export function useDecisionPower(status: string): "change" | "propose" | "read" {
-  const { can } = useMe();
-  if (status !== "proposed") return "read";
-  // An approver or owner changes (update_decision with the approver's recommend_decision_options); a commenter proposes.
-  // The mock rows' own can_edit is true (the API sends d.can_edit); a viewer's can() is false whatever the item says.
-  if (can("update_decision", true) && can("recommend_decision_options")) return "change";
-  if (can("create_decision")) return "propose";
-  return "read";
+/** Who may act, as Detailed's inspector reads it: can() and the decision's own can_edit, can_withdraw and can_reassign.
+ * An owner (or the decider) changes; an approver who is not the decider proposes a change to the decider; a viewer reads. */
+export function useDecisionPower(status: string, decider: string) {
+  const { can, me } = useMe();
+  const d = mkDecisionCan(me, decider, status);
+  const power: "change" | "propose" | "read" = can("update_decision", d.can_edit) && d.can_edit ? "change" : status === "proposed" && can("create_decision") ? "propose" : "read";
+  return { power, mayWithdraw: power === "change" && d.can_withdraw, mayReassign: power === "change" && d.can_reassign && can("reassign_decision") };
 }
 
-export type MkDecision = MkDecisionFields & { title: string; decider: string; withdrawn?: boolean; edited?: boolean; suggested?: boolean };
+export type MkDecision = MkDecisionFields & { title: string; decider: string; withdrawn?: boolean; deleted?: boolean; edited?: boolean; suggested?: boolean };
 
 export function seedDecision(title: string, decider: string, long: boolean): MkDecision {
   return { ...(long ? MK_LONG : mkDecisionFields(title)), title, decider };
 }
 
-/** The canned edit the mid and done frames show (the same one each time). */
-export function cannedEdit(d: MkDecision): MkDecision {
-  return { ...d, options: [...d.options, "Ship to pilot customers first"], review_on: "2026-12-07", edited: true };
+/** The canned edit the mid and done frames show (the same one each time): an option added and, but in c (one field at a time), the review day moved. */
+export function cannedEdit(d: MkDecision, v: string | null): MkDecision {
+  return { ...d, options: [...d.options, "Ship to pilot customers first"], review_on: v === "c" ? d.review_on : "2026-12-07", edited: true };
 }
 
 const dayWords = (iso: string) => calendarDay(iso, { month: "short", day: "numeric", year: "numeric" });
@@ -55,12 +76,12 @@ const dayWords = (iso: string) => calendarDay(iso, { month: "short", day: "numer
 export function RowMenu({ items, open, onOpen, label }: { items: { label: string; onClick: () => void; danger?: boolean }[]; open: boolean; onOpen: (o: boolean) => void; label: string }) {
   if (!items.length) return null;
   return (
-    <span className="relative inline-flex">
+    <span className="inline-flex flex-col items-end gap-1">
       <button type="button" aria-label={`More for ${label}`} aria-expanded={open} className="simple-button simple-button-quiet !min-h-9 !px-2" onClick={() => onOpen(!open)}>
         <Icon name="more" size={20} stroke={1.7} />
       </button>
       {open && (
-        <span role="menu" className="absolute top-10 right-0 z-30 flex w-[200px] flex-col rounded-xl border border-line bg-surface p-1 shadow-lg">
+        <span role="menu" className="flex w-[200px] flex-col rounded-xl border border-line bg-surface p-1 shadow-lg">
           {items.map((i) => (
             <button key={i.label} role="menuitem" type="button" className={`rounded-lg px-3 py-2 text-left text-[16px] hover:bg-surface2 ${i.danger ? "text-[var(--danger,#b42318)]" : ""}`} onClick={i.onClick}>
               {i.label}
@@ -125,7 +146,7 @@ export function PeopleList({ current, onPick, verb }: { current: string; onPick:
 }
 
 /** The form every proposal shares: title, question, context, options, review date. */
-export function DecisionForm({ d, onChange, compact = false }: { d: MkDecision; onChange: (d: MkDecision) => void; compact?: boolean }) {
+export function DecisionForm({ d, onChange, compact = false, pickDecider = false }: { d: MkDecision; onChange: (d: MkDecision) => void; compact?: boolean; pickDecider?: boolean }) {
   return (
     <div className={`flex flex-col ${compact ? "gap-3" : "gap-4"}`}>
       <Field label="Title">
@@ -146,6 +167,13 @@ export function DecisionForm({ d, onChange, compact = false }: { d: MkDecision; 
           <Icon name="clock" size={18} stroke={1.7} />
         </span>
       </Field>
+      {pickDecider && (
+        <Field label="Decides">
+          <select className="simple-select max-w-[260px]" value={d.decider} onChange={(e) => onChange({ ...d, decider: e.target.value })}>
+            {MK_PEOPLE.map((p) => <option key={p}>{p}</option>)}
+          </select>
+        </Field>
+      )}
     </div>
   );
 }
@@ -174,20 +202,35 @@ export function DecisionDetails({ d }: { d: MkDecision }) {
 /** One open decision's row under ec1: its title and meta come from the page; the variant adds its controls. */
 export function DecisionEditRow({ title, decider, status, meta, first, long, code }: { title: string; decider: string; status: string; meta: string; first: boolean; long: boolean; code: string }) {
   const mk = useMk();
-  const power = useDecisionPower(status);
-  const mayReassign = useMe().can("reassign_decision");
+  const { power, mayWithdraw, mayReassign } = useDecisionPower(status, decider);
   const target = first && mk.long === long && mk.act !== "new";
   const start = seedDecision(title, decider, long);
-  const preset = target && mk.phase === "done" ? (mk.act === "withdraw" ? { ...start, withdrawn: true } : mk.act === "reassign" ? { ...start, decider: "Mei Tanaka", edited: true } : power === "propose" ? { ...cannedEdit(start), edited: false, suggested: true } : cannedEdit(start)) : start;
+  // The canned edit is only the edited example's: the hard case opens D-80 as it is.
+  const edit = (x: MkDecision) => (long ? x : cannedEdit(x, mk.ec1));
+  const preset =
+    target && mk.phase === "done"
+      ? mk.act === "withdraw"
+        ? { ...start, withdrawn: true }
+        : mk.act === "delete"
+          ? { ...start, deleted: true }
+          : mk.act === "reassign"
+            ? { ...start, decider: "Mei Tanaka", edited: true }
+            : power === "propose"
+              ? { ...edit(start), edited: false, suggested: true }
+              : edit(start)
+      : start;
   const [d, setD] = useState<MkDecision>(preset);
-  const [draft, setDraft] = useState<MkDecision>(target && mk.phase === "mid" ? cannedEdit(start) : start);
+  const [draft, setDraft] = useState<MkDecision>(target && mk.phase === "mid" ? edit(start) : start);
   const initial = target && (mk.open || mk.phase === "mid") ? (mk.ec1 === "a" && mk.open && mk.phase !== "mid" && mk.act === "edit" ? "menu" : mk.act) : null;
   const [mode, setMode] = useState<string | null>(initial);
   const [expanded, setExpanded] = useState(target && mk.ec1 === "c" && (mk.open || mk.phase !== ""));
+  useTrashToast(!!d.deleted, `${code} ${d.title}`, () => setD({ ...d, deleted: false }));
   const save = (next: MkDecision) => {
     setD(power === "propose" ? { ...next, edited: false, suggested: true } : { ...next, edited: true });
     setMode(null);
   };
+  const withdraw = () => { setD({ ...d, withdrawn: true }); setMode(null); };
+  const remove = () => { setD({ ...d, deleted: true }); setMode(null); };
   const v = mk.ec1;
   const changes = power === "change";
   const verbSave = changes ? "Save" : `Suggest to ${d.decider}`;
@@ -196,6 +239,7 @@ export function DecisionEditRow({ title, decider, status, meta, first, long, cod
       <Icon name="flag" size={20} stroke={1.7} />
     </span>
   );
+  if (d.deleted) return null;
   if (d.withdrawn)
     return (
       <li className="flex !items-start gap-[14px] border-t border-line py-[14px] opacity-80" data-testid="decision-row">
@@ -213,12 +257,12 @@ export function DecisionEditRow({ title, decider, status, meta, first, long, cod
         </button>
       </li>
     );
-  const metaLine = [d.decider, meta, d.suggested ? `your change waits for ${d.decider}` : null, d.edited ? "edited just now" : null].filter(Boolean).join(" · ");
+  const metaLine = [`${d.decider} decides`, meta, d.suggested ? `your change waits for ${d.decider}` : null, d.edited ? "edited just now" : null].filter(Boolean).join(" · ");
   const titleEl = (
     <span className="break-words">
       <span className="simple-code">{code}</span>{" "}
       {v === "b" ? (
-        <button type="button" className="text-left font-[650] hover:underline" onClick={() => setMode("sheet")}>
+        <button type="button" className={TITLE_LINK} onClick={() => setMode("sheet")}>
           {d.title}
         </button>
       ) : (
@@ -226,7 +270,8 @@ export function DecisionEditRow({ title, decider, status, meta, first, long, cod
       )}
     </span>
   );
-  /* a: the row menu (Edit, Reassign, Withdraw); Edit opens the form in the row. */
+  const mark = d.edited || d.suggested ? EDITED : "";
+  /* a: the row menu (Edit, Reassign, Withdraw, Delete); Edit opens the form in the row. */
   if (v === "a") {
     const items =
       power === "read"
@@ -235,11 +280,11 @@ export function DecisionEditRow({ title, decider, status, meta, first, long, cod
           ? [
               { label: "Edit", onClick: () => { setDraft(d); setMode("edit"); } },
               ...(mayReassign ? [{ label: "Reassign", onClick: () => setMode("reassign") }] : []),
-              { label: "Withdraw", onClick: () => setMode("withdraw"), danger: true },
+              ...(mayWithdraw ? [{ label: "Withdraw", onClick: () => setMode("withdraw") }, { label: "Delete", onClick: remove, danger: true }] : []),
             ]
           : [{ label: "Suggest a change", onClick: () => { setDraft(d); setMode("edit"); } }];
     return (
-      <li className={`flex flex-wrap !items-start gap-[14px] border-t border-line py-[14px] ${d.edited || d.suggested ? "bg-[var(--simple-edited)]" : ""}`} data-testid="decision-row">
+      <li className={`flex flex-wrap !items-start gap-[14px] border-t border-line py-[14px] ${mark}`} data-testid="decision-row">
         {icon}
         <span className="simple-rb min-w-0 flex-1">
           {titleEl}
@@ -263,8 +308,13 @@ export function DecisionEditRow({ title, decider, status, meta, first, long, cod
           {mode === "reassign" && <div className="mt-3"><PeopleList current={d.decider} verb="decides" onPick={(p) => { setD({ ...d, decider: p, edited: true }); setMode(null); }} /></div>}
           {mode === "withdraw" && (
             <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-line p-3">
-              <span className="flex-1">Withdraw this decision? It stays in the history.</span>
-              <button type="button" className="simple-button simple-button-primary" onClick={() => setD({ ...d, withdrawn: true })}>
+              <span className="flex flex-1 items-center gap-1">
+                Withdraw {code}?
+                <InfoTip label="Withdraw" align="start">
+                  Not now: it stays in the history, and Undo brings it back.
+                </InfoTip>
+              </span>
+              <button type="button" className="simple-button simple-button-primary" onClick={withdraw}>
                 Withdraw
               </button>
               <button type="button" className="simple-button" onClick={() => setMode(null)}>
@@ -276,10 +326,10 @@ export function DecisionEditRow({ title, decider, status, meta, first, long, cod
       </li>
     );
   }
-  /* b: the title opens the decision's sheet: every field, the decider, Withdraw at its foot. */
+  /* b: the title opens the decision's sheet: every field, the decider, Withdraw and Delete at its foot. */
   if (v === "b") {
     return (
-      <li className={`flex !items-start gap-[14px] border-t border-line py-[14px] ${d.edited || d.suggested ? "bg-[var(--simple-edited)]" : ""}`} data-testid="decision-row">
+      <li className={`flex !items-start gap-[14px] border-t border-line py-[14px] ${mark}`} data-testid="decision-row">
         {icon}
         <span className="simple-rb min-w-0 flex-1">
           {titleEl}
@@ -289,20 +339,23 @@ export function DecisionEditRow({ title, decider, status, meta, first, long, cod
           open={mode !== null && mode !== "menu"}
           d={d}
           power={power}
+          mayReassign={mayReassign}
+          mayWithdraw={mayWithdraw}
           code={code}
           startEditing={mode === "edit" || (target && mk.phase === "mid")}
           startDraft={draft}
           startPeople={mode === "reassign"}
           onClose={() => setMode(null)}
           onSave={(n) => save(n)}
-          onWithdraw={() => { setD({ ...d, withdrawn: true }); setMode(null); }}
+          onWithdraw={withdraw}
+          onDelete={remove}
         />
       </li>
     );
   }
   /* c: in place: a chevron shows every field under the title, each one edited where it is. */
   return (
-    <li className={`flex !items-start gap-[14px] border-t border-line py-[14px] ${d.edited || d.suggested ? "bg-[var(--simple-edited)]" : ""}`} data-testid="decision-row">
+    <li className={`flex !items-start gap-[14px] border-t border-line py-[14px] ${mark}`} data-testid="decision-row">
       {icon}
       <span className="simple-rb min-w-0 flex-1">
         <span className="flex items-start gap-2">
@@ -322,21 +375,26 @@ export function DecisionEditRow({ title, decider, status, meta, first, long, cod
           <div className="mt-2 flex flex-col gap-2 border-l-2 border-line pl-3">
             <InPlace label="Question" value={d.question} power={power} onSave={(t) => save({ ...d, question: t })} />
             <InPlace label="Context" value={d.context} power={power} multiline onSave={(t) => save({ ...d, context: t })} />
-            <InPlaceOptions d={d} power={power} startOpen={target && mk.phase === "mid"} onSave={(o) => save({ ...d, options: o, review_on: target ? "2026-12-07" : d.review_on })} />
+            <InPlaceOptions d={d} power={power} startOpen={target && mk.phase === "mid"} extra={long ? null : "Ship to pilot customers first"} onSave={(o) => save({ ...d, options: o })} />
             <InPlace label="Review on" value={dayWords(d.review_on)} power={power} onSave={() => save(d)} />
             <span className="flex flex-wrap items-center gap-2">
               <span className={LABEL}>Decides</span>
-              {power === "change" && mayReassign ? (
-                <button type="button" className="simple-link" onClick={() => setMode(mode === "reassign" ? null : "reassign")}>
+              {mayReassign ? (
+                <button type="button" className="simple-link underline decoration-line-strong underline-offset-[5px]" onClick={() => setMode(mode === "reassign" ? null : "reassign")}>
                   {d.decider}
                 </button>
               ) : (
                 <span>{d.decider}</span>
               )}
-              {power === "change" && (
-                <button type="button" className="simple-more !mt-0 ml-auto" onClick={() => setD({ ...d, withdrawn: true })}>
-                  Withdraw
-                </button>
+              {mayWithdraw && (
+                <span className="ml-auto flex gap-4">
+                  <button type="button" className="simple-more !mt-0" onClick={withdraw}>
+                    Withdraw
+                  </button>
+                  <button type="button" className="simple-more !mt-0 !text-[var(--danger,#b42318)]" onClick={remove}>
+                    Delete
+                  </button>
+                </span>
               )}
             </span>
             {mode === "reassign" && <PeopleList current={d.decider} verb="decides" onPick={(p) => { setD({ ...d, decider: p, edited: true }); setMode(null); }} />}
@@ -380,9 +438,9 @@ function InPlace({ label, value, onSave, power, multiline, bold, prefix }: { lab
   );
 }
 
-function InPlaceOptions({ d, power, startOpen, onSave }: { d: MkDecision; power: string; startOpen: boolean; onSave: (o: string[]) => void }) {
+function InPlaceOptions({ d, power, startOpen, extra, onSave }: { d: MkDecision; power: string; startOpen: boolean; extra: string | null; onSave: (o: string[]) => void }) {
   const [editing, setEditing] = useState(startOpen);
-  const [draft, setDraft] = useState(startOpen ? [...d.options, "Ship to pilot customers first"] : d.options);
+  const [draft, setDraft] = useState(startOpen && extra ? [...d.options, extra] : d.options);
   return (
     <span className="group flex items-start gap-2 max-[600px]:flex-wrap">
       <span className={`${LABEL} w-[90px] shrink-0 pt-0.5 max-[600px]:basis-full`}>Options</span>
@@ -413,7 +471,7 @@ function InPlaceOptions({ d, power, startOpen, onSave }: { d: MkDecision; power:
 }
 
 /** b's sheet (the side on a desktop, the bottom on a phone), the same for a new decision. */
-export function DecisionSheet({ open, d, power, code, startEditing, startDraft, startPeople = false, onClose, onSave, onWithdraw, isNew = false }: { open: boolean; d: MkDecision; power: string; code: string; startEditing: boolean; startDraft: MkDecision; startPeople?: boolean; onClose: () => void; onSave: (d: MkDecision) => void; onWithdraw: () => void; isNew?: boolean }) {
+export function DecisionSheet({ open, d, power, mayReassign = false, mayWithdraw = false, code, startEditing, startDraft, startPeople = false, onClose, onSave, onWithdraw, onDelete, isNew = false }: { open: boolean; d: MkDecision; power: string; mayReassign?: boolean; mayWithdraw?: boolean; code: string; startEditing: boolean; startDraft: MkDecision; startPeople?: boolean; onClose: () => void; onSave: (d: MkDecision) => void; onWithdraw: () => void; onDelete: () => void; isNew?: boolean }) {
   const [editing, setEditing] = useState(startEditing || isNew);
   const [draft, setDraft] = useState(startEditing ? startDraft : d);
   const [people, setPeople] = useState(startPeople);
@@ -424,16 +482,13 @@ export function DecisionSheet({ open, d, power, code, startEditing, startDraft, 
         {editing ? (
           <DecisionForm d={draft} onChange={setDraft} />
         ) : (
-          <>
-            <DecisionDetails d={d} />
-            {power === "read" && <p className="simple-meta">You can read this decision.</p>}
-          </>
+          <DecisionDetails d={d} />
         )}
         <div className="flex flex-col gap-2 border-t border-line pt-3">
           <span className="flex items-center gap-2">
             <span className={LABEL}>Decides</span>
             <span className="flex-1">{(isNew ? draft : d).decider}</span>
-            {changes && (
+            {(isNew ? changes : mayReassign) && (
               <button type="button" className="simple-button" aria-expanded={people} onClick={() => setPeople(!people)}>
                 {isNew ? "Pick" : "Reassign"}
               </button>
@@ -457,10 +512,15 @@ export function DecisionSheet({ open, d, power, code, startEditing, startDraft, 
                 <button type="button" className="simple-button simple-button-primary" onClick={() => { setDraft(d); setEditing(true); }}>
                   {changes ? "Edit" : "Suggest a change"}
                 </button>
-                {changes && (
-                  <button type="button" className="simple-button ml-auto" onClick={onWithdraw}>
-                    Withdraw
-                  </button>
+                {mayWithdraw && (
+                  <span className="ml-auto flex gap-2">
+                    <button type="button" className="simple-button" onClick={onWithdraw}>
+                      Withdraw
+                    </button>
+                    <button type="button" className="simple-button text-[var(--danger,#b42318)]" onClick={onDelete}>
+                      Delete
+                    </button>
+                  </span>
                 )}
               </>
             )}
@@ -472,7 +532,7 @@ export function DecisionSheet({ open, d, power, code, startEditing, startDraft, 
 }
 
 /** "+ New decision" at the page's top (a and b); c adds a "Propose a decision" row at the list's foot instead. */
-export function NewDecision({ onAdd }: { onAdd: (title: string) => void }) {
+export function NewDecision({ onAdd }: { onAdd: (title: string, decider: string) => void }) {
   const mk = useMk();
   const { can } = useMe();
   const changes = can("create_decision") && can("recommend_decision_options");
@@ -487,22 +547,22 @@ export function NewDecision({ onAdd }: { onAdd: (title: string) => void }) {
         <Icon name="plus" size={18} stroke={1.7} />
         {changes ? "New decision" : "Propose a decision"}
       </button>
-      {mk.ec1 === "b" && <DecisionSheet open={open} isNew d={blank} power={changes ? "change" : "propose"} code="" startEditing startDraft={blank} onClose={() => setOpen(false)} onSave={(n) => { onAdd(n.title); setOpen(false); }} onWithdraw={() => {}} />}
+      {mk.ec1 === "b" && <DecisionSheet open={open} isNew d={blank} power={changes ? "change" : "propose"} code="" startEditing startDraft={blank} onClose={() => setOpen(false)} onSave={(n) => { onAdd(n.title, n.decider); setOpen(false); }} onWithdraw={() => {}} onDelete={() => {}} />}
       {mk.ec1 === "a" && open && (
-        <NewInline blank={blank} changes={changes} onCancel={() => setOpen(false)} onAdd={(t) => { onAdd(t); setOpen(false); }} />
+        <NewInline blank={blank} changes={changes} onCancel={() => setOpen(false)} onAdd={(t, p) => { onAdd(t, p); setOpen(false); }} />
       )}
     </>
   );
 }
 
-function NewInline({ blank, changes, onCancel, onAdd }: { blank: MkDecision; changes: boolean; onCancel: () => void; onAdd: (t: string) => void }) {
+function NewInline({ blank, changes, onCancel, onAdd }: { blank: MkDecision; changes: boolean; onCancel: () => void; onAdd: (t: string, decider: string) => void }) {
   const [draft, setDraft] = useState(blank);
   return (
     <section className="simple-card" aria-label="New decision">
       <h2 className="simple-h2">{changes ? "New decision" : "Propose a decision"}</h2>
-      <DecisionForm d={draft} onChange={setDraft} compact />
+      <DecisionForm d={draft} onChange={setDraft} compact pickDecider />
       <span className="flex gap-2">
-        <button type="button" className="simple-button simple-button-primary" onClick={() => onAdd(draft.title)}>
+        <button type="button" className="simple-button simple-button-primary" onClick={() => onAdd(draft.title, draft.decider)}>
           {changes ? "Add decision" : `Send to ${draft.decider}`}
         </button>
         <button type="button" className="simple-button" onClick={onCancel}>
@@ -514,19 +574,23 @@ function NewInline({ blank, changes, onCancel, onAdd }: { blank: MkDecision; cha
 }
 
 /** c: the list's last row, "Propose a decision": type its title, Enter adds it; the rest is filled in its row. */
-export function NewDecisionRow({ onAdd }: { onAdd: (t: string) => void }) {
+export function NewDecisionRow({ onAdd }: { onAdd: (t: string, decider: string) => void }) {
   const mk = useMk();
   const { can } = useMe();
   const [t, setT] = useState(mk.act === "new" && mk.phase === "mid" ? "Offer a yearly plan at launch" : "");
+  const [who, setWho] = useState("Priya Nair");
   if (mk.ec1 !== "c" || !can("create_decision")) return null;
   return (
     <li className="flex items-center gap-[14px] border-t border-line py-[14px]">
       <span aria-hidden className="simple-ico">
         <Icon name="plus" size={20} stroke={1.7} />
       </span>
-      <input className={FIELD} placeholder={can("recommend_decision_options") ? "New decision: what needs deciding?" : "Propose a decision: what needs deciding?"} value={t} onChange={(e) => setT(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && t.trim()) { onAdd(t.trim()); setT(""); } }} autoFocus={mk.act === "new" && mk.open} />
+      <input className={`${FIELD} min-w-0 flex-1`} placeholder={can("recommend_decision_options") ? "New decision: what needs deciding?" : "Propose a decision: what needs deciding?"} value={t} onChange={(e) => setT(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && t.trim()) { onAdd(t.trim(), who); setT(""); } }} autoFocus={mk.act === "new" && mk.open} />
+      <select className="simple-select" aria-label="Decides" value={who} onChange={(e) => setWho(e.target.value)}>
+        {MK_PEOPLE.map((p) => <option key={p} value={p}>{p} decides</option>)}
+      </select>
       {t && (
-        <button type="button" className="simple-button simple-button-primary" onClick={() => { onAdd(t.trim()); setT(""); }}>
+        <button type="button" className="simple-button simple-button-primary" onClick={() => { onAdd(t.trim(), who); setT(""); }}>
           Add
         </button>
       )}
@@ -538,7 +602,7 @@ export function NewDecisionRow({ onAdd }: { onAdd: (t: string) => void }) {
 
 
 type Q = Schemas["SimpleQuestion"];
-export type MkQ = { title: string; recommendation: string; options: string[]; withdrawn: boolean; edited: boolean; suggested: boolean };
+export type MkQ = { title: string; recommendation: string; options: string[]; withdrawn: boolean; edited: boolean; suggested: boolean; deleted?: boolean };
 
 /** c: the list's Edit mode (every row a form at once). */
 export const MkEditAll = createContext<{ on: boolean; set: (on: boolean) => void }>({ on: false, set: () => {} });
@@ -553,16 +617,19 @@ export function useMkQuestion(q: Q, target: boolean) {
   const power = qPower(q);
   const long = target && mk.long;
   const base: MkQ = { title: long ? MK_LONG_Q.title : q.title, recommendation: long ? MK_LONG_Q.recommendation : q.recommendation ?? "", options: long ? MK_LONG_Q.options : q.alternatives.map((a) => a.label), withdrawn: false, edited: false, suggested: false };
-  const changed: MkQ = long ? { ...base, options: [...base.options, Q_EDIT.extra] } : { ...base, title: Q_EDIT.title, recommendation: Q_EDIT.recommendation, options: [...base.options, Q_EDIT.extra] };
+  // The canned edit is only the edited example's (Q5): the hard case opens the long question as it is.
+  const changed: MkQ = long ? base : { ...base, title: Q_EDIT.title, recommendation: Q_EDIT.recommendation, options: [...base.options, Q_EDIT.extra] };
   const t = target && !!mk.eq2 && mk.act !== "new";
   const done = t && mk.phase === "done";
-  const [s, setS] = useState<MkQ>(done ? (mk.act === "withdraw" ? { ...base, withdrawn: true } : power === "propose" ? { ...changed, title: base.title, recommendation: base.recommendation, options: base.options, suggested: true } : { ...changed, edited: true }) : base);
+  // Withdrawn and deleted start from the edited question (the done frame before them).
+  const [s, setS] = useState<MkQ>(done ? (mk.act === "withdraw" ? { ...changed, edited: true, withdrawn: true } : mk.act === "delete" ? { ...changed, edited: true, deleted: true } : power === "propose" ? { ...changed, title: base.title, recommendation: base.recommendation, options: base.options, suggested: true } : { ...changed, edited: true }) : base);
   const [draft, setDraft] = useState<MkQ>(t && mk.phase === "mid" ? changed : base);
   const [mode, setMode] = useState<string | null>(t && (mk.open || mk.phase === "mid") ? (mk.eq2 === "a" && mk.open && mk.phase !== "mid" ? "menu" : mk.act) : null);
   const save = (n: MkQ) => {
     setS(power === "propose" ? { ...s, suggested: true } : { ...n, edited: true });
     setMode(null);
   };
+  useTrashToast(!!s.deleted, `${q.code} ${s.title}`, () => setS({ ...s, deleted: false }));
   return { mk, power, s, setS, draft, setDraft, mode, setMode, save, target: t };
 }
 
@@ -605,7 +672,7 @@ export function WithdrawnQuestion({ code, title, onUndo }: { code: string; title
 }
 
 /** b: the question's sheet, the same shape as a decision's. */
-export function QuestionSheet({ open, q, m, isNew = false, onClose, onAdd }: { open: boolean; q?: Q; m?: ReturnType<typeof useMkQuestion>; isNew?: boolean; onClose: () => void; onAdd?: (t: string) => void }) {
+export function QuestionSheet({ open, q, m, isNew = false, onClose, onAdd }: { open: boolean; q?: Q; m?: ReturnType<typeof useMkQuestion>; isNew?: boolean; onClose: () => void; onAdd?: (q: MkQ) => void }) {
   const mk = useMk();
   const blank: MkQ = mk.phase === "mid" ? { title: "Who can export a team's alert history?", recommendation: "Owners only, from Settings", options: ["Every member", "Owners and approvers"], withdrawn: false, edited: false, suggested: false } : { title: "", recommendation: "", options: ["", ""], withdrawn: false, edited: false, suggested: false };
   const [editing, setEditing] = useState(isNew || m?.mode === "edit");
@@ -642,7 +709,7 @@ export function QuestionSheet({ open, q, m, isNew = false, onClose, onAdd }: { o
           <div className="flex flex-wrap gap-2 border-t border-line pt-3">
             {editing ? (
               <>
-                <button type="button" className="simple-button simple-button-primary" onClick={() => { if (isNew) onAdd?.(nd.title); else { m!.save(m!.draft); setEditing(false); } }}>
+                <button type="button" className="simple-button simple-button-primary" onClick={() => { if (isNew) onAdd?.(nd); else { m!.save(m!.draft); setEditing(false); } }}>
                   {isNew ? (power === "change" ? "Add question" : "Send to the PRD's owner") : power === "change" ? "Save" : "Suggest"}
                 </button>
                 <button type="button" className="simple-button" onClick={() => (isNew ? onClose() : setEditing(false))}>
@@ -655,9 +722,14 @@ export function QuestionSheet({ open, q, m, isNew = false, onClose, onAdd }: { o
                   {power === "change" ? "Edit" : "Suggest a change"}
                 </button>
                 {power === "change" && (
-                  <button type="button" className="simple-button ml-auto" onClick={() => { m!.setS({ ...m!.s, withdrawn: true }); onClose(); }}>
-                    Withdraw
-                  </button>
+                  <span className="ml-auto flex gap-2">
+                    <button type="button" className="simple-button" onClick={() => { m!.setS({ ...m!.s, withdrawn: true }); onClose(); }}>
+                      Withdraw
+                    </button>
+                    <button type="button" className="simple-button text-[var(--danger,#b42318)]" onClick={() => { m!.setS({ ...m!.s, deleted: true }); onClose(); }}>
+                      Delete
+                    </button>
+                  </span>
                 )}
               </>
             )}
@@ -694,18 +766,26 @@ export function AskQuestionRow({ onAdd }: { onAdd: (t: string) => void }) {
 }
 
 /** A question just added in the mock-up: no decider or recommendation yet. */
-export function AddedQuestion({ title, n }: { title: string; n: number }) {
+export function AddedQuestion({ q: { title, recommendation, options }, code }: { q: MkQ; code: string }) {
+  const answers = options.filter(Boolean);
   return (
-    <li className="simple-row bg-[var(--simple-edited)]" data-testid="question-row">
+    <li className={`simple-row ${EDITED}`} data-testid="question-row">
       <span aria-hidden className="simple-ico">
         <Icon name="flag" size={20} stroke={1.7} />
       </span>
       <div className="simple-rb">
         <span>
-          <span className="simple-code">Q-{n}</span> <b className="font-[650]">{title}</b>
+          <span className="simple-code">{code}</span> <b className="font-[650]">{title}</b>
         </span>
         <span className="simple-meta">Usage alerts PRD · added by you just now</span>
-        <span className="simple-meta">No recommendation in the PRD yet.</span>
+        {recommendation ? (
+          <span className="simple-rec">
+            <span className="simple-rec-label">Recommended in Usage alerts PRD:</span> {recommendation}
+          </span>
+        ) : (
+          <span className="simple-meta">No recommendation in the PRD yet.</span>
+        )}
+        {answers.length > 0 && <span className="simple-meta">Other answers: {answers.join(" · ")}</span>}
         <span className="simple-meta">No decider yet</span>
       </div>
       <div className="simple-actions min-[601px]:w-[232px]">

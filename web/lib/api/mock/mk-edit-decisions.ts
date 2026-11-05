@@ -37,11 +37,11 @@ export function mkDecisionFields(title: string): MkDecisionFields { // MOCK-HOOK
 export const MK_EXTRA_DECISIONS = [ // MOCK-HOOK
   { title: "Roll out the shared inbox by region or all at once", long: true, approver: "Priya Nair" }, // MOCK-HOOK
   { title: "Keep the free plan's five-seat limit", long: false, approver: "Sam Okafor" }, // MOCK-HOOK
-  { title: "Move the billing page into Settings", long: false, approver: "Lena Ortiz" }, // MOCK-HOOK
+  { title: "Move the billing page into Settings", long: false, approver: "Jonas Berg" }, // MOCK-HOOK
 ]; // MOCK-HOOK
 
 /** People a decision can be reassigned to (invented). */ // MOCK-HOOK
-export const MK_PEOPLE = ["Priya Nair", "Sam Okafor", "Lena Ortiz", "Jonas Berg", "Mei Tanaka", "Ravi Shah"]; // MOCK-HOOK
+export const MK_PEOPLE = ["Priya Nair", "Sam Okafor", "Jonas Berg", "Mei Tanaka", "Ravi Shah", "Nora Quinn"]; // MOCK-HOOK
 
 /** The long question: the hard case for questions (long text, many answers). */ // MOCK-HOOK
 export const MK_LONG_Q = { // MOCK-HOOK
@@ -49,3 +49,11 @@ export const MK_LONG_Q = { // MOCK-HOOK
   recommendation: "The workspace the alert comes from; a person's own quiet hours always win over a workspace's", // MOCK-HOOK
   options: ["The person's home workspace", "The strictest of all their workspaces", "Each person picks one in Settings", "The team owner picks one for everyone", "Ask the person the first time it happens"], // MOCK-HOOK
 }; // MOCK-HOOK
+
+/** A decision's own permission fields, as GET /v1/decisions/{decision} sends them (mock/decisions.ts): an owner or the decider edits and withdraws (and so deletes), an owner reassigns. */ // MOCK-HOOK
+export function mkDecisionCan(me: { name?: string | null; role: string } | null, decider: string, status: string) { // MOCK-HOOK
+  const proposed = status === "proposed"; // MOCK-HOOK
+  const owner = me?.role === "owner"; // MOCK-HOOK
+  const editor = owner || (!!me?.name && me.name === decider); // MOCK-HOOK
+  return { can_edit: proposed && editor, can_withdraw: proposed && editor, can_reassign: proposed && owner }; // MOCK-HOOK
+} // MOCK-HOOK
