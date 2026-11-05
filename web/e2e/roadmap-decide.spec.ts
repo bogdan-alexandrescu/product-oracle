@@ -1,5 +1,5 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login, openRoadmapItem } from "./helpers";
+import { login, openRoadmapItem, signOut } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /**
@@ -334,6 +334,7 @@ test("an approver's proposed Remove the dependency says who it waits for and is 
   await line.getByRole("button", { name: `‘${dependent}’` }).click();
   await expect(page.getByTestId("floating-card")).toContainText(dependent);
   // The person it waits for reads "waits for you", on the strip and in Needs a decision.
+  await signOut(page);
   await login(page);
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
@@ -350,6 +351,7 @@ test("the decider of a draft sent for review sees Approve, not Send for review, 
   await banner.getByRole("button", { name: "Send for review" }).click();
   await expect(page.getByText(/Sent for review/).first()).toBeVisible();
   // Priya Raman decides the Onboarding roadmap.
+  await signOut(page);
   await login(page, "approver@example.com");
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
