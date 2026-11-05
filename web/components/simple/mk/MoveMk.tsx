@@ -1,9 +1,10 @@
 "use client"; // MOCK-HOOK
 
 // MOCK-HOOK: mk-edit-meetings-tracks, decision 3 (?em=a|b|c): how a person moves a feature to another PRD or track of the one roadmap.
-import { MK_PRDS } from "@/lib/api/mock/mk-edit-meetings-tracks"; // MOCK-HOOK
+import { InfoTip } from "@/components/ds"; // MOCK-HOOK
+import { MK_DECIDERS, MK_PRDS, MK_PRDS_MANY } from "@/lib/api/mock/mk-edit-meetings-tracks"; // MOCK-HOOK
 
-import { MK_BTN, MK_FIELD, MK_PRIMARY, mk, useMkMode } from "./mk"; // MOCK-HOOK
+import { MK_BTN, MK_CHIP, MK_FIELD, MK_PRIMARY, mk, useMkMode } from "./mk"; // MOCK-HOOK
 
 const KEY = "setup-video"; // MOCK-HOOK: Welcome video, the feature every story moves
 const TO = "Welcome media track"; // MOCK-HOOK
@@ -28,7 +29,7 @@ const row = "grid grid-cols-[96px_minmax(0,1fr)] gap-2 py-1"; // MOCK-HOOK
 
 /** MOCK-HOOK: A, two fields in the panel's Details: PRD and Track, changed in place as every other field. */
 export function MoveRows({ item }: { item: Moveable & { can_decide?: boolean } }) { // MOCK-HOOK
-  const mode = useMkMode(); // MOCK-HOOK
+  const mode = useMkMode(item.can_decide); // MOCK-HOOK
   if (mk("em") !== "a") return null; // MOCK-HOOK
   const story = item.key === KEY; // MOCK-HOOK
   const s = st(); // MOCK-HOOK
@@ -47,47 +48,45 @@ export function MoveRows({ item }: { item: Moveable & { can_decide?: boolean } }
             ) : ( // MOCK-HOOK
               <select aria-label="Track" defaultValue={TO} className={MK_FIELD}><option>{TO}</option></select> // MOCK-HOOK
             )} {/* MOCK-HOOK */}
-            {s === "mid" && <p className="text-sm text-text2">Its dates, links and goal stay.</p>} {/* MOCK-HOOK */}
-            {s === "mid" && <div className="flex gap-1.5"><button type="button" className={MK_PRIMARY}>{mode === "propose" ? "Propose" : "Save"}</button><button type="button" className={MK_BTN}>Cancel</button></div>} {/* MOCK-HOOK */}
+            {s === "mid" && <div className="flex items-center gap-1.5"><button type="button" className={MK_PRIMARY}>{mode === "propose" ? "Propose" : "Save"}</button><button type="button" className={MK_BTN}>Cancel</button><Stays /></div>} {/* MOCK-HOOK */}
           </div> // MOCK-HOOK
         ) : ( // MOCK-HOOK
           <button type="button" disabled={!may} className="text-left underline decoration-dotted underline-offset-4 disabled:no-underline">{item.track?.title ?? "No track"}</button> // MOCK-HOOK
         )} {/* MOCK-HOOK */}
-        {story && s === "result" && mode === "propose" && <p className="text-sm text-text2">Proposed: {TO}. It waits for an approver.</p>} {/* MOCK-HOOK */}
+        {story && s === "result" && mode === "propose" && <p className="mt-1 flex items-center gap-1"><span className={MK_CHIP}>Proposed</span><InfoTip label="The proposed move" align="start">Move to {TO}. It waits for {MK_DECIDERS.move}, who decides this feature; its dates, links and goal stay.</InfoTip></p>} {/* MOCK-HOOK */}
       </dd></div> {/* MOCK-HOOK */}
     </> // MOCK-HOOK
   ); // MOCK-HOOK
 } // MOCK-HOOK
 
 /** MOCK-HOOK: B, a "Move to" button in the panel's head and its picker. */
-export function MoveTo({ item }: { item: Moveable }) { // MOCK-HOOK
-  const mode = useMkMode(); // MOCK-HOOK
+export function MoveTo({ item }: { item: Moveable & { can_decide?: boolean } }) { // MOCK-HOOK
+  const mode = useMkMode(item.can_decide); // MOCK-HOOK
   if (mk("em") !== "b" || mode === "read") return null; // MOCK-HOOK
   const s = st(); // MOCK-HOOK
   const open = item.key === KEY && (s === "open" || s === "mid"); // MOCK-HOOK
-  const prds = mk("many") ? [...MK_PRDS, { title: "Team billing and invoices for large accounts", tracks: ["Invoices", "Tax rules", "Payment retries"] }, { title: "Search everywhere", tracks: ["Search"] }] : MK_PRDS; // MOCK-HOOK
+  const prds = mk("many") ? MK_PRDS_MANY : MK_PRDS; // MOCK-HOOK
   return ( // MOCK-HOOK
     <span className="relative"> {/* MOCK-HOOK */}
       <button type="button" aria-expanded={open} className="rounded-full border border-line px-2 py-px text-sm font-medium text-text hover:bg-surface2" data-testid="mk-move-to">Move to…</button> {/* MOCK-HOOK */}
       {open && ( // MOCK-HOOK
-        <div role="dialog" aria-label="Move to" className="absolute top-8 left-0 z-[70] w-[340px] rounded-xl border border-line bg-surface p-3 text-[15px] text-text shadow-tip"> {/* MOCK-HOOK */}
+        <div role="dialog" aria-label="Move to" className="absolute top-8 right-0 z-[70] w-[340px] max-w-[calc(100vw-32px)] rounded-xl border border-line bg-surface p-3 text-[15px] text-text shadow-tip"> {/* MOCK-HOOK */}
           <p className="font-semibold">Move {item.key === KEY ? "Welcome video" : "it"} to</p> {/* MOCK-HOOK */}
-          <ul className="mt-2 max-h-[300px] overflow-y-auto"> {/* MOCK-HOOK */}
+          <ul className="mt-1 max-h-[520px] overflow-y-auto"> {/* MOCK-HOOK */}
             {prds.map((p) => ( // MOCK-HOOK
-              <li key={p.title} className="py-1"> {/* MOCK-HOOK */}
+              <li key={p.title} className="py-0.5"> {/* MOCK-HOOK */}
                 <p className="text-sm font-medium text-text2">{p.title}</p> {/* MOCK-HOOK */}
                 {p.tracks.map((t) => { // MOCK-HOOK
                   const here = t === item.track?.title; // MOCK-HOOK
                   const picked = s === "mid" && t === TO; // MOCK-HOOK
-                  return <button key={t} type="button" disabled={here} className={`block w-full truncate rounded-lg px-2 py-1 text-left ${picked ? "bg-accent-soft font-medium text-accent-ink" : here ? "text-text-faint" : "hover:bg-surface2"}`}>{t}{here ? " · now" : ""}</button>; // MOCK-HOOK
+                  return <button key={t} type="button" disabled={here} className={`block w-full truncate rounded-lg px-2 py-0.5 text-left ${picked ? "bg-accent-soft font-medium text-accent-ink" : here ? "text-text-faint" : "hover:bg-surface2"}`}>{t}{here ? " · now" : ""}</button>; // MOCK-HOOK
                 })} {/* MOCK-HOOK */}
               </li> // MOCK-HOOK
             ))} {/* MOCK-HOOK */}
           </ul> {/* MOCK-HOOK */}
           {s === "mid" && ( // MOCK-HOOK
             <div className="mt-2 border-t border-line pt-2"> {/* MOCK-HOOK */}
-              <p className="text-sm text-text2">Its dates, links and goal stay.</p> {/* MOCK-HOOK */}
-              <div className="mt-2 flex gap-1.5"><button type="button" className={MK_PRIMARY}>{mode === "propose" ? `Propose the move` : `Move to ${TO}`}</button><button type="button" className={MK_BTN}>Cancel</button></div> {/* MOCK-HOOK */}
+              <div className="flex items-center gap-1.5"><button type="button" className={MK_PRIMARY}>{mode === "propose" ? `Propose the move` : `Move to ${TO}`}</button><button type="button" className={MK_BTN}>Cancel</button><Stays /></div> {/* MOCK-HOOK */}
             </div> // MOCK-HOOK
           )} {/* MOCK-HOOK */}
         </div> // MOCK-HOOK
@@ -110,20 +109,25 @@ export function TrackDropHook() { // MOCK-HOOK
   return ( // MOCK-HOOK
     <div className="relative px-2 py-1.5" data-mk-focus=""> {/* MOCK-HOOK */}
       <div className={`flex h-[44px] items-center rounded-lg border-2 border-dashed px-2 text-[15px] font-semibold ${s === "mid" ? "border-accent bg-accent-soft text-accent-ink" : "border-line text-text2"}`}>{TO}<span className="ml-1 text-xs font-normal">· empty</span></div> {/* MOCK-HOOK */}
-      <div aria-hidden className={`pointer-events-none absolute z-[5] flex items-center gap-1.5 rounded-lg border border-accent bg-surface px-2 py-1 text-[15px] shadow-tip ${s === "mid" ? "top-6 left-10" : "-top-24 left-6"}`} style={{ transform: "rotate(-2deg)" }}>⠿ Welcome video</div> {/* MOCK-HOOK */}
+      <div aria-hidden className={`pointer-events-none absolute z-[5] flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-accent bg-surface px-2 py-1 text-[15px] shadow-tip ${s === "mid" ? "top-6 left-10" : "top-2 left-[calc(100%+24px)]"}`} style={{ transform: "rotate(-2deg)" }}>⠿ Welcome video</div> {/* MOCK-HOOK */}
       {s === "mid" && <p className="mt-1 px-1 text-xs text-text2">{mode === "propose" ? "Let go to propose" : "Let go to move"}</p>} {/* MOCK-HOOK */}
     </div> // MOCK-HOOK
   ); // MOCK-HOOK
 } // MOCK-HOOK
 
 /** MOCK-HOOK: what the move did. */
-export function MoveDone() { // MOCK-HOOK
-  const mode = useMkMode(); // MOCK-HOOK
+export function MoveDone({ decides }: { decides?: boolean }) { // MOCK-HOOK
+  const mode = useMkMode(decides); // MOCK-HOOK
   if (!mk("em") || st() !== "result" || mode === "read") return null; // MOCK-HOOK
   return ( // MOCK-HOOK
     <p role="status" className="fixed bottom-5 left-5 z-[80] flex items-center gap-3 rounded-xl bg-[#1f2328] px-4 py-2.5 text-[15px] text-white shadow-tip" data-testid="mk-move-done"> {/* MOCK-HOOK */}
-      {mode === "propose" ? `Proposed: move Welcome video to ${TO}. It waits for an approver.` : `Moved Welcome video to ${TO}`} {/* MOCK-HOOK */}
-      <button type="button" className="font-medium underline">Undo</button> {/* MOCK-HOOK */}
+      {mode === "propose" ? `Move proposed · waits for ${MK_DECIDERS.move}` : `Moved Welcome video to ${TO}`} {/* MOCK-HOOK */}
+      <button type="button" className="font-medium underline">{mode === "propose" ? "Withdraw" : "Undo"}</button> {/* MOCK-HOOK */}
     </p> // MOCK-HOOK
   ); // MOCK-HOOK
+} // MOCK-HOOK
+
+/** MOCK-HOOK: what a move keeps, behind an (i). */
+function Stays() { // MOCK-HOOK
+  return <InfoTip label="What stays" align="start">Its dates, links and goal stay.</InfoTip>; // MOCK-HOOK
 } // MOCK-HOOK

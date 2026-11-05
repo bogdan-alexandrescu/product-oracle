@@ -4,9 +4,9 @@
 import { useState } from "react"; // MOCK-HOOK
 
 import { InfoTip, Sheet } from "@/components/ds"; // MOCK-HOOK
-import { MK_AGENDA, MK_AGENDA_ADDABLE, MK_AGENDA_MANY, type MkAgendaItem } from "@/lib/api/mock/mk-edit-meetings-tracks"; // MOCK-HOOK
+import { MK_AGENDA, MK_AGENDA_ADDABLE, MK_AGENDA_MANY, MK_DECIDERS, type MkAgendaItem } from "@/lib/api/mock/mk-edit-meetings-tracks"; // MOCK-HOOK
 
-import { MK_BTN, MK_FIELD, MK_LINK, MK_PRIMARY, mk, type MkMode } from "./mk"; // MOCK-HOOK
+import { MK_BTN, MK_CHIP, MK_FIELD, MK_LINK, MK_PRIMARY, mk, type MkMode } from "./mk"; // MOCK-HOOK
 
 type St = "rest" | "open" | "mid" | "result"; // MOCK-HOOK
 
@@ -27,7 +27,8 @@ function Dot({ s }: { s: MkAgendaItem["state"] }) { // MOCK-HOOK
   return null; // MOCK-HOOK
 } // MOCK-HOOK
 
-function ItemName({ x }: { x: MkAgendaItem }) { // MOCK-HOOK
+function ItemName({ x, bare }: { x: MkAgendaItem; bare?: boolean }) { // MOCK-HOOK
+  if (bare && x.kind === "topic") return <span>{x.title}</span>; // MOCK-HOOK: the sheet says "topic" on the row's second line
   return x.kind === "feature" ? ( // MOCK-HOOK
     <button type="button" className="text-left hover:underline">{x.title}</button> // MOCK-HOOK
   ) : ( // MOCK-HOOK
@@ -39,19 +40,19 @@ export function AgendaMk({ mode, phone }: { mode: MkMode; phone: boolean }) { //
   const v = mk("ea") ?? "a"; // MOCK-HOOK
   const st = (mk("st") ?? "rest") as St; // MOCK-HOOK
   const base = mk("many") ? MK_AGENDA_MANY : MK_AGENDA; // MOCK-HOOK
-  const list = st === "result" ? after(base) : base; // MOCK-HOOK
+  const list = st === "result" && mode === "edit" ? after(base) : base; // MOCK-HOOK: a proposal leaves the agenda as it is
   if (v === "b") return <AgendaSheet list={list} st={st} mode={mode} phone={phone} />; // MOCK-HOOK
   if (v === "c") return <AgendaByChat list={list} st={st} mode={mode} />; // MOCK-HOOK
   return <AgendaInPlace list={list} st={st} mode={mode} />; // MOCK-HOOK
 } // MOCK-HOOK
 
-/** MOCK-HOOK: what a commenter's change says, or nothing. */
+/** MOCK-HOOK: what the change did; an approver's proposal names who it waits for. */
 function Done({ mode, words }: { mode: MkMode; words: string }) { // MOCK-HOOK
   return ( // MOCK-HOOK
     <p role="status" className="flex flex-wrap items-center gap-x-3 border-b border-line bg-[var(--simple-edited)] px-4 py-1.5 text-base" data-testid="mk-agenda-done"> {/* MOCK-HOOK */}
-      {mode === "propose" ? `Proposed: ${words}. It waits for the presenter.` : `${words}.`} {/* MOCK-HOOK */}
-      <button type="button" className={MK_LINK}>Undo</button> {/* MOCK-HOOK */}
-      {mode === "edit" && <a href="/trash" className={MK_LINK}>Open Trash</a>} {/* MOCK-HOOK */}
+      {mode === "propose" ? <><span className="flex items-center gap-1"><span className={MK_CHIP}>Proposed</span><InfoTip label="What is proposed" align="start">{words}.</InfoTip></span><span>Waits for {MK_DECIDERS.agenda}</span></> : `${words}.`} {/* MOCK-HOOK */}
+      <button type="button" className={MK_LINK}>{mode === "propose" ? "Withdraw" : "Undo"}</button> {/* MOCK-HOOK */}
+      {mode === "edit" && <a href="/settings/trash" className={MK_LINK}>Open Trash</a>} {/* MOCK-HOOK */}
     </p> // MOCK-HOOK
   ); // MOCK-HOOK
 } // MOCK-HOOK
@@ -108,6 +109,7 @@ function AgendaSheet({ list, st, mode, phone }: { list: MkAgendaItem[]; st: St; 
   const nowAt = list.findIndex((x) => x.state === "now"); // MOCK-HOOK
   const next = list.find((x, i) => i > nowAt && x.state === "next"); // MOCK-HOOK
   const save = mode === "propose" ? "Propose" : "Save"; // MOCK-HOOK
+  const firstMovable = list.findIndex((x) => x.state !== "done" && x.state !== "now"); // MOCK-HOOK: the item right after Now cannot go up
   return ( // MOCK-HOOK
     <> {/* MOCK-HOOK */}
       <div aria-label="Agenda" data-testid="mk-agenda" className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-line px-4 py-2 text-base"> {/* MOCK-HOOK */}
@@ -136,13 +138,13 @@ function AgendaSheet({ list, st, mode, phone }: { list: MkAgendaItem[]; st: St; 
                       <div className="flex gap-2"><button type="button" className={MK_PRIMARY}>{save}</button><button type="button" className={MK_BTN}>Cancel</button></div> {/* MOCK-HOOK */}
                     </div> // MOCK-HOOK
                   ) : ( // MOCK-HOOK
-                    <p className={`break-words ${locked && x.state === "done" ? "text-text2" : ""}`}><ItemName x={x} /> {x.state !== "next" && <Dot s={x.state} />}</p> // MOCK-HOOK
+                    <p className={`break-words ${locked && x.state === "done" ? "text-text2" : ""}`}><ItemName x={x} bare /> {x.state !== "next" && <Dot s={x.state} />}</p> // MOCK-HOOK
                   )} {/* MOCK-HOOK */}
-                  {!renaming && <p className="text-sm text-text-faint">{x.mins} min{x.by ? ` · added by ${x.by}` : ""}</p>} {/* MOCK-HOOK */}
+                  {!renaming && <p className="text-sm text-text-faint">{x.mins} min{x.kind === "topic" ? " · topic" : ""}{x.by ? ` · added by ${x.by}` : ""}</p>} {/* MOCK-HOOK */}
                 </div> {/* MOCK-HOOK */}
                 {may && !locked && !renaming && ( // MOCK-HOOK
                   <span className="flex flex-none items-center gap-1"> {/* MOCK-HOOK */}
-                    <button type="button" aria-label={`Move ${x.title} up`} className="h-8 w-8 rounded text-text2 hover:bg-surface2">↑</button> {/* MOCK-HOOK */}
+                    {i === firstMovable ? <span aria-hidden className="w-8" /> : <button type="button" aria-label={`Move ${x.title} up`} className="h-8 w-8 rounded text-text2 hover:bg-surface2">↑</button>} {/* MOCK-HOOK */}
                     <button type="button" aria-label={`Move ${x.title} down`} className="h-8 w-8 rounded text-text2 hover:bg-surface2">↓</button> {/* MOCK-HOOK */}
                     <button type="button" aria-label={`Rename ${x.title}`} className="h-8 rounded px-1.5 text-sm text-text2 hover:bg-surface2">Rename</button> {/* MOCK-HOOK */}
                     <button type="button" aria-label={`Remove ${x.title}`} className="h-8 w-8 rounded text-text2 hover:bg-surface2 hover:text-crit">×</button> {/* MOCK-HOOK */}
@@ -159,7 +161,7 @@ function AgendaSheet({ list, st, mode, phone }: { list: MkAgendaItem[]; st: St; 
             <div className="flex flex-wrap gap-1.5">{MK_AGENDA_ADDABLE.slice(0, phone ? 2 : 4).map((t) => <button key={t} type="button" className="rounded-full border border-line px-2.5 py-0.5 text-sm hover:bg-surface2">+ {t}</button>)}</div> {/* MOCK-HOOK */}
           </div> // MOCK-HOOK
         )} {/* MOCK-HOOK */}
-        {mode === "propose" && <p className="mt-3 text-sm text-text2">Your changes wait for the presenter.</p>} {/* MOCK-HOOK */}
+        {mode === "propose" && <p className="mt-3"><span className={MK_CHIP}>Waits for {MK_DECIDERS.agenda}</span></p>} {/* MOCK-HOOK */}
 </div> {/* MOCK-HOOK */}
       </Sheet> {/* MOCK-HOOK */}
     </> // MOCK-HOOK

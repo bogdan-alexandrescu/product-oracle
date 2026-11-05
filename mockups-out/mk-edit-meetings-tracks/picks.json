@@ -1,12 +1,12 @@
 {
- "title": "Meeting agenda items, tracks, and moving a feature to another roadmap",
+ "title": "Meeting agenda items, tracks, and moving a feature to another PRD or track",
  "subtitle": "Three decisions so every agenda item, track and a feature's PRD and track can be changed in Simple",
  "decisions": [
   {
    "code": "ea",
    "name": "Meeting agenda items",
    "question": "How does a person add, rename, reorder and remove agenda items in a live review meeting?",
-   "common": "Items are the PRD's features or a typed topic; done and current items stay fixed; a removed item goes to Trash with Undo; owners, approvers and the presenter change it, a commenter proposes (it waits for the presenter), a viewer reads; 'next' and 'skip' in the chat still work.",
+   "common": "Items are the PRD's features or a typed topic; done and current items stay fixed; a removed item goes to Settings > Trash with Undo; an owner changes the agenda, an approver who is not the meeting's decider proposes (it waits for the decider, by name, with Withdraw), a viewer reads; 'next' and 'skip' in the chat still work.",
    "proposals": [
     {
      "letter": "a",
@@ -30,7 +30,7 @@
       },
       {
        "file": "frames/ea-a-result.html",
-       "caption": "Done: Quiet hours is 3rd and renamed, Beta date sign-off added, Alert history export in Trash; one line says so, with Undo and Open Trash."
+       "caption": "Done: Quiet hours is 3rd and renamed, Beta date sign-off added, Alert history export in Settings > Trash; one line says so, with Undo and Open Trash."
       },
       {
        "file": "frames/ea-a-hard-1512.html",
@@ -42,7 +42,7 @@
       },
       {
        "file": "frames/ea-a-propose.html",
-       "caption": "A commenter's same changes: the line says they wait for the presenter."
+       "caption": "An approver who is not the meeting's decider: the agenda stays as it was; a Proposed chip, with what is proposed behind its (i), waits for Priya Raman, with Withdraw."
       },
       {
        "file": "frames/ea-a-open-390.html",
@@ -65,7 +65,7 @@
       },
       {
        "file": "frames/ea-b-open.html",
-       "caption": "Edit agenda opens the Agenda sheet: every item numbered, with its minutes, arrows, Rename and ×; done and current items are fixed."
+       "caption": "Edit agenda opens the Agenda sheet: every item numbered, with its minutes and 'topic' on its second line, arrows, Rename and ×; done and current items are fixed, and the item after Now has no up arrow."
       },
       {
        "file": "frames/ea-b-mid.html",
@@ -73,7 +73,7 @@
       },
       {
        "file": "frames/ea-b-result.html",
-       "caption": "Done: the strip reads on; one line says Quiet hours moved up and renamed, Beta date sign-off added, Alert history export in Trash, with Undo and Open Trash."
+       "caption": "Done: the strip reads on; one line says Quiet hours moved up and renamed, Beta date sign-off added, Alert history export in Settings > Trash, with Undo and Open Trash."
       },
       {
        "file": "frames/ea-b-hard-1512.html",
@@ -85,7 +85,7 @@
       },
       {
        "file": "frames/ea-b-propose.html",
-       "caption": "A commenter's same changes: the line says they wait for the presenter."
+       "caption": "An approver who is not the meeting's decider: the strip is unchanged; a Proposed chip, with what is proposed behind its (i), waits for Priya Raman, with Withdraw."
       },
       {
        "file": "frames/ea-b-open-390.html",
@@ -127,7 +127,7 @@
       },
       {
        "file": "frames/ea-c-propose.html",
-       "caption": "A commenter's same changes: the line says they wait for the presenter."
+       "caption": "An approver who is not the meeting's decider: the agenda stays as it was; a Proposed chip, with what is proposed behind its (i), waits for Priya Raman, with Withdraw."
       },
       {
        "file": "frames/ea-c-open-390.html",
@@ -141,7 +141,7 @@
    "code": "et",
    "name": "Tracks",
    "question": "Where in Simple are tracks added, renamed, given an owner, paused, closed and moved to Trash?",
-   "common": "A track has a name, an owner, a state (active, paused, closed) and its PRD; Move to Trash is restorable with Undo; owners and approvers change, a commenter proposes (it waits for an approver), a viewer reads; Detailed's /plan track panel stays as is.",
+   "common": "A track has a name, an owner, a state (active, paused, closed) and its PRD; Move to Trash goes to Settings > Trash, restorable with Undo; an owner changes it, an approver who is not the track's owner proposes (it waits for the track's owner, by name, with Withdraw), a viewer reads; Detailed's /plan track panel stays as is.",
    "proposals": [
     {
      "letter": "a",
@@ -177,11 +177,11 @@
       },
       {
        "file": "frames/et-a-propose.html",
-       "caption": "A commenter's rename: the note says it waits for an approver; the lane keeps its name."
+       "caption": "An approver who is not the track's owner renames it: the lane keeps its name; the note says the rename waits for Marco Ilves, with Withdraw."
       },
       {
        "file": "frames/et-a-open-390.html",
-       "caption": "Phone 390: the Gantt's narrow lanes; the ⋯ sits on each lane header."
+       "caption": "Phone 390: the lane's ⋯ opens a bottom sheet over the tab bar, the track's name whole in its head, with Rename, Owner, Pause, Close and Move to Trash."
       }
      ]
     },
@@ -200,7 +200,7 @@
       },
       {
        "file": "frames/et-b-open.html",
-       "caption": "The Tracks sheet: every track with its owner, features and state, paused ones too; Guided setup track open to change."
+       "caption": "The Tracks sheet: + Add track on its own line at the top; every track with its owner, features and state, paused ones too; Guided setup track open to change, with Hide to fold it."
       },
       {
        "file": "frames/et-b-mid.html",
@@ -208,7 +208,7 @@
       },
       {
        "file": "frames/et-b-result.html",
-       "caption": "Done: the sheet and the lane read Setup and onboarding; a note says so, with Undo."
+       "caption": "Done: the lane reads Setup and onboarding; a note at the bottom says so, with Undo."
       },
       {
        "file": "frames/et-b-hard-1512.html",
@@ -220,7 +220,7 @@
       },
       {
        "file": "frames/et-b-propose.html",
-       "caption": "A commenter's rename: the note says it waits for an approver."
+       "caption": "An approver who is not the track's owner renames it: the lane keeps its name; the note says the rename waits for Marco Ilves, with Withdraw."
       },
       {
        "file": "frames/et-b-open-390.html",
@@ -258,11 +258,11 @@
       },
       {
        "file": "frames/et-c-viewer.html",
-       "caption": "A viewer: the panel reads only, with one line saying who can change it."
+       "caption": "A viewer: the panel reads only; a View only chip, with who can change it behind its (i)."
       },
       {
        "file": "frames/et-c-propose.html",
-       "caption": "A commenter's rename: the note says it waits for an approver."
+       "caption": "An approver who is not the track's owner renames it: the lane keeps its name; the note says the rename waits for Marco Ilves, with Withdraw."
       },
       {
        "file": "frames/et-c-open-390.html",
@@ -275,8 +275,8 @@
   {
    "code": "em",
    "name": "Moving a feature",
-   "question": "How does a person move a feature to another PRD or track of the same roadmap?",
-   "common": "Links stay within the one roadmap; the feature keeps its dates, links and goal; owners and approvers move it, a commenter proposes (it waits for an approver), a viewer reads; Undo after a move.",
+   "question": "How does a person move a feature to another PRD or track?",
+   "common": "A feature moves only within the company's one roadmap and keeps its dates, links and goal; an owner or the feature's decider moves it, an approver who is not its decider proposes (it waits for the decider, by name, with Withdraw), a viewer reads; Undo after a move.",
    "proposals": [
     {
      "letter": "a",
@@ -297,7 +297,7 @@
       },
       {
        "file": "frames/em-a-mid.html",
-       "caption": "Welcome media track picked: Save or Cancel; one line says its dates, links and goal stay."
+       "caption": "Welcome media track picked: Save or Cancel; what stays is behind the (i)."
       },
       {
        "file": "frames/em-a-result.html",
@@ -309,11 +309,11 @@
       },
       {
        "file": "frames/em-a-viewer.html",
-       "caption": "A viewer: PRD and Track read as text; the panel says who can change it."
+       "caption": "A viewer: PRD and Track read as text, like the panel's other fields."
       },
       {
        "file": "frames/em-a-propose.html",
-       "caption": "A commenter's move: the field says it waits for an approver; the note says Proposed."
+       "caption": "An approver who is not the feature's decider: Track keeps Guided setup track with a Proposed chip, the move behind its (i); the note says it waits for Marco Ilves, with Withdraw."
       },
       {
        "file": "frames/em-a-open-390.html",
@@ -339,7 +339,7 @@
       },
       {
        "file": "frames/em-b-mid.html",
-       "caption": "Welcome media track picked: one line says what stays, then Move to Welcome media track."
+       "caption": "Welcome media track picked: Move to Welcome media track or Cancel; what stays is behind the (i)."
       },
       {
        "file": "frames/em-b-result.html",
@@ -347,7 +347,7 @@
       },
       {
        "file": "frames/em-b-hard-1512.html",
-       "caption": "At 1512 with five PRDs and their tracks: the picker scrolls."
+       "caption": "At 1512 with five PRDs and their tracks: the picker lists all five under the panel's head, inside its left column."
       },
       {
        "file": "frames/em-b-viewer.html",
@@ -355,7 +355,7 @@
       },
       {
        "file": "frames/em-b-propose.html",
-       "caption": "A commenter's move: the note says it waits for an approver."
+       "caption": "An approver who is not the feature's decider: the head still names Guided setup track; the note says the move waits for Marco Ilves, with Withdraw."
       },
       {
        "file": "frames/em-b-open-390.html",
@@ -377,7 +377,7 @@
       },
       {
        "file": "frames/em-c-open.html",
-       "caption": "Row lifted: the lanes take it, and the empty Welcome media track appears as a drop place under them."
+       "caption": "Row lifted: the empty Welcome media track appears as a drop place under the lanes, the lifted row beside it."
       },
       {
        "file": "frames/em-c-mid.html",
@@ -397,7 +397,7 @@
       },
       {
        "file": "frames/em-c-propose.html",
-       "caption": "A commenter's drop: the note says it waits for an approver; the row stays."
+       "caption": "An approver who is not the feature's decider drops it: the row stays; the note says the move waits for Marco Ilves, with Withdraw."
       },
       {
        "file": "frames/em-c-open-390.html",

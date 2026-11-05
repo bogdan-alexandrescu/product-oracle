@@ -1043,7 +1043,7 @@ export function SimpleRoadmap() {
 
   // home-waiting-one-list: a "waiting for you" row links ?item=<id> (Fix the link, Confirm the
   // dates, Accept): the item's panel opens once, on what waits there, its actions in view.
-  const linkedItem = params.get("item");
+  const linkedItem = (mk("em") && data?.items.find((i) => i.key === params.get("item"))?.id) || params.get("item"); // MOCK-HOOK: the frames open a feature by its key
   const [opened, setOpened] = useState<string | null>(null);
   useEffect(() => {
     if (!linkedItem || opened === linkedItem || !byId.has(linkedItem)) return;
@@ -1331,7 +1331,7 @@ export function SimpleRoadmap() {
         </div>
       )}
       {mk("et") && <TracksMk mode={mkMode} phone={phone} />} {/* MOCK-HOOK */}
-      <MoveDone /> {/* MOCK-HOOK */}
+      <MoveDone decides={mk("em") === "c" ? undefined : data?.items.find((i) => i.key === "setup-video")?.can_decide} /> {/* MOCK-HOOK */}
       {/* The Timeline always draws its rows under their goal (rowsOf), so it offers no Group by. */}
       {format !== "timeline" && (
       <span className="flex max-w-full min-w-0 flex-wrap items-center gap-1.5 text-sm text-text2">
