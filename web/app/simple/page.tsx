@@ -331,7 +331,7 @@ export default function SimpleHome() {
     void setupQ.reload();
   }
   const decidedLately = useQuery(k("decided"), () => unwrap(api.GET("/v1/decisions", { params: { query: { status: "decided" } } })));
-  const onePagers = useQuery(k("one-pagers"), () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
+  const onePagers = useQuery(k("one-pagers"), () => unwrap(api.GET("/v1/simple/one-pagers")));
 
   // S7: Oracle's suggested features under each goal of the band (an accept reloads Home).
   const suggestions = useGoalSuggestions(reloadAll);

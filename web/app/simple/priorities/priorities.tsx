@@ -976,7 +976,7 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
               <span className="rounded-full bg-na-bg px-2 text-[length:var(--simple-small)] text-na">Draft</span>
               {/* build-feature-panel review 7: a draft's name opens the one feature panel too. */}
               <span className="flex-1 font-medium">
-                <button type="button" data-feature={d.item_id} className="text-left hover:underline">
+                <button type="button" data-feature={d.item_id} title={`Open ${d.title}`} className="text-left hover:underline">
                   {d.title}
                 </button>
               </span>
@@ -2028,33 +2028,42 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
   const weeksOf = (r: Row) => (r.effort == null ? "" : `${fmt(r.effort)} wk`);
   // A goal's features as Archive counts them: its bucket's.
   const featuresOf: GoalFeatures = (title) => (buckets.find((b) => !b.no_goal && sameGoal(b.title, title))?.codes ?? []).map((c) => ({ code: c, name: rowOf.get(c)?.title ?? c, slices: [] }));
+  // Round 6: no work this quarter is said in words, not as "0 wk" over an empty chart.
+  const planned = data.weeks_total > 0;
   return (
     <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
       <p className="mb-3 text-text2" data-testid="buckets-intro">
         {dated
           ? "Grouped by goal for this quarter; the milestones and key dates are on the Ranked list's Line."
-          : "No dated plan yet, so the work is not placed by milestone."}{" "}
-        Engineer-weeks per confirmed goal this quarter: {fmt(moved.length ? total : data.weeks_total)} wk in all.
+          : "No dated plan yet, so the work is not placed by milestone."}
+        {planned ? ` Engineer-weeks per confirmed goal this quarter: ${fmt(moved.length ? total : data.weeks_total)} wk in all.` : null}
       </p>
-      <figure className="hidden sm:block" data-testid="bucket-bar">
-        <figcaption className="mb-1 text-[length:var(--simple-small)] text-text2">Share of engineer-weeks by goal</figcaption>
-        <div className="flex overflow-hidden rounded-[var(--simple-card-radius)] border border-line">
-          {buckets.map((b, k) =>
-            b.weeks > 0 ? (
-              <div
-                key={b.key}
-                data-testid="bucket-segment"
-                title={`${b.title}: ${fmt(b.weeks)} wk · ${percent[k]}%`}
-                style={{ width: `${b.share * 100}%` }}
-                className={`min-h-12 min-w-0 border-r border-surface p-2 text-[length:var(--simple-small)] ${b.no_goal ? "bg-warn-bg text-warn" : "bg-accent-soft text-accent-ink"}`}
-              >
-                {/* qa-simple-plan-40: the numbers are said once, on the cards below. */}
-                <span className="block truncate font-medium">{b.title}</span>
-              </div>
-            ) : null,
-          )}
-        </div>
-      </figure>
+      {!planned && (
+        <p className="mb-3 text-text2" data-testid="buckets-empty">
+          Nothing planned this quarter.
+        </p>
+      )}
+      {planned && (
+        <figure className="hidden sm:block" data-testid="bucket-bar">
+          <figcaption className="mb-1 text-[length:var(--simple-small)] text-text2">Share of engineer-weeks by goal</figcaption>
+          <div className="flex overflow-hidden rounded-[var(--simple-card-radius)] border border-line">
+            {buckets.map((b, k) =>
+              b.weeks > 0 ? (
+                <div
+                  key={b.key}
+                  data-testid="bucket-segment"
+                  title={`${b.title}: ${fmt(b.weeks)} wk · ${percent[k]}%`}
+                  style={{ width: `${b.share * 100}%` }}
+                  className={`min-h-12 min-w-0 border-r border-surface p-2 text-[length:var(--simple-small)] ${b.no_goal ? "bg-warn-bg text-warn" : "bg-accent-soft text-accent-ink"}`}
+                >
+                  {/* qa-simple-plan-40: the numbers are said once, on the cards below. */}
+                  <span className="block truncate font-medium">{b.title}</span>
+                </div>
+              ) : null,
+            )}
+          </div>
+        </figure>
+      )}
       {note && <UndoNote onUndo={note.undo ? () => void writes.undo(note.undo!) : note.changes?.length ? () => void tasks.undo(note.changes!) : undefined}>{note.text}</UndoNote>}
       {error && (
         <p role="alert" className="mt-3 text-[15px] text-warn">

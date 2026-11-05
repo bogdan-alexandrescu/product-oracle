@@ -43,7 +43,7 @@
  * meeting (409 naming it).
  */
 import type { Schemas } from "@/lib/api/client";
-import { agendaOut, decidedOutsideRows, questionsCounts, questionsOfMeeting, questionsOut, routeQuestionChanges, seedQuestions, waitingOut, type QuestionsDb } from "./simple-questions";
+import { agendaOut, decidedOutsideRows, questionsCounts, questionsOfMeeting, questionsOut, questionsPrdReplaced, routeQuestionChanges, seedQuestions, waitingOut, type QuestionsDb } from "./simple-questions";
 import { plainFlow } from "./simple-visuals";
 import { proposeOffAgenda, seedSimpleProposal } from "./simple-changes";
 import { mockNowMs } from "./clock";
@@ -89,7 +89,8 @@ export interface MeetingsCtx {
   /** home-deleted-roadmap: when the last of this kind was purged, when none is left, live or in Trash; else null. */
   deletedForGood?: (kind: string) => string | null;
   /** qa4-simple-prd-1: every PRD document (as the API's start options list each readable PRD by its own title). */
-  documents?: () => { id: string; slug: string; title: string }[];
+  /** simple-replaced-prds: `replaced_by`, the PRDs that replaced one marked replaced (never offered or filtered by in Simple). */
+  documents?: () => { id: string; slug: string; title: string; replaced_by?: Schemas["PrdRef"][] }[];
   /** build-rundecide RD1 a: the runs' decided stops on the PRDs shown (./simple-runs.ts), for the Runs card. */
   runs?: (prd: string | null) => Schemas["SimpleRunGroup"][];
   /** runplan-r2: a meeting decision is a row of the decision log too (Company > Decisions), as the API's one decisions row. */
@@ -185,6 +186,10 @@ interface Prd {
   ids: string[];
   decider: string | null;
   reviewers: string[];
+  /** simple-replaced-prds: marked replaced; never offered or filtered by in Simple. */
+  replaced?: boolean;
+  /** The PRDs that replaced it (the 404 of its options and start names them, as meetings._prd). */
+  replaced_by?: Schemas["PrdRef"][];
 }
 
 const iso = (t: number) => new Date(t).toISOString();
@@ -215,8 +220,15 @@ function prds(ctx: MeetingsCtx): Prd[] {
   ];
   // qa4-simple-prd-1: the API starts a review of any PRD the reader reads, not only these two.
   const more = docs.filter((d) => !known.some((k) => k.slug === d.slug || k.ids.includes(d.id))).map((d) => ({ slug: d.slug, title: d.title, id: d.id, ids: [d.id], decider: null, reviewers: [] }));
-  return [...known, ...more];
+  // simple-replaced-prds: any of them may be marked replaced.
+  return [...known, ...more].map((x) => {
+    const by = docs.find((d) => d.slug === x.slug || x.ids.includes(d.id))?.replaced_by ?? [];
+    return by.length ? { ...x, replaced: true, replaced_by: by } : x;
+  });
 }
+
+/** simple-replaced-prds (as meetings._prd): a replaced PRD is not reviewed in Simple; the 404 names its replacements. */
+const replacedPrd = (prd: Prd) => json(404, { detail: { message: "This PRD was replaced", replaced_by: prd.replaced_by ?? [] } });
 
 const owners = (ctx: MeetingsCtx) => ctx.members.filter((m) => m.role === "owner").map((m) => m.id);
 /** walkc-meeting r2 (5j, meetings._waits): who approves a meeting's drafts: the PRD's decider, else the company's owners. */
@@ -260,7 +272,12 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
   const approver = ctx.members.find((m) => m.email === "approver@example.com")?.id;
   const commenter = ctx.members.find((m) => m.email === "commenter@example.com");
   const people = [owner, approver, commenter?.id].filter((x): x is string => !!x);
+  // simple-replaced-prds: the past meeting was held before any PRD was marked replaced, so it
+  // names its items whether or not they still feed the roadmap (first read after a replace too).
+  const replaced = ctx.roadmap.replaced_prds;
+  ctx.roadmap.replaced_prds = undefined;
   const all = items(ctx);
+  ctx.roadmap.replaced_prds = replaced;
   const item = (key: string) => all.find((i) => i.key === key);
   const alerts = prds(ctx)[1];
   const setup = prds(ctx)[0];
@@ -566,7 +583,7 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
     open_decisions: openDecisions(ctx, db, p),
     // The meeting PRD's agenda (questions.due_for): the open questions blocking the soonest
     // one's milestone, whoever decides them, and those decided in this meeting (with Undo).
-    decisions_due: questionsOut(ctx, qdb(ctx, db), p.id).length ? agendaOut(ctx, qdb(ctx, db), { id: m.id, session_id: m.session_id, live: m.status === "live" }) : [],
+    decisions_due: questionsOut(ctx, qdb(ctx, db), p.id, true).length ? agendaOut(ctx, qdb(ctx, db), { id: m.id, session_id: m.session_id, live: m.status === "live" }) : [],
     pending_proposals: proposals(ctx, p),
     drafts: meetingDrafts(ctx, db, m, p),
     waiting_people: [...new Set(meetingDrafts(ctx, db, m, p).flatMap((d) => d.waiting_on))].map((i) => ref(ctx, i)),
@@ -1025,7 +1042,8 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
   const goalQ = q.get("goal");
   const meetingQ = q.get("meeting");
   const prd = prdQ ? ps.find((x) => x.slug === prdQ || x.id === prdQ) : undefined;
-  if (prdQ && !prd) return json(404, { detail: "No such PRD" });
+  // simple-replaced-prds (as decisions_page): a replaced PRD is not a filter; its past meetings stay.
+  if (prdQ && (!prd || prd.replaced)) return json(404, { detail: "No such PRD" });
   const goal = goalQ ? [...goals.values()].find((g) => g.key === goalQ || g.id === goalQ) : undefined;
   if (goalQ && !goal) return json(404, { detail: "No such goal" });
   let match: Set<string> | null = null;
@@ -1068,7 +1086,7 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
     // A decided question taken outside meetings is listed here with its code and answer (open ones wait above).
     other: [...(meetingQ ? [] : decidedOutsideRows(ctx, qd, qs)), ...others.map((d) => row(ctx, d))],
     // qa4-simple-decide-37 (as decisions_page: both from the PRDs the reader reads): every PRD whose questions are shown.
-    prds: [...new Map([...ps.map((x) => [x.slug, x.title] as const), ...questionsOut(ctx, qd, null).map((x) => [x.prd.slug, x.prd.title] as const)])]
+    prds: [...new Map([...ps.filter((x) => !x.replaced).map((x) => [x.slug, x.title] as const), ...(questionsPrdReplaced(ctx) ? [] : questionsOut(ctx, qd, null)).map((x) => [x.prd.slug, x.prd.title] as const)])]
       .sort((a, b) => a[1].localeCompare(b[1])).map(([id, title]) => ({ id, title })),
     // goal-order (as decisions_page): the Goal filter lists the goals in the one goal order.
     goals: [...goals.values()].sort((a, b) => goalRank(a.key) - goalRank(b.key) || a.key.localeCompare(b.key)).map((g) => ({ id: g.key, title: g.title })),
@@ -1104,6 +1122,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     const b = (await body(req)) as Partial<Schemas["SimpleMeetingIn"]>;
     const prd = ps.find((x) => x.slug === b.prd || x.id === b.prd);
     if (!prd) return json(404, { detail: "No such PRD" });
+    if (prd.replaced) return replacedPrd(prd);
     if (!mayStart(ctx, prd)) return json(403, { detail: "Only an owner or the PRD's decider starts its review meeting" });
     seedMeetingProposal(ctx);
     const members = new Set(ctx.members.map((m) => m.id));
@@ -1148,8 +1167,10 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
   if (p[3] === "options" && method === "GET") {
     const prdQ = q.get("prd");
     // As the API's, every PRD by its title.
-    const list = (prdQ ? ps.filter((x) => x.slug === prdQ || x.id === prdQ) : [...ps]).sort((a, b) => a.title.localeCompare(b.title));
+    // simple-replaced-prds (as meetings.options): a replaced PRD is never offered.
+    const list = (prdQ ? ps.filter((x) => x.slug === prdQ || x.id === prdQ) : ps.filter((x) => !x.replaced)).sort((a, b) => a.title.localeCompare(b.title));
     if (prdQ && !list.length) return json(404, { detail: "No such PRD" });
+    if (prdQ && list[0].replaced) return replacedPrd(list[0]);
     const occQ = q.get("occurrence");
     const occ = occQ ? upcoming(ctx, db, occQ)[0] : null;
     if (occQ && !occ) return json(404, { detail: "No such scheduled review" });

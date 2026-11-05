@@ -52,6 +52,8 @@ export interface OnePagerCtx {
   overflowPages?: number;
   /** build-feature-panel: each "bets" line's own roadmap item (./simple-roadmap.ts betLineItemIds), by line id. */
   betItemIds?: Record<string, string>;
+  /** simple-replaced-prds: the PRDs that replaced this one, when it is marked replaced (its read, PDF and Remind are a 404 naming them). */
+  replacedBy?: Schemas["PrdRef"][];
 }
 
 const REMIND_EVERY_MS = 24 * 60 * 60 * 1000;
@@ -645,8 +647,11 @@ async function body(req: Request): Promise<Record<string, unknown>> {
 export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Request, p: string[]): Promise<Response | null> {
   if (p[1] !== "simple") return null;
   const m = req.method;
+  // simple-replaced-prds (as one_pager._document with current): a replaced PRD has no one-pager in Simple.
+  const replaced = () => json(404, { detail: { message: "This PRD was replaced", replaced_by: ctx.replacedBy ?? [] } });
   if (p[2] === "one-pagers" && m === "GET") {
     if (p[3] !== db.doc.slug && p[3] !== db.doc.id) return json(404, { detail: "No such PRD" });
+    if (ctx.replacedBy?.length) return replaced();
     if (p[4] === "pdf") {
       const over = !ctx.planPages?.length && ctx.overflowPages ? ctx.overflowPages : 0;
       const pages = ctx.planPages?.length ? ["The timeline", ...ctx.planPages] : over ? Array.from({ length: over }, (_, i) => `Page ${i + 1}`) : ["One page"];
@@ -682,6 +687,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
   }
   if (p[2] === "one-pagers" && p[4] === "remind" && m === "POST") {
     if (p[3] !== db.doc.slug && p[3] !== db.doc.id) return json(404, { detail: "No such PRD" });
+    if (ctx.replacedBy?.length) return replaced();
     if (RANK[ctx.role] < RANK.commenter || !mayRemind(ctx)) return json(403, { detail: "Only the PRD's owners and its decider remind its reviewers" });
     const d = db.draft;
     if (!d || d.status !== "submitted" || !d.waiting_on?.length) return json(409, { detail: "No submitted draft of this PRD waits on a review" });
