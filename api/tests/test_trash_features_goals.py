@@ -40,7 +40,7 @@ Test cards (protects / fails_when / no_claim):
   fails_when=two items share a key or the dependent points at the new one; no_claim=PRD
   imports (the same helper).
 - test_a_commenters_goal_delete_is_a_proposal_to_its_decider: protects=a commenter's goal
-  delete is a delete_goal proposal ("proposed: move the goal Grow to Trash"), the goal
+  delete is a delete_goal proposal ("proposed: move the goal “Grow” to Trash"), the goal
   stays until an owner accepts it; the commenter may not accept it; a viewer is refused;
   fails_when=the commenter is refused or deletes directly; no_claim=the Inbox screen.
 - test_a_proposed_delete_of_a_feature_already_in_trash_is_closed: protects=a proposal to
@@ -433,7 +433,7 @@ async def test_a_commenters_goal_delete_is_a_proposal_to_its_decider(client):
     assert r.json()["entry"] is None
     change = r.json()["change"]
     assert change["status"] == "proposed" and change["op"] == "delete_goal"
-    assert "proposed: move the goal Grow to Trash" in change["words"]
+    assert "proposed: move the goal “Grow” to Trash" in change["words"]
     assert grow in [g["id"] for g in (await w.read(client))["goals"]]
     # The owners read it among the changes, theirs to decide.
     r = await client.get("/v1/simple/changes", headers=w.as_("owner"))
