@@ -660,3 +660,47 @@ def test_the_decision_record_names_a_feature_by_its_title_never_its_key():
     untitled = one(None)
     assert "price-early" not in untitled, untitled
     assert untitled.startswith('- A feature in this run: "Which database?"'), untitled
+
+
+# ------------------------------------------------------------------ review round 4
+
+
+def test_a_different_short_question_one_word_apart_imports():
+    # protects=a short question (under 5 words) is the answered one only with the same
+    # words, so a different short question one word apart imports; fails_when="Which
+    # region?" is refused because "Which database?" was answered at the Engineering
+    # review; no_claim=paraphrases.
+    pairs = (
+        ("Which database?", "Which region?"),
+        ("Who owns billing?", "Who owns support?"),
+        ("Should we support Safari?", "Should we support Firefox?"),
+        ("Which region launches first?", "Which region launches last?"),
+    )
+    for asked, listed in pairs:
+        assert listed_open([_answered(asked)], _prd(f"- {listed}")) == [], listed
+        assert len(listed_open([_answered(asked)], _prd(f"- {asked}"))) == 1, asked
+    # Five words or more: one word apart is still the answered question.
+    five = [_answered("Should we keep audit exports?")]
+    assert len(listed_open(five, _prd("- Should we keep audit backups?"))) == 1
+
+
+def test_the_refusal_quotes_the_draft_line_that_matched():
+    # protects=the refusal names the answered question and the draft's own line;
+    # fails_when=the message quotes only the answered question; no_claim=table layout.
+    answers = [_answered("Should we keep exports for seven years?", "Yes.")]
+    [problem] = listed_open(
+        answers, _prd("- Should we keep exports for seven yrs? Owner: Rae Example")
+    )
+    assert (
+        'the draft lists it under Open questions as "Should we keep exports for seven yrs? '
+        'Owner: Rae Example"'
+    ) in problem.message, problem.message
+
+
+def test_an_owner_word_inside_the_question_is_not_a_tail():
+    # protects=only a trailing owner tail ("… Owner: Rae") is stripped; fails_when="Who is
+    # the owner: finance or ops?" is also read as "Who is the" and refused because "Who is
+    # the?" was answered; no_claim=other tail wordings.
+    answers = [_answered("Who is the?")]
+    assert listed_open(answers, _prd("- Who is the owner: finance or ops?")) == []
+    assert len(listed_open(answers, _prd("- Who is the? Owner: Rae Example"))) == 1
