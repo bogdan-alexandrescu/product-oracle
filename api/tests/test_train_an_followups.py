@@ -134,6 +134,38 @@ async def test_run_imported_into_reads_its_index(db):  # noqa: F811
     assert "ix_audit_events_version_imported" in plan, plan
 
 
+def test_the_import_index_is_built_concurrently_outside_the_migration_transaction():
+    """0108 builds its index CONCURRENTLY in an autocommit block, so audited writes go on
+    while it builds (a plain CREATE INDEX in the transaction holds a ShareLock on
+    audit_events until commit), and first drops an invalid one an earlier attempt left."""
+    import io
+    import re
+
+    from alembic import command
+    from alembic.config import Config
+
+    from tests.conftest import API_DIR
+
+    out = io.StringIO()
+    cfg = Config(str(API_DIR / "alembic.ini"), output_buffer=out)
+    cfg.attributes["database_url"] = "postgresql+asyncpg://example@localhost/example"
+    command.upgrade(cfg, "0107_simple_change_seq:0108_audit_import_index", sql=True)
+    sql = re.sub(r"\s+", " ", out.getvalue())
+    drop = sql.index("DROP INDEX CONCURRENTLY IF EXISTS ix_audit_events_version_imported")
+    create = sql.index("CREATE INDEX CONCURRENTLY ix_audit_events_version_imported")
+    # The autocommit block ends the migration's transaction before the build ...
+    assert "COMMIT;" in sql[:drop], sql
+    assert "BEGIN;" not in sql[sql.rindex("COMMIT;", 0, drop) : create], sql
+    # ... and keeps the partial index's condition.
+    assert "WHERE action = 'document.version_imported'" in sql[create:], sql
+
+    out = io.StringIO()
+    cfg = Config(str(API_DIR / "alembic.ini"), output_buffer=out)
+    cfg.attributes["database_url"] = "postgresql+asyncpg://example@localhost/example"
+    command.downgrade(cfg, "0108_audit_import_index:0107_simple_change_seq", sql=True)
+    assert "DROP INDEX ix_audit_events_version_imported" in out.getvalue()
+
+
 # --- a send-back note answered point by point: every point addressed reads as done -----------
 
 ALL_ADDRESSED = """resolutions:
