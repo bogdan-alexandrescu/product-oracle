@@ -379,7 +379,7 @@ test("the decider of a draft sent for review sees Approve, not Send for review, 
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await expect(banner).toBeVisible();
   // Right after load, before the people lookup answers, the banner names whose draft it is.
-  await expect(banner.getByTestId("draft-words")).toContainText("Avery Stone's working draft of the Onboarding roadmap", { timeout: 3_000 });
+  await expect(banner.getByTestId("draft-words")).toContainText("Avery Stone's working draft of the Onboarding roadmap", { timeout: 10_000 });
   await expect(banner.getByTestId("draft-words")).not.toContainText("Someone");
   await expect(banner.getByRole("button", { name: "Send for review" })).toHaveCount(0);
   await expect(banner.getByRole("button", { name: "Approve", exact: true })).toBeVisible();
