@@ -189,7 +189,8 @@ const byState = (a: Rebuild, b: Rebuild) => ORDER[a.state] - ORDER[b.state];
  */
 function runsFor(rb: Rb, slug: string) {
   const own = rb.rebuilds.filter((r) => r.document_slug === slug || r.source_slug === slug).sort(byState);
-  const feeds = rb.company_roadmap?.slug === slug ? rb.rebuilds.filter((r) => r.document_kind === "prd" && r.document_slug !== slug).sort(byState) : [];
+  // A new PRD still being written feeds nothing yet: it is not one of the roadmap's PRDs.
+  const feeds = rb.company_roadmap?.slug === slug ? rb.rebuilds.filter((r) => r.document_kind === "prd" && !r.new_document && r.document_slug !== slug).sort(byState) : [];
   return { own, feeds };
 }
 
@@ -337,7 +338,7 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 /** What happens to the page while it runs, in one sentence. */
 function outcome(r: Rebuild) {
   const was = r.from_version != null ? `v${r.from_version}` : null;
-  if (r.new_document && r.state !== "failed") return `It writes a ${newWord(r).toLowerCase()}, ${titleOf(r)}. Nobody reads it until it is approved.`;
+  if (r.new_document && r.state !== "failed") return `It writes a ${newWord(r).replace(/^New/, "new")}, ${titleOf(r)}. Nobody reads it until it is approved.`;
   if (r.state === "done") return was ? `v${r.to_version} is a draft until it is approved. Until then, everyone keeps seeing ${was}.` : `v${r.to_version} is a draft until it is approved.`;
   if (r.state === "failed") {
     const why = (r.error ?? "It stopped").replace(/\.$/, "");
