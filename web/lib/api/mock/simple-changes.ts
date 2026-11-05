@@ -110,7 +110,7 @@ function applyGoalAsk(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" 
     return done instanceof Response ? done : null;
   }
   const bin = ctx.goalBin ?? { trash: (ctx.trash ??= { entries: [], estimates: {} }), id: ctx.id, name: ctx.names[ctx.id] ?? null, now: () => iso(mockNowMs()) };
-  const row = trashGoal(gb, bin, id, to, c.reason ?? null);
+  const row = trashGoal(gb, bin, id, to, c.reason ?? null, db);
   return row instanceof Response ? row : null;
 }
 

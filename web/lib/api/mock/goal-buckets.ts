@@ -9,6 +9,7 @@ import type { Schemas } from "@/lib/api/client";
 import { stableUuid } from "./ids";
 import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
 import { planGoalNames, planSlices } from "./simple-plan";
+import { GOALS, goalId, type SeedItem } from "./simple-roadmap";
 
 // trash-features-goals: `trashed` while in Settings › Trash (left out of every read, kept for Restore).
 // edit-goals-prds EG1: a goal's owner (a member's id; seeded by email, matched to the member on first read) and when it was archived.
@@ -142,7 +143,7 @@ const featureSnap = (f: Feature) => ({
 // The API signs each undo and refuses one it did not give; the mock signs with a plain hash of the rest.
 const sigOf = (u: Omit<Undo, "sig">) => {
   let h = 2166136261;
-  for (const c of JSON.stringify({ goals: u.goals ?? [], features: u.features ?? [], added_goal_id: u.added_goal_id ?? null })) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
+  for (const c of JSON.stringify({ goals: u.goals ?? [], features: u.features ?? [], items: u.items ?? [], added_goal_id: u.added_goal_id ?? null })) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
   return `mock-${h.toString(16)}`;
 };
 const signed = (u: Omit<Undo, "sig">): Undo => ({ ...u, sig: sigOf(u) });
@@ -166,6 +167,51 @@ function moveOff(db: GoalBucketsDb, g: Goal, to: string | null): Feature[] {
     f.goal_ids = f.goal_ids[0] === g.id && !rest.length && to ? [to] : rest;
   }
   return before;
+}
+
+/** The roadmap items whose own goal a goal's delete takes off (SimpleDb's items and ids). */
+export type GoalBucketsItems = { items: SeedItem[]; ids: Record<string, string> };
+type ItemSnap = Schemas["ItemGoalsSnap"];
+/** The item goal key of a bucket goal: the roadmap's goal of that name. */
+const itemGoalKey = (g: Goal | undefined) => (g ? Object.keys(GOALS).find((k) => GOALS[k].toLowerCase() === g.title.toLowerCase()) : undefined);
+/** An item's own goals (keys), first first, as goalIdsOf reads them, and writing them back. */
+const keysOf = (s: SeedItem): string[] => (s.own_goal !== undefined ? (s.own_goal ? [s.own_goal] : []) : [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])]);
+function setKeys(s: SeedItem, keys: string[]): void {
+  if (s.own_goal !== undefined) s.own_goal = keys[0] ?? "";
+  else {
+    s.goal = keys[0];
+    s.goals = keys.slice(1);
+  }
+}
+
+/** As trash_goal: each live item naming the goal as its own loses it, and gets `to` first if it lacks it; what was done, for Undo. */
+function itemsOff(simple: GoalBucketsItems | undefined, db: GoalBucketsDb, g: Goal, to: string | null): ItemSnap[] {
+  const key = itemGoalKey(g);
+  if (!simple || !key) return [];
+  const toKey = to ? itemGoalKey(db.goals.find((x) => x.id === to)) : undefined;
+  const out: ItemSnap[] = [];
+  for (const s of simple.items.filter((x) => !x.trashed && keysOf(x).includes(key))) {
+    const before = keysOf(s);
+    const rest = before.filter((k) => k !== key);
+    const added = toKey && !rest.includes(toKey) ? toKey : null;
+    out.push({ item_id: simple.ids[s.key], goal_id: goalId(key), index: before.indexOf(key), added_goal_id: added ? goalId(added) : null });
+    setKeys(s, added ? [added, ...rest] : rest);
+  }
+  return out;
+}
+
+/** goal_buckets._goal_back: the goal a delete added off, the goal it took off back in its place. */
+function itemsBack(simple: GoalBucketsItems | undefined, snaps: ItemSnap[]): void {
+  const keyOf = (id: string | null | undefined) => (id ? Object.keys(GOALS).find((k) => goalId(k) === id) : undefined);
+  for (const it of snaps) {
+    const s = simple?.items.find((x) => simple.ids[x.key] === it.item_id);
+    const key = keyOf(it.goal_id);
+    if (!s || !key) continue;
+    const added = keyOf(it.added_goal_id);
+    const keys = keysOf(s).filter((k) => k !== added);
+    if (!keys.includes(key)) keys.splice(Math.min(it.index ?? 0, keys.length), 0, key);
+    setKeys(s, keys);
+  }
 }
 
 /** trash-features-goals (oracle.simple.trash_items): Settings › Trash and who writes there. */
@@ -194,11 +240,11 @@ export function unarchiveGoal(db: GoalBucketsDb, id: string): { g: Goal; undo: U
 }
 
 /** A goal to Trash (trash_items.trash_goal), also an accepted Ask to delete: the Trash row and the Undo for its links, or an error. */
-export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, id: string, to: string | null, reason: string | null): { row: TrashEntryRow; undo: Undo } | Response {
+export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, id: string, to: string | null, reason: string | null, simple?: GoalBucketsItems): { row: TrashEntryRow; undo: Undo } | Response {
   const g = db.goals.find((x) => x.id === id && !x.trashed);
   if (!g) return json(404, { detail: "No such goal" });
   if (to && !db.goals.some((x) => x.id === to && !x.archived && !x.trashed && x.id !== g.id)) return json(422, { detail: "Pick another goal" });
-  const undo = signed({ goals: [], features: moveOff(db, g, to).map(featureSnap), added_goal_id: null });
+  const undo = signed({ goals: [], features: moveOff(db, g, to).map(featureSnap), items: itemsOff(simple, db, g, to), added_goal_id: null });
   g.trashed = true;
   const at = bin.now();
   const row: TrashEntryRow = {
@@ -214,6 +260,8 @@ export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, id: string, 
   return { row, undo };
 }
 
+const itemsIn = (simple: Partial<GoalBucketsItems>): GoalBucketsItems | undefined => (simple.items && simple.ids ? { items: simple.items, ids: simple.ids } : undefined);
+
 /** The goal buckets' db, its seeded owners matched to the members by email. */
 export function goalBucketsDb(simple: { goal_buckets?: GoalBucketsDb }, people: GoalPeople = []): GoalBucketsDb {
   const db = (simple.goal_buckets ??= seedGoalBuckets());
@@ -224,7 +272,7 @@ export function goalBucketsDb(simple: { goal_buckets?: GoalBucketsDb }, people: 
 }
 
 /** /v1/simple/goal-buckets... (as the API: approvers and owners write; anyone reads). */
-export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb }, role: string, req: Request, p: string[], bin?: GoalBucketsTrash): Promise<Response | null> {
+export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb } & Partial<GoalBucketsItems>, role: string, req: Request, p: string[], bin?: GoalBucketsTrash): Promise<Response | null> {
   if (p[1] !== "simple" || p[2] !== "goal-buckets") return null;
   const people = bin?.people ?? [];
   const db = goalBucketsDb(simple, people);
@@ -245,7 +293,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
   // trash-features-goals: DELETE .../goals/{id}?to_goal_id= (approvers and owners): whoever deletes it restores it.
   if (bin && p[3] === "goals" && p[4] && !p[5] && m === "DELETE") {
     const q = new URL(req.url).searchParams;
-    const done = trashGoal(db, bin, p[4], q.get("to_goal_id"), q.get("reason"));
+    const done = trashGoal(db, bin, p[4], q.get("to_goal_id"), q.get("reason"), itemsIn(simple));
     if (done instanceof Response) return done;
     return json(200, { entry: entryOut(done.row, done.row.out.deleted_at, true), change: null, can_restore: true, undo: done.undo });
   }
@@ -305,6 +353,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb },
       const f = db.features.find((x) => x.id === s.feature_id);
       if (f) f.goal_ids = s.links.map((l) => l.goal_id);
     }
+    itemsBack(itemsIn(simple), u.items ?? []);
     if (u.added_goal_id) {
       const g = db.goals.find((x) => x.id === u.added_goal_id);
       if (g) g.archived = true;

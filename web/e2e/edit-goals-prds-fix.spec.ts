@@ -19,6 +19,16 @@ import { expect, test, type Page } from "./test";
  * Card eg1-no-plan: protects = with no dated plan each goal names its owner, its ⋯ reads Edit
  * goal, Archive goal and Delete goal (Ask to archive and Ask to delete for a commenter), and the
  * Archived goals fold is there with Restore; Delete goal has Undo; fails_when = any is missing.
+ *
+ * Fix round 2 (PR 1279 review r2), Priya Raman an approver:
+ * Card eg1-no-plan-delete: protects = with no dated plan a deleted goal's bucket is gone, also
+ * after a reload (its roadmap items lose it as their own goal, as the API's trash_goal does), and
+ * Undo brings it back with its features; fails_when = the bucket stays, owner line and menu gone.
+ * Card eg1-approver: protects = an approver's ⋯ reads Edit goal, Archive goal and Delete goal and
+ * the Archived goals fold offers Restore and Delete, with and without a dated plan; fails_when =
+ * any is missing or asks instead.
+ * Card eg1-accept-restore: protects = an owner accepts a commenter's Ask to restore in Decisions,
+ * and the goal is back in the buckets; fails_when = no ask to accept, or the goal stays archived.
  */
 
 const LOOKS = [
@@ -139,3 +149,70 @@ for (const look of LOOKS) {
     });
   });
 }
+
+const APPROVER = "approver@example.com";
+
+test.describe("fix round 2", () => {
+  const look = LOOKS[0];
+
+  for (const phone of [LOOKS[0], LOOKS[1]]) {
+    test(`no dated plan, ${phone.name}: a deleted goal's bucket is gone, also after a reload; Undo brings it back with its features`, async ({ page }) => {
+      const view = VIEWS[1];
+      await open(page, phone, view);
+      await expect(bucket(page, view, "Activation").locator('[data-code="F-01"]')).toBeVisible();
+      await deleteGoal(page, view, "Activation");
+      await expect(note(page)).toContainText("Deleted Activation.");
+      await expect(bucket(page, view, "Activation")).toHaveCount(0);
+      await shot(page, `no-plan-deleted-${slug(phone.name)}`);
+      await note(page).getByRole("button", { name: "Undo" }).click();
+      await expect(note(page)).toContainText("Undone: Activation and its links are back.");
+      await expect(bucket(page, view, "Activation").locator('[data-code="F-01"]')).toBeVisible();
+      await expect(bucket(page, view, "Activation").getByRole("button", { name: "More for Activation" })).toBeVisible();
+      await expect(bucket(page, view, "Activation").getByTestId("goal-owner")).toBeVisible();
+
+      await deleteGoal(page, view, "Activation");
+      await expect(bucket(page, view, "Activation")).toHaveCount(0);
+      await page.reload();
+      await expect(bucket(page, view, "Reliability").locator('[data-code="F-01"]')).toBeVisible();
+      await expect(bucket(page, view, "Activation")).toHaveCount(0);
+    });
+  }
+
+  for (const view of VIEWS) {
+    test(`${view.name}: an approver's ⋯ reads Edit, Archive and Delete goal; the Archived goals fold has Restore and Delete`, async ({ page }) => {
+      await open(page, look, view, APPROVER);
+      await bucket(page, view, "Growth").getByRole("button", { name: "More for Growth" }).click();
+      await expect(page.getByRole("menuitem")).toHaveText(["Edit goal", "Archive goal", "Delete goal"]);
+      await shot(page, `approver-menu-${slug(view.name)}`);
+      await page.keyboard.press("Escape");
+      await fold(page).locator("summary").click();
+      const row = (title: string) => fold(page).getByTestId("archived-goal").filter({ hasText: title });
+      await expect(row("Faster first report").getByRole("button")).toHaveText(["Restore", "Delete"]);
+      await row("Faster first report").getByRole("button", { name: "Restore" }).click();
+      await expect(note(page)).toContainText("Restored Faster first report.");
+      await expect(fold(page)).toContainText("Archived goals · 2");
+      await row("Launch in two new regions").getByRole("button", { name: "Delete" }).click();
+      const dialog = page.getByRole("dialog", { name: "Delete Launch in two new regions" });
+      await dialog.getByRole("button", { name: "Delete goal" }).click();
+      await expect(note(page)).toContainText("Deleted Launch in two new regions. It is in Settings > Trash for 30 days.");
+      await expect(row("Launch in two new regions")).toHaveCount(0);
+    });
+
+    test(`${view.name}: the owner accepts a commenter's Ask to restore in Decisions, and the goal is back`, async ({ page }) => {
+      await open(page, look, view, "commenter@example.com");
+      await fold(page).locator("summary").click();
+      await fold(page).getByTestId("archived-goal").filter({ hasText: "Cut support tickets in half" }).getByRole("button", { name: "Ask to restore" }).click();
+      await expect(note(page)).toContainText("Sent to Avery Stone: restore Cut support tickets in half.");
+
+      await login(page, ADMIN.email);
+      await page.goto("/simple/decisions");
+      const ask = page.getByTestId("questions-mine").getByTestId("waiting-item").filter({ hasText: 'proposed: restore the goal "Cut support tickets in half"' });
+      await ask.getByRole("button", { name: "Accept" }).click();
+      await expect(ask).toHaveCount(0);
+
+      await page.goto("/simple/priorities?tab=buckets");
+      await expect(bucket(page, view, "Cut support tickets in half")).toHaveCount(1);
+      await expect(fold(page)).toContainText("Archived goals · 2");
+    });
+  }
+});
