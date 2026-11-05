@@ -814,18 +814,23 @@ export function ofReplacedPrd(db: SimpleDb, s: SeedItem): boolean {
   return !!replaced.length && (replaced.includes(ownPrd(s).id) || replaced.includes(ownPrd(s).slug));
 }
 
-/** additions._home: the PRD (and track) a feature added in Simple is filed under, in place:
- * its roadmap's PRD while current, else that of the roadmap's first item of a current PRD
- * with a track, else the PRD that replaced the roadmap's. */
+/** additions._home: the track and PRD a feature added in Simple is filed under, in place: the
+ * roadmap's first track (by when it was made: TRACKS' order) of a current PRD, else its first
+ * track under the PRD that replaced it. A track's PRD is its first item's on the roadmap. */
 export function fileUnderCurrentPrd(db: SimpleDb, s: SeedItem): void {
-  if (!ofReplacedPrd(db, s)) return;
-  const live = db.items.find((x) => x.roadmap === s.roadmap && x.track && !ofReplacedPrd(db, x));
+  const tracks = Object.keys(TRACKS).flatMap((t) => {
+    const first = db.items.find((x) => x.roadmap === s.roadmap && x.track === t);
+    return first ? [first] : [];
+  });
+  if (!tracks.length) return;
+  const live = tracks.find((x) => !ofReplacedPrd(db, x));
   if (live) {
     s.track = live.track;
     s.prd_doc = ownPrd(live);
     return;
   }
-  const own = ownPrd(s);
+  s.track = tracks[0].track;
+  const own = ownPrd(tracks[0]);
   const to = db.replaced_with?.[own.id] ?? db.replaced_with?.[own.slug];
   if (to) s.prd_doc = to;
 }
@@ -1114,7 +1119,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     ],
     // build-milestones-on-roadmap: the shown roadmaps' milestones per goal (a PRD's among them).
     goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)))),
-    span: db.plan ? planSpan() : null,
+    // service.build: the span of the shown items' PRDs' plans only (a replaced plan PRD's goes with its items).
+    span: db.plan && shown.some((i) => !!i.prd && (i.prd.slug === PLAN_PRD_SLUG || !!db.plan?.prds?.includes(i.prd.slug))) ? planSpan() : null,
     // A working draft belongs to one roadmap: a chosen roadmap's read carries its own only.
     changes_in_review: chosen ? (reader.hiddenBy[roadmapId(chosen)] ?? 0) : reader.hidden,
     drafts: chosen ? reader.visible.filter((d) => d.document_id === roadmapId(chosen)) : reader.visible,

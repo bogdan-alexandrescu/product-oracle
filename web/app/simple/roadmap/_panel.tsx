@@ -15,10 +15,12 @@ import { ChangeFailed, changedWords, decide, nearWords, propose, resultWords, se
 
 const toast = (ask: ToastAsk) => dsToast({ place: "corner", ...ask });
 
-/** Which roadmap item is the feature: its code in the plan's PRD, else its code, else its name. */
-export function itemFor(items: Item[], f: { code: string; name: string; prd?: { id: string; slug: string } | null }): Item | undefined {
+/** Which roadmap item is the feature: the item itself when known (a draft's), else its code in
+ * the plan's PRD, else its code, else its name. */
+export function itemFor(items: Item[], f: { id?: string; code: string; name: string; prd?: { id: string; slug: string } | null }): Item | undefined {
   const same = (i: Item) => !!i.code && i.code.toLowerCase() === f.code.toLowerCase();
   return (
+    (f.id ? items.find((i) => i.id === f.id) : undefined) ??
     items.find((i) => same(i) && !!f.prd && (i.prd?.id === f.prd.id || i.prd?.slug === f.prd.slug)) ??
     items.find(same) ??
     items.find((i) => i.title === f.name)
@@ -32,7 +34,7 @@ export function FeaturePanel({
   canChange,
   onClose,
 }: {
-  feature: { code: string; name: string; prd?: { id: string; slug: string } | null };
+  feature: { id?: string; code: string; name: string; prd?: { id: string; slug: string } | null };
   phone: boolean;
   canChange: boolean;
   onClose: () => void;

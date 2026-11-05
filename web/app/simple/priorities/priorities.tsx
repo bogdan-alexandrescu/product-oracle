@@ -922,6 +922,10 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
   const [merging, setMerging] = useState<string | null>(null);
   const [into, setInto] = useState("");
   const show = useSearchParams().get("show");
+  // A draft's name opens the one feature panel, as a row anywhere else in Simple does.
+  const { can } = useMe();
+  const phone = usePhone();
+  const [opened, setOpened] = useState<Draft | null>(null);
   return (
     <section aria-label="Not ranked yet" className="mt-6">
       <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Not ranked yet</h2>
@@ -933,7 +937,11 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
           <li key={d.item_id} data-testid="prio-draft" data-code={d.code} data-shown={show === d.item_id ? "true" : undefined} className={`rounded-[var(--simple-card-radius)] border border-dashed bg-surface p-3 ${show === d.item_id ? "border-accent ring-2 ring-accent" : "border-line-strong"}`}>
             <div className="flex flex-wrap items-center gap-3">
               <span className="rounded-full bg-na-bg px-2 text-[length:var(--simple-small)] text-na">Draft</span>
-              <span className="flex-1 font-medium">{d.title}</span>
+              <span className="flex-1 font-medium">
+                <button type="button" title={`Open ${d.title}`} className="text-left hover:underline" onClick={() => setOpened(d)}>
+                  {d.title}
+                </button>
+              </span>
               <span className="text-[length:var(--simple-small)] text-text2">{d.goal?.title ?? "No goal"}</span>
               {mayChange && (
                 <span className="flex gap-2">
@@ -1003,6 +1011,7 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
           );
         })}
       </ul>
+      {opened && <FeaturePanel key={opened.item_id} feature={{ id: opened.item_id, code: opened.code, name: opened.title }} phone={phone} canChange={can("create_simple_change")} onClose={() => setOpened(null)} />}
     </section>
   );
 }
