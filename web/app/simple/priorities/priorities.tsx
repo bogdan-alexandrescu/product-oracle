@@ -19,6 +19,7 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { FeaturePanel } from "../roadmap/_panel";
 import { ArchiveDialog, BTN, count, dayOf, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
+import { ArchivedBuckets, ArchivedGoalsFold, GoalOwner, GoalSheet, MK_TODAY, MoreMenu, mkSet, useGoalAccess, useMk, useMkStore } from "@/components/simple/MkEditGoalsPrds"; // MOCK-HOOK
 import { knownCode, TaskRow, useBucketTasks, type Task } from "./task-edit";
 import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan } from "./plan-buckets";
 
@@ -2253,6 +2254,11 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
   const [panel, setPanel] = useState<{ goal: GoalBrief; start?: GoalPanelStart } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [archiving, setArchiving] = useState<string | null>(null);
+  const eg = useMk("eg"); // MOCK-HOOK
+  const access = useGoalAccess(); // MOCK-HOOK
+  const [verb, setVerb] = useState<"Archive" | "Delete" | "Remove">("Archive"); // MOCK-HOOK
+  const [sheet, setSheet] = useState<string | null>(null); // MOCK-HOOK
+  const [showArchived, setShowArchived] = useState(false); // MOCK-HOOK
   const [note, setNote] = useState<Note | null>(null);
   const noteSlot = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -2345,12 +2351,23 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
     .map((b) => ({ b, rows: b.codes.map((c) => rowOf.get(c)).filter((r): r is Row => !!r && !r.in_plan) }))
     .filter((x) => x.rows.length > 0);
   const archivedGoal = gb?.goals.find((g) => g.id === archiving);
+  const mk = useMkStore(); // MOCK-HOOK
+  const sheetGoal = gb?.goals.find((g) => g.id === sheet); // MOCK-HOOK
+  // MOCK-HOOK: Restore puts an archived goal back as the last goal (or asks an approver to).
+  const mkRestore = async (x: { id: string; title: string; measure: string | null; target: string | null; due: string | null }) => { // MOCK-HOOK
+    if (access === "propose") return setNote({ text: <>Sent to an approver: restore {x.title}.</> }); // MOCK-HOOK
+    mkSet((st) => ({ ...st, archived: st.archived.filter((a) => a.id !== x.id) })); // MOCK-HOOK
+    if (await writes.add({ title: x.title, measure: x.measure ?? "", target: x.target ?? "", due: "", day: x.due ?? "2027-03-31" }, nextOrder)) setNote({ text: <>Restored {x.title} as goal {nextOrder}. Drag features back into it, or leave it empty.</> }); // MOCK-HOOK
+  }; // MOCK-HOOK
   // A feature's name opens the Simple item panel, as the roadmap does.
   const phone = usePhone();
   const [opened, setOpened] = useState<{ code: string; name: string } | null>(null);
   return (
     <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
       <PlanBucketsHead plan={plan} codeOf={codeOf} />
+      {eg === "b" && mk.archived.length > 0 && ( // MOCK-HOOK
+        <label data-testid="mk-show-archived" className="mt-3 inline-flex items-center gap-2 text-[15px]"><input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="h-4 w-4 accent-[var(--accent)]" /> Show archived goals ({mk.archived.length})</label> // MOCK-HOOK
+      )} {/* MOCK-HOOK */}
       <div ref={noteSlot} className="scroll-mt-4" />
       {note && <UndoNote onUndo={note.undo ? () => void writes.undo(note.undo!) : note.changes?.length ? () => void tasks.undo(note.changes!) : undefined}>{note.text}</UndoNote>}
       {error && (
@@ -2387,6 +2404,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
                   order={rec.order}
                   title="Edit goal"
                   year={year}
+                  mkOwner={eg === "a" ? rec.title : undefined} // MOCK-HOOK
                   onCancel={() => setEditing(null)}
                   onSave={async (f) => {
                     if (await writes.edit(rec, f, year)) setEditing(null);
@@ -2402,12 +2420,29 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
                     <span data-testid="plan-goal-count" className={`mt-1 flex-none text-[15px] text-text2 max-sm:order-last max-sm:mt-0 max-sm:basis-full ${rec ? "max-sm:pl-8" : ""}`}>
                       {count(n)}
                     </span>
-                    {rights.edit(rec) && (
-                      <button type="button" aria-label={`Edit ${g}`} title="Edit goal" className={ICON_BTN} onClick={() => setEditing(rec!.id)} disabled={!!editing}>
+                    {(eg ? access === "change" && !!rec : rights.edit(rec)) && ( // MOCK-HOOK
+                      <button type="button" aria-label={`Edit ${g}`} title="Edit goal" className={ICON_BTN} onClick={() => (eg === "b" ? setSheet(rec!.id) : setEditing(rec!.id))} disabled={!!editing}> {/* MOCK-HOOK */}
                         ✎
                       </button>
                     )}
-                    {rights.edit(rec) && rights.archive && <GoalMenu title={g} archive onEdit={() => setEditing(rec!.id)} onArchive={() => setArchiving(rec!.id)} />}
+                    {!eg && rights.edit(rec) && rights.archive && <GoalMenu title={g} archive onEdit={() => setEditing(rec!.id)} onArchive={() => setArchiving(rec!.id)} />}
+                    {eg && rec && access !== "read" && ( // MOCK-HOOK
+                      <MoreMenu // MOCK-HOOK
+                        label={`More for ${g}`} // MOCK-HOOK
+                        testId="mk-goal-menu" // MOCK-HOOK
+                        items={ // MOCK-HOOK
+                          access === "propose" // MOCK-HOOK
+                            ? eg === "b" // MOCK-HOOK
+                              ? [{ label: "Open goal", onClick: () => setSheet(rec.id) }] // MOCK-HOOK
+                              : [{ label: eg === "c" ? "Ask to remove" : "Ask to archive", onClick: () => { setVerb(eg === "c" ? "Remove" : "Archive"); setArchiving(rec.id); } }, ...(eg === "a" ? [{ label: "Ask to delete", warn: true, onClick: () => { setVerb("Delete"); setArchiving(rec.id); } }] : [])] // MOCK-HOOK
+                            : eg === "a" // MOCK-HOOK
+                              ? [{ label: "Edit goal", onClick: () => setEditing(rec.id) }, { label: "Archive goal", onClick: () => { setVerb("Archive"); setArchiving(rec.id); } }, { label: "Delete goal", warn: true, onClick: () => { setVerb("Delete"); setArchiving(rec.id); } }] // MOCK-HOOK
+                              : eg === "b" // MOCK-HOOK
+                                ? [{ label: "Open goal", onClick: () => setSheet(rec.id) }] // MOCK-HOOK
+                                : [{ label: "Edit goal", onClick: () => setEditing(rec.id) }, { label: "Remove goal", warn: true, onClick: () => { setVerb("Remove"); setArchiving(rec.id); } }] // MOCK-HOOK
+                        } // MOCK-HOOK
+                      /> // MOCK-HOOK
+                    )} {/* MOCK-HOOK */}
                   </div>
                   {rec && (
                     <p data-testid="goal-measure" className={`mt-0.5 text-[15px] leading-5 text-text2 ${rec ? "pl-8" : ""}`}>
@@ -2420,6 +2455,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
                       )}
                     </p>
                   )}
+                  {eg && rec && <p className="mt-0.5 pl-8"><GoalOwner title={rec.title} picker={eg === "c"} access={access} /></p>} {/* MOCK-HOOK */}
                 </>
               )}
               <FeatureRows plan={plan} goal={g} gb={gb} grips={rights.move || rights.task} lifted={drag.lifted} onGrip={featureGrip} onOpen={setOpened} {...taskRows(g, rec)} />
@@ -2481,6 +2517,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
               </button>
             </li>
           ))}
+        {eg === "b" && showArchived && <ArchivedBuckets access={access} onRestore={(x) => mkRestore(x)} />} {/* MOCK-HOOK */}
         {noGoal && (
           <li data-testid="plan-goal" data-goal="" className="rounded-[var(--simple-card-radius)] border border-warn bg-surface p-4">
             <div className="flex flex-wrap items-baseline gap-x-2">
@@ -2493,6 +2530,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
             <FeatureRows plan={plan} goal={null} gb={gb} grips={rights.move || rights.task} lifted={drag.lifted} onGrip={featureGrip} onOpen={setOpened} {...taskRows(null, undefined)} />
           </li>
         )}
+        {eg === "a" && <ArchivedGoalsFold access={access} onRestore={(x) => void mkRestore(x)} />} {/* MOCK-HOOK */}
         {outside.length > 0 && (
           <li data-testid="plan-outside" className="rounded-[var(--simple-card-radius)] border border-line bg-surface p-4 sm:col-span-2">
             <h3 className="text-[21px] font-[650] leading-7">Also this quarter, outside the plan</h3>
@@ -2527,9 +2565,14 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
           goal={archivedGoal}
           plan={plan}
           gb={gb}
+          verb={eg ? verb : undefined} // MOCK-HOOK
+          propose={!!eg && access === "propose"} // MOCK-HOOK
           onClose={() => setArchiving(null)}
           onArchive={async (to) => {
-            if (!(await writes.archive(archivedGoal, to, archiveWords((t) => planFeatures(plan, t), gb, archivedGoal, to)))) return;
+            if (eg && access === "propose") { setArchiving(null); return setNote({ text: <>Sent to an approver: {verb.toLowerCase()} {archivedGoal.title}. Nothing changes until they say yes.</> }); } // MOCK-HOOK
+            const mkWords = archiveWords((t) => planFeatures(plan, t), gb, archivedGoal, to).replace(/^Archived/, eg && verb !== "Archive" ? `${verb === "Delete" ? "Deleted" : "Removed"}` : "Archived") + (eg && verb !== "Archive" ? " It is in Trash for 30 days." : ""); // MOCK-HOOK
+            if (!(await writes.archive(archivedGoal, to, mkWords))) return; // MOCK-HOOK
+            if (eg && verb === "Archive") mkSet((st) => ({ ...st, archived: [{ id: archivedGoal.id, title: archivedGoal.title, measure: archivedGoal.measure ?? null, target: archivedGoal.target ?? null, due: archivedGoal.due ?? null, owner: st.owners[archivedGoal.title] ?? "", archived: MK_TODAY, features: planFeatures(plan, archivedGoal.title).length }, ...st.archived] })); // MOCK-HOOK
             setArchiving(null);
             // gb2-a-result: the archived bucket is gone, so the page scrolls back to the note's own
             // place above the buckets, where it covers no goal's title.
@@ -2538,6 +2581,23 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
         />
       )}
       {panel && <GoalPanel key={`${panel.goal.key}:${panel.start ?? ""}`} goal={panel.goal} start={panel.start} api={suggestions} onClose={() => setPanel(null)} />}
+      {sheetGoal && ( // MOCK-HOOK
+        <GoalSheet // MOCK-HOOK
+          goal={{ title: sheetGoal.title, measure: sheetGoal.measure ?? null, target: sheetGoal.target ?? null, due: dayOf(sheetGoal.due, year) }} // MOCK-HOOK
+          order={sheetGoal.order} // MOCK-HOOK
+          total={gb?.goals.length ?? 0} // MOCK-HOOK
+          access={access} // MOCK-HOOK
+          onClose={() => setSheet(null)} // MOCK-HOOK
+          onSave={async (f) => { // MOCK-HOOK
+            setSheet(null); // MOCK-HOOK
+            if (access === "propose") return setNote({ text: <>Sent to an approver: your changes to {sheetGoal.title}.</> }); // MOCK-HOOK
+            mkSet((st) => ({ ...st, owners: { ...st.owners, [f.title]: f.owner } })); // MOCK-HOOK
+            await writes.edit(sheetGoal, { ...f, day: sheetGoal.due ?? "2027-03-31" }, year); // MOCK-HOOK
+          }} // MOCK-HOOK
+          onArchive={() => { setSheet(null); setVerb("Archive"); setArchiving(sheetGoal.id); }} // MOCK-HOOK
+          onDelete={() => { setSheet(null); setVerb("Delete"); setArchiving(sheetGoal.id); }} // MOCK-HOOK
+        /> // MOCK-HOOK
+      )} {/* MOCK-HOOK */}
     </section>
   );
 }

@@ -7,6 +7,8 @@ import { calendarDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
+import { mkSet, OwnerField, useMkStore } from "@/components/simple/MkEditGoalsPrds"; // MOCK-HOOK
+
 import { CodeTag, goalLabel, milestoneColour, planFeatures, wk } from "./plan-buckets";
 
 /*
@@ -108,8 +110,10 @@ function Field({ label, children, error }: { label: string; children: ReactNode;
 type Fields = { title: string; measure: string; target: string; due: string };
 
 /** GB1 a: the goal's header turned into a small form, right where it sits. */
-export function GoalForm({ start, order, title, year, onSave, onCancel }: { start: Fields; order: number; title: string; year: string; onSave: (f: Fields & { day: string }) => Promise<void>; onCancel: () => void }) {
+export function GoalForm({ start, order, title, year, onSave, onCancel, mkOwner }: { start: Fields; order: number; title: string; year: string; onSave: (f: Fields & { day: string }) => Promise<void>; onCancel: () => void; mkOwner?: string }) {
   const [f, setF] = useState<Fields>(start);
+  const mkStore = useMkStore(); // MOCK-HOOK
+  const [owner, setOwner] = useState(mkOwner !== undefined ? (mkStore.owners[mkOwner] ?? "") : ""); // MOCK-HOOK
   const [busy, setBusy] = useState(false);
   const day = parseDay(f.due, year);
   const done = !!(f.title.trim() && f.measure.trim() && f.target.trim() && day);
@@ -123,6 +127,7 @@ export function GoalForm({ start, order, title, year, onSave, onCancel }: { star
         if (!done || busy) return;
         setBusy(true);
         try {
+          if (mkOwner !== undefined) mkSet((x) => ({ ...x, owners: { ...x.owners, [f.title.trim()]: owner } })); // MOCK-HOOK
           await onSave({ ...f, day: day! });
         } finally {
           setBusy(false);
@@ -154,6 +159,7 @@ export function GoalForm({ start, order, title, year, onSave, onCancel }: { star
           <input type="text" value={f.due} onChange={set("due")} placeholder="Pick a day" className={day ? INPUT : BAD} />
         </Field>
       </div>
+      {mkOwner !== undefined && <OwnerField value={owner} onChange={setOwner} />} {/* MOCK-HOOK */}
       <div className="mt-1 flex items-center gap-2">
         <button type="submit" className={PRIMARY} disabled={!done || busy}>
           Save goal
@@ -320,7 +326,8 @@ export function FeatureRows({
 /** A goal's features as ArchiveDialog counts them: the plan's, or with no dated plan the bucket's. */
 export type GoalFeatures = (goal: string) => { code: string; name: string; slices: Plan["slices"] }[];
 
-export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive }: { goal: Goal; plan: Plan | null; featuresOf?: GoalFeatures; gb: Buckets; onClose: () => void; onArchive: (to: string | null) => Promise<void> }) {
+export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive, verb, propose }: { goal: Goal; plan: Plan | null; featuresOf?: GoalFeatures; gb: Buckets; onClose: () => void; onArchive: (to: string | null) => Promise<void>; verb?: "Archive" | "Delete" | "Remove"; propose?: boolean }) {
+  const V = verb ?? "Archive"; // MOCK-HOOK
   const [mode, setMode] = useState<"move" | "none">("move");
   const [to, setTo] = useState("");
   const [busy, setBusy] = useState(false);
@@ -345,7 +352,8 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive }
   return (
     <div data-backdrop="" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
       <div ref={ref} role="dialog" aria-modal="true" aria-label={`Archive ${goal.title}`} className="flex max-h-[88vh] w-full max-w-lg flex-col rounded-t-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg sm:rounded-[var(--simple-card-radius)]" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Archive {goal.title}?</h2>
+        <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">{propose ? `Ask to ${V.toLowerCase()}` : V} {goal.title}?</h2> {/* MOCK-HOOK */}
+        {V !== "Archive" && <p className="mt-1 text-[15px] font-[650]">It goes to Trash, where an owner can bring it back for 30 days.</p>} {/* MOCK-HOOK */}
         <p className="mt-1 text-[15px] text-text2">
           {!plan
             ? list.length
@@ -411,7 +419,7 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive }
               }
             }}
           >
-            Archive goal
+            {propose ? "Send to an approver" : `${V} goal`} {/* MOCK-HOOK */}
           </button>
           <button type="button" className={BTN} onClick={onClose}>
             Cancel

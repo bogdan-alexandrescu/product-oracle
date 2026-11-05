@@ -1,5 +1,7 @@
 "use client";
 
+import { OnePagerArchivedBanner, OnePagerMk, PrdNote } from "@/components/simple/MkEditGoalsPrds"; // MOCK-HOOK
+
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
@@ -448,6 +450,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
         {/* qa4-simple-prd-34: it says it leaves Simple for Detailed. */}
         Open in Detailed{sessionId ? " (new tab)" : ""}
       </Link>
+      {!sessionId && <OnePagerMk slug={v.document.slug} title={v.document.title} phone={phone} />} {/* MOCK-HOOK */}
       {phone && startWhyLine}
     </>
   );
@@ -462,6 +465,8 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       data-testid="one-pager"
       data-presenting={presenting ? "true" : undefined}
     >
+      {!presenting && <OnePagerArchivedBanner slug={v.document.slug} />} {/* MOCK-HOOK */}
+      {!presenting && <div className="px-4 pt-3 empty:hidden"><PrdNote /></div>} {/* MOCK-HOOK */}
       {draftShown && v.draft && !presenting && (
         <div role="status" aria-label="Working draft" className="simple-noprint flex flex-wrap items-center gap-3 border-b border-[var(--simple-rule)] bg-[var(--simple-edited)] px-4 py-2 text-base">
           <strong>Working draft</strong>
