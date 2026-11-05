@@ -10,6 +10,8 @@ from oracle.auth.models import User
 from oracle.docs.models import Document, DocumentVersion
 from oracle.runs.models import Run
 from oracle.tenancy import tenant_session
+from tests.conftest import make_tenant
+from tests.fixtures import seed_auth
 from tests.test_runs import as_user, create, decide, get, owner, runtime, started, tick
 
 __all__ = ["owner", "runtime"]
@@ -116,3 +118,109 @@ async def test_a_reader_who_may_not_see_runs_still_reads_the_sign(client, owner,
     viewer = await as_user(tenant_id, "viewer")
     body = await _rebuilds(client, viewer)
     assert [r["state"] for r in body["rebuilds"]] == ["running"]
+
+
+async def test_a_roadmap_run_carries_the_prd_it_reads(client, runtime):
+    """A prd_to_roadmap run names the PRD it reads (``source_slug``), so the PRD's sign lists
+    it beside the PRD's own regenerate (frame a-one-pager-running-rbcasetwo)."""
+    from tests.test_roadmap import PRD, approved_prd
+    from tests.test_roadmap import create as create_roadmap_run
+
+    _, auth = await seed_auth()
+    await approved_prd(client, auth)
+    run = await create_roadmap_run(client, auth, source=PRD)
+    body = await _rebuilds(client, auth)
+    [rb] = [r for r in body["rebuilds"] if r["run_id"] == run["id"]]
+    assert rb["source_slug"] == PRD
+    assert rb["document_kind"] == "roadmap"
+
+
+async def test_a_prd_run_carries_no_source(client, owner, runtime):
+    _, auth = owner
+    await create(client, auth)
+    [rb] = (await _rebuilds(client, auth))["rebuilds"]
+    assert rb["source_slug"] is None
+
+
+async def test_a_document_the_reader_may_not_see_has_no_sign(client, owner, runtime):
+    tenant_id, auth = owner
+    async with tenant_session(tenant_id) as s:
+        s.add(Document(slug="example-prd", title="Example PRD", kind="prd", visibility="approvers"))
+        await s.commit()
+    await started(client, auth, checkpoints={"eng_dates": False})
+    commenter = await as_user(tenant_id, "commenter")
+    body = await _rebuilds(client, commenter)
+    assert body["rebuilds"] == []
+    # The owner still reads it.
+    assert [r["state"] for r in (await _rebuilds(client, auth))["rebuilds"]] == ["running"]
+
+
+async def test_the_prd_count_is_what_the_reader_may_see(client, owner, runtime):
+    tenant_id, auth = owner
+    async with tenant_session(tenant_id) as s:
+        s.add(
+            Document(
+                slug="example-roadmap",
+                title="Example roadmap",
+                kind="roadmap",
+                company_roadmap=True,
+            )
+        )
+        s.add(Document(slug="open-prd", title="Open PRD", kind="prd"))
+        s.add(Document(slug="closed-prd", title="Closed PRD", kind="prd", visibility="approvers"))
+        await s.commit()
+    assert (await _rebuilds(client, auth))["company_roadmap"]["prds"] == 2
+    commenter = await as_user(tenant_id, "commenter")
+    assert (await _rebuilds(client, commenter))["company_roadmap"]["prds"] == 1
+
+
+async def test_another_tenants_runs_are_not_listed(client, owner, runtime):
+    _, auth = owner
+    await started(client, auth, checkpoints={"eng_dates": False})
+    other = await as_user(await make_tenant("Other Example Co"), "owner")
+    assert (await _rebuilds(client, other))["rebuilds"] == []
+
+
+async def test_a_flow_that_writes_no_document_is_not_listed(client, runtime):
+    """prd_draft_items reads a PRD draft and writes no version of any document."""
+    from oracle.runs import flows
+    from tests.test_roadmap import PRD, approved_prd
+
+    assert not any(g.imports_draft for g in flows.FLOWS["prd_draft_items"].segments)
+    _, auth = await seed_auth()
+    await approved_prd(client, auth, approve=False)
+    resp = await client.post(
+        "/v1/runs",
+        json={"flow": "prd_draft_items", "source": PRD, "source_version": 1},
+        headers=auth,
+    )
+    assert resp.status_code == 201, resp.text
+    assert (await _rebuilds(client, auth))["rebuilds"] == []
+
+
+async def test_many_runs_read_in_a_few_queries(client, owner, runtime):
+    """Batched: the number of queries does not grow with the runs or their documents."""
+    from sqlalchemy import event
+
+    from oracle.db import get_engine
+
+    tenant_id, auth = owner
+    await create(client, auth)
+    counts = []
+    for n in range(2):
+        statements = []
+
+        def count(*_a, _s=statements, **_k):
+            _s.append(1)
+
+        event.listen(get_engine().sync_engine, "before_cursor_execute", count)
+        try:
+            await _rebuilds(client, auth)
+        finally:
+            event.remove(get_engine().sync_engine, "before_cursor_execute", count)
+        counts.append(len(statements))
+        for i in range(3):
+            await create(client, auth, document=f"example-prd-{n}-{i}")
+    body = await _rebuilds(client, auth)
+    assert len(body["rebuilds"]) == 7
+    assert counts[1] == counts[0]
