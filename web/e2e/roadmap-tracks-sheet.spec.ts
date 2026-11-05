@@ -67,10 +67,12 @@ test.describe("Tracks sheet", () => {
     await expect(row(page, "Partner setup track")).toContainText("No owner · 0 features");
     await expect(page.getByTestId("tracks-open")).toHaveText("Tracks · 4");
 
+    // It shows its 3 live features; Move to Trash moves its cut one (In-app tour) too, and says so.
+    await expect(row(page, "Setup and onboarding")).toContainText("3 features");
     await row(page, "Setup and onboarding").getByRole("button", { name: "Move to Trash" }).click();
-    await expect(row(page, "Setup and onboarding").getByTestId("track-trash-confirm")).toContainText("Its 3 features move to No track.");
+    await expect(row(page, "Setup and onboarding").getByTestId("track-trash-confirm")).toContainText("Its 4 features, cut ones too, move to No track.");
     await row(page, "Setup and onboarding").getByTestId("track-trash-confirm").getByRole("button", { name: "Move to Trash" }).click();
-    await expect(toasts(page)).toContainText("Moved Setup and onboarding to Trash · 3 features now have no track");
+    await expect(toasts(page)).toContainText("Moved Setup and onboarding to Trash · 4 features now have no track");
     await expect(row(page, "Setup and onboarding")).toHaveCount(0);
     await expect(page.getByTestId("tracks-open")).toHaveText("Tracks · 3");
 
@@ -158,8 +160,11 @@ test.describe("Tracks sheet", () => {
     await r.getByRole("button", { name: "Paused" }).click();
     await expect(toasts(page)).toContainText("Pause proposed · waits for Avery Stone");
     await expect(r).not.toContainText("· Paused");
+    // After Withdraw the sheet reads its tracks again.
+    const reread = page.waitForResponse((res) => res.url().includes("/v1/simple/tracks") && res.request().method() === "GET");
     await toasts(page).getByRole("button", { name: "Withdraw" }).click();
     await expect(toasts(page)).toContainText("Withdrawn");
+    await reread;
   });
 
   test("a viewer reads", async ({ page }) => {
