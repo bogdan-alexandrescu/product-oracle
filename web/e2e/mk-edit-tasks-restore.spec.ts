@@ -25,7 +25,8 @@ async function snap(page: Page, name: string) {
     let css = "";
     for (const sh of Array.from(document.styleSheets)) {
       try {
-        for (const rule of Array.from(sh.cssRules)) css += rule.cssText + "\n";
+        for (const rule of Array.from(sh.cssRules))
+          css += rule.cssText.replace(/url\((['"]?)(?!data:|#)([^'")]+)\1\)/g, (_m, _q, u: string) => `url(${new URL(u, sh.href ?? location.href).href})`) + "\n";
       } catch {
         /* a sheet from elsewhere */
       }
