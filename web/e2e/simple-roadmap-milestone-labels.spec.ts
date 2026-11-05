@@ -165,7 +165,10 @@ for (const scheme of ["light", "dark"] as const)
       }
       expect(found, "Tab never reaches a milestone label").toBe(true);
       const focused = page.locator('[data-testid="timeline-milestone"]:focus');
+      // The first label in the row is Jan 15's, cut short: its tip gives the whole name.
+      expect(await focused.evaluate((el) => el.scrollWidth > el.clientWidth + 1), "the focused label is not the cut one").toBe(true);
       await expect(tip).toBeVisible();
+      await expect(tip).toContainText(/^Trail beta, Jan 15, 2027/);
       expect(await focused.evaluate((el) => getComputedStyle(el).outlineStyle)).not.toBe("none");
       // On along the row: the chip lists what it folds; Enter on an entry opens it.
       let chip = false;
