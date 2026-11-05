@@ -43,6 +43,12 @@ Test cards (protects / fails_when / no_claim):
   open decision as the Decisions page's row (fields, ``can``) for the sheet Home and Waiting
   for you open on a decision-log call; Waiting still answers; a deleted one is 404;
   fails_when=the row or its ``can`` is missing, or Waiting is shadowed.
+- test_accepting_a_proposed_withdraw_applies_it: protects=accepting a proposed change
+  that is not an edit (a withdraw waiting for its decider) withdraws the decision;
+  fails_when=the accept reads the sheet's fields for "status" (a 500).
+- test_a_question_of_a_deleted_or_replaced_prd_is_404: protects=``GET
+  /v1/simple/decisions/{id}`` drops an open question whose PRD is replaced or deleted, as
+  the Decisions page does; fails_when=it still reads as a row.
 """
 
 import uuid
@@ -414,4 +420,48 @@ async def test_one_decision_reads_as_its_row(client):
                                 headers=ctx.as_("owner"))  # fmt: skip
     assert gone.status_code == 200, gone.text
     r = await client.get(f"/v1/simple/decisions/{d['id']}", headers=ctx.as_("owner"))
+    assert r.status_code == 404, r.text
+
+
+async def test_accepting_a_proposed_withdraw_applies_it(client):
+    from oracle.simple.models import SimpleChange
+
+    ctx = await make_ctx()
+    d = await _decision(client, ctx, approver="owner")
+    async with tenant_session(ctx.tenant_id) as s:
+        c = SimpleChange(op="withdraw_decision", target={"decision_id": d["id"], "name": "D"},
+                         before={"status": "proposed"}, after={"status": "withdrawn"},
+                         status="proposed", by=ctx.users["approver"].id, at=NOW,
+                         routed_to=[ctx.users["owner"].id])  # fmt: skip
+        s.add(c)
+        await s.commit()
+        cid = c.id
+    ok = await client.post(f"{CHANGES}/{cid}/accept", headers=ctx.as_("owner"), json={})
+    assert ok.status_code in (200, 201), ok.text
+    assert ok.json()["change"]["status"] == "accepted"
+    async with tenant_session(ctx.tenant_id) as s:
+        assert (await s.get(Decision, uuid.UUID(d["id"]))).status == "withdrawn"
+
+
+async def test_a_question_of_a_deleted_or_replaced_prd_is_404(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    q = next(x for x in (await _page(client, ctx))["questions"] if x["status"] == "proposed")
+    url = f"/v1/simple/decisions/{q['id']}"
+    r = await client.get(url, headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        other = Document(slug="guided-setup-two", title="Guided setup two", kind="prd",
+                         status="approved", visibility="company")  # fmt: skip
+        s.add(other)
+        await s.flush()
+        (await s.get(Document, ids["prd"])).replaced_by = [other.id]
+        await s.commit()
+    r = await client.get(url, headers=ctx.as_("owner"))
+    assert r.status_code == 404, r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        prd = await s.get(Document, ids["prd"])
+        prd.replaced_by, prd.deleted_at = [], NOW
+        await s.commit()
+    r = await client.get(url, headers=ctx.as_("owner"))
     assert r.status_code == 404, r.text
