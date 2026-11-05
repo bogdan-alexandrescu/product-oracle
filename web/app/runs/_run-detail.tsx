@@ -38,7 +38,6 @@ import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { failedAt, formatDateTime, formatDay, formatTime, plural } from "@/lib/format";
 import { useMe, type Operation } from "@/lib/me";
-import { unknownGoalWords } from "@/lib/order-problems";
 
 import { NewRunDialog, type RunStart } from "./_new-run-dialog";
 import { QueueWaitNote } from "./_queue-wait";
@@ -2598,7 +2597,7 @@ function GateRow({ x, onWaive }: { x: NonNullable<CheckpointOut["gate"]>["left"]
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium">{x.item_title ?? x.item}</span>
         <Chip kind="crit" className={REASON_CHIP}>
-          {x.code === "unknown_goal" ? unknownGoalWords(x.label) : x.label}
+          {x.label}
         </Chip>
         {x.waivable && onWaive && !open && (
           <button

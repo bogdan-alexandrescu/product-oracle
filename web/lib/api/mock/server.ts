@@ -82,6 +82,7 @@ import {
   seedEngReviewRun,
   seedFeatureSetRun,
   seedPriorityRuns,
+  PRIORITY_STALE_GOAL_RUN,
   seedRunReviewRun,
   seedNoDocumentRuns,
   proposalRun,
@@ -1998,6 +1999,9 @@ function seedPriorityOrder(): Db {
     template: null, template_version: null, theme: null, created_at: at, updated_at: at,
   });
   seeded("priority-order", () => seedPriorityRuns(db.runs!, runsContext(db)));
+  // The Gift boxes run proposed Cut early churn: its review (Baseline › From this run) decides it, and Undo brings it back.
+  const churn = db.baseline.entities.find((e) => e.type === "goal" && e.key === "g.early-churn");
+  if (churn) churn.run_id = PRIORITY_STALE_GOAL_RUN;
   return db;
 }
 

@@ -779,6 +779,8 @@ function liveOf(ctx: RunsContext, cp: CheckpointOut, actions: DraftActionRow[]):
 
 /** The gate of `cp` now, with its live reasons. */
 function gateNow(ctx: RunsContext, cp: CheckpointOut, actions: DraftActionRow[], edits = true): Schemas["Gate"] | null {
+  // As the API's _live_reasons: an order's stale-goal problem is read as of now (gone once its goal is back).
+  recheckOrderGoals(ctx, cp, false);
   return gateOf(cp, actions, edits, liveOf(ctx, cp, actions));
 }
 
@@ -1270,12 +1272,22 @@ const approvedScope = (ctx: Pick<RunsContext, "db">, r: RunOut) => (ctx.db.scope
 const goalSet = (ctx: Pick<RunsContext, "goalKeys">) => (ctx.goalKeys ? new Set(ctx.goalKeys()) : null);
 
 /**
+ * As oracle.priorities.run_order.unknown_goal_message: a new feature names a goal that is not one
+ * of the Ground Truth, said by the goal's last known name; with none, never by its key.
+ */
+function unknownGoalMessage(feature: string, goal: string | undefined | null): string {
+  return goal
+    ? `${feature} names the goal ${goal}, which is not a goal in the Ground Truth: the run must name one that is`
+    : `${feature} names a goal that was deleted: the run must name a goal of the Ground Truth`;
+}
+
+/**
  * As the API's check (oracle.priorities.run_order.check_order), for the codes the mock's
  * orders can show: unknown_feature, not_in_scope, missing_feature, before_prerequisite,
  * new_feature_no_goal, unknown_goal (blocking); differs_from_live, no_goal (advisory). The live ranking is the mock's
  * (./lane-f.ts), restricted to the ranked features.
  */
-function checkOrder(given: OrderSpec, scope: PrdScopeOut["features"] | null, goals: Set<string> | null): PriorityCheck {
+function checkOrder(given: OrderSpec, scope: PrdScopeOut["features"] | null, goals: Set<string> | null, goalTitle?: (key: string) => string | undefined): PriorityCheck {
   const live = ranking(given.method).features;
   const titleOf = (k: string) => live.find((f) => f.key === k)?.title ?? (scope ?? []).find((f) => f.key === k)?.title ?? given.order.find((o) => o.key === k && o.title)?.title ?? k;
   // A key ranked twice is checked once, at its first entry (api: duplicate_key).
@@ -1309,7 +1321,7 @@ function checkOrder(given: OrderSpec, scope: PrdScopeOut["features"] | null, goa
     const keys = named.flatMap((g) => (g.key ? [g.key] : []));
     const zero = new Set(named.filter((g) => g.key && g.contribution === 0).map((g) => g.key!));
     const unknown = goals ? [...new Set(keys)].filter((k) => !goals.has(k)) : [];
-    for (const g of unknown) add("unknown_goal", o.key, `${title} names the goal ${g}, which is not a goal in the Ground Truth: the run must name one that is`);
+    for (const g of unknown) add("unknown_goal", o.key, unknownGoalMessage(title, goalTitle?.(g)));
     if (!unknown.length && !keys.some((k) => (!goals || goals.has(k)) && !zero.has(k))) add("new_feature_no_goal", o.key, `${title} is new and names no goal it serves: the run must name one`);
   }
   for (const k of keys) {
@@ -1461,34 +1473,57 @@ function decideOrder(ctx: Pick<RunsContext, "db" | "now" | "documents" | "accept
   }
 }
 
+type OrderProblem = PriorityCheck["problems"][number] & { stale_goal?: string };
+/** As run_order._is_stale: a problem stale_goals added (marked), or one stored before the mark. */
+const isStale = (p: OrderProblem) => !!p.stale_goal || p.message.includes("after the order was checked");
+
 /**
- * As oracle.priorities.run_order.stale_goals at approval: each goal an order's new feature serves
- * that is no goal of the Ground Truth now is a blocking unknown_goal, added to the order's check.
+ * As oracle.priorities.run_order.recheck_goals (api runs.service._recheck_order_goals): each goal
+ * an order's new feature serves that is no goal of the Ground Truth now is a blocking unknown_goal
+ * on the order's check, named by its last known name (never its key); one whose goal is back
+ * (restored, confirmed again) is dropped. `add` (Approve order): a newly stale goal is added; a
+ * read (the band, the gate, the Inbox) only drops what no longer holds. Returns the stale-goal
+ * problems open now.
  */
-function recheckOrderGoals(ctx: Pick<RunsContext, "db" | "goalKeys" | "goalTitle">, cp: CheckpointOut): PriorityCheck["problems"] {
+function recheckOrderGoals(ctx: Pick<RunsContext, "db" | "goalKeys" | "goalTitle">, cp: CheckpointOut, add = true): PriorityCheck["problems"] {
   const goals = goalSet(ctx);
-  const snap = (ctx.db.priority_snapshots ?? []).find((x) => x.id === cp.payload.priority_snapshot_id && x.status === "proposed");
+  const snap = cp.status === "pending" && cp.kind === "priority_order" ? (ctx.db.priority_snapshots ?? []).find((x) => x.id === cp.payload.priority_snapshot_id && x.status === "proposed") : undefined;
   if (!goals || !snap) return [];
   const check = snap.check_result ?? { method: snap.method, features: snap.ranking.length, problems: [], order: [] };
-  const said = new Set(check.problems.map((x) => x.message));
-  const stale: PriorityCheck["problems"] = [];
+  const problems = check.problems as OrderProblem[];
+  const kept = problems.filter((p) => !isStale(p));
+  const before = new Set(problems.filter(isStale).map((p) => p.message));
+  const said = new Set(kept.map((x) => x.message));
+  const stale: OrderProblem[] = [];
   for (const row of snap.ranking.filter((x) => x.new)) {
     for (const g of row.explanation.goals ?? []) {
-      if (goals.has(String(g.goal)) || g.contribution === 0) continue;
-      const title = ctx.goalTitle?.(String(g.goal));
+      const key = String(g.goal);
+      if (goals.has(key) || g.contribution === 0) continue;
+      const title = ctx.goalTitle?.(key);
+      // A goal gone from the Ground Truth: its last known name, the row's term kept it (not its key).
       const message = title
-          ? `${row.title} serves the goal ${title}, which was rejected after the order was checked: the run must name a goal of the Ground Truth`
-          : `${row.title} names the goal ${g.goal}, which is not a goal in the Ground Truth: the run must name one that is`;
-      if (said.has(message)) continue;
+        ? `${row.title} serves the goal ${title}, which was rejected after the order was checked: the run must name a goal of the Ground Truth`
+        : unknownGoalMessage(row.title, g.title && g.title !== key ? g.title : null);
+      if (said.has(message) || (!add && !before.has(message))) continue;
       said.add(message);
-      stale.push({ code: "unknown_goal", blocking: true, feature: row.key, message });
+      stale.push({ code: "unknown_goal", blocking: true, feature: row.key, message, stale_goal: key });
     }
   }
-  if (stale.length) {
-    snap.check_result = { ...check, problems: [...check.problems, ...stale] };
+  const next = [...kept, ...stale];
+  if (next.length !== problems.length || next.some((p, i) => p.message !== problems[i].message)) {
+    snap.check_result = { ...check, problems: next };
     cp.payload = { ...cp.payload, priority_check: snap.check_result };
   }
   return stale;
+}
+
+/**
+ * As the API's compare read (oracle.priorities.service.compare): the order's stale-goal problems
+ * as of now, before the band reads them.
+ */
+export function refreshOrderGoals(ctx: Pick<RunsContext, "db" | "goalKeys" | "goalTitle">, snap: { checkpoint_id?: string | null; run_id?: string | null }) {
+  const cp = ctx.db.runs.find((r) => r.id === snap.run_id)?.checkpoints.find((c) => c.id === snap.checkpoint_id);
+  if (cp) recheckOrderGoals(ctx, cp, false);
 }
 
 /** The priority stop's note when Oracle saved the order itself (H11 ``priorities`` at Act). */
@@ -1576,7 +1611,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
   const dates = def.outputs.includes("eng_dates.yaml") ? datesCheckOf(r, r.id === ENG_DATES_RUN ? SEEDED_DATES : LOCAL_DATES) : null;
   if (dates) ctx.db.artifacts[`${r.id}|${s.seq}|eng_dates.yaml`] = datesYaml(dates, attempt);
   if (def.outputs.includes("priority.yaml")) {
-    s.priority_check = checkOrder(LOCAL_ORDER, scopeOf(ctx, r), goalSet(ctx));
+    s.priority_check = checkOrder(LOCAL_ORDER, scopeOf(ctx, r), goalSet(ctx), ctx.goalTitle);
     snapshot = proposeOrder(ctx, r, s.seq, attempt, LOCAL_ORDER, s.priority_check);
   }
   // The mock writes no strategy draft ("{draft}"): Company › Strategy keeps its own store.
@@ -3252,7 +3287,7 @@ function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, do
   own.scopes![r.id] = [];
   tick(full);
   const priority = r.segments.find((s) => s.name === "priority")!;
-  const check = checkOrder(spec, scope ?? null, goalSet(ctx));
+  const check = checkOrder(spec, scope ?? null, goalSet(ctx), ctx.goalTitle);
   priority.priority_check = check;
   db.artifacts[`${r.id}|${priority.seq}|priority.yaml`] = priorityYaml(spec, priority.name, 1);
   const snap = proposeOrder(full, r, priority.seq, 1, spec, check);
@@ -3281,7 +3316,7 @@ export function seedPriorityRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
   const checkout = ctx.documents.find((d) => d.slug === "checkout-redesign");
   const earlier = db.runs.find((r) => r.document_slug === "checkout-redesign") ?? db.runs[0];
   const spec: OrderSpec = { method: "goal_weighted", order: ranking("goal_weighted").features.slice(0, 4).map((f) => ({ key: f.key, score: f.score ?? 0, explanation: "As the live ranking" })) };
-  const check = checkOrder(spec, null, goalSet(ctx));
+  const check = checkOrder(spec, null, goalSet(ctx), ctx.goalTitle);
   const snap = proposeOrder({ ...ctx, db }, earlier, 0, 1, spec, check);
   Object.assign(snap, {
     status: "saved",
