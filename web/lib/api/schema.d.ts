@@ -12596,7 +12596,12 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Bucket Goal
+         * @description Move the goal to Trash, after its features move to ``to_goal_id`` (absent: to no
+         *     goal), as Archive moves them.
+         */
+        delete: operations["delete_bucket_goal"];
         options?: never;
         head?: never;
         /**
@@ -12660,6 +12665,67 @@ export interface paths {
          * @description Puts back every goal and link a write changed.
          */
         post: operations["undo_goal_buckets"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Simple Item
+         * @description Move the feature to Trash (30 days, then deleted for good). Who may not decide on it
+         *     proposes it to its decider instead (``change``); viewers are refused.
+         */
+        delete: operations["delete_simple_item"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/items/{item_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Simple Item
+         * @description Put the feature back from Trash with its links, goal and milestone.
+         */
+        post: operations["restore_simple_item"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-buckets/goals/{goal_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Bucket Goal
+         * @description Put the goal back from Trash with its order, measure, target and due.
+         */
+        post: operations["restore_bucket_goal"];
         delete?: never;
         options?: never;
         head?: never;
@@ -18406,7 +18472,7 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             /** Op */
-            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal" | "edit_goal_milestone" | "set_depends_on") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped" | "api_action");
+            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal" | "edit_goal_milestone" | "set_depends_on" | "delete_item") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped" | "api_action");
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -18522,7 +18588,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal" | "edit_goal_milestone" | "set_depends_on";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal" | "edit_goal_milestone" | "set_depends_on" | "delete_item";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -26530,7 +26596,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal" | "edit_goal_milestone" | "set_depends_on";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal" | "edit_goal_milestone" | "set_depends_on" | "delete_item";
             /**
              * Status
              * @enum {string}
@@ -38715,7 +38781,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal" | "edit_goal_milestone" | "set_depends_on";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal" | "edit_goal_milestone" | "set_depends_on" | "delete_item";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -38764,7 +38830,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal" | "edit_goal_milestone" | "set_depends_on";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "add_link" | "remove_link" | "restore_link" | "restore_dates" | "set_goal" | "restore_goal" | "edit_goal_milestone" | "set_depends_on" | "delete_item";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -45408,14 +45474,14 @@ export interface components {
         };
         /**
          * TrashItem
-         * @description A document, intake or run as it was when it went to Trash.
+         * @description A document, intake, run, roadmap feature or goal as it was when it went to Trash.
          */
         TrashItem: {
             /**
              * Type
              * @enum {string}
              */
-            type: "document" | "intake" | "run";
+            type: "document" | "intake" | "run" | "feature" | "goal";
             /**
              * Id
              * Format: uuid
@@ -45427,10 +45493,27 @@ export interface components {
             title: string;
             /** Kind */
             kind: string;
+            /** Code */
+            code?: string | null;
             /** Created At */
             created_at?: string | null;
             /** Wrote */
             wrote?: string | null;
+        };
+        /**
+         * TrashedOut
+         * @description A delete's answer: the Trash entry when it went to Trash, or the proposal made when
+         *     the caller may not delete it (``change``, routed to its decider). ``can_restore``:
+         *     whether the caller may restore it from Trash (owners); others ask an owner.
+         */
+        TrashedOut: {
+            entry?: components["schemas"]["TrashEntryOut"] | null;
+            change?: components["schemas"]["SimpleChangeOut"] | null;
+            /**
+             * Can Restore
+             * @default false
+             */
+            can_restore: boolean;
         };
         /**
          * TriageDailyIn
@@ -71576,6 +71659,40 @@ export interface operations {
             };
         };
     };
+    delete_bucket_goal: {
+        parameters: {
+            query?: {
+                to_goal_id?: string | null;
+                reason?: string | null;
+            };
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_bucket_goal: {
         parameters: {
             query?: never;
@@ -71701,6 +71818,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GoalBucketsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_simple_item: {
+        parameters: {
+            query?: {
+                reason?: string | null;
+            };
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_simple_item: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_bucket_goal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"];
                 };
             };
             /** @description Validation Error */
