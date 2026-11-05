@@ -36,7 +36,9 @@ export function useDecisionSheet(): SheetApi | null {
 
 /** At most this many options or other answers (decision_sheet.MAX_OPTIONS). */
 const MAX_OPTIONS = 6;
-const FIELD = "w-full rounded-md border border-line-strong bg-surface px-3 text-[15px] text-text";
+/** ec1-b-mid: the frames' field and label. */
+const FIELD = "w-full rounded-xl border border-line bg-surface px-3 py-2 text-[16px] leading-6 text-text placeholder:text-text2 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30";
+const LABEL = "text-[14px] font-semibold text-text2";
 const REASSIGNED = "Reassigned in Simple";
 
 /** "Dec 7, 2026". */
@@ -511,11 +513,11 @@ function EditFields({ draft, set, question, target }: { draft: Draft; set: (p: P
   const one = question ? "answer" : "option";
   const rows = draft.options;
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       {target.kind === "new-question" && (
         <label className="flex flex-col gap-1">
-          <span className="simple-meta font-[650]">PRD</span>
-          <select className={`${FIELD} h-10`} value={draft.prd} onChange={(e) => set({ prd: e.target.value })}>
+          <span className={LABEL}>PRD</span>
+          <select className={FIELD} value={draft.prd} onChange={(e) => set({ prd: e.target.value })}>
             {target.prds.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.title}
@@ -525,33 +527,33 @@ function EditFields({ draft, set, question, target }: { draft: Draft; set: (p: P
         </label>
       )}
       <label className="flex flex-col gap-1">
-        <span className="simple-meta font-[650]">{question ? "Question" : "Title"}</span>
-        <input data-autofocus className={`${FIELD} h-10`} value={draft.title} maxLength={200} onChange={(e) => set({ title: e.target.value })} />
+        <span className={LABEL}>{question ? "Question" : "Title"}</span>
+        <input data-autofocus className={FIELD} value={draft.title} maxLength={200} onChange={(e) => set({ title: e.target.value })} />
       </label>
       {question ? (
         <label className="flex flex-col gap-1">
-          <span className="simple-meta font-[650]">Recommendation</span>
-          <input className={`${FIELD} h-10`} value={draft.recommendation} maxLength={500} onChange={(e) => set({ recommendation: e.target.value })} />
+          <span className={LABEL}>Recommendation</span>
+          <input className={FIELD} value={draft.recommendation} maxLength={500} onChange={(e) => set({ recommendation: e.target.value })} />
         </label>
       ) : (
         <>
           <label className="flex flex-col gap-1">
-            <span className="simple-meta font-[650]">Question</span>
-            <textarea className={`${FIELD} py-2`} rows={2} value={draft.question} maxLength={1000} onChange={(e) => set({ question: e.target.value })} />
+            <span className={LABEL}>Question</span>
+            <textarea className={FIELD} rows={2} value={draft.question} maxLength={1000} onChange={(e) => set({ question: e.target.value })} />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="simple-meta font-[650]">Context</span>
-            <textarea className={`${FIELD} py-2`} rows={4} value={draft.context} maxLength={4000} onChange={(e) => set({ context: e.target.value })} />
+            <span className={LABEL}>Context</span>
+            <textarea className={FIELD} rows={4} value={draft.context} maxLength={4000} onChange={(e) => set({ context: e.target.value })} />
           </label>
         </>
       )}
       <fieldset className="flex flex-col gap-2">
-        <legend className="simple-meta mb-1 font-[650]">{listName}</legend>
+        <legend className={`${LABEL} mb-1`}>{listName}</legend>
         {rows.map((o, i) => (
           <div key={i} className="flex items-center gap-2">
             <input
               aria-label={`${question ? "Answer" : "Option"} ${i + 1}`}
-              className={`${FIELD} h-10 min-w-0 flex-1`}
+              className={`${FIELD} min-w-0 flex-1`}
               value={o}
               maxLength={200}
               onChange={(e) =>
@@ -563,10 +565,10 @@ function EditFields({ draft, set, question, target }: { draft: Draft; set: (p: P
             <button
               type="button"
               aria-label={`Remove ${question ? "answer" : "option"} ${i + 1}`}
-              className="grid size-10 place-items-center rounded-button text-accent-ink hover:bg-surface2"
+              className="simple-button simple-button-quiet !min-h-9 !px-2"
               onClick={() => set({ options: rows.filter((_, j) => j !== i) })}
             >
-              <Icon name="x" size={18} />
+              <Icon name="x" size={18} stroke={1.7} />
             </button>
           </div>
         ))}
@@ -578,14 +580,14 @@ function EditFields({ draft, set, question, target }: { draft: Draft; set: (p: P
       </fieldset>
       {!question && (
         <div className="flex flex-col gap-1">
-          <span className="simple-meta flex items-center gap-1 font-[650]">
+          <span className={`${LABEL} flex items-center gap-1`}>
             Review on
             <InfoTip label="Review on" align="start">
               The day the decider looks at this call again.
             </InfoTip>
           </span>
           {/* The repo's day field (as the roadmap's milestone card): the day month first, the date picker under it. */}
-          <span className={`${FIELD.replace("w-full ", "")} relative flex h-10 w-[220px] max-w-full items-center justify-between`} data-testid="decision-sheet-review">
+          <span className={`${FIELD.replace("w-full ", "")} relative flex w-[220px] max-w-full items-center justify-between`} data-testid="decision-sheet-review">
             <span className={draft.review_at ? "" : "text-text2"}>{draft.review_at ? reviewDay(draft.review_at) : "Pick a day"}</span>
             <Icon name="clock" size={18} stroke={1.7} />
             <input aria-label="Review on" type="date" className="absolute inset-0 cursor-pointer opacity-0" value={draft.review_at} onChange={(e) => set({ review_at: e.target.value })} />
