@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { expect, test, type Page } from "./test";
 
 import { VERSION_WARNINGS_SCENARIO } from "../lib/api/mock/roadmap";
@@ -105,3 +107,25 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     });
   });
 }
+
+test("B-05: the roadmap's share preview and its HTML export read the stored as-of day month first", async ({ page }) => {
+  // protects=B-05 fix 2; fails_when=the mock's export HTML (the Audience view's preview, the
+  // downloaded HTML) shows the stored line as "As of 2026-10-02." while the page reads it month first.
+  await scenario(page, "sharing");
+  await login(page);
+  await page.goto("/documents/usage-alerts-roadmap");
+  const view = page.getByTestId("audience-view");
+  await expect(view.getByText("How the exported page looks", { exact: true })).toBeVisible();
+  const preview = page.frameLocator('iframe[title="Roadmap for Team"]').locator("body");
+  await expect(preview).toContainText("As of Oct 2, 2026");
+  expect(await preview.innerText()).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+
+  await page.goto("/documents/usage-alerts-roadmap/v/1");
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export HTML", exact: true }).click();
+  const html = await readFile((await (await download).path())!, "utf8");
+  const text = html.replace(/<style>[\s\S]*?<\/style>/g, "").replace(/<[^>]+>/g, " ");
+  expect(text).toContain("As of Oct 2, 2026");
+  expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+});
