@@ -222,6 +222,21 @@ async def test_html_version_banner(client, fx):
     assert "imported Oct 16, 2026, 7:01 AM PDT" in banner
 
 
+async def test_html_stamps_hold_together(client, fx):
+    # PR 1300 round 3: as on the slides, a stamp's day and its time each stay on one line.
+    nb = "\u00a0"
+    html = (await _export(client, fx, "html", n=2)).text
+    header = html[html.index("<header") : html.index("</header>")]
+    assert f"Oct{nb}17,{nb}2026, 2:30{nb}AM{nb}PDT" in header
+    appendix = html[html.index('class="sources-appendix"') :]
+    assert f"retrieved Oct{nb}16,{nb}2026, 6:10{nb}AM{nb}PDT" in appendix
+    html = (await _export(client, fx, "html", n=1)).text
+    header = html[html.index("<header") : html.index("</header>")]
+    assert f"Oct{nb}16,{nb}2026, 7:01{nb}AM{nb}PDT" in header
+    # The Markdown file is text a person edits: plain spaces.
+    assert nb not in (await _export(client, fx, "md", n=2)).text.splitlines()[0]
+
+
 async def test_html_is_self_contained_and_escapes_raw_html(client, fx):
     html = (await _export(client, fx, "html")).text
     assert "<style>" in html and "@page" in html  # stylesheet inlined

@@ -219,20 +219,12 @@ def test_e9_one_paragraph_longer_than_a_slide_is_split_at_sentences():
         assert sum(u.cost for u in deck_module._units(page)) <= budget, page
 
 
-def test_e9_a_long_list_item_code_block_and_table_row_are_split():
+def test_e9_a_long_list_item_and_table_row_are_split():
     budget = deck_module.SLIDE_LINES
     item = "- " + ONE_PARAGRAPH
     pages = deck_module.slide_pages(item, budget)
     assert len(pages) >= 2 and pages[0].startswith("- Sentence 1 ")
     assert all(" ".join(pages).count(s) == 1 for s in SENTENCES)
-
-    code = "```\n" + "\n".join(f"step {i}" for i in range(1, 41)) + "\n```"
-    pages = deck_module.slide_pages(code, budget)
-    assert len(pages) >= 2
-    for page in pages:
-        assert page.startswith("```\n") and page.endswith("\n```"), page
-    steps = "\n".join(pages)
-    assert all(steps.count(f"step {i}\n") == 1 for i in range(1, 41))
 
     table = "| Feature | Outcome |\n| --- | --- |\n| Saved carts | " + ONE_PARAGRAPH + " |"
     pages = deck_module.slide_pages(table, budget)
@@ -338,3 +330,93 @@ async def test_e9_a_paragraph_longer_than_a_slide_is_whole_in_the_deck_pdf(clien
     text = re.sub(r"\s+", " ", text)
     for i, sentence in enumerate(SENTENCES, start=1):
         assert text.count(sentence) == 1, i
+
+
+# Review round 3 of PR 1300. The owner (Nov 5): code stays out of decks. A code block is one
+# line on its slide, "Code: N lines, in the full PRD", linking to that place in the full PRD
+# (the HTML deck and Present mode; the PPTX and the deck PDF show the words); it is never
+# split into continuation slides, never a blank slide. A table row with one overlong cell
+# fills its continuation slides; the document exports hold their stamps together.
+CODE = "Steps to try:\n\n```\n" + "\n".join(f"step {i} of the rollout" for i in range(1, 41)) + "\n```"
+CODE_LINE = "Code: 40 lines, in the full PRD"
+
+
+def _code_draft() -> str:
+    return _draft().replace(RISKS, CODE)
+
+
+def _no_code(text: str) -> None:
+    assert text.count(CODE_LINE) == 1, text
+    for i in (1, 7, 20, 40):
+        assert f"step {i} of the rollout" not in text, i
+
+
+async def test_r3_a_code_block_is_one_line_on_its_slide(client, tenant_id):
+    h = await _token(tenant_id, "approver")
+    assert (await _import(client, h, _code_draft())).status_code == 201
+    deck = (await client.get(f"{BASE}/deck", headers=h)).json()
+    headings = [s["heading"] for s in deck["slides"]]
+    assert "Top risks" in headings and not any(x.startswith("Top risks (") for x in headings)
+    _no_code(" ".join(_visible(s["html"]) for s in deck["slides"]))
+    for s in deck["slides"]:
+        if s["kind"] == "section":
+            body = s["html"][s["html"].index("slide-body") :]
+            assert _visible(body).replace(s["heading"], "").strip(), s["heading"]
+            assert "<pre" not in s["html"], s["heading"]
+    risks = next(s for s in deck["slides"] if s["heading"] == "Top risks")
+    assert "Steps to try:" in _visible(risks["html"])
+    link = re.search(r'<a href="([^"]+)">' + CODE_LINE + "</a>", risks["html"])
+    assert link and link.group(1).endswith("/documents/checkout/v/1#s-top-risks"), risks["html"]
+
+    html = (await client.get(f"{BASE}/export?layer=deck&format=html", headers=h)).text
+    assert re.search(r'<a href="[^"]*/documents/checkout/v/1#s-top-risks">' + CODE_LINE, html)
+
+    resp = await client.get(f"{BASE}/export?layer=deck&format=pptx", headers=h)
+    texts = _pptx_texts(resp.content)
+    assert len(texts) == len(deck["slides"])
+    _no_code(" ".join(t for ts in texts for t in ts))
+    on_risks = [ts for ts in texts if "Top risks" in ts]
+    assert len(on_risks) == 1 and any(CODE_LINE in t for t in on_risks[0])
+
+
+@requires_pdf
+async def test_r3_a_code_block_is_one_plain_line_in_the_deck_pdf(client, tenant_id):
+    h = await _token(tenant_id, "approver")
+    assert (await _import(client, h, _code_draft())).status_code == 201
+    deck = (await client.get(f"{BASE}/deck", headers=h)).json()
+    resp = await client.get(f"{BASE}/export?layer=deck&format=pdf", headers=h)
+    assert resp.status_code == 200
+    reader = PdfReader(io.BytesIO(resp.content))
+    assert len(reader.pages) == len(deck["slides"])
+    pages = [re.sub(r"\s+", " ", p.extract_text()) for p in reader.pages]
+    _no_code(" ".join(pages))
+    for n, text in enumerate(pages, start=1):
+        assert text.strip(), n
+    for page in reader.pages:
+        for annot in page.get("/Annots") or []:
+            uri = str((annot.get_object().get("/A") or {}).get("/URI") or "")
+            assert "#s-top-risks" not in uri, uri
+
+
+def test_r3_a_table_row_with_one_long_cell_fills_its_slides():
+    budget = deck_module.SLIDE_LINES
+    table = "| Feature | Outcome |\n| --- | --- |\n| Saved carts | " + ONE_PARAGRAPH + " |"
+    pages = deck_module.slide_pages(table, budget)
+    assert len(pages) >= 2
+    assert all(" ".join(pages).count(s) == 1 for s in SENTENCES)
+    # The Outcome cell is rendered most of the slide wide (the Feature column holds two
+    # words), so each slide but the last holds more than half its lines of it at about
+    # 80 characters a line, not at half the slide's width.
+    rows = int((budget - 1.2) / 1.2)
+    for page in pages[:-1]:
+        cell = page.splitlines()[-1].strip("| ").split(" | ")[-1]
+        assert len(cell) > 0.6 * rows * 80, (len(cell), page)
+
+
+def test_r3_document_stamps_hold_together():
+    from datetime import UTC, datetime
+
+    at = datetime(2026, 10, 30, 21, 49, tzinfo=UTC)
+    assert render_module._format_dt(at, "America/Los_Angeles") == (
+        f"Oct{NBSP}30,{NBSP}2026, 2:49{NBSP}PM{NBSP}PDT"
+    )
