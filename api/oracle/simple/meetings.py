@@ -697,6 +697,7 @@ PROPOSAL_WORDS = {
     "set_goal": "new goal for",
     "set_depends": "new dependencies for",
     "set_status": "new status for",
+    "set_parent": "change what it is part of:",
 }
 
 

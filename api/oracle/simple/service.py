@@ -477,6 +477,12 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
     )
     for e in entries:
         e.resolved = moved[e.row.id]
+    # feature-parts: a part with no dates of its own reads its parent's.
+    by_key = {(e.roadmap.id, e.row.item_key): e for e in entries}
+    for e in entries:
+        parent = by_key.get((e.roadmap.id, e.row.parent_key)) if e.row.parent_key else None
+        if parent is not None and parent is not e and e.resolved.undated:
+            e.resolved = parent.resolved
     nodes = [
         constraints.Node(
             id=str(e.row.id),
@@ -493,6 +499,9 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
             else None,
             accepted_risks=list(e.row.accepted_risks or []),
             prd=company.OnRoadmap("", e.prd.title).prd_name if e.prd is not None else None,
+            parent=str(by_key[(e.roadmap.id, e.row.parent_key)].row.id)
+            if (e.roadmap.id, e.row.parent_key) in by_key
+            else None,
         )
         for e in entries
     ]
@@ -950,6 +959,7 @@ def item_out(
         else None,
         own_owner_id=str(row.owner_id) if row.owner_id else None,
         depends_keys=list(row.depends_on or []),
+        parent_key=row.parent_key,
         can_decide=may,
         deciders=[names[i] for i in decider_ids(e, deciders) or owners or [] if i in names],
         reasons=_reasons(e),

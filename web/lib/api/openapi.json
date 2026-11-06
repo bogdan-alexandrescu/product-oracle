@@ -62027,6 +62027,7 @@
                   "set_goal",
                   "set_depends",
                   "set_status",
+                  "set_parent",
                   "set_goal_measure",
                   "set_owner",
                   "set_decider",
@@ -62430,6 +62431,7 @@
               "set_goal",
               "set_depends",
               "set_status",
+              "set_parent",
               "set_goal_measure",
               "set_owner",
               "set_decider",
@@ -86062,6 +86064,7 @@
               "set_goal",
               "set_depends",
               "set_status",
+              "set_parent",
               "set_goal_measure",
               "set_owner",
               "set_decider",
@@ -119913,6 +119916,7 @@
               "set_goal",
               "set_depends",
               "set_status",
+              "set_parent",
               "set_goal_measure",
               "set_owner",
               "set_decider",
@@ -120063,6 +120067,7 @@
               "set_goal",
               "set_depends",
               "set_status",
+              "set_parent",
               "set_goal_measure",
               "set_owner",
               "set_decider",
@@ -125897,6 +125902,35 @@
                 "type": "null"
               }
             ]
+          },
+          "parent_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Key"
+          },
+          "part_of": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleMergedInto"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parts": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleMergedInto"
+            },
+            "type": "array",
+            "title": "Parts",
+            "default": []
           },
           "drafting": {
             "type": "boolean",

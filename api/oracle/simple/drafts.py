@@ -115,6 +115,8 @@ FIELDS = (
     "track_id",
     "prd_document_id",
     "shipped",
+    # feature-parts: set_parent.
+    "parent_key",
 )
 UUID_FIELDS = ("feature_id", "owner_id", "decider_id", "track_id", "prd_document_id")
 DATES = ("start_date", "end_date")
@@ -987,6 +989,7 @@ OP_WORDS = {
     "set_goal": "New goal for",
     "set_depends": "New dependencies for",
     "set_status": "New status for",
+    "set_parent": "Changed what it is part of:",
 }
 
 

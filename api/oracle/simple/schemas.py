@@ -326,6 +326,12 @@ class SimpleRoadmapItem(BaseModel):
         description="S7: likely duplicates of a draft not kept both (at most 2, best first).",
     )
     merged_into: "SimpleMergedInto | None" = None
+    # feature-parts: the key of the item this one is part of as stored (set_parent's
+    # ``before``), that item (null: none, or not in this read), and the item's open parts
+    # in the roadmap's order.
+    parent_key: str | None = None
+    part_of: "SimpleMergedInto | None" = None
+    parts: list["SimpleMergedInto"] = []
     drafting: bool = Field(
         default=False, description="S7: Oracle's drafting job for this draft is queued or running."
     )
@@ -573,6 +579,8 @@ ChangeOp = Literal[
     "set_goal",
     "set_depends",
     "set_status",
+    # feature-parts: the item made part of another (one level), or taken out.
+    "set_parent",
     # one-feature-panel: how the goal the item serves is measured (its target and date).
     "set_goal_measure",
     # chat-actions: the item's own owner and decider (into the working draft).

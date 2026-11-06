@@ -623,8 +623,10 @@ async def _drafting(db: AsyncSession, ids: list[str]) -> set[str]:
 async def item_extras(
     db: AsyncSession, read_: service.Read, shown: list[service.Entry]
 ) -> dict[uuid.UUID, dict[str, Any]]:
-    """S7's fields of the roadmap read's items: looks_like, merged_into, drafting, flow."""
+    """S7's fields of the roadmap read's items: looks_like, merged_into, drafting, flow;
+    feature-parts' part_of and parts."""
     out: dict[uuid.UUID, dict[str, Any]] = {}
+    _parts(read_, shown, out)
     drafts_ = [e for e in shown if e.row.draft]
     merged = [e for e in shown if e.row.merged_into]
     if not drafts_ and not merged:
@@ -647,6 +649,29 @@ async def item_extras(
             title=kept.row.title if kept else e.row.merged_into,  # type: ignore[arg-type]
         )
     return out
+
+
+def _ref(e: service.Entry) -> SimpleMergedInto:
+    return SimpleMergedInto(id=str(e.row.id), code=e.code or e.row.item_key, title=e.row.title)
+
+
+def _parts(
+    read_: service.Read, shown: list[service.Entry], out: dict[uuid.UUID, dict[str, Any]]
+) -> None:
+    """feature-parts: each shown item's parent (part_of) and its open parts, in order."""
+    by_key = {(e.roadmap.id, e.row.item_key): e for e in read_.entries}
+    parts: dict[uuid.UUID, list[SimpleMergedInto]] = {}
+    for e in read_.entries:
+        parent = by_key.get((e.roadmap.id, e.row.parent_key)) if e.row.parent_key else None
+        if parent is None or e.status in ("merged", "cut"):
+            continue
+        parts.setdefault(parent.row.id, []).append(_ref(e))
+    for e in shown:
+        parent = by_key.get((e.roadmap.id, e.row.parent_key)) if e.row.parent_key else None
+        if parent is not None:
+            out.setdefault(e.row.id, {})["part_of"] = _ref(parent)
+        if e.row.id in parts:
+            out.setdefault(e.row.id, {})["parts"] = parts[e.row.id]
 
 
 # --------------------------------------------------------------------------- the jobs

@@ -3,7 +3,8 @@
 one-click fixes S3 applies.
 
 - ``dependency_order``: a dependency ends on or after the day the item starts (two window
-  estimates never conflict); the line names the item and its dependency.
+  estimates never conflict); the line names the item and its dependency. Never between a
+  part and its parent (feature-parts), either way.
   Fixes: shift_dependents, move_dependency, accept_risk.
 - ``blocker_date``: an open blocker of the item is expected after the item starts.
   Fixes: accept_risk.
@@ -64,6 +65,8 @@ class Node:
     accepted_risks: list[dict[str, Any]] = field(default_factory=list)
     # The item's PRD ("Safety PRD"): a dependency in another PRD is named with it.
     prd: str | None = None
+    # feature-parts: the id of the item this one is part of (never a broken link with it).
+    parent: str | None = None
 
 
 @dataclass(frozen=True)
@@ -127,6 +130,9 @@ def check(nodes: list[Node]) -> dict[str, list[Flag]]:
         for dep_id in n.depends_on:
             dep = by_id.get(dep_id)
             if dep is None or dep.id == n.id or dep.status == "cut":
+                continue
+            if dep.id == n.parent or dep.parent == n.id:
+                # feature-parts: a part is never a broken link against its parent.
                 continue
             if dep.end.estimated and n.start.estimated:
                 continue
