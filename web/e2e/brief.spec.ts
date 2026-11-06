@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { login, openSection, section, sectionStrip, selectText, showAll } from "./helpers";
+import { login, openSection, section, selectText, showAll } from "./helpers";
 
 // O1f: every document has a brief layer and a full layer. The saved-carts fixture has a
 // brief (summary, goals, problem, features by milestone, roadmap, non-goals, top risks,
@@ -23,8 +23,8 @@ const savedView = (page: Page, view: "brief" | "full") =>
     .toBe(true);
 
 const sections = (page: Page) => page.getByTestId("document-sections").filter({ visible: true });
-/** The outline's names: the sections of the current mode (Brief or Full), in order. */
-const stripItems = (page: Page) => sectionStrip(page).getByTestId("outline-name");
+/** The contents rail's row headings: the sections of the current mode (Brief or Full), in order. */
+const stripItems = (page: Page) => page.getByTestId("prd-contents").filter({ visible: true }).locator(".prd-toc-h");
 /** An outline name is its heading. */
 const headingsAre = (names: string[]) => names.map((h) => new RegExp(`${h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
 
@@ -49,7 +49,7 @@ test("brief: a document opens on its brief; Full switches, and the choice is rem
 
   await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
   await expect(sections(page)).toHaveAttribute("data-view", "full");
-  await expect(sectionStrip(page).getByTestId("chip-all")).toHaveText(/All\s*20/);
+  await expect(page.getByTestId("view-note")).toContainText("Full document: all 20 sections");
   // qa-docs-50: the opening section reads as the Introduction, not the title again.
   await expect(stripItems(page).first()).toHaveText(/Introduction$/);
   await openSection(page, "feature-detail");

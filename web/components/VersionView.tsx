@@ -581,6 +581,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
       const root = rootRef.current;
       const key = c.section_key;
       const mark = root?.querySelector(`[data-comment-ids~="${c.id}"]`);
+      // PT1 a: every section is on the page; the comment's section becomes the one being read.
+      if (mark && calm && key !== openKey) {
+        select(key);
+        setScrollTarget({ id: c.id, key });
+        return;
+      }
       if (mark) {
         mark.scrollIntoView({ block: "center", behavior: "smooth" });
         return;
@@ -604,7 +610,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
       }
       setScrollTarget({ id: c.id, key });
     },
-    [scopeKeys, shownSections, select, view, expandable, sections, briefSections],
+    [scopeKeys, shownSections, select, view, expandable, sections, briefSections, calm, openKey],
   );
 
   const onHighlightClick = useCallback((id: string) => {

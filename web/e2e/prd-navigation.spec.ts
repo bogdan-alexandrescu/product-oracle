@@ -104,70 +104,11 @@ test("outline rail: every section, grouped by chapter and folded; the current ch
   await noSidewaysScroll(page);
 });
 
-test("outline rail: '/' filters by name, the chips narrow, arrows and Enter pick, j/k step anywhere", async ({ page }) => {
-  await bigPrd(page, { width: 1440, height: 900 });
-  await page.goto(BIG);
-  await expect(section(page, "2-2-evidence-from-support")).toBeVisible();
+// '/' filter + arrow-key list focus + global j/k stepping were the outline rail's own keys
+// (PT1 a): the PRD contents rail has no keyboard shortcuts of its own, so that test is gone.
 
-  await page.keyboard.press("/");
-  const box = rail(page).getByTestId("outline-filter");
-  await expect(box).toBeFocused();
-  await page.keyboard.type("invoice");
-  // The matches, with their chapters for context.
-  await expect(railRows(page).getByTestId("outline-name")).toHaveText(["7. Billing", "7.3 Invoices", "7.3.1 Invoice numbering"]);
-  await page.keyboard.press("ArrowDown");
-  await expect(railRows(page).first()).toBeFocused();
-  await page.keyboard.press("ArrowDown");
-  await expect(outlineRow(page, "7-3-invoices")).toBeFocused();
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("ArrowUp");
-  await expect(outlineRow(page, "7-3-invoices")).toBeFocused();
-  await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/#7-3-invoices$/);
-  await expect(section(page, "7-3-invoices")).toBeVisible();
-  await box.fill("");
-
-  // Chips: To review (no verdict) and With feedback (sections with open feedback).
-  const chips = rail(page).getByTestId("outline-chips");
-  await expect(chips.getByRole("button", { name: /^To review/ })).toHaveText(/To review\s*91/);
-  await expect(chips.getByRole("button", { name: /^With feedback/ })).toHaveText(/With feedback\s*9/);
-  await chips.getByRole("button", { name: /^With feedback/ }).click();
-  const withCount = railRows(page).filter({ has: page.getByTestId("outline-count") });
-  await expect(withCount).toHaveCount(9);
-  await expect(outlineRow(page, "5-4-import-from-a-spreadsheet").getByTestId("outline-count")).toHaveText("2");
-  await chips.getByRole("button", { name: /^To review/ }).click();
-  await expect(rail(page).locator('a[data-state="approved"]').filter({ has: page.getByTestId("outline-count") })).toHaveCount(0);
-  await expect(outlineRow(page, "1-2-north-star-metric")).toHaveCount(0);
-  await chips.getByRole("button", { name: /^All/ }).click();
-
-  // j / k: next and previous section from anywhere on the page.
-  await page.locator("body").click({ position: { x: 700, y: 30 } });
-  await page.keyboard.press("j");
-  await expect(page).toHaveURL(/#7-3-invoices-1$/);
-  await expect(outlineRow(page, "7-3-invoices-1")).toHaveAttribute("aria-current", "true");
-  await page.keyboard.press("j");
-  await expect(section(page, "7-3-invoices-2")).toBeVisible();
-  await page.keyboard.press("k");
-  await expect(section(page, "7-3-invoices-1")).toBeVisible();
-  await expect(outlineRow(page, "7-3-invoices-1")).toBeInViewport();
-});
-
-test("outline rail: the collapse button hides it, remembered per user; the switcher stands in", async ({ page }) => {
-  await bigPrd(page, { width: 1440, height: 900 });
-  await page.goto(BIG);
-  await expect(rail(page)).toBeVisible();
-  await expect(switcher(page)).toHaveCount(0);
-  await page.getByTestId("outline-collapse").click();
-  await expect(rail(page)).toHaveCount(0);
-  await expect(switcher(page)).toBeVisible();
-  await page.reload();
-  await expect(section(page, "2-2-evidence-from-support")).toBeVisible();
-  await expect(rail(page)).toHaveCount(0);
-  await page.getByTestId("outline-expand").filter({ visible: true }).click();
-  await expect(rail(page)).toBeVisible();
-  await page.reload();
-  await expect(rail(page)).toBeVisible();
-});
+// The rail's collapse/expand and the switcher standing in for it are gone on a PRD (PT1 a):
+// the contents rail has no collapse button and there is no switcher to stand in for it.
 
 test("switcher at 1200 px: arrows, i of M, Next to review, and a popover that closes every way and stays on screen", async ({ page }) => {
   await bigPrd(page, { width: 1200, height: 800 });
@@ -237,13 +178,14 @@ test("switcher at 1200 px: arrows, i of M, Next to review, and a popover that cl
 
 test("phone: a Sections / Review bar opens sheets that close on Escape, the scrim and a swipe, with focus kept inside", async ({ page }) => {
   await bigPrd(page, { width: 390, height: 844 });
-  await page.goto(BIG);
+  await page.goto(`${BIG}#2-2-evidence-from-support`);
   await expect(section(page, "2-2-evidence-from-support")).toBeVisible();
   await expect(rail(page)).toHaveCount(0);
   await expect(switcher(page)).toHaveCount(0);
   const sectionsBtn = page.getByTestId("phone-sections");
   const reviewBtn = page.getByTestId("phone-review");
-  await expect(sectionsBtn).toHaveText("Section 10 of 104");
+  // PT1 a: "Section <num> of <chapters>", the num from the heading level, not a position count.
+  await expect(sectionsBtn).toHaveText("Section 2.2 of 13");
   await expect(reviewBtn).toHaveText(/Review\s*·\s*12/);
   for (const b of [sectionsBtn, reviewBtn]) expect((await b.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await insideViewport(page, page.getByTestId("phone-bar"));
@@ -268,7 +210,7 @@ test("phone: a Sections / Review bar opens sheets that close on Escape, the scri
   await row.click();
   await expect(sheet).toHaveCount(0);
   await expect(section(page, "2-3-evidence-from-sales-calls")).toBeVisible();
-  await expect(sectionsBtn).toHaveText("Section 11 of 104");
+  await expect(sectionsBtn).toHaveText("Section 2.3 of 13");
 
   // Escape, the scrim and a swipe down on the handle close it.
   await sectionsBtn.click();
@@ -365,7 +307,7 @@ test("review panel: three tabs; Feedback is one list by state, scope and kind, w
   await staged.getByRole("button", { name: "Accept", exact: true }).click();
   await expect(staged.getByTestId("feedback-state-chip")).toHaveText("Staged");
   await expect(panel.getByRole("tab", { name: /^Feedback/ })).toHaveText(/Feedback\s*11/);
-  await expect(outlineRow(page, "5-4-import-from-a-spreadsheet").getByTestId("outline-count")).toHaveText("1");
+  // PT1 a: the contents rail shows a status dot, not a feedback count badge (gone).
 
   // Sources and History.
   await openTab(page, "History");
@@ -400,34 +342,31 @@ test("tall content: the rail and the panel scroll inside themselves; each one's 
   await showAll(page);
   const vh = 900;
 
-  // Unfold every chapter so the rail is far taller than the screen.
-  const unfold = rail(page).getByRole("button", { name: /^Unfold/ });
-  for (let i = 0; i < 40 && (await unfold.count()) > 0; i++) await unfold.first().click();
-  await expect(unfold).toHaveCount(0);
-  const railScroll = rail(page).getByTestId("outline-scroll");
+  // Open the contents to every section, far taller than the screen (PT1 a: no folding/Unfold).
+  await page.getByRole("button", { name: "Contents: find a section" }).click();
+  const contentsRail = page.locator(".prd-rail");
   const panelScroll = page.getByTestId("review-tabpanel").filter({ visible: true });
-  for (const box of [railScroll, panelScroll]) {
+  for (const box of [contentsRail, panelScroll]) {
     const { sh, ch } = await box.evaluate((el) => ({ sh: el.scrollHeight, ch: el.clientHeight }));
     expect(sh).toBeGreaterThan(ch);
   }
   const bottomOnScreen = async () => {
-    for (const el of [rail(page), page.getByTestId("review-panel")]) {
+    for (const el of [contentsRail, page.getByTestId("review-panel")]) {
       await expect.poll(async () => {
         const b = (await el.boundingBox())!;
         return b.y + b.height;
       }).toBeLessThanOrEqual(vh);
     }
   };
-  // Without scrolling the page, and with the page scrolled to the card's foot.
+  // Without scrolling the page, and with the page scrolled to the document's foot.
   await bottomOnScreen();
   await panelScroll.evaluate((el) => el.scrollTo(0, el.scrollHeight));
   await expect(page.getByTestId("review-panel").getByTestId("feedback-item").last()).toBeInViewport();
-  await railScroll.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+  await contentsRail.evaluate((el) => el.scrollTo(0, el.scrollHeight));
   await expect(outlineRow(page, "glossary-guest")).toBeInViewport();
-  await page.getByRole("navigation", { name: "Previous and next section" }).scrollIntoViewIfNeeded();
-  await expect(page.getByRole("navigation", { name: "Previous and next section" })).toBeInViewport();
+  await section(page, "glossary-guest").scrollIntoViewIfNeeded();
   await bottomOnScreen();
-  await expect(rail(page)).toBeInViewport();
+  await expect(contentsRail).toBeInViewport();
   await expect(page.getByTestId("review-panel")).toBeInViewport();
 });
 
@@ -448,9 +387,10 @@ test("legacy #s-key links open their section, and in-page section links use #key
   await bigPrd(page, { width: 1440, height: 900 });
   await page.goto(`${BIG}#s-6-5-changing-a-role`);
   await expect(section(page, "6-5-changing-a-role")).toBeVisible();
-  await expect(outlineRow(page, "6-5-changing-a-role")).toHaveAttribute("aria-current", "true");
+  // The contents rail's own row marks the current section with aria-current="location".
+  await expect(outlineRow(page, "6-5-changing-a-role")).toHaveAttribute("aria-current", "location");
   await expect(outlineRow(page, "6-5-changing-a-role")).toHaveAttribute("href", `${BIG}#6-5-changing-a-role`);
-  // A legacy link clicked inside the page opens its section too.
+  // A legacy link clicked inside the page opens its section too, and makes it current.
   await page.evaluate(() => {
     const a = document.createElement("a");
     a.href = "#s-9-1-global-search";
@@ -460,6 +400,7 @@ test("legacy #s-key links open their section, and in-page section links use #key
   });
   await page.locator("#legacy-link").click();
   await expect(section(page, "9-1-global-search")).toBeVisible();
+  await expect(outlineRow(page, "9-1-global-search")).toHaveAttribute("aria-current", "location");
 });
 
 test("scroll strip: the chevrons scroll it and it stays where they leave it", async ({ page }) => {

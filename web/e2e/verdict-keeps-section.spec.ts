@@ -2,7 +2,7 @@ import { MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
 
 import { expect, test } from "./test";
 
-import { login, openSection, section } from "./helpers";
+import { login, openSection } from "./helpers";
 
 /*
  * A verdict saves after its click, and the bar shows it at once ("Approved · Not saved yet").
@@ -16,7 +16,7 @@ import { login, openSection, section } from "./helpers";
 const CARTS = "/documents/saved-carts/v/2";
 const SAVE = "PUT /v1/documents/saved-carts/versions/2/sections/summary/review";
 
-test("a section opened while a verdict saves stays open when the save lands", async ({ page }) => {
+test("a section opened while a verdict saves stays the current one when the save lands", async ({ page }) => {
   await login(page);
   await page.evaluate(([key, call, msKey]) => {
     localStorage.setItem(key, call);
@@ -31,9 +31,10 @@ test("a section opened while a verdict saves stays open when the save lands", as
   // Before the save answers, the reader moves on to the Roadmap.
   const roadmap = await openSection(page, "brief-roadmap");
   await expect(page).toHaveURL(/#brief-roadmap$/);
-  // The save lands (the outline marks Summary approved), and the Roadmap is still open.
-  await expect(page.locator('a[data-outline-key="summary"]').filter({ visible: true })).toHaveAccessibleName("Summary, Approved", { timeout: 5_000 });
+  // The save lands (the contents row marks Summary approved), and the Roadmap is still current.
+  await expect(page.locator('a[data-outline-key="summary"]').filter({ visible: true })).toHaveAccessibleName("1 Summary Approved", { timeout: 5_000 });
   await expect(roadmap).toBeVisible();
-  await expect(section(page, "summary")).toHaveCount(0);
+  // Summary is no longer the current section: its review bar is hidden, Roadmap's is the one shown.
+  await expect(summary.getByTestId("review-bar")).toBeHidden();
   await expect(roadmap.getByRole("button", { name: "Expand General release" })).toBeVisible();
 });
