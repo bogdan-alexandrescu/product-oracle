@@ -120,8 +120,9 @@ test("sources › Google Docs: editing adds to the list from the picker; removin
   await expect(notes.getByRole("listitem")).toHaveText([
     /Lost access\s*to\s*Vendor research/,
     /No access\s*Customer interviews Q3/,
-    /Skipped\s*owned outside example.com\s*3 docs\s*Agency SOW 2026, Partner pricing sheet, Contractor onboarding notes/,
-    /Skipped\s*in a shared drive outside the company\s*1 doc\s*Joint launch plan/,
+    // D-10: why each was skipped is behind the row's (i), not a sentence on it.
+    /Skipped\s*3 docs\s*Agency SOW 2026, Partner pricing sheet, Contractor onboarding notes\s*i\s*owned outside example.com/,
+    /Skipped\s*1 doc\s*Joint launch plan\s*i\s*in a shared drive outside the company/,
   ]);
   await expect(row.getByTestId("source-status")).toHaveText("Needs attention");
 

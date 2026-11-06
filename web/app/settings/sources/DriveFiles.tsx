@@ -396,9 +396,12 @@ export function DriveNotes({
           <Chip kind="line" title={skippedTitle(reason)}>
             Skipped
           </Chip>
-          <span className="min-w-0 text-text2">{reason.replace(/^Skipped:\s*/, "")}</span>
           <span className="tnum flex-none font-medium">{names.length === 1 ? "1 doc" : `${names.length} docs`}</span>
           <NameList names={names} />
+          {/* D-10: why behind the (i), not a sentence on the row. */}
+          <InfoTip label="why these docs are skipped" align="start">
+            {reason.replace(/^Skipped:\s*/, "")}. {skippedTitle(reason)}.
+          </InfoTip>
         </li>
       ))}
       {flagged.map(([reason, names]) => (
@@ -413,9 +416,10 @@ export function DriveNotes({
       {limited.map((n) => (
         <li key={`limit-${n.external_id}`} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
           <Chip kind="warn">Capped</Chip>
-          <span className="min-w-0 text-text2">
-            <span className="font-medium text-text">{nameOf(n)}</span>: {n.reason}
-          </span>
+          <span className="min-w-0 font-medium">{nameOf(n)}</span>
+          <InfoTip label={`why ${nameOf(n)} is capped`} align="start">
+            {n.reason}
+          </InfoTip>
         </li>
       ))}
     </ul>
