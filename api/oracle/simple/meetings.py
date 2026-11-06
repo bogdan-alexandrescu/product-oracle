@@ -1349,8 +1349,10 @@ def _agenda_apply(a: dict, rows: list[dict], titles: dict[str, str], me: uuid.UU
         x["title"] = title
         return {"op": "rename", "id": x["id"], "name": was, "to": title}
     if op == "remove":
+        # port-an-decisions: the row and where it stood, for its Trash entry's Restore.
+        at = rows.index(x)
         rows.remove(x)
-        return {"op": "remove", "id": x["id"], "name": was}
+        return {"op": "remove", "id": x["id"], "name": was, "row": dict(x), "at": at}
     # move: never before the current item or a done one.
     first = max(
         (k + 1 for k, y in enumerate(rows) if states[y["id"]] in ("done", "now")), default=0
@@ -1430,12 +1432,15 @@ async def edit_agenda(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
                 gone.extend(said[k : k + 1])
         a.update(items=rows, clauses=clauses, words=_agenda_words(clauses), proposal=None,
                  left_out=_agenda_words(gone))  # fmt: skip
+        a["trashed"] = await _trash_removed(db, principal, m, clauses)
     elif op == "undo":
         if right != "save" or "before" not in a:
             raise MeetingError(404, "Nothing to undo")
         if body.get("batch") != a.get("batch"):
             raise MeetingError(409, "Someone changed the agenda since")
         a.update(items=a.pop("before"), clauses=[], words=[], left_out=[], batch=None)
+        # port-an-decisions: what the batch removed comes back, so it leaves Trash.
+        await _untrash(db, a.pop("trashed", None) or [])
     elif right == "propose":
         # The agenda stays as it is; the ops wait for the decider. An op of the earlier
         # proposal whose item is gone since is dropped, and the proposal says so (its clauses
@@ -1458,9 +1463,83 @@ async def edit_agenda(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
     else:
         if a.get("batch") != body.get("batch") or "before" not in a:
             a.update(before=[dict(x) for x in rows], batch=body.get("batch"), clauses=[],
-                     left_out=[])  # fmt: skip
-        clauses = [*(a.get("clauses") or []), _agenda_apply(a, rows, titles, me, body)]  # type: ignore[arg-type]
+                     left_out=[], trashed=[])  # fmt: skip
+        clause = _agenda_apply(a, rows, titles, me, body)  # type: ignore[arg-type]
+        clauses = [*(a.get("clauses") or []), clause]
         a.update(items=rows, clauses=clauses, words=_agenda_words(clauses))
+        a["trashed"] = [*(a.get("trashed") or []),
+                        *await _trash_removed(db, principal, m, [clause])]  # fmt: skip
+    m.agenda = json.loads(json.dumps(a, default=str))
+    await db.flush()
+
+
+async def _trash_removed(
+    db: AsyncSession, principal: Any, m: SimpleMeeting, clauses: list[dict]
+) -> list[str]:
+    """port-an-decisions: each agenda item the batch removed goes to Settings › Trash, its
+    row kept in the entry (the agenda is the meeting's JSON); returns the entries' ids, so
+    the batch's Undo takes them back out and the sheet offers Open Trash."""
+    from oracle.trash import service as trash
+    from oracle.trash.models import RETENTION_DAYS, TrashEntry
+
+    out: list[str] = []
+    for c in clauses:
+        if c.get("op") != "remove":
+            continue
+        at = trash.now()
+        root = {"type": "agenda_item", "id": c["id"], "slug": None, "title": c["name"],
+                "kind": "agenda_item", "meeting_id": str(m.id), "row": c["row"],
+                "at": c["at"]}  # fmt: skip
+        entry = TrashEntry(id=uuid.uuid4(), root_type="agenda_item", root_id=uuid.UUID(c["id"]),
+                           root=json.loads(json.dumps(root, default=str)), items=[],
+                           deleted_by=principal.id,
+                           deleted_by_name=await trash._actor_name(db, principal),
+                           published=False,
+                           purge_after=at + timedelta(days=RETENTION_DAYS))  # fmt: skip
+        entry.created_at = at
+        db.add(entry)
+        await audit.record(db, principal, "trash.delete", "agenda_item", entry.root_id,
+                           {"entry_id": str(entry.id), "root": root, "items": []})  # fmt: skip
+        out.append(str(entry.id))
+    await db.flush()
+    return out
+
+
+async def _untrash(db: AsyncSession, entry_ids: list[str]) -> None:
+    """An Undo of the batch that removed them: their Trash entries go (the rows are back)."""
+    from sqlalchemy import delete
+
+    from oracle.trash.models import TrashEntry
+
+    if entry_ids:
+        await db.execute(
+            delete(TrashEntry).where(TrashEntry.id.in_([uuid.UUID(i) for i in entry_ids]))
+        )
+
+
+async def restore_agenda_item(db: AsyncSession, entry: Any) -> None:
+    """port-an-decisions: Trash's Restore of a removed agenda item puts its row back where it
+    stood (never before the current item or a done one). Refused (409) when its meeting has
+    ended or is gone, or the item is on the agenda again."""
+    from oracle.trash import service as trash
+
+    root = entry.root
+    m = await db.get(SimpleMeeting, uuid.UUID(root["meeting_id"]), with_for_update=True,
+                     populate_existing=True)  # fmt: skip
+    if m is None:
+        raise trash.Conflict("Its meeting was deleted: there is no agenda to put it back on")
+    if m.status == "ended":
+        raise trash.Conflict("Its meeting has ended: the agenda is closed")
+    a = dict(m.agenda or {})
+    rows = [dict(x) for x in a.get("items") or []]
+    row = dict(root["row"])
+    if any(x["id"] == row["id"] for x in rows):
+        raise trash.Conflict(f"'{root['title']}' is on the agenda again already")
+    states = _states(a, rows)
+    first = max((k + 1 for k, st in enumerate(states) if st in ("done", "now")), default=0)
+    rows.insert(max(first, min(int(root.get("at") or 0), len(rows))), row)
+    a["items"] = rows
+    a["trashed"] = [i for i in a.get("trashed") or [] if i != str(entry.id)]
     m.agenda = json.loads(json.dumps(a, default=str))
     await db.flush()
 
@@ -1586,6 +1665,7 @@ async def _agenda_out(
         batch=a.get("batch"),
         words=list(a.get("words") or []),
         left_out=list(a.get("left_out") or []),
+        in_trash=bool(a.get("trashed")),
         proposal=SimpleAgendaProposal(
             by=_ref(uuid.UUID(prop["by"]), names),
             decider=_ref(uuid.UUID(prop["decider"]), names) if prop.get("decider") else None,

@@ -11333,7 +11333,12 @@ export interface paths {
         get: operations["get_request"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Request
+         * @description port-an-decisions: an owner deletes the request to Settings › Trash (30 days, then
+         *     gone for good); Restore there brings it back. A request others are merged into stays.
+         */
+        delete: operations["delete_request"];
         options?: never;
         head?: never;
         /**
@@ -39867,6 +39872,11 @@ export interface components {
              * @default []
              */
             left_out: string[];
+            /**
+             * In Trash
+             * @default false
+             */
+            in_trash: boolean;
             proposal?: components["schemas"]["SimpleAgendaProposal"] | null;
             decider?: components["schemas"]["SimplePersonRef"] | null;
         };
@@ -41547,7 +41557,8 @@ export interface components {
              *       "items": [],
              *       "addable": [],
              *       "words": [],
-             *       "left_out": []
+             *       "left_out": [],
+             *       "in_trash": false
              *     }
              */
             agenda: components["schemas"]["SimpleAgenda"];
@@ -46645,7 +46656,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "document" | "intake" | "run" | "feature" | "goal" | "decision" | "question";
+            type: "document" | "intake" | "run" | "feature" | "goal" | "decision" | "question" | "agenda_item" | "request";
             /**
              * Id
              * Format: uuid
@@ -70513,6 +70524,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RequestDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_request: {
+        parameters: {
+            query?: {
+                reason?: string | null;
+            };
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"];
                 };
             };
             /** @description Validation Error */

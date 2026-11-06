@@ -97,6 +97,12 @@ def describe(row: Any) -> dict[str, Any]:
         from oracle.simple import decision_sheet
 
         return decision_sheet.describe(row)
+    from oracle.requests.models import ProductRequest
+
+    if isinstance(row, ProductRequest):
+        from oracle.requests import service as requests_service
+
+        return requests_service.describe_for_trash(row)
     if isinstance(row, Document):
         return {
             "type": "document",
@@ -388,8 +394,21 @@ def _decision_model() -> type:
     return Decision
 
 
+def _request_model() -> type:
+    from oracle.requests.models import ProductRequest
+
+    return ProductRequest
+
+
 def _models() -> tuple[type, ...]:
-    return (Document, ProductIntake, Run, *_feature_goal_models().values(), _decision_model())
+    return (
+        Document,
+        ProductIntake,
+        Run,
+        *_feature_goal_models().values(),
+        _decision_model(),
+        _request_model(),
+    )
 
 
 async def get_entry(db: AsyncSession, entry_id: uuid.UUID) -> TrashEntry:
@@ -462,8 +481,9 @@ async def _not_restored(db: AsyncSession, entry: TrashEntry) -> list[dict[str, A
 
 # trash-features-goals (owner's answer, Nov 5): whoever deleted a feature or a goal restores
 # it too (edit-decisions: and a decision or a PRD question); everything else in Trash is the
-# owners' alone.
-OWN_RESTORE = frozenset({"feature", "goal", "decision", "question"})
+# owners' alone. port-an-decisions: and a meeting's agenda item (a request is an owner's
+# delete).
+OWN_RESTORE = frozenset({"feature", "goal", "decision", "question", "agenda_item"})
 
 
 def may_restore(principal: Any, entry: TrashEntry) -> bool:
@@ -485,6 +505,11 @@ async def restore_entry(
     from oracle.simple import trash_items
 
     await trash_items.before_restore(db, entry)
+    if entry.root_type == "agenda_item":
+        # port-an-decisions: the row goes back onto its meeting's agenda.
+        from oracle.simple import meetings
+
+        await meetings.restore_agenda_item(db, entry)
     for model in _models():
         await db.execute(
             update(model)
@@ -544,6 +569,7 @@ async def purge_entry(
         ProductIntake,
         *_feature_goal_models().values(),
         _decision_model(),
+        _request_model(),
     ):
         await db.execute(
             delete(model)

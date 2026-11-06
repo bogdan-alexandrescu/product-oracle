@@ -50,6 +50,7 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
     from oracle.jobs.models import LlmJob, LlmSuggestion
     from oracle.priorities.models import PrioritySnapshot
     from oracle.quality.models import OutcomeRecord
+    from oracle.requests.models import ProductRequest, RequestReply
     from oracle.review.models import (
         DocumentPublication,
         DocumentReviewPolicy,
@@ -160,6 +161,8 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
         # Goal milestones: a trashed roadmap's leave with it, and a PRD's own (origin_prd_id)
         # leave the roadmap with their PRD, as its plan does.
         TrackMilestone: [("roadmap_id", docs), ("origin_prd_id", docs)],
+        # port-an-decisions: a request in Trash takes its replies out of the Inbox with it.
+        RequestReply: [("request_id", ProductRequest.__table__)],
     }
 
 
@@ -216,6 +219,7 @@ def criteria() -> dict[type, Callable[[Any], ColumnElement[bool]]]:
         from oracle.baseline.models import Entity
         from oracle.decisions.models import Decision
         from oracle.docs.models import Document
+        from oracle.requests.models import ProductRequest
         from oracle.roadmap.models import RoadmapItem
         from oracle.runs.models import Run
         from oracle.v2.models import ArtifactRequest, ProductIntake, StakeholderQuestion
@@ -235,6 +239,8 @@ def criteria() -> dict[type, Callable[[Any], ColumnElement[bool]]]:
         )
         # edit-decisions: a decision or PRD question in Trash is left out too.
         _CRITERIA[Decision] = lambda cls: and_(_prd_question_live(cls), cls.deleted_at.is_(None))
+        # port-an-decisions: a request an owner deleted to Trash.
+        _CRITERIA[ProductRequest] = lambda cls: cls.deleted_at.is_(None)
     return _CRITERIA
 
 

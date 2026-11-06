@@ -1990,6 +1990,8 @@ class SimpleAgenda(BaseModel):
     words: list[str] = []
     # The accepted proposal's ops whose item was gone, as words: left out of the batch.
     left_out: list[str] = []
+    # port-an-decisions: the batch removed items that wait in Settings › Trash (Open Trash).
+    in_trash: bool = False
     proposal: SimpleAgendaProposal | None = None
     # Who decides what an approver proposes: the PRD's decider (none: an owner).
     decider: SimplePersonRef | None = None

@@ -39350,6 +39350,74 @@
           }
         },
         "x-min-role": "commenter"
+      },
+      "delete": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Delete Request",
+        "description": "port-an-decisions: an owner deletes the request to Settings \u203a Trash (30 days, then\ngone for good); Restore there brings it back. A request others are merged into stays.",
+        "operationId": "delete_request",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/requests/{request_id}/qualify": {
@@ -119991,6 +120059,11 @@
             "title": "Left Out",
             "default": []
           },
+          "in_trash": {
+            "type": "boolean",
+            "title": "In Trash",
+            "default": false
+          },
           "proposal": {
             "anyOf": [
               {
@@ -124135,7 +124208,8 @@
               "items": [],
               "addable": [],
               "words": [],
-              "left_out": []
+              "left_out": [],
+              "in_trash": false
             }
           },
           "draft_roadmap": {
@@ -138259,7 +138333,9 @@
               "feature",
               "goal",
               "decision",
-              "question"
+              "question",
+              "agenda_item",
+              "request"
             ],
             "title": "Type"
           },
