@@ -36,6 +36,13 @@ Test cards (protects / fails_when / no_claim):
   with key F-09 (then the PRD's feature is linked to it): no prd_feature_missing, no no_code,
   and Give it a code is not needed; a code key is a feature's only, and once; fails_when=the
   key F-09 is refused, the new feature reads no code or the PRD's feature stays flagged.
+- test_a_code_key_is_read_one_way_and_taken_once: protects=a code key is stored as the check
+  reads it (F-9 and F-009 are F-09; F-9a is F-09a), and refused with "Another feature already
+  has the code F-09." when any feature reads that code: by its key (F-9, F-009 after F-09; F-09
+  after F-9), through a published roadmap item's PRD section (a slug feature on f-40 reads
+  F-40), or as a code given and taken back (an alias Give it a code never gives again);
+  fails_when=two features read one code, a code key reads F-40.2, or the refusal names a
+  type:key.
 - test_scoped_to_the_company: protects=another company cannot give our feature a code or link
   our PRD; fails_when=a route reaches across tenants.
 """
@@ -370,3 +377,51 @@ async def test_add_a_prd_feature_by_its_code(client):
                  {"type": "feature", "key": "F-31X", "title": "Odd"}):  # fmt: skip
         r = await client.post("/v1/baseline/entities", json=body, headers=ctx.as_("owner"))
         assert r.status_code in (409, 422), (body, r.text)
+
+
+async def _create(client, ctx, key: str, title: str = "Team invites"):
+    body = {"type": "feature", "key": key, "title": title}
+    return await client.post("/v1/baseline/entities", json=body, headers=ctx.as_("owner"))
+
+
+async def test_a_code_key_is_read_one_way_and_taken_once(client):
+    w = await world()
+    ctx, search = w["ctx"], w["features"]["smart-search"]
+    taken = "Another feature already has the code {}."
+    # F-9 is stored as the check reads it, F-09; F-9a keeps its slice letter.
+    r = await _create(client, ctx, "F-9")
+    assert r.status_code == 201, r.text
+    assert r.json()["entity"]["key"] == "F-09"
+    r = await _create(client, ctx, "F-9a", "Team invites by link")
+    assert r.status_code == 201, r.text
+    assert r.json()["entity"]["key"] == "F-09a"
+    for key in ("F-09", "F-9", "F-009"):
+        r = await _create(client, ctx, key, "Team invites 2")
+        assert r.status_code == 409, (key, r.text)
+        assert r.json()["detail"] == taken.format("F-09")
+    r = await _create(client, ctx, "F-009a", "Team invites 3")
+    assert r.status_code == 409 and r.json()["detail"] == taken.format("F-09a")
+    # A slug feature on a published item from the PRD's section f-40 reads F-40: taken.
+    async with tenant_session(ctx.tenant_id) as s:
+        item = await s.get(RoadmapItem, uuid.UUID(w["items"]["b"]))
+        item.feature_id, item.prd_section_key = uuid.UUID(search), "f-40"
+        await s.commit()
+    for key in ("F-40", "F-040"):
+        r = await _create(client, ctx, key, "Search 2")
+        assert r.status_code == 409, (key, r.text)
+        assert r.json()["detail"] == taken.format("F-40")
+    # A code given and taken back stays its feature's alias: never another feature's.
+    async with tenant_session(ctx.tenant_id) as s:
+        item = await s.get(RoadmapItem, uuid.UUID(w["items"]["b"]))
+        item.feature_id = item.prd_section_key = None
+        await s.commit()
+    r = await client.post(code_url(search), headers=ctx.as_("approver"))
+    assert r.status_code == 200, r.text
+    code = r.json()["code"]
+    r = await client.delete(code_url(search), headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    r = await _create(client, ctx, code, "Search 3")
+    assert r.status_code == 409 and r.json()["detail"] == taken.format(code)
+    # No two Ground Truth features read one code.
+    codes = [f["feature"]["code"] for f in _of(await _check(client, ctx), "no_goal")]
+    assert len(codes) == len(set(codes)) and "F-09" in codes and "F-09.2" not in codes
