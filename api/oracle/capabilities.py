@@ -223,6 +223,8 @@ PER_ITEM: dict[str, Role | None] = {
     "delete_discussion_message": None,
     "delete_goal_milestone": "owner",
     "delete_scope_item": "approver",
+    # edit-decisions: its decider, whoever made it or an owner (decision_sheet.may_change).
+    "delete_simple_decision": "owner",
     "discard_simple_chat_card": None,
     "dismiss_date_suggestion": "owner",
     "dismiss_discussion_change": "approver",

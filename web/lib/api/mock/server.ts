@@ -24,7 +24,7 @@ import { capabilitiesOut } from "./capabilities";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { carriedFor, REPLACED_PRD_SCENARIO, seedReplacedBases } from "./replaced-prd";
-import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
+import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, logReadable, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionLogRow, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
 import { FIT_COMPANY_SCENARIO, FIT_SCENARIOS, fitDateGoal, routeFitDate } from "./fit-date";
 import { generalReply } from "./general-chat";
@@ -167,7 +167,7 @@ import { bucketGoalsInOrder, placeBucketGoal, placeBucketGoals, routeGoalBuckets
 import { proposeGoalDelete, routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./currentstate";
 import { featureKeyOf, prioritiesOut } from "./simple-priorities";
-import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
+import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, sheetDecisionMade, sheetProposals, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
 import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
@@ -2737,9 +2737,24 @@ function passOutcomes(db: Db) {
 }
 
 /** What the decision log mock reads: the signed-in member, the members, the runs' stops. */
+/** edit-decisions: the decision log's calls the reader may read, not in Trash (seeded first). */
+function logCalls(db: Db, me: MemberRow): DecisionLogRow[] {
+  db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+  const ctx = decisionsContext(db, me);
+  return ensureDecisions(db, ctx).decisions.filter((d) => !d.trashed && logReadable(ctx, d));
+}
+
+/** edit-decisions: every number the decision log holds (one number sequence with Simple's decisions). */
+function logNumbers(db: Db, me: MemberRow): number[] {
+  db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+  return ensureDecisions(db, decisionsContext(db, me)).decisions.map((d) => d.number);
+}
+
 function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
   return {
     me: { id: me.id, email: me.email, role: me.role, status: me.status },
+    // edit-decisions: one number sequence with Simple's decisions page (one decisions table in the API).
+    otherNumbers: () => (db.simple_meetings?.decisions ?? []).map((d) => d.number),
     members: db.members.map((m) => ({ id: m.id, email: m.email, role: m.role, status: m.status })),
     runs: (db.runs?.runs ?? []) as unknown as DecisionsContext["runs"],
     documentTitle: (slug) => db.documents.find((d) => d.slug === slug)?.title ?? null,
@@ -5845,7 +5860,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       // New PRD (4): a PRD moved to Trash releases its requests; Restore links back the free ones.
       // TRASH_KEPT_LINKS_SCENARIO: a PRD trashed before this release kept its request links.
       onTrash: (ids) => (localStorage.getItem(MOCK_SCENARIO_KEY) === TRASH_KEPT_LINKS_SCENARIO ? undefined : releaseDocuments(ensureRequests(db), ids)),
-      simple: () => db.simple_roadmap,
+      // edit-decisions: Restore puts a decision or a PRD's question back on Simple's Decisions too.
+      simple: () => db.simple_roadmap && { ...db.simple_roadmap, sheet: [...(db.simple_meetings?.decisions ?? []), ...(db.simple_meetings?.questions?.questions ?? [])] },
       onRestore: (released) => relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
       uuid,
       now,
@@ -6768,6 +6784,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     };
     // prd-questions: the remembered Decisions view and the judgement calls waiting for me.
     meetingsCtx.view = () => db.preferences?.[me.email]?.simple_decisions_view ?? null;
+    meetingsCtx.trash = () => (db.trash ??= emptyTrash());
     meetingsCtx.runs = (prd) => {
       db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
       const docs = db.documents.filter((d) => d.kind === "prd");
@@ -6779,7 +6796,26 @@ async function route(db: Db, req: Request): Promise<Response> {
       ensureDecisions(db, ctx);
       return decisionInbox(ctx, db.decisions!, null).filter((d) => d.counts && d.reason === "needs_decision").length;
     };
+    // The log's own row, in Trash or not, when the reader may read it (GET /v1/decisions/{number}'s check).
+    meetingsCtx.logRow = async (id) => {
+      db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+      const ctx = decisionsContext(db, me);
+      const found = ensureDecisions(db, ctx).decisions.find((d) => d.id === id);
+      return found && logReadable(ctx, found) ? found : null;
+    };
+    meetingsCtx.logCalls = () => logCalls(db, me);
+    meetingsCtx.logNumbers = () => logNumbers(db, me);
     const meetingsDb = ensureMeetings(db, meetingsCtx);
+    // edit-decisions: the decision sheet's suggestions are Simple changes too (one changes table in the API).
+    if (req.method === "GET" && p[2] === "changes" && p.length === 3 && !q.get("session") && !q.get("document")) {
+      const engineRes = await simpleRoute(req);
+      if (engineRes?.ok) {
+        const rows = (await engineRes.json()) as Schemas["SimpleChangeOut"][];
+        const sheet = (await sheetProposals(meetingsDb, meetingsCtx, q.get("status"))).filter((c) => q.get("mine") !== "true" || c.by === me.id);
+        return json(200, [...rows, ...sheet].sort((a, b) => (a.at < b.at ? 1 : -1)));
+      }
+      if (engineRes) return engineRes;
+    }
     const meetingsRes =
       (await routeMeetingQuestions(meetingsDb, meetingsCtx, req, p)) ??
       (await routeSimpleMeetings(meetingsDb, meetingsCtx, req, p, q)) ?? (await withMeeting(meetingsDb, meetingsCtx, req, p, simpleRoute));
@@ -6802,6 +6838,8 @@ async function route(db: Db, req: Request): Promise<Response> {
         onePager: onePagerDb,
         rituals: ensureRituals(db, me),
         documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title })),
+        // edit-decisions: Simple's decisions are numbered after the log's (one number sequence).
+        logNumbers: () => logNumbers(db, me),
       });
       return { db: ensureMeetings(db, ctx), ctx };
     });
@@ -6812,8 +6850,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       const res = (await routeDecisions(dctx, ensureDecisions(db, dctx), post, ["v1", "decisions"], new URLSearchParams()))!;
       if (!res.ok) return null;
       const doc = b.subjects?.find((x) => x.kind === "document")?.id ?? null;
-      const id = ((await res.json()) as Schemas["DecisionOut"]).id;
-      reviews.propose(b.title, b.approver_id, doc, id);
+      const made = (await res.json()) as Schemas["DecisionOut"];
+      const id = made.id;
+      reviews.propose(b.title, b.approver_id, doc, id, made.number);
       return id;
     };
     const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, proposeTo: (d: string | null) => reviews.proposeTo(d),
@@ -6868,7 +6907,28 @@ async function route(db: Db, req: Request): Promise<Response> {
   // The decision log (H1): judgement calls, and a record of every run stop decided.
   const decisionsCtx = decisionsContext(db, me);
   ensureDecisions(db, decisionsCtx);
+  // edit-decisions: Reassign from Simple's sheet on a decision only Simple's store holds (one
+  // decisions table in the API): the same checks as POST /v1/decisions/{id}/reassign.
+  const simpleOnly = req.method === "POST" && p[1] === "decisions" && p[3] === "reassign" && !db.decisions!.decisions.some((d) => d.id === p[2]) ? db.simple_meetings?.decisions.find((d) => d.id === p[2]) : undefined;
+  if (simpleOnly) {
+    if (me.role !== "owner") return json(403, { detail: "Requires the owner role" });
+    if (simpleOnly.status !== "proposed" && simpleOnly.status !== "decided") return json(409, { detail: `D-${simpleOnly.number} is ${simpleOnly.status}` });
+    const b = (await req.clone().json()) as Schemas["ReassignIn"];
+    const to = decisionsCtx.members.find((x) => x.id === b.approver_id);
+    if (!to || to.status === "disabled" || !["approver", "owner"].includes(to.role)) return json(422, { detail: "The approver must be an active member with the approver role or above" });
+    simpleOnly.approver_id = b.approver_id;
+    return json(200, { id: simpleOnly.id, number: simpleOnly.number, title: simpleOnly.title, approver_id: b.approver_id });
+  }
   const decided = await routeDecisions(decisionsCtx, db.decisions!, req, p, q);
+  // edit-decisions: a decision made from Simple's sheet is listed there; Reassign shows there too.
+  if (decided?.ok && req.method === "POST" && p[1] === "decisions" && p.length === 2 && db.simple_meetings) {
+    sheetDecisionMade(db.simple_meetings, (await decided.clone().json()) as Schemas["DecisionOut"], me.id);
+  }
+  if (decided?.ok && req.method === "POST" && p[1] === "decisions" && p[3] === "reassign") {
+    const logged = (await decided.clone().json()) as Schemas["DecisionOut"];
+    const copy = db.simple_meetings?.decisions.find((d) => d.id === logged.id);
+    if (copy) copy.approver_id = logged.approver_id;
+  }
   if (decided?.ok && req.method === "POST" && p[1] === "decisions" && (p[3] === "decide" || p[3] === "withdraw")) {
     // An Ask proposal's Decide or Decline (withdraw) shows on Simple's Decisions page (one decisions row in the API).
     const logged = db.decisions!.decisions.find((d) => String(d.number) === p[2] || d.id === p[2]);

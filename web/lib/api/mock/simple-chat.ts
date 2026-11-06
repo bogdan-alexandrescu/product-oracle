@@ -202,7 +202,7 @@ export interface ChatMeetings {
   /** Who confirms a commenter's decision on Ask: the document's decider, else an owner (an approver or above). */
   proposeTo(documentId: string | null): { id: string; name: string } | null;
   /** A commenter's decision on Ask, open on the Decisions page for `deciderId`. */
-  propose(title: string, deciderId: string, documentId: string | null, id?: string): string;
+  propose(title: string, deciderId: string, documentId: string | null, id?: string, logNumber?: number): string;
 }
 
 export interface ChatDb {
