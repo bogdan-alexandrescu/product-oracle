@@ -863,14 +863,14 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
             </>
           ) : (
             <>
-              <p data-testid="minutes-summary" data-user-content>{minutes?.summary || "No summary."}</p>
+              <p data-testid="minutes-summary">{minutes?.summary ? <span data-user-content>{minutes.summary}</span> : "No summary."}</p>
               <h3 className="font-semibold">Open questions</h3>
               {/* qa-simple-decide-52: each open question leads to where it is decided. */}
               {minutes?.open_questions.length ? (
                 <ul className="list-disc pl-5">
                   {minutes.open_questions.map((x) => (
                     <li key={x}>
-                      <Link className="text-accent-ink hover:underline" href={`/simple/decisions?meeting=${m.id}`}>{questionWords(x)}</Link>
+                      <Link className="text-accent-ink hover:underline" href={`/simple/decisions?meeting=${m.id}`} data-user-content>{questionWords(x)}</Link>
                     </li>
                   ))}
                 </ul>

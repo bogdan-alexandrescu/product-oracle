@@ -392,7 +392,7 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
               const n = /^D-(\d+):/.exec(x)?.[1];
               const anchor = n && !rowNumbers.has(Number(n)) ? `d-${n}` : undefined;
               return (
-                <li key={x} id={anchor} className={anchor ? "target:bg-[var(--simple-edited)]" : undefined}>
+                <li key={x} id={anchor} className={anchor ? "target:bg-[var(--simple-edited)]" : undefined} data-user-content>
                   {x}
                 </li>
               );
@@ -542,7 +542,7 @@ function Rows({ rows }: { rows: Row[] }) {
             </span>
             <span className="simple-rb flex-1">
               <span className="break-words">
-                <span className="simple-code">{code}</span> <b className="font-[650]">{title}</b>
+                <span className="simple-code">{code}</span> <b className="font-[650]" data-user-content>{title}</b>
               </span>
               <span className="simple-meta">
                 {[chosen, r.approver?.name ?? "No approver", momentWords(r.decided_at ?? r.created_at, zone), done ? null : STATUS_WORDS[r.status] ?? "open"]
