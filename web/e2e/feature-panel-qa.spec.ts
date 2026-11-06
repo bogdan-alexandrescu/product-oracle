@@ -57,7 +57,7 @@ for (const size of SIZES) {
         await expect(page.getByText("Dependency removed in your working draft")).toBeVisible();
         await expect(needed.getByTestId("card-needed-row").filter({ hasText: "Mobile alert push" })).toHaveCount(0);
         await expect(needed).toContainText("Weekly alert digest");
-        await tap(page.getByRole("button", { name: "Undo" }));
+        await tap(page.getByTestId("toasts").getByRole("button", { name: "Undo" }));
         await expect(needed.getByTestId("card-needed-row").filter({ hasText: "Mobile alert push" })).toBeVisible();
 
         // Add one: it now depends on this one.
@@ -65,7 +65,7 @@ for (const size of SIZES) {
         await panel(page).getByLabel("Feature that needs it").selectOption({ label: "Alert history export" });
         await tap(panel(page).getByRole("button", { name: "Save" }));
         await expect(needed.getByTestId("card-needed-row").filter({ hasText: "Alert history export" })).toBeVisible();
-        await tap(needed.getByRole("button", { name: "Alert history export" }));
+        await tap(needed.getByRole("button", { name: "Alert history export", exact: true }));
         await expect(panel(page).getByTestId("card-depends")).toContainText("Alert rules engine");
       });
 
