@@ -32,8 +32,8 @@
 <div class="doc-strings" aria-hidden="true">
   <span class="doc-strings-title">{{ footer_title }}</span>
   {%- if not link_holder %}
-  <span class="doc-strings-version"> · Version {{ number }}{% if number < latest_number %} of {{ latest_number }}{% endif %}</span>
-  <span class="doc-strings-status"> · {{ status | replace("_", " ") | capitalize }}</span>
+  <span class="doc-strings-version">Version {{ number }}{% if number < latest_number %} of {{ latest_number }}{% endif %}</span>
+  <span class="doc-strings-status">{{ status | replace("_", " ") | capitalize }}</span>
   {%- endif %}
   <span class="doc-strings-asof">As of {{ as_of }}</span>
 </div>

@@ -74,7 +74,7 @@ body.orientation-landscape { max-width: 76rem; }
 }
 /* WeasyPrint runs no string-set inside a running element, so a page footer that shows
    the title, version and status reads them from this carrier instead. It takes no space
-   on the page and is never shown on screen. Each part after the title carries its own
+   on the page and is never shown on screen. Each part after the title sets its own
    separator, so a footer without a version or status ends with the title. */
 .doc-strings { height: 0; overflow: hidden; margin: 0; visibility: hidden; }
 /* A long title or source label: the full text on screen, the capped one in the
@@ -86,8 +86,8 @@ body.orientation-landscape { max-width: 76rem; }
 }
 .doc-strings > span { display: inline; }
 .doc-strings-title { string-set: doc-title content(text); }
-.doc-strings-version { string-set: doc-version content(text); }
-.doc-strings-status { string-set: doc-status content(text); }
+.doc-strings-version { string-set: doc-version " \00B7  " content(text); }
+.doc-strings-status { string-set: doc-status " \00B7  " content(text); }
 .doc-strings-asof { string-set: doc-asof content(text); }
 @media screen { .doc-strings { display: none; } }
 .legend > span { display: inline-block; margin-right: 1rem; }
