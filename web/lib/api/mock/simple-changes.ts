@@ -612,6 +612,8 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
       const waiting = (db.reviewers?.[d.roadmap] ?? []).filter((r) => r !== ctx.id);
       Object.assign(d.out, { status: "submitted", version: (d.out.base_version ?? 1) + 1, submitted_at: now, submitted_by: ctx.id, waiting_on: waiting });
     }
+    // As drafts.approve: a second press in a stale tab, after this approver's approval published it, answers with it.
+    if (d.out.status === "approved" && (approverOf(db, ctx, d) || (db.reviewers?.[d.roadmap] ?? []).includes(ctx.id))) return json(200, draftOut(db, ctx, d));
     if (d.out.status !== "submitted") return json(409, { detail: `This draft is ${d.out.status}: only a submitted draft is approved` });
     // As drafts._approve: the decider (with none, an editor), a required reviewer (one who approved
     // already may approve again: nothing changes) or anyone it waits on.

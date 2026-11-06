@@ -303,7 +303,7 @@ for (const phone of [false, true]) {
     test(`a version sent for review waits on its required reviewer, who approves it from the Inbox (${where})`, async ({ page }) => {
       test.setTimeout(120_000);
       await login(page);
-      // The owner changes the Alerts roadmap and sends it for review (on a desktop, by the keyboard).
+      // The owner changes the Alerts roadmap and approves it (on a desktop, by the keyboard).
       const size = page.viewportSize()!;
       // Read once first: Oracle's dates and goal suggestions, made as it is first read, are in the counts.
       await readRoadmap(page);
@@ -319,11 +319,12 @@ for (const phone of [false, true]) {
       await bar.focus();
       await page.keyboard.press("ArrowRight");
       await expect(page.getByTestId("draft-count")).toHaveText("1");
-      await page.getByTestId("draft-banner").getByRole("button", { name: "Send for review" }).click();
-      const sent = page.getByRole("status").filter({ hasText: "Sent for review" });
+      // roadmap-decide: the owner decides a roadmap that names no decider: Approve and publish sends it to its required reviewer.
+      await page.getByTestId("draft-banner").getByRole("button", { name: "Approve and publish" }).click();
+      const sent = page.getByRole("status").filter({ hasText: "Approved: Alerts roadmap waits for 1 more reviewer" });
       await expect(sent).toBeVisible();
-      // card: inbox-send-counts-at-once: the owner decides the roadmap: the version now waits on them too, and the rail counts it at once.
-      await expect.poll(() => shownCount(page, false)).toBe(railBefore + 1);
+      // card: inbox-send-counts-at-once: the owner approved it, so it waits on no one of theirs: the rail's count reads again at once.
+      await expect.poll(() => shownCount(page, false)).toBe(railBefore);
       // card: roadmap-toast-clear: the toast covers no bar of the chart.
       const box = (await sent.boundingBox())!;
       const bars = await page.getByTestId("timeline-bar").evaluateAll((els) =>
@@ -332,7 +333,7 @@ for (const phone of [false, true]) {
       const covered = bars.filter((b) => b.x < box.x + box.width && box.x < b.x + b.width && b.y < box.y + box.height && box.y < b.y + b.height);
       expect(covered).toEqual([]);
       await page.setViewportSize(size);
-      if (phone) await expect.poll(() => inboxCount(page, true, "roadmap")).toBe(phoneBefore + 1);
+      if (phone) await expect.poll(() => inboxCount(page, true, "roadmap")).toBe(phoneBefore);
 
       await switchTo(page, "approver@example.com");
       const railCount = await openInboxFromRail(page, phone);
@@ -359,9 +360,9 @@ for (const phone of [false, true]) {
       await expect(approval).toContainText(/Alerts roadmap version \d+ is waiting for your approval/);
       await expect.poll(() => approvalCount(page, phone)).toBeGreaterThan(0);
       const shown = await approvalCount(page, phone);
-      // The reviewer's approval alone does not publish it: the decider's is still to come.
+      // The owner approved it already: the reviewer's approval publishes it.
       await tap(approval.getByRole("button", { name: "Approve" }));
-      await expect(page.getByText("Approved: it waits for the other approvals")).toBeVisible();
+      await expect(page.getByText("Approved: Alerts roadmap is published")).toBeVisible();
       // The counts drop at once, on the page where it was approved.
       await expect.poll(() => approvalCount(page, phone)).toBe(shown - 1);
 
@@ -372,27 +373,10 @@ for (const phone of [false, true]) {
       await expect(page.getByTestId("home-needs")).toBeVisible();
       await expect.poll(() => homeCounts(page)).toEqual({ approvals: before.approvals - 1, proposals: before.proposals });
 
-      // The decider (the owner, who sent it) has it waiting in their Inbox too.
+      // The owner (its decider) approved it with Approve and publish: nothing waits in their Inbox.
       await switchTo(page, ADMIN.email);
-      const ownerCount = await openInboxFromRail(page, phone);
-      const mine = page.getByRole("row").filter({ has: page.getByTestId("simple-approval-context") });
-      await expect(mine).toHaveCount(1);
-      await expect(mine).toContainText(/Alerts roadmap version \d+/);
-      expect(await waiting(page)).toBe(ownerCount);
-      await tap(mine.getByRole("link", { name: /^Open Alerts roadmap version \d+ to approve it$/ }));
-      await expect(page).toHaveURL(/\/simple\/roadmap\?roadmap=.*&draft=/);
-      const decide = page.getByTestId("draft-approval");
-      await expect(decide).toContainText(/Alerts roadmap version \d+ is waiting for your approval/);
-      await expect.poll(() => approvalCount(page, phone)).toBeGreaterThan(0);
-      const ownerShown = await approvalCount(page, phone);
-      await tap(decide.getByRole("button", { name: "Approve" }));
-      await expect(page.getByText("Approved: Alerts roadmap is published")).toBeVisible();
-      await expect.poll(() => approvalCount(page, phone)).toBe(ownerShown - 1);
-
-      await page.goto("/inbox");
-      await expect(page.getByTestId("inbox-needs")).toBeVisible();
+      await openInboxFromRail(page, phone);
       await expect(page.getByRole("row").filter({ has: page.getByTestId("simple-approval-context") })).toHaveCount(0);
-      await expect.poll(() => waiting(page).catch(() => 0)).toBe(ownerCount - 1);
     });
   });
 }

@@ -36,7 +36,7 @@ for (const width of [1440, 390]) {
     test.setTimeout(120_000);
     await page.setViewportSize({ width: 1440, height: 900 });
     await login(page);
-    // The owner changes the Alerts roadmap and sends it for review.
+    // The owner changes the Alerts roadmap and approves it.
     await page.goto("/simple/roadmap");
     await expect(page.getByTestId("simple-roadmap")).toBeVisible();
     await page.getByTestId("filter-roadmap").selectOption({ label: "Alerts roadmap" });
@@ -45,8 +45,9 @@ for (const width of [1440, 390]) {
     await bar.focus();
     await page.keyboard.press("ArrowRight");
     await expect(page.getByTestId("draft-count")).toHaveText("1");
-    await page.getByTestId("draft-banner").getByRole("button", { name: "Send for review" }).click();
-    await expect(page.getByRole("status").filter({ hasText: "Sent for review" })).toBeVisible();
+    // roadmap-decide: the owner decides a roadmap that names no decider: Approve and publish sends it to its required reviewers.
+    await page.getByTestId("draft-banner").getByRole("button", { name: "Approve and publish" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Approved: Alerts roadmap waits for 1 more reviewer" })).toBeVisible();
 
     // The required reviewer opens it from their Inbox.
     await page.setViewportSize({ width, height: width < 640 ? 844 : 900 });

@@ -1570,6 +1570,12 @@ async def approve(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) -
         await submit(db, principal, d.id)
         # Review minor 5: the draft as submitting left it, not as read before.
         d, w = await _get(db, principal, draft_id)
+    # A second press in a stale tab, after this approver's approval published it: the
+    # published draft, not a 409 (inbox-mock-matches-api).
+    if d.status == "approved" and (
+        _approver_of(principal, d, w) or principal.user_id in w.reviewers.get(d.document_id, [])
+    ):
+        return (await outs(db, principal, [d], []))[0]
     other = await _approve(db, principal.tenant_id, d, w, principal, [], None)
     return (await outs(db, principal, [d], other))[0]
 
