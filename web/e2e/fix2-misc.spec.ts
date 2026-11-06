@@ -95,8 +95,8 @@ test("autonomy: every level control lines up, right-aligned", async ({ page }) =
   expect(new Set(boxes.map((b) => b.right)).size).toBe(1);
   // Right-aligned: the control ends near its row's right edge.
   for (const b of boxes) expect(b.rowRight - b.right).toBeLessThan(40);
-  // The vision row has locked steps and still matches the rest.
-  await expect(step(page, "vision", "Act")).toBeDisabled();
+  // The vision row has locked steps left out and still matches the rest.
+  await expect(step(page, "vision", "Act")).toHaveCount(0);
 });
 
 // qa-settings-36: clicking the level already set does nothing; Act's limits have their own button.
@@ -143,16 +143,21 @@ test("webhooks and trash: their empty states explain themselves", async ({ page 
 });
 
 // qa-settings-46: Project ID with where to find it, the key's hint, and why Save waits.
+// qa-f-72: both hints sit behind their field's (i), not loose text on the page.
 test("analytics: the PostHog form says where to find each value and why Save waits", async ({ page }) => {
   await login(page);
   await settings(page, "analytics");
   const form = page.getByTestId("analytics-posthog");
   await expect(form.getByText("Project ID", { exact: true })).toBeVisible();
   await expect(form).not.toContainText("Project id");
-  await expect(form.getByLabel("Project ID")).toHaveAccessibleDescription("Find it in PostHog › Project settings.");
-  await expect(form.getByLabel("Personal API key")).toHaveAccessibleDescription(
-    "Make one in PostHog › Account settings › Personal API keys.",
-  );
+  await form.getByRole("button", { name: "About the project ID" }).click();
+  await expect(form.getByRole("tooltip").filter({ hasText: "Find it in PostHog › Project settings." })).toBeVisible();
+  await form.getByRole("button", { name: "About the project ID" }).click();
+  await form.getByRole("button", { name: "About the personal API key" }).click();
+  await expect(
+    form.getByRole("tooltip").filter({ hasText: "Make one in PostHog › Account settings › Personal API keys." }),
+  ).toBeVisible();
+  await form.getByRole("button", { name: "About the personal API key" }).click();
   const save = form.getByRole("button", { name: "Save" });
   await expect(save).toHaveAttribute("data-variant", "primary");
   await expect(save).toBeDisabled();

@@ -117,6 +117,8 @@ test.describe("desktop", () => {
     await expect(action).toBeDisabled();
     await expect(header().getByRole("button", { name: "Save as new version" })).toHaveCount(0);
     await expect(page.getByTestId("version-save-reason")).toHaveText("Change the template to save a new version.");
+    // qa-F-75: sections are rows by default; the raw body sits behind Edit as Markdown.
+    await page.getByRole("button", { name: "Edit as Markdown" }).click();
     expect((await action.boundingBox())!.y).toBeGreaterThan((await page.getByLabel("Template body").boundingBox())!.y);
     await expect(action).toHaveAttribute("data-variant", "primary");
 
