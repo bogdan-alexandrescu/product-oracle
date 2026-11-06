@@ -228,11 +228,13 @@ for (const phone of [false, true]) {
       expect(Math.round((await accept.boundingBox())!.height)).toBe(Math.round((await decline.boundingBox())!.height));
     });
 
-    test("qa4-simple-decide-39: a decision's link is named by its code and its words", async ({ page }) => {
+    test("qa4-simple-decide-39, F-26: a decision's link is its name, no code, and a long line hangs under it", async ({ page }) => {
       await pastMeeting(page);
       const taken = page.getByRole("list", { name: "Decisions taken" });
-      await expect(taken.getByRole("link", { name: /^D-4 Moved / })).toBeVisible();
-      await expect(taken.getByRole("link", { name: /^D-\d+$/ })).toHaveCount(0);
+      await expect(taken.getByRole("link", { name: /^Moved / }).first()).toBeVisible();
+      await expect(taken).not.toContainText(/D-\d+/);
+      const line = taken.getByTestId("decision-taken").first();
+      expect(await line.evaluate((el) => [getComputedStyle(el).textIndent, getComputedStyle(el).paddingLeft])).toEqual(["-16px", "16px"]);
     });
 
     test("qa4-simple-decide-32: Connect Slack is drawn as a link, not grey like its note", async ({ page }) => {

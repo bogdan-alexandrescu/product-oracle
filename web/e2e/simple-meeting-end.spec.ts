@@ -99,8 +99,8 @@ for (const phone of [false, true]) {
         const sent = page.getByRole("status", { name: "Sent" });
         await expect(sent).toContainText("Decisions page · posted");
         await expect(sent).toContainText("Each attendee's Inbox · posted");
-        await expect(sent).toContainText("Email · not sent (not picked)");
-        await expect(sent).toContainText("Slack · not posted (not picked)");
+        await expect(sent).toContainText("Email · not sent (not chosen for this meeting)");
+        await expect(sent).toContainText("Slack · not sent (not chosen for this meeting)");
         await expect(page.getByTestId("minutes-summary")).toHaveText("We moved the checklist to Next and keep it first.");
         await expect(page.getByRole("region", { name: "Minutes" })).toContainText("Write the checklist copy · Priya Raman · by Mon Nov 2");
         await sent.getByRole("link", { name: "Open the Decisions page" }).click();
