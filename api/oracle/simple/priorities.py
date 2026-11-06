@@ -64,6 +64,7 @@ from oracle.simple.schemas import (
     SimplePriorityRow,
     SimpleQuarter,
 )
+from oracle.trash.filter import INCLUDE_TRASHED
 
 router = APIRouter(prefix="/v1/simple", tags=["simple"])
 
@@ -567,6 +568,27 @@ def above(e: service.Entry | None, line: SimpleLine) -> bool:
     return e.resolved.end.date <= line.date
 
 
+async def _trashed_without_live(db: AsyncSession, feature_ids: set[str]) -> set[str]:
+    """Feature ids (``ranking.features``' ``entity_id`` strings) with at least one roadmap
+    item in Trash and no live one anywhere (trash-features-goals): those leave Priorities
+    with their roadmap item, not just the reader's view of it. A feature with no roadmap
+    item at all, or whose only item sits on a roadmap this reader cannot see, keeps showing
+    as it did (its row un-reorderable): this only drops a feature actually in Trash."""
+    ids = {uuid.UUID(f) for f in feature_ids}
+    if not ids:
+        return set()
+    rows = await db.execute(
+        select(RoadmapItem.feature_id, RoadmapItem.deleted_at)
+        .where(RoadmapItem.feature_id.in_(ids))
+        .execution_options(**{INCLUDE_TRASHED: True})
+    )
+    trashed: set[str] = set()
+    live: set[str] = set()
+    for feature_id, deleted_at in rows:
+        (live if deleted_at is None else trashed).add(str(feature_id))
+    return trashed - live
+
+
 async def build(
     db: AsyncSession, principal: Any, line_key: str | None = None
 ) -> SimplePrioritiesOut:
@@ -579,15 +601,19 @@ async def build(
     by_feature = {str(o.feature_id): o for o in active.values()}
     names = await changes._names(db, {o.created_by for o in active.values()})
     can_change = has_role(principal.role, "commenter")
+    trashed = await _trashed_without_live(
+        db, {f.entity_id for f in ranking.features if f.entity_id not in items}
+    )
+    features = [f for f in ranking.features if f.entity_id not in trashed]
     code_of = {
         f.key: (items[f.entity_id].row.item_key if f.entity_id in items else f.key)
-        for f in ranking.features
+        for f in features
     }
-    id_of = {f.key: f.entity_id for f in ranking.features}
+    id_of = {f.key: f.entity_id for f in features}
     rows: list[SimplePriorityRow] = []
     deps: dict[str, list[str]] = {}
     prd_of: list[str | None] = []
-    for f in ranking.features:
+    for f in features:
         e = items.get(f.entity_id)
         deps[f.entity_id] = [id_of[d] for d in f.depends_on if d in id_of]
         gv = f.explanation.inputs.get("goal_value")
@@ -628,7 +654,7 @@ async def build(
             )
         )
     short = await _short_codes(db)
-    for f, r in zip(ranking.features, rows, strict=True):
+    for f, r in zip(features, rows, strict=True):
         r.short_code = short.get(f.key, f.key)
     _after(rows, deps)
     this_quarter, inside = await plan_quarter(db, read_)
