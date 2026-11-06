@@ -88442,6 +88442,17 @@
               }
             ],
             "title": "Line Id"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section"
           }
         },
         "type": "object",

@@ -901,6 +901,8 @@ class InboxSimpleChange(BaseModel):
     subject: str | None = None
     question_id: uuid.UUID | None = None
     line_id: str | None = None
+    # PR 1320 re-review: a one-pager number fix's PRD section (its key), where Open lands.
+    section: str | None = None
 
 
 DraftStatus = Literal["working", "submitted", "approved", "discarded"]
