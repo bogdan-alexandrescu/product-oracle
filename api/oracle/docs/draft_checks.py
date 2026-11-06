@@ -30,7 +30,7 @@ def run_warnings(
     draft the sections were parsed from, for the lines its warnings name)."""
     if kind == "prd":
         # PRD source words: its sources by their titles, its issues by what they are.
-        return [*named_codes.check(sections), *source_words.check(sections, markdown)]
+        return [*named_codes.check(sections, prd=True), *source_words.check(sections, markdown)]
     if kind == "roadmap":
         return [*named_codes.check(sections), *draft_words.check(sections)]
     return []

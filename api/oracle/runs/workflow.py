@@ -193,6 +193,22 @@ def code_name_trouble(warnings: list[str]) -> str:
     return " and ".join(parts) or "uses codes without their names"
 
 
+def warning_subject(warnings: list[str]) -> str:
+    """What a sent-back draft's warnings point at, in plain words ("codes", "source
+    lines", "issue numbers"), by the import's warning codes."""
+    parts: list[str] = []
+    for codes, what in (
+        (("unnamed_code", "codes_not_listed"), "codes"),
+        (("source_not_named",), "source lines"),
+        (("issue_number",), "issue numbers"),
+        (("queue_said_as_estimate", "unverified_written"), "date words"),
+        (("described_called_missing",), "lines that call something missing"),
+    ):
+        if any(c in warnings for c in codes) and what not in parts:
+            parts.append(what)
+    return " and ".join(parts) or "codes"
+
+
 def code_name_findings(name: str, code_names: list[str], warnings: list[str]) -> list[str]:
     """The review findings for a draft imported with codes it does not name or list (#306,
     oracle.docs.named_codes): a lead line saying which rule it breaks, then the import's

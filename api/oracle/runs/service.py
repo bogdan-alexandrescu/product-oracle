@@ -5784,12 +5784,16 @@ async def _send_back(
                 f"writer (SwarmCloud: {_shown(exc)}): {checkpoint} waits for a person.",
             )
             return False
-    still = "is still refused," if refused else f"still {trouble}, the import says which codes and"
+    subject = workflow.warning_subject(list(imported.get("warnings") or []))
+    still = (
+        "is still refused," if refused else f"still {trouble}, the import says which {subject} and"
+    )
+    problems = "import's problems" if refused else f"import's warnings on its {subject}"
     _note(
         segment,
         f"{name} {why}, so Oracle sent the draft back to the writer before "
         f"asking a person: it answered {step} (round {round_}) with NOT_YET and the "
-        f"{'import' if refused else 'unnamed code'}'s problems as findings. This is "
+        f"{problems} as findings. This is "
         "Oracle's answer, not a person's decision: nothing is "
         "approved, and the run's agents may not write to Oracle until a person's answer "
         f"counts. The revision is imported when the next review opens; if it {still} "

@@ -82,7 +82,7 @@ const PASS = (rationale: string): Rule => ["pass", rationale, []];
 const RULES_BY_SLUG: Record<string, Record<string, Rule>> = {
   "online-deposits": {
     problem_clarity: PASS("The problem names its users and its pain is backed by the no-show count."),
-    goal_alignment: ["warning", "The goals section cites Fewer missed visits (G4), still proposed.", ["problem"]],
+    goal_alignment: ["warning", "The PRD's goals are proposed, not confirmed", ["problem"]],
     evidence_provenance: PASS("Evidence is fresh and confident."),
     alternatives_tradeoffs: PASS("Two refund approaches are compared."),
     blocker_feasibility: ["critical", "The same-day refund blocker has no workable mitigation or experiment.", ["risks"]],
