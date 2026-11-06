@@ -16,7 +16,16 @@ Test cards (protects / fails_when / no_claim):
   item of a PRD feature over two milestones) whose feature the PRD flags already is one
   unlinked item with its slice code, never also a slice flag; the PRD feature is one flag
   however many milestones it spans; fails_when=one missing feature shows as a flag per
-  milestone, or a slice reads no code.
+  milestone, or a slice reads no code, or two slices read the same code.
+- test_an_item_matched_by_code_is_in_the_ground_truth / test_a_proposed_code_still_flags_its_items:
+  protects=a roadmap item linked to no feature whose own code (F-02) or whose slice's
+  feature (F-15, for an F-15 item and an F-15a slice) is a confirmed Ground Truth feature is
+  in it, by code: no flag; a proposed F-15 still leaves them flagged; fails_when=an item
+  matched by code reads "not a feature in the Ground Truth" and Add to Ground Truth would
+  add the slice as a second feature.
+- test_prd_plan_codes_read_as_codes: protects=a PRD plan code is read as an F-code (f-01
+  matches the confirmed F-01; the number 15 reads F-15); fails_when=a plan feature coded f-01
+  is flagged though F-01 is confirmed, or a flag shows a bare number.
 - test_prd_features_match_by_code_only: protects=a PRD's F-20 Bulk import is flagged though
   the confirmed F-01 has the same name, with the hint "Same name as F-01 Bulk import." and
   the feature to link to; a PRD feature with no code is flagged, not skipped;
@@ -281,7 +290,8 @@ async def test_a_slice_item_of_a_missing_prd_feature(client):
         y = await seed.item(rv, pv, "usage-y", title="Usage export scale", position=7,
                             prd_section_key="f-15")  # fmt: skip
         await s.commit()
-        ids = {str(b.id): "F-15b", str(x.id): "F-15a", str(y.id): "F-15b"}
+        # The second item of F-15 takes the next free letter: F-15b is the explicit one's.
+        ids = {str(b.id): "F-15b", str(x.id): "F-15a", str(y.id): "F-15c"}
     out = await _check(client, w["ctx"])
     # F-15 is one flag, however many milestones or items it has.
     assert [f["feature"]["code"] for f in _of(out, "prd_feature_missing")] == ["F-09", "F-15"]
@@ -289,6 +299,61 @@ async def test_a_slice_item_of_a_missing_prd_feature(client):
     unlinked = {f["item"]["id"]: f["item"]["code"] for f in _of(out, "unlinked_item")}
     for i, code in ids.items():
         assert unlinked[i] == code
+
+
+async def _add_usage_export(w: dict, status: str = "confirmed") -> dict:
+    """F-15 Usage export (``status``) and, linked to no feature, the items F-02 Audit log
+    (its own code), F-15 Usage export start (a PRD item of F-15) and F-15a Usage export
+    slice (a slice item)."""
+    prd_id, pv_id, rv_id = w["seed"]
+    async with tenant_session(w["ctx"].tenant_id) as s:
+        seed = Seed(s)
+        rv = await s.get(DocumentVersion, rv_id)
+        pv = await s.get(DocumentVersion, pv_id)
+        f15 = await seed.entity("feature", "F-15")
+        f15.title, f15.status = "Usage export", status
+        own = await seed.item(rv, pv, "audit", title="Audit log", position=5,
+                              prd_section_key="f-02")  # fmt: skip
+        whole = await seed.item(rv, pv, "usage-x", title="Usage export start", position=6,
+                                prd_section_key="f-15")  # fmt: skip
+        part = await seed.item(rv, pv, "usage-a", title="Usage export slice", position=7,
+                               prd_section_key="f-15a")  # fmt: skip
+        await s.commit()
+        return {"F-02": str(own.id), "F-15": str(whole.id), "F-15a": str(part.id)}
+
+
+async def test_an_item_matched_by_code_is_in_the_ground_truth(client):
+    w = await world()
+    ids = await _add_usage_export(w)
+    out = await _check(client, w["ctx"])
+    flagged = {(f.get("item") or {}).get("id") for f in out["flags"]}
+    assert flagged.isdisjoint(ids.values())
+    assert [f["feature"]["code"] for f in _of(out, "prd_feature_missing")] == ["F-09"]
+    assert [f["item"]["id"] for f in _of(out, "unlinked_item")] == [w["items"]["b"],
+                                                                    w["items"]["d"]]  # fmt: skip
+
+
+async def test_a_proposed_code_still_flags_its_items(client):
+    w = await world()
+    ids = await _add_usage_export(w, status="proposed")
+    out = await _check(client, w["ctx"])
+    # F-15 is not in the Ground Truth: the PRD's F-15 is flagged, its items too.
+    assert [f["feature"]["code"] for f in _of(out, "prd_feature_missing")] == ["F-09", "F-15"]
+    unlinked = {f["item"]["id"]: f["item"]["code"] for f in _of(out, "unlinked_item")}
+    assert unlinked[ids["F-15"]] == "F-15b" and unlinked[ids["F-15a"]] == "F-15a"
+    # F-02 is confirmed: its item is in the Ground Truth by code.
+    assert ids["F-02"] not in unlinked
+
+
+async def test_prd_plan_codes_read_as_codes(client):
+    plan = {**PLAN, "features": [{"code": "f-01", "name": "Bulk import", "milestones": ["M1"]},
+                                 {"code": 15, "name": "Usage export"}]}  # fmt: skip
+    w = await world(plan)
+    out = await _check(client, w["ctx"])
+    missing = _of(out, "prd_feature_missing")
+    # f-01 is the confirmed F-01; the number 15 reads F-15, never a bare 15.
+    assert [f["feature"] for f in missing] == [{"id": None, "code": "F-15", "name": "Usage export"}]
+    assert _fixes(missing[0]) == [("add_to_ground_truth", "F-15"), ("link_to_feature", "F-15")]
 
 
 async def test_prd_features_match_by_code_only(client):
