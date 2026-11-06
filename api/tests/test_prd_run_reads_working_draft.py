@@ -33,6 +33,7 @@ NOW = datetime(2026, 11, 6, 9, 0, tzinfo=UTC)
 PUBLISHED = datetime(2026, 11, 4, 18, 0, tzinfo=UTC)
 # Nov 5, 2026, 11:40 PM PST.
 EDITED = datetime(2026, 11, 6, 7, 40, tzinfo=UTC)
+NOTE = "Follow the roadmap as edited."
 OWNER = "00000000-0000-4000-8000-000000000001"
 
 
@@ -111,7 +112,7 @@ async def world(*, draft: bool = True, starter: str = "owner") -> dict:
                                draft_ids=[d.id]))  # fmt: skip
         run = await _add(s, Run(flow="baseline_to_prd", status="running", document_id=digest.id,
                                 created_by=ctx.users[starter].id,
-                                knobs={"regenerate_note": "Follow the roadmap as edited."}))  # fmt: skip
+                                knobs={"regenerate_note": NOTE}))  # fmt: skip
         await s.commit()
         return {"tenant": tenant_id, "run": run.id, "digest": digest.id}
 
